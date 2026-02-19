@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Provider {
+  id        Int       @id @default(autoincrement())
+  code      String    @unique
+  name      String
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+model Product {
+  id           Int             @id @default(autoincrement())
+  finPrdtCd    String          @unique
+  kind         String
+  name         String?
+  providerId   Int?
+  provider     Provider?       @relation(fields: [providerId], references: [id])
+  raw          Json?
+  options      ProductOption[]
+  favorites    Favorite[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model ProductOption {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  saveTrm   String?
+  intrRate  Float?
+  intrRate2 Float?
+  raw       Json?
+}
+
+model UserProfile {
+  id               Int               @id @default(autoincrement())
+  purpose          String?
+  preferredTerms   String?
+  liquidityNeed    String?
+  ratePreference   String?
+  favorites        Favorite[]
+  plannerSnapshots PlannerSnapshot[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Favorite {
+  id            Int         @id @default(autoincrement())
+  userProfileId Int
+  productId     Int
+  userProfile   UserProfile @relation(fields: [userProfileId], references: [id])
+  product       Product     @relation(fields: [productId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([userProfileId, productId])
+}
+
+model PlannerSnapshot {
+  id                  Int         @id @default(autoincrement())
+  userProfileId       Int
+  userProfile         UserProfile @relation(fields: [userProfileId], references: [id])
+  monthlyIncome       Float?
+  monthlyExpense      Float?
+  monthlySaving       Float?
+  emergencyMonths     Float?
+  debtBurdenRatio     Float?
+  goalAmount          Float?
+  goalMonths          Int?
+  assumptions         Json?
+  createdAt           DateTime    @default(now())
+}
