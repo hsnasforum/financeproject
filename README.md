@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Finance Planner MVP
 
-## Getting Started
+Next.js(App Router) + TypeScript + Tailwind + Prisma(SQLite) 기반 개인용 재무설계/금융상품 추천 MVP입니다.
 
-First, run the development server:
+## Local Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저: `http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment & Security
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- API 키(FINLIFE/공공 API)는 **서버 환경변수(.env.local)** 에만 저장합니다.
+- 키/토큰은 클라이언트 번들에 노출하면 안 됩니다. (`NEXT_PUBLIC_*` 로 키를 넣지 않음)
+- SQLite DB 파일(`*.db`, `*.sqlite*`)은 커밋하지 않습니다. (`prisma/schema.prisma`와 migration 소스만 커밋)
 
-## Learn More
+## Git Remote Setup
 
-To learn more about Next.js, take a look at the following resources:
+현재 브랜치 확인:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+git branch --show-current
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+원격 연결(최초):
 
-## Deploy on Vercel
+```bash
+git remote add origin <REMOTE_URL>
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`origin`이 이미 있으면 URL 갱신:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+git remote set-url origin <REMOTE_URL>
+```
+
+푸시:
+
+```bash
+git push -u origin main
+```
+
+현재 브랜치가 `main`이 아니면:
+
+```bash
+git push -u origin "$(git branch --show-current)"
+```
+
+## Push Rejected 해결
+
+원격에 기존 커밋이 있어 push가 거부되면:
+
+```bash
+git pull --rebase origin main
+git push -u origin main
+```
+
+rebase 충돌 시:
+
+1. 충돌 파일 수정
+2. `git add <file>`
+3. `git rebase --continue`
+4. 완료 후 `git push -u origin main`

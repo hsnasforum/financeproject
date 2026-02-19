@@ -33,6 +33,7 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.local.example
+!.env.example
 
 # vercel
 .vercel
@@ -44,3 +45,18 @@ next-env.d.ts
 tmp/api-samples/
 tmp/api-cache/
 tmp/dart/
+
+# generic build/cache
+dist/
+.turbo/
+coverage/
+*.log
+
+# prisma/sqlite local artifacts
+prisma/*.db
+prisma/*.db-journal
+prisma/*.db-wal
+prisma/*.db-shm
+*.sqlite
+*.sqlite3
+*.db
