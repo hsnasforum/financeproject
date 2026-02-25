@@ -1,0 +1,17 @@
+{
+  "shape": {
+    "rootType": "array",
+    "topLevelKeys": [],
+    "resultKeys": [],
+    "rowsPath": "(root)",
+    "rowsCount": 2,
+    "sampleRowKeys": ["cur_unit", "deal_bas_dt", "deal_bas_r", "ttb"]
+  },
+  "rowKeys": [
+    ["cur_unit", 2],
+    ["deal_bas_dt", 2],
+    ["deal_bas_r", 2],
+    ["ttb", 1],
+    ["tts", 1]
+  ]
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL SERVICE.</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <prdNm>KDB 안심 정기예금</prdNm>
+        <prdOtl>최대 연 3.45% 우대조건 충족 시</prdOtl>
+        <prdJinPpo>목돈 운용</prdJinPpo>
+        <hitIrtCndCone>우대금리 포함 최대 연 3.45%, 12개월</hitIrtCndCone>
+      </item>
+      <item>
+        <prdNm>KDB 스마트 예금</prdNm>
+        <prdOtl>비대면 가입 전용</prdOtl>
+      </item>
+    </items>
+    <numOfRows>2</numOfRows>
+    <pageNo>1</pageNo>
+    <totalCount>2</totalCount>
+  </body>
+</response>

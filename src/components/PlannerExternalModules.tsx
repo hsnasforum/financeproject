@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import lawdCodes from "@/data/molit/lawdCodes.sigungu.json";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { RegionSelector } from "@/components/housing/RegionSelector";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { formatAreaWithPyeong, formatKrwWithEok } from "@/lib/format/krw";
+import { findSidoByLawdCd } from "@/lib/housing/lawdRegions";
 
 type HousingBenchmark = {
   regionCode: string;
@@ -25,9 +27,12 @@ type HousingBenchmark = {
   source: string;
 };
 
-type RegionOption = {
-  code: string;
-  name: string;
+type PlannerAssumptions = {
+  fx?: {
+    asOf: string;
+    base: "KRW";
+    rates: Record<string, number>;
+  };
 };
 
 const AREA_PRESETS = [59, 84, 114];
@@ -47,9 +52,15 @@ function parseNumberInput(value: string): number {
   return parsed;
 }
 
-export function PlannerExternalModules() {
-  const regions = lawdCodes as RegionOption[];
+function describeDiff(current: number, benchmark: number): string {
+  if (!Number.isFinite(current) || !Number.isFinite(benchmark) || benchmark <= 0) return "비교를 위해 입력값을 확인해 주세요.";
+  const diff = current - benchmark;
+  const sign = diff > 0 ? "+" : "";
+  const pct = (diff / benchmark) * 100;
+  return `차이: ${sign}${formatKrwWithEok(diff)} (중앙값 대비 ${pct.toFixed(1)}%)`;
+}
 
+export function PlannerExternalModules() {
   const [regionCode, setRegionCode] = useState("11680");
   const [month, setMonth] = useState(currentYyyyMm());
   const [areaM2, setAreaM2] = useState(84);
@@ -64,10 +75,60 @@ export function PlannerExternalModules() {
   const [currentJeonseDeposit, setCurrentJeonseDeposit] = useState(0);
   const [currentMonthlyRent, setCurrentMonthlyRent] = useState(0);
 
+  const [assumptions, setAssumptions] = useState<PlannerAssumptions | null>(null);
+  const [fxRates, setFxRates] = useState<Record<string, number>>({});
+  const [foreignAmount, setForeignAmount] = useState(1000);
+  const [assumptionNotes, setAssumptionNotes] = useState<string[]>([]);
+  const [benefitCount, setBenefitCount] = useState<number | null>(null);
+  const [subscriptionCount, setSubscriptionCount] = useState<number | null>(null);
+
   const selectedRegionName = useMemo(() => {
-    const found = regions.find((r) => r.code === regionCode);
-    return found?.name ?? `코드 ${regionCode}`;
-  }, [regionCode, regions]);
+    const found = findSidoByLawdCd(regionCode);
+    return found ? `${found.sidoName} ${found.sigunguName}` : `코드 ${regionCode}`;
+  }, [regionCode]);
+
+  useEffect(() => {
+    let aborted = false;
+
+    async function loadEvidence() {
+      try {
+        const [assumptionRes, benefitRes, subscriptionRes] = await Promise.all([
+          fetch("/api/planner/assumptions", { cache: "no-store" }),
+          fetch("/api/public/benefits/search?query=%EC%A3%BC%EA%B1%B0", { cache: "no-store" }),
+          fetch("/api/public/housing/subscription?region=%EC%84%9C%EC%9A%B8", { cache: "no-store" }),
+        ]);
+
+        const assumptionJson = await assumptionRes.json();
+        const benefitJson = await benefitRes.json();
+        const subscriptionJson = await subscriptionRes.json();
+
+        if (aborted) return;
+
+        setAssumptions((assumptionJson?.ok ? assumptionJson.data : null) as PlannerAssumptions | null);
+        const incomingRates = (assumptionJson?.ok ? assumptionJson.data?.fx?.rates : null) as Record<string, number> | null;
+        if (incomingRates && typeof incomingRates === "object") {
+          setFxRates({
+            USD: Number(incomingRates.USD ?? 0),
+            JPY: Number(incomingRates.JPY ?? 0),
+            EUR: Number(incomingRates.EUR ?? 0),
+          });
+        }
+        setAssumptionNotes(Array.isArray(assumptionJson?.notes) ? assumptionJson.notes : []);
+        setBenefitCount(Array.isArray(benefitJson?.data?.items) ? benefitJson.data.items.length : null);
+        setSubscriptionCount(Array.isArray(subscriptionJson?.data?.items) ? subscriptionJson.data.items.length : null);
+      } catch {
+        if (aborted) return;
+        setAssumptions(null);
+        setAssumptionNotes(["외부 근거 데이터를 자동으로 불러오지 못했습니다. 각 화면에서 개별 확인해 주세요."]);
+      }
+    }
+
+    void loadEvidence();
+
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   async function loadHousing() {
     setHousingLoading(true);
@@ -109,26 +170,86 @@ export function PlannerExternalModules() {
     }
   }
 
-  const diffPct = housing ? ((goalAmount - housing.median) / housing.median) * 100 : null;
-  const jeonseDiffPct = rent && currentJeonseDeposit > 0 && rent.median > 0 ? ((currentJeonseDeposit - rent.median) / rent.median) * 100 : null;
-  const monthlyDiffPct = rent && currentMonthlyRent > 0 && (rent.monthlyMedian ?? 0) > 0 ? ((currentMonthlyRent - (rent.monthlyMedian ?? 0)) / (rent.monthlyMedian ?? 0)) * 100 : null;
-
   return (
     <div className="grid gap-4">
       <Card>
+        <h3 className="text-base font-semibold">외부 근거 데이터</h3>
+        <p className="mt-1 text-xs text-slate-500">플래너 계산에 참고하는 대외 지표입니다. 모든 값은 참고용이며 사용자가 가정값을 조정할 수 있습니다.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3 text-sm">
+          <div className="rounded-xl border border-border bg-surface-muted p-3">
+            <p className="text-xs text-slate-500">환율 가정(기준일)</p>
+            {assumptions?.fx ? (
+              <>
+                <p className="font-semibold">{assumptions.fx.asOf}</p>
+                <p className="text-xs text-slate-600">USD {fxRates.USD || "-"} · JPY {fxRates.JPY || "-"} · EUR {fxRates.EUR || "-"}</p>
+              </>
+            ) : (
+              <p className="text-xs text-amber-700">환율 설정 필요 또는 호출 실패</p>
+            )}
+          </div>
+          <div className="rounded-xl border border-border bg-surface-muted p-3">
+            <p className="text-xs text-slate-500">혜택 후보</p>
+            <p className="font-semibold">{typeof benefitCount === "number" ? `${benefitCount}건` : "조회 필요"}</p>
+            <p className="text-[11px] text-slate-500">기준 키워드: 주거</p>
+            <Link href="/benefits?query=주거" className="text-xs text-primary underline underline-offset-4">보조금24 보기</Link>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-muted p-3">
+            <p className="text-xs text-slate-500">청약 공고</p>
+            <p className="font-semibold">{typeof subscriptionCount === "number" ? `${subscriptionCount}건` : "조회 필요"}</p>
+            <p className="text-[11px] text-slate-500">기준 지역: 서울 · 최근 조회</p>
+            <Link href="/housing/subscription?region=서울" className="text-xs text-primary underline underline-offset-4">청약홈 보기</Link>
+          </div>
+        </div>
+        {assumptions?.fx ? (
+          <div className="mt-3 rounded-xl border border-border bg-surface-muted p-3">
+            <p className="text-xs font-semibold text-slate-700">환율 가정값(수정 가능)</p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-4">
+              {["USD", "JPY", "EUR"].map((currency) => (
+                <label key={currency} className="text-xs">
+                  {currency}
+                  <input
+                    className="mt-1 h-9 w-full rounded border border-slate-300 px-2"
+                    value={fxRates[currency] || ""}
+                    onChange={(e) =>
+                      setFxRates((prev) => ({
+                        ...prev,
+                        [currency]: Number(e.target.value.replace(/[^0-9.]/g, "")) || 0,
+                      }))
+                    }
+                  />
+                </label>
+              ))}
+              <label className="text-xs">
+                외화 금액
+                <input
+                  className="mt-1 h-9 w-full rounded border border-slate-300 px-2"
+                  value={foreignAmount}
+                  onChange={(e) => setForeignAmount(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)}
+                />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-slate-600">
+              환산 예시: {foreignAmount.toLocaleString()} USD ≈ {formatKrwWithEok((fxRates.USD ?? 0) * foreignAmount)}
+            </p>
+          </div>
+        ) : null}
+        {assumptionNotes.length > 0 ? (
+          <ul className="mt-2 space-y-1 text-xs text-slate-500">
+            {assumptionNotes.map((note) => (
+              <li key={note}>- {note}</li>
+            ))}
+          </ul>
+        ) : null}
+      </Card>
+
+      <Card>
         <h3 className="text-base font-semibold">실거래 벤치마크(내집마련)</h3>
         <p className="mt-1 text-xs text-slate-500">
-          선택한 지역/거래월/면적 기준으로 최근 실거래 가격 분포(건수/중앙값/범위)를 요약해 참고 지표로 제공합니다. 실제 매물/계약 조건에 따라 달라질 수 있습니다.
+          사용 순서: 1) 시/도 2) 시군구 3) 거래월(YYYYMM) 4) 면적 5) 목표금액 입력 후 조회. 결과는 참고 지표이며, 국토부 원자료(만원)를 원 단위로 환산해 보여줍니다.
         </p>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-4">
-          <label className="text-sm">지역
-            <select className="mt-1 block h-10 w-full rounded-xl border border-border px-3" value={regionCode} onChange={(e) => setRegionCode(e.target.value)}>
-              {regions.map((region) => (
-                <option key={region.code} value={region.code}>{region.name}</option>
-              ))}
-            </select>
-          </label>
+          <RegionSelector lawdCd={regionCode} onChangeLawdCd={setRegionCode} />
           <label className="text-sm">거래월(YYYYMM)
             <input className="mt-1 block h-10 w-full rounded-xl border border-border px-3" value={month} onChange={(e) => setMonth(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} />
           </label>
@@ -154,9 +275,8 @@ export function PlannerExternalModules() {
           <div className="mt-3 rounded-xl border border-border bg-surface-muted p-3 text-sm">
             <p>건수: {housing.count}건 · 중앙값: {formatKrwWithEok(housing.median)} · 범위: {formatKrwWithEok(housing.min)} ~ {formatKrwWithEok(housing.max)}</p>
             <p className="text-xs text-slate-500">기준: {selectedRegionName} · 월 {housing.month} · 면적 {formatAreaWithPyeong(Number(housing.areaBand))}</p>
-            <p className="mt-1 text-xs text-slate-600">
-              목표금액 괴리율: {diffPct === null ? "-" : `${diffPct.toFixed(1)}%`} (참고 지표, 확정 아님)
-            </p>
+            <p className="mt-1 text-xs text-slate-600">활용 가이드: {describeDiff(goalAmount, housing.median)}</p>
+            {housing.count < 5 ? <p className="mt-1 text-xs text-amber-700">표본 건수가 적어 참고 오차가 커질 수 있습니다.</p> : null}
           </div>
         ) : null}
       </Card>
@@ -164,17 +284,11 @@ export function PlannerExternalModules() {
       <Card>
         <h3 className="text-base font-semibold">주거비 벤치마크(전월세)</h3>
         <p className="mt-1 text-xs text-slate-500">
-          선택 조건의 최근 전월세 실거래를 요약한 참고 지표입니다. 보증금/월세는 계약 조건에 따라 달라질 수 있으며 확정 값이 아닙니다.
+          시/도와 시군구를 선택한 뒤 거래월·면적·유형으로 조회합니다. 보증금/월세 중앙값과 현재 입력값 차이를 함께 비교해 현재 주거비 수준을 점검하세요.
         </p>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-4">
-          <label className="text-sm">지역
-            <select className="mt-1 block h-10 w-full rounded-xl border border-border px-3" value={regionCode} onChange={(e) => setRegionCode(e.target.value)}>
-              {regions.map((region) => (
-                <option key={region.code} value={region.code}>{region.name}</option>
-              ))}
-            </select>
-          </label>
+          <RegionSelector lawdCd={regionCode} onChangeLawdCd={setRegionCode} />
           <label className="text-sm">거래월(YYYYMM)
             <input className="mt-1 block h-10 w-full rounded-xl border border-border px-3" value={month} onChange={(e) => setMonth(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} />
           </label>
@@ -234,12 +348,12 @@ export function PlannerExternalModules() {
             <p className="text-xs text-slate-500">
               기준: {selectedRegionName} · 월 {rent.month} · 면적 {formatAreaWithPyeong(Number(rent.areaBand))} · 유형 {rent.rentType ?? "ALL"}
             </p>
-            <p className="mt-1 text-xs text-slate-600">
-              현재값 비교: 전세 {jeonseDiffPct === null ? "입력 필요" : `${jeonseDiffPct.toFixed(1)}%`} · 월세 {monthlyDiffPct === null ? "입력 필요" : `${monthlyDiffPct.toFixed(1)}%`} (참고 지표, 확정 아님)
-            </p>
+            <p className="mt-1 text-xs text-slate-600">전세 비교: {currentJeonseDeposit > 0 ? describeDiff(currentJeonseDeposit, rent.median) : "입력 필요"}</p>
+            <p className="text-xs text-slate-600">월세 비교: {currentMonthlyRent > 0 && typeof rent.monthlyMedian === "number" ? describeDiff(currentMonthlyRent, rent.monthlyMedian) : "입력 필요"}</p>
+            {rent.count < 5 ? <p className="mt-1 text-xs text-amber-700">표본 건수가 적어 참고 오차가 커질 수 있습니다.</p> : null}
           </div>
         ) : (
-          <p className="mt-2 text-xs text-slate-500">현재 전세보증금/월세를 입력하면 벤치마크 대비 수준(%)을 보여드립니다.</p>
+          <p className="mt-2 text-xs text-slate-500">현재 전세보증금/월세를 입력하면 벤치마크 대비 수준을 문장으로 안내합니다.</p>
         )}
       </Card>
     </div>

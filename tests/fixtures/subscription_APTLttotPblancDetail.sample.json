@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "PBLANC_NO": "APT-001",
+      "HOUSE_NM": "강남 센트럴 파크",
+      "SUBSCRPT_AREA_CODE": "100",
+      "RCEPT_BGNDE": "2026-02-01",
+      "RCEPT_ENDDE": "2026-02-03",
+      "HOUSE_SECD_NM": "민영",
+      "PBLANC_URL": "https://example.com/apt-001"
+    },
+    {
+      "houseManageNo": "APT-002",
+      "houseNm": "부산 해운대 리버뷰",
+      "subscrptAreaCodeNm": "부산",
+      "applyStart": "2026-02-10",
+      "applyEnd": "2026-02-12"
+    }
+  ]
+}

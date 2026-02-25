@@ -1,0 +1,5 @@
+command: scripts/pack-share.sh
+mode: changes
+title: (auto)
+dry_run: 0
+args: (none)

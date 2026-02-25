@@ -32,4 +32,45 @@ describe("parseFinlifeApiResponse", () => {
     expect(parsed.data[0]?.options).toHaveLength(2);
     expect(parsed.data[0]?.best?.intr_rate2).toBe(3.5);
   });
+
+  it("accepts expanded kind values without forcing deposit", () => {
+    const parsed = parseFinlifeApiResponse({
+      ok: true,
+      mode: "fixture",
+      meta: {
+        kind: "mortgage-loan",
+        pageNo: 1,
+        topFinGrpNo: "020000",
+        fallbackUsed: false,
+      },
+      data: [],
+    });
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.meta.kind).toBe("mortgage-loan");
+  });
+
+  it("keeps failure envelope with meta.kind and data array on error payload", () => {
+    const parsed = parseFinlifeApiResponse({
+      ok: false,
+      mode: "live",
+      meta: {
+        kind: "deposit",
+        pageNo: 1,
+        topFinGrpNo: "020000",
+        fallbackUsed: false,
+      },
+      data: [],
+      error: {
+        code: "SCHEMA_MISMATCH",
+        message: "응답 형식이 예상과 다릅니다.",
+      },
+    });
+
+    expect(parsed.ok).toBe(false);
+    expect(parsed.meta.kind).toBe("deposit");
+    expect(Array.isArray(parsed.data)).toBe(true);
+    expect(parsed.error?.code).toBe("SCHEMA_MISMATCH");
+    expect(typeof parsed.error?.message).toBe("string");
+  });
 });

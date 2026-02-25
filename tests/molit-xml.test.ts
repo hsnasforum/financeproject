@@ -5,13 +5,14 @@ import {
   filterRowsByAreaBand,
   getMolitHeader,
   getMolitItems,
+  isMolitSuccessCode,
 } from "../src/lib/publicApis/providers/molitNormalize";
 
 describe("molit xml normalize", () => {
   it("parses sales xml and applies areaBand tolerance", () => {
     const xml = `
       <response>
-        <header><resultCode>00</resultCode><resultMsg>NORMAL SERVICE.</resultMsg></header>
+        <header><resultCode>000</resultCode><resultMsg>NORMAL SERVICE.</resultMsg></header>
         <body>
           <items>
             <item><거래금액>120,000</거래금액><전용면적>84.95</전용면적></item>
@@ -28,6 +29,7 @@ describe("molit xml normalize", () => {
     expect(items).toHaveLength(2);
     expect(filtered).toHaveLength(1);
     expect(amounts).toEqual([120000]);
+    expect(isMolitSuccessCode(getMolitHeader(xml).resultCode)).toBe(true);
   });
 
   it("parses rent xml and keeps only 84-band rows", () => {
@@ -92,5 +94,24 @@ describe("molit xml normalize", () => {
 
     expect(filtered).toHaveLength(1);
     expect(amounts).toEqual([100000]);
+  });
+
+  it("parses OpenAPI_ServiceResponse header fields", () => {
+    const xml = `
+      <OpenAPI_ServiceResponse>
+        <cmmMsgHeader>
+          <errMsg>SERVICE ERROR</errMsg>
+          <returnAuthMsg>SERVICE_KEY_IS_NOT_REGISTERED_ERROR</returnAuthMsg>
+          <returnReasonCode>30</returnReasonCode>
+        </cmmMsgHeader>
+      </OpenAPI_ServiceResponse>
+    `;
+
+    const header = getMolitHeader(xml);
+    expect(header).toEqual({
+      resultCode: "30",
+      resultMsg: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+    });
+    expect(isMolitSuccessCode(header.resultCode)).toBe(false);
   });
 });

@@ -1,0 +1,24 @@
+{
+  "shape": {
+    "rootType": "object",
+    "topLevelKeys": ["data"],
+    "resultKeys": [],
+    "rowsPath": "data",
+    "rowsCount": 3,
+    "sampleRowKeys": ["서비스ID", "서비스명", "서비스목적요약", "선정기준", "소관기관명", "신청방법", "지원대상", "지원지역"]
+  },
+  "rowKeys": [
+    ["description", 2],
+    ["org", 2],
+    ["serviceId", 2],
+    ["serviceName", 2],
+    ["지원지역", 2],
+    ["서비스ID", 1],
+    ["서비스명", 1],
+    ["서비스목적요약", 1],
+    ["선정기준", 1],
+    ["소관기관명", 1],
+    ["신청방법", 1],
+    ["지원대상", 1]
+  ]
+}

@@ -22,7 +22,17 @@ const baseInput: PlannerInput = {
   extraMonthlyDebtPayment: 0,
   riskProfile: "balanced",
   insuranceStatus: "unknown",
+  monthlyInsurancePremium: 0,
+  indemnityStatus: "unknown",
+  insurancePurposeHealth: false,
+  insurancePurposeAccident: false,
+  insurancePurposeLife: false,
+  insurancePurposeIncome: false,
   retirementAssets: 0,
+  retirementMonthlyContribution: 0,
+  npsExpectedMonthly: 0,
+  retirementNeedRatioPct: 70,
+  retirementWithdrawalRatePct: 3.5,
 };
 
 describe("planner execution hints", () => {

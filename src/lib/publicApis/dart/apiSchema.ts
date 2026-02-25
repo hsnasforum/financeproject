@@ -1,4 +1,4 @@
-import { type CorpIndexItem, type DartApiResult, type DartCompany } from "@/lib/publicApis/dart/types";
+import { type CorpIndexItem, type DartApiResult, type DartCompany, type DartApiErrorCode } from "@/lib/publicApis/dart/types";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -25,19 +25,22 @@ export function parseDartSearchResponse(raw: unknown):
 
   const dataRaw = isRecord(raw.data) ? raw.data : {};
   const itemsRaw = Array.isArray(dataRaw.items) ? dataRaw.items : [];
-  const items: CorpIndexItem[] = itemsRaw
+  const items = (itemsRaw as unknown[])
     .map((item) => {
       if (!isRecord(item)) return null;
       const corp_code = typeof item.corp_code === "string" ? item.corp_code : "";
       const corp_name = typeof item.corp_name === "string" ? item.corp_name : "";
       if (!corp_code || !corp_name) return null;
-      return {
+      const result: CorpIndexItem = {
         corp_code,
         corp_name,
-        stock_code: typeof item.stock_code === "string" ? item.stock_code : undefined,
       };
+      if (typeof item.stock_code === "string") {
+        result.stock_code = item.stock_code;
+      }
+      return result;
     })
-    .filter((v): v is CorpIndexItem => Boolean(v));
+    .filter((v): v is CorpIndexItem => v !== null);
 
   return {
     ok: true,
@@ -60,7 +63,7 @@ export function parseDartCompanyResponse(raw: unknown): DartApiResult<DartCompan
     return {
       ok: false,
       error: {
-        code: known.has(error.code) ? (error.code as DartApiResult<DartCompany>["error"]["code"]) : "UPSTREAM",
+        code: known.has(error.code) ? (error.code as DartApiErrorCode) : "UPSTREAM",
         message: error.message,
       },
     };

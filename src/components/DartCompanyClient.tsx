@@ -103,20 +103,23 @@ export function DartCompanyClient() {
         return;
       }
       const rows = Array.isArray(raw?.items) ? raw.items : [];
-      const normalized: CorpIndexItem[] = rows
+      const normalized = (rows as unknown[])
         .map((row) => {
           if (!row || typeof row !== "object") return null;
           const data = row as Record<string, unknown>;
           const corp_code = typeof data.corpCode === "string" ? data.corpCode : "";
           const corp_name = typeof data.corpName === "string" ? data.corpName : "";
           if (!corp_code || !corp_name) return null;
-          return {
+          const item: CorpIndexItem = {
             corp_code,
             corp_name,
-            stock_code: typeof data.stockCode === "string" ? data.stockCode : undefined,
           };
+          if (typeof data.stockCode === "string") {
+            item.stock_code = data.stockCode;
+          }
+          return item;
         })
-        .filter((v): v is CorpIndexItem => Boolean(v));
+        .filter((v): v is CorpIndexItem => v !== null);
       setQuery(queryInput.trim());
       setItems(normalized);
     } catch (error) {
@@ -223,7 +226,11 @@ export function DartCompanyClient() {
   return (
     <main className="py-8">
       <Container>
-        <SectionHeader title="OpenDART 기업개황 조회" subtitle="회사명 검색 → corp_code 선택 → 기업개황 조회" />
+        <SectionHeader 
+          title="OpenDART 기업개황 조회" 
+          subtitle="회사명 검색 → corp_code 선택 → 기업개황 조회" 
+          icon="/icons/ic-dashboard.png"
+        />
 
         <Card>
           <form

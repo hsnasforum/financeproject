@@ -85,6 +85,14 @@ function matchTagContent(xml: string, tag: string): string | null {
   return selfClosingRe.test(xml) ? "" : null;
 }
 
+function matchFirstTagContent(xml: string, tags: string[]): string | null {
+  for (const tag of tags) {
+    const matched = matchTagContent(xml, tag);
+    if (matched !== null) return matched;
+  }
+  return null;
+}
+
 function parseXmlLikeMolit(xml: string): { response: { header: { resultCode?: string; resultMsg?: string }; body: { items: { item: MolitRow[] } } } } {
   const itemRe = /<item>([\s\S]*?)<\/item>/g;
   const rows: MolitRow[] = [];
@@ -115,13 +123,21 @@ export function parseMolitBody(raw: unknown): unknown {
   return parseXmlLikeMolit(text);
 }
 
+export function isMolitSuccessCode(code?: string): boolean {
+  if (!code) return true;
+  return /^0+$/.test(code.trim());
+}
+
 export function getMolitHeader(raw: unknown): { resultCode?: string; resultMsg?: string } {
+  const xmlText = typeof raw === "string" ? raw : "";
   const parsed = parseMolitBody(raw);
   if (!parsed || typeof parsed !== "object") return {};
   const rec = parsed as { response?: { header?: Record<string, unknown> }; header?: Record<string, unknown> };
   const header = (rec.response?.header ?? rec.header ?? {}) as Record<string, unknown>;
-  const resultCode = typeof header.resultCode === "string" ? header.resultCode : undefined;
-  const resultMsg = typeof header.resultMsg === "string" ? header.resultMsg : undefined;
+  const baseCode = typeof header.resultCode === "string" ? header.resultCode : undefined;
+  const baseMsg = typeof header.resultMsg === "string" ? header.resultMsg : undefined;
+  const resultCode = baseCode ?? matchFirstTagContent(xmlText, ["returnReasonCode"]) ?? undefined;
+  const resultMsg = baseMsg ?? matchFirstTagContent(xmlText, ["returnAuthMsg", "errMsg"]) ?? undefined;
   return { resultCode, resultMsg };
 }
 

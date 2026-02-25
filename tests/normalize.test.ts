@@ -15,4 +15,18 @@ describe("normalizeFinlifeProducts", () => {
     expect(rows[0].options).toHaveLength(2);
     expect(rows[0].best?.intr_rate2).toBe(2.7);
   });
+
+  it("does not compute best when options do not have rate fields", () => {
+    const rows = normalizeFinlifeProducts({
+      baseList: [{ fin_prdt_cd: "L1", kor_co_nm: "은행", fin_prdt_nm: "대출A" }],
+      optionList: [
+        { fin_prdt_cd: "L1", save_trm: "12", ln_lmt: "10000000" },
+        { fin_prdt_cd: "L1", save_trm: "24", ln_lmt: "20000000" },
+      ],
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].options).toHaveLength(2);
+    expect(rows[0].best).toBeUndefined();
+  });
 });

@@ -1,10 +1,17 @@
-import type { ReactNode } from "react";
+import type { ReactNode, ElementType } from "react";
 
 type CardProps = {
   children: ReactNode;
   className?: string;
+  as?: ElementType;
 };
 
-export function Card({ children, className = "" }: CardProps) {
-  return <article className={`rounded-2xl border border-border bg-surface p-4 shadow-card ${className}`.trim()}>{children}</article>;
+export function Card({ children, className = "", as: Component = "article" }: CardProps) {
+  return (
+    <Component
+      className={`rounded-3xl border border-border bg-surface p-6 shadow-card transition-all duration-300 hover:shadow-md ${className}`.trim()}
+    >
+      {children}
+    </Component>
+  );
 }
