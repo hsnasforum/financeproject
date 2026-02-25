@@ -45,6 +45,7 @@ next-env.d.ts
 tmp/api-samples/
 tmp/api-cache/
 tmp/dart/
+tmp/finlife-fixtures/
 
 # generic build/cache
 dist/
@@ -60,3 +61,9 @@ prisma/*.db-shm
 *.sqlite
 *.sqlite3
 *.db
+
+# provider logos (local assets only)
+public/providers/*
+!public/providers/README.md
+/.pnpm-store/
+/artifacts/

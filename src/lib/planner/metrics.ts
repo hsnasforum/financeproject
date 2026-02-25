@@ -20,7 +20,17 @@ export type PlannerInput = {
   extraMonthlyDebtPayment: number;
   riskProfile: "conservative" | "balanced" | "aggressive";
   insuranceStatus: "unknown" | "none" | "basic" | "adequate";
+  monthlyInsurancePremium: number;
+  indemnityStatus: "unknown" | "yes" | "no";
+  insurancePurposeHealth: boolean;
+  insurancePurposeAccident: boolean;
+  insurancePurposeLife: boolean;
+  insurancePurposeIncome: boolean;
   retirementAssets: number;
+  retirementMonthlyContribution: number;
+  npsExpectedMonthly: number;
+  retirementNeedRatioPct: number;
+  retirementWithdrawalRatePct: number;
 };
 
 export type PlannerMetrics = {

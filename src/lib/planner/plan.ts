@@ -38,6 +38,7 @@ function toPriorityLabel(priority: Recommendation["priority"]): string {
 
 function buildChecklist(recs: Recommendation[]): ChecklistItem[] {
   const items: ChecklistItem[] = [];
+  const showRuleDebug = process.env.NEXT_PUBLIC_SHOW_RULE_DEBUG === "1";
 
   const playbookByRule: Record<string, string> = {
     R_EMG_01: "emg_account_split",
@@ -49,7 +50,10 @@ function buildChecklist(recs: Recommendation[]): ChecklistItem[] {
 
   for (const rec of recs) {
     const bucket: ChecklistItem["bucket"] = rec.priority === "P0" ? "이번 주" : "이번 달";
-    const reason = rec.triggeredBy[0] ?? rec.rationale[0] ?? "규칙 기반 권고";
+    const reason =
+      rec.rationale[0] ??
+      (showRuleDebug ? rec.triggeredBy[0] : undefined) ??
+      "규칙 기반 권고";
     const playbookId = playbookByRule[rec.id];
 
     if (rec.actions.length > 0) {

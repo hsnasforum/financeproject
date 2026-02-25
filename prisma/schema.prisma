@@ -4,13 +4,13 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Provider {
   id        Int       @id @default(autoincrement())
   code      String    @unique
   name      String
+  aliases   ProviderAlias[]
   products  Product[]
   createdAt DateTime  @default(now())
 }
@@ -20,6 +20,9 @@ model Product {
   finPrdtCd    String          @unique
   kind         String
   name         String?
+  providerNameNorm String?
+  productNameNorm  String?
+  searchTextNorm   String?
   providerId   Int?
   provider     Provider?       @relation(fields: [providerId], references: [id])
   raw          Json?
@@ -27,6 +30,11 @@ model Product {
   favorites    Favorite[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+  externalMatches ExternalProductMatch[]
+
+  @@index([providerNameNorm])
+  @@index([productNameNorm])
+  @@index([searchTextNorm])
 }
 
 model ProductOption {
@@ -75,4 +83,64 @@ model PlannerSnapshot {
   goalMonths          Int?
   assumptions         Json?
   createdAt           DateTime    @default(now())
+}
+
+model ProviderAlias {
+  id           Int      @id @default(autoincrement())
+  providerId   Int
+  provider     Provider @relation(fields: [providerId], references: [id])
+  aliasRaw     String
+  aliasNorm    String
+  createdAt    DateTime @default(now())
+
+  @@index([aliasNorm])
+  @@unique([providerId, aliasNorm])
+}
+
+model ExternalSourceSnapshot {
+  id           Int      @id @default(autoincrement())
+  sourceId     String
+  kind         String
+  lastSyncedAt DateTime
+  ttlMs        Int
+  metaJson     Json?
+
+  @@unique([sourceId, kind])
+  @@index([sourceId, kind])
+}
+
+model ExternalProduct {
+  id               Int      @id @default(autoincrement())
+  sourceId         String
+  kind             String
+  externalKey      String
+  providerNameRaw  String
+  providerNameNorm String
+  productNameRaw   String
+  productNameNorm  String
+  summary          String?
+  rawJson          Json
+  firstSeenAt      DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  matches          ExternalProductMatch[]
+
+  @@unique([sourceId, kind, externalKey])
+  @@index([sourceId, kind, providerNameNorm])
+  @@index([sourceId, kind, productNameNorm])
+}
+
+model ExternalProductMatch {
+  id                Int              @id @default(autoincrement())
+  externalProductId Int
+  externalProduct   ExternalProduct  @relation(fields: [externalProductId], references: [id], onDelete: Cascade)
+  internalProductId Int?
+  internalProduct   Product?         @relation(fields: [internalProductId], references: [id], onDelete: SetNull)
+  method            String
+  confidence        Float
+  evidenceJson      Json
+  createdAt         DateTime         @default(now())
+
+  @@index([externalProductId, confidence])
+  @@index([internalProductId])
 }

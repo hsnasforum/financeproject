@@ -28,6 +28,12 @@ export function normalizeFinlifeProducts(input: {
 
     productsByCode.set(code, {
       fin_prdt_cd: code,
+      fin_co_no: (() => {
+        if (raw.fin_co_no === undefined || raw.fin_co_no === null) return undefined;
+        const value = String(raw.fin_co_no).trim();
+        if (!/^\d+$/.test(value)) return value || undefined;
+        return value.padStart(7, "0");
+      })(),
       kor_co_nm: raw.kor_co_nm ? String(raw.kor_co_nm) : undefined,
       fin_prdt_nm: raw.fin_prdt_nm ? String(raw.fin_prdt_nm) : undefined,
       options: [],
@@ -51,9 +57,16 @@ export function normalizeFinlifeProducts(input: {
   }
 
   for (const product of productsByCode.values()) {
+    const hasAnyRate = product.options.some((option) => option.intr_rate !== null || option.intr_rate2 !== null);
+    if (!hasAnyRate) continue;
+
     const best = product.options
       .slice()
-      .sort((a, b) => (b.intr_rate2 ?? -Infinity) - (a.intr_rate2 ?? -Infinity))[0];
+      .sort((a, b) => {
+        const aRate = a.intr_rate2 ?? a.intr_rate ?? -Infinity;
+        const bRate = b.intr_rate2 ?? b.intr_rate ?? -Infinity;
+        return bRate - aRate;
+      })[0];
 
     if (best) {
       product.best = {

@@ -1,0 +1,22 @@
+{
+  "shape": {
+    "rootType": "object",
+    "topLevelKeys": ["result"],
+    "resultKeys": ["baseList", "optionList"],
+    "rowsPath": "result.baseList",
+    "rowsCount": 2,
+    "sampleRowKeys": ["fin_prdt_cd", "fin_prdt_nm", "kor_co_nm", "top_fin_grp_no"]
+  },
+  "baseKeys": [
+    ["fin_prdt_cd", 2],
+    ["fin_prdt_nm", 2],
+    ["kor_co_nm", 2],
+    ["top_fin_grp_no", 2]
+  ],
+  "optionKeys": [
+    ["fin_prdt_cd", 3],
+    ["intr_rate", 3],
+    ["intr_rate2", 3],
+    ["save_trm", 3]
+  ]
+}

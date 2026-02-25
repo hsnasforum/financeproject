@@ -1,0 +1,38 @@
+{
+  "result": {
+    "baseList": [
+      {
+        "fin_prdt_cd": "DEPOSIT_SAMPLE_001",
+        "fin_prdt_nm": "샘플 정기예금",
+        "kor_co_nm": "테스트은행",
+        "top_fin_grp_no": "020000"
+      },
+      {
+        "fin_prdt_cd": "DEPOSIT_SAMPLE_002",
+        "fin_prdt_nm": "샘플 예금 B",
+        "kor_co_nm": "샘플저축은행",
+        "top_fin_grp_no": "020000"
+      }
+    ],
+    "optionList": [
+      {
+        "fin_prdt_cd": "DEPOSIT_SAMPLE_001",
+        "save_trm": "6",
+        "intr_rate": "2.10",
+        "intr_rate2": "2.50"
+      },
+      {
+        "fin_prdt_cd": "DEPOSIT_SAMPLE_001",
+        "save_trm": "12",
+        "intr_rate": "2.40",
+        "intr_rate2": "2.80"
+      },
+      {
+        "fin_prdt_cd": "DEPOSIT_SAMPLE_002",
+        "save_trm": "12",
+        "intr_rate": "2.00",
+        "intr_rate2": "2.30"
+      }
+    ]
+  }
+}

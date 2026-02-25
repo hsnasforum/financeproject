@@ -1,0 +1,114 @@
+{
+  "generatedAt": "2026-02-19T12:44:30.468Z",
+  "zip": "/home/xpdlqj/code/finance/금융회사_로고아이콘.zip",
+  "variant": "컬러",
+  "format": "SVG",
+  "matched": [
+    {
+      "fin_co_no": "0010001",
+      "kor_co_nm": "우리은행",
+      "file": "0010001.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010002",
+      "kor_co_nm": "한국스탠다드차타드은행",
+      "file": "0010002.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010016",
+      "kor_co_nm": "아이엠뱅크",
+      "file": "0010016.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010017",
+      "kor_co_nm": "부산은행",
+      "file": "0010017.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010019",
+      "kor_co_nm": "광주은행",
+      "file": "0010019.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010024",
+      "kor_co_nm": "경남은행",
+      "file": "0010024.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010026",
+      "kor_co_nm": "중소기업은행",
+      "file": "0010026.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010030",
+      "kor_co_nm": "한국산업은행",
+      "file": "0010030.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0010927",
+      "kor_co_nm": "국민은행",
+      "file": "0010927.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0011625",
+      "kor_co_nm": "신한은행",
+      "file": "0011625.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0013175",
+      "kor_co_nm": "농협은행주식회사",
+      "file": "0013175.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0013909",
+      "kor_co_nm": "주식회사 하나은행",
+      "file": "0013909.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0014674",
+      "kor_co_nm": "주식회사 케이뱅크",
+      "file": "0014674.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0014807",
+      "kor_co_nm": "수협은행",
+      "file": "0014807.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0015130",
+      "kor_co_nm": "주식회사 카카오뱅크",
+      "file": "0015130.svg",
+      "status": "copied"
+    },
+    {
+      "fin_co_no": "0017801",
+      "kor_co_nm": "토스뱅크 주식회사",
+      "file": "0017801.svg",
+      "status": "copied"
+    }
+  ],
+  "missing": [
+    {
+      "fin_co_no": "0010020",
+      "kor_co_nm": "제주은행"
+    },
+    {
+      "fin_co_no": "0010022",
+      "kor_co_nm": "전북은행"
+    }
+  ]
+}

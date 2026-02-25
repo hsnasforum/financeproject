@@ -1,14 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #eef3f8;
-  --foreground: #0f172a;
+  --background: #f8fafc; /* bg-slate-50 */
+  --foreground: #0f172a; /* text-slate-900 */
   --surface: #ffffff;
-  --surface-muted: #f7fafc;
-  --border: #d8e1ec;
-  --primary: #0f766e;
-  --shadow-card: 0 10px 24px rgba(15, 23, 42, 0.06);
-  --radius-card: 1rem;
+  --surface-muted: #f1f5f9; /* bg-slate-100 */
+  --border: #e2e8f0; /* border-slate-200 */
+  --primary: #059669; /* emerald-600 */
+  --primary-foreground: #ffffff;
+  --secondary: #475569; /* slate-600 */
+  --secondary-foreground: #ffffff;
+  --muted: #94a3b8; /* slate-400 */
+  --accent: #f0fdf4; /* emerald-50 */
+  --radius: 2rem; /* Extra Large 32px radius for 2025 look */
+  --radius-sm: 1rem; /* 16px for smaller items */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 4px 20px -1px rgb(0 0 0 / 0.03), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+  --shadow-md: 0 10px 30px -3px rgb(0 0 0 / 0.04), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 25px 50px -12px rgb(0 0 0 / 0.05);
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", Roboto, Arial, "Noto Sans",
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
 }
 
 @theme inline {
@@ -18,16 +30,27 @@
   --color-surface-muted: var(--surface-muted);
   --color-border: var(--border);
   --color-primary: var(--primary);
-  --shadow-card: var(--shadow-card);
-  --radius-card: var(--radius-card);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --radius-2xl: var(--radius);
+  --radius-xl: var(--radius-sm);
+  --shadow-card: var(--shadow);
   --font-sans: var(--font-geist-sans);
 }
 
 body {
-  background:
-    radial-gradient(900px circle at 12% -10%, #d9f5f0 0%, transparent 45%),
-    radial-gradient(780px circle at 100% 0%, #e5efff 0%, transparent 40%),
-    linear-gradient(180deg, #f8fbff 0%, #eef3f8 100%);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  font-family: var(--font-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
 }

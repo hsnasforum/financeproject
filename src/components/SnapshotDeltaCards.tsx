@@ -91,7 +91,7 @@ export function SnapshotDeltaCards({ prev, next }: { prev: PlannerSnapshot | nul
     },
   ];
 
-  const emergencyProgress = progressPct(next.metrics.cashAssetsBase, next.metrics.emergencyTargetAmount);
+  const emergencyProgress = progressPct(next.input.cashAssets * next.metrics.baseMultiplier, next.metrics.emergencyTargetAmount);
   const goalProgress = progressPct(next.metrics.monthlySaving, next.metrics.goalRequiredMonthly);
 
   return (

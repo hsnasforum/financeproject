@@ -1,4 +1,5 @@
 import housingSalesMock from "@/data/public/housing-sales.mock.json";
+import { toWonFromManwon } from "@/lib/housing/money";
 import { fetchExternal, requireServerEnv } from "@/lib/http/fetchExternal";
 import { type HousingBenchmark, type PublicApiResult } from "@/lib/publicApis/contracts/types";
 import {
@@ -9,6 +10,7 @@ import {
   filterRowsByAreaBand,
   getMolitHeader,
   getMolitItems,
+  isMolitSuccessCode,
   normalizeBaseUrl,
 } from "@/lib/publicApis/providers/molitNormalize";
 
@@ -76,12 +78,13 @@ export async function getHousingSalesBenchmark(regionCode: string, month: string
 
     const fetched = await fetchExternal(url);
     const header = getMolitHeader(fetched.body);
-    if (header.resultCode && header.resultCode !== "00") {
-      return { ok: false, error: { code: "UPSTREAM", message: `실거래 API 오류(${header.resultCode})` } };
+    if (header.resultCode && !isMolitSuccessCode(header.resultCode)) {
+      const detail = header.resultMsg ? `: ${header.resultMsg}` : "";
+      return { ok: false, error: { code: "UPSTREAM", message: `실거래 API 오류(${header.resultCode})${detail}` } };
     }
 
     const rows = filterRowsByAreaBand(getMolitItems(fetched.body), areaBand, 10);
-    const values = extractSaleAmountsFromRows(rows);
+    const values = toWonFromManwon(extractSaleAmountsFromRows(rows));
     if (!values.length) {
       return { ok: false, error: { code: "UPSTREAM", message: "해당 면적대 실거래 데이터를 찾지 못했습니다." } };
     }
@@ -138,8 +141,9 @@ export async function getHousingRentBenchmark(regionCode: string, month: string,
 
     const fetched = await fetchExternal(url);
     const header = getMolitHeader(fetched.body);
-    if (header.resultCode && header.resultCode !== "00") {
-      return { ok: false, error: { code: "UPSTREAM", message: `전월세 API 오류(${header.resultCode})` } };
+    if (header.resultCode && !isMolitSuccessCode(header.resultCode)) {
+      const detail = header.resultMsg ? `: ${header.resultMsg}` : "";
+      return { ok: false, error: { code: "UPSTREAM", message: `전월세 API 오류(${header.resultCode})${detail}` } };
     }
 
     const rows = extractRentRowsFromRows(filterRowsByAreaBand(getMolitItems(fetched.body), areaBand, 10));
@@ -147,8 +151,8 @@ export async function getHousingRentBenchmark(regionCode: string, month: string,
       return { ok: false, error: { code: "UPSTREAM", message: "해당 면적대 전월세 데이터를 찾지 못했습니다." } };
     }
 
-    const deposits = rows.map((r) => r.deposit).filter((v) => Number.isFinite(v));
-    const monthly = rows.map((r) => r.monthly).filter((v) => Number.isFinite(v));
+    const deposits = toWonFromManwon(rows.map((r) => r.deposit));
+    const monthly = toWonFromManwon(rows.map((r) => r.monthly));
     const depositStats = toNumbers(deposits);
     const monthlyStats = monthly.length ? toNumbers(monthly) : null;
 

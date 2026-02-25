@@ -131,20 +131,23 @@ export function InvestCompaniesClient() {
       }
 
       const itemsRaw = Array.isArray(raw.items) ? raw.items : [];
-      const items: SearchItem[] = itemsRaw
+      const items = (itemsRaw as unknown[])
         .map((row) => {
           if (!row || typeof row !== "object") return null;
           const item = row as Record<string, unknown>;
           const corpCode = typeof item.corpCode === "string" ? item.corpCode : "";
           const corpName = typeof item.corpName === "string" ? item.corpName : "";
           if (!corpCode || !corpName) return null;
-          return {
+          const result: SearchItem = {
             corpCode,
             corpName,
-            stockCode: typeof item.stockCode === "string" ? item.stockCode : undefined,
           };
+          if (typeof item.stockCode === "string") {
+            result.stockCode = item.stockCode;
+          }
+          return result;
         })
-        .filter((value): value is SearchItem => Boolean(value));
+        .filter((value): value is SearchItem => value !== null);
 
       setSearchItems(items);
       setSearchTotal(typeof raw.total === "number" ? raw.total : items.length);
@@ -273,7 +276,11 @@ export function InvestCompaniesClient() {
   return (
     <main className="py-8">
       <Container>
-        <SectionHeader title="기업개황 보조정보" subtitle="회사명 검색 → corp_code 선택 → 기업개황 조회" />
+        <SectionHeader 
+          title="기업개황 보조정보" 
+          subtitle="회사명 검색 → corp_code 선택 → 기업개황 조회" 
+          icon="/icons/ic-dashboard.png"
+        />
 
         <Card>
           <form

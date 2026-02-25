@@ -1,0 +1,48 @@
+{
+  "getProductList": {
+    "header": {
+      "resultCode": "00",
+      "resultMsg": "NORMAL SERVICE"
+    },
+    "totalCount": 42659,
+    "numOfRows": 5,
+    "pageNo": 1,
+    "item": [
+      {
+        "num": "1",
+        "fncIstNm": "한국산업은행",
+        "prdNm": "KDB 정기예금",
+        "regDate": "2025-12-31",
+        "prdSalDscnDt": ""
+      },
+      {
+        "num": "2",
+        "fncIstNm": "국민은행",
+        "prdNm": "KB Star 정기예금",
+        "regDate": "2025-12-31",
+        "prdSalDscnDt": ""
+      },
+      {
+        "num": "3",
+        "fncIstNm": "신한은행",
+        "prdNm": "쏠편한 정기예금",
+        "regDate": "2025-12-31",
+        "prdSalDscnDt": ""
+      },
+      {
+        "num": "4",
+        "fncIstNm": "우리은행",
+        "prdNm": "WON 정기예금",
+        "regDate": "2025-12-31",
+        "prdSalDscnDt": ""
+      },
+      {
+        "num": "5",
+        "fncIstNm": "하나은행",
+        "prdNm": "하나의 정기예금",
+        "regDate": "2025-12-31",
+        "prdSalDscnDt": ""
+      }
+    ]
+  }
+}

@@ -18,6 +18,12 @@ pnpm dev
 - 키/토큰은 클라이언트 번들에 노출하면 안 됩니다. (`NEXT_PUBLIC_*` 로 키를 넣지 않음)
 - SQLite DB 파일(`*.db`, `*.sqlite*`)은 커밋하지 않습니다. (`prisma/schema.prisma`와 migration 소스만 커밋)
 
+## Current Build Priority
+
+- 현재 단계 우선순위와 DoD 검증 루틴은 `docs/api-utilization-draft.md`의 `Phase Now (현재 단계)`를 기준으로 진행합니다.
+- 현재 제공 화면/내비 경로는 `docs/current-screens.md`를 기준으로 확인합니다.
+- FINLIFE 스키마는 샘플 호출 결과(JSON) 확인 후 타입/정규화를 확정합니다(추측 구현 금지).
+
 ## Git Remote Setup
 
 현재 브랜치 확인:
