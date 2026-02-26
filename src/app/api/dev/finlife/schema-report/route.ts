@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
+import { onlyDev } from "@/lib/dev/onlyDev";
 import { buildFinlifeSchemaReport } from "@/lib/finlife/schemaReport";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  if ((process.env.NODE_ENV ?? "development") === "production") {
-    return NextResponse.json({ ok: false, error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
-  }
+  const blocked = onlyDev();
+  if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);
   const topNRaw = Number(searchParams.get("topN") ?? "30");

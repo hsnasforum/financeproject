@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { ArtifactQuickActions } from "@/components/ArtifactQuickActions";
 import { Card } from "@/components/ui/Card";
 import {
   applyState,
@@ -137,7 +138,7 @@ function toDateMillis(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function DartAlertsSummaryCard() {
+export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickActions?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<AlertsData>(EMPTY_ALERTS);
   const [alertState, setAlertState] = useState<AlertState>(emptyAlertState());
@@ -281,6 +282,12 @@ export function DartAlertsSummaryCard() {
           ))}
         </ul>
       )}
+
+      {showQuickActions ? (
+        <div className="mt-4">
+          <ArtifactQuickActions artifactName="alerts_md" label="공시 알림 빠른 작업" />
+        </div>
+      ) : null}
     </Card>
   );
 }

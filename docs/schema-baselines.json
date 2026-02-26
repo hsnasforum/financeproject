@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-25T12:17:18.557Z",
+  "generatedAt": "2026-02-26T13:35:10.106Z",
   "fingerprint": {
     "maxDepth": 8,
     "arraySampleSize": 3,
@@ -949,48 +949,6 @@
           ]
         },
         {
-          "path": "$.items[].options[].raw.dcls_month",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.fin_co_no",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.fin_prdt_cd",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.intr_rate",
-          "types": [
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.intr_rate_type",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.intr_rate_type_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].options[].raw.intr_rate2",
-          "types": [
-            "number"
-          ]
-        },
-        {
           "path": "$.items[].options[].raw.save_trm",
           "types": [
             "string"
@@ -1006,98 +964,6 @@
           "path": "$.items[].raw",
           "types": [
             "object"
-          ]
-        },
-        {
-          "path": "$.items[].raw.dcls_end_day",
-          "types": [
-            "null",
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.dcls_month",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.dcls_strt_day",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.etc_note",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_co_no",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_co_subm_day",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_prdt_cd",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.fin_prdt_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.join_deny",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.join_member",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.join_way",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.kor_co_nm",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.max_limit",
-          "types": [
-            "null",
-            "number"
-          ]
-        },
-        {
-          "path": "$.items[].raw.mtrt_int",
-          "types": [
-            "string"
-          ]
-        },
-        {
-          "path": "$.items[].raw.spcl_cnd",
-          "types": [
-            "string"
           ]
         },
         {
@@ -1125,12 +991,6 @@
           ]
         },
         {
-          "path": "$.meta.configuredGroups[]",
-          "types": [
-            "string"
-          ]
-        },
-        {
           "path": "$.meta.duplicateAcrossGroupsCount",
           "types": [
             "number"
@@ -1155,12 +1015,6 @@
           ]
         },
         {
-          "path": "$.meta.groupsScanned[]",
-          "types": [
-            "string"
-          ]
-        },
-        {
           "path": "$.meta.lastUpstreamStatus",
           "types": [
             "null"
@@ -1176,12 +1030,6 @@
           "path": "$.meta.pagesFetchedByGroup",
           "types": [
             "object"
-          ]
-        },
-        {
-          "path": "$.meta.pagesFetchedByGroup.020000",
-          "types": [
-            "number"
           ]
         },
         {

@@ -49,3 +49,6 @@ jobs:
 
       - name: Verify
         run: pnpm verify
+
+      - name: Build
+        run: pnpm build

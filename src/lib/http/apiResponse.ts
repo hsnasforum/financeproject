@@ -54,6 +54,7 @@ type JsonErrorOptions = {
   issues?: string[];
   debug?: Record<string, unknown>;
   status?: number;
+  meta?: Record<string, unknown>;
 };
 
 export function jsonError(code: string, message: string, options?: JsonErrorOptions) {
@@ -74,11 +75,13 @@ export function jsonError(code: string, message: string, options?: JsonErrorOpti
     error.debug = options.debug;
   }
 
-  return NextResponse.json(
-    {
-      ok: false,
-      error,
-    },
-    { status: options?.status ?? statusFromCode(code) },
-  );
+  const body: Record<string, unknown> = {
+    ok: false,
+    error,
+  };
+  if (options?.meta) {
+    body.meta = options.meta;
+  }
+
+  return NextResponse.json(body, { status: options?.status ?? statusFromCode(code) });
 }

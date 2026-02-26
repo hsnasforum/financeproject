@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { onlyDev } from "@/lib/dev/onlyDev";
 import { getKstTodayYYYYMMDD, fetchEximExchange } from "@/lib/publicApis/providers/exchange";
 import { searchBenefits } from "@/lib/publicApis/providers/benefits";
 import { listSubscriptionNotices } from "@/lib/publicApis/providers/subscription";
@@ -22,10 +23,6 @@ const SOURCE_SET = new Set<SourceName>([
   "molit_rent",
 ]);
 
-function notFound() {
-  return NextResponse.json({ ok: false, error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
-}
-
 function statusFromCode(code?: string): number {
   if (!code) return 502;
   if (code === "INPUT") return 400;
@@ -34,7 +31,8 @@ function statusFromCode(code?: string): number {
 }
 
 export async function GET(request: Request) {
-  if (process.env.NODE_ENV === "production") return notFound();
+  const blocked = onlyDev();
+  if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);
   const source = (searchParams.get("source") ?? "").trim().toLowerCase() as SourceName;

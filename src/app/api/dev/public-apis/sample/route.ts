@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getApiCacheRecord, makeApiCacheKey, setApiCache } from "@/lib/cache/apiCache";
+import { onlyDev } from "@/lib/dev/onlyDev";
 import { getDartCompany } from "@/lib/publicApis/dart/company";
 import { getExchangeQuotes } from "@/lib/publicApis/providers/fx";
 import { getHousingRentBenchmark, getHousingSalesBenchmark } from "@/lib/publicApis/providers/housing";
@@ -42,9 +43,8 @@ const REQUIRED_ENV: Record<ApiName, string[]> = {
 };
 
 export async function POST(request: Request) {
-  if ((process.env.NODE_ENV ?? "development") === "production") {
-    return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
-  }
+  const blocked = onlyDev();
+  if (blocked) return blocked;
 
   let body: SampleBody;
   try {

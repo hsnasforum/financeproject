@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { NextResponse } from "next/server";
+import { onlyDev } from "@/lib/dev/onlyDev";
 import { decideTrustedOrigin, parseHostPatterns } from "@/lib/security/trustedOrigin";
 
 export const runtime = "nodejs";
@@ -20,10 +21,6 @@ type GitCommandResult = {
 
 const MAX_OUTPUT_CHARS = 12000;
 const COMMAND_TIMEOUT_MS = 120000;
-
-function isDevEnabled(): boolean {
-  return (process.env.NODE_ENV ?? "development") !== "production";
-}
 
 function sanitizeGitOutput(text: string): string {
   if (!text) return "";
@@ -126,9 +123,9 @@ function enforceTrustedOrigin(request: Request) {
 }
 
 export async function GET(request: Request) {
-  if (!isDevEnabled()) {
-    return NextResponse.json({ ok: false, error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
-  }
+  const blocked = onlyDev();
+  if (blocked) return blocked;
+
   const decision = enforceTrustedOrigin(request);
   if (!decision.ok) {
     return NextResponse.json({ ok: false, error: { code: decision.code, message: decision.message, hint: decision.hint } }, { status: 403 });
@@ -139,9 +136,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!isDevEnabled()) {
-    return NextResponse.json({ ok: false, error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
-  }
+  const blocked = onlyDev();
+  if (blocked) return blocked;
+
   const decision = enforceTrustedOrigin(request);
   if (!decision.ok) {
     return NextResponse.json({ ok: false, error: { code: decision.code, message: decision.message, hint: decision.hint } }, { status: 403 });
@@ -165,4 +162,3 @@ export async function POST(request: Request) {
   const result = await runGit(action);
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
-

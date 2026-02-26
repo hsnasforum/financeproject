@@ -24,10 +24,13 @@ describe("canBuildCorpIndex", () => {
 
 describe("canAutoBuildFromUi", () => {
   const originalApiKey = process.env.OPENDART_API_KEY;
+  const originalBuildStub = process.env.DART_E2E_BUILD_STUB;
 
   afterEach(() => {
     if (typeof originalApiKey === "string") process.env.OPENDART_API_KEY = originalApiKey;
     else delete process.env.OPENDART_API_KEY;
+    if (typeof originalBuildStub === "string") process.env.DART_E2E_BUILD_STUB = originalBuildStub;
+    else delete process.env.DART_E2E_BUILD_STUB;
     vi.restoreAllMocks();
   });
 
@@ -49,6 +52,12 @@ describe("canAutoBuildFromUi", () => {
   it("is enabled in development when key and script exist", () => {
     process.env.OPENDART_API_KEY = "test-key";
     vi.spyOn(fs, "existsSync").mockReturnValue(true);
+    expect(canAutoBuildFromUi("development")).toBe(true);
+  });
+
+  it("is enabled in development with build stub even without key", () => {
+    process.env.DART_E2E_BUILD_STUB = "1";
+    delete process.env.OPENDART_API_KEY;
     expect(canAutoBuildFromUi("development")).toBe(true);
   });
 });

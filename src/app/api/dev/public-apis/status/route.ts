@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getApiCacheDiagnostics } from "@/lib/cache/apiCache";
+import { onlyDev } from "@/lib/dev/onlyDev";
 import { computeMissingKeys, computeNotLoadedYet, parseEnvKeys, parseEnvTemplate, validateApiUrls } from "@/lib/dev/envDoctor";
 
 export const runtime = "nodejs";
@@ -29,9 +30,8 @@ const APIS = [
 ] as const;
 
 export async function GET() {
-  if ((process.env.NODE_ENV ?? "development") === "production") {
-    return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
-  }
+  const blocked = onlyDev();
+  if (blocked) return blocked;
 
   const root = process.cwd();
   const examplePath = path.join(root, ".env.local.example");

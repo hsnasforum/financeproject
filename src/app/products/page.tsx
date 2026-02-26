@@ -56,11 +56,11 @@ export default function ProductsHomePage() {
           <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600">Product Explorer</p>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-900 md:text-4xl">금융상품 카테고리</h1>
           <p className="mt-3 max-w-2xl text-sm text-slate-600 md:text-base leading-relaxed">
-            예금, 적금, 연금저축, 주담대, 전세대출, 신용대출을 같은 화면 구조에서 비교할 수 있습니다.
+            통합 탐색(`/products/catalog`)에서 먼저 검색/필터링한 뒤, 필요할 때 카테고리 화면으로 이동하는 흐름을 권장합니다.
           </p>
           <div className="mt-6">
-            <Link href="/products/deposit">
-              <Button size="lg" variant="primary">대표 카테고리 바로가기</Button>
+            <Link href="/products/catalog">
+              <Button size="lg" variant="primary">통합 탐색 먼저 열기</Button>
             </Link>
           </div>
         </section>

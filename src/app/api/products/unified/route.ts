@@ -3,7 +3,7 @@ import {
   UnifiedInputError,
   type UnifiedMode,
 } from "@/lib/sources/unified";
-import { jsonError, jsonOk } from "@/lib/http/apiResponse";
+import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { singleflight } from "../../../../lib/cache/singleflight";
 import { timingsToDebugMap, withTiming } from "../../../../lib/http/timing";
 import {
@@ -15,6 +15,8 @@ import {
   parseStringValue,
 } from "@/lib/http/validate";
 import type { UnifiedSourceId } from "@/lib/sources/types";
+import { pushError } from "../../../../lib/observability/errorRingBuffer";
+import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../lib/observability/trace";
 
 function parseEnrichSources(input: string | null): Array<"datago_kdb"> {
   if (!input || !input.trim()) return [];
@@ -53,6 +55,23 @@ function summarizeIssues(issues: string[]): string {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
+  const traceId = getOrCreateTraceId(request);
+  const traceMeta = (meta: unknown = {}) => attachTrace(meta, traceId);
+  const withTrace = <T extends Response>(response: T) => setTraceHeader(response, traceId);
+  const recordError = (code: string, message: string, status: number) => {
+    pushError({
+      time: new Date().toISOString(),
+      traceId,
+      route: "/api/products/unified",
+      source: "unified",
+      code,
+      message,
+      status,
+      elapsedMs: Date.now() - startedAt,
+    });
+  };
+
   try {
     const { searchParams } = new URL(request.url);
     const bag = createValidationBag();
@@ -145,7 +164,13 @@ export async function GET(request: Request) {
     }
 
     if (hasIssues(bag)) {
-      return jsonError("INPUT", summarizeIssues(bag.issues), { issues: bag.issues });
+      const message = summarizeIssues(bag.issues);
+      const status = statusFromCode("INPUT");
+      recordError("INPUT", message, status);
+      return withTrace(jsonError("INPUT", message, {
+        issues: bag.issues,
+        meta: traceMeta(),
+      }));
     }
 
     const singleflightKey = [
@@ -202,11 +227,13 @@ export async function GET(request: Request) {
     };
 
     const generatedAt = new Date().toISOString();
-    return jsonOk({
+    return withTrace(jsonOk({
       data,
       coverage,
       meta: {
-        generatedAt,
+        ...traceMeta({
+          generatedAt,
+        }),
         ...(debugRequested
           ? {
               debug: {
@@ -217,14 +244,22 @@ export async function GET(request: Request) {
       },
       ...(debug ? { diagnostics: data.diagnostics } : {}),
       fetchedAt: generatedAt,
-    });
+    }));
   } catch (error) {
     if (error instanceof UnifiedInputError) {
-      return jsonError("INPUT", error.message, { issues: [error.message] });
+      const status = statusFromCode("INPUT");
+      recordError("INPUT", error.message, status);
+      return withTrace(jsonError("INPUT", error.message, {
+        issues: [error.message],
+        meta: traceMeta(),
+      }));
     }
     console.error("[products/unified] failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return jsonError("UPSTREAM", "현재 데이터를 갱신하지 못했어요. 잠시 후 다시 시도해주세요.");
+    const message = "현재 데이터를 갱신하지 못했어요. 잠시 후 다시 시도해주세요.";
+    const status = statusFromCode("UPSTREAM");
+    recordError("UPSTREAM", message, status);
+    return withTrace(jsonError("UPSTREAM", message, { meta: traceMeta() }));
   }
 }

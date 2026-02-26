@@ -10,7 +10,8 @@ import { uiTextKo } from "@/lib/uiText.ko";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 
 const navItems = [
-  { href: "/products", label: "상품전체" },
+  { href: "/dashboard", label: "대시보드" },
+  { href: "/products/catalog", label: "통합탐색" },
   { href: "/recommend", label: uiTextKo.nav.recommend },
   { href: "/planner", label: uiTextKo.nav.planner },
   { href: "/benefits", label: "혜택" },
@@ -42,7 +43,7 @@ export function SiteHeader() {
 
           <div className="flex items-center gap-3">
             <div className="hidden lg:flex items-center mr-2">
-              <form action="/products" method="GET" className="relative group">
+              <form action="/products/catalog" method="GET" className="relative group">
                 <input
                   name="q"
                   className="h-10 w-64 rounded-[2rem] border border-slate-200 bg-slate-50 pl-4 pr-10 text-[11px] font-medium text-slate-900 outline-none transition-all duration-300 focus:w-72 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-300"

@@ -213,13 +213,14 @@ export function DartSearchClient() {
                 <label className="text-sm">
                   회사명 검색
                   <input
+                    data-testid="dart-search-input"
                     className="mt-1 block h-10 rounded-xl border border-border bg-surface px-3 text-sm"
                     value={q}
                     onChange={(event) => setQ(event.target.value)}
                     placeholder="예: 삼성전자"
                   />
                 </label>
-                <Button type="submit" variant="primary" disabled={loading}>
+                <Button data-testid="dart-search-submit" type="submit" variant="primary" disabled={loading}>
                   {loading ? "검색 중..." : "검색"}
                 </Button>
               </form>
@@ -229,21 +230,24 @@ export function DartSearchClient() {
 
             {missing ? (
               <Card className="mt-4">
-                <p className="text-sm font-semibold text-slate-800">CORPCODES_INDEX_MISSING</p>
-                <div className="mt-2 space-y-1 text-xs text-slate-700">
-                  <p>message: {missing.message ?? "-"}</p>
-                  <p>hintCommand: {missing.hintCommand ?? "-"}</p>
-                  <p>primaryPath: {missing.primaryPath ?? "-"}</p>
-                  <p>triedPaths: {Array.isArray(missing.triedPaths) ? missing.triedPaths.join(" | ") : "-"}</p>
-                  <p>canAutoBuild: {typeof missing.canAutoBuild === "boolean" ? String(missing.canAutoBuild) : "-"}</p>
-                  <p>autoBuildDisabledReason: {missing.autoBuildDisabledReason ?? "-"}</p>
-                  <p>buildEndpoint: {missing.buildEndpoint ?? "-"}</p>
-                  <p>statusEndpoint: {missing.statusEndpoint ?? "-"}</p>
+                <div data-testid="dart-missing-index">
+                  <p className="text-sm font-semibold text-slate-800">CORPCODES_INDEX_MISSING</p>
+                  <div className="mt-2 space-y-1 text-xs text-slate-700">
+                    <p>message: {missing.message ?? "-"}</p>
+                    <p>hintCommand: {missing.hintCommand ?? "-"}</p>
+                    <p>primaryPath: {missing.primaryPath ?? "-"}</p>
+                    <p>triedPaths: {Array.isArray(missing.triedPaths) ? missing.triedPaths.join(" | ") : "-"}</p>
+                    <p>canAutoBuild: {typeof missing.canAutoBuild === "boolean" ? String(missing.canAutoBuild) : "-"}</p>
+                    <p>autoBuildDisabledReason: {missing.autoBuildDisabledReason ?? "-"}</p>
+                    <p>buildEndpoint: {missing.buildEndpoint ?? "-"}</p>
+                    <p>statusEndpoint: {missing.statusEndpoint ?? "-"}</p>
+                  </div>
                 </div>
 
                 {isDev && missing.canAutoBuild === true ? (
                   <div className="mt-3">
                     <Button
+                      data-testid="dart-build-index-button"
                       size="sm"
                       onClick={() => void buildIndex()}
                       disabled={buildLoading}
@@ -256,25 +260,31 @@ export function DartSearchClient() {
             ) : null}
 
             <Card className="mt-4">
-              <h2 className="text-base font-semibold text-slate-900">검색 결과</h2>
-              {!loading && !error && items.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-600">검색 결과가 없습니다.</p>
-              ) : null}
-              {items.length > 0 ? (
-                <ul className="mt-3 space-y-2">
-                  {items.map((item) => (
-                    <li key={item.corpCode} className="rounded-xl border border-border bg-surface-muted p-3">
-                      <Link href={`/public/dart/company?corpCode=${encodeURIComponent(item.corpCode)}`} className="block">
-                        <p className="text-sm font-semibold text-slate-900">{item.corpName}</p>
-                        <p className="text-xs text-slate-600">
-                          corp_code {item.corpCode}
-                          {item.stockCode ? ` · 종목코드 ${item.stockCode}` : " · 비상장"}
-                        </p>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              <div data-testid="dart-search-results">
+                <h2 className="text-base font-semibold text-slate-900">검색 결과</h2>
+                {!loading && !error && items.length === 0 ? (
+                  <p className="mt-2 text-sm text-slate-600">검색 결과가 없습니다.</p>
+                ) : null}
+                {items.length > 0 ? (
+                  <ul className="mt-3 space-y-2">
+                    {items.map((item) => (
+                      <li key={item.corpCode} className="rounded-xl border border-border bg-surface-muted p-3">
+                        <Link
+                          data-testid="dart-search-item"
+                          href={`/public/dart/company?corpCode=${encodeURIComponent(item.corpCode)}`}
+                          className="block"
+                        >
+                          <p className="text-sm font-semibold text-slate-900">{item.corpName}</p>
+                          <p className="text-xs text-slate-600">
+                            corp_code {item.corpCode}
+                            {item.stockCode ? ` · 종목코드 ${item.stockCode}` : " · 비상장"}
+                          </p>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
             </Card>
 
             <div className="mt-4 grid gap-4 lg:grid-cols-2">

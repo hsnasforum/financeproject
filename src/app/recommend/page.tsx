@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { NumberField } from "@/components/forms/NumberField";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
@@ -524,7 +524,7 @@ function buildDetailProduct(item: RecommendItem): NormalizedProduct {
   };
 }
 
-export default function RecommendPage() {
+function RecommendPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [profile, setProfile] = useState<StoredProfile>(defaultProfile);
@@ -732,7 +732,7 @@ export default function RecommendPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
+    <main data-testid="recommend-root" className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4">
       <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
       <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
@@ -965,6 +965,7 @@ export default function RecommendPage() {
 
         <div className="mt-6 flex items-center gap-3">
           <Button
+            data-testid="recommend-submit"
             variant="primary"
             onClick={() => void submit()}
             disabled={loading}
@@ -974,6 +975,9 @@ export default function RecommendPage() {
           <span className="text-sm text-slate-500">현재 목적: {purposeLabel}</span>
           {entrySource ? <span className="text-xs text-slate-500">유입: {entrySource}</span> : null}
         </div>
+        {loading ? (
+          <p data-testid="recommend-running" className="mt-2 text-xs text-slate-500">추천 계산 중...</p>
+        ) : null}
       </section>
 
       {error ? <section className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</section> : null}
@@ -1153,7 +1157,7 @@ export default function RecommendPage() {
         )}
       </section>
 
-      <section className="grid gap-4">
+      <section data-testid="recommend-result" className="grid gap-4">
         {(result?.items ?? []).length === 0 && result?.ok ? (
           <article className="rounded-[2rem] shadow-sm border border-slate-100 bg-white p-6 text-sm text-slate-600">
             추천 후보가 없어 표시할 항목이 없습니다. 조건을 바꿔 다시 실행하거나 상품 탐색에서 직접 확인해보세요.
@@ -1245,5 +1249,13 @@ export default function RecommendPage() {
       </section>
       </div>
     </main>
+  );
+}
+
+export default function RecommendPage() {
+  return (
+    <Suspense fallback={<main className="mx-auto w-full max-w-6xl px-4 py-10 text-sm text-slate-600">추천 화면을 불러오는 중...</main>}>
+      <RecommendPageInner />
+    </Suspense>
   );
 }

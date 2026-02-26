@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ArtifactQuickActions } from "@/components/ArtifactQuickActions";
 import { Card } from "@/components/ui/Card";
 import type { DailyBrief } from "@/lib/dart/dailyBriefBuilder";
 
@@ -17,7 +18,7 @@ function formatDateTime(value: string | null): string {
   return parsed.toLocaleString("ko-KR");
 }
 
-export function DartDailyBriefCard() {
+export function DartDailyBriefCard({ showQuickActions = false }: { showQuickActions?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [brief, setBrief] = useState<DailyBrief | null>(null);
 
@@ -72,6 +73,12 @@ export function DartDailyBriefCard() {
           ))}
         </ol>
       )}
+
+      {showQuickActions ? (
+        <div className="mt-4">
+          <ArtifactQuickActions artifactName="brief_md" label="브리핑 빠른 작업" />
+        </div>
+      ) : null}
     </Card>
   );
 }

@@ -37,6 +37,11 @@ export function explainAutoBuildFromUi(nodeEnv = process.env.NODE_ENV ?? "develo
     return { canAutoBuild: false, reason: "운영 환경에서는 비활성화" };
   }
 
+  const isBuildStub = (process.env.DART_E2E_BUILD_STUB ?? "").trim() === "1";
+  if (isBuildStub) {
+    return { canAutoBuild: true };
+  }
+
   const apiKey = (process.env.OPENDART_API_KEY ?? "").trim();
   if (!apiKey) {
     return { canAutoBuild: false, reason: "OPENDART_API_KEY가 없습니다." };

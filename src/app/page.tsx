@@ -56,14 +56,14 @@ export default async function Home() {
                 </p>
                 
                 <div className="mt-10 flex flex-wrap gap-4">
-                  <Link href="/planner">
+                  <Link href="/dashboard">
                     <Button variant="primary" size="lg" className="rounded-full shadow-xl shadow-emerald-500/20 hover:scale-[1.02] active:scale-95 transition-all text-base px-8 h-14">
-                      무료 재무설계 시작
+                      대시보드 열기
                     </Button>
                   </Link>
-                  <Link href="/products">
+                  <Link href="/planner">
                     <Button variant="outline" size="lg" className="rounded-full bg-white/80 backdrop-blur border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 text-base px-8 h-14 hover:scale-[1.02] active:scale-95 transition-all">
-                      금리 상품 탐색
+                      재무설계 시작
                     </Button>
                   </Link>
                 </div>
@@ -85,8 +85,8 @@ export default async function Home() {
           {/* Right Side Cards */}
           <div className="flex flex-col gap-6">
             <ExchangeSummaryCard />
-            <DartAlertsSummaryCard />
-            <DartDailyBriefCard />
+            <DartAlertsSummaryCard showQuickActions />
+            <DartDailyBriefCard showQuickActions />
             
             <Card className="p-8 border-slate-100 bg-white shadow-lg shadow-slate-200/30 rounded-[2rem] hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
               <div className="flex justify-between items-start mb-6">
@@ -122,103 +122,19 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* Section Divider */}
-        <div className="mt-24 mb-10 flex items-center gap-6 px-4">
-           <h2 className="text-sm font-black text-slate-900 tracking-tight">서비스 탐색</h2>
-           <div className="h-[1px] flex-1 bg-gradient-to-r from-slate-200 to-transparent" />
-        </div>
-
-        {/* Categories Grid */}
-        <section className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Planner Card */}
-          <Link href="/planner" className="block outline-none group">
-            <Card className="h-full p-8 border-slate-100 bg-white shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 transition-all duration-300 rounded-[2rem] relative overflow-hidden ring-1 ring-transparent hover:ring-emerald-500/10 focus-visible:ring-emerald-500/50">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-bl-full -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-110" />
-              <div className="relative z-10">
-                <div className="h-14 w-14 rounded-2xl bg-blue-50 flex items-center justify-center mb-6 group-hover:bg-blue-100 transition-colors">
-                   <Image src="/icons/ic-planner.png" alt="" aria-hidden="true" width={28} height={28} className="object-contain" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight mb-3">내 재무설계</h3>
-                <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8">
-                  현금 흐름을 한눈에 파악하고, AI가 제안하는 실행 체크리스트로 미래를 준비하세요.
-                </p>
-                <div className="flex items-center gap-2 text-sm font-bold text-emerald-600">
-                  <span>시작하기</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                </div>
-              </div>
-            </Card>
-          </Link>
-
-          {/* Recommend Card */}
-          <Link href="/recommend" className="block outline-none group">
-            <Card className="h-full p-8 border-slate-100 bg-white shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 hover:-translate-y-1 transition-all duration-300 rounded-[2rem] relative overflow-hidden ring-1 ring-transparent hover:ring-emerald-500/10 focus-visible:ring-emerald-500/50">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50/50 rounded-bl-full -mr-10 -mt-10 transition-transform duration-500 group-hover:scale-110" />
-              <div className="relative z-10">
-                <div className="h-14 w-14 rounded-2xl bg-amber-50 flex items-center justify-center mb-6 group-hover:bg-amber-100 transition-colors">
-                   <Image src="/icons/ic-recommend.png" alt="" aria-hidden="true" width={28} height={28} className="object-contain" />
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 tracking-tight mb-3">지능형 추천</h3>
-                <p className="text-sm font-medium text-slate-500 leading-relaxed mb-8">
-                  수만 개의 금융 상품 중 당신의 조건과 라이프스타일에 완벽히 부합하는 상품을 찾습니다.
-                </p>
-                <div className="flex items-center gap-2 text-sm font-bold text-emerald-600">
-                  <span>탐색하기</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-                </div>
-              </div>
-            </Card>
-          </Link>
-
-          {/* Quick Links Card */}
-          <Card className="h-full p-8 border-slate-100 bg-white shadow-sm hover:shadow-xl hover:shadow-emerald-900/5 transition-all duration-300 rounded-[2rem] relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50/50 rounded-bl-full -mr-10 -mt-10" />
-            <div className="relative z-10">
-              <div className="h-14 w-14 rounded-2xl bg-purple-50 flex items-center justify-center mb-6">
-                 <Image src="/icons/ic-products.png" alt="" aria-hidden="true" width={28} height={28} className="object-contain" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 tracking-tight mb-3">라이프 케어</h3>
-              <p className="text-sm font-medium text-slate-500 leading-relaxed mb-6">
-                주거, 청약, 연금 등 생애 주기에 필수적인 금융 정보와 혜택을 한 곳에서 관리합니다.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Link href="/benefits" className="inline-flex h-8 items-center justify-center rounded-full bg-slate-50 px-4 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">혜택 찾기</Link>
-                <Link href="/housing/subscription" className="inline-flex h-8 items-center justify-center rounded-full bg-slate-50 px-4 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">청약 점검</Link>
-                <Link href="/planner" className="inline-flex h-8 items-center justify-center rounded-full bg-slate-50 px-4 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">연금 관리</Link>
-                <Link href="/public/dart" className="inline-flex h-8 items-center justify-center rounded-full bg-slate-50 px-4 text-xs font-bold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors">공시 정보</Link>
-              </div>
-            </div>
-          </Card>
-        </section>
-
-        {/* Fast Track Section */}
-        <section className="mt-12 rounded-[2rem] border border-slate-100 bg-white/60 backdrop-blur-md p-8 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <section className="mt-16 rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <h3 className="text-lg font-bold text-slate-900 tracking-tight">금융상품 다이렉트</h3>
-              <p className="mt-1.5 text-sm font-medium text-slate-500">목적에 맞는 금융상품 카테고리로 즉시 이동하세요.</p>
+              <h2 className="text-lg font-black text-slate-900 tracking-tight">핵심 바로가기</h2>
+              <p className="mt-1 text-sm text-slate-500">v1.0 RC 기준 핵심 진입 링크만 제공합니다.</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {[
-                { label: "예금", href: "/products/deposit" },
-                { label: "적금", href: "/products/saving" },
-                { label: "주담대", href: "/products/mortgage-loan" },
-                { label: "전세대출", href: "/products/rent-house-loan" },
-                { label: "신용대출", href: "/products/credit-loan" },
-              ].map(item => (
-                <Link 
-                  key={item.href} 
-                  href={item.href}
-                  className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-all hover:scale-[1.02] active:scale-95 shadow-sm hover:shadow"
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <div className="w-[1px] h-8 bg-slate-200 mx-2 hidden md:block" />
-              <Link href="/products" className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-95 shadow-md">
-                전체보기
-              </Link>
-            </div>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link href="/dashboard" className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-50 px-4 text-xs font-bold text-emerald-700 hover:bg-emerald-100">/dashboard</Link>
+            <Link href="/planner" className="inline-flex h-9 items-center justify-center rounded-full bg-slate-100 px-4 text-xs font-bold text-slate-700 hover:bg-slate-200">/planner</Link>
+            <Link href="/recommend" className="inline-flex h-9 items-center justify-center rounded-full bg-slate-100 px-4 text-xs font-bold text-slate-700 hover:bg-slate-200">/recommend</Link>
+            <Link href="/public/dart" className="inline-flex h-9 items-center justify-center rounded-full bg-slate-100 px-4 text-xs font-bold text-slate-700 hover:bg-slate-200">/public/dart</Link>
+            <Link href="/settings/data-sources" className="inline-flex h-9 items-center justify-center rounded-full bg-slate-100 px-4 text-xs font-bold text-slate-700 hover:bg-slate-200">/settings/data-sources</Link>
           </div>
         </section>
 

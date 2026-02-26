@@ -10,6 +10,8 @@ import { normalizeSido } from "@/lib/regions/kr";
 import { singleflight } from "../../../../lib/cache/singleflight";
 import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
 import { timingsToDebugMap, withTiming } from "../../../../lib/http/timing";
+import { pushError } from "../../../../lib/observability/errorRingBuffer";
+import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../lib/observability/trace";
 
 function parsePageSize(value: string | null): { value: number; valid: boolean } {
   if (value === null) return { value: 50, valid: true };
@@ -45,6 +47,23 @@ function toCompletionRate(meta: Record<string, unknown>): number | undefined {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
+  const traceId = getOrCreateTraceId(request);
+  const traceMeta = (meta: unknown = {}) => attachTrace(meta, traceId);
+  const withTrace = <T extends Response>(response: T) => setTraceHeader(response, traceId);
+  const recordError = (code: string, message: string, status: number) => {
+    pushError({
+      time: new Date().toISOString(),
+      traceId,
+      route: "/api/gov24/search",
+      source: "gov24",
+      code,
+      message,
+      status,
+      elapsedMs: Date.now() - startedAt,
+    });
+  };
+
   try {
     const { searchParams } = new URL(request.url);
     const query = (searchParams.get("q") ?? "").trim();
@@ -54,16 +73,28 @@ export async function GET(request: Request) {
     const cursorParsed = parseCursor(searchParams.get("cursor"));
     const pageSizeParsed = parsePageSize(searchParams.get("pageSize"));
     if (!cursorParsed.valid) {
-      return NextResponse.json(
-        buildExternalApiFailure({ code: "INPUT", message: "cursor는 0 이상의 정수여야 합니다." }),
-        { status: statusFromExternalApiErrorCode("INPUT") },
-      );
+      const message = "cursor는 0 이상의 정수여야 합니다.";
+      const status = statusFromExternalApiErrorCode("INPUT");
+      recordError("INPUT", message, status);
+      return withTrace(NextResponse.json(
+        {
+          ...buildExternalApiFailure({ code: "INPUT", message }),
+          meta: traceMeta(),
+        },
+        { status },
+      ));
     }
     if (!pageSizeParsed.valid) {
-      return NextResponse.json(
-        buildExternalApiFailure({ code: "INPUT", message: "pageSize는 1~200 범위의 정수여야 합니다." }),
-        { status: statusFromExternalApiErrorCode("INPUT") },
-      );
+      const message = "pageSize는 1~200 범위의 정수여야 합니다.";
+      const status = statusFromExternalApiErrorCode("INPUT");
+      recordError("INPUT", message, status);
+      return withTrace(NextResponse.json(
+        {
+          ...buildExternalApiFailure({ code: "INPUT", message }),
+          meta: traceMeta(),
+        },
+        { status },
+      ));
     }
     const cursor = cursorParsed.value;
     const pageSize = pageSizeParsed.value;
@@ -79,15 +110,15 @@ export async function GET(request: Request) {
         sourceKey: "gov24",
         reason: "snapshot_missing",
       });
-      return NextResponse.json({
+      return withTrace(NextResponse.json({
         ok: true,
         data: {
           items: [],
           totalMatched: 0,
           page: { cursor, pageSize, nextCursor: null, hasMore: false },
         },
-        meta,
-      });
+        meta: traceMeta(meta),
+      }));
     }
 
     const computed = await withTiming("gov24.search.filter", () => singleflight(
@@ -151,7 +182,7 @@ export async function GET(request: Request) {
       },
     ));
 
-    return NextResponse.json({
+    return withTrace(NextResponse.json({
       ok: true,
       data: {
         items: computed.value.payload.data.items,
@@ -159,7 +190,7 @@ export async function GET(request: Request) {
         page: computed.value.payload.data.page,
       },
       meta: {
-        ...computed.value.meta,
+        ...traceMeta(computed.value.meta),
         ...(debugTimingEnabled
           ? {
               debug: {
@@ -168,11 +199,18 @@ export async function GET(request: Request) {
             }
           : {}),
       },
-    });
+    }));
   } catch {
-    return NextResponse.json(
-      buildExternalApiFailure({ code: "INTERNAL", message: "GOV24 검색 API 처리 중 오류가 발생했습니다." }),
-      { status: statusFromExternalApiErrorCode("INTERNAL") },
-    );
+    const code = "INTERNAL";
+    const message = "GOV24 검색 API 처리 중 오류가 발생했습니다.";
+    const status = statusFromExternalApiErrorCode(code);
+    recordError(code, message, status);
+    return withTrace(NextResponse.json(
+      {
+        ...buildExternalApiFailure({ code, message }),
+        meta: traceMeta(),
+      },
+      { status },
+    ));
   }
 }
