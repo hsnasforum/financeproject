@@ -20,6 +20,6 @@ describe("normalizeListQuery", () => {
 describe("mapOpenDartStatus", () => {
   it("maps rate limit and list no-data status", () => {
     expect(mapOpenDartStatus("020", "요청 제한", "company").httpStatus).toBe(429);
-    expect(mapOpenDartStatus("013", "조회된 데이터가 없음", "list").httpStatus).toBe(200);
+    expect(mapOpenDartStatus("013", "조회된 데이터가 없음", "list").httpStatus).toBe(404);
   });
 });

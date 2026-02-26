@@ -1,0 +1,7 @@
+{
+  "minScore": 70,
+  "includeCategories": [],
+  "excludeFlags": ["정정", "첨부", "공시서류제출", "연결"],
+  "maxPerCorp": 2,
+  "maxItems": 20
+}

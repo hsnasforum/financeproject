@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Card } from "@/components/ui/Card";
@@ -18,6 +18,7 @@ import {
 } from "@/lib/publicApis/benefitsTopics";
 import { getBenefitQualityBucket } from "@/lib/publicApis/benefitsQuality";
 import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
+import { parseBenefitsQueryPreset } from "@/lib/planner/actionQuery";
 
 type BenefitItem = BenefitCandidate;
 
@@ -92,6 +93,13 @@ type FacetsState = {
   sigungu: RegionFacet[];
 };
 
+type PlannerBenefitsContext = {
+  category: string;
+  region: string;
+  ageBand: string;
+  incomeBand: string;
+};
+
 function parseFlag(value: string | null, defaultValue = true): boolean {
   if (value === null) return defaultValue;
   const lowered = value.trim().toLowerCase();
@@ -99,9 +107,32 @@ function parseFlag(value: string | null, defaultValue = true): boolean {
   return true;
 }
 
+function categoryLabel(value: string): string {
+  if (value === "housing") return "주거";
+  if (value === "jeonse") return "전세";
+  if (value === "wolse") return "월세";
+  if (value === "childcare" || value === "family" || value === "birth") return "부양가족";
+  if (value === "youth") return "청년";
+  if (value === "job") return "일자리";
+  if (value === "education") return "교육";
+  if (value === "medical") return "의료";
+  return "전체";
+}
+
+function ageBandLabel(value: string): string {
+  if (!value || value === "all") return "전체";
+  return value;
+}
+
+function incomeBandLabel(value: string): string {
+  if (!value || value === "all") return "전체";
+  return value;
+}
+
 export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string }) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState(initialQuery);
   const [selectedTopics, setSelectedTopics] = useState<BenefitTopicKey[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -127,7 +158,47 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   const [detail, setDetail] = useState<{ conditions?: string[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [expandedHints, setExpandedHints] = useState<Record<string, boolean>>({});
+  const [plannerContext, setPlannerContext] = useState<PlannerBenefitsContext>({
+    category: "all",
+    region: "전국",
+    ageBand: "all",
+    incomeBand: "all",
+  });
   const requestControllerRef = useRef<AbortController | null>(null);
+  const initializedFromQueryRef = useRef(false);
+
+  const summaryLines = useMemo(() => {
+    return [
+      `검색어 ${query.trim() || "-"} · 카테고리 ${categoryLabel(plannerContext.category)}`,
+      `지역 ${plannerContext.region} · 연령대 ${ageBandLabel(plannerContext.ageBand)} · 소득 ${incomeBandLabel(plannerContext.incomeBand)}`,
+      `적용 필터 주제 ${isTopicFilterBypassed(selectedTopics) ? "전체" : `${selectedTopics.length}개`} · 시도 ${sido || "전체"}`,
+    ];
+  }, [plannerContext.ageBand, plannerContext.category, plannerContext.incomeBand, plannerContext.region, query, selectedTopics, sido]);
+
+  const checklist = useMemo(() => {
+    const itemsList = [
+      "상세 보기에서 신청 자격·신청 방법을 확인한다.",
+      "조건이 과도하면 카테고리 또는 지역 필터를 완화해 다시 조회한다.",
+      "적용 가능한 혜택은 플래너 가정값(월 지출/목표)에 반영한다.",
+    ];
+    if (items.length === 0) {
+      itemsList.push("조회 0건이면 region=전국 또는 category=all로 재시도한다.");
+    }
+    if (error) {
+      itemsList.push("오류가 반복되면 데이터 소스 상태 페이지에서 연결 상태를 점검한다.");
+    }
+    return itemsList.slice(0, 6);
+  }, [error, items.length]);
+
+  const topicBuckets = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const item of items) {
+      const topic = item.topicMatch?.matchedTopics?.[0];
+      const key = topic && topic in BENEFIT_TOPICS ? BENEFIT_TOPICS[topic as BenefitTopicKey].label : "기타";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [items]);
 
   const syncUrl = useCallback((state: FetchState) => {
     const normalizedTopics = isTopicFilterBypassed(state.topics) ? [] : state.topics;
@@ -207,6 +278,8 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
     const nextSido = patch.sido ?? sido;
     const currentSigungu = patch.sigungu ?? sigungu;
     const shouldResetSigungu = patch.sido !== undefined && patch.sido !== sido && patch.sigungu === undefined;
+    const shouldForceStrictRegion = patch.sido !== undefined && (patch.sido ?? "").trim().length > 0;
+    const shouldResetBroadRegion = patch.sido !== undefined && (patch.sido ?? "").trim().length === 0;
     const nextTopicsRaw = patch.topics ?? selectedTopics;
     const nextTopics = isTopicFilterBypassed(nextTopicsRaw) ? [] : nextTopicsRaw;
     const nextState: FetchState = {
@@ -214,8 +287,8 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       topics: nextTopics,
       sido: nextSido,
       sigungu: shouldResetSigungu ? "" : currentSigungu,
-      includeNationwide: patch.includeNationwide ?? includeNationwide,
-      includeUnknown: patch.includeUnknown ?? includeUnknown,
+      includeNationwide: patch.includeNationwide ?? (shouldForceStrictRegion ? false : shouldResetBroadRegion ? true : includeNationwide),
+      includeUnknown: patch.includeUnknown ?? (shouldForceStrictRegion ? false : shouldResetBroadRegion ? true : includeUnknown),
       scanAll: patch.scanAll ?? scanAll,
       pageSize: patch.pageSize ?? pageSize,
       maxPages: patch.maxPages ?? maxPages,
@@ -262,47 +335,59 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   }, [includeNationwide, includeUnknown, maxPages, pageSize, query, run, selectedTopics, sigungu, sido]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const sp = new URLSearchParams(window.location.search);
-      const queryFromUrl = (sp.get("query") ?? "").trim();
-      const topicsFromUrl = parseTopicKeys((sp.get("topics") ?? "").split(",").map((entry) => entry.trim()).filter(Boolean));
-      const parsedSido = normalizeSido(sp.get("sido") ?? "") ?? "";
-      const parsedSigungu = (sp.get("sigungu") ?? "").trim();
-      const parsedIncludeNationwide = parseFlag(sp.get("includeNationwide"), true);
-      const parsedIncludeUnknown = parseFlag(sp.get("includeUnknown"), true);
-      const parsedScan = (sp.get("scan") ?? "").trim().toLowerCase();
-      const parsedScanAll = parsedScan ? parsedScan === "all" : true;
-      const parsedPageSize = Math.max(1, Math.min(200, Number(sp.get("pageSize") ?? sp.get("limit") ?? "50") || 50));
-      const parsedMaxPagesRaw = (sp.get("maxPages") ?? "10").trim().toLowerCase();
-      const parsedMaxPages = parsedMaxPagesRaw === "auto" ? "auto" : Math.max(5, Math.min(30, Number(parsedMaxPagesRaw) || 10));
-      const normalizedTopics = isTopicFilterBypassed(topicsFromUrl) ? [] : topicsFromUrl;
-      const initialState: FetchState = {
-        query: queryFromUrl || initialQuery.trim(),
-        topics: normalizedTopics,
-        sido: parsedSido,
-        sigungu: parsedSido ? parsedSigungu : "",
-        includeNationwide: parsedIncludeNationwide,
-        includeUnknown: parsedIncludeUnknown,
-        scanAll: parsedScanAll,
-        pageSize: parsedPageSize,
-        maxPages: parsedMaxPages,
-      };
-      setQuery(initialState.query);
-      setSelectedTopics(initialState.topics);
-      setSido(initialState.sido);
-      setSigungu(initialState.sigungu);
-      setIncludeNationwide(initialState.includeNationwide);
-      setIncludeUnknown(initialState.includeUnknown);
-      setScanAll(initialState.scanAll);
-      setPageSize(initialState.pageSize);
-      setMaxPages(initialState.maxPages);
-      void run(initialState, { cursor: 0, includeFacets: true });
-    }, 0);
+    if (initializedFromQueryRef.current) return;
+    initializedFromQueryRef.current = true;
+
+    const queryPreset = parseBenefitsQueryPreset(searchParams, initialQuery);
+    const topicsFromUrl = parseTopicKeys((searchParams.get("topics") ?? "").split(",").map((entry) => entry.trim()).filter(Boolean));
+    const parsedSido = queryPreset.sido || normalizeSido(searchParams.get("sido") ?? "") || "";
+    const parsedSigungu = queryPreset.sigungu || (searchParams.get("sigungu") ?? "").trim();
+    const hasIncludeNationwideParam = searchParams.has("includeNationwide");
+    const hasIncludeUnknownParam = searchParams.has("includeUnknown");
+    const parsedIncludeNationwide = parseFlag(searchParams.get("includeNationwide"), parsedSido ? false : true);
+    const parsedIncludeUnknown = parseFlag(searchParams.get("includeUnknown"), parsedSido ? false : true);
+    const parsedScan = (searchParams.get("scan") ?? "").trim().toLowerCase();
+    const parsedScanAll = parsedScan ? parsedScan === "all" : true;
+    const parsedPageSize = Math.max(1, Math.min(200, Number(searchParams.get("pageSize") ?? searchParams.get("limit") ?? "50") || 50));
+    const parsedMaxPagesRaw = (searchParams.get("maxPages") ?? "10").trim().toLowerCase();
+    const parsedMaxPages = parsedMaxPagesRaw === "auto" ? "auto" : Math.max(5, Math.min(30, Number(parsedMaxPagesRaw) || 10));
+    const prioritizedTopics = topicsFromUrl.length > 0 ? topicsFromUrl : queryPreset.mappedTopics;
+    const normalizedTopics = isTopicFilterBypassed(prioritizedTopics) ? [] : prioritizedTopics;
+    const initialState: FetchState = {
+      query: queryPreset.q,
+      topics: normalizedTopics,
+      sido: parsedSido,
+      sigungu: parsedSido ? parsedSigungu : "",
+      includeNationwide: parsedIncludeNationwide,
+      includeUnknown: parsedIncludeUnknown,
+      scanAll: parsedScanAll,
+      pageSize: parsedPageSize,
+      maxPages: parsedMaxPages,
+    };
+
+    setPlannerContext({
+      category: queryPreset.category,
+      region: queryPreset.region,
+      ageBand: queryPreset.ageBand,
+      incomeBand: queryPreset.incomeBand,
+    });
+    setQuery(initialState.query);
+    setSelectedTopics(initialState.topics);
+    setSido(initialState.sido);
+    setSigungu(initialState.sigungu);
+    setIncludeNationwide(initialState.includeNationwide);
+    setIncludeUnknown(initialState.includeUnknown);
+    if (!hasIncludeNationwideParam && parsedSido) setIncludeNationwide(false);
+    if (!hasIncludeUnknownParam && parsedSido) setIncludeUnknown(false);
+    setScanAll(initialState.scanAll);
+    setPageSize(initialState.pageSize);
+    setMaxPages(initialState.maxPages);
+    void run(initialState, { cursor: 0, includeFacets: true });
+
     return () => {
-      window.clearTimeout(timer);
       requestControllerRef.current?.abort();
     };
-  }, [initialQuery, run]);
+  }, [initialQuery, run, searchParams]);
 
   return (
     <main className="py-8">
@@ -435,6 +520,15 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
             <p className="mt-1 text-xs font-semibold text-slate-700">
               총 결과 {totalMatched}개 (스냅샷 {meta.snapshot?.totalItemsInSnapshot ?? "?"}개 / 업스트림 {meta.upstreamTotalCount ?? "?"}개)
             </p>
+            {topicBuckets.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {topicBuckets.slice(0, 8).map(([label, count]) => (
+                  <span key={`${label}-${count}`} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600">
+                    {label} {count}
+                  </span>
+                ))}
+              </div>
+            ) : null}
             {meta.pipeline ? (
               <p className="mt-1 text-xs text-slate-600">
                 스냅샷 {meta.pipeline.snapshotUnique} → 주제/검색 {meta.pipeline.afterAdvancedQuery} → 토글 {meta.pipeline.afterScopeToggles} → 지역 {sigungu ? meta.pipeline.afterSigungu : meta.pipeline.afterSido} → 표시 {meta.pipeline.afterLimit}
@@ -548,6 +642,20 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
           {error ? <p className="mt-2 text-sm text-red-700" data-testid="benefits-error-banner">{error}</p> : null}
           {errorCode ? <p className="mt-1 text-xs text-red-600">오류 코드: {errorCode}</p> : null}
           {assumption ? <p className="mt-2 text-xs text-slate-500">{assumption}</p> : null}
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-semibold text-slate-800">조건 요약</p>
+            <ul className="mt-1 space-y-1 text-xs text-slate-600">
+              {summaryLines.map((line) => (
+                <li key={line}>- {line}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-sm font-semibold text-slate-800">다음 행동 체크리스트</p>
+            <ul className="mt-1 space-y-1 text-xs text-slate-600">
+              {checklist.map((item) => (
+                <li key={item}>- {item}</li>
+              ))}
+            </ul>
+          </div>
           {!includeNationwide && !includeUnknown ? (
             <p className="mt-1 text-xs text-amber-700">전국/미상을 제외하면 0건이 될 수 있습니다.</p>
           ) : null}

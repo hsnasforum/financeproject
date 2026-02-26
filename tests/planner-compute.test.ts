@@ -15,6 +15,8 @@ function baseInput(): PlannerInput {
 }
 
 describe("computePlanner", () => {
+  const emergencyRecommendHref = "/recommend?purpose=emergency&kind=deposit&preferredTerm=3&liquidityPref=high&rateMode=max&pool=unified&autorun=1&save=1&go=history";
+
   it("allocates to emergency fund when free cashflow is positive and emergency is insufficient", () => {
     const input = baseInput();
     const result = computePlanner(input, getDefaultPlannerAssumptions());
@@ -46,27 +48,31 @@ describe("computePlanner", () => {
     input.debts = [{ name: "대출", balance: 5000000, aprPct: 12, monthlyPayment: 150000 }];
 
     const result = computePlanner(input, getDefaultPlannerAssumptions());
+    const firstActionHrefs = result.actions[0]?.links?.map((link) => link.href) ?? [];
 
     expect(result.warnings.join(" ")).toContain("월 가용저축액");
     expect(result.actions[0]?.title).toContain("현금흐름");
+    expect(firstActionHrefs).toContain("/gov24");
   });
 
-  it("attaches emergency/deposit deep links to emergency-first actions", () => {
+  it("attaches emergency recommend links to emergency-first actions", () => {
     const minEmergencyInput = baseInput();
     minEmergencyInput.liquidAssets = 1_000_000;
 
     const minEmergencyResult = computePlanner(minEmergencyInput, getDefaultPlannerAssumptions());
     const minEmergencyAction = minEmergencyResult.actions.find((action) => action.title === "최소 비상금 먼저 확보");
+    const minEmergencyHrefs = minEmergencyAction?.links?.map((link) => link.href) ?? [];
 
-    expect(minEmergencyAction?.link?.href).toBe("/recommend?purpose=emergency&kind=deposit");
+    expect(minEmergencyHrefs).toContain(emergencyRecommendHref);
 
     const targetEmergencyInput = baseInput();
     targetEmergencyInput.liquidAssets = 2_500_000;
 
     const targetEmergencyResult = computePlanner(targetEmergencyInput, getDefaultPlannerAssumptions());
     const targetEmergencyAction = targetEmergencyResult.actions.find((action) => action.title === "비상금 목표까지 우선 적립");
+    const targetEmergencyHrefs = targetEmergencyAction?.links?.map((link) => link.href) ?? [];
 
-    expect(targetEmergencyAction?.link?.href).toBe("/products/deposit");
+    expect(targetEmergencyHrefs).toContain(emergencyRecommendHref);
   });
 
   it("attaches credit-loan deep links to debt-focused actions", () => {
@@ -79,8 +85,22 @@ describe("computePlanner", () => {
     const result = computePlanner(input, getDefaultPlannerAssumptions());
     const parallelAction = result.actions.find((action) => action.title === "고금리 부채+비상금 병행");
     const focusAction = result.actions.find((action) => action.title.startsWith("집중 상환 대상:"));
+    const parallelHrefs = parallelAction?.links?.map((link) => link.href) ?? [];
+    const focusHrefs = focusAction?.links?.map((link) => link.href) ?? [];
 
-    expect(parallelAction?.link?.href).toBe("/products/credit-loan");
-    expect(focusAction?.link?.href).toBe("/products/credit-loan");
+    expect(parallelHrefs).toContain("/products/credit-loan");
+    expect(parallelHrefs).toContain(emergencyRecommendHref);
+    expect(focusHrefs).toContain("/products/credit-loan");
+  });
+
+  it("adds housing afford and subscription links when housing goal keywords are present", () => {
+    const input = baseInput();
+    input.goals = [{ name: "내집 마련 청약", targetAmount: 150000000, horizonMonths: 60 }];
+
+    const result = computePlanner(input, getDefaultPlannerAssumptions());
+    const allHrefs = result.actions.flatMap((action) => action.links?.map((link) => link.href) ?? []);
+
+    expect(allHrefs).toContain("/housing/afford?incomeNet=4000000&outflow=2000000");
+    expect(allHrefs).toContain("/housing/subscription?region=전국&mode=all&houseType=apt");
   });
 });

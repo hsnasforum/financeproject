@@ -11,6 +11,10 @@ vi.mock("@/lib/publicApis/providers/exchange", () => ({
   getKstTodayYYYYMMDD: vi.fn(() => "20260225"),
 }));
 
+vi.mock("@/lib/http/apiError", async () => await import("../src/lib/http/apiError"));
+vi.mock("@/lib/http/fallbackMeta", async () => await import("../src/lib/http/fallbackMeta"));
+vi.mock("@/lib/http/rateLimitCooldown", async () => await import("../src/lib/http/rateLimitCooldown"));
+
 vi.mock("@/lib/publicApis/errorContract", async () => await import("../src/lib/publicApis/errorContract"));
 
 vi.mock("@/lib/publicApis/benefitsSnapshot", () => ({
@@ -51,6 +55,7 @@ type ErrorEnvelope = {
   error?: {
     code?: unknown;
     message?: unknown;
+    debug?: unknown;
   };
 };
 

@@ -6,8 +6,9 @@ import { getSnapshotOrNull } from "@/lib/publicApis/benefitsSnapshot";
 import { searchBenefits } from "@/lib/publicApis/providers/benefits";
 import { buildBenefitsSearchPayload, type SearchFilters } from "@/lib/publicApis/benefitsSearchView";
 import { parseTopicKeys } from "@/lib/publicApis/benefitsTopics";
+import { getCachePolicy } from "../../../../../lib/dataSources/cachePolicy";
 
-const TTL_SECONDS = 2 * 24 * 60 * 60;
+const TTL_SECONDS = Math.max(1, Math.trunc(getCachePolicy("benefits").ttlMs / 1000));
 
 function statusByCode(code: string): number {
   if (code === "INPUT") return 400;
@@ -76,7 +77,8 @@ export async function GET(request: Request) {
     const useSnapshotPath = scanMode === "all";
     const maxPages = parseMaxPages(searchParams.get("maxPages"), 10);
     const rows = parsePositiveInt(searchParams.get("rows"), 200, 50, 300);
-    const snapshotTtlMs = parsePositiveInt(searchParams.get("snapshotTtlSec"), 24 * 60 * 60, 60, 7 * 24 * 60 * 60) * 1000;
+    const snapshotPolicySec = Math.max(60, Math.trunc(getCachePolicy("benefits").ttlMs / 1000));
+    const snapshotTtlMs = parsePositiveInt(searchParams.get("snapshotTtlSec"), snapshotPolicySec, 60, 7 * 24 * 60 * 60) * 1000;
     const deep = scanMode === "deep";
     const scanPages = useSnapshotPath ? maxPages : scanMode === "deep" ? (typeof maxPages === "number" ? Math.max(maxPages, 10) : 10) : 1;
     const scope = (searchParams.get("scope") ?? "auto").trim().toLowerCase() as "auto" | "name" | "field";

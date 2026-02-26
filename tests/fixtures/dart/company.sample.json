@@ -1,0 +1,26 @@
+{
+  "ok": true,
+  "data": {
+    "corp_code": "00126380",
+    "corp_name": "삼성전자",
+    "corp_name_eng": "SAMSUNG ELECTRONICS CO,.LTD",
+    "stock_name": "삼성전자",
+    "stock_code": "005930",
+    "ceo_nm": "한종희",
+    "corp_cls": "Y",
+    "jurir_no": "1301110006246",
+    "bizr_no": "1248100998",
+    "adres": "경기도 수원시 영통구 삼성로 129",
+    "hm_url": "www.samsung.com",
+    "ir_url": "https://www.samsung.com/global/ir",
+    "phn_no": "031-200-1114",
+    "fax_no": "031-200-7538",
+    "induty_code": "264",
+    "est_dt": "19690113",
+    "acc_mt": "12",
+    "raw": {
+      "status": "000",
+      "message": "정상"
+    }
+  }
+}

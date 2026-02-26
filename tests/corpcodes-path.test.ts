@@ -10,6 +10,7 @@ describe("resolveCorpCodesIndexPath", () => {
     expect(resolved.primary).toBe(path.resolve(root, "./custom/corpCodes.json"));
     expect(resolved.tried).toEqual([
       path.resolve(root, "./custom/corpCodes.json"),
+      path.join(root, "tmp", "dart", "corpCodes.index.json"),
       path.join(root, "src", "data", "dart", "corpCodes.json"),
     ]);
   });

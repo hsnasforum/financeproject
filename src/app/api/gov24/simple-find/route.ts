@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
+import { makeHttpError } from "@/lib/http/apiError";
 import { getSnapshotOrNull } from "@/lib/publicApis/benefitsSnapshot";
 import { paginateByCursor, rankBySimpleFind } from "@/lib/publicApis/gov24SimpleFind/matcher";
 import { type Gov24SimpleFindInput } from "@/lib/publicApis/gov24SimpleFind/types";
 import { buildOrgTypeCounts, classifyOrgType, type Gov24OrgType } from "@/lib/gov24/orgClassifier";
 import { buildGov24CardFields } from "@/lib/gov24/cardFields";
+import { attachFallback } from "@/lib/http/fallbackMeta";
 import { normalizeSido } from "@/lib/regions/kr";
 import { filterByResidence } from "@/lib/gov24/residenceHardFilter";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
+import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
 
 function parsePageSize(value: string | null, fallback = 50): number {
   const parsed = Number(value);
@@ -60,22 +63,41 @@ export async function POST(request: Request) {
 
   const body = parseBody(await request.json().catch(() => null));
   if (!body) {
-    return NextResponse.json({ ok: false, error: { code: "INPUT", message: "간편찾기 입력값이 올바르지 않습니다." } }, { status: 400 });
+    return NextResponse.json(
+      {
+        ok: false,
+        meta: attachFallback({}, {
+          mode: "LIVE",
+          sourceKey: "gov24",
+          reason: "input_invalid",
+        }),
+        error: makeHttpError("INPUT", "간편찾기 입력값이 올바르지 않습니다."),
+      },
+      { status: 400 },
+    );
   }
   if (body.targetType !== "individual") {
     return NextResponse.json({
       ok: true,
       data: { items: [], totalMatched: 0, page: { cursor, pageSize, nextCursor: null, hasMore: false } },
-      meta: { message: "개인/가구 대상만 우선 지원합니다." },
+      meta: attachFallback({ message: "개인/가구 대상만 우선 지원합니다." }, {
+        mode: "CACHE",
+        sourceKey: "gov24",
+        reason: "target_type_not_supported",
+      }),
     });
   }
 
-  const snap = getSnapshotOrNull({ ttlMs: 24 * 60 * 60 * 1000 });
+  const snap = getSnapshotOrNull({ ttlMs: getCachePolicy("gov24").ttlMs });
   if (!snap) {
     return NextResponse.json({
       ok: true,
       data: { items: [], totalMatched: 0, page: { cursor, pageSize, nextCursor: null, hasMore: false } },
-      meta: { generatedAt: null, snapshotTotal: 0 },
+      meta: attachFallback({ generatedAt: null, snapshotTotal: 0 }, {
+        mode: "CACHE",
+        sourceKey: "gov24",
+        reason: "snapshot_missing",
+      }),
     });
   }
 
@@ -128,6 +150,12 @@ export async function POST(request: Request) {
       generatedAt: snap.snapshot.meta.generatedAt,
       snapshotTotal: snap.snapshot.meta.totalItemsInSnapshot,
       residenceFilter: { before: snap.snapshot.items.length, after: residenceItems.length },
+      fallback: {
+        mode: "CACHE",
+        sourceKey: "gov24",
+        reason: "snapshot_read",
+        generatedAt: snap.snapshot.meta.generatedAt,
+      },
     },
   });
 }

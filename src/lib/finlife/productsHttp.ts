@@ -1,8 +1,9 @@
 import { ensureProductBest } from "@/lib/finlife/best";
 import { fetchLiveFinlifeDetailed } from "@/lib/finlife/fetchLive";
-import { fetchMockFinlife } from "@/lib/finlife/fetchMock";
+import { singleflight } from "../cache/singleflight";
 import {
   buildFinlifeHttpCacheKey,
+  getFinlifeHttpCacheTtlMs,
   resolveFinlifeHttpCacheState,
   type FinlifeHttpCacheState,
 } from "@/lib/finlife/httpCache";
@@ -11,6 +12,9 @@ import { resolveFinlifeMode } from "@/lib/finlife/mode";
 import { normalizeFinlifeProducts } from "@/lib/finlife/normalize";
 import { loadFinlifeSnapshot } from "@/lib/finlife/snapshot";
 import { type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
+import { isDebugEnabled } from "@/lib/http/apiError";
+import { attachFallback, type FallbackMeta } from "@/lib/http/fallbackMeta";
+import { setCooldown, shouldCooldown } from "@/lib/http/rateLimitCooldown";
 import { statusFromExternalApiErrorCode } from "@/lib/publicApis/errorContract";
 import { buildSchemaMismatchError } from "@/lib/publicApis/schemaDrift";
 
@@ -46,6 +50,73 @@ type CacheEntry = {
 };
 
 const liveCache = new Map<string, CacheEntry>();
+const FINLIFE_SOURCE_KEY = "finlife";
+const DEFAULT_COOLDOWN_SECONDS = 120;
+
+function fallbackLive(reason?: string): FallbackMeta {
+  return {
+    mode: "LIVE",
+    sourceKey: FINLIFE_SOURCE_KEY,
+    reason,
+  };
+}
+
+function fallbackCache(input: { reason: string; generatedAt?: string; nextRetryAt?: string }): FallbackMeta {
+  return {
+    mode: "CACHE",
+    sourceKey: FINLIFE_SOURCE_KEY,
+    reason: input.reason,
+    generatedAt: input.generatedAt,
+    nextRetryAt: input.nextRetryAt,
+  };
+}
+
+function fallbackReplay(input: { reason: string; generatedAt?: string; nextRetryAt?: string }): FallbackMeta {
+  return {
+    mode: "REPLAY",
+    sourceKey: FINLIFE_SOURCE_KEY,
+    reason: input.reason,
+    generatedAt: input.generatedAt,
+    nextRetryAt: input.nextRetryAt,
+  };
+}
+
+function withFallback(payload: FinlifeSourceResult, fallback: FallbackMeta): FinlifeSourceResult {
+  const metaWithFallback = attachFallback(payload.meta, fallback);
+  return {
+    ...payload,
+    meta: {
+      ...metaWithFallback,
+      fallbackUsed: fallback.mode !== "LIVE",
+    },
+  };
+}
+
+function snapshotGeneratedAt(payload: FinlifeSourceResult | null | undefined): string | undefined {
+  return typeof payload?.meta?.snapshot?.generatedAt === "string" ? payload.meta.snapshot.generatedAt : undefined;
+}
+
+function parseUpstreamError(input: unknown): {
+  status?: number;
+  retryAfterSeconds?: number;
+  timeout: boolean;
+} {
+  const parsed = input as { status?: unknown; retryAfterSeconds?: unknown; message?: unknown; name?: unknown } | undefined;
+  const statusRaw = typeof parsed?.status === "number" ? parsed.status : Number(parsed?.status);
+  const message = typeof parsed?.message === "string" ? parsed.message : "";
+  const messageStatus = message.match(/\bHTTP\s+(\d{3})\b/i);
+  const status = Number.isFinite(statusRaw)
+    ? Math.trunc(statusRaw)
+    : messageStatus
+      ? Number(messageStatus[1])
+      : undefined;
+  const retryAfterRaw = typeof parsed?.retryAfterSeconds === "number"
+    ? parsed.retryAfterSeconds
+    : Number(parsed?.retryAfterSeconds);
+  const retryAfterSeconds = Number.isFinite(retryAfterRaw) ? Math.max(1, Math.trunc(retryAfterRaw)) : undefined;
+  const timeout = parsed?.name === "AbortError" || /timeout|timed out|etimedout|econnreset/i.test(message);
+  return { status, retryAfterSeconds, timeout };
+}
 
 function parsePositiveInt(value: string | null, fallback: number, min: number, max: number): number {
   if (value === null) return fallback;
@@ -271,6 +342,16 @@ function parseScanMode(searchParams: URLSearchParams): { scan: "page" | "all"; m
   return { scan, maxPages: Math.min(hardCap, Math.trunc(parsed)) };
 }
 
+function fetchLiveFinlifeSingleflight(
+  kind: Extract<FinlifeKind, "deposit" | "saving">,
+  params: Required<{ pageNo: number; topFinGrpNo: string; scan: "page"; scanMaxPages: "auto" }>,
+) {
+  return singleflight(
+    `finlife-live:${kind}:${params.topFinGrpNo}:${params.pageNo}`,
+    () => fetchLiveFinlifeDetailed(kind, params),
+  );
+}
+
 function buildHeaders(mode: "live" | "replay" | "mock", cacheState: FinlifeHttpCacheState, upstream: "called" | "not-called"): Record<string, string> {
   return {
     "x-finlife-mode": mode,
@@ -280,14 +361,9 @@ function buildHeaders(mode: "live" | "replay" | "mock", cacheState: FinlifeHttpC
 }
 
 function parseFlags(searchParams: URLSearchParams): { debug: boolean; forceBypass: boolean } {
-  const debug = searchParams.get("debug") === "1" || process.env.NODE_ENV !== "production";
+  const debug = isDebugEnabled(searchParams);
   const forceBypass = searchParams.get("force") === "1";
   return { debug, forceBypass };
-}
-
-function getCacheTtlMs(): number {
-  const seconds = parsePositiveInt(process.env.FINLIFE_CACHE_TTL_SECONDS ?? "60", 60, 1, 24 * 60 * 60);
-  return seconds * 1000;
 }
 
 function buildSchemaMismatchPayload(input: {
@@ -296,8 +372,9 @@ function buildSchemaMismatchPayload(input: {
   topFinGrpNo: string;
   mode: FinlifeSourceResult["mode"];
   error: FinlifeSourceResult["error"];
+  fallback?: FallbackMeta;
 }): FinlifeSourceResult {
-  return {
+  const payload: FinlifeSourceResult = {
     ok: false,
     mode: input.mode,
     meta: {
@@ -310,57 +387,83 @@ function buildSchemaMismatchPayload(input: {
     data: [],
     error: input.error,
   };
+  return withFallback(payload, input.fallback ?? fallbackLive("schema_mismatch"));
 }
 
-function buildMockPayload(input: {
+function buildHttpErrorPayload(input: {
   kind: Extract<FinlifeKind, "deposit" | "saving">;
   pageNo: number;
   topFinGrpNo: string;
-  pageSize: number;
+  mode: FinlifeSourceResult["mode"];
+  code: string;
   message: string;
-  fallbackUsed: boolean;
-  note?: string;
+  fallback?: FallbackMeta;
 }): FinlifeSourceResult {
-  const parsed = extractRowsAndPaging({
-    raw: fetchMockFinlife(input.kind),
-    pageNo: input.pageNo,
-    pageSize: input.pageSize,
-    kind: input.kind,
-    topFinGrpNo: input.topFinGrpNo,
-    mode: "mock",
-  });
-  if (parsed.mismatch) {
-    return buildSchemaMismatchPayload({
-      kind: input.kind,
-      pageNo: input.pageNo,
-      topFinGrpNo: input.topFinGrpNo,
-      mode: "mock",
-      error: parsed.mismatch,
-    });
-  }
-  const totalOptions = parsed.rows.reduce((sum, item) => sum + item.options.length, 0);
-  return {
-    ok: true,
-    mode: "mock",
+  const payload: FinlifeSourceResult = {
+    ok: false,
+    mode: input.mode,
     meta: {
       kind: input.kind,
       pageNo: input.pageNo,
       topFinGrpNo: input.topFinGrpNo,
-      fallbackUsed: input.fallbackUsed,
+      fallbackUsed: false,
       message: input.message,
-      hasNext: false,
-      nextPage: null,
-      totalCount: parsed.rows.length,
-      nowPage: 1,
-      maxPage: 1,
-      totalProducts: parsed.rows.length,
-      totalOptions,
-      source: "mock",
-      note: input.note,
     },
-    data: parsed.rows,
-    raw: { source: "mock" },
+    data: [],
+    error: {
+      code: input.code,
+      message: input.message,
+    },
   };
+  return withFallback(payload, input.fallback ?? fallbackLive("http_error"));
+}
+
+function buildReplayPayload(input: {
+  snapshot: NonNullable<ReturnType<typeof loadFinlifeSnapshot>>;
+  kind: Extract<FinlifeKind, "deposit" | "saving">;
+  pageNo: number;
+  pageSize: number;
+  topFinGrpNo: string;
+  reason: string;
+  nextRetryAt?: string;
+}): FinlifeSourceResult {
+  const filtered = input.snapshot.items.filter((item) => pickGroupCode(item) === input.topFinGrpNo);
+  const page = paginate(filtered, input.pageNo, input.pageSize);
+  const ageMs = Math.max(0, Date.now() - Date.parse(input.snapshot.meta.generatedAt));
+
+  const payload: FinlifeSourceResult = {
+    ok: true,
+    mode: "fixture",
+    meta: {
+      kind: input.kind,
+      pageNo: input.pageNo,
+      topFinGrpNo: input.topFinGrpNo,
+      fallbackUsed: true,
+      hasNext: page.hasNext,
+      nextPage: page.hasNext ? input.pageNo + 1 : null,
+      totalCount: page.total,
+      nowPage: input.pageNo,
+      maxPage: page.maxPage,
+      totalProducts: input.snapshot.meta.totalProducts,
+      totalOptions: input.snapshot.meta.totalOptions,
+      source: "snapshot",
+      note: "fromFile replay",
+      snapshot: {
+        generatedAt: input.snapshot.meta.generatedAt,
+        ageMs,
+        completionRate: input.snapshot.meta.completionRate,
+        totalProducts: input.snapshot.meta.totalProducts,
+        totalOptions: input.snapshot.meta.totalOptions,
+      },
+    },
+    data: page.rows,
+  };
+
+  return withFallback(payload, fallbackReplay({
+    reason: input.reason,
+    generatedAt: input.snapshot.meta.generatedAt,
+    nextRetryAt: input.nextRetryAt,
+  }));
 }
 
 function attachDebugMeta(payload: FinlifeSourceResult, input: {
@@ -370,12 +473,14 @@ function attachDebugMeta(payload: FinlifeSourceResult, input: {
   pageSize: number;
   upstream?: UpstreamDebug;
 }): FinlifeSourceResult {
-  if (!input.enabled) return payload;
+  if (!input.enabled || !payload.ok) return payload;
+  const existingMetaDebug = payload.meta.debug ?? {};
   return {
     ...payload,
     meta: {
       ...payload.meta,
       debug: {
+        ...existingMetaDebug,
         cacheKey: input.cacheKey,
         pageNo: input.pageNo,
         pageSize: input.pageSize,
@@ -386,6 +491,43 @@ function attachDebugMeta(payload: FinlifeSourceResult, input: {
         totalCount: input.upstream?.totalCount,
         maxPage: input.upstream?.maxPage,
       },
+    },
+  };
+}
+
+function compactDebug(debug: Record<string, unknown>): Record<string, unknown> {
+  const entries = Object.entries(debug).filter(([, value]) => value !== undefined);
+  return Object.fromEntries(entries);
+}
+
+function attachDebugError(payload: FinlifeSourceResult, input: {
+  enabled: boolean;
+  cacheKey: string;
+  pageNo: number;
+  pageSize: number;
+  reason: string;
+  upstream?: UpstreamDebug;
+}): FinlifeSourceResult {
+  if (!input.enabled || payload.ok || !payload.error) return payload;
+  const mergedDebug = compactDebug({
+    ...(payload.error.debug ?? {}),
+    cacheKey: input.cacheKey,
+    pageNo: input.pageNo,
+    pageSize: input.pageSize,
+    reason: input.reason,
+    upstreamStatus: input.upstream?.upstreamStatus,
+    upstreamMs: input.upstream?.upstreamMs,
+    baseListLen: input.upstream?.baseListLen,
+    optionListLen: input.upstream?.optionListLen,
+    totalCount: input.upstream?.totalCount,
+    maxPage: input.upstream?.maxPage,
+  });
+  if (Object.keys(mergedDebug).length === 0) return payload;
+  return {
+    ...payload,
+    error: {
+      ...payload.error,
+      debug: mergedDebug,
     },
   };
 }
@@ -415,83 +557,59 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
 
   if (pageNoParsed.error || pageSizeParsed.error) {
     const message = pageNoParsed.error ?? pageSizeParsed.error ?? "요청 파라미터가 올바르지 않습니다.";
+    const payload = buildHttpErrorPayload({
+      kind,
+      pageNo,
+      topFinGrpNo,
+      mode: mode === "replay" ? "fixture" : "live",
+      code: "INPUT",
+      message,
+    });
     return {
       status: statusFromExternalApiErrorCode("INPUT"),
       headers: buildHeaders(mode === "replay" ? "replay" : "live", "bypass", "not-called"),
-      payload: {
-        ok: false,
-        mode: mode === "replay" ? "fixture" : "live",
-        meta: {
-          kind,
-          pageNo,
-          topFinGrpNo,
-          fallbackUsed: false,
-          message: "요청 파라미터가 올바르지 않습니다.",
-        },
-        data: [],
-        error: {
-          code: "INPUT",
-          message,
-        },
-      },
+      payload: attachDebugError(payload, {
+        enabled: debug,
+        cacheKey: `input:${kind}:${topFinGrpNo}:${pageNo}:${pageSize}`,
+        pageNo,
+        pageSize,
+        reason: "input_invalid",
+      }),
     };
   }
 
   if (mode === "replay") {
     const snapshot = loadFinlifeSnapshot(kind);
     if (!snapshot) {
-      const payload = buildMockPayload({
+      const payload = buildHttpErrorPayload({
         kind,
         pageNo,
         topFinGrpNo,
-        pageSize,
-        message: "replay 스냅샷이 없어 mock 데이터로 전환했습니다.",
-        fallbackUsed: true,
-        note: "replay_missing_to_mock",
+        mode: "fixture",
+        code: "REPLAY_MISSING",
+        message: "replay 스냅샷을 찾지 못했습니다.",
+        fallback: fallbackReplay({ reason: "replay_missing" }),
       });
       return {
-        status: 200,
-        headers: buildHeaders("mock", "bypass", "not-called"),
-        payload: attachDebugMeta(payload, {
+        status: statusFromExternalApiErrorCode("REPLAY_MISSING"),
+        headers: buildHeaders("replay", "bypass", "not-called"),
+        payload: attachDebugError(payload, {
           enabled: debug,
           cacheKey: `replay-missing:${kind}:${topFinGrpNo}:${pageNo}:${pageSize}`,
           pageNo,
           pageSize,
+          reason: "replay_missing",
         }),
       };
     }
-
-    const filtered = snapshot.items.filter((item) => pickGroupCode(item) === topFinGrpNo);
-    const page = paginate(filtered, pageNo, pageSize);
-    const ageMs = Math.max(0, Date.now() - Date.parse(snapshot.meta.generatedAt));
-
-    const payload: FinlifeSourceResult = {
-      ok: true,
-      mode: "fixture",
-      meta: {
-        kind,
-        pageNo,
-        topFinGrpNo,
-        fallbackUsed: false,
-        hasNext: page.hasNext,
-        nextPage: page.hasNext ? pageNo + 1 : null,
-        totalCount: page.total,
-        nowPage: pageNo,
-        maxPage: page.maxPage,
-        totalProducts: snapshot.meta.totalProducts,
-        totalOptions: snapshot.meta.totalOptions,
-        source: "snapshot",
-        note: "fromFile replay",
-        snapshot: {
-          generatedAt: snapshot.meta.generatedAt,
-          ageMs,
-          completionRate: snapshot.meta.completionRate,
-          totalProducts: snapshot.meta.totalProducts,
-          totalOptions: snapshot.meta.totalOptions,
-        },
-      },
-      data: page.rows,
-    };
+    const payload = buildReplayPayload({
+      snapshot,
+      kind,
+      pageNo,
+      pageSize,
+      topFinGrpNo,
+      reason: "explicit_replay",
+    });
 
     return {
       status: 200,
@@ -515,10 +633,14 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
   });
 
   if (cacheDecision.state === "hit" && cacheDecision.entry) {
+    const cachedPayload = withFallback(cacheDecision.entry.payload, fallbackCache({
+      reason: "http_cache_hit",
+      generatedAt: snapshotGeneratedAt(cacheDecision.entry.payload),
+    }));
     return {
       status: 200,
       headers: buildHeaders("live", "hit", "not-called"),
-      payload: attachDebugMeta(cacheDecision.entry.payload, {
+      payload: attachDebugMeta(cachedPayload, {
         enabled: debug,
         cacheKey,
         pageNo,
@@ -528,25 +650,93 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
     };
   }
 
-  if (!process.env.FINLIFE_API_KEY) {
-    const payload = buildMockPayload({
+  const cooldown = shouldCooldown(FINLIFE_SOURCE_KEY);
+  if (cooldown.cooldown) {
+    const stale = liveCache.get(cacheKey);
+    if (stale) {
+      const stalePayload = withFallback(stale.payload, fallbackCache({
+        reason: "cooldown_cache",
+        generatedAt: snapshotGeneratedAt(stale.payload),
+        nextRetryAt: cooldown.nextRetryAt,
+      }));
+      return {
+        status: 200,
+        headers: buildHeaders("live", cacheDecision.state, "not-called"),
+        payload: attachDebugMeta(stalePayload, {
+          enabled: debug,
+          cacheKey,
+          pageNo,
+          pageSize,
+          upstream: stale.debug,
+        }),
+      };
+    }
+    const replay = loadFinlifeSnapshot(kind);
+    if (replay) {
+      const replayPayload = buildReplayPayload({
+        snapshot: replay,
+        kind,
+        pageNo,
+        pageSize,
+        topFinGrpNo,
+        reason: "cooldown_replay",
+        nextRetryAt: cooldown.nextRetryAt,
+      });
+      return {
+        status: 200,
+        headers: buildHeaders("replay", cacheDecision.state, "not-called"),
+        payload: attachDebugMeta(replayPayload, {
+          enabled: debug,
+          cacheKey,
+          pageNo,
+          pageSize,
+        }),
+      };
+    }
+  }
+
+  if (!process.env.FINLIFE_API_KEY || !process.env.FINLIFE_API_KEY.trim()) {
+    const replay = loadFinlifeSnapshot(kind);
+    if (replay) {
+      const replayPayload = buildReplayPayload({
+        snapshot: replay,
+        kind,
+        pageNo,
+        pageSize,
+        topFinGrpNo,
+        reason: "missing_api_key_replay",
+      });
+      return {
+        status: 200,
+        headers: buildHeaders("replay", cacheDecision.state, "not-called"),
+        payload: attachDebugMeta(replayPayload, {
+          enabled: debug,
+          cacheKey,
+          pageNo,
+          pageSize,
+        }),
+      };
+    }
+
+    const payload = buildHttpErrorPayload({
       kind,
       pageNo,
       topFinGrpNo,
-      pageSize,
-      message: "FINLIFE_API_KEY 미설정으로 mock 데이터로 동작합니다.",
-      fallbackUsed: true,
-      note: "missing_api_key_to_mock",
-    });
-    liveCache.set(cacheKey, {
-      expiresAt: nowMs + getCacheTtlMs(),
-      payload,
-      debug: {},
+      mode: "live",
+      code: "CONFIG_MISSING",
+      message: "FINLIFE_API_KEY가 설정되지 않았습니다.",
+      fallback: fallbackLive("missing_api_key_no_replay"),
     });
     return {
-      status: 200,
-      headers: buildHeaders("mock", cacheDecision.state, "not-called"),
-      payload: attachDebugMeta(payload, { enabled: debug, cacheKey, pageNo, pageSize }),
+      status: statusFromExternalApiErrorCode("CONFIG_MISSING"),
+      headers: buildHeaders("live", cacheDecision.state, "not-called"),
+      payload: attachDebugError(payload, {
+        enabled: debug,
+        cacheKey,
+        pageNo,
+        pageSize,
+        reason: "missing_api_key",
+      }),
     };
   }
 
@@ -560,7 +750,12 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
       let fetchedPages = 0;
 
       for (let currentPage = 1; currentPage <= maxPages; currentPage += 1) {
-        const live = await fetchLiveFinlifeDetailed(kind, { pageNo: currentPage, topFinGrpNo, scan: "page", scanMaxPages: "auto" });
+        const live = await fetchLiveFinlifeSingleflight(kind, {
+          pageNo: currentPage,
+          topFinGrpNo,
+          scan: "page",
+          scanMaxPages: "auto",
+        });
         const one = extractRowsAndPaging({
           raw: live.raw,
           pageNo: currentPage,
@@ -581,11 +776,12 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
           return {
             status: 502,
             headers: buildHeaders("live", cacheDecision.state, "called"),
-            payload: attachDebugMeta(payload, {
+            payload: attachDebugError(payload, {
               enabled: debug,
               cacheKey,
               pageNo: currentPage,
               pageSize,
+              reason: "schema_mismatch",
               upstream: {
                 upstreamStatus: live.status,
                 upstreamMs: live.elapsedMs,
@@ -611,7 +807,7 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
 
       const merged = mergeProducts(pageRows);
       const totalOptions = merged.reduce((sum, item) => sum + item.options.length, 0);
-      payload = {
+      payload = withFallback({
         ok: true,
         mode: "live",
         meta: {
@@ -632,9 +828,14 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
           truncatedByMaxPages: fetchedPages >= maxPages && (paging?.hasNext ?? false),
         },
         data: merged,
-      };
+      }, fallbackLive("live_ok"));
     } else {
-      const live = await fetchLiveFinlifeDetailed(kind, { pageNo, topFinGrpNo, scan: "page", scanMaxPages: "auto" });
+      const live = await fetchLiveFinlifeSingleflight(kind, {
+        pageNo,
+        topFinGrpNo,
+        scan: "page",
+        scanMaxPages: "auto",
+      });
       const one = extractRowsAndPaging({
         raw: live.raw,
         pageNo,
@@ -655,11 +856,12 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
         return {
           status: 502,
           headers: buildHeaders("live", cacheDecision.state, "called"),
-          payload: attachDebugMeta(payload, {
+          payload: attachDebugError(payload, {
             enabled: debug,
             cacheKey,
             pageNo,
             pageSize,
+            reason: "schema_mismatch",
             upstream: {
               upstreamStatus: live.status,
               upstreamMs: live.elapsedMs,
@@ -679,7 +881,7 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
         maxPage: paging.maxPage,
       };
 
-      payload = {
+      payload = withFallback({
         ok: true,
         mode: "live",
         meta: {
@@ -699,11 +901,11 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
           totalOptions,
         },
         data: rows,
-      };
+      }, fallbackLive("live_ok"));
     }
 
     liveCache.set(cacheKey, {
-      expiresAt: nowMs + getCacheTtlMs(),
+      expiresAt: nowMs + getFinlifeHttpCacheTtlMs(),
       payload,
       debug: upstreamDebug,
     });
@@ -721,32 +923,92 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
+    const parsedUpstream = parseUpstreamError(error);
+    const upstreamStatus = parsedUpstream.status;
+    const retryAfterSeconds = parsedUpstream.retryAfterSeconds;
+    const shouldSetCooldown =
+      parsedUpstream.timeout
+      || upstreamStatus === 429
+      || (typeof upstreamStatus === "number" && upstreamStatus >= 500);
+    let cooldownNextRetryAt: string | undefined;
+    if (shouldSetCooldown) {
+      cooldownNextRetryAt = setCooldown(FINLIFE_SOURCE_KEY, retryAfterSeconds ?? DEFAULT_COOLDOWN_SECONDS).nextRetryAt;
+    }
     console.error("[finlife-route] live fetch failed", {
       kind,
       pageNo,
       topFinGrpNo,
       message,
+      upstreamStatus,
+      cooldownNextRetryAt,
     });
 
-    const payload = buildMockPayload({
+    const stale = liveCache.get(cacheKey);
+    if (stale) {
+      const stalePayload = withFallback(stale.payload, fallbackCache({
+        reason: "live_failed_cache",
+        generatedAt: snapshotGeneratedAt(stale.payload),
+        nextRetryAt: cooldownNextRetryAt,
+      }));
+      return {
+        status: 200,
+        headers: buildHeaders("live", cacheDecision.state, "not-called"),
+        payload: attachDebugMeta(stalePayload, {
+          enabled: debug,
+          cacheKey,
+          pageNo,
+          pageSize,
+          upstream: stale.debug,
+        }),
+      };
+    }
+
+    const replay = loadFinlifeSnapshot(kind);
+    if (replay) {
+      const replayPayload = buildReplayPayload({
+        snapshot: replay,
+        kind,
+        pageNo,
+        pageSize,
+        topFinGrpNo,
+        reason: "live_failed_replay",
+        nextRetryAt: cooldownNextRetryAt,
+      });
+      return {
+        status: 200,
+        headers: buildHeaders("replay", cacheDecision.state, "not-called"),
+        payload: attachDebugMeta(replayPayload, {
+          enabled: debug,
+          cacheKey,
+          pageNo,
+          pageSize,
+        }),
+      };
+    }
+
+    const payload = buildHttpErrorPayload({
       kind,
       pageNo,
       topFinGrpNo,
-      pageSize,
-      message: "라이브 FINLIFE 호출 실패로 mock 데이터로 전환했습니다.",
-      fallbackUsed: true,
-      note: "live_failed_to_mock",
-    });
-    liveCache.set(cacheKey, {
-      expiresAt: nowMs + getCacheTtlMs(),
-      payload,
-      debug: {},
+      mode: "live",
+      code: "LIVE_FETCH_FAILED",
+      message: "라이브 FINLIFE 호출에 실패했습니다.",
+      fallback: fallbackLive("live_failed_no_fallback"),
     });
 
     return {
-      status: 200,
-      headers: buildHeaders("mock", cacheDecision.state, "called"),
-      payload: attachDebugMeta(payload, { enabled: debug, cacheKey, pageNo, pageSize }),
+      status: statusFromExternalApiErrorCode("LIVE_FETCH_FAILED"),
+      headers: buildHeaders("live", cacheDecision.state, "called"),
+      payload: attachDebugError(payload, {
+        enabled: debug,
+        cacheKey,
+        pageNo,
+        pageSize,
+        reason: "live_fetch_failed",
+        upstream: {
+          upstreamStatus,
+        },
+      }),
     };
   }
 }
@@ -754,4 +1016,5 @@ export async function getFinlifeProductsForHttp(kind: Extract<FinlifeKind, "depo
 export const __test__ = {
   buildFinlifeHttpCacheKey,
   resolveFinlifeHttpCacheState,
+  liveCache,
 };

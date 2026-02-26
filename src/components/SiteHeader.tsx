@@ -21,7 +21,7 @@ export function SiteHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-100 bg-white/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 w-full border-b border-slate-100/60 bg-white/70 backdrop-blur-2xl">
       <Container>
         <div className="flex h-16 items-center justify-between gap-4">
           <div className="flex items-center gap-10">
@@ -32,7 +32,7 @@ export function SiteHeader() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition-all hover:bg-slate-50 hover:text-primary active:scale-95"
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition-all hover:bg-emerald-50 hover:text-emerald-700 active:scale-95"
                 >
                   {item.label}
                 </Link>
@@ -45,10 +45,10 @@ export function SiteHeader() {
               <form action="/products" method="GET" className="relative group">
                 <input
                   name="q"
-                  className="h-10 w-64 rounded-2xl border border-slate-200 bg-slate-50 pl-4 pr-10 text-[11px] font-medium text-slate-900 outline-none transition-all duration-300 focus:w-72 focus:bg-white focus:ring-4 focus:ring-emerald-50 focus:border-emerald-200"
+                  className="h-10 w-64 rounded-[2rem] border border-slate-200 bg-slate-50 pl-4 pr-10 text-[11px] font-medium text-slate-900 outline-none transition-all duration-300 focus:w-72 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-300"
                   placeholder="금융상품을 검색해보세요"
                 />
-                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors">
+                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition-colors">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 </button>
               </form>

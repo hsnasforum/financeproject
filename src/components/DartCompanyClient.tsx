@@ -164,8 +164,11 @@ export function DartCompanyClient() {
     setStatusError("");
     try {
       const res = await fetch(endpoint, { cache: "no-store" });
-      const raw = (await res.json()) as CorpIndexStatusPayload & { message?: string };
+      const raw = (await res.json()) as CorpIndexStatusPayload & CorpIndexMissingPayload & { message?: string };
       if (!res.ok) {
+        if (res.status === 409 || raw.error === "CORPCODES_INDEX_MISSING") {
+          setMissingIndex((prev) => ({ ...(prev ?? {}), ...raw }));
+        }
         setStatusError(raw.message ?? "인덱스 상태를 불러오지 못했습니다.");
         return;
       }

@@ -175,13 +175,21 @@
 ## D. 행안부 보조금24 공공서비스 (P0)
 - 사용자 가치: 지출 절감/현금흐름 개선 후보(혜택)를 제시한다.
 - 플래너 반영: 혜택 적용 여부를 가정값으로 노출하고 월 영향액을 사용자가 조정한다.
-- UI 위치: `/benefits` 검색 + 플래너 추천 카드 (`/benefits`는 실제 화면 `/gov24`로 리다이렉트).
+- UI 위치: `/benefits` 검색 + 플래너 추천 카드.
 - 입력값: `query`, (추후) 가구/연령/지역 필터.
 - 캐싱/주의: TTL 1d~7d, 응답 항목 변경 대비 런타임 파서 검증 필요.
-- 현재 구현: `/benefits?query=주거` 형태로 직접 진입 가능(내부적으로 `/gov24?q=...`로 이동)하며, 플래너 4단계에서 추천 쿼리 버튼으로 빠른 보기/새 탭 연동.
+- 현재 구현: `/benefits?q=주거` 형태로 직접 진입 가능하며, 쿼리 우선으로 카테고리/지역 프리셋을 반영한다.
 - 검색 전략: 업스트림 `cond[서비스명::LIKE]` 우선, 0건 시 `cond[서비스분야::LIKE]` 재시도, 이후 로컬 스캔 fallback.
 - 0건 분기: `업스트림 0건` vs `매칭 0건` vs `오류(error.code)`를 분리 표시.
 - 상세: `/api/public/benefits/item?serviceId=...` 기반 Drawer 제공.
+
+### Planner -> Benefits/Subscription 매핑 규칙 (P1-1)
+- 플래너 액션 딥링크는 쿼리 표준을 고정한다.
+- 혜택: `q`, `category`, `region`, `ageBand`, `incomeBand` (예: `/benefits?q=주거비&category=housing&region=전국`).
+- 청약: `region`, `type`, `priority` (예: `/housing/subscription?region=서울&type=apt&priority=housing-cost`).
+- 쿼리 파라미터는 각 페이지의 기본값/저장값보다 우선 적용한다.
+- 두 페이지 모두 결과 상단에 조건 요약(3줄)과 다음 행동 체크리스트를 표시한다.
+- 실패는 `ok:false + error.code/message(+debug)` 규격을 유지하고, 0건은 설정/필터 완화 안내로 degrade 한다.
 
 ## E. 한국부동산원 청약홈 분양정보 (P1)
 - 사용자 가치: 청약 목표 사용자의 일정/공고 확인 루틴을 강화한다.

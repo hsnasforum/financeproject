@@ -1,5 +1,5 @@
-import { DartCompanyClient } from "@/components/DartCompanyClient";
+import { DartSearchClient } from "@/components/DartSearchClient";
 
 export default function DartPublicPage() {
-  return <DartCompanyClient />;
+  return <DartSearchClient />;
 }

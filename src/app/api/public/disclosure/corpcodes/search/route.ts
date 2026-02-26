@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCorpIndexPath, getCorpIndexStatus, loadCorpIndex, searchCorpIndex, type CorpCodeSort } from "@/lib/publicApis/dart/corpIndex";
-import { explainAutoBuildFromUi } from "@/lib/publicApis/dart/indexBuildGuard";
+import { buildMissingCorpIndexPayload } from "@/lib/publicApis/dart/missingIndex";
 
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const query = (searchParams.get("query") ?? "").trim();
+  const query = (searchParams.get("q") ?? searchParams.get("query") ?? "").trim();
   const sortRaw = (searchParams.get("sort") ?? "name").trim();
   const limitRaw = (searchParams.get("limit") ?? "50").trim();
   const debug = searchParams.get("debug") === "1";
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error: "INPUT",
-        message: "query 값을 입력하세요.",
+        message: "q(query) 값을 입력하세요.",
       },
       { status: 400 },
     );
@@ -46,17 +46,9 @@ export async function GET(request: Request) {
   const index = loadCorpIndex();
   if (!index) {
     const status = getCorpIndexStatus();
-    const autoBuild = explainAutoBuildFromUi();
     return NextResponse.json(
       {
-        error: "CORPCODES_INDEX_MISSING",
-        message: "corpCodes 인덱스가 없습니다. scripts/dart_corpcode_build.py를 실행하세요.",
-        hintCommand: "python3 scripts/dart_corpcode_build.py",
-        hintCommandWithPath: "DART_CORPCODES_INDEX_PATH=tmp/dart/corpCodes.index.json python3 scripts/dart_corpcode_build.py",
-        canAutoBuild: autoBuild.canAutoBuild,
-        autoBuildDisabledReason: autoBuild.reason,
-        buildEndpoint: "/api/public/disclosure/corpcodes/build",
-        statusEndpoint: "/api/public/disclosure/corpcodes/status",
+        ...buildMissingCorpIndexPayload(status),
         primaryPath: status.primaryPath,
         path: getCorpIndexPath(),
         triedPaths: status.triedPaths,

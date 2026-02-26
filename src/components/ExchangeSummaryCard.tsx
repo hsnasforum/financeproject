@@ -51,7 +51,7 @@ export function ExchangeSummaryCard() {
   }, []);
 
   return (
-    <Card className="p-8 border border-slate-100 shadow-xl shadow-slate-200/50 bg-white overflow-hidden relative">
+    <Card className="p-8 border border-slate-100 shadow-xl shadow-slate-200/50 bg-white overflow-hidden relative rounded-[2rem] hover:shadow-2xl hover:shadow-emerald-900/5 hover:-translate-y-1 transition-all duration-300">
       <div className="absolute top-0 right-0 -mr-8 -mt-8 h-32 w-32 rounded-full bg-emerald-50 blur-2xl" />
       
       <div className="relative z-10">

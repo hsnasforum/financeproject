@@ -4,6 +4,7 @@ import {
   DEFAULT_WEIGHTS,
   type RecommendDebug,
   type RecommendationAssumptions,
+  type RecommendDetailProduct,
   type RecommendedItem,
   type RecommendKind,
   type RecommendWeights,
@@ -458,6 +459,30 @@ type RecommendCandidate = {
   badges?: string[];
   extraReasons?: string[];
 };
+export type { RecommendCandidate };
+
+function buildDetailProduct(product: NormalizedProduct): RecommendDetailProduct {
+  return {
+    fin_prdt_cd: product.fin_prdt_cd,
+    fin_co_no: product.fin_co_no,
+    kor_co_nm: product.kor_co_nm,
+    fin_prdt_nm: product.fin_prdt_nm,
+    options: product.options.map((option) => ({
+      save_trm: option.save_trm,
+      intr_rate: option.intr_rate ?? null,
+      intr_rate2: option.intr_rate2 ?? null,
+      raw: option.raw ?? {},
+    })),
+    best: product.best
+      ? {
+          save_trm: product.best.save_trm,
+          intr_rate: product.best.intr_rate ?? null,
+          intr_rate2: product.best.intr_rate2 ?? null,
+        }
+      : undefined,
+    raw: product.raw ?? {},
+  };
+}
 
 export function recommendCandidates(input: {
   kind: RecommendKind;
@@ -504,6 +529,7 @@ export function recommendCandidates(input: {
       selectedOption: selected,
       breakdown,
       reasons: reasonLines,
+      detailProduct: buildDetailProduct(product),
       badges: [...(badges ?? []), sourceId === "finlife" ? "FINLIFE" : sourceId === "datago_kdb" ? "KDB" : sourceId],
     } satisfies RecommendedItem;
   });

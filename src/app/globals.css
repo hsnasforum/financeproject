@@ -54,3 +54,47 @@ body {
     @apply border-border;
   }
 }
+
+@media print {
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .report-root {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0.5cm !important;
+    gap: 0.4cm !important;
+  }
+
+  .print-card,
+  .print-card table,
+  .print-card tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-card {
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
+    border-radius: 0.5rem !important;
+  }
+
+  a {
+    color: #000000 !important;
+    text-decoration: none !important;
+  }
+}

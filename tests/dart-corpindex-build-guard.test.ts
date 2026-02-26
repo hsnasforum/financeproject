@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { canAutoBuildFromUi, canBuildCorpIndex } from "../src/lib/publicApis/dart/indexBuildGuard";
 
 describe("canBuildCorpIndex", () => {
@@ -22,8 +23,32 @@ describe("canBuildCorpIndex", () => {
 });
 
 describe("canAutoBuildFromUi", () => {
+  const originalApiKey = process.env.OPENDART_API_KEY;
+
+  afterEach(() => {
+    if (typeof originalApiKey === "string") process.env.OPENDART_API_KEY = originalApiKey;
+    else delete process.env.OPENDART_API_KEY;
+    vi.restoreAllMocks();
+  });
+
   it("is disabled in production", () => {
     expect(canAutoBuildFromUi("production")).toBe(false);
+  });
+
+  it("is disabled when OPENDART_API_KEY is missing", () => {
+    delete process.env.OPENDART_API_KEY;
+    expect(canAutoBuildFromUi("development")).toBe(false);
+  });
+
+  it("is disabled when script does not exist", () => {
+    process.env.OPENDART_API_KEY = "test-key";
+    vi.spyOn(fs, "existsSync").mockReturnValue(false);
+    expect(canAutoBuildFromUi("development")).toBe(false);
+  });
+
+  it("is enabled in development when key and script exist", () => {
+    process.env.OPENDART_API_KEY = "test-key";
+    vi.spyOn(fs, "existsSync").mockReturnValue(true);
     expect(canAutoBuildFromUi("development")).toBe(true);
   });
 });

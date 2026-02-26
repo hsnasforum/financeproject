@@ -50,10 +50,13 @@ export function normalizeCorpQuery(value: string): string {
 }
 
 export function resolveCorpCodesIndexPath(root = process.cwd(), envPath = process.env.DART_CORPCODES_INDEX_PATH): { primary: string; tried: string[] } {
-  const primary = envPath?.trim() ? path.resolve(root, envPath.trim()) : path.join(root, "tmp", "dart", "corpCodes.index.json");
+  const envPrimary = envPath?.trim() ? path.resolve(root, envPath.trim()) : null;
+  const tmpDefault = path.join(root, "tmp", "dart", "corpCodes.index.json");
   const legacy = path.join(root, "src", "data", "dart", "corpCodes.json");
+  const primary = envPrimary ?? tmpDefault;
   const tried = [primary];
-  if (legacy !== primary) tried.push(legacy);
+  if (tmpDefault !== primary) tried.push(tmpDefault);
+  if (legacy !== primary && legacy !== tmpDefault) tried.push(legacy);
   return { primary, tried };
 }
 

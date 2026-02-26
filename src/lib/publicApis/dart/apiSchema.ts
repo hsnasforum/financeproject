@@ -54,45 +54,66 @@ export function parseDartSearchResponse(raw: unknown):
 
 export function parseDartCompanyResponse(raw: unknown): DartApiResult<DartCompany> {
   if (!isRecord(raw) || typeof raw.ok !== "boolean") {
-    throw new Error("DART 기업개황 응답 형식이 올바르지 않습니다.");
+    return invalidCompanyResponse();
   }
 
   if (!raw.ok) {
-    const error = parseError(raw.error);
-    const known = new Set(["CONFIG", "INPUT", "UPSTREAM", "NO_INDEX", "NO_DATA", "RATE_LIMIT", "AUTH", "FORBIDDEN", "MAINTENANCE", "INTERNAL"]);
+    if (!isRecord(raw.error) || typeof raw.error.code !== "string" || typeof raw.error.message !== "string") {
+      return invalidCompanyResponse();
+    }
     return {
       ok: false,
       error: {
-        code: known.has(error.code) ? (error.code as DartApiErrorCode) : "UPSTREAM",
-        message: error.message,
+        code: toKnownErrorCode(raw.error.code),
+        message: raw.error.message,
       },
     };
   }
 
   const dataRaw = isRecord(raw.data) ? raw.data : null;
-  if (!dataRaw || typeof dataRaw.corp_code !== "string") {
-    throw new Error("DART 기업개황 data 형식이 올바르지 않습니다.");
+  const responseRaw = dataRaw && isRecord(dataRaw.raw) ? dataRaw.raw : null;
+  if (!dataRaw || typeof dataRaw.corp_code !== "string" || typeof dataRaw.corp_name !== "string" || !responseRaw || typeof responseRaw.status !== "string") {
+    return invalidCompanyResponse();
   }
 
   const data: DartCompany = {
+    ...dataRaw,
     corp_code: dataRaw.corp_code,
-    corp_name: typeof dataRaw.corp_name === "string" ? dataRaw.corp_name : undefined,
-    corp_name_eng: typeof dataRaw.corp_name_eng === "string" ? dataRaw.corp_name_eng : undefined,
-    stock_code: typeof dataRaw.stock_code === "string" ? dataRaw.stock_code : undefined,
-    ceo_nm: typeof dataRaw.ceo_nm === "string" ? dataRaw.ceo_nm : undefined,
-    corp_cls: typeof dataRaw.corp_cls === "string" ? dataRaw.corp_cls : undefined,
-    jurir_no: typeof dataRaw.jurir_no === "string" ? dataRaw.jurir_no : undefined,
-    bizr_no: typeof dataRaw.bizr_no === "string" ? dataRaw.bizr_no : undefined,
-    adres: typeof dataRaw.adres === "string" ? dataRaw.adres : undefined,
-    hm_url: typeof dataRaw.hm_url === "string" ? dataRaw.hm_url : undefined,
-    ir_url: typeof dataRaw.ir_url === "string" ? dataRaw.ir_url : undefined,
-    phn_no: typeof dataRaw.phn_no === "string" ? dataRaw.phn_no : undefined,
-    fax_no: typeof dataRaw.fax_no === "string" ? dataRaw.fax_no : undefined,
-    induty_code: typeof dataRaw.induty_code === "string" ? dataRaw.induty_code : undefined,
-    est_dt: typeof dataRaw.est_dt === "string" ? dataRaw.est_dt : undefined,
-    acc_mt: typeof dataRaw.acc_mt === "string" ? dataRaw.acc_mt : undefined,
-    raw: isRecord(dataRaw.raw) ? dataRaw.raw : {},
+    corp_name: dataRaw.corp_name,
+    corp_name_eng: pickString(dataRaw.corp_name_eng),
+    stock_name: pickString(dataRaw.stock_name),
+    stock_code: pickString(dataRaw.stock_code),
+    ceo_nm: pickString(dataRaw.ceo_nm),
+    corp_cls: pickString(dataRaw.corp_cls),
+    adres: pickString(dataRaw.adres),
+    hm_url: pickString(dataRaw.hm_url),
+    induty_code: pickString(dataRaw.induty_code),
+    est_dt: pickString(dataRaw.est_dt),
+    acc_mt: pickString(dataRaw.acc_mt),
+    raw: {
+      status: responseRaw.status,
+      message: pickString(responseRaw.message),
+    },
   };
 
   return { ok: true, data };
+}
+
+function pickString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function toKnownErrorCode(code: string): DartApiErrorCode {
+  const known = new Set<DartApiErrorCode>(["CONFIG", "INPUT", "AUTH", "FORBIDDEN", "NO_DATA", "RATE_LIMIT", "MAINTENANCE", "UPSTREAM", "INTERNAL"]);
+  return known.has(code as DartApiErrorCode) ? (code as DartApiErrorCode) : "INTERNAL";
+}
+
+function invalidCompanyResponse(): DartApiResult<DartCompany> {
+  return {
+    ok: false,
+    error: {
+      code: "INTERNAL",
+      message: "응답 형식이 올바르지 않습니다.",
+    },
+  };
 }

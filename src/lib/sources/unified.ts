@@ -2,20 +2,29 @@ import { prisma } from "@/lib/db/prisma";
 import { loadFinlifeSnapshot } from "@/lib/finlife/snapshot";
 import { shouldRunFinlifeSync } from "@/lib/finlife/syncPolicy";
 import { runFinlifeSnapshotSync } from "@/lib/finlife/syncRunner";
+import { samplebankProvider } from "@/lib/providers/samplebank";
+import { runProvider } from "@/lib/providers/runProvider";
 import { buildNormFilter, normalizeSearchQuery, type QueryMode } from "@/lib/sources/search";
 import { refreshSourceIfStale } from "@/lib/sources/datago/sync";
 import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedCursor";
 import { normalizeProviderName } from "@/lib/sources/providerName";
 import { type UnifiedSourceId } from "@/lib/sources/types";
 import {
+  buildStableUnifiedId,
   integrateCanonicalWithMatches,
+  mergeUnifiedCatalogRows,
+  sortUnifiedOptions,
   type DepositProtectionMode,
+  type UnifiedMergeItem,
+  type UnifiedOptionView,
 } from "@/lib/sources/unifiedEnrichPolicy";
 
 export class UnifiedInputError extends Error {}
 
 export type UnifiedProductView = {
+  stableId: string;
   sourceId: UnifiedSourceId;
+  sourceIds?: UnifiedSourceId[];
   kind: string;
   externalKey: string;
   providerName: string;
@@ -29,10 +38,12 @@ export type UnifiedProductView = {
     depositProtection?: "matched" | "unknown";
     kdbMatched?: boolean;
   };
+  options?: UnifiedOptionView[];
   match?: {
     method: string;
     confidence: number;
     internalProductId: number | null;
+    canonicalFinPrdtCd?: string;
     evidence?: Record<string, unknown>;
   };
 };
@@ -69,6 +80,138 @@ export type UnifiedResult = {
 type EnrichSourceId = "datago_kdb";
 export type UnifiedMode = "merged" | "integrated";
 const MATCH_CONFIDENCE_THRESHOLD = 0.92;
+
+function normalizeRate(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const cleaned = value.trim().replace(/,/g, "");
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function parseTermMonths(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const term = Math.trunc(value);
+    return term >= 0 ? term : null;
+  }
+  if (typeof value !== "string") return null;
+  const matched = value.replace(/,/g, "").match(/\d+/);
+  if (!matched) return null;
+  const parsed = Number(matched[0]);
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
+}
+
+function buildFinlifeOptions(
+  options: Array<{ saveTrm: string | null; intrRate: number | null; intrRate2: number | null }>,
+): UnifiedOptionView[] {
+  return sortUnifiedOptions(
+    options.map((option) => ({
+      sourceId: "finlife",
+      termMonths: parseTermMonths(option.saveTrm),
+      saveTrm: option.saveTrm ?? undefined,
+      intrRate: normalizeRate(option.intrRate),
+      intrRate2: normalizeRate(option.intrRate2),
+    })),
+  );
+}
+
+function buildKdbOptions(rawJson: unknown): UnifiedOptionView[] {
+  const raw = (rawJson as Record<string, unknown> | null) ?? null;
+  if (!raw) return [];
+  const saveTrm = typeof raw.prdJinTrmCone === "string" ? raw.prdJinTrmCone : "";
+  const highRate = typeof raw.hitIrtCndCone === "string" ? raw.hitIrtCndCone : "";
+  const lowRate = typeof raw.lowIrtCndCone === "string" ? raw.lowIrtCndCone : "";
+
+  const option: UnifiedOptionView = {
+    sourceId: "datago_kdb",
+    termMonths: parseTermMonths(saveTrm),
+    saveTrm: saveTrm || undefined,
+    intrRate: normalizeRate(lowRate),
+    intrRate2: normalizeRate(highRate),
+  };
+  if (option.termMonths === null && !option.saveTrm && option.intrRate === null && option.intrRate2 === null) {
+    return [];
+  }
+  return sortUnifiedOptions([option]);
+}
+
+function matchesUnifiedQuery(text: string, qNorm: string, qMode: QueryMode): boolean {
+  if (!qNorm) return true;
+  if (!text) return false;
+  if (qMode === "prefix") return text.startsWith(qNorm);
+  return text.includes(qNorm);
+}
+
+function toSamplebankOptionRows(
+  options: Array<{
+    sourceId: "samplebank";
+    termMonths: number | null;
+    saveTrm?: string;
+    intrRate: number | null;
+    intrRate2: number | null;
+  }>,
+): UnifiedOptionView[] {
+  return sortUnifiedOptions(
+    options.map((option) => ({
+      sourceId: "samplebank",
+      termMonths: option.termMonths,
+      saveTrm: option.saveTrm,
+      intrRate: option.intrRate,
+      intrRate2: option.intrRate2,
+    })),
+  );
+}
+
+async function getSamplebankMergedItems(input: {
+  kind: "deposit" | "saving";
+  q: string | null;
+  qMode: QueryMode;
+  includeTimestamps: boolean;
+  debug: boolean;
+}): Promise<{ items: UnifiedProductView[]; count: number }> {
+  const executed = await runProvider(samplebankProvider, {
+    kind: input.kind,
+  }, {
+    debug: input.debug,
+  });
+  if (!executed.ok) {
+    console.error("[unified] samplebank provider failed", {
+      code: executed.error.code,
+      message: executed.error.message,
+    });
+    return { items: [], count: 0 };
+  }
+
+  const qNorm = normalizeSearchQuery(input.q ?? "");
+  const filtered = executed.data.items
+    .filter((item) => item.kind === input.kind)
+    .filter((item) => matchesUnifiedQuery(
+      normalizeSearchQuery(`${item.providerName} ${item.productName}`),
+      qNorm,
+      input.qMode,
+    ));
+
+  const merged = filtered.map((item) => ({
+    stableId: item.stableId || `samplebank:${item.externalKey}`,
+    sourceId: "samplebank" as const,
+    kind: item.kind,
+    externalKey: item.externalKey,
+    providerName: item.providerName,
+    productName: item.productName,
+    options: toSamplebankOptionRows(item.options),
+    firstSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
+    lastSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
+    updatedAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
+    badges: ["SAMPLEBANK"],
+  }));
+  return {
+    items: merged,
+    count: merged.length,
+  };
+}
 
 function resolveFinlifeSnapshotTtlMs(): number {
   const sec = Number(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS ?? "43200");
@@ -311,6 +454,10 @@ async function enrichFinlifeDepositItems(input: {
     const term = typeof raw?.prdJinTrmCone === "string" ? raw.prdJinTrmCone : "";
     const summaryLine = [row.summary, hit ? `최고금리: ${hit}` : "", term ? `가입기간: ${term}` : ""].filter(Boolean).join(" / ");
     return {
+      stableId: buildStableUnifiedId({
+        sourceId: "datago_kdb",
+        externalKey: row.externalKey,
+      }),
       sourceId: "datago_kdb",
       kind: "deposit",
       externalKey: row.externalKey,
@@ -318,6 +465,7 @@ async function enrichFinlifeDepositItems(input: {
       productName: row.productNameRaw,
       summary: summaryLine || undefined,
       badges: ["KDB_ONLY"],
+      options: buildKdbOptions(row.rawJson),
       firstSeenAt: input.includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
       lastSeenAt: input.includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
       updatedAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
@@ -428,6 +576,17 @@ async function getSingleSourceExternal(input: {
       matches: {
         orderBy: { confidence: "desc" },
         take: 1,
+        select: {
+          method: true,
+          confidence: true,
+          internalProductId: true,
+          evidenceJson: true,
+          internalProduct: {
+            select: {
+              finPrdtCd: true,
+            },
+          },
+        },
       },
     },
     orderBy: sort === "recent"
@@ -442,6 +601,11 @@ async function getSingleSourceExternal(input: {
   const nextCursor = hasMore ? encodeUnifiedCursor({ id: picked[picked.length - 1].id }) : null;
 
   const merged: UnifiedProductView[] = picked.map((row) => ({
+    stableId: buildStableUnifiedId({
+      sourceId,
+      externalKey: row.externalKey,
+      canonicalFinPrdtCd: row.matches[0]?.internalProduct?.finPrdtCd ?? null,
+    }),
     sourceId,
     kind: row.kind,
     externalKey: row.externalKey,
@@ -451,11 +615,13 @@ async function getSingleSourceExternal(input: {
     firstSeenAt: includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
     lastSeenAt: includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
     updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
+    options: buildKdbOptions(row.rawJson),
     match: row.matches[0]
       ? {
           method: row.matches[0].method,
           confidence: row.matches[0].confidence,
           internalProductId: row.matches[0].internalProductId,
+          canonicalFinPrdtCd: row.matches[0].internalProduct?.finPrdtCd ?? undefined,
           evidence: (row.matches[0].evidenceJson as Record<string, unknown>) ?? undefined,
         }
       : undefined,
@@ -525,6 +691,17 @@ async function getSingleSourceFinlife(input: {
       createdAt: true,
       updatedAt: true,
       raw: true,
+      options: {
+        select: {
+          saveTrm: true,
+          intrRate: true,
+          intrRate2: true,
+        },
+        orderBy: [
+          { saveTrm: "asc" },
+          { id: "asc" },
+        ],
+      },
       provider: {
         select: {
           name: true,
@@ -545,6 +722,10 @@ async function getSingleSourceFinlife(input: {
     const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
     const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
     return {
+      stableId: buildStableUnifiedId({
+        sourceId,
+        externalKey: row.finPrdtCd,
+      }),
       sourceId,
       kind,
       externalKey: row.finPrdtCd,
@@ -553,6 +734,7 @@ async function getSingleSourceFinlife(input: {
       firstSeenAt: includeTimestamps ? row.createdAt.toISOString() : undefined,
       lastSeenAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
       updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
+      options: buildFinlifeOptions(row.options),
     };
   });
 
@@ -567,6 +749,47 @@ async function getSingleSourceFinlife(input: {
       nextCursor,
       limit,
       sourceId,
+    },
+  };
+}
+
+async function getSingleSourceSamplebank(input: {
+  kind: "deposit" | "saving";
+  cursor: string | null;
+  q: string | null;
+  includeTimestamps: boolean;
+  limit: number;
+  qMode: QueryMode;
+  debug: boolean;
+}): Promise<UnifiedResult> {
+  const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
+  if (input.cursor && !decoded) {
+    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
+  }
+
+  const loaded = await getSamplebankMergedItems({
+    kind: input.kind,
+    q: input.q,
+    qMode: input.qMode,
+    includeTimestamps: input.includeTimestamps,
+    debug: input.debug,
+  });
+  const normalizedLimit = Math.min(1000, Math.max(1, input.limit));
+  const offset = decoded?.id ?? 0;
+  const sliced = loaded.items.slice(offset, offset + normalizedLimit);
+  const hasMore = offset + normalizedLimit < loaded.items.length;
+  const nextCursor = hasMore ? encodeUnifiedCursor({ id: offset + normalizedLimit }) : null;
+
+  return {
+    kind: input.kind,
+    sources: { samplebank: { count: loaded.count } },
+    merged: sliced,
+    items: sliced,
+    pageInfo: {
+      hasMore,
+      nextCursor,
+      limit: normalizedLimit,
+      sourceId: "samplebank",
     },
   };
 }
@@ -686,8 +909,9 @@ export async function getUnifiedProducts(input: {
     };
   }
 
-  if (cursor && !sourceId) {
-    throw new UnifiedInputError("Cursor pagination requires single sourceId.");
+  const mergedCursor = cursor && !sourceId ? decodeUnifiedCursor(cursor) : null;
+  if (cursor && !sourceId && !mergedCursor) {
+    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
   }
 
   if (sourceId) {
@@ -707,6 +931,17 @@ export async function getUnifiedProducts(input: {
         limit,
         sort,
         qMode,
+      });
+    }
+    if (sourceId === "samplebank") {
+      return getSingleSourceSamplebank({
+        kind,
+        cursor,
+        q,
+        includeTimestamps,
+        limit,
+        qMode,
+        debug,
       });
     }
     const base = await getSingleSourceFinlife({
@@ -778,6 +1013,17 @@ export async function getUnifiedProducts(input: {
         createdAt: true,
         updatedAt: true,
         raw: true,
+        options: {
+          select: {
+            saveTrm: true,
+            intrRate: true,
+            intrRate2: true,
+          },
+          orderBy: [
+            { saveTrm: "asc" },
+            { id: "asc" },
+          ],
+        },
         provider: {
           select: {
             name: true,
@@ -793,6 +1039,10 @@ export async function getUnifiedProducts(input: {
       const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
       const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
       merged.push({
+        stableId: buildStableUnifiedId({
+          sourceId: "finlife",
+          externalKey: row.finPrdtCd,
+        }),
         sourceId: "finlife",
         kind,
         externalKey: row.finPrdtCd,
@@ -801,12 +1051,13 @@ export async function getUnifiedProducts(input: {
         firstSeenAt: includeTimestamps ? row.createdAt.toISOString() : undefined,
         lastSeenAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
         updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
+        options: buildFinlifeOptions(row.options),
       });
     }
     sourceMap.finlife = { count: finlifeRows.length };
   }
 
-  const externalSources = includeSources.filter((id) => id !== "finlife") as Array<"datago_kdb">;
+  const externalSources = includeSources.filter((id) => id !== "finlife" && id !== "samplebank") as Array<"datago_kdb">;
   if (externalSources.length > 0) {
     const onlyNewMap = await getOnlyNewSinceBySource(kind, externalSources);
     const changedSinceDate = changedSince ? new Date(changedSince) : null;
@@ -823,6 +1074,17 @@ export async function getUnifiedProducts(input: {
         matches: {
           orderBy: { confidence: "desc" },
           take: 1,
+          select: {
+            method: true,
+            confidence: true,
+            internalProductId: true,
+            evidenceJson: true,
+            internalProduct: {
+              select: {
+                finPrdtCd: true,
+              },
+            },
+          },
         },
       },
       orderBy: sort === "recent"
@@ -841,6 +1103,11 @@ export async function getUnifiedProducts(input: {
       }
 
       merged.push({
+        stableId: buildStableUnifiedId({
+          sourceId: row.sourceId,
+          externalKey: row.externalKey,
+          canonicalFinPrdtCd: row.matches[0]?.internalProduct?.finPrdtCd ?? null,
+        }),
         sourceId: row.sourceId as UnifiedSourceId,
         kind: row.kind,
         externalKey: row.externalKey,
@@ -850,11 +1117,13 @@ export async function getUnifiedProducts(input: {
         firstSeenAt: includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
         lastSeenAt: includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
         updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
+        options: buildKdbOptions(row.rawJson),
         match: row.matches[0]
           ? {
               method: row.matches[0].method,
               confidence: row.matches[0].confidence,
               internalProductId: row.matches[0].internalProductId,
+              canonicalFinPrdtCd: row.matches[0].internalProduct?.finPrdtCd ?? undefined,
               evidence: (row.matches[0].evidenceJson as Record<string, unknown>) ?? undefined,
             }
           : undefined,
@@ -865,27 +1134,344 @@ export async function getUnifiedProducts(input: {
     }
   }
 
-  if (sort === "recent") {
-    merged.sort((a, b) => {
-      const aTs = Date.parse(a.lastSeenAt ?? a.updatedAt ?? a.firstSeenAt ?? "");
-      const bTs = Date.parse(b.lastSeenAt ?? b.updatedAt ?? b.firstSeenAt ?? "");
-      if (Number.isFinite(aTs) && Number.isFinite(bTs) && aTs !== bTs) return bTs - aTs;
-      return `${a.providerName} ${a.productName}`.localeCompare(`${b.providerName} ${b.productName}`);
+  if (includeSources.includes("samplebank")) {
+    const samplebankLoaded = await getSamplebankMergedItems({
+      kind,
+      q,
+      qMode,
+      includeTimestamps,
+      debug,
     });
-  } else {
-    merged.sort((a, b) => `${a.providerName} ${a.productName}`.localeCompare(`${b.providerName} ${b.productName}`));
+    merged.push(...samplebankLoaded.items);
+    sourceMap.samplebank = {
+      count: samplebankLoaded.count,
+    };
   }
 
-  const sliced = merged.slice(0, Math.min(1000, Math.max(1, limit)));
+  const deduped = mergeUnifiedCatalogRows({
+    items: merged as UnifiedMergeItem[],
+    sort,
+  }) as UnifiedProductView[];
+  const normalizedLimit = Math.min(1000, Math.max(1, limit));
+  const offset = mergedCursor?.id ?? 0;
+  const sliced = deduped.slice(offset, offset + normalizedLimit);
+  const hasMore = offset + normalizedLimit < deduped.length;
+  const nextCursor = hasMore ? encodeUnifiedCursor({ id: offset + normalizedLimit }) : null;
+
   return {
     kind,
     sources: sourceMap,
     merged: sliced,
     items: sliced,
     pageInfo: {
-      hasMore: false,
-      nextCursor: null,
+      hasMore,
+      nextCursor,
       limit,
     },
   };
+}
+
+type UnifiedLookupTarget = {
+  sourceId: "finlife" | "datago_kdb" | "samplebank";
+  externalKey: string;
+};
+
+function normalizeDatagoLookupKey(value: string): string {
+  let out = value.trim();
+  while (out.toLowerCase().startsWith("datago_kdb:")) {
+    out = out.slice("datago_kdb:".length).trim();
+  }
+  if (out.toUpperCase().startsWith("KDB:")) {
+    out = out.slice("KDB:".length).trim();
+  }
+  return out;
+}
+
+function parseUnifiedLookupId(id: string): UnifiedLookupTarget {
+  const raw = id.trim();
+  if (!raw) {
+    throw new UnifiedInputError("id는 필수입니다.");
+  }
+
+  const separator = raw.indexOf(":");
+  if (separator < 0) {
+    return {
+      sourceId: "finlife",
+      externalKey: raw,
+    };
+  }
+
+  const sourceId = raw.slice(0, separator).trim().toLowerCase();
+  const externalKey = raw.slice(separator + 1).trim();
+  if (!externalKey) {
+    throw new UnifiedInputError("id 형식이 올바르지 않습니다.");
+  }
+  if (sourceId !== "finlife" && sourceId !== "datago_kdb" && sourceId !== "samplebank") {
+    throw new UnifiedInputError("id source는 finlife 또는 datago_kdb 또는 samplebank 이어야 합니다.");
+  }
+
+  const normalizedExternal = sourceId === "datago_kdb" ? normalizeDatagoLookupKey(externalKey) : externalKey;
+  if (!normalizedExternal) {
+    throw new UnifiedInputError("id 형식이 올바르지 않습니다.");
+  }
+  return {
+    sourceId,
+    externalKey: normalizedExternal,
+  };
+}
+
+function buildDatagoSummary(summary: string | null | undefined, rawJson: unknown): string | undefined {
+  const raw = (rawJson as Record<string, unknown> | null) ?? null;
+  const hit = typeof raw?.hitIrtCndCone === "string" ? raw.hitIrtCndCone : "";
+  const term = typeof raw?.prdJinTrmCone === "string" ? raw.prdJinTrmCone : "";
+  const merged = [summary ?? "", hit ? `최고금리: ${hit}` : "", term ? `가입기간: ${term}` : ""]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(" / ");
+  return merged || undefined;
+}
+
+function buildFinlifeItemFromProductRow(
+  row: {
+    finPrdtCd: string;
+    kind: string;
+    name: string | null;
+    raw: unknown;
+    createdAt: Date;
+    updatedAt: Date;
+    provider: { name: string } | null;
+    options: Array<{ saveTrm: string | null; intrRate: number | null; intrRate2: number | null }>;
+  },
+  includeTimestamps: boolean,
+): UnifiedProductView {
+  const raw = (row.raw as Record<string, unknown> | null) ?? null;
+  const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
+  const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
+  const summary = typeof raw?.spcl_cnd === "string"
+    ? raw.spcl_cnd
+    : (typeof raw?.join_way === "string" ? raw.join_way : undefined);
+
+  return {
+    stableId: buildStableUnifiedId({
+      sourceId: "finlife",
+      externalKey: row.finPrdtCd,
+    }),
+    sourceId: "finlife",
+    kind: row.kind,
+    externalKey: row.finPrdtCd,
+    providerName: providerNameRaw || row.provider?.name || "",
+    productName: productNameRaw || row.name || row.finPrdtCd,
+    summary,
+    badges: ["FINLIFE"],
+    options: buildFinlifeOptions(row.options),
+    firstSeenAt: includeTimestamps ? row.createdAt.toISOString() : undefined,
+    lastSeenAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
+    updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
+  };
+}
+
+function buildDatagoItemFromExternalRow(
+  row: {
+    sourceId: string;
+    kind: string;
+    externalKey: string;
+    providerNameRaw: string;
+    productNameRaw: string;
+    summary: string | null;
+    rawJson: unknown;
+    firstSeenAt: Date;
+    lastSeenAt: Date;
+    updatedAt: Date;
+  },
+  includeTimestamps: boolean,
+  canonicalFinPrdtCd?: string | null,
+): UnifiedProductView {
+  return {
+    stableId: buildStableUnifiedId({
+      sourceId: row.sourceId,
+      externalKey: row.externalKey,
+      canonicalFinPrdtCd,
+    }),
+    sourceId: "datago_kdb",
+    kind: row.kind,
+    externalKey: row.externalKey,
+    providerName: row.providerNameRaw,
+    productName: row.productNameRaw,
+    summary: buildDatagoSummary(row.summary, row.rawJson),
+    badges: canonicalFinPrdtCd ? ["KDB_MATCHED"] : ["KDB_ONLY"],
+    options: buildKdbOptions(row.rawJson),
+    firstSeenAt: includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
+    lastSeenAt: includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
+    updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
+  };
+}
+
+export async function getUnifiedProductById(input: {
+  id: string;
+  includeTimestamps?: boolean;
+}): Promise<UnifiedProductView | null> {
+  const includeTimestamps = Boolean(input.includeTimestamps);
+  const target = parseUnifiedLookupId(input.id);
+
+  if (target.sourceId === "finlife") {
+    const finlife = await prisma.product.findUnique({
+      where: { finPrdtCd: target.externalKey },
+      select: {
+        id: true,
+        finPrdtCd: true,
+        kind: true,
+        name: true,
+        raw: true,
+        createdAt: true,
+        updatedAt: true,
+        provider: { select: { name: true } },
+        options: {
+          select: {
+            saveTrm: true,
+            intrRate: true,
+            intrRate2: true,
+          },
+          orderBy: [{ saveTrm: "asc" }, { id: "asc" }],
+        },
+      },
+    });
+    if (!finlife) return null;
+
+    const canonical = buildFinlifeItemFromProductRow(finlife, includeTimestamps);
+    if (finlife.kind !== "deposit") return canonical;
+
+    const matches = await prisma.externalProductMatch.findMany({
+      where: {
+        internalProductId: finlife.id,
+        externalProduct: {
+          is: {
+            sourceId: "datago_kdb",
+            kind: "deposit",
+          },
+        },
+      },
+      orderBy: [{ confidence: "desc" }, { id: "asc" }],
+      select: {
+        externalProductId: true,
+        externalProduct: {
+          select: {
+            sourceId: true,
+            kind: true,
+            externalKey: true,
+            providerNameRaw: true,
+            productNameRaw: true,
+            summary: true,
+            rawJson: true,
+            firstSeenAt: true,
+            lastSeenAt: true,
+            updatedAt: true,
+          },
+        },
+      },
+      take: 20,
+    });
+
+    const dedupedByExternal = new Map<number, (typeof matches)[number]>();
+    for (const row of matches) {
+      if (!dedupedByExternal.has(row.externalProductId)) {
+        dedupedByExternal.set(row.externalProductId, row);
+      }
+    }
+    const matchedViews = [...dedupedByExternal.values()].map((row) =>
+      buildDatagoItemFromExternalRow(
+        row.externalProduct,
+        includeTimestamps,
+        finlife.finPrdtCd,
+      ));
+
+    if (matchedViews.length === 0) return canonical;
+
+    const merged = mergeUnifiedCatalogRows({
+      items: [canonical, ...matchedViews] as UnifiedMergeItem[],
+      sort: "recent",
+    }) as UnifiedProductView[];
+    return merged[0] ?? canonical;
+  }
+
+  if (target.sourceId === "samplebank") {
+    const loaded = await getSamplebankMergedItems({
+      kind: "deposit",
+      q: null,
+      qMode: "contains",
+      includeTimestamps,
+      debug: false,
+    });
+    return loaded.items.find((item) => item.externalKey === target.externalKey) ?? null;
+  }
+
+  const external = await prisma.externalProduct.findFirst({
+    where: {
+      sourceId: "datago_kdb",
+      externalKey: target.externalKey,
+    },
+    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    select: {
+      id: true,
+      sourceId: true,
+      kind: true,
+      externalKey: true,
+      providerNameRaw: true,
+      productNameRaw: true,
+      summary: true,
+      rawJson: true,
+      firstSeenAt: true,
+      lastSeenAt: true,
+      updatedAt: true,
+      matches: {
+        orderBy: [{ confidence: "desc" }, { id: "asc" }],
+        take: 1,
+        select: {
+          internalProductId: true,
+          internalProduct: {
+            select: {
+              finPrdtCd: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!external) return null;
+
+  const canonicalFinPrdtCd = external.matches[0]?.internalProduct?.finPrdtCd ?? null;
+  const kdbItem = buildDatagoItemFromExternalRow(external, includeTimestamps, canonicalFinPrdtCd);
+
+  const internalProductId = external.matches[0]?.internalProductId;
+  if (typeof internalProductId !== "number") {
+    return kdbItem;
+  }
+
+  const finlife = await prisma.product.findUnique({
+    where: { id: internalProductId },
+    select: {
+      finPrdtCd: true,
+      kind: true,
+      name: true,
+      raw: true,
+      createdAt: true,
+      updatedAt: true,
+      provider: { select: { name: true } },
+      options: {
+        select: {
+          saveTrm: true,
+          intrRate: true,
+          intrRate2: true,
+        },
+        orderBy: [{ saveTrm: "asc" }, { id: "asc" }],
+      },
+    },
+  });
+  if (!finlife) return kdbItem;
+
+  const canonical = buildFinlifeItemFromProductRow(finlife, includeTimestamps);
+  const merged = mergeUnifiedCatalogRows({
+    items: [canonical, kdbItem] as UnifiedMergeItem[],
+    sort: "recent",
+  }) as UnifiedProductView[];
+  return merged[0] ?? canonical;
 }

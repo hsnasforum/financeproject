@@ -6,11 +6,18 @@ import { spawnSync } from "node:child_process";
 const root = process.cwd();
 const envPath = (process.env.DART_CORPCODES_INDEX_PATH ?? "").trim();
 const primaryPath = envPath ? path.resolve(root, envPath) : path.join(root, "tmp", "dart", "corpCodes.index.json");
+const tmpFallbackPath = path.join(root, "tmp", "dart", "corpCodes.index.json");
+const legacyFallbackPath = path.join(root, "src", "data", "dart", "corpCodes.json");
+const triedPaths = [primaryPath];
+if (!triedPaths.includes(tmpFallbackPath)) triedPaths.push(tmpFallbackPath);
+if (!triedPaths.includes(legacyFallbackPath)) triedPaths.push(legacyFallbackPath);
 const scriptPath = path.join(root, "scripts", "dart_corpcode_build.py");
 
-if (fs.existsSync(primaryPath)) {
-  console.log(`[dart:ensure-corpindex] index exists: ${primaryPath}`);
-  process.exit(0);
+for (const candidatePath of triedPaths) {
+  if (fs.existsSync(candidatePath)) {
+    console.log(`[dart:ensure-corpindex] index exists: ${candidatePath}`);
+    process.exit(0);
+  }
 }
 
 if (!(process.env.OPENDART_API_KEY ?? "").trim()) {

@@ -30,6 +30,21 @@ describe("benefits region extraction", () => {
     expect(region.tags).toContain("미상");
   });
 
+  it("prefers earliest sido mention when multiple sido names are present", () => {
+    const region = extractRegionTagsFromTexts(["충청남도 공주시·세종특별자치시 인근 거주자"]);
+    expect(region.scope).toBe("REGIONAL");
+    expect(region.sido).toBe("충남");
+    expect(region.sigungu).toBe("공주시");
+  });
+
+  it("does not accept non-administrative sigungu tokens", () => {
+    const region = extractRegionTagsFromTexts(["부산광역시 원가구 청년 지원"]);
+    expect(region.scope).toBe("REGIONAL");
+    expect(region.sido).toBe("부산");
+    expect(region.sigungu).toBeUndefined();
+    expect(region.tags).not.toContain("부산 원가구");
+  });
+
   it("narrows results by sido using normalized fixture data", () => {
     const rows = loadFixtureRows();
     const normalized = benefitsTest.normalizeBenefits(rows).items;

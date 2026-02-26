@@ -3,145 +3,98 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { getCorpIndexStatus, invalidateCorpIndexCache, resolveCorpCodesIndexPath } from "@/lib/publicApis/dart/corpIndex";
-import { canBuildCorpIndex } from "@/lib/publicApis/dart/indexBuildGuard";
 
 export const runtime = "nodejs";
 
 const execFileAsync = promisify(execFile);
+const MAX_TAIL_LENGTH = 2_000;
+
+type BuildResult = { ok: true; stdout: string; stderr: string } | { ok: false; message: string; stdout: string; stderr: string };
+
+type ExecFileFailure = Error & { code?: string; stdout?: string; stderr?: string };
 
 export async function POST(request: Request) {
-  const guard = canBuildCorpIndex({
-    requestToken: request.headers.get("x-build-token"),
-  });
-
-  if (!guard.allowed) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "FORBIDDEN",
-        message: "인덱스 자동 생성은 현재 환경에서 허용되지 않습니다.",
-        reason: guard.reason,
-        status: getCorpIndexStatus(),
-      },
-      { status: 403 },
-    );
+  const nodeEnv = (process.env.NODE_ENV ?? "development").trim();
+  if (nodeEnv === "production") {
+    const expected = (process.env.DART_INDEX_BUILD_TOKEN ?? "").trim();
+    const provided = (request.headers.get("x-build-token") ?? "").trim();
+    if (!expected || expected !== provided) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "빌드 권한이 없습니다.",
+        },
+        { status: 403 },
+      );
+    }
   }
 
   const start = Date.now();
-  const { primary: outPath } = resolveCorpCodesIndexPath();
+  const outPath = resolveCorpCodesIndexPath().primary;
   const scriptPath = path.join(process.cwd(), "scripts", "dart_corpcode_build.py");
 
-  const result = await runBuild(scriptPath, outPath);
+  const built = await runBuild(scriptPath, outPath);
   const tookMs = Date.now() - start;
 
-  if (!result.ok) {
+  if (!built.ok) {
     return NextResponse.json(
       {
         ok: false,
-        error: "BUILD_FAILED",
-        message: result.message,
-        stderrTail: sanitizeTail(result.stderr),
-        status: getCorpIndexStatus(),
+        message: built.message,
+        stdoutTail: sanitizeTail(built.stdout),
+        stderrTail: sanitizeTail(built.stderr),
       },
       { status: 500 },
     );
   }
 
   invalidateCorpIndexCache();
-  const status = getCorpIndexStatus();
-  if (!status.exists) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "INDEX_NOT_FOUND_AFTER_BUILD",
-        message: "인덱스 생성 후 파일을 찾지 못했습니다. 출력 경로와 권한을 확인하세요.",
-        outPath,
-        stdoutTail: sanitizeTail(result.stdout),
-        status,
-      },
-      { status: 500 },
-    );
-  }
-
   return NextResponse.json({
     ok: true,
     outPath,
     tookMs,
-    stdoutTail: sanitizeTail(result.stdout),
-    status,
+    status: getCorpIndexStatus(),
   });
 }
 
-export async function GET() {
-  return NextResponse.json({ ok: false, error: "METHOD_NOT_ALLOWED", message: "POST 요청을 사용하세요." }, { status: 405 });
-}
-
-async function runBuild(scriptPath: string, outPath: string): Promise<{ ok: true; stdout: string } | { ok: false; message: string; stderr: string }> {
-  const args = [scriptPath, "--out", outPath];
-
+async function runBuild(scriptPath: string, outPath: string): Promise<BuildResult> {
   try {
-    const first = await execFileAsync("python3", args, {
+    const result = await execFileAsync("python3", [scriptPath, "--out", outPath], {
       cwd: process.cwd(),
       timeout: 120_000,
       maxBuffer: 1024 * 1024,
     });
-    return { ok: true, stdout: first.stdout ?? "" };
+    return {
+      ok: true,
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+    };
   } catch (error) {
-    const firstErr = error as Error & { code?: string; stderr?: string };
-    if (firstErr.code !== "ENOENT") {
+    const failure = error as ExecFileFailure;
+    if (failure.code === "ENOENT") {
       return {
         ok: false,
-        message: mapBuildFailureMessage(firstErr.stderr ?? firstErr.message ?? "인덱스 생성에 실패했습니다."),
-        stderr: firstErr.stderr ?? String(firstErr.message ?? ""),
-      };
-    }
-  }
-
-  try {
-    const second = await execFileAsync("python", args, {
-      cwd: process.cwd(),
-      timeout: 120_000,
-      maxBuffer: 1024 * 1024,
-    });
-    return { ok: true, stdout: second.stdout ?? "" };
-  } catch (error) {
-    const secondErr = error as Error & { code?: string; stderr?: string };
-    if (secondErr.code === "ENOENT") {
-      return {
-        ok: false,
-        message: "python 실행 환경을 찾지 못했습니다. python3 또는 python 설치를 확인하세요.",
-        stderr: "python executable not found",
+        message: "python3를 찾을 수 없습니다.",
+        stdout: "",
+        stderr: "python3 executable not found",
       };
     }
 
     return {
       ok: false,
-      message: mapBuildFailureMessage(secondErr.stderr ?? secondErr.message ?? "인덱스 생성에 실패했습니다."),
-      stderr: secondErr.stderr ?? String(secondErr.message ?? ""),
+      message: "corpCodes 인덱스 생성에 실패했습니다.",
+      stdout: failure.stdout ?? "",
+      stderr: failure.stderr ?? failure.message ?? "",
     };
   }
 }
 
-function mapBuildFailureMessage(stderr: string): string {
-  const safe = stderr.toLowerCase();
-  if (safe.includes("opendart_api_key")) {
-    return "OPENDART_API_KEY 설정이 필요합니다.";
-  }
-  if (safe.includes("timed out")) {
-    return "인덱스 생성이 시간 초과되었습니다. 잠시 후 다시 시도하세요.";
-  }
-  if (safe.includes("http status") || safe.includes("호출 실패")) {
-    return "OpenDART 호출에 실패했습니다. 네트워크 상태를 확인하고 다시 시도하세요.";
-  }
-  return "인덱스 생성에 실패했습니다. 서버 로그를 확인하세요.";
-}
-
-function sanitizeTail(text: string): string {
-  const redacted = text
+function sanitizeTail(input: string): string {
+  const masked = input
     .replace(/crtfc_key=[^&\s]+/gi, "crtfc_key=***")
-    .replace(/opendart_api_key\s*=\s*[^\s]+/gi, "OPENDART_API_KEY=***");
+    .replace(/opendart_api_key\s*=\s*[^\s]+/gi, "OPENDART_API_KEY=***")
+    .trim();
 
-  const trimmed = redacted.trim();
-  if (trimmed.length <= 1200) return trimmed;
-  return trimmed.slice(-1200);
+  if (masked.length <= MAX_TAIL_LENGTH) return masked;
+  return masked.slice(-MAX_TAIL_LENGTH);
 }

@@ -1,4 +1,5 @@
-import { SIDO_LIST, normalizeSido } from "../regions/kr";
+import { SIDO_LIST, extractRegionTagsFromTexts, normalizeSido } from "../regions/kr";
+import { SIDO_ADMIN_2025, SIGUNGU_BY_SIDO_CODE_2025 } from "../regions/kr_admin_2025";
 import { isTopicFilterBypassed, type BenefitTopicKey } from "./benefitsTopics";
 import { applyTopicFilter } from "./benefitsTopicMatch";
 import { type BenefitCandidate } from "./contracts/types";
@@ -38,6 +39,45 @@ function toSearchFields(item: BenefitCandidate): string[] {
     .map((entry) => entry.toLowerCase());
 }
 
+const EFFECTIVE_REGION_CACHE = new WeakMap<BenefitCandidate, BenefitCandidate["region"]>();
+
+function getEffectiveRegion(item: BenefitCandidate): BenefitCandidate["region"] {
+  const cached = EFFECTIVE_REGION_CACHE.get(item);
+  if (cached) return cached;
+
+  if (item.region.scope !== "UNKNOWN") {
+    EFFECTIVE_REGION_CACHE.set(item, item.region);
+    return item.region;
+  }
+
+  // Avoid overfitting to long summary texts; prefer high-signal fields first.
+  const focusedTexts = [item.org, item.title, item.applyHow]
+    .filter((entry): entry is string => Boolean(entry))
+    .map((entry) => entry.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const fallbackTexts = [item.summary, ...(item.eligibilityHints ?? []), item.eligibilityText, item.eligibilityExcerpt]
+    .filter((entry): entry is string => Boolean(entry))
+    .map((entry) => entry.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const focused = extractRegionTagsFromTexts(focusedTexts);
+  const inferred = focused.scope !== "UNKNOWN" ? focused : extractRegionTagsFromTexts(fallbackTexts);
+
+  if (inferred.scope === "UNKNOWN") {
+    EFFECTIVE_REGION_CACHE.set(item, item.region);
+    return item.region;
+  }
+
+  const merged: BenefitCandidate["region"] = {
+    ...item.region,
+    ...inferred,
+    confidence: "LOW",
+    unknownReason: undefined,
+  };
+  EFFECTIVE_REGION_CACHE.set(item, merged);
+  return merged;
+}
+
 export function filterBenefitsByQuery(items: BenefitCandidate[], query: string): BenefitCandidate[] {
   const q = query.trim().toLowerCase();
   if (!q) return items;
@@ -46,8 +86,9 @@ export function filterBenefitsByQuery(items: BenefitCandidate[], query: string):
 
 function applyScopeToggles(items: BenefitCandidate[], includeNationwide: boolean, includeUnknown: boolean): BenefitCandidate[] {
   return items.filter((item) => {
-    if (item.region.scope === "NATIONWIDE") return includeNationwide;
-    if (item.region.scope === "UNKNOWN") return includeUnknown;
+    const region = getEffectiveRegion(item);
+    if (region.scope === "NATIONWIDE") return includeNationwide;
+    if (region.scope === "UNKNOWN") return includeUnknown;
     return true;
   });
 }
@@ -55,25 +96,38 @@ function applyScopeToggles(items: BenefitCandidate[], includeNationwide: boolean
 function applySido(items: BenefitCandidate[], selectedSido: string | null): BenefitCandidate[] {
   if (!selectedSido) return items;
   return items.filter((item) => {
-    if (item.region.scope !== "REGIONAL") return true;
-    return (item.region.tags ?? []).includes(selectedSido);
+    const region = getEffectiveRegion(item);
+    if (region.scope !== "REGIONAL") return true;
+    return (region.tags ?? []).includes(selectedSido);
   });
 }
 
 function applySigungu(items: BenefitCandidate[], selectedSido: string | null, selectedSigungu: string | null): BenefitCandidate[] {
   if (!selectedSido || !selectedSigungu) return items;
   return items.filter((item) => {
-    if (item.region.scope !== "REGIONAL") return true;
-    const tags = item.region.tags ?? [];
+    const region = getEffectiveRegion(item);
+    if (region.scope !== "REGIONAL") return true;
+    const tags = region.tags ?? [];
     return tags.includes(`${selectedSido} ${selectedSigungu}`) || tags.includes(selectedSigungu);
   });
+}
+
+function getSigunguCatalogBySido(sido: string): string[] {
+  const match = SIDO_ADMIN_2025.find((entry) => normalizeSido(entry.name) === sido);
+  if (!match) return [];
+  return (SIGUNGU_BY_SIDO_CODE_2025[match.code] ?? []).map((entry) => entry.name);
+}
+
+function getSigunguCatalogSetBySido(sido: string): Set<string> {
+  return new Set(getSigunguCatalogBySido(sido));
 }
 
 function buildSidoFacets(items: BenefitCandidate[]): RegionFacet[] {
   const counts = new Map<string, number>();
   for (const item of items) {
-    if (item.region.scope !== "REGIONAL") continue;
-    const rawSido = item.region.sido ?? item.region.tags.find((tag) => Boolean(normalizeSido(tag)));
+    const region = getEffectiveRegion(item);
+    if (region.scope !== "REGIONAL") continue;
+    const rawSido = region.sido ?? region.tags.find((tag) => Boolean(normalizeSido(tag)));
     const key = rawSido ? normalizeSido(rawSido) : null;
     if (!key) continue;
     counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -83,25 +137,31 @@ function buildSidoFacets(items: BenefitCandidate[]): RegionFacet[] {
 
 function buildSigunguFacets(items: BenefitCandidate[], selectedSido: string | null): RegionFacet[] {
   if (!selectedSido) return [];
+  const allowedSigunguSet = getSigunguCatalogSetBySido(selectedSido);
   const counts = new Map<string, number>();
   for (const item of items) {
-    if (item.region.scope !== "REGIONAL") continue;
-    for (const tag of item.region.tags ?? []) {
+    const region = getEffectiveRegion(item);
+    if (region.scope !== "REGIONAL") continue;
+    for (const tag of region.tags ?? []) {
       if (!tag.startsWith(`${selectedSido} `)) continue;
       const sigungu = tag.slice(selectedSido.length + 1).trim();
       if (!sigungu || !/[시군구]$/.test(sigungu)) continue;
       if (sigungu === `${selectedSido}시` || sigungu === `${selectedSido}도`) continue;
       if (SIGUNGU_BLACKLIST.has(sigungu)) continue;
+      if (allowedSigunguSet.size > 0 && !allowedSigunguSet.has(sigungu)) continue;
       counts.set(sigungu, (counts.get(sigungu) ?? 0) + 1);
     }
+  }
+  for (const sigungu of getSigunguCatalogBySido(selectedSido)) {
+    if (!counts.has(sigungu)) counts.set(sigungu, 0);
   }
   return [...counts.entries()].map(([key, count]) => ({ key, count })).sort((a, b) => a.key.localeCompare(b.key, "ko"));
 }
 
 function buildScopeCounts(items: BenefitCandidate[]) {
-  const regional = items.filter((item) => item.region.scope === "REGIONAL").length;
-  const nationwide = items.filter((item) => item.region.scope === "NATIONWIDE").length;
-  const unknown = items.filter((item) => item.region.scope === "UNKNOWN").length;
+  const regional = items.filter((item) => getEffectiveRegion(item).scope === "REGIONAL").length;
+  const nationwide = items.filter((item) => getEffectiveRegion(item).scope === "NATIONWIDE").length;
+  const unknown = items.filter((item) => getEffectiveRegion(item).scope === "UNKNOWN").length;
   return {
     regional,
     nationwide,

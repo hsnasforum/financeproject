@@ -1,47 +1,77 @@
 # Release Notes
 
 ## Latest
-### 2026-02-25 (Day1~Day6 기준점)
-### 변경된 파일 목록
-- `docs/current-screens.md`
-- `src/components/SiteHeader.tsx`
-- `src/app/page.tsx`
+### 2026-02-25 (P2 Unified Catalog 승격)
+### 변경 파일
+- `docs/unified-catalog-contract.md`
+- `src/lib/sources/unified.ts`
+- `src/lib/sources/unifiedEnrichPolicy.ts`
+- `src/app/api/products/unified/route.ts`
+- `src/app/products/catalog/page.tsx`
 - `src/app/products/page.tsx`
-- `src/lib/planner/types.ts`
-- `src/lib/planner/compute.ts`
-- `src/app/planner/page.tsx`
-- `src/app/recommend/page.tsx`
-- `src/lib/recommend/resultHistory.ts`
-- `src/lib/publicApis/errorContract.ts`
-- `src/app/api/public/exchange/route.ts`
-- `src/app/api/gov24/search/route.ts`
-- `src/lib/finlife/productsHttp.ts`
-- `tests/planner-compute.test.ts`
-- `tests/recommend-result-history.test.ts`
-- `tests/external-api-error-contract.test.ts`
+- `docs/current-screens.md`
+- `tests/unified-contract.test.ts`
+- `tests/unified-mode-validation.test.ts`
+- `tests/unified-dedup-stability.test.ts`
 
-### 이번 주 변경점
-- Day1: 현재 제공 화면 카탈로그를 `docs/current-screens.md`로 고정하고, 홈/헤더/제품 페이지 링크 정합성을 점검했습니다.
-- Day2: GOV24/환율/FINLIFE의 스키마 드리프트 방어(안전한 에러 + 진단정보) 및 리포트/스냅샷 기반 테스트를 강화했습니다.
-- Day3: 플래너 우선순위 액션에 실제 이동 링크를 추가해 추천/상품 탐색으로 바로 연결되도록 개선했습니다.
-- Day4: 추천 결과를 localStorage에 저장하고, 이전 실행 대비 순위/금리/신규/이탈 변화 요약을 UI에 노출하도록 확장했습니다.
-- Day5: 추천 카드의 badge key 충돌(중복 key 경고) 이슈를 해결했습니다.
-- Day6: 외부 API 실패 응답 규격(`ok:false + error.code/message`)을 공통화하고, 입력 오류는 HTTP 400으로 명확히 매핑되도록 정리했습니다.
+### 변경 요약
+- `/api/products/unified` 계약 문서를 추가하고 `stableId`, options 정렬, tie-break 불변식을 명시했습니다.
+- merged 모드에서 dedup key를 고정하고(FINLIFE `fin_prdt_cd` 우선), 동일 term options 병합 규칙을 코드로 고정했습니다.
+- merged 다중소스에 cursor 페이지네이션을 연결하고, integrated 제약( finlife 필수 / cursor 금지 )은 그대로 유지했습니다.
+- 사용자용 `/products/catalog` 페이지를 추가해 `kind/termMonths/minRate/q` 필터 + 결과 리스트 + `meta.generatedAt` 표시를 제공했습니다.
+- 제품 메인(`/products`)에 통합 탐색 진입 카드를 추가했습니다.
 
-### pnpm verify / CI 기준
-- 로컬 `pnpm verify` 통과 (2026-02-25 실행): `validate:dumps:fixtures + lint + typecheck + test` 모두 성공
-- CI 기준: `.github/workflows/ci.yml`의 `Verify` 단계가 동일하게 `pnpm verify`를 실행하도록 유지됨
+### 검증
+- `pnpm test -- tests/unified-contract.test.ts tests/unified-mode-validation.test.ts tests/unified-dedup-stability.test.ts`
+- `pnpm verify`
 
-### 깨진 것 (Known Broken)
-- 현재 릴리즈 후보 기준에서 재현되는 Blocker 없음 (`pnpm verify` 통과 기준)
-- 단, 외부 업스트림(ODcloud/EXIM/FINLIFE) 장애/스키마 급변 시 `SCHEMA_MISMATCH`/`UPSTREAM` 계열 오류는 발생 가능(의도된 fail-safe)
+### 2026-02-25 (Day1~Day6 Release Candidate)
+### Day1~Day6 변경 파일 목록
+- Day1 화면/링크 정합성
+  - `docs/current-screens.md`
+  - `src/app/products/page.tsx`
+  - `src/app/products/pension/page.tsx`
+- Day2 플래너 액션 딥링크
+  - `src/lib/planner/types.ts`
+  - `src/lib/planner/compute.ts`
+  - `src/app/planner/page.tsx`
+  - `tests/planner-compute.test.ts`
+- Day3 추천 저장+비교(diff) 및 상세 연결
+  - `src/app/recommend/page.tsx`
+  - `src/lib/recommend/types.ts`
+  - `src/lib/recommend/score.ts`
+- Day4~Day5 외부 API 에러 표준/디버그 분리
+  - `src/lib/http/apiError.ts`
+  - `src/app/api/public/exchange/route.ts`
+  - `src/app/api/gov24/sync/route.ts`
+  - `src/app/api/gov24/detail/route.ts`
+  - `src/app/api/gov24/simple-find/route.ts`
+  - `src/lib/finlife/types.ts`
+  - `src/lib/finlife/productsHttp.ts`
+  - `tests/external-api-error-contract.test.ts`
+  - `tests/http-api-error.test.ts`
+  - `tests/finlife-http-error-debug.test.ts`
+- Day6 오프라인 수동 검증 고정
+  - `docs/day6-offline-qa.md`
+  - `scripts/offline_doctor.mjs`
+  - `package.json`
 
-### 주의사항 (가정값 / 데이터 기준일)
-- 플래너/추천 결과는 규칙 기반 시뮬레이션이며 확정 수익/보장을 의미하지 않음(가정값: 비상금 개월수, 고금리 기준 APR, DSR 경고 기준, 금리 선택 정책 등)
-- 환율/혜택/상품 데이터는 실시간 보장이 아닌 기준 시점 데이터임:
-  - 환율: 응답의 `meta.asOf` / `requestedDate` 기준
-  - GOV24: 스냅샷 `generatedAt` 및 `meta.sync.state`(ready/syncing/needs_sync) 확인 필요
-  - FINLIFE: `meta.kind/pageNo/topFinGrpNo`와 `mode(live/fixture/mock)` 확인 필요
+### 작업 요약 (5줄)
+- 정합성: 실제 라우트 기준으로 `current-screens`를 갱신하고 `/products/pension` 카탈로그를 반영했습니다.
+- 딥링크: `/planner` 우선순위 액션에서 추천/대출 페이지로 즉시 이동하는 CTA를 `links[]`로 표준화했습니다.
+- 저장+diff: `/recommend` 결과를 로컬 저장하고 직전 실행 대비 순위/금리/기간 변화를 카드에서 비교 표시하도록 고정했습니다.
+- 에러표준: 환율/GOV24/FINLIFE 실패 응답을 `{ ok:false, error:{ code, message, debug? } }`로 통일했습니다.
+- 오프라인 QA: `offline:doctor`와 Day6 문서로 스냅샷/DB/REPLAY 준비상태를 빠르게 재현·진단 가능하게 했습니다.
+
+### pnpm verify 결과
+- 로컬 `pnpm verify` 통과 (2026-02-25 실행).
+- 검증 게이트: `validate:dumps:fixtures + lint + typecheck + test` 모두 성공.
+- CI도 동일하게 `pnpm verify`를 기준 게이트로 사용합니다.
+
+### 남은 TODO / 리스크 (확장 전)
+- 추천의 `depositProtection`은 현재 `unknown` 기본값이며 `matched` 판정 로직은 확장 전 구현이 필요합니다.
+- FINLIFE HTTP 레이어의 `buildMockPayload`는 현재 미사용 경고 상태라 다음 정리 배치에서 제거/통합이 필요합니다.
+- 기본 브랜치 병합에서 verify 강제는 문서화 완료 상태이며 실제 보호 규칙 운영 점검이 필요합니다.
 
 ---
 

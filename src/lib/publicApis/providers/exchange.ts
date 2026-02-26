@@ -1,3 +1,4 @@
+import { ExternalApiError, fetchExternal } from "../../http/fetchExternal";
 import { type PublicApiResult } from "../contracts/types";
 import { buildSchemaMismatchError, safeEndpoint } from "../schemaDrift";
 
@@ -170,12 +171,14 @@ export async function fetchEximExchange(params?: { dateYYYYMMDD?: string }): Pro
     url.searchParams.set("data", dataParam);
     url.searchParams.set("searchdate", dateYYYYMMDD);
 
-    const response = await fetch(url.toString(), { cache: "no-store" });
-    if (!response.ok) {
-      return { ok: false, error: { code: "UPSTREAM_ERROR", message: `환율 API 응답 오류(${response.status})` } };
-    }
-    const contentType = response.headers.get("content-type") ?? "";
-    const text = await response.text();
+    const fetched = await fetchExternal(url.toString(), {
+      timeoutMs: 12_000,
+      retries: 2,
+      sourceKey: "exchange",
+      retryOn: [429, 500, 502, 503, 504],
+    });
+    const contentType = fetched.contentType;
+    const text = fetched.text;
     if (hasHtmlShape(text, contentType)) {
       const mismatch = buildSchemaMismatchError({
         source: "exchange",
@@ -229,7 +232,25 @@ export async function fetchEximExchange(params?: { dateYYYYMMDD?: string }): Pro
     return { ok: true, data: normalized };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    console.error("[exchange] fetch failed", { endpoint: safeEndpoint(baseResolved.baseUrl), reason: message });
-    return { ok: false, error: { code: "FETCH_FAILED", message: `환율 API 호출 실패: ${message}` } };
+    const timeout = error instanceof ExternalApiError ? Boolean(error.timeout) : /timeout|timed out|etimedout|abort/i.test(message);
+    const upstreamStatus = error instanceof ExternalApiError ? error.status : undefined;
+    const retryAfterSeconds = error instanceof ExternalApiError ? error.retryAfterSeconds : undefined;
+    console.error("[exchange] fetch failed", {
+      endpoint: safeEndpoint(baseResolved.baseUrl),
+      reason: message,
+      upstreamStatus,
+    });
+    return {
+      ok: false,
+      error: {
+        code: typeof upstreamStatus === "number" ? "UPSTREAM_ERROR" : "FETCH_FAILED",
+        message: `환율 API 호출 실패: ${message}`,
+        diagnostics: {
+          timeout,
+          upstreamStatus,
+          retryAfterSeconds,
+        },
+      },
+    };
   }
 }

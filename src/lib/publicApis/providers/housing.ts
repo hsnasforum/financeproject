@@ -1,6 +1,6 @@
 import housingSalesMock from "@/data/public/housing-sales.mock.json";
 import { toWonFromManwon } from "@/lib/housing/money";
-import { fetchExternal, requireServerEnv } from "@/lib/http/fetchExternal";
+import { fetchExternal, requireServerEnv } from "../../http/fetchExternal";
 import { type HousingBenchmark, type PublicApiResult } from "@/lib/publicApis/contracts/types";
 import {
   buildApiUrl,
@@ -76,7 +76,12 @@ export async function getHousingSalesBenchmark(regionCode: string, month: string
     const endpoint = buildEndpoint(base, "getRTMSDataSvcAptTrade");
     const url = buildApiUrl(endpoint, key, { LAWD_CD: regionCode, DEAL_YMD: month, numOfRows: "100", pageNo: "1" });
 
-    const fetched = await fetchExternal(url);
+    const fetched = await fetchExternal(url, {
+      sourceKey: "housing:sales",
+      timeoutMs: 12_000,
+      retries: 2,
+      retryOn: [429, 500, 502, 503, 504],
+    });
     const header = getMolitHeader(fetched.body);
     if (header.resultCode && !isMolitSuccessCode(header.resultCode)) {
       const detail = header.resultMsg ? `: ${header.resultMsg}` : "";
@@ -139,7 +144,12 @@ export async function getHousingRentBenchmark(regionCode: string, month: string,
     const endpoint = buildEndpoint(base, "getRTMSDataSvcAptRent");
     const url = buildApiUrl(endpoint, key, { LAWD_CD: regionCode, DEAL_YMD: month, numOfRows: "200", pageNo: "1" });
 
-    const fetched = await fetchExternal(url);
+    const fetched = await fetchExternal(url, {
+      sourceKey: "housing:rent",
+      timeoutMs: 12_000,
+      retries: 2,
+      retryOn: [429, 500, 502, 503, 504],
+    });
     const header = getMolitHeader(fetched.body);
     if (header.resultCode && !isMolitSuccessCode(header.resultCode)) {
       const detail = header.resultMsg ? `: ${header.resultMsg}` : "";

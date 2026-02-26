@@ -79,6 +79,9 @@ vi.mock("@/lib/recommend/types", () => {
   };
 });
 
+vi.mock("@/lib/http/fallbackMeta", async () => await import("../src/lib/http/fallbackMeta"));
+vi.mock("@/lib/http/apiResponse", async () => await import("../src/lib/http/apiResponse"));
+
 import { POST } from "../src/app/api/recommend/route";
 
 type RecommendApiJson = {
@@ -129,6 +132,22 @@ describe("POST /api/recommend", () => {
     expect(json?.ok).toBe(false);
     expect(typeof json?.error?.message).toBe("string");
     expect((json.error?.message ?? "").length).toBeGreaterThan(0);
+  });
+
+  it("returns 400 with standardized error for invalid candidatePool", async () => {
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      candidatePool: "invalid",
+    });
+
+    expect(status).toBe(400);
+    expect(json.ok).toBe(false);
+    expect(typeof json.error?.message).toBe("string");
+    expect((json.error?.message ?? "")).toContain("candidatePool");
   });
 
   it("returns 200 and recommendation schema for valid input", async () => {
