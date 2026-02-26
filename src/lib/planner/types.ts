@@ -39,16 +39,18 @@ export type PlannerMetricLine = {
   formula?: string;
 };
 
+export type PlannerActionLink = {
+  href: string;
+  label: string;
+};
+
 export type PlannerAction = {
   priority: "high" | "mid" | "low";
   title: string;
   action: string;
   reason: string;
   numbers?: Record<string, number>;
-  link?: {
-    href: string;
-    label: string;
-  };
+  links?: PlannerActionLink[];
 };
 
 export type PlannerGoalPlan = {

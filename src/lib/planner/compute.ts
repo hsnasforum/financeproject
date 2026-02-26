@@ -162,18 +162,45 @@ function metric(key: string, label: string, value: number | null, unit: PlannerM
 
 const PLANNER_ACTION_LINKS = {
   emergencyRecommend: {
-    href: "/recommend?purpose=emergency&kind=deposit",
-    label: "비상금 추천 보기",
+    href: "/recommend?purpose=emergency&kind=deposit&preferredTerm=3&liquidityPref=high&rateMode=max&pool=unified&autorun=1&save=1&go=history",
+    label: "비상금 예금 추천",
   },
-  depositProducts: {
-    href: "/products/deposit",
-    label: "예금 상품 보기",
+  savingRecommend: {
+    href: "/recommend?purpose=seed-money&kind=saving&preferredTerm=12&liquidityPref=mid&rateMode=max&pool=unified&autorun=1&save=1&go=history",
+    label: "목표 적금 추천",
   },
   creditLoanProducts: {
     href: "/products/credit-loan",
-    label: "신용대출 비교하기",
+    label: "대출 상품 보기/비교",
+  },
+  gov24Benefits: {
+    href: "/gov24",
+    label: "지원금/혜택 찾아보기",
+  },
+  benefitsCashflow: {
+    href: "/benefits?q=생활비&category=job&region=전국&ageBand=all&incomeBand=low-mid",
+    label: "생활지원 혜택 보기",
+  },
+  benefitsFamily: {
+    href: "/benefits?q=양육%20돌봄&category=childcare&region=전국&ageBand=30s-40s&incomeBand=all",
+    label: "부양가족 혜택 보기",
+  },
+  benefitsHousing: {
+    href: "/benefits?q=주거비&category=housing&region=전국&ageBand=all&incomeBand=all",
+    label: "주거지원 혜택 보기",
+  },
+  subscriptionHousing: {
+    href: "/housing/subscription?region=전국&mode=all&houseType=apt",
+    label: "청약 공고 보기",
   },
 } as const;
+
+function buildHousingAffordHref(incomeNet: number, outflow: number): string {
+  const params = new URLSearchParams();
+  params.set("incomeNet", String(Math.max(0, Math.round(incomeNet))));
+  params.set("outflow", String(Math.max(0, Math.round(outflow))));
+  return `/housing/afford?${params.toString()}`;
+}
 
 export function computePlanner(input: PlannerInput, assumptionOverrides?: Partial<PlannerAssumptions>): PlannerResult {
   validateInput(input);
@@ -191,6 +218,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
   const netWorth = input.liquidAssets + (input.otherAssets ?? 0) - totalDebtBalance;
   const emergencyFundMonths = monthlyExpenses > 0 ? input.liquidAssets / monthlyExpenses : null;
   const debtServiceRatioPct = input.monthlyIncomeNet > 0 ? (monthlyDebtPayments / input.monthlyIncomeNet) * 100 : null;
+  const fixedExpenseRatioPct = input.monthlyIncomeNet > 0 ? (input.monthlyFixedExpenses / input.monthlyIncomeNet) * 100 : null;
 
   const minEmergencyTarget = assumptions.minEmergencyMonthsBeforeDebtExtra * monthlyExpenses;
   const desiredEmergencyTarget = assumptions.emergencyTargetMonths * monthlyExpenses;
@@ -200,6 +228,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
     .filter((debt) => debt.balance > 0 && debt.aprPct >= assumptions.highInterestAprPctThreshold)
     .sort((a, b) => b.aprPct - a.aprPct);
   const focusDebt = highInterestDebts[0];
+  const hasHousingGoal = input.goals.some((goal) => /주택|집|내집|아파트|전세|월세|청약/.test(goal.name));
 
   let emergencyMonthly = 0;
   let debtExtraMonthly = 0;
@@ -213,6 +242,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
       action: "고정비/변동비 조정 또는 소득 증대 계획을 먼저 실행하세요.",
       reason: "월 가용저축액이 0 이하이면 비상금/부채/목표 배분이 지속되기 어렵습니다.",
       numbers: { monthlyFreeCashFlow },
+      links: [PLANNER_ACTION_LINKS.gov24Benefits],
     });
   } else if (input.liquidAssets < minEmergencyTarget) {
     emergencyMonthly = monthlyFreeCashFlow;
@@ -222,7 +252,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
       action: "가용저축액을 비상금에 우선 배분하세요.",
       reason: "최소 비상금 1개월(설정값) 확보 전에는 예기치 못한 지출 대응이 어렵습니다.",
       numbers: { minEmergencyTarget, currentLiquidAssets: input.liquidAssets },
-      link: PLANNER_ACTION_LINKS.emergencyRecommend,
+      links: [PLANNER_ACTION_LINKS.emergencyRecommend],
     });
   } else if (highInterestDebts.length > 0) {
     debtExtraMonthly = monthlyFreeCashFlow * 0.6;
@@ -237,7 +267,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
       action: "가용저축액의 약 60%는 고금리 부채 추가상환, 40%는 비상금 유지/보강에 배분합니다.",
       reason: "고금리 이자비용을 줄이면서 유동성 리스크를 동시에 관리하기 위한 규칙 기반 배분입니다.",
       numbers: { debtExtraMonthly, emergencyMonthly },
-      link: PLANNER_ACTION_LINKS.creditLoanProducts,
+      links: [PLANNER_ACTION_LINKS.creditLoanProducts, PLANNER_ACTION_LINKS.emergencyRecommend],
     });
   } else if (input.liquidAssets < desiredEmergencyTarget) {
     emergencyMonthly = monthlyFreeCashFlow;
@@ -247,7 +277,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
       action: "고금리 부채가 없는 상태이므로 비상금 목표 개월수 충족을 먼저 달성합니다.",
       reason: "유동성 쿠션이 목표보다 작으면 목표 적립보다 리스크 관리가 우선됩니다.",
       numbers: { desiredEmergencyTarget, currentLiquidAssets: input.liquidAssets },
-      link: PLANNER_ACTION_LINKS.depositProducts,
+      links: [PLANNER_ACTION_LINKS.emergencyRecommend],
     });
   } else {
     goalsMonthly = monthlyFreeCashFlow;
@@ -257,6 +287,23 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
       action: "비상금 목표 달성 이후 가용저축액을 목표별 적립에 집중합니다.",
       reason: "고금리 부채가 없고 비상금 목표를 충족한 구간이므로 목표 달성률 제고가 우선입니다.",
       numbers: { goalsMonthly },
+      links: [PLANNER_ACTION_LINKS.savingRecommend],
+    });
+  }
+
+  if (hasHousingGoal) {
+    actions.push({
+      priority: "mid",
+      title: "주거 목표 연계 청약 탐색",
+      action: "주거비 부담 계산과 청약 공고 탐색을 함께 실행해 다음 행동을 빠르게 정하세요.",
+      reason: "목표명에 주거 관련 키워드가 포함되어 계산기/청약 화면으로 1클릭 연결합니다.",
+      links: [
+        {
+          href: buildHousingAffordHref(input.monthlyIncomeNet, monthlyExpenses),
+          label: "주거비 부담 계산기",
+        },
+        PLANNER_ACTION_LINKS.subscriptionHousing,
+      ],
     });
   }
 
@@ -311,7 +358,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
         focusDebtAprPct: focusDebt.aprPct,
         focusDebtBalance: focusDebt.balance,
       },
-      link: PLANNER_ACTION_LINKS.creditLoanProducts,
+      links: [PLANNER_ACTION_LINKS.creditLoanProducts],
     });
   }
 
@@ -352,6 +399,40 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
         ? "일부 목표의 월 배분이 0으로 계산되어 현금흐름 개선이 선행되어야 합니다."
         : "현재 배분은 규칙 기반 계산 결과이며 실제 집행 상황에 따라 조정이 필요합니다.",
       numbers: { goalCount: goalPlans.length, blockedGoals },
+      links: [PLANNER_ACTION_LINKS.savingRecommend],
+    });
+  }
+
+  const hasDependentSignal = input.goals.some((goal) => /자녀|육아|양육|교육|돌봄|가족/.test(goal.name));
+  if (monthlyFreeCashFlow <= 0 || (savingsRatePct !== null && savingsRatePct < 5)) {
+    actions.push({
+      priority: "mid",
+      title: "소득/지출 압박 완화 지원 확인",
+      action: "현재 조건에 맞는 현금성/생활비 보조 혜택을 먼저 확인하세요.",
+      reason: "현금흐름 압박 구간에서는 지출 절감형 지원금 탐색이 단기 개선에 유리합니다.",
+      numbers: { monthlyFreeCashFlow },
+      links: [PLANNER_ACTION_LINKS.benefitsCashflow],
+    });
+  }
+
+  if (hasDependentSignal) {
+    actions.push({
+      priority: "mid",
+      title: "부양가족 지원 제도 확인",
+      action: "양육/교육/돌봄 관련 혜택을 확인해 가계 고정지출을 완화하세요.",
+      reason: "목표명에서 부양가족 관련 신호가 감지되어 맞춤형 혜택 탐색 우선순위를 높였습니다.",
+      links: [PLANNER_ACTION_LINKS.benefitsFamily],
+    });
+  }
+
+  if (fixedExpenseRatioPct !== null && fixedExpenseRatioPct >= 45) {
+    actions.push({
+      priority: "mid",
+      title: "주거비 과다 구간 점검",
+      action: "주거지원 혜택과 최근 청약 공고를 함께 확인해 주거비 리스크를 낮추세요.",
+      reason: `고정비 비중이 ${fixedExpenseRatioPct.toFixed(2)}%로 높아 주거비 최적화 액션이 필요합니다.`,
+      numbers: { fixedExpenseRatioPct },
+      links: [PLANNER_ACTION_LINKS.benefitsHousing, PLANNER_ACTION_LINKS.subscriptionHousing],
     });
   }
 
@@ -363,6 +444,7 @@ export function computePlanner(input: PlannerInput, assumptionOverrides?: Partia
     metric("netWorth", "순자산", netWorth, "KRW", "순자산 = (현금성 자산 + 기타자산) - 총 부채잔액"),
     metric("emergencyFundMonths", "비상금 개월수", emergencyFundMonths, "MONTHS", "비상금 개월수 = 현금성 자산 / 월 지출"),
     metric("debtServiceRatioPct", "부채부담률", debtServiceRatioPct, "PCT", "부채부담률(%) = 월 부채상환 / 월 소득(세후) * 100"),
+    metric("fixedExpenseRatioPct", "고정비 비중", fixedExpenseRatioPct, "PCT", "고정비 비중(%) = 월 고정지출 / 월 소득(세후) * 100"),
   ];
 
   return {

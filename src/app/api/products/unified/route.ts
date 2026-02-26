@@ -1,18 +1,20 @@
-import { NextResponse } from "next/server";
 import {
   getUnifiedProducts,
   UnifiedInputError,
   type UnifiedMode,
 } from "@/lib/sources/unified";
-import { parseIncludeSources } from "@/lib/sources/includeSources";
+import { jsonError, jsonOk } from "@/lib/http/apiResponse";
+import { singleflight } from "../../../../lib/cache/singleflight";
+import { timingsToDebugMap, withTiming } from "../../../../lib/http/timing";
+import {
+  addIssue,
+  createValidationBag,
+  hasIssues,
+  parseEnum,
+  parseIntValue,
+  parseStringValue,
+} from "@/lib/http/validate";
 import type { UnifiedSourceId } from "@/lib/sources/types";
-
-function parsePositiveInt(value: string | null, fallback: number, min: number, max: number): number {
-  if (value === null) return fallback;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(n)));
-}
 
 function parseEnrichSources(input: string | null): Array<"datago_kdb"> {
   if (!input || !input.trim()) return [];
@@ -23,49 +25,78 @@ function parseEnrichSources(input: string | null): Array<"datago_kdb"> {
   return [...picked];
 }
 
+function parseIncludeSourcesWithIssues(
+  input: string[],
+  addInvalid: (token: string) => void,
+): UnifiedSourceId[] {
+  const tokens = input
+    .flatMap((entry) => entry.split(","))
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (tokens.length === 0) return ["finlife"];
+
+  const picked = new Set<UnifiedSourceId>();
+  for (const token of tokens) {
+    if (token === "finlife" || token === "datago_kdb" || token === "samplebank") {
+      picked.add(token);
+    } else {
+      addInvalid(token);
+    }
+  }
+  return picked.size > 0 ? [...picked] : ["finlife"];
+}
+
+function summarizeIssues(issues: string[]): string {
+  const first = issues[0] ?? "요청 파라미터가 올바르지 않습니다.";
+  return `요청 파라미터 오류 ${issues.length}건: ${first}`;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const kind = (searchParams.get("kind") ?? "deposit").trim().toLowerCase();
-    if (kind !== "deposit" && kind !== "saving") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "INPUT",
-            message: "kind는 deposit 또는 saving 이어야 합니다.",
-          },
-        },
-        { status: 400 },
-      );
-    }
+    const bag = createValidationBag();
+    const kind = parseEnum(bag, {
+      path: "kind",
+      value: (searchParams.get("kind") ?? "deposit").trim().toLowerCase(),
+      allowed: ["deposit", "saving"] as const,
+      fallback: "deposit",
+    });
 
     const includeSourcesValues = searchParams.getAll("includeSources");
-    const includeSources = parseIncludeSources(
-      includeSourcesValues.length > 0 ? includeSourcesValues : searchParams.get("includeSources"),
+    const includeSources = parseIncludeSourcesWithIssues(
+      includeSourcesValues.length > 0
+        ? includeSourcesValues
+        : (searchParams.get("includeSources") ? [searchParams.get("includeSources") as string] : []),
+      (token) => addIssue(bag, "includeSources", `includes unsupported value: ${token}`),
     );
-    const sourceIdRaw = searchParams.get("sourceId");
-    if (sourceIdRaw && !["finlife", "datago_kdb"].includes(sourceIdRaw)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "INPUT",
-            message: "sourceId는 finlife, datago_kdb 중 하나여야 합니다.",
-          },
-        },
-        { status: 400 },
-      );
+    const sourceIdRaw = parseStringValue(bag, {
+      path: "sourceId",
+      value: searchParams.get("sourceId"),
+      fallback: "",
+      trim: true,
+    });
+    if (sourceIdRaw && sourceIdRaw !== "finlife" && sourceIdRaw !== "datago_kdb" && sourceIdRaw !== "samplebank") {
+      addIssue(bag, "sourceId", "must be one of finlife|datago_kdb|samplebank");
     }
-    const sourceId = (sourceIdRaw && ["finlife", "datago_kdb"].includes(sourceIdRaw))
-      ? (sourceIdRaw as UnifiedSourceId)
+    const sourceId = (sourceIdRaw === "finlife" || sourceIdRaw === "datago_kdb" || sourceIdRaw === "samplebank")
+      ? sourceIdRaw
       : null;
+
     const cursor = searchParams.get("cursor");
     const q = searchParams.get("q");
-    const qMode = (searchParams.get("qMode") ?? "contains").trim().toLowerCase();
-    const queryMode = qMode === "prefix" ? "prefix" : "contains";
-    const modeRaw = (searchParams.get("mode") ?? "merged").trim().toLowerCase();
-    const mode: UnifiedMode = modeRaw === "integrated" ? "integrated" : "merged";
+    const queryMode = parseEnum(bag, {
+      path: "qMode",
+      value: (searchParams.get("qMode") ?? "contains").trim().toLowerCase(),
+      allowed: ["contains", "prefix"] as const,
+      fallback: "contains",
+    });
+    const mode = parseEnum(bag, {
+      path: "mode",
+      value: (searchParams.get("mode") ?? "merged").trim().toLowerCase(),
+      allowed: ["merged", "integrated"] as const,
+      fallback: "merged",
+    }) as UnifiedMode;
     const debugRequested = searchParams.get("debug") === "1";
     const canExposeDiagnostics = process.env.NODE_ENV !== "production" || process.env.UNIFIED_DEBUG_ALLOW_IN_PROD === "1";
     const debug = debugRequested && canExposeDiagnostics;
@@ -74,87 +105,95 @@ export async function GET(request: Request) {
     const changedSince = searchParams.get("changedSince");
     const includeTimestamps = searchParams.get("includeTimestamps") === "1";
     const enrichSources = parseEnrichSources(searchParams.get("enrichSources"));
-    const depositProtectionRaw = (searchParams.get("depositProtection") ?? "any").trim().toLowerCase();
-    const depositProtection = (depositProtectionRaw === "prefer" || depositProtectionRaw === "require")
-      ? depositProtectionRaw
-      : "any";
+    const depositProtection = parseEnum(bag, {
+      path: "depositProtection",
+      value: (searchParams.get("depositProtection") ?? "any").trim().toLowerCase(),
+      allowed: ["any", "prefer", "require"] as const,
+      fallback: "any",
+    });
     const includeKdbOnly = searchParams.get("includeKdbOnly") === "1";
-    const limit = parsePositiveInt(searchParams.get("limit"), 200, 1, 1000);
-    const sort = (searchParams.get("sort") ?? "recent").trim().toLowerCase();
-    const sortMode = sort === "name" ? "name" : "recent";
+    const limit = parseIntValue(bag, {
+      path: "limit",
+      value: searchParams.get("limit"),
+      fallback: 200,
+      min: 1,
+      max: 1000,
+    });
+    const sortMode = parseEnum(bag, {
+      path: "sort",
+      value: (searchParams.get("sort") ?? "recent").trim().toLowerCase(),
+      allowed: ["recent", "name"] as const,
+      fallback: "recent",
+    });
+
     if (mode === "integrated") {
       if (!includeSources.includes("finlife")) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: {
-              code: "INPUT",
-              message: "Integrated mode requires finlife as canonical source.",
-            },
-          },
-          { status: 400 },
-        );
+        addIssue(bag, "mode", "Integrated mode requires finlife as canonical source.");
       }
       if (cursor) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: {
-              code: "INPUT",
-              message: "Cursor pagination is not supported in integrated mode.",
-            },
-          },
-          { status: 400 },
-        );
+        addIssue(bag, "cursor", "Cursor pagination is not supported in integrated mode.");
       }
     }
-    if (cursor && (!sourceId || includeSources.length !== 1 || includeSources[0] !== sourceId)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "INPUT",
-            message: "Cursor pagination requires single sourceId.",
-          },
-        },
-        { status: 400 },
-      );
+    if (cursor && sourceId && (!includeSources.includes(sourceId) || includeSources.length !== 1)) {
+      addIssue(bag, "cursor", "Cursor pagination requires single sourceId.");
     }
     if (mode !== "integrated" && enrichSources.length > 0) {
       const singleFinlife = sourceId === "finlife" && includeSources.length === 1 && includeSources[0] === "finlife";
       if (!singleFinlife) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: {
-              code: "INPUT",
-              message: "enrichSources requires single sourceId=finlife",
-            },
-          },
-          { status: 400 },
-        );
+        addIssue(bag, "enrichSources", "enrichSources requires single sourceId=finlife");
       }
     }
 
-    const data = await getUnifiedProducts({
+    if (hasIssues(bag)) {
+      return jsonError("INPUT", summarizeIssues(bag.issues), { issues: bag.issues });
+    }
+
+    const singleflightKey = [
+      "products-unified",
       kind,
       mode,
-      includeSources,
-      sourceId,
-      cursor,
-      q,
-      refresh,
-      onlyNew,
-      changedSince,
-      includeTimestamps,
-      limit,
-      sort: sortMode,
-      qMode: queryMode,
-      enrichSources,
+      includeSources.join(","),
+      sourceId ?? "all",
+      cursor ?? "",
+      q ?? "",
+      refresh ? "1" : "0",
+      onlyNew ? "1" : "0",
+      changedSince ?? "",
+      includeTimestamps ? "1" : "0",
+      String(limit),
+      sortMode,
+      queryMode,
+      enrichSources.join(","),
       depositProtection,
-      includeKdbOnly,
-      debug,
-    });
+      includeKdbOnly ? "1" : "0",
+      debug ? "1" : "0",
+    ].join("|");
+    const dataTimed = await withTiming(
+      "products.unified.query",
+      () => singleflight(
+        singleflightKey,
+        () => getUnifiedProducts({
+          kind,
+          mode,
+          includeSources,
+          sourceId,
+          cursor,
+          q,
+          refresh,
+          onlyNew,
+          changedSince,
+          includeTimestamps,
+          limit,
+          sort: sortMode,
+          qMode: queryMode,
+          enrichSources,
+          depositProtection,
+          includeKdbOnly,
+          debug,
+        }),
+      ),
+    );
+    const data = dataTimed.value;
 
     const itemRows = Array.isArray(data.items) ? data.items : [];
     const coverage = {
@@ -162,38 +201,30 @@ export async function GET(request: Request) {
       kdbBadged: itemRows.filter((item) => Array.isArray(item.badges) && item.badges.includes("KDB_MATCHED")).length,
     };
 
-    return NextResponse.json({
-      ok: true,
+    const generatedAt = new Date().toISOString();
+    return jsonOk({
       data,
       coverage,
+      meta: {
+        generatedAt,
+        ...(debugRequested
+          ? {
+              debug: {
+                timings: timingsToDebugMap([dataTimed.timing]),
+              },
+            }
+          : {}),
+      },
       ...(debug ? { diagnostics: data.diagnostics } : {}),
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: generatedAt,
     });
   } catch (error) {
     if (error instanceof UnifiedInputError) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "INPUT",
-            message: error.message,
-          },
-        },
-        { status: 400 },
-      );
+      return jsonError("INPUT", error.message, { issues: [error.message] });
     }
     console.error("[products/unified] failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "UPSTREAM",
-          message: "현재 데이터를 갱신하지 못했어요. 잠시 후 다시 시도해주세요.",
-        },
-      },
-      { status: 502 },
-    );
+    return jsonError("UPSTREAM", "현재 데이터를 갱신하지 못했어요. 잠시 후 다시 시도해주세요.");
   }
 }

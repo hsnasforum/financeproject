@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-02-25T00:00:00.000Z",
+  "items": [
+    {
+      "productCode": "SB-DEP-001",
+      "bankName": "샘플은행",
+      "productName": "샘플 정기예금 플러스",
+      "kind": "deposit",
+      "options": [
+        { "termMonths": 6, "baseRate": 2.9, "maxRate": 3.2 },
+        { "termMonths": 12, "baseRate": 3.1, "maxRate": 3.6 }
+      ]
+    },
+    {
+      "productCode": "SB-DEP-002",
+      "bankName": "샘플은행",
+      "productName": "샘플 하이예금",
+      "kind": "deposit",
+      "options": [
+        { "termMonths": 12, "baseRate": 3.0, "maxRate": 3.4 },
+        { "termMonths": 24, "baseRate": 3.2, "maxRate": 3.8 }
+      ]
+    }
+  ]
+}

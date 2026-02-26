@@ -1,3 +1,5 @@
+import { SIDO_ADMIN_2025, SIGUNGU_BY_SIDO_CODE_2025 } from "./kr_admin_2025";
+
 export const SIDO_LIST = [
   "서울",
   "부산",
@@ -80,6 +82,32 @@ const SIDO_ALIAS_MAP = new Map<string, (typeof SIDO_LIST)[number]>(
 );
 
 const SIDO_SCAN_ALIASES = [...new Set(SIDO_ALIAS_ENTRIES.map(([alias]) => alias))].sort((a, b) => b.length - a.length);
+const SIGUNGU_SCAN_ALIASES = Object.values(SIGUNGU_BY_SIDO_CODE_2025)
+  .flatMap((entries) => entries.map((entry) => entry.name))
+  .sort((a, b) => b.length - a.length);
+const SIDO_TO_SIGUNGU_SET = (() => {
+  const map = new Map<string, Set<string>>();
+  for (const sido of SIDO_ADMIN_2025) {
+    const canonicalSido = normalizeSido(sido.name);
+    if (!canonicalSido) continue;
+    map.set(canonicalSido, new Set((SIGUNGU_BY_SIDO_CODE_2025[sido.code] ?? []).map((entry) => entry.name)));
+  }
+  return map;
+})();
+
+const SIGUNGU_TO_SIDO_SET = (() => {
+  const map = new Map<string, Set<string>>();
+  for (const sido of SIDO_ADMIN_2025) {
+    const canonicalSido = normalizeSido(sido.name);
+    if (!canonicalSido) continue;
+    for (const sigungu of SIGUNGU_BY_SIDO_CODE_2025[sido.code] ?? []) {
+      const set = map.get(sigungu.name) ?? new Set<string>();
+      set.add(canonicalSido);
+      map.set(sigungu.name, set);
+    }
+  }
+  return map;
+})();
 
 const NATIONWIDE_PATTERN = /(전국민|전국\s*공통|전\s*국|전지역|전\s*지역)/;
 const SIGUNGU_PATTERN = /([가-힣A-Za-z0-9]{1,20}(?:시|군|구))/;
@@ -96,15 +124,40 @@ export function normalizeSido(raw: string): string | null {
 }
 
 function parseSidoAndSigungu(text: string): { sido: string; sigungu?: string } | null {
+  let pickedAlias: string | null = null;
+  let pickedIndex = Number.POSITIVE_INFINITY;
   for (const alias of SIDO_SCAN_ALIASES) {
     const idx = text.indexOf(alias);
     if (idx < 0) continue;
-    const sido = normalizeSido(alias);
-    if (!sido) continue;
-    const after = text.slice(idx + alias.length).replace(/^[\s,()\-:]+/, "").trim();
-    const sigunguMatch = after.match(SIGUNGU_PATTERN);
-    return { sido, sigungu: sigunguMatch?.[1] };
+    if (idx < pickedIndex) {
+      pickedAlias = alias;
+      pickedIndex = idx;
+      continue;
+    }
+    if (idx === pickedIndex && pickedAlias && alias.length > pickedAlias.length) {
+      pickedAlias = alias;
+    }
   }
+  if (pickedAlias) {
+    const sido = normalizeSido(pickedAlias);
+    if (sido) {
+      const after = text.slice(pickedIndex + pickedAlias.length).replace(/^[\s,()\-:]+/, "").trim();
+      const sigunguMatch = after.match(SIGUNGU_PATTERN);
+      const sigungu = sigunguMatch?.[1];
+      const allowedSigungu = SIDO_TO_SIGUNGU_SET.get(sido);
+      const isKnownSigungu = Boolean(sigungu && allowedSigungu?.has(sigungu));
+      return { sido, sigungu: isKnownSigungu ? sigungu : undefined };
+    }
+  }
+
+  for (const sigungu of SIGUNGU_SCAN_ALIASES) {
+    if (!text.includes(sigungu)) continue;
+    const mapped = SIGUNGU_TO_SIDO_SET.get(sigungu);
+    if (!mapped || mapped.size !== 1) continue;
+    const [sido] = [...mapped.values()];
+    return { sido, sigungu };
+  }
+
   return null;
 }
 

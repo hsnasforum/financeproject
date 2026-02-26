@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-25T00:00:00.000Z",
+  "companies": [
+    {
+      "corpCode": "00126380",
+      "corpName": "삼성전자",
+      "stockCode": "005930"
+    }
+  ]
+}

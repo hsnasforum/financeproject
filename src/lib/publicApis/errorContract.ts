@@ -24,7 +24,14 @@ export function statusFromExternalApiErrorCode(code: string | undefined): number
   if (!code) return 502;
   if (code === "INPUT") return 400;
   if (code === "NO_DATA") return 404;
-  if (code === "ENV_MISSING" || code === "ENV_INVALID_URL" || code === "ENV_INCOMPLETE_URL" || code === "ENV_DOC_URL" || code === "CONFIG") {
+  if (
+    code === "ENV_MISSING"
+    || code === "ENV_INVALID_URL"
+    || code === "ENV_INCOMPLETE_URL"
+    || code === "ENV_DOC_URL"
+    || code === "CONFIG"
+    || code === "CONFIG_MISSING"
+  ) {
     return 400;
   }
   return 502;

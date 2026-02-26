@@ -1,18 +1,21 @@
-import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { ensureProductBest } from "@/lib/finlife/best";
 import { type NormalizedProduct } from "@/lib/finlife/types";
+import { jsonError, jsonOk } from "@/lib/http/apiResponse";
+import { pushTiming, timingsToDebugMap, type TimingEntry, withTiming } from "../../../lib/http/timing";
 import { applyDepositProtectionPolicy } from "@/lib/recommend/depositProtection";
 import { parseKdbRateAndTerm } from "@/lib/recommend/external/kdb";
-import { recommendCandidates } from "@/lib/recommend/score";
+import { recommendCandidates, type RecommendCandidate } from "@/lib/recommend/score";
 import { toNormalizedOption } from "@/lib/recommend/selectOption";
 import {
-  DEFAULT_TOP_N,
-  DEFAULT_WEIGHTS,
-  type CandidateSource,
+  type CandidatePool,
   type DepositProtectionMode,
   type UserRecommendProfile,
 } from "@/lib/recommend/types";
+import { createValidationBag, parseIntValue } from "../../../lib/http/validate";
+import { issuesToApi, parseRecommendProfile } from "../../../lib/schemas/recommendProfile";
+import { parseStringIssues } from "../../../lib/schemas/issueTypes";
+import { unifiedProductsToRecommendCandidates } from "../../../lib/recommend/unifiedAdapter";
 import { getUnifiedProducts } from "@/lib/sources/unified";
 
 const KDB_CANDIDATE_LIMIT = 500;
@@ -25,125 +28,12 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return isObject(value) ? value : null;
 }
 
-function asEnum<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
-  if (typeof value !== "string") return fallback;
-  return (allowed as readonly string[]).includes(value) ? (value as T[number]) : fallback;
-}
-
-function asInt(value: unknown, fallback: number, min: number, max: number): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(min, Math.min(max, Math.trunc(n)));
-}
-
-function asWeight(value: unknown, fallback: number): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.max(0, Math.min(1, n));
-}
-
-function asPreferredTerm(value: unknown, fallback: UserRecommendProfile["preferredTerm"]): UserRecommendProfile["preferredTerm"] {
-  const n = asInt(value, fallback, 3, 36);
-  if (n === 3 || n === 6 || n === 12 || n === 24 || n === 36) return n;
-  return fallback;
-}
-
-function isOneOf<T extends readonly string[]>(value: unknown, allowed: T): value is T[number] {
-  return typeof value === "string" && (allowed as readonly string[]).includes(value);
-}
-
-function isValidPreferredTerm(value: unknown): boolean {
-  const n = Number(value);
-  return n === 3 || n === 6 || n === 12 || n === 24 || n === 36;
-}
-
-function parseCandidateSources(value: unknown): CandidateSource[] {
-  if (!Array.isArray(value)) return ["finlife"];
-  const picked = new Set<CandidateSource>();
-  for (const raw of value) {
-    if (raw === "finlife" || raw === "datago_kdb") picked.add(raw);
-  }
-  return picked.size > 0 ? [...picked] : ["finlife"];
-}
-
-function parseProfile(rawBody: unknown, queryTopN: string | null): { profile: UserRecommendProfile; issues: string[] } {
-  const body = isObject(rawBody) ? rawBody : {};
-  const weightsRaw = isObject(body.weights) ? body.weights : {};
-  const issues: string[] = [];
-
-  if (body.purpose !== undefined && !isOneOf(body.purpose, ["emergency", "seed-money", "long-term"] as const)) {
-    issues.push("purpose must be one of emergency|seed-money|long-term");
-  }
-  if (body.kind !== undefined && !isOneOf(body.kind, ["deposit", "saving"] as const)) {
-    issues.push("kind must be deposit or saving");
-  }
-  if (body.liquidityPref !== undefined && !isOneOf(body.liquidityPref, ["low", "mid", "high"] as const)) {
-    issues.push("liquidityPref must be low|mid|high");
-  }
-  if (body.rateMode !== undefined && !isOneOf(body.rateMode, ["max", "base", "simple"] as const)) {
-    issues.push("rateMode must be max|base|simple");
-  }
-  if (body.preferredTerm !== undefined && !isValidPreferredTerm(body.preferredTerm)) {
-    issues.push("preferredTerm must be one of 3|6|12|24|36");
-  }
-  if (body.depositProtection !== undefined && !isOneOf(body.depositProtection, ["any", "prefer", "require"] as const)) {
-    issues.push("depositProtection must be any|prefer|require");
-  }
-
-  const candidateSources = parseCandidateSources(body.candidateSources);
-  if (body.candidateSources !== undefined && candidateSources.length === 0) {
-    issues.push("candidateSources must include finlife or datago_kdb");
-  }
-
-  if (body.topN !== undefined) {
-    const n = Number(body.topN);
-    if (!Number.isFinite(n) || Math.trunc(n) < 1 || Math.trunc(n) > 50) {
-      issues.push("topN must be an integer between 1 and 50");
-    }
-  }
-  if (queryTopN !== null) {
-    const n = Number(queryTopN);
-    if (!Number.isFinite(n) || Math.trunc(n) < 1 || Math.trunc(n) > 50) {
-      issues.push("query topN must be an integer between 1 and 50");
-    }
-  }
-
-  const profile: UserRecommendProfile = {
-    purpose: asEnum(body.purpose, ["emergency", "seed-money", "long-term"] as const, "seed-money"),
-    kind: asEnum(body.kind, ["deposit", "saving"] as const, "deposit"),
-    preferredTerm: asPreferredTerm(body.preferredTerm, 12),
-    liquidityPref: asEnum(body.liquidityPref, ["low", "mid", "high"] as const, "mid"),
-    rateMode: asEnum(body.rateMode, ["max", "base", "simple"] as const, "max"),
-    topN: asInt(queryTopN ?? body.topN, DEFAULT_TOP_N, 1, 50),
-    candidateSources,
-    depositProtection: asEnum(body.depositProtection, ["any", "prefer", "require"] as const, "any"),
-    weights: {
-      rate: asWeight(weightsRaw.rate, DEFAULT_WEIGHTS.rate),
-      term: asWeight(weightsRaw.term, DEFAULT_WEIGHTS.term),
-      liquidity: asWeight(weightsRaw.liquidity, DEFAULT_WEIGHTS.liquidity),
-    },
-  };
-
-  if (isObject(weightsRaw)) {
-    for (const [key, value] of Object.entries(weightsRaw)) {
-      if (key !== "rate" && key !== "term" && key !== "liquidity") continue;
-      if (value === undefined) continue;
-      const n = Number(value);
-      if (!Number.isFinite(n) || n < 0 || n > 1) {
-        issues.push(`weights.${key} must be between 0 and 1`);
-      }
-    }
-  }
-
-  return { profile, issues };
-}
-
 function parseKdbTermToSaveTrm(termMonths: number | null): string | undefined {
   if (termMonths === null || !Number.isFinite(termMonths) || termMonths <= 0) return undefined;
   return String(Math.trunc(termMonths));
 }
 
-async function loadFinlifeCandidates(kind: "deposit" | "saving") {
+async function loadLegacyFinlifeCandidates(kind: "deposit" | "saving") {
   const unified = await getUnifiedProducts({
     kind,
     includeSources: ["finlife"],
@@ -280,38 +170,139 @@ async function loadKdbCandidates(kind: "deposit" | "saving") {
     .filter((row): row is NonNullable<typeof row> => row !== null);
 }
 
+async function loadUnifiedCandidates(input: {
+  kind: "deposit" | "saving";
+  profile: UserRecommendProfile;
+}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
+  const sourceSet = new Set(input.profile.candidateSources ?? ["finlife"]);
+  if (sourceSet.size === 0) sourceSet.add("finlife");
+
+  const includeSources: Array<"finlife" | "datago_kdb"> = [];
+  if (sourceSet.has("finlife")) includeSources.push("finlife");
+  if (sourceSet.has("datago_kdb")) includeSources.push("datago_kdb");
+  if (includeSources.length === 0) includeSources.push("finlife");
+
+  const unified = await getUnifiedProducts({
+    kind: input.kind,
+    mode: "merged",
+    includeSources,
+    sourceId: null,
+    cursor: null,
+    q: null,
+    refresh: false,
+    onlyNew: false,
+    changedSince: null,
+    includeTimestamps: false,
+    limit: 1000,
+    sort: "name",
+    qMode: "contains",
+  });
+
+  const adapted = unifiedProductsToRecommendCandidates({
+    items: unified.items,
+    profile: {
+      preferredTerm: input.profile.preferredTerm,
+      rateMode: input.profile.rateMode,
+    },
+  });
+
+  return {
+    candidates: adapted.map((candidate) => ({
+      sourceId: candidate.sourceId,
+      product: candidate.product,
+      badges: candidate.badges,
+      extraReasons: candidate.extraReasons,
+    })),
+    matchedFinPrdtCdSet: new Set(
+      adapted
+        .filter((candidate) => candidate.matchedDepositProtection)
+        .map((candidate) => candidate.product.fin_prdt_cd),
+    ),
+  };
+}
+
+async function getCandidates(input: {
+  kind: "deposit" | "saving";
+  profile: UserRecommendProfile;
+  candidatePool: CandidatePool;
+}): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
+  if (input.candidatePool === "unified") {
+    return loadUnifiedCandidates({
+      kind: input.kind,
+      profile: input.profile,
+    });
+  }
+
+  const includeFinlife = (input.profile.candidateSources ?? ["finlife"]).includes("finlife");
+  const includeKdb = (input.profile.candidateSources ?? ["finlife"]).includes("datago_kdb");
+
+  const finlifeLoaded = includeFinlife
+    ? await loadLegacyFinlifeCandidates(input.kind)
+    : { candidates: [] as Array<{ sourceId: "finlife"; productId: number; finPrdtCd: string; product: NormalizedProduct; extraReasons: string[]; badges: string[] }>, productIdToFinPrdtCd: new Map<number, string>() };
+  const kdbCandidates = includeKdb ? await loadKdbCandidates(input.kind) : [];
+
+  return {
+    candidates: [
+      ...finlifeLoaded.candidates.map((row) => ({
+        sourceId: row.sourceId,
+        product: row.product,
+        extraReasons: row.extraReasons,
+        badges: row.badges,
+      })),
+      ...kdbCandidates,
+    ],
+    matchedFinPrdtCdSet: new Set<string>(),
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url);
-    const { profile, issues } = parseProfile(await request.json().catch(() => ({})), url.searchParams.get("topN"));
+    const debugTimingsEnabled = url.searchParams.get("debug") === "1";
+    const timings: TimingEntry[] = [];
+    const body = await request.json().catch(() => ({}));
+    const topNBag = createValidationBag();
+    const queryTopNRaw = url.searchParams.get("topN");
+    const queryTopN = queryTopNRaw === null
+      ? null
+      : parseIntValue(topNBag, {
+          path: "query.topN",
+          value: queryTopNRaw,
+          fallback: 10,
+          min: 1,
+          max: 50,
+        });
+
+    const profileInput: Record<string, unknown> = isObject(body) ? { ...body } : {};
+    if (queryTopN !== null) profileInput.topN = queryTopN;
+
+    const parsedProfile = parseRecommendProfile(profileInput);
+    const issues = [...parsedProfile.issues, ...parseStringIssues(topNBag.issues)];
     if (issues.length > 0) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "INPUT",
-            message: issues.join("; "),
-          },
-        },
-        { status: 400 },
-      );
+      const first = issues[0];
+      const summary = first ? `${first.path} ${first.message}` : "입력값이 올바르지 않습니다.";
+      return jsonError("INPUT", `입력값 오류 ${issues.length}건: ${summary}`, {
+        issues: issuesToApi(issues),
+      });
     }
+    const profile: UserRecommendProfile = parsedProfile.value;
 
-    const includeFinlife = (profile.candidateSources ?? ["finlife"]).includes("finlife");
-    const includeKdb = (profile.candidateSources ?? ["finlife"]).includes("datago_kdb");
+    const candidatePool = profile.candidatePool ?? "legacy";
+    const candidateResult = await withTiming("recommend.loadCandidates", () => getCandidates({
+      kind: profile.kind,
+      profile,
+      candidatePool,
+    }));
+    pushTiming(timings, candidateResult.timing);
+    const candidateBundle = candidateResult.value;
 
-    const finlifeLoaded = includeFinlife
-      ? await loadFinlifeCandidates(profile.kind)
-      : { candidates: [], productIdToFinPrdtCd: new Map<number, string>() };
-    const kdbCandidates = includeKdb ? await loadKdbCandidates(profile.kind) : [];
-
-    if (finlifeLoaded.candidates.length === 0 && kdbCandidates.length === 0) {
-      return NextResponse.json({
-        ok: true,
+    if (candidateBundle.candidates.length === 0) {
+      return jsonOk({
         meta: {
           kind: profile.kind,
           topN: profile.topN,
           rateMode: profile.rateMode,
+          candidatePool,
           candidateSources: profile.candidateSources ?? ["finlife"],
           depositProtection: profile.depositProtection ?? "any",
           weights: profile.weights,
@@ -321,6 +312,18 @@ export async function POST(request: Request) {
             normalizationPolicy: "금리 점수는 후보군 내 0..1 정규화",
             kdbParsingPolicy: "KDB 문자열 파싱 결과(가정 포함)는 옵션 확장 시에만 사용",
           },
+          fallback: {
+            mode: "LIVE",
+            sourceKey: "recommend",
+            reason: "compute_no_candidates",
+          },
+          ...(debugTimingsEnabled
+            ? {
+                debug: {
+                  timings: timingsToDebugMap(timings),
+                },
+              }
+            : {}),
         },
         items: [],
         message: "No products in DB. Run pnpm live:smoke or pnpm products:sync",
@@ -332,35 +335,29 @@ export async function POST(request: Request) {
       });
     }
 
-    const recommendedBase = recommendCandidates({
+    const recommendResult = await withTiming("recommend.score", async () => recommendCandidates({
       kind: profile.kind,
       profile,
-      candidates: [
-        ...finlifeLoaded.candidates.map((row) => ({
-          sourceId: row.sourceId,
-          product: row.product,
-          extraReasons: row.extraReasons,
-          badges: row.badges,
-        })),
-        ...kdbCandidates,
-      ],
-    });
+      candidates: candidateBundle.candidates,
+    }));
+    pushTiming(timings, recommendResult.timing);
+    const recommendedBase = recommendResult.value;
 
     const protectionMode = (profile.depositProtection ?? "any") as DepositProtectionMode;
     const itemsWithProtection = applyDepositProtectionPolicy({
       items: recommendedBase.items,
       mode: protectionMode,
-      matchedFinPrdtCdSet: new Set(),
+      matchedFinPrdtCdSet: candidateBundle.matchedFinPrdtCdSet,
     })
       .sort((a, b) => b.finalScore - a.finalScore)
       .slice(0, Math.max(1, Math.min(50, profile.topN)));
 
-    return NextResponse.json({
-      ok: true,
+    return jsonOk({
       meta: {
         kind: profile.kind,
         topN: profile.topN,
         rateMode: profile.rateMode,
+        candidatePool,
         candidateSources: profile.candidateSources ?? ["finlife"],
         depositProtection: protectionMode,
         weights: recommendedBase.weights,
@@ -369,6 +366,18 @@ export async function POST(request: Request) {
           kdbParsingPolicy: "KDB 금리/기간은 원문 문자열 파싱과 휴리스틱 가정(기간별 동일금리 가정 가능)에 기반합니다.",
           depositProtectionPolicy: "보호 신호 필터(any/prefer/require)는 현재 비활성화 상태입니다.",
         },
+        fallback: {
+          mode: "LIVE",
+          sourceKey: "recommend",
+          reason: "compute_success",
+        },
+        ...(debugTimingsEnabled
+          ? {
+              debug: {
+                timings: timingsToDebugMap(timings),
+              },
+            }
+          : {}),
       },
       items: itemsWithProtection,
       debug: recommendedBase.debug,
@@ -377,15 +386,6 @@ export async function POST(request: Request) {
     console.error("[recommend] failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "RECOMMEND_FAILED",
-          message: "추천 데이터를 계산하지 못했습니다. 잠시 후 다시 시도해주세요.",
-        },
-      },
-      { status: 500 },
-    );
+    return jsonError("INTERNAL", "추천 데이터를 계산하지 못했습니다. 잠시 후 다시 시도해주세요.");
   }
 }

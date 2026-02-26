@@ -1,4 +1,5 @@
 import { type FinlifeSourceResult, type NormalizedOption, type NormalizedProduct } from "@/lib/finlife/types";
+import type { FallbackMeta } from "@/lib/http/fallbackMeta";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -23,6 +24,21 @@ function asStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const out = value.map((entry) => String(entry ?? "").trim()).filter(Boolean);
   return out.length > 0 ? out : undefined;
+}
+
+function parseFallbackMeta(value: unknown): FallbackMeta | undefined {
+  if (!isRecord(value)) return undefined;
+  const mode = value.mode;
+  if (mode !== "LIVE" && mode !== "CACHE" && mode !== "REPLAY") return undefined;
+  const sourceKey = typeof value.sourceKey === "string" ? value.sourceKey : "";
+  if (!sourceKey) return undefined;
+  return {
+    mode,
+    sourceKey,
+    reason: typeof value.reason === "string" ? value.reason : undefined,
+    generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : undefined,
+    nextRetryAt: typeof value.nextRetryAt === "string" ? value.nextRetryAt : undefined,
+  };
 }
 
 function isFinlifeKind(value: unknown): value is FinlifeSourceResult["meta"]["kind"] {
@@ -137,6 +153,7 @@ export function parseFinlifeApiResponse(raw: unknown): FinlifeSourceResult {
           totalOptions: asOptionalInteger(metaRaw.snapshot.totalOptions),
         }
       : undefined,
+    fallback: parseFallbackMeta(metaRaw.fallback),
   };
 
   const data = Array.isArray(raw.data) ? raw.data.map(parseProduct).filter((v): v is NormalizedProduct => Boolean(v)) : [];

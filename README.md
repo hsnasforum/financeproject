@@ -24,6 +24,14 @@ pnpm dev
 - 현재 제공 화면/내비 경로는 `docs/current-screens.md`를 기준으로 확인합니다.
 - FINLIFE 스키마는 샘플 호출 결과(JSON) 확인 후 타입/정규화를 확정합니다(추측 구현 금지).
 
+## Release Candidate Gate
+
+- Release Candidate(RC) 조건은 로컬 `pnpm verify` 통과입니다.
+- `pnpm verify`는 `validate:dumps:fixtures + lint + typecheck + test`를 모두 실행합니다.
+- CI(`.github/workflows/ci.yml`)도 동일하게 `pnpm verify`를 실행합니다.
+- 기본 브랜치 병합 전에는 verify 성공을 필수로 확인합니다.
+- 브랜치 보호 설정 기준은 `docs/github-branch-protection.md`를 따릅니다.
+
 ## Git Remote Setup
 
 현재 브랜치 확인:

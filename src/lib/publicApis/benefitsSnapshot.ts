@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { getCachePolicy } from "../dataSources/cachePolicy";
 import { type BenefitCandidate } from "./contracts/types";
 
 type SnapshotMeta = {
@@ -28,6 +29,7 @@ type BenefitsSnapshot = {
 };
 
 const memoryCache = new Map<string, BenefitsSnapshot>();
+const BENEFITS_TTL_MS = getCachePolicy("benefits").ttlMs;
 
 function defaultSnapshotPath(): string {
   return path.join(process.cwd(), ".data", "benefits_snapshot.json");
@@ -71,7 +73,7 @@ export function loadSnapshot(filePath = defaultSnapshotPath()): BenefitsSnapshot
 
 export function getSnapshotOrNull(params?: { filePath?: string; ttlMs?: number }): { snapshot: BenefitsSnapshot; fromCache: "memory" | "disk"; isStale: boolean } | null {
   const filePath = params?.filePath ?? defaultSnapshotPath();
-  const ttlMs = Math.max(60_000, params?.ttlMs ?? 24 * 60 * 60 * 1000);
+  const ttlMs = Math.max(60_000, params?.ttlMs ?? BENEFITS_TTL_MS);
   const mem = memoryCache.get(filePath);
   if (mem) {
     return { snapshot: mem, fromCache: "memory", isStale: !isSnapshotFresh(mem.meta.generatedAt, ttlMs) };
@@ -102,7 +104,7 @@ export async function getOrBuildSnapshot(params: {
   build: () => Promise<{ items: BenefitCandidate[]; meta: Omit<SnapshotMeta, "generatedAt" | "totalItemsInSnapshot"> }>;
 }): Promise<{ snapshot: BenefitsSnapshot; fromCache: "memory" | "disk" | "built" }> {
   const filePath = params.filePath ?? defaultSnapshotPath();
-  const ttlMs = Math.max(60_000, params.ttlMs ?? 24 * 60 * 60 * 1000);
+  const ttlMs = Math.max(60_000, params.ttlMs ?? BENEFITS_TTL_MS);
 
   if (!params.forceRefresh) {
     const mem = memoryCache.get(filePath);

@@ -1,0 +1,42 @@
+name: Daily Refresh
+
+on:
+  schedule:
+    - cron: "5 0 * * *" # 00:05 UTC = 09:05 KST
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Run daily refresh
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          OPENDART_BASE_URL: "https://opendart.fss.or.kr"
+        run: pnpm daily:refresh
+
+      - name: Commit outputs (if changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/ || true
+          git add -f tmp/dart/ || true
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -m "chore(daily): refresh dart outputs"
+          git push

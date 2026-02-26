@@ -1,4 +1,4 @@
-import { ExternalApiError } from "../../http/fetchExternal";
+import { ExternalApiError, fetchExternal } from "../../http/fetchExternal";
 import { type ExternalSourceId } from "../types";
 
 type DatagoResponse = {
@@ -42,55 +42,17 @@ export function buildDatagoUrl(sourceId: ExternalSourceId, baseUrl: string, para
   return appendQuery(withServiceKey, queryString);
 }
 
-function maskUrl(input: string): string {
-  try {
-    const url = new URL(input);
-    if (url.searchParams.has("ServiceKey")) {
-      url.searchParams.set("ServiceKey", "****");
-    }
-    return url.toString();
-  } catch {
-    return "(invalid-url)";
-  }
-}
-
-async function requestWithRetry(url: string): Promise<DatagoResponse> {
-  let attempt = 0;
-  while (true) {
-    try {
-      const res = await fetch(url, { cache: "no-store" });
-      const text = await res.text();
-      if (!res.ok) {
-        if ((res.status === 429 || res.status >= 500) && attempt < 2) {
-          const waitMs = 500 * 2 ** attempt;
-          attempt += 1;
-          await new Promise((resolve) => setTimeout(resolve, waitMs));
-          continue;
-        }
-        throw new ExternalApiError({
-          code: "UPSTREAM",
-          message: `data.go.kr 호출 실패(${res.status})`,
-        });
-      }
-      return { status: res.status, text };
-    } catch (error) {
-      if (error instanceof ExternalApiError) throw error;
-      if (attempt < 2) {
-        const waitMs = 500 * 2 ** attempt;
-        attempt += 1;
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        continue;
-      }
-      console.error("[datago] request failed", {
-        url: maskUrl(url),
-        message: error instanceof Error ? error.message : "unknown",
-      });
-      throw new ExternalApiError({
-        code: "UPSTREAM",
-        message: "data.go.kr 호출에 실패했습니다.",
-      });
-    }
-  }
+async function requestWithRetry(url: string, sourceId: ExternalSourceId): Promise<DatagoResponse> {
+  const result = await fetchExternal(url, {
+    timeoutMs: 12_000,
+    retries: 2,
+    sourceKey: `datago:${sourceId}`,
+    retryOn: [429, 500, 502, 503, 504],
+  });
+  return {
+    status: result.status,
+    text: result.text,
+  };
 }
 
 export async function requestDatagoText(
@@ -99,7 +61,7 @@ export async function requestDatagoText(
   params: Record<string, string | number | undefined>,
 ): Promise<DatagoResponse> {
   const url = buildDatagoUrl(sourceId, baseUrl, params);
-  return requestWithRetry(url);
+  return requestWithRetry(url, sourceId);
 }
 
 export async function requestDatagoJson(

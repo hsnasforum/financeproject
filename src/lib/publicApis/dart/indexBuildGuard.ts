@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 export type IndexBuildGuardInput = {
   nodeEnv?: string;
   configuredToken?: string | null;
@@ -25,15 +28,26 @@ export function canBuildCorpIndex(input: IndexBuildGuardInput): { allowed: boole
 }
 
 export function canAutoBuildFromUi(nodeEnv = process.env.NODE_ENV ?? "development"): boolean {
-  return nodeEnv.trim() !== "production";
+  return explainAutoBuildFromUi(nodeEnv).canAutoBuild;
 }
 
 export function explainAutoBuildFromUi(nodeEnv = process.env.NODE_ENV ?? "development"): { canAutoBuild: boolean; reason?: string } {
-  if (canAutoBuildFromUi(nodeEnv)) {
-    return { canAutoBuild: true };
+  const env = nodeEnv.trim().toLowerCase();
+  if (env === "production") {
+    return { canAutoBuild: false, reason: "운영 환경에서는 비활성화" };
   }
+
+  const apiKey = (process.env.OPENDART_API_KEY ?? "").trim();
+  if (!apiKey) {
+    return { canAutoBuild: false, reason: "OPENDART_API_KEY가 없습니다." };
+  }
+
+  const scriptPath = path.join(process.cwd(), "scripts", "dart_corpcode_build.py");
+  if (!fs.existsSync(scriptPath)) {
+    return { canAutoBuild: false, reason: "dart_corpcode_build.py가 없습니다." };
+  }
+
   return {
-    canAutoBuild: false,
-    reason: "production 환경에서는 x-build-token 헤더가 필요한 보호 정책으로 UI 자동 생성이 비활성화됩니다.",
+    canAutoBuild: true,
   };
 }

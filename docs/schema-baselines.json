@@ -1,0 +1,2486 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-25T12:17:18.557Z",
+  "fingerprint": {
+    "maxDepth": 8,
+    "arraySampleSize": 3,
+    "ignorePaths": [
+      "$.meta.generatedAt",
+      "$.generatedAt",
+      "$.meta.syncedAt",
+      "$.meta.updatedAt",
+      "$.meta.fetchedAt",
+      "$.status.lastUpdatedAt"
+    ]
+  },
+  "snapshots": {
+    "benefits_snapshot_partial.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].applyHow",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityChips",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityChips[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityExcerpt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityHints",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityHints[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityText",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fetchedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].id",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].isEligibilityTruncated",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.items[].lastUpdated",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].org",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].region.confidence",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region.scope",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region.tags",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].region.tags[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region.unknownReason",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].summary",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].title",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.dedupedCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.effectiveMaxPages",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetched",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalItemsInSnapshot",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.uniqueCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.upstreamTotalCount",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "benefits_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].applyHow",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityChips",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityChips[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityExcerpt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityHints",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityHints[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].eligibilityText",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fetchedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].id",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].isEligibilityTruncated",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.items[].lastUpdated",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].org",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].region.confidence",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region.scope",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region.tags",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].region.tags[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].region.unknownReason",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].summary",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].title",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.dedupedCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.effectiveMaxPages",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.effectivePerPage",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.hardCapPages",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.neededPagesEstimate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetched",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.paginationSuspected",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.requestedMaxPages",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.rows",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.rowsFetched",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalItemsInSnapshot",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.truncatedByHardCap",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.uniqueCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.upstreamTotalCount",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "finlife_credit-loan_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].options[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate2",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_1",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_10",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_11",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_12",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_13",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_4",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_5",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_6",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_grad_avg",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_lend_rate_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_lend_rate_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.crdt_prdt_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].raw.cb_name",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.crdt_prdt_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.crdt_prdt_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_end_day",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_subm_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_way",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.top_fin_grp_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.duplicateAcrossGroupsCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.fallbackUsed",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.lastUpstreamStatus",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.meta.note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.020000",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalOptions",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.totalProducts",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.truncatedByHardCap",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.ttlMs",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "finlife_deposit_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].best",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].best.intr_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].best.intr_rate2",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].best.save_trm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].options[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate2",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate2",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.save_trm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].save_trm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_end_day",
+          "types": [
+            "null",
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.etc_note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_subm_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_deny",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_member",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_way",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.max_limit",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.mtrt_int",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.spcl_cnd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.top_fin_grp_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.duplicateAcrossGroupsCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.fallbackUsed",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.lastUpstreamStatus",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.meta.note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.020000",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalOptions",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.totalProducts",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.truncatedByHardCap",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.ttlMs",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "finlife_mortgage-loan_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].options[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate2",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_avg",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_max",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_min",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.mrtg_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.mrtg_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.rpay_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.rpay_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_end_day",
+          "types": [
+            "null",
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dly_rate",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.erly_rpay_fee",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_subm_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_way",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.loan_inci_expn",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.loan_lmt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.top_fin_grp_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.duplicateAcrossGroupsCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.fallbackUsed",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.lastUpstreamStatus",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.meta.note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.020000",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalOptions",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.totalProducts",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.truncatedByHardCap",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.ttlMs",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "finlife_pension_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.duplicateAcrossGroupsCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.fallbackUsed",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.lastUpstreamStatus",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.meta.note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.020000",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalOptions",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.totalProducts",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.truncatedByHardCap",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.ttlMs",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "finlife_rent-house-loan_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].options[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate2",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_avg",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_max",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_min",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.lend_rate_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.rpay_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.rpay_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_end_day",
+          "types": [
+            "null",
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dly_rate",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.erly_rpay_fee",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_subm_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_way",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.loan_inci_expn",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.loan_lmt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.top_fin_grp_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.duplicateAcrossGroupsCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.fallbackUsed",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.lastUpstreamStatus",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.meta.note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.020000",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalOptions",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.totalProducts",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.truncatedByHardCap",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.ttlMs",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "finlife_saving_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].best",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].best.intr_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].best.intr_rate2",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].best.save_trm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].options[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate2",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate2",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.rsrv_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.rsrv_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.save_trm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].save_trm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_end_day",
+          "types": [
+            "null",
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.etc_note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_subm_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_deny",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_member",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_way",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.max_limit",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.mtrt_int",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.spcl_cnd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.top_fin_grp_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.configuredGroups[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.duplicateAcrossGroupsCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.fallbackUsed",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.meta.groupsScanned[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.lastUpstreamStatus",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.meta.note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.020000",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.source",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.meta.totalOptions",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.totalProducts",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.truncatedByHardCap",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.meta.ttlMs",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
+    "gov24_sync_checkpoint.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.ok",
+          "types": [
+            "boolean"
+          ]
+        },
+        {
+          "path": "$.status",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.status.completionRate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.status.effectiveMaxPages",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.status.jobId",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.status.lastUpdatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.status.pagesFetched",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.status.state",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.status.uniqueCount",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.status.upstreamTotalCount",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -23,6 +23,9 @@ vi.mock("@/lib/sources/includeSources", () => ({
   },
 }));
 
+vi.mock("@/lib/http/apiResponse", async () => await import("../src/lib/http/apiResponse"));
+vi.mock("@/lib/http/validate", async () => await import("../src/lib/http/validate"));
+
 import { GET } from "../src/app/api/products/unified/route";
 
 type UnifiedRouteJson = {
@@ -165,5 +168,17 @@ describe("GET /api/products/unified", () => {
     expect(json.ok).toBe(true);
     expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({ debug: true }));
     expect(typeof json.diagnostics?.providerIndex?.finlifeProviders).toBe("number");
+  });
+
+  it("accepts samplebank in includeSources query", async () => {
+    const { status, json } = await callUnified("?mode=merged&includeSources=samplebank&kind=deposit");
+
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
+      includeSources: ["samplebank"],
+      kind: "deposit",
+      mode: "merged",
+    }));
   });
 });

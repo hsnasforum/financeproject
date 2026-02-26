@@ -1,5 +1,5 @@
 import fxMock from "@/data/public/fx.mock.json";
-import { fetchExternal, requireServerEnv } from "@/lib/http/fetchExternal";
+import { fetchExternal, requireServerEnv } from "../../http/fetchExternal";
 import { type ExchangeRateQuote, type PublicApiResult } from "@/lib/publicApis/contracts/types";
 
 function parseRate(value: unknown): number | null {
@@ -69,7 +69,12 @@ export async function getExchangeQuotes(date: string, currencies: string[]): Pro
     const params = new URLSearchParams({ authkey: key, data: "AP01" });
     if (date) params.set("searchdate", date);
 
-    const fetched = await fetchExternal(`${base}?${params.toString()}`);
+    const fetched = await fetchExternal(`${base}?${params.toString()}`, {
+      sourceKey: "fx",
+      timeoutMs: 12_000,
+      retries: 2,
+      retryOn: [429, 500, 502, 503, 504],
+    });
     if (fetched.kind !== "json") {
       return { ok: false, error: { code: "UPSTREAM", message: "환율 API 응답 형식이 예상과 다릅니다." } };
     }

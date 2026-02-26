@@ -2,7 +2,9 @@ export type UnifiedKind = "deposit" | "saving" | "loan";
 
 export type ExternalSourceId = "datago_kdb";
 
-export type UnifiedSourceId = "finlife" | ExternalSourceId;
+export type UnifiedProviderSourceId = "samplebank";
+
+export type UnifiedSourceId = "finlife" | ExternalSourceId | UnifiedProviderSourceId;
 
 export type NormalizedExternalProduct = {
   sourceId: ExternalSourceId;

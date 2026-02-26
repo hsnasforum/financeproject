@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
+import { makeHttpError } from "@/lib/http/apiError";
 import { getSnapshotOrNull } from "@/lib/publicApis/benefitsSnapshot";
 import { getBenefitItem } from "@/lib/publicApis/providers/benefits";
 import { fetchOfficialGov24Detail } from "@/lib/gov24/officialClient";
 import { normalizeEligibilityLines } from "@/lib/gov24/eligibilityNormalize";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
+import { attachFallback } from "@/lib/http/fallbackMeta";
+import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
 
 function splitLines(...texts: Array<string | undefined>): string[] {
   return texts
@@ -36,13 +39,35 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const svcId = (searchParams.get("svcId") ?? "").trim();
   if (!svcId) {
-    return NextResponse.json({ ok: false, error: { code: "INPUT", message: "svcId가 필요합니다." } }, { status: 400 });
+    return NextResponse.json(
+      {
+        ok: false,
+        meta: attachFallback({}, {
+          mode: "LIVE",
+          sourceKey: "gov24",
+          reason: "input_missing_svcid",
+        }),
+        error: makeHttpError("INPUT", "svcId가 필요합니다."),
+      },
+      { status: 400 },
+    );
   }
 
-  const snapshot = getSnapshotOrNull({ ttlMs: 24 * 60 * 60 * 1000 });
+  const snapshot = getSnapshotOrNull({ ttlMs: getCachePolicy("gov24").ttlMs });
   const item = snapshot?.snapshot.items.find((entry) => entry.id === svcId) ?? null;
   if (!item) {
-    return NextResponse.json({ ok: false, error: { code: "NO_DATA", message: "서비스를 찾지 못했습니다." } }, { status: 404 });
+    return NextResponse.json(
+      {
+        ok: false,
+        meta: attachFallback({}, {
+          mode: "CACHE",
+          sourceKey: "gov24",
+          reason: "snapshot_item_missing",
+        }),
+        error: makeHttpError("NO_DATA", "서비스를 찾지 못했습니다."),
+      },
+      { status: 404 },
+    );
   }
 
   const official = await fetchOfficialGov24Detail(svcId);
@@ -77,6 +102,20 @@ export async function GET(request: Request) {
     orgName: item.org,
   });
 
+  const sourceType = official ? "official" : detail.ok ? "openapi" : "fallback";
+  const fallbackMeta = official
+    ? {
+        mode: "LIVE" as const,
+        sourceKey: "gov24",
+        reason: "official_detail",
+      }
+    : {
+        mode: "CACHE" as const,
+        sourceKey: "gov24",
+        reason: "snapshot_detail",
+        generatedAt: snapshot?.snapshot.meta.generatedAt,
+      };
+
   return NextResponse.json({
     ok: true,
     data: {
@@ -90,7 +129,10 @@ export async function GET(request: Request) {
       primaryApplyUrl: applyLinks.primaryUrl,
       supportTarget,
       tabs,
-      source: official ? "official" : detail.ok ? "openapi" : "fallback",
+      source: sourceType,
     },
+    meta: attachFallback({
+      snapshotGeneratedAt: snapshot?.snapshot.meta.generatedAt ?? null,
+    }, fallbackMeta),
   });
 }

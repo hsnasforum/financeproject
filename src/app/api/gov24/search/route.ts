@@ -5,7 +5,11 @@ import { buildGov24SearchPayload } from "@/lib/publicApis/gov24SearchView";
 import { isGov24SyncInFlight } from "@/lib/publicApis/gov24SyncState";
 import { classifyOrgType } from "@/lib/gov24/orgClassifier";
 import { isRegionMatch } from "@/lib/gov24/regionFilter";
+import { attachFallback } from "@/lib/http/fallbackMeta";
 import { normalizeSido } from "@/lib/regions/kr";
+import { singleflight } from "../../../../lib/cache/singleflight";
+import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
+import { timingsToDebugMap, withTiming } from "../../../../lib/http/timing";
 
 function parsePageSize(value: string | null): { value: number; valid: boolean } {
   if (value === null) return { value: 50, valid: true };
@@ -46,6 +50,7 @@ export async function GET(request: Request) {
     const query = (searchParams.get("q") ?? "").trim();
     const selectedSido = normalizeSido(searchParams.get("sido") ?? "") ?? null;
     const selectedSigungu = (searchParams.get("sigungu") ?? "").trim() || null;
+    const debugTimingEnabled = searchParams.get("debug") === "1";
     const cursorParsed = parseCursor(searchParams.get("cursor"));
     const pageSizeParsed = parsePageSize(searchParams.get("pageSize"));
     if (!cursorParsed.valid) {
@@ -62,10 +67,18 @@ export async function GET(request: Request) {
     }
     const cursor = cursorParsed.value;
     const pageSize = pageSizeParsed.value;
-    const snapshotTtlMs = 24 * 60 * 60 * 1000;
+    const snapshotTtlMs = getCachePolicy("gov24").ttlMs;
 
     const snap = getSnapshotOrNull({ ttlMs: snapshotTtlMs });
     if (!snap) {
+      const meta = attachFallback({
+        snapshot: null,
+        sync: { state: isGov24SyncInFlight() ? "syncing" : "needs_sync" },
+      }, {
+        mode: "CACHE",
+        sourceKey: "gov24",
+        reason: "snapshot_missing",
+      });
       return NextResponse.json({
         ok: true,
         data: {
@@ -73,60 +86,87 @@ export async function GET(request: Request) {
           totalMatched: 0,
           page: { cursor, pageSize, nextCursor: null, hasMore: false },
         },
-        meta: {
-          snapshot: null,
-          sync: { state: isGov24SyncInFlight() ? "syncing" : "needs_sync" },
-        },
+        meta,
       });
     }
 
-    const completionRate = toCompletionRate(snap.snapshot.meta as Record<string, unknown>);
-    const regionFiltered = snap.snapshot.items.filter((item) =>
-      isRegionMatch({
+    const computed = await withTiming("gov24.search.filter", () => singleflight(
+      [
+        "gov24-search",
+        snap.snapshot.meta.generatedAt,
         query,
-        selectedSido,
-        selectedSigungu,
-        itemRegionScope: item.region.scope,
-        itemRegionTags: item.region.tags,
-        itemSido: item.region.sido ?? null,
-        itemSigungu: item.region.sigungu ?? null,
-        title: item.title,
-        orgName: item.org,
-        orgType: classifyOrgType(item.org),
-      }),
-    );
+        selectedSido ?? "",
+        selectedSigungu ?? "",
+        String(cursor),
+        String(pageSize),
+      ].join("|"),
+      async () => {
+        const completionRate = toCompletionRate(snap.snapshot.meta as Record<string, unknown>);
+        const regionFiltered = snap.snapshot.items.filter((item) =>
+          isRegionMatch({
+            query,
+            selectedSido,
+            selectedSigungu,
+            itemRegionScope: item.region.scope,
+            itemRegionTags: item.region.tags,
+            itemSido: item.region.sido ?? null,
+            itemSigungu: item.region.sigungu ?? null,
+            title: item.title,
+            orgName: item.org,
+            orgType: classifyOrgType(item.org),
+          }),
+        );
 
-    const payload = buildGov24SearchPayload(regionFiltered, { query, cursor, pageSize }, {
-      ...snap.snapshot.meta,
-    });
+        const payload = buildGov24SearchPayload(regionFiltered, { query, cursor, pageSize }, {
+          ...snap.snapshot.meta,
+        });
+
+        const meta = attachFallback({
+          snapshot: {
+            totalItems: snap.snapshot.meta.totalItemsInSnapshot,
+            completionRate,
+            generatedAt: snap.snapshot.meta.generatedAt,
+            hardCapPages: snap.snapshot.meta.hardCapPages,
+            effectivePerPage: snap.snapshot.meta.effectivePerPage,
+            neededPagesEstimate: snap.snapshot.meta.neededPagesEstimate,
+            effectiveMaxPages: snap.snapshot.meta.effectiveMaxPages,
+            pagesFetched: snap.snapshot.meta.pagesFetched,
+            truncatedByHardCap: snap.snapshot.meta.truncatedByHardCap,
+            uniqueCount: snap.snapshot.meta.uniqueCount,
+          },
+          sync: {
+            state: isGov24SyncInFlight()
+              ? "syncing"
+              : completionRate !== undefined && completionRate >= 0.95
+                ? "ready"
+                : "needs_sync",
+          },
+        }, {
+          mode: "CACHE",
+          sourceKey: "gov24",
+          reason: "snapshot_read",
+          generatedAt: snap.snapshot.meta.generatedAt,
+        });
+        return { payload, meta };
+      },
+    ));
 
     return NextResponse.json({
       ok: true,
       data: {
-        items: payload.data.items,
-        totalMatched: payload.data.totalMatched,
-        page: payload.data.page,
+        items: computed.value.payload.data.items,
+        totalMatched: computed.value.payload.data.totalMatched,
+        page: computed.value.payload.data.page,
       },
       meta: {
-        snapshot: {
-          totalItems: snap.snapshot.meta.totalItemsInSnapshot,
-          completionRate,
-          generatedAt: snap.snapshot.meta.generatedAt,
-          hardCapPages: snap.snapshot.meta.hardCapPages,
-          effectivePerPage: snap.snapshot.meta.effectivePerPage,
-          neededPagesEstimate: snap.snapshot.meta.neededPagesEstimate,
-          effectiveMaxPages: snap.snapshot.meta.effectiveMaxPages,
-          pagesFetched: snap.snapshot.meta.pagesFetched,
-          truncatedByHardCap: snap.snapshot.meta.truncatedByHardCap,
-          uniqueCount: snap.snapshot.meta.uniqueCount,
-        },
-        sync: {
-          state: isGov24SyncInFlight()
-            ? "syncing"
-            : completionRate !== undefined && completionRate >= 0.95
-              ? "ready"
-              : "needs_sync",
-        },
+        ...computed.value.meta,
+        ...(debugTimingEnabled
+          ? {
+              debug: {
+                timings: timingsToDebugMap([computed.timing]),
+              },
+            }
+          : {}),
       },
     });
   } catch {

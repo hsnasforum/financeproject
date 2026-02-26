@@ -1,3 +1,4 @@
+import { fetchExternal } from "../http/fetchExternal";
 import { type PublicApiError, type PublicApiErrorCode } from "./contracts/types";
 
 export function encodeServiceKey(key: string): string {
@@ -187,18 +188,30 @@ export async function odcloudFetchWithAuth(
   init?: RequestInit,
   opts?: { allowServiceKeyFallback?: boolean },
 ): Promise<{ response: Response; authMode: "query" | "header-fallback" }> {
+  const toResponse = (input: { text: string; status: number; headers: Headers }): Response => (
+    new Response(input.text, {
+      status: input.status,
+      headers: new Headers(input.headers),
+    })
+  );
+
   const allowFallback = opts?.allowServiceKeyFallback !== false;
   const queryUrl = new URL(url.toString());
   appendServiceKey(queryUrl, key);
-  const first = await fetch(queryUrl.toString(), {
+  const first = await fetchExternal(queryUrl.toString(), {
     ...(init ?? {}),
-    cache: "no-store",
+    timeoutMs: 12_000,
+    retries: 1,
+    sourceKey: "odcloud",
+    retryOn: [429, 500, 502, 503, 504],
+    throwOnHttpError: false,
   });
-  if (!allowFallback) return { response: first, authMode: "query" };
+  const firstResponse = toResponse(first);
+  if (!allowFallback) return { response: firstResponse, authMode: "query" };
 
-  const preview = (await first.clone().text()).slice(0, 2048);
+  const preview = first.text.slice(0, 2048);
   if (!looksLikeAuthError(first.status, preview)) {
-    return { response: first, authMode: "query" };
+    return { response: firstResponse, authMode: "query" };
   }
 
   const fallbackUrl = new URL(url.toString());
@@ -211,25 +224,34 @@ export async function odcloudFetchWithAuth(
     }
   })();
   secondHeaders.set("Authorization", decodedKey);
-  const second = await fetch(fallbackUrl.toString(), {
+  const second = await fetchExternal(fallbackUrl.toString(), {
     ...(init ?? {}),
     headers: secondHeaders,
-    cache: "no-store",
+    timeoutMs: 12_000,
+    retries: 1,
+    sourceKey: "odcloud",
+    retryOn: [429, 500, 502, 503, 504],
+    throwOnHttpError: false,
   });
-  if (!looksLikeAuthError(second.status, (await second.clone().text()).slice(0, 2048))) {
-    return { response: second, authMode: "header-fallback" };
+  const secondResponse = toResponse(second);
+  if (!looksLikeAuthError(second.status, second.text.slice(0, 2048))) {
+    return { response: secondResponse, authMode: "header-fallback" };
   }
 
   if (decodedKey !== key) {
     const thirdHeaders = new Headers(init?.headers ?? {});
     thirdHeaders.set("Authorization", key);
-    const third = await fetch(fallbackUrl.toString(), {
+    const third = await fetchExternal(fallbackUrl.toString(), {
       ...(init ?? {}),
       headers: thirdHeaders,
-      cache: "no-store",
+      timeoutMs: 12_000,
+      retries: 1,
+      sourceKey: "odcloud",
+      retryOn: [429, 500, 502, 503, 504],
+      throwOnHttpError: false,
     });
-    return { response: third, authMode: "header-fallback" };
+    return { response: toResponse(third), authMode: "header-fallback" };
   }
 
-  return { response: second, authMode: "header-fallback" };
+  return { response: secondResponse, authMode: "header-fallback" };
 }

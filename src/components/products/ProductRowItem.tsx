@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +14,14 @@ type Props = {
   kind: FinlifeKind;
   amountWonDefault: number;
   badges?: string[];
+  unifiedDetailHref?: string;
+  reasonLines?: string[];
+  isFavorite?: boolean;
+  isCompared?: boolean;
+  compareLimit?: number;
+  onToggleFavorite?: () => void;
+  onToggleCompare?: () => void;
+  onViewed?: () => void;
 };
 
 function formatRate(value: number | null | undefined): string {
@@ -20,7 +29,20 @@ function formatRate(value: number | null | undefined): string {
   return `${value.toFixed(2)}%`;
 }
 
-export function ProductRowItem({ product, kind, amountWonDefault, badges = [] }: Props) {
+export function ProductRowItem({
+  product,
+  kind,
+  amountWonDefault,
+  badges = [],
+  unifiedDetailHref,
+  reasonLines = [],
+  isFavorite = false,
+  isCompared = false,
+  compareLimit = 4,
+  onToggleFavorite,
+  onToggleCompare,
+  onViewed,
+}: Props) {
   const [open, setOpen] = useState(false);
   const bestOption = product.best;
   const termLabel = bestOption?.save_trm ? formatGlossaryValue("save_trm", bestOption.save_trm) : "-";
@@ -30,7 +52,10 @@ export function ProductRowItem({ product, kind, amountWonDefault, badges = [] }:
 
   return (
     <>
-      <div className="group relative flex items-center gap-5 py-6 px-2 transition-all duration-300 hover:bg-slate-50/50 rounded-2xl">
+      <div
+        className="group relative flex items-center gap-5 py-6 px-2 transition-all duration-300 hover:bg-slate-50/50 rounded-2xl"
+        onClick={() => onViewed?.()}
+      >
         <div className="relative shrink-0">
           <div className="absolute -inset-2 rounded-full bg-emerald-100/20 opacity-0 group-hover:opacity-100 transition-opacity blur-xl" />
           <ProviderLogo
@@ -67,6 +92,13 @@ export function ProductRowItem({ product, kind, amountWonDefault, badges = [] }:
               최고 <span className="text-emerald-600">{formatRate(bestRate)}</span>
             </span>
           </div>
+          {reasonLines.length > 0 ? (
+            <ul className="mt-1 space-y-0.5 text-[11px] text-slate-600">
+              {reasonLines.slice(0, 3).map((line, index) => (
+                <li key={`${product.fin_prdt_cd}-reason-${index}`}>- {line}</li>
+              ))}
+            </ul>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 flex-col items-end gap-3 text-right">
@@ -76,14 +108,57 @@ export function ProductRowItem({ product, kind, amountWonDefault, badges = [] }:
               {formatRate(bestRate ?? basicRate)}
             </span>
           </div>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={() => setOpen(true)}
-            className="h-9 px-5 rounded-xl text-[11px] font-bold border-slate-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 transition-all shadow-sm active:scale-95"
-          >
-            상세 보기
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={isFavorite ? "primary" : "outline"}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onViewed?.();
+                onToggleFavorite?.();
+              }}
+              className="h-9 px-3 rounded-xl text-[11px] font-bold"
+            >
+              {isFavorite ? "즐겨찾기 해제" : "즐겨찾기"}
+            </Button>
+            <Button
+              size="sm"
+              variant={isCompared ? "primary" : "outline"}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onViewed?.();
+                onToggleCompare?.();
+              }}
+              className="h-9 px-3 rounded-xl text-[11px] font-bold"
+              title={`비교함 최대 ${compareLimit}개`}
+            >
+              {isCompared ? "비교 해제" : "비교 담기"}
+            </Button>
+            {unifiedDetailHref ? (
+              <Link
+                href={unifiedDetailHref}
+                onClick={() => onViewed?.()}
+                className="inline-flex h-9 items-center rounded-xl border border-slate-200 px-4 text-[11px] font-bold text-slate-700 transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+              >
+                통합 상세
+              </Link>
+            ) : null}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onViewed?.();
+                setOpen(true);
+              }}
+              className="h-9 px-5 rounded-xl text-[11px] font-bold border-slate-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 transition-all shadow-sm active:scale-95"
+            >
+              상세 보기
+            </Button>
+          </div>
         </div>
       </div>
 

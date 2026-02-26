@@ -171,6 +171,16 @@ export function InvestCompaniesClient() {
       const res = await fetch(statusEndpoint, { cache: "no-store" });
       const raw = (await res.json()) as Record<string, unknown>;
       if (!res.ok) {
+        const code = typeof raw.error === "string" ? raw.error : "";
+        if (res.status === 409 || code === "CORPCODES_INDEX_MISSING") {
+          setIndexMissing(true);
+          setPrimaryPath(typeof raw.primaryPath === "string" ? raw.primaryPath : "");
+          setTriedPaths(Array.isArray(raw.triedPaths) ? raw.triedPaths.filter((x): x is string => typeof x === "string") : []);
+          setCanAutoBuild(Boolean(raw.canAutoBuild));
+          setAutoBuildDisabledReason(typeof raw.autoBuildDisabledReason === "string" ? raw.autoBuildDisabledReason : "");
+          setBuildEndpoint(typeof raw.buildEndpoint === "string" ? raw.buildEndpoint : "/api/public/disclosure/corpcodes/build");
+          setStatusEndpoint(typeof raw.statusEndpoint === "string" ? raw.statusEndpoint : "/api/public/disclosure/corpcodes/status");
+        }
         setStatusError(typeof raw.message === "string" ? raw.message : "인덱스 상태 조회에 실패했습니다.");
         return;
       }

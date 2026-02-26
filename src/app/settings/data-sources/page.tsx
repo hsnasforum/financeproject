@@ -2,6 +2,8 @@ import { getDataSourceStatuses } from "@/lib/dataSources/registry";
 import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { DataSourcePingButton } from "@/components/DataSourcePingButton";
+import { DataSourceHealthTable } from "@/components/DataSourceHealthTable";
+import { OpenDartStatusCard } from "@/components/OpenDartStatusCard";
 
 function badgeClass(state: "configured" | "missing" | "error") {
   if (state === "configured") return "bg-emerald-100 text-emerald-700";
@@ -11,6 +13,7 @@ function badgeClass(state: "configured" | "missing" | "error") {
 
 export default function DataSourcesSettingsPage() {
   const sources = getDataSourceStatuses();
+  const openDartConfigured = Boolean((process.env.OPENDART_API_KEY ?? "").trim());
   const canPing = process.env.NODE_ENV !== "production";
   const pingMap: Partial<Record<string, "exim_exchange" | "mois_benefits" | "reb_subscription" | "finlife" | "molit_sales" | "molit_rent">> = {
     EXIM_EXCHANGE: "exim_exchange",
@@ -57,6 +60,8 @@ export default function DataSourcesSettingsPage() {
             );
           })}
         </div>
+        <OpenDartStatusCard configured={openDartConfigured} />
+        <DataSourceHealthTable />
       </Container>
     </main>
   );

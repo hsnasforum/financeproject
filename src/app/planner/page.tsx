@@ -27,6 +27,7 @@ type ComputeResponse = {
 };
 
 const STORAGE_KEY = "planner:last";
+const LAST_SNAPSHOT_KEY = "planner_last_snapshot_v1";
 
 const DEFAULT_INPUT: PlannerInput = {
   monthlyIncomeNet: 3500000,
@@ -201,6 +202,14 @@ export default function PlannerPage() {
         return;
       }
       setResult(json.result);
+      localStorage.setItem(
+        LAST_SNAPSHOT_KEY,
+        JSON.stringify({
+          savedAt: new Date().toISOString(),
+          input,
+          result: json.result,
+        }),
+      );
     } catch {
       setError("요청 처리 중 오류가 발생했습니다.");
     } finally {
@@ -245,9 +254,10 @@ export default function PlannerPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
+    <main className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4">
       <Card>
-        <h1 className="text-2xl font-bold text-slate-900">재무설계 MVP (규칙 기반)</h1>
+        <h1 className="text-3xl font-black tracking-tight text-slate-900">재무설계 MVP (규칙 기반)</h1>
         <p className="mt-2 text-sm text-slate-600">오프라인 동작 · 가정값 편집 · 설명가능 계산. 확정 수익/보장을 의미하지 않습니다.</p>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -410,11 +420,13 @@ export default function PlannerPage() {
                   </div>
                   <p className="mt-2 text-sm text-slate-700">{action.action}</p>
                   <p className="mt-1 text-xs text-slate-500">근거: {action.reason}</p>
-                  {action.link ? (
-                    <div className="mt-3">
-                      <Link href={action.link.href}>
-                        <Button size="sm" variant="outline">{action.link.label}</Button>
-                      </Link>
+                  {(action.links ?? []).length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(action.links ?? []).map((link) => (
+                        <Link key={`${link.href}-${link.label}`} href={link.href}>
+                          <Button size="sm" variant="outline">{link.label}</Button>
+                        </Link>
+                      ))}
                     </div>
                   ) : null}
                 </div>
@@ -485,6 +497,7 @@ export default function PlannerPage() {
           </Card>
         </>
       ) : null}
+      </div>
     </main>
   );
 }

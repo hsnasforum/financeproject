@@ -10,7 +10,7 @@ export function parseIncludeSources(input: string | string[] | null): UnifiedSou
     .filter(Boolean);
   if (tokens.length === 0) return ["finlife"];
 
-  const allowed: UnifiedSourceId[] = ["finlife", "datago_kdb"];
+  const allowed: UnifiedSourceId[] = ["finlife", "datago_kdb", "samplebank"];
   const picked = new Set<UnifiedSourceId>();
   for (const token of tokens) {
     if ((allowed as string[]).includes(token)) {

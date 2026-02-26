@@ -1,10 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
+import { ErrorSummary } from "@/components/forms/ErrorSummary";
+import { FieldError } from "@/components/forms/FieldError";
+import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
+import { pathToId } from "@/lib/forms/ids";
+import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
+import { parseSubscriptionFilters, type SubscriptionHouseType, type SubscriptionMode } from "@/lib/schemas/subscriptionFilters";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { FallbackBanner } from "@/components/FallbackBanner";
+import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
+
+const ERROR_SUMMARY_ID = "subscription_error_summary";
 
 type SubscriptionItem = {
   id: string;
@@ -31,6 +43,12 @@ type SearchMeta = {
   dropStats?: { missingTitle?: number; generatedId?: number };
   truncated?: boolean;
   availableRegionsTop?: string[];
+  fallback?: {
+    mode?: string;
+    reason?: string;
+    generatedAt?: string;
+    nextRetryAt?: string;
+  };
 };
 
 function todayIsoDate(): string {
@@ -43,19 +61,63 @@ function daysAgoIsoDate(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export function SubscriptionClient({ initialRegion = "전국" }: { initialRegion?: string }) {
+function houseTypeLabel(value: "apt" | "urbty" | "remndr"): string {
+  if (value === "urbty") return "오피스텔/도시형";
+  if (value === "remndr") return "잔여세대";
+  return "APT";
+}
+
+type SubscriptionClientProps = {
+  initialRegion?: string;
+  initialFrom?: string;
+  initialTo?: string;
+  initialQuery?: string;
+  initialHouseType?: SubscriptionHouseType;
+  initialMode?: SubscriptionMode;
+};
+
+export function SubscriptionClient({
+  initialRegion = "전국",
+  initialFrom = daysAgoIsoDate(90),
+  initialTo = todayIsoDate(),
+  initialQuery = "",
+  initialHouseType = "apt",
+  initialMode = "all",
+}: SubscriptionClientProps) {
+  const initializedFromQueryRef = useRef(false);
   const [region, setRegion] = useState(initialRegion);
   const [items, setItems] = useState<SubscriptionItem[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [assumption, setAssumption] = useState("");
   const [meta, setMeta] = useState<SearchMeta>({});
-  const [from, setFrom] = useState(daysAgoIsoDate(90));
-  const [to, setTo] = useState(todayIsoDate());
-  const [houseType, setHouseType] = useState<"apt" | "urbty" | "remndr">("apt");
-  const [query, setQuery] = useState("");
+  const [from, setFrom] = useState(initialFrom);
+  const [to, setTo] = useState(initialTo);
+  const [houseType, setHouseType] = useState<SubscriptionHouseType>(initialHouseType);
+  const [query, setQuery] = useState(initialQuery);
+  const [formIssues, setFormIssues] = useState<Issue[]>([]);
   const [selected, setSelected] = useState<SubscriptionItem | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const runInFlightRef = useRef(false);
+
+  const summaryLines = useMemo(() => {
+    return [
+      `지역 ${region || "전국"} · 유형 ${houseTypeLabel(houseType)}`,
+      `조회 기간 ${from || "-"} ~ ${to || "-"}`,
+      `키워드 ${query.trim() || "-"}`,
+    ];
+  }, [from, houseType, query, region, to]);
+  const fieldIssueMap = useMemo(() => issuesToFieldMap(formIssues), [formIssues]);
+
+  const showValidationIssues = useCallback((issues: Issue[]) => {
+    setFormIssues(issues);
+    setError(firstError(issues) ?? "입력값을 확인해 주세요.");
+    setTimeout(() => {
+      scrollToErrorSummary(ERROR_SUMMARY_ID);
+      focusFirstError(issues.map((entry) => entry.path));
+      announce(`입력 오류 ${issues.length}건이 있습니다.`);
+    }, 0);
+  }, []);
 
   const openDetail = useCallback(async (item: SubscriptionItem) => {
     setSelected(item);
@@ -72,25 +134,63 @@ export function SubscriptionClient({ initialRegion = "전국" }: { initialRegion
     }
   }, [houseType, region]);
 
-  const run = useCallback(async (nextRegion?: string, options?: { mode?: "search" | "all"; deep?: boolean }) => {
-    const regionValue = (nextRegion ?? region).trim() || "전국";
+  const run = useCallback(async (options?: {
+    region?: string;
+    from?: string;
+    to?: string;
+    query?: string;
+    houseType?: "apt" | "urbty" | "remndr";
+    mode?: "search" | "all";
+    deep?: boolean;
+  }) => {
+    if (runInFlightRef.current) return;
+    const modeValue = options?.mode ?? "search";
+    const parsedFilters = parseSubscriptionFilters({
+      region: options?.region ?? region,
+      from: options?.from ?? from,
+      to: options?.to ?? to,
+      q: options?.query ?? query,
+      houseType: options?.houseType ?? houseType,
+      mode: modeValue,
+      scan: options?.deep ? "deep" : "",
+    });
+    if (!parsedFilters.ok) {
+      showValidationIssues(parsedFilters.issues);
+      return;
+    }
+
+    const filters = parsedFilters.value;
+    setRegion(filters.region);
+    setFrom(filters.from);
+    setTo(filters.to);
+    setHouseType(filters.houseType);
+    setQuery(filters.q);
+
+    runInFlightRef.current = true;
     setLoading(true);
     setError("");
+    setFormIssues([]);
     setMeta({});
     try {
       const params = new URLSearchParams();
-      if (regionValue) params.set("region", regionValue);
-      if (options?.mode === "all") params.set("mode", "all");
-      if (options?.deep) params.set("scan", "deep");
-      if (from.trim()) params.set("from", from.trim());
-      if (to.trim()) params.set("to", to.trim());
-      if (query.trim()) params.set("q", query.trim());
-      params.set("houseType", houseType);
+      if (filters.region) params.set("region", filters.region);
+      if (filters.mode === "all") params.set("mode", "all");
+      if (filters.deep) params.set("scan", "deep");
+      if (filters.from) params.set("from", filters.from);
+      if (filters.to) params.set("to", filters.to);
+      if (filters.q) params.set("q", filters.q);
+      params.set("houseType", filters.houseType);
       const res = await fetch(`/api/public/housing/subscription?${params.toString()}`, { cache: "no-store" });
       const json = await res.json();
       if (!json?.ok) {
-        setError(json?.error?.message ?? "청약 공고 조회 실패");
-        setLoading(false);
+        const apiIssues = parseStringIssues(json?.error?.issues ?? []);
+        if (apiIssues.length > 0) {
+          showValidationIssues(apiIssues);
+        } else {
+          const message = json?.error?.message ?? "청약 공고 조회 실패";
+          setError(message);
+          announce(message);
+        }
         return;
       }
       setItems(Array.isArray(json.data?.items) ? json.data.items : []);
@@ -98,49 +198,131 @@ export function SubscriptionClient({ initialRegion = "전국" }: { initialRegion
       setMeta(typeof json.meta === "object" && json.meta ? json.meta : {});
     } catch {
       setError("청약 공고 조회 실패");
+      announce("청약 공고 조회 실패");
     } finally {
       setLoading(false);
+      runInFlightRef.current = false;
     }
-  }, [region, from, to, query, houseType]);
+  }, [region, from, to, query, houseType, showValidationIssues]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void run(initialRegion.trim() || "전국", { mode: "all" });
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [initialRegion, run]);
+    if (initializedFromQueryRef.current) return;
+    initializedFromQueryRef.current = true;
+    void run({ mode: initialMode });
+  }, [initialMode, run]);
 
   return (
     <main className="py-8">
       <Container>
         <SectionHeader title="청약 공고 조회" subtitle="청약홈 분양정보 · 지역별 참고 일정" />
         <Card>
+          <FallbackBanner fallback={meta.fallback} className="mb-3" />
+          <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-3" />
+          <ErrorAnnouncer />
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <select className="h-10 rounded-xl border border-border px-3" value={region} onChange={(e) => setRegion(e.target.value)}>
-              {["전국", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"].map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-            <input type="date" className="h-10 rounded-xl border border-border px-3" value={from} onChange={(e) => setFrom(e.target.value)} />
-            <input type="date" className="h-10 rounded-xl border border-border px-3" value={to} onChange={(e) => setTo(e.target.value)} />
-            <select className="h-10 rounded-xl border border-border px-3" value={houseType} onChange={(e) => setHouseType(e.target.value as "apt" | "urbty" | "remndr")}>
-              <option value="apt">APT</option>
-              <option value="urbty">오피스텔/도시형</option>
-              <option value="remndr">잔여세대</option>
-            </select>
-            <input className="h-10 rounded-xl border border-border px-3" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="주택명 키워드(선택)" />
+            <div>
+              <select
+                id={pathToId("region")}
+                className="h-10 w-full rounded-xl border border-border px-3"
+                value={region}
+                onChange={(e) => setRegion(e.target.value)}
+                aria-invalid={Boolean(fieldIssueMap.region?.[0])}
+                aria-describedby={fieldIssueMap.region?.[0] ? `${pathToId("region")}_error` : undefined}
+              >
+                {["전국", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"].map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <FieldError id={`${pathToId("region")}_error`} message={fieldIssueMap.region?.[0]} />
+            </div>
+            <div>
+              <input
+                id={pathToId("from")}
+                type="date"
+                className="h-10 w-full rounded-xl border border-border px-3"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                aria-invalid={Boolean(fieldIssueMap.from?.[0])}
+                aria-describedby={fieldIssueMap.from?.[0] ? `${pathToId("from")}_error` : undefined}
+              />
+              <FieldError id={`${pathToId("from")}_error`} message={fieldIssueMap.from?.[0]} />
+            </div>
+            <div>
+              <input
+                id={pathToId("to")}
+                type="date"
+                className="h-10 w-full rounded-xl border border-border px-3"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                aria-invalid={Boolean(fieldIssueMap.to?.[0])}
+                aria-describedby={fieldIssueMap.to?.[0] ? `${pathToId("to")}_error` : undefined}
+              />
+              <FieldError id={`${pathToId("to")}_error`} message={fieldIssueMap.to?.[0]} />
+            </div>
+            <div>
+              <select
+                id={pathToId("houseType")}
+                className="h-10 w-full rounded-xl border border-border px-3"
+                value={houseType}
+                onChange={(e) => setHouseType(e.target.value as "apt" | "urbty" | "remndr")}
+                aria-invalid={Boolean(fieldIssueMap.houseType?.[0])}
+                aria-describedby={fieldIssueMap.houseType?.[0] ? `${pathToId("houseType")}_error` : undefined}
+              >
+                <option value="apt">APT</option>
+                <option value="urbty">오피스텔/도시형</option>
+                <option value="remndr">잔여세대</option>
+              </select>
+              <FieldError id={`${pathToId("houseType")}_error`} message={fieldIssueMap.houseType?.[0]} />
+            </div>
+            <div>
+              <input
+                id={pathToId("q")}
+                className="h-10 w-full rounded-xl border border-border px-3"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="주택명 키워드(선택)"
+                aria-invalid={Boolean(fieldIssueMap.q?.[0])}
+                aria-describedby={fieldIssueMap.q?.[0] ? `${pathToId("q")}_error` : undefined}
+              />
+              <FieldError id={`${pathToId("q")}_error`} message={fieldIssueMap.q?.[0]} />
+            </div>
           </div>
           <div className="mt-2 flex gap-2">
-            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(7)); setTo(todayIsoDate()); }}>최근 7일</Button>
-            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }}>최근 30일</Button>
-            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(90)); setTo(todayIsoDate()); }}>최근 90일</Button>
+            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(7)); setTo(todayIsoDate()); }} disabled={loading}>최근 7일</Button>
+            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }} disabled={loading}>최근 30일</Button>
+            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(90)); setTo(todayIsoDate()); }} disabled={loading}>최근 90일</Button>
           </div>
           <div className="mt-2 flex gap-2">
-            <Button onClick={() => void run()}>{loading ? "로딩..." : "조회"}</Button>
-            <Button variant="outline" onClick={() => { setRegion("전국"); setQuery(""); setFrom(daysAgoIsoDate(90)); setTo(todayIsoDate()); void run("전국", { mode: "all" }); }}>전체 보기</Button>
+            <Button onClick={() => void run()} disabled={loading}>{loading ? "로딩..." : "조회"}</Button>
+            <Button variant="outline" disabled={loading} onClick={() => {
+              const fallbackFrom = daysAgoIsoDate(90);
+              const fallbackTo = todayIsoDate();
+              setRegion("전국");
+              setQuery("");
+              setFrom(fallbackFrom);
+              setTo(fallbackTo);
+              void run({ region: "전국", from: fallbackFrom, to: fallbackTo, query: "", mode: "all" });
+            }}>
+              전체 보기
+            </Button>
           </div>
-          {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
+          {error ? (
+            <div className="mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <p>{error}</p>
+              <Link href="/settings/data-sources" className="mt-2 inline-block text-xs underline">
+                데이터 소스 상태 확인
+              </Link>
+            </div>
+          ) : null}
           {assumption ? <p className="mt-2 text-xs text-slate-500">{assumption}</p> : null}
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-semibold text-slate-800">조건 요약</p>
+            <ul className="mt-1 space-y-1 text-xs text-slate-600">
+              {summaryLines.map((line) => (
+                <li key={line}>- {line}</li>
+              ))}
+            </ul>
+          </div>
           <p className="mt-1 text-xs text-slate-500">공고 일정/상태는 변경될 수 있으므로 최종 공고문을 확인하세요.</p>
           <ul className="mt-3 space-y-2 text-sm">
             {items.map((item) => (
@@ -172,8 +354,11 @@ export function SubscriptionClient({ initialRegion = "전국" }: { initialRegion
                 <p className="text-xs text-slate-500">가능한 지역 예: {meta.availableRegionsTop.join(", ")}</p>
               ) : null}
               <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => void run(region, { mode: "all" })}>전체 보기(필터 없이)</Button>
-                <Button size="sm" variant="outline" onClick={() => void run(region, { deep: true })}>더 깊게 검색</Button>
+                <Button size="sm" variant="outline" onClick={() => void run({ region, mode: "all" })}>전체 보기(필터 없이)</Button>
+                <Button size="sm" variant="outline" onClick={() => void run({ region, deep: true })}>더 깊게 검색</Button>
+                <Link href="/settings/data-sources" className="inline-flex h-8 items-center rounded-xl border border-border px-2 text-xs">
+                  설정 확인
+                </Link>
               </div>
             </div>
           ) : null}

@@ -1,3 +1,5 @@
+import { getCachePolicy } from "../dataSources/cachePolicy";
+
 export type FinlifeHttpCacheState = "hit" | "miss" | "bypass";
 
 export function buildFinlifeHttpCacheKey(input: {
@@ -31,4 +33,12 @@ export function resolveFinlifeHttpCacheState<T extends { expiresAt: number }>(in
     return { state: "miss", entry: null };
   }
   return { state: "hit", entry: cached };
+}
+
+export function getFinlifeHttpCacheTtlMs(): number {
+  const envSeconds = Number(process.env.FINLIFE_CACHE_TTL_SECONDS ?? "");
+  if (Number.isFinite(envSeconds) && envSeconds > 0) {
+    return Math.max(1, Math.trunc(envSeconds)) * 1000;
+  }
+  return getCachePolicy("finlife").ttlMs;
 }

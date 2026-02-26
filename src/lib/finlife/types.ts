@@ -1,3 +1,5 @@
+import type { FallbackMeta } from "@/lib/http/fallbackMeta";
+
 export type FinlifeKind =
   | "deposit"
   | "saving"
@@ -28,6 +30,7 @@ export type NormalizedProduct = {
   kor_co_nm?: string;
   fin_prdt_nm?: string;
   options: NormalizedOption[];
+  reasons?: string[];
   best?: {
     save_trm?: string;
     intr_rate2?: number | null;
@@ -70,6 +73,7 @@ export type FinlifeSourceResult = {
       totalProducts?: number;
       totalOptions?: number;
     };
+    fallback?: FallbackMeta;
     debug?: {
       cacheKey?: string;
       upstreamStatus?: number;
@@ -87,6 +91,7 @@ export type FinlifeSourceResult = {
   error?: {
     code: string;
     message: string;
+    debug?: Record<string, unknown>;
     diagnostics?: Record<string, unknown>;
   };
 };
@@ -115,12 +120,14 @@ export type FinlifeCompanyResult = {
     maxPage?: number;
     errCd?: string;
     errMsg?: string;
+    fallback?: FallbackMeta;
   };
   data: FinlifeCompany[];
   raw?: unknown;
   error?: {
     code: string;
     message: string;
+    debug?: Record<string, unknown>;
     diagnostics?: Record<string, unknown>;
   };
 };
