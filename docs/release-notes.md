@@ -1,6 +1,40 @@
 # Release Notes
 
 ## Latest
+### 2026-02-26 (v1.0 RC Lock: P45~P50)
+### 변경 요약
+- P45: `daily_refresh_result.json` reader/API + 대시보드 카드로 마지막 자동 갱신 상태 노출.
+- P46~P48: artifacts 뷰어/복사/다운로드/Quick Actions를 메인·대시보드에서 바로 사용 가능하도록 정리.
+- P49: `onlyDev` 공통 차단으로 `/api/dev/*` production 404 일괄 적용 + CI `pnpm build` 게이트 추가.
+- P50: 네비/홈 동선을 `/dashboard` 중심으로 정리하고, 홈 바로가기를 핵심 5개로 축소.
+- P50: `/dashboard/artifacts`, `/debug/unified`, `/dev/*`를 production 404로 고정하고 E2E/CI를 RC 기준으로 잠금.
+
+### 변경 파일(핵심)
+- `src/lib/dev/onlyDev.ts`
+- `src/app/api/dev/**/route.ts`
+- `src/app/dev/**/page.tsx`
+- `src/app/debug/unified/page.tsx`
+- `src/app/dashboard/artifacts/page.tsx`
+- `src/components/DebugUnifiedClient.tsx`
+- `src/components/DashboardArtifactsClient.tsx`
+- `src/components/SiteHeader.tsx`
+- `src/components/brand/BrandLogo.tsx`
+- `src/app/page.tsx`
+- `src/app/products/page.tsx`
+- `tests/e2e/smoke.spec.ts`
+- `tests/e2e/dart-flow.spec.ts`
+- `playwright.config.ts`
+- `.github/workflows/e2e-smoke.yml`
+- `.github/workflows/ci.yml`
+- `docs/current-screens.md`
+- `docs/deploy.md`
+
+### 게이트 결과
+- `pnpm verify`: PASS
+- `pnpm build`: PASS
+- `pnpm e2e`: PASS (7 passed, 2 skipped)
+- `pnpm e2e:rc`: PASS (7 passed)
+
 ### 2026-02-25 (P2 Unified Catalog 승격)
 ### 변경 파일
 - `docs/unified-catalog-contract.md`

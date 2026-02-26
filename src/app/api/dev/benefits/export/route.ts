@@ -2,6 +2,7 @@ import { searchBenefits } from "../../../../../lib/publicApis/providers/benefits
 import { getBenefitQualityBucket } from "../../../../../lib/publicApis/benefitsQuality";
 import { csvEscape } from "../../../../../lib/publicApis/benefitsCsv";
 import { type BenefitCandidate } from "../../../../../lib/publicApis/contracts/types";
+import { onlyDev } from "../../../../../lib/dev/onlyDev";
 
 function parsePositiveInt(value: string | null, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
@@ -33,7 +34,8 @@ function toExportRows(items: BenefitCandidate[]) {
 }
 
 export async function GET(request: Request) {
-  if ((process.env.NODE_ENV ?? "development") !== "development") {
+  const blocked = onlyDev();
+  if (blocked) {
     return new Response(JSON.stringify({ ok: false, error: "NOT_FOUND" }), { status: 404, headers: { "content-type": "application/json" } });
   }
 

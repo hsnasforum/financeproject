@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildSnapshot } from "@/lib/publicApis/benefitsSnapshot";
 import { searchBenefits } from "@/lib/publicApis/providers/benefits";
+import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 
 function parsePositiveInt(value: string | null, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
@@ -16,9 +17,9 @@ function parseMaxPages(value: string | null, fallback: number | "auto"): number 
 }
 
 export async function POST(request: Request) {
-  if ((process.env.NODE_ENV ?? "development") !== "development") {
-    return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
-  }
+  const blocked = onlyDev();
+  if (blocked) return blocked;
+
   const { searchParams } = new URL(request.url);
   const maxPages = parseMaxPages(searchParams.get("maxPages"), "auto");
   const envRows = parsePositiveInt(process.env.BENEFITS_SCAN_ROWS ?? null, 200, 50, 300);

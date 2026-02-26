@@ -37,5 +37,14 @@ pnpm daily:refresh
 - 스케줄: `5 0 * * *` (UTC 00:05, KST 09:05)
 - 저장소 Secrets에 아래 키를 추가하세요.
   - `OPENDART_API_KEY`
+- 실행 결과는 `tmp/daily_refresh_result.json`, `tmp/daily_refresh.log`로 남고, Actions Summary/Artifacts에서도 확인할 수 있습니다.
+- 워크플로는 실행 후 변경 파일이 있으면 `docs/**`, `tmp/**` 기준으로 자동 PR을 생성/업데이트합니다.
 
-워크플로는 실행 후 변경 파일이 있을 때 `docs/*`, `tmp/dart/*`만 커밋/푸시합니다.
+## 실패/스킵 확인 포인트
+
+- Actions Summary: 각 step의 `status/tookMs/stdoutTail/stderrTail` 표 확인
+- Artifacts:
+  - `tmp/daily_refresh_result.json` (구조화된 실행 결과)
+  - `tmp/daily_refresh.log` (간단 텍스트 로그)
+  - `docs/dart-*.md`, `tmp/dart/*.json` (산출물)
+- `OPENDART_API_KEY`가 없고 `dart:watch`가 내부 skip되면 `status=skipped`로 기록되며 기본(non-strict) 모드에서는 workflow 실패로 처리되지 않습니다.

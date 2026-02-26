@@ -1,8 +1,10 @@
 import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { NextResponse } from "next/server";
-import { getCorpIndexStatus, invalidateCorpIndexCache, resolveCorpCodesIndexPath } from "@/lib/publicApis/dart/corpIndex";
+import { assertLocalHost, assertSameOrigin, toGuardErrorResponse } from "../../../../../../lib/dev/devGuards";
+import { getCorpIndexStatus, invalidateCorpIndexCache, resolveCorpCodesIndexPath } from "../../../../../../lib/publicApis/dart/corpIndex";
 
 export const runtime = "nodejs";
 
@@ -27,10 +29,55 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
+  } else {
+    try {
+      assertLocalHost(request);
+      assertSameOrigin(request);
+    } catch (error) {
+      const guard = toGuardErrorResponse(error);
+      if (guard) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: {
+              code: guard.code,
+              message: guard.message,
+            },
+          },
+          { status: guard.status },
+        );
+      }
+      throw error;
+    }
   }
 
   const start = Date.now();
   const outPath = resolveCorpCodesIndexPath().primary;
+  const useBuildStub = (process.env.DART_E2E_BUILD_STUB ?? "").trim() === "1";
+
+  if (useBuildStub) {
+    try {
+      const stubFixturePath = path.join(process.cwd(), "tests", "fixtures", "dart", "corpCodes.index.sample.json");
+      await runBuildStub(stubFixturePath, outPath);
+      invalidateCorpIndexCache();
+      return NextResponse.json({
+        ok: true,
+        outPath,
+        tookMs: Date.now() - start,
+        status: getCorpIndexStatus(),
+      });
+    } catch (error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "stub 인덱스 생성에 실패했습니다.",
+          stderrTail: error instanceof Error ? sanitizeTail(error.message) : "unknown",
+        },
+        { status: 500 },
+      );
+    }
+  }
+
   const scriptPath = path.join(process.cwd(), "scripts", "dart_corpcode_build.py");
 
   const built = await runBuild(scriptPath, outPath);
@@ -55,6 +102,11 @@ export async function POST(request: Request) {
     tookMs,
     status: getCorpIndexStatus(),
   });
+}
+
+async function runBuildStub(fixturePath: string, outPath: string): Promise<void> {
+  await fs.mkdir(path.dirname(outPath), { recursive: true });
+  await fs.copyFile(fixturePath, outPath);
 }
 
 async function runBuild(scriptPath: string, outPath: string): Promise<BuildResult> {

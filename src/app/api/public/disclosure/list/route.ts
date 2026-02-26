@@ -1,7 +1,9 @@
-import { jsonError, jsonOk } from "@/lib/http/apiResponse";
+import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { attachFallback } from "@/lib/http/fallbackMeta";
 import { ExternalApiError, fetchExternal } from "@/lib/http/fetchExternal";
 import { setCooldown, shouldCooldown } from "@/lib/http/rateLimitCooldown";
+import { pushError } from "../../../../../lib/observability/errorRingBuffer";
+import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../../lib/observability/trace";
 import { mapOpenDartStatus } from "@/lib/publicApis/dart/opendartErrors";
 
 export const runtime = "nodejs";
@@ -133,6 +135,33 @@ function mapItems(listRaw: unknown): DisclosureItem[] {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
+  const traceId = getOrCreateTraceId(request);
+  const traceMeta = (meta: unknown = {}) => attachTrace(meta, traceId);
+  const withTrace = <T extends Response>(response: T) => setTraceHeader(response, traceId);
+  const fail = (
+    code: string,
+    message: string,
+    options?: {
+      issues?: string[];
+      debug?: Record<string, unknown>;
+      status?: number;
+    },
+  ) => {
+    const status = options?.status ?? statusFromCode(code);
+    pushError({
+      time: new Date().toISOString(),
+      traceId,
+      route: "/api/public/disclosure/list",
+      source: "dart",
+      code,
+      message,
+      status,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return withTrace(jsonError(code, message, { ...options, meta: traceMeta() }));
+  };
+
   const { searchParams } = new URL(request.url);
   const debug = searchParams.get("debug") === "1";
   const corpCode = (searchParams.get("corpCode") ?? "").trim();
@@ -142,7 +171,7 @@ export async function GET(request: Request) {
   const finalOnly = parseFinalOnly(searchParams.get("finalOnly"));
 
   if (corpCode && !/^\d{8}$/.test(corpCode)) {
-    return jsonError("INPUT", "입력값을 확인해주세요.", {
+    return fail("INPUT", "입력값을 확인해주세요.", {
       issues: ["corpCode must be 8 digits"],
       status: 400,
     });
@@ -155,7 +184,7 @@ export async function GET(request: Request) {
   });
 
   if (normalizedRange.issues.length > 0) {
-    return jsonError("INPUT", "입력값을 확인해주세요.", {
+    return fail("INPUT", "입력값을 확인해주세요.", {
       issues: normalizedRange.issues,
       status: 400,
     });
@@ -163,14 +192,14 @@ export async function GET(request: Request) {
 
   const apiKey = (process.env.OPENDART_API_KEY ?? "").trim();
   if (!apiKey) {
-    return jsonError("CONFIG", "OpenDART 설정이 필요합니다. OPENDART_API_KEY를 확인하세요.", {
+    return fail("CONFIG", "OpenDART 설정이 필요합니다. OPENDART_API_KEY를 확인하세요.", {
       status: 400,
     });
   }
 
   const cooldown = shouldCooldown(SOURCE_KEY);
   if (cooldown.cooldown) {
-    return jsonError("RATE_LIMIT", "요청 제한으로 잠시 후 다시 시도해주세요.", {
+    return fail("RATE_LIMIT", "요청 제한으로 잠시 후 다시 시도해주세요.", {
       status: 429,
       ...(debug
         ? {
@@ -213,7 +242,7 @@ export async function GET(request: Request) {
       } else if (fetched.status >= 500) {
         nextRetryAt = setCooldown(SOURCE_KEY, DEFAULT_COOLDOWN_SECONDS).nextRetryAt;
       }
-      return jsonError("UPSTREAM", "OpenDART 목록 조회에 실패했습니다.", {
+      return fail("UPSTREAM", "OpenDART 목록 조회에 실패했습니다.", {
         status: fetched.status === 429 ? 429 : 502,
         ...(debug
           ? {
@@ -227,7 +256,7 @@ export async function GET(request: Request) {
     }
 
     if (!isRecord(fetched.body)) {
-      return jsonError("UPSTREAM", "OpenDART 응답 형식이 올바르지 않습니다.", { status: 502 });
+      return fail("UPSTREAM", "OpenDART 응답 형식이 올바르지 않습니다.", { status: 502 });
     }
 
     const status = asString(fetched.body.status) ?? "";
@@ -238,13 +267,13 @@ export async function GET(request: Request) {
         setCooldown(SOURCE_KEY, fetched.retryAfterSeconds ?? DEFAULT_COOLDOWN_SECONDS);
       }
       if (mapped.noData) {
-        return jsonError(mapped.code, mapped.message, { status: mapped.httpStatus });
+        return fail(mapped.code, mapped.message, { status: mapped.httpStatus });
       }
-      return jsonError(mapped.code, mapped.message, { status: mapped.httpStatus });
+      return fail(mapped.code, mapped.message, { status: mapped.httpStatus });
     }
 
     const items = mapItems(fetched.body.list);
-    return jsonOk({
+    return withTrace(jsonOk({
       data: {
         pageNo: Number(fetched.body.page_no ?? pageNo),
         pageCount: Number(fetched.body.page_count ?? pageCount),
@@ -264,7 +293,7 @@ export async function GET(request: Request) {
           generatedAt,
         },
       ),
-    });
+    }, { meta: traceMeta() }));
   } catch (error) {
     if (error instanceof ExternalApiError) {
       let nextRetryAt: string | undefined;
@@ -273,7 +302,7 @@ export async function GET(request: Request) {
       } else if ((typeof error.status === "number" && error.status >= 500) || error.timeout) {
         nextRetryAt = setCooldown(SOURCE_KEY, DEFAULT_COOLDOWN_SECONDS).nextRetryAt;
       }
-      return jsonError(error.detail.code, error.detail.message, {
+      return fail(error.detail.code, error.detail.message, {
         status: error.status === 429 ? 429 : 502,
         ...(debug
           ? {
@@ -286,6 +315,6 @@ export async function GET(request: Request) {
       });
     }
 
-    return jsonError("INTERNAL", "공시 목록 조회 중 오류가 발생했습니다.", { status: 502 });
+    return fail("INTERNAL", "공시 목록 조회 중 오류가 발생했습니다.", { status: 502 });
   }
 }

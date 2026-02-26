@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { odcloudFetchWithAuth, resolveOdcloudEndpoint, setSearchParams } from "@/lib/publicApis/odcloud";
 import { extractOdcloudRows } from "@/lib/publicApis/odcloudScan";
 
@@ -46,9 +47,8 @@ async function fetchPage(params: { endpoint: URL; apiKey: string; pageNo: number
 }
 
 export async function GET() {
-  if ((process.env.NODE_ENV ?? "development") !== "development") {
-    return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
-  }
+  const blocked = onlyDev();
+  if (blocked) return blocked;
 
   const apiKey = (process.env.MOIS_BENEFITS_API_KEY ?? "").trim();
   if (!apiKey) {
@@ -108,4 +108,3 @@ export async function GET() {
     },
   });
 }
-

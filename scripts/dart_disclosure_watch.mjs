@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 
 const DEFAULT_WATCHLIST_RELATIVE_PATH = path.join("config", "dart-watchlist.json");
 const DEFAULT_RULES_RELATIVE_PATH = path.join("config", "dart-disclosure-rules.json");
@@ -22,6 +23,14 @@ const DEFAULT_ALERT_PREFS = Object.freeze({
   maxPerCorp: 2,
   maxItems: 20,
 });
+
+function loadEnvFiles(cwd = process.cwd()) {
+  for (const name of [".env.local", "env.local", ".env"]) {
+    const filePath = path.join(cwd, name);
+    if (!fs.existsSync(filePath)) continue;
+    dotenv.config({ path: filePath, override: false, quiet: true });
+  }
+}
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -1915,6 +1924,7 @@ function createEmptyDigest(input) {
 }
 
 async function run() {
+  loadEnvFiles();
   const cwd = process.cwd();
   const args = parseArgs(process.argv.slice(2));
   const watchlistPath = path.isAbsolute(args.watchlist) ? args.watchlist : path.resolve(cwd, args.watchlist);

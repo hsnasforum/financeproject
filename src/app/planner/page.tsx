@@ -121,6 +121,8 @@ function buildPlannerDeepLinks(
   recommendParams.set("liquidityPref", liquidityPref);
   recommendParams.set("rateMode", rateMode);
   recommendParams.set("topN", "5");
+  recommendParams.set("save", "1");
+  recommendParams.set("go", "history");
 
   const productParams = new URLSearchParams();
   productParams.set("from", "planner");
@@ -348,7 +350,7 @@ export default function PlannerPage() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <Button variant="primary" onClick={() => void runCompute()} disabled={loading}>{loading ? "계산 중..." : "계산하기"}</Button>
+          <Button data-testid="planner-compute" variant="primary" onClick={() => void runCompute()} disabled={loading}>{loading ? "계산 중..." : "계산하기"}</Button>
           <Button variant="outline" onClick={resetAll}>초기화</Button>
           <Button variant="outline" onClick={exportJson}>Export JSON</Button>
           <Button variant="outline" onClick={() => fileRef.current?.click()}>Import JSON</Button>
@@ -375,7 +377,7 @@ export default function PlannerPage() {
               <p className="mt-1 text-sm text-emerald-800">현재 계산값을 추천/상품 탐색으로 바로 전달합니다.</p>
               <p className="mt-2 text-xs text-emerald-700">{deepLinks.summary}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <Link href={deepLinks.recommendHref}>
+                <Link data-testid="planner-action-cta" href={deepLinks.recommendHref}>
                   <Button variant="primary">추천으로 이동</Button>
                 </Link>
                 <Link href={deepLinks.productsHref}>
@@ -411,7 +413,7 @@ export default function PlannerPage() {
 
           <Card>
             <h2 className="text-lg font-semibold">우선순위 액션</h2>
-            <div className="mt-3 space-y-3">
+            <div data-testid="planner-actions" className="mt-3 space-y-3">
               {result.actions.map((action, idx) => (
                 <div key={`${action.title}-${idx}`} className="rounded-lg border border-slate-200 p-3">
                   <div className="flex items-center gap-2">

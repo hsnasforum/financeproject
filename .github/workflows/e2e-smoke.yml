@@ -1,0 +1,150 @@
+name: E2E Smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core_flows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      FINLIFE_REPLAY: "1"
+      DATABASE_URL: "file:./prisma/dev.db"
+      DART_CORPCODES_INDEX_PATH: "tests/fixtures/dart/corpCodes.index.sample.json"
+      DART_E2E_FIXTURE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prisma db push
+        run: pnpm exec prisma db push
+
+      - name: Seed debug data
+        run: pnpm seed:debug
+
+      - name: Run smoke + core flows
+        run: pnpm e2e -- tests/e2e/smoke.spec.ts tests/e2e/flow-planner-to-history.spec.ts tests/e2e/flow-history-to-report.spec.ts tests/e2e/dart-flow.spec.ts
+
+  dart_index_present:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      FINLIFE_REPLAY: "1"
+      DATABASE_URL: "file:./prisma/dev.db"
+      DART_CORPCODES_INDEX_PATH: "tests/fixtures/dart/corpCodes.index.sample.json"
+      DART_E2E_FIXTURE: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prisma db push
+        run: pnpm exec prisma db push
+
+      - name: Seed debug data
+        run: pnpm seed:debug
+
+      - name: Run dart flow (index present)
+        run: pnpm e2e -- tests/e2e/dart-flow.spec.ts
+
+  dart_index_missing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      FINLIFE_REPLAY: "1"
+      DATABASE_URL: "file:./prisma/dev.db"
+      DART_CORPCODES_INDEX_PATH: "tmp/dart/e2e-corpCodes.index.json"
+      DART_E2E_FIXTURE: "1"
+      DART_E2E_BUILD_STUB: "1"
+      DART_E2E_EXPECT_MISSING: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: |
+          corepack enable
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prisma db push
+        run: pnpm exec prisma db push
+
+      - name: Seed debug data
+        run: pnpm seed:debug
+
+      - name: Ensure dart index is missing
+        run: |
+          rm -f tmp/dart/e2e-corpCodes.index.json
+          rm -f tmp/dart/corpCodes.index.json
+          rm -f src/data/dart/corpCodes.json
+
+      - name: Run dart flow (index missing)
+        run: pnpm e2e -- tests/e2e/dart-missing-index.spec.ts
+
+      - name: Reset dart index before build flow
+        run: rm -f tmp/dart/e2e-corpCodes.index.json
+
+      - name: Run dart flow (build button)
+        run: pnpm e2e -- tests/e2e/dart-build-index.spec.ts

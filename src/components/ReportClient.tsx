@@ -129,7 +129,7 @@ export function ReportClient({
   }
 
   return (
-    <main className="report-root mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
+    <main data-testid="report-root" className="report-root mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
       <section className="print-card rounded-2xl border border-slate-200 bg-white p-6">
         <div className="no-print flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl font-bold text-slate-900">재무설계 + 추천 리포트</h1>
@@ -193,7 +193,7 @@ export function ReportClient({
               고정지출 {reportModel.planner.snapshot.input.monthlyFixedExpenses.toLocaleString()}원 /
               변동지출 {reportModel.planner.snapshot.input.monthlyVariableExpenses.toLocaleString()}원
             </p>
-            <div className="mt-3 overflow-x-auto">
+            <div data-testid="report-recommend-table" className="mt-3 overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-slate-600">

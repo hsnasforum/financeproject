@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { ensureProductBest } from "@/lib/finlife/best";
 import { type NormalizedProduct } from "@/lib/finlife/types";
-import { jsonError, jsonOk } from "@/lib/http/apiResponse";
+import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { pushTiming, timingsToDebugMap, type TimingEntry, withTiming } from "../../../lib/http/timing";
 import { applyDepositProtectionPolicy } from "@/lib/recommend/depositProtection";
 import { parseKdbRateAndTerm } from "@/lib/recommend/external/kdb";
@@ -17,6 +17,8 @@ import { issuesToApi, parseRecommendProfile } from "../../../lib/schemas/recomme
 import { parseStringIssues } from "../../../lib/schemas/issueTypes";
 import { unifiedProductsToRecommendCandidates } from "../../../lib/recommend/unifiedAdapter";
 import { getUnifiedProducts } from "@/lib/sources/unified";
+import { pushError } from "../../../lib/observability/errorRingBuffer";
+import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../lib/observability/trace";
 
 const KDB_CANDIDATE_LIMIT = 500;
 
@@ -256,6 +258,23 @@ async function getCandidates(input: {
 }
 
 export async function POST(request: Request) {
+  const startedAt = Date.now();
+  const traceId = getOrCreateTraceId(request);
+  const traceMeta = (meta: unknown = {}) => attachTrace(meta, traceId);
+  const withTrace = <T extends Response>(response: T) => setTraceHeader(response, traceId);
+  const recordError = (code: string, message: string, status: number) => {
+    pushError({
+      time: new Date().toISOString(),
+      traceId,
+      route: "/api/recommend",
+      source: "recommend",
+      code,
+      message,
+      status,
+      elapsedMs: Date.now() - startedAt,
+    });
+  };
+
   try {
     const url = new URL(request.url);
     const debugTimingsEnabled = url.searchParams.get("debug") === "1";
@@ -281,9 +300,13 @@ export async function POST(request: Request) {
     if (issues.length > 0) {
       const first = issues[0];
       const summary = first ? `${first.path} ${first.message}` : "입력값이 올바르지 않습니다.";
-      return jsonError("INPUT", `입력값 오류 ${issues.length}건: ${summary}`, {
+      const message = `입력값 오류 ${issues.length}건: ${summary}`;
+      const status = statusFromCode("INPUT");
+      recordError("INPUT", message, status);
+      return withTrace(jsonError("INPUT", message, {
         issues: issuesToApi(issues),
-      });
+        meta: traceMeta(),
+      }));
     }
     const profile: UserRecommendProfile = parsedProfile.value;
 
@@ -297,26 +320,28 @@ export async function POST(request: Request) {
     const candidateBundle = candidateResult.value;
 
     if (candidateBundle.candidates.length === 0) {
-      return jsonOk({
+      return withTrace(jsonOk({
         meta: {
-          kind: profile.kind,
-          topN: profile.topN,
-          rateMode: profile.rateMode,
-          candidatePool,
-          candidateSources: profile.candidateSources ?? ["finlife"],
-          depositProtection: profile.depositProtection ?? "any",
-          weights: profile.weights,
-          assumptions: {
-            rateSelectionPolicy: "금리 선택 정책: 최고금리 우선(기본값)",
-            liquidityPolicy: "유동성은 기간 기반 휴리스틱으로 반영",
-            normalizationPolicy: "금리 점수는 후보군 내 0..1 정규화",
-            kdbParsingPolicy: "KDB 문자열 파싱 결과(가정 포함)는 옵션 확장 시에만 사용",
-          },
-          fallback: {
-            mode: "LIVE",
-            sourceKey: "recommend",
-            reason: "compute_no_candidates",
-          },
+          ...traceMeta({
+            kind: profile.kind,
+            topN: profile.topN,
+            rateMode: profile.rateMode,
+            candidatePool,
+            candidateSources: profile.candidateSources ?? ["finlife"],
+            depositProtection: profile.depositProtection ?? "any",
+            weights: profile.weights,
+            assumptions: {
+              rateSelectionPolicy: "금리 선택 정책: 최고금리 우선(기본값)",
+              liquidityPolicy: "유동성은 기간 기반 휴리스틱으로 반영",
+              normalizationPolicy: "금리 점수는 후보군 내 0..1 정규화",
+              kdbParsingPolicy: "KDB 문자열 파싱 결과(가정 포함)는 옵션 확장 시에만 사용",
+            },
+            fallback: {
+              mode: "LIVE",
+              sourceKey: "recommend",
+              reason: "compute_no_candidates",
+            },
+          }),
           ...(debugTimingsEnabled
             ? {
                 debug: {
@@ -332,7 +357,7 @@ export async function POST(request: Request) {
           rateMin: 0,
           rateMax: 0,
         },
-      });
+      }));
     }
 
     const recommendResult = await withTiming("recommend.score", async () => recommendCandidates({
@@ -352,25 +377,27 @@ export async function POST(request: Request) {
       .sort((a, b) => b.finalScore - a.finalScore)
       .slice(0, Math.max(1, Math.min(50, profile.topN)));
 
-    return jsonOk({
+    return withTrace(jsonOk({
       meta: {
-        kind: profile.kind,
-        topN: profile.topN,
-        rateMode: profile.rateMode,
-        candidatePool,
-        candidateSources: profile.candidateSources ?? ["finlife"],
-        depositProtection: protectionMode,
-        weights: recommendedBase.weights,
-        assumptions: {
-          ...recommendedBase.assumptions,
-          kdbParsingPolicy: "KDB 금리/기간은 원문 문자열 파싱과 휴리스틱 가정(기간별 동일금리 가정 가능)에 기반합니다.",
-          depositProtectionPolicy: "보호 신호 필터(any/prefer/require)는 현재 비활성화 상태입니다.",
-        },
-        fallback: {
-          mode: "LIVE",
-          sourceKey: "recommend",
-          reason: "compute_success",
-        },
+        ...traceMeta({
+          kind: profile.kind,
+          topN: profile.topN,
+          rateMode: profile.rateMode,
+          candidatePool,
+          candidateSources: profile.candidateSources ?? ["finlife"],
+          depositProtection: protectionMode,
+          weights: recommendedBase.weights,
+          assumptions: {
+            ...recommendedBase.assumptions,
+            kdbParsingPolicy: "KDB 금리/기간은 원문 문자열 파싱과 휴리스틱 가정(기간별 동일금리 가정 가능)에 기반합니다.",
+            depositProtectionPolicy: "보호 신호 필터(any/prefer/require)는 현재 비활성화 상태입니다.",
+          },
+          fallback: {
+            mode: "LIVE",
+            sourceKey: "recommend",
+            reason: "compute_success",
+          },
+        }),
         ...(debugTimingsEnabled
           ? {
               debug: {
@@ -381,11 +408,14 @@ export async function POST(request: Request) {
       },
       items: itemsWithProtection,
       debug: recommendedBase.debug,
-    });
+    }));
   } catch (error) {
     console.error("[recommend] failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return jsonError("INTERNAL", "추천 데이터를 계산하지 못했습니다. 잠시 후 다시 시도해주세요.");
+    const message = "추천 데이터를 계산하지 못했습니다. 잠시 후 다시 시도해주세요.";
+    const status = statusFromCode("INTERNAL");
+    recordError("INTERNAL", message, status);
+    return withTrace(jsonError("INTERNAL", message, { meta: traceMeta() }));
   }
 }

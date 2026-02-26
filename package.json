@@ -1,6 +1,6 @@
 {
   "name": "finance",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "node scripts/next_dev_safe.mjs",
@@ -24,8 +24,11 @@
     "dart:watch:strict-high": "node scripts/dart_disclosure_watch.mjs --strict-high",
     "providers:logos:import": "node scripts/providers-logos-import.mjs",
     "providers:manifest": "node scripts/providers-manifest.mjs",
-    "e2e": "node scripts/e2e_run.mjs",
+    "e2e": "playwright test",
+    "e2e:rc": "playwright test tests/e2e/smoke.spec.ts tests/e2e/flow-planner-to-history.spec.ts tests/e2e/flow-history-to-report.spec.ts tests/e2e/dart-flow.spec.ts",
+    "e2e:ui": "playwright test --ui",
     "e2e:pw": "playwright test",
+    "e2e:legacy": "node scripts/e2e_run.mjs",
     "e2e:docker": "node scripts/e2e_docker.mjs",
     "finlife:probe": "node scripts/finlife_probe_groups.mjs",
     "finlife:sync": "node scripts/finlife_sync.mjs",

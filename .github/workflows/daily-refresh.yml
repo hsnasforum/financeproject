@@ -5,17 +5,26 @@ on:
     - cron: "5 0 * * *" # 00:05 UTC = 09:05 KST
   workflow_dispatch: {}
 
+concurrency:
+  group: daily-refresh-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install
         run: |
@@ -28,15 +37,68 @@ jobs:
           OPENDART_BASE_URL: "https://opendart.fss.or.kr"
         run: pnpm daily:refresh
 
-      - name: Commit outputs (if changed)
+      - name: Add actions summary
+        if: always()
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/ || true
-          git add -f tmp/dart/ || true
-          if git diff --cached --quiet; then
-            echo "No changes"
-            exit 0
-          fi
-          git commit -m "chore(daily): refresh dart outputs"
-          git push
+          node <<'NODE'
+          const fs = require("node:fs");
+          const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+          const resultPath = "tmp/daily_refresh_result.json";
+          const esc = (value) => String(value ?? "")
+            .replace(/\|/g, "\\|")
+            .replace(/\r?\n/g, "<br/>");
+
+          let lines = ["## Daily Refresh Summary", ""];
+          if (!fs.existsSync(resultPath)) {
+            lines.push("- result file not found: `tmp/daily_refresh_result.json`");
+            fs.appendFileSync(summaryPath, `${lines.join("\n")}\n`, "utf-8");
+            process.exit(0);
+          }
+
+          const raw = JSON.parse(fs.readFileSync(resultPath, "utf-8"));
+          lines.push(`- generatedAt: \`${esc(raw.generatedAt)}\``);
+          lines.push(`- ok: \`${raw.ok ? "true" : "false"}\``);
+          lines.push("");
+          lines.push("| Step | Status | Took(ms) | stdoutTail | stderrTail |");
+          lines.push("|---|---|---:|---|---|");
+          for (const step of Array.isArray(raw.steps) ? raw.steps : []) {
+            lines.push(`| ${esc(step.name)} | ${esc(step.status)} | ${Number(step.tookMs ?? 0)} | ${esc(step.stdoutTail)} | ${esc(step.stderrTail)} |`);
+          }
+          fs.appendFileSync(summaryPath, `${lines.join("\n")}\n`, "utf-8");
+          NODE
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-refresh-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            tmp/daily_refresh_result.json
+            tmp/daily_refresh.log
+            docs/dart-*.md
+            tmp/dart/*.json
+
+      - name: Create refresh pull request
+        if: always()
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(daily): refresh generated outputs"
+          branch: "chore/daily-refresh"
+          delete-branch: false
+          title: "chore(daily): refresh generated outputs"
+          body: |
+            Automated daily refresh output update.
+            - source workflow: `${{ github.workflow }}`
+            - run: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+          add-paths: |
+            docs/**
+            tmp/**
+          labels: |
+            automated
+            daily-refresh
+
+      - name: PR result
+        if: always()
+        run: |
+          echo "Daily refresh workflow completed"

@@ -3,6 +3,8 @@ import { getApiCacheRecord, makeApiCacheKey, setApiCache } from "@/lib/cache/api
 import { makeHttpError, isDebugEnabled } from "@/lib/http/apiError";
 import { attachFallback } from "@/lib/http/fallbackMeta";
 import { setCooldown, shouldCooldown } from "@/lib/http/rateLimitCooldown";
+import { pushError } from "../../../../lib/observability/errorRingBuffer";
+import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../lib/observability/trace";
 import { statusFromExternalApiErrorCode } from "@/lib/publicApis/errorContract";
 import { fetchEximExchange, getKstTodayYYYYMMDD } from "@/lib/publicApis/providers/exchange";
 import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
@@ -24,6 +26,23 @@ function minusDays(dateYYYYMMDD: string, days: number): string {
 }
 
 export async function GET(request: Request) {
+  const startedAt = Date.now();
+  const traceId = getOrCreateTraceId(request);
+  const traceMeta = (meta: unknown = {}) => attachTrace(meta, traceId);
+  const withTrace = <T extends Response>(response: T) => setTraceHeader(response, traceId);
+  const recordError = (code: string, message: string, status: number) => {
+    pushError({
+      time: new Date().toISOString(),
+      traceId,
+      route: "/api/public/exchange",
+      source: "exchange",
+      code,
+      message,
+      status,
+      elapsedMs: Date.now() - startedAt,
+    });
+  };
+
   let requestedDate = "";
   let fallbackDays = 0;
   const { searchParams } = new URL(request.url);
@@ -32,16 +51,21 @@ export async function GET(request: Request) {
   try {
     requestedDate = (searchParams.get("date") ?? "").trim() || getKstTodayYYYYMMDD();
     if (!/^\d{8}$/.test(requestedDate)) {
-      return NextResponse.json(
+      const code = "INPUT";
+      const message = "date는 YYYYMMDD 형식이어야 합니다.";
+      const status = statusFromExternalApiErrorCode(code);
+      recordError(code, message, status);
+      return withTrace(NextResponse.json(
         {
           ok: false,
-          error: makeHttpError("INPUT", "date는 YYYYMMDD 형식이어야 합니다.", {
+          meta: traceMeta(),
+          error: makeHttpError(code, message, {
             debugEnabled,
             debug: { requestedDate },
           }),
         },
-        { status: statusFromExternalApiErrorCode("INPUT") },
-      );
+        { status },
+      ));
     }
 
     const key = makeApiCacheKey("exim-exchange", { requestedDate });
@@ -49,9 +73,9 @@ export async function GET(request: Request) {
     const cooldown = shouldCooldown(EXCHANGE_SOURCE_KEY);
     if (cooldown.cooldown && hit) {
       const payload = hit.entry.payload as Record<string, unknown>;
-      return NextResponse.json({
+      return withTrace(NextResponse.json({
         ...payload,
-        meta: attachFallback({
+        meta: traceMeta(attachFallback({
           ...(typeof payload.meta === "object" && payload.meta !== null ? payload.meta : {}),
           cache: "hit",
           key,
@@ -62,20 +86,24 @@ export async function GET(request: Request) {
           sourceKey: EXCHANGE_SOURCE_KEY,
           reason: "cooldown_cache_hit",
           nextRetryAt: cooldown.nextRetryAt,
-        }),
-      });
+        })),
+      }));
     }
     if (cooldown.cooldown && !hit) {
-      return NextResponse.json(
+      const code = "UPSTREAM_ERROR";
+      const message = "환율 API 호출 제한으로 잠시 대기 후 다시 시도해주세요.";
+      const status = 429;
+      recordError(code, message, status);
+      return withTrace(NextResponse.json(
         {
           ok: false,
-          meta: attachFallback({}, {
+          meta: traceMeta(attachFallback({}, {
             mode: "CACHE",
             sourceKey: EXCHANGE_SOURCE_KEY,
             reason: "cooldown_no_cache",
             nextRetryAt: cooldown.nextRetryAt,
-          }),
-          error: makeHttpError("UPSTREAM_ERROR", "환율 API 호출 제한으로 잠시 대기 후 다시 시도해주세요.", {
+          })),
+          error: makeHttpError(code, message, {
             debugEnabled,
             debug: {
               requestedDate,
@@ -83,14 +111,14 @@ export async function GET(request: Request) {
             },
           }),
         },
-        { status: 429 },
-      );
+        { status },
+      ));
     }
     if (hit) {
       const payload = hit.entry.payload as Record<string, unknown>;
-      return NextResponse.json({
+      return withTrace(NextResponse.json({
         ...payload,
-        meta: attachFallback({
+        meta: traceMeta(attachFallback({
           ...(typeof payload.meta === "object" && payload.meta !== null ? payload.meta : {}),
           cache: "hit",
           key,
@@ -100,8 +128,8 @@ export async function GET(request: Request) {
           mode: "CACHE",
           sourceKey: EXCHANGE_SOURCE_KEY,
           reason: "cache_hit",
-        }),
-      });
+        })),
+      }));
     }
 
     const fetchTimed = await withTiming("exchange.fetch", async () => {
@@ -152,9 +180,9 @@ export async function GET(request: Request) {
         const degraded = getApiCacheRecord(key);
         if (degraded) {
           const degradedPayload = degraded.entry.payload as Record<string, unknown>;
-          return NextResponse.json({
+          return withTrace(NextResponse.json({
             ...degradedPayload,
-            meta: attachFallback({
+            meta: traceMeta(attachFallback({
               ...(typeof degradedPayload.meta === "object" && degradedPayload.meta !== null ? degradedPayload.meta : {}),
               ...timingMeta,
               cache: "hit",
@@ -166,22 +194,24 @@ export async function GET(request: Request) {
               sourceKey: EXCHANGE_SOURCE_KEY,
               reason: "live_failed_cache_hit",
               nextRetryAt,
-            }),
-          });
+            })),
+          }));
         }
       }
 
-      return NextResponse.json(
+      const status = statusFromExternalApiErrorCode(result.error.code);
+      recordError(result.error.code, result.error.message, status);
+      return withTrace(NextResponse.json(
         {
           ok: false,
-          meta: attachFallback({
+          meta: traceMeta(attachFallback({
             ...timingMeta,
           }, {
             mode: "LIVE",
             sourceKey: EXCHANGE_SOURCE_KEY,
             reason: "live_failed",
             nextRetryAt,
-          }),
+          })),
           error: makeHttpError(result.error.code, result.error.message, {
             debugEnabled,
             debug: {
@@ -192,8 +222,8 @@ export async function GET(request: Request) {
             },
           }),
         },
-        { status: statusFromExternalApiErrorCode(result.error.code) },
-      );
+        { status },
+      ));
     }
 
     const payload = {
@@ -217,26 +247,30 @@ export async function GET(request: Request) {
     const ttlSeconds = Math.max(1, Math.trunc(ttlMs / 1000));
     const entry = setApiCache(key, payload, ttlSeconds);
 
-    return NextResponse.json({
+    return withTrace(NextResponse.json({
       ...payload,
-      meta: {
+      meta: traceMeta({
         ...payload.meta,
         cache: "miss",
         key,
         fetchedAt: entry.fetchedAt,
         expiresAt: entry.expiresAt,
-      },
-    });
+      }),
+    }));
   } catch {
-    return NextResponse.json(
+    const code = "INTERNAL";
+    const message = "환율 API 처리 중 오류가 발생했습니다.";
+    const status = statusFromExternalApiErrorCode(code);
+    recordError(code, message, status);
+    return withTrace(NextResponse.json(
       {
         ok: false,
-        meta: attachFallback({}, {
+        meta: traceMeta(attachFallback({}, {
           mode: "LIVE",
           sourceKey: EXCHANGE_SOURCE_KEY,
           reason: "route_internal_error",
-        }),
-        error: makeHttpError("INTERNAL", "환율 API 처리 중 오류가 발생했습니다.", {
+        })),
+        error: makeHttpError(code, message, {
           debugEnabled,
           debug: {
             requestedDate,
@@ -244,7 +278,7 @@ export async function GET(request: Request) {
           },
         }),
       },
-      { status: statusFromExternalApiErrorCode("INTERNAL") },
-    );
+      { status },
+    ));
   }
 }

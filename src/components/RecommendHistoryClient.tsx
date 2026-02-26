@@ -158,6 +158,11 @@ export function RecommendHistoryClient({
     if (!pair) return null;
     return computeDiff(pair.previous, pair.current);
   }, [selectedRuns]);
+  const openedFromQuery = Boolean(
+    initialOpenRunId
+    && activeRun
+    && activeRun.runId === initialOpenRunId,
+  );
 
   function refresh() {
     const next = listRuns();
@@ -279,6 +284,7 @@ export function RecommendHistoryClient({
                       </button>
                       <Link
                         href={`/report?runId=${encodeURIComponent(run.runId)}`}
+                        data-testid={active ? "history-open-report" : undefined}
                         className="inline-flex rounded-md border border-emerald-300 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50"
                       >
                         리포트 열기
@@ -308,6 +314,11 @@ export function RecommendHistoryClient({
             <p className="mt-2 text-sm text-slate-600">실행을 선택해 주세요.</p>
           ) : (
             <>
+              {openedFromQuery ? (
+                <p data-testid="history-open-run" className="mt-2 text-xs text-emerald-700">
+                  open run: {activeRun.runId}
+                </p>
+              ) : null}
               <p className="mt-2 text-sm text-slate-700">
                 저장 시각: {formatDateTime(activeRun.savedAt)} / 항목 {activeRun.items.length}건
               </p>

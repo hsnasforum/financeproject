@@ -128,7 +128,7 @@ export function DartCompanyPageClient() {
   }
 
   return (
-    <main className="py-8">
+    <main data-testid="dart-company-root" className="py-8">
       <Container>
         <SectionHeader
           title={title}
@@ -144,11 +144,11 @@ export function DartCompanyPageClient() {
             </Button>
           </div>
           {loading ? <p className="mt-3 text-sm text-slate-600">기업개황 조회 중...</p> : null}
-          {error ? <p className="mt-3 text-sm text-rose-700">{error}</p> : null}
+          {error ? <p data-testid="dart-company-error" className="mt-3 text-sm text-rose-700">{error}</p> : null}
 
           {!loading && !error && company ? (
             <dl className="mt-3 grid grid-cols-1 gap-2 text-sm">
-              <div><dt className="text-slate-500">회사명</dt><dd className="font-medium text-slate-900">{company.corpName ?? "-"}</dd></div>
+              <div><dt className="text-slate-500">회사명</dt><dd data-testid="dart-company-name" className="font-medium text-slate-900">{company.corpName ?? "-"}</dd></div>
               <div><dt className="text-slate-500">corp_code</dt><dd>{company.corpCode ?? "-"}</dd></div>
               <div><dt className="text-slate-500">종목코드</dt><dd>{company.stockCode ?? "-"}</dd></div>
               <div><dt className="text-slate-500">대표자</dt><dd>{company.ceo ?? "-"}</dd></div>

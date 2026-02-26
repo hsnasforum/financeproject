@@ -53,11 +53,17 @@ export function resolveCorpCodesIndexPath(root = process.cwd(), envPath = proces
   const envPrimary = envPath?.trim() ? path.resolve(root, envPath.trim()) : null;
   const tmpDefault = path.join(root, "tmp", "dart", "corpCodes.index.json");
   const legacy = path.join(root, "src", "data", "dart", "corpCodes.json");
-  const primary = envPrimary ?? tmpDefault;
-  const tried = [primary];
-  if (tmpDefault !== primary) tried.push(tmpDefault);
-  if (legacy !== primary && legacy !== tmpDefault) tried.push(legacy);
-  return { primary, tried };
+  if (envPrimary) {
+    return {
+      primary: envPrimary,
+      tried: [envPrimary],
+    };
+  }
+
+  return {
+    primary: tmpDefault,
+    tried: [tmpDefault, legacy],
+  };
 }
 
 export function getCorpIndexPath(): string {
