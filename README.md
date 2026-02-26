@@ -1,81 +1,90 @@
-# Finance Planner MVP
+# Finance Project
 
-Next.js(App Router) + TypeScript + Tailwind + Prisma(SQLite) 기반 개인용 재무설계/금융상품 추천 MVP입니다.
+개인 재무설계와 금융상품 탐색/추천, 공공데이터 연동, DART 공시 모니터링을 통합한 Next.js 기반 프로젝트입니다.
 
-## Local Run
+## 핵심 기능
+
+- 재무설계(Planner): 입력값 기반 지표/액션 제안
+- 금융상품 탐색/추천: 통합 카탈로그 + 추천 실행/히스토리
+- 공공 API 연동: FINLIFE, Gov24, OpenDART
+- DART 모니터링:
+  - 공시 분류/클러스터링
+  - digest/alerts/daily brief 생성
+  - 메인/리포트 노출
+- 자동 갱신 파이프라인:
+  - `daily:refresh` 로 로컬/CI에서 일일 갱신
+  - GitHub Actions 스케줄 실행 지원
+
+## 기술 스택
+
+- Next.js(App Router) + React + TypeScript
+- Tailwind CSS
+- Prisma + SQLite (로컬 개발)
+- Vitest + ESLint
+
+## 빠른 시작
 
 ```bash
 pnpm install
-cp .env.example .env.local
+cp .env.local.example .env.local
 pnpm dev
 ```
 
-브라우저: `http://localhost:3000`
+- 기본 접속: `http://localhost:3000`
+- LAN 접속 개발 서버: `pnpm dev:lan`
 
-## Environment & Security
+## 환경 변수
 
-- API 키(FINLIFE/공공 API)는 **서버 환경변수(.env.local)** 에만 저장합니다.
-- 키/토큰은 클라이언트 번들에 노출하면 안 됩니다. (`NEXT_PUBLIC_*` 로 키를 넣지 않음)
-- SQLite DB 파일(`*.db`, `*.sqlite*`)은 커밋하지 않습니다. (`prisma/schema.prisma`와 migration 소스만 커밋)
+주요 환경 변수는 `.env.local.example` 참고:
 
-## Current Build Priority
+- `OPENDART_API_KEY` (선택)
+- `OPENDART_BASE_URL` (기본 `https://opendart.fss.or.kr`)
+- 기타 외부 API 키(FINLIFE 등)
 
-- 현재 단계 우선순위와 DoD 검증 루틴은 `docs/api-utilization-draft.md`의 `Phase Now (현재 단계)`를 기준으로 진행합니다.
-- 현재 제공 화면/내비 경로는 `docs/current-screens.md`를 기준으로 확인합니다.
-- FINLIFE 스키마는 샘플 호출 결과(JSON) 확인 후 타입/정규화를 확정합니다(추측 구현 금지).
+참고:
+- `OPENDART_API_KEY`가 없어도 `pnpm dart:watch`는 실패하지 않고 skip digest를 생성합니다.
 
-## Release Candidate Gate
+## 자주 쓰는 명령어
 
-- Release Candidate(RC) 조건은 로컬 `pnpm verify` 통과입니다.
-- `pnpm verify`는 `validate:dumps:fixtures + lint + typecheck + test`를 모두 실행합니다.
-- CI(`.github/workflows/ci.yml`)도 동일하게 `pnpm verify`를 실행합니다.
-- 기본 브랜치 병합 전에는 verify 성공을 필수로 확인합니다.
-- 브랜치 보호 설정 기준은 `docs/github-branch-protection.md`를 따릅니다.
+- 개발 서버: `pnpm dev`
+- 타입체크: `pnpm typecheck`
+- 테스트: `pnpm test`
+- 전체 검증: `pnpm verify`
 
-## Git Remote Setup
+DART 관련:
 
-현재 브랜치 확인:
+- 공시 워치 실행: `pnpm dart:watch`
+- strict-high 모드: `pnpm dart:watch:strict-high`
+- 일일 갱신: `pnpm daily:refresh`
+- 일일 갱신(strict): `pnpm daily:refresh:strict`
 
-```bash
-git branch --show-current
-```
+## 산출물 경로
 
-원격 연결(최초):
+DART watch/refresh 실행 시 주요 산출물:
 
-```bash
-git remote add origin <REMOTE_URL>
-```
+- `tmp/dart/disclosure_digest.json`
+- `tmp/dart/disclosure_alerts.json`
+- `tmp/dart/daily_brief.json`
+- `docs/dart-disclosure-digest.md`
+- `docs/dart-disclosure-alerts.md`
+- `docs/dart-daily-brief.md`
 
-`origin`이 이미 있으면 URL 갱신:
+## 자동화
 
-```bash
-git remote set-url origin <REMOTE_URL>
-```
+- CI: `.github/workflows/ci.yml` (기본 verify)
+- Daily refresh: `.github/workflows/daily-refresh.yml`
+  - cron: `5 0 * * *` (UTC 00:05 / KST 09:05)
+  - 필요 Secret: `OPENDART_API_KEY`
 
-푸시:
+## 문서
 
-```bash
-git push -u origin main
-```
+- OpenDART 설정: `docs/opendart-setup.md`
+- Daily refresh 운영: `docs/daily-refresh.md`
+- API/현재 우선순위: `docs/api-utilization-draft.md`
+- 현재 화면 기준: `docs/current-screens.md`
 
-현재 브랜치가 `main`이 아니면:
+## 보안/운영 주의
 
-```bash
-git push -u origin "$(git branch --show-current)"
-```
-
-## Push Rejected 해결
-
-원격에 기존 커밋이 있어 push가 거부되면:
-
-```bash
-git pull --rebase origin main
-git push -u origin main
-```
-
-rebase 충돌 시:
-
-1. 충돌 파일 수정
-2. `git add <file>`
-3. `git rebase --continue`
-4. 완료 후 `git push -u origin main`
+- API 키는 반드시 서버 환경변수(`.env.local`)에만 저장
+- `NEXT_PUBLIC_*`로 민감키 노출 금지
+- DB/로컬 캐시 파일은 커밋 금지 (`.gitignore` 기준)
