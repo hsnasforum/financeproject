@@ -2,11 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArtifactQuickActions } from "@/components/ArtifactQuickActions";
+import { InlineTodoEditor, type InlineTodoPatch } from "@/components/InlineTodoEditor";
+import { StickyAgendaBar } from "@/components/StickyAgendaBar";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { StatCard } from "@/components/ui/StatCard";
+import { buildAgenda } from "@/lib/feedback/feedbackAgenda";
+import { computeStats, pickTop } from "@/lib/feedback/feedbackStats";
 import { listRuns, type SavedRecommendRun } from "@/lib/recommend/savedRunsStore";
 import { defaults as recommendProfileDefaults, parseRecommendProfile, toSearchParams } from "@/lib/schemas/recommendProfile";
+import { cn } from "@/lib/utils";
 
 const PLANNER_LAST_SNAPSHOT_KEY = "planner_last_snapshot_v1";
 const RECOMMEND_PROFILE_KEY = "recommend_profile_v1";
@@ -64,11 +74,6 @@ type DailyBriefData = {
   };
 };
 
-type DailyBriefApiPayload = {
-  ok?: boolean;
-  data?: DailyBriefData | null;
-};
-
 type DailyRefreshStepStatus = "ok" | "skipped" | "failed";
 
 type DailyRefreshStep = {
@@ -108,92 +113,70 @@ type DataSourceHealthPayload = {
   fetchedAt?: string;
 };
 
-type DartWatchPayload = {
+type FeedbackCategory = "bug" | "improve" | "question";
+type FeedbackStatus = "OPEN" | "DOING" | "DONE";
+type FeedbackPriority = "P0" | "P1" | "P2" | "P3";
+type FeedbackTask = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
+type FeedbackItem = {
+  id: string;
+  createdAt: string;
+  category: FeedbackCategory;
+  message: string;
+  traceId: string | null;
+  status: FeedbackStatus;
+  priority: FeedbackPriority;
+  dueDate: string | null;
+  tags: string[];
+  note: string;
+  tasks: FeedbackTask[];
+};
+
+type FeedbackRecentPayload = {
   ok?: boolean;
-  tookMs?: number;
-  stdoutTail?: string;
-  stderrTail?: string;
+  data?: FeedbackItem[];
   error?: {
     code?: string;
     message?: string;
   };
 };
 
-type DevUnlockPayload = {
+type FeedbackPatchPayload = {
   ok?: boolean;
-  csrf?: string;
+  data?: FeedbackItem;
   error?: {
     code?: string;
     message?: string;
   };
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
+type FeedbackMutationPatch = InlineTodoPatch & {
+  status?: FeedbackStatus;
+};
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "-";
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return "-";
-  return parsed.toLocaleString("ko-KR", { hour12: false });
+  return parsed.toLocaleString("ko-KR", { 
+    month: "short", 
+    day: "numeric", 
+    hour: "2-digit", 
+    minute: "2-digit",
+    hour12: false 
+  });
 }
 
 function formatKrw(value: unknown): string {
   const amount = Number(value);
   if (!Number.isFinite(amount)) return "-";
+  if (amount >= 100000000) return `${(amount / 100000000).toFixed(1)}억원`;
+  if (amount >= 10000) return `${(amount / 10000).toLocaleString()}만원`;
   return `${Math.round(amount).toLocaleString()}원`;
-}
-
-function parsePlannerSnapshot(raw: string | null): PlannerSnapshot | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) return null;
-    const savedAt = typeof parsed.savedAt === "string" ? parsed.savedAt : "";
-    if (!savedAt) return null;
-    return {
-      savedAt,
-      input: isRecord(parsed.input) ? parsed.input as PlannerSnapshot["input"] : undefined,
-      result: isRecord(parsed.result) ? parsed.result as PlannerSnapshot["result"] : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function parseRecommendSnapshot(raw: string | null): RecommendResultSnapshot | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) return null;
-    const savedAt = typeof parsed.savedAt === "string" ? parsed.savedAt : "";
-    if (!savedAt) return null;
-    return {
-      savedAt,
-      profile: isRecord(parsed.profile) ? parsed.profile as RecommendResultSnapshot["profile"] : undefined,
-      items: Array.isArray(parsed.items) ? parsed.items as RecommendResultSnapshot["items"] : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function parseStoredRecommendProfile(raw: string | null) {
-  if (!raw) return recommendProfileDefaults();
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    return parseRecommendProfile(parsed).value;
-  } catch {
-    return recommendProfileDefaults();
-  }
-}
-
-function clipLogSnippet(value: string | null | undefined, maxChars = 220): string {
-  const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (!normalized) return "";
-  if (normalized.length <= maxChars) return normalized;
-  return `${normalized.slice(0, maxChars)}...`;
 }
 
 function isRecommendPurpose(value: string | null | undefined): value is "emergency" | "seed-money" | "long-term" {
@@ -204,73 +187,20 @@ function isRecommendKind(value: string | null | undefined): value is "deposit" |
   return value === "deposit" || value === "saving";
 }
 
-function toTimestamp(value: string | null | undefined): number {
-  if (!value) return 0;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+function feedbackCategoryLabel(value: FeedbackCategory): string {
+  if (value === "bug") return "버그";
+  if (value === "improve") return "개선";
+  return "질문";
 }
 
-function summarizeDailyRefreshBadge(data: DailyRefreshData): {
-  label: "OK" | "FAILED" | "SKIPPED";
-  className: string;
-} {
-  const steps = Array.isArray(data.steps) ? data.steps : [];
-  if (steps.length > 0 && steps.every((step) => step.status === "skipped")) {
-    return {
-      label: "SKIPPED",
-      className: "bg-amber-100 text-amber-800",
-    };
-  }
-  if (steps.some((step) => step.status === "failed") || data.ok === false) {
-    return {
-      label: "FAILED",
-      className: "bg-rose-100 text-rose-800",
-    };
-  }
-  return {
-    label: "OK",
-    className: "bg-emerald-100 text-emerald-800",
-  };
+function summarizeFeedbackMessage(message: string, maxLength = 90): string {
+  const trimmed = message.trim();
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength)}...`;
 }
 
-function summarizeFromRun(run: SavedRecommendRun): RecommendSummary {
-  const sortedItems = [...run.items].sort((a, b) => a.rank - b.rank);
-  const top = sortedItems[0];
-  return {
-    savedAt: run.savedAt,
-    source: "saved_run",
-    purpose: run.profile.purpose,
-    kind: run.profile.kind,
-    topN: run.profile.topN,
-    itemsCount: run.items.length,
-    topItemName: top?.productName ?? "-",
-    topItemRate: top?.appliedRate ?? null,
-  };
-}
-
-function summarizeFromSnapshot(snapshot: RecommendResultSnapshot): RecommendSummary {
-  const rows = Array.isArray(snapshot.items) ? snapshot.items : [];
-  const top = [...rows]
-    .sort((a, b) => Number(a?.rank ?? 9999) - Number(b?.rank ?? 9999))[0];
-  return {
-    savedAt: snapshot.savedAt,
-    source: "result_snapshot",
-    purpose: String(snapshot.profile?.purpose ?? "-"),
-    kind: String(snapshot.profile?.kind ?? "-"),
-    topN: Number(snapshot.profile?.topN ?? 0) || rows.length,
-    itemsCount: rows.length,
-    topItemName: String(top?.productName ?? "-"),
-    topItemRate: typeof top?.appliedRate === "number" ? top.appliedRate : null,
-  };
-}
-
-function pickLatestRecommendSummary(snapshot: RecommendResultSnapshot | null, run: SavedRecommendRun | null): RecommendSummary | null {
-  if (!snapshot && !run) return null;
-  if (snapshot && !run) return summarizeFromSnapshot(snapshot);
-  if (!snapshot && run) return summarizeFromRun(run);
-  return toTimestamp(snapshot?.savedAt) >= toTimestamp(run?.savedAt)
-    ? summarizeFromSnapshot(snapshot as RecommendResultSnapshot)
-    : summarizeFromRun(run as SavedRecommendRun);
+function dueDateText(value: string | null): string {
+  return value ?? "기한 미정";
 }
 
 export function DashboardClient() {
@@ -287,11 +217,6 @@ export function DashboardClient() {
     data: null,
     error: null,
   });
-  const [dartWatch, setDartWatch] = useState<{ loading: boolean; error: string | null; note: string | null }>({
-    loading: false,
-    error: null,
-    note: null,
-  });
   const [unlockToken, setUnlockToken] = useState("");
   const [unlock, setUnlock] = useState<{ loading: boolean; unlocked: boolean; csrf: string | null; error: string | null }>({
     loading: false,
@@ -299,458 +224,647 @@ export function DashboardClient() {
     csrf: null,
     error: null,
   });
-  const [recommendRerunError, setRecommendRerunError] = useState<string | null>(null);
   const [health, setHealth] = useState<{ loading: boolean; rows: DataSourceHealthRow[]; fetchedAt: string | null; error: string | null }>({
     loading: true,
     rows: [],
     fetchedAt: null,
     error: null,
   });
+  const [feedback, setFeedback] = useState<{ loading: boolean; rows: FeedbackItem[]; error: string | null }>({
+    loading: true,
+    rows: [],
+    error: null,
+  });
+  const feedbackRowsRef = useRef<FeedbackItem[]>([]);
+  const patchSeqRef = useRef<Record<string, number>>({});
+  const [inlineEditors, setInlineEditors] = useState<Record<string, boolean>>({});
+  const [inlineSaving, setInlineSaving] = useState<Record<string, boolean>>({});
+  const [inlineErrors, setInlineErrors] = useState<Record<string, string>>({});
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
-    try {
-      const plannerRaw = window.localStorage.getItem(PLANNER_LAST_SNAPSHOT_KEY);
-      const plannerParsed = parsePlannerSnapshot(plannerRaw);
-      setPlanner({ data: plannerParsed, error: plannerParsed ? null : null });
-    } catch {
-      setPlanner({ data: null, error: "플래너 로컬 데이터를 읽지 못했습니다." });
-    }
+    const timer = window.setTimeout(() => {
+      try {
+        const plannerRaw = window.localStorage.getItem(PLANNER_LAST_SNAPSHOT_KEY);
+        if (plannerRaw) {
+          const parsed = JSON.parse(plannerRaw);
+          setPlanner({ data: parsed, error: null });
+        }
+      } catch {
+        setPlanner({ data: null, error: "플래너 데이터를 읽지 못했습니다." });
+      }
 
-    try {
-      const snapshotRaw = window.localStorage.getItem(RECOMMEND_LAST_RESULT_KEY);
-      const snapshot = parseRecommendSnapshot(snapshotRaw);
-      const latestRun = listRuns()[0] ?? null;
-      const summary = pickLatestRecommendSummary(snapshot, latestRun);
-      setRecommend({ data: summary, error: null });
-    } catch {
-      setRecommend({ data: null, error: "추천 로컬 데이터를 읽지 못했습니다." });
-    }
+      try {
+        const snapshotRaw = window.localStorage.getItem(RECOMMEND_LAST_RESULT_KEY);
+        const latestRun = listRuns()[0] ?? null;
+        if (latestRun) {
+          const sortedItems = [...latestRun.items].sort((a, b) => a.rank - b.rank);
+          setRecommend({ data: {
+            savedAt: latestRun.savedAt,
+            source: "saved_run",
+            purpose: latestRun.profile.purpose,
+            kind: latestRun.profile.kind,
+            topN: latestRun.profile.topN,
+            itemsCount: latestRun.items.length,
+            topItemName: sortedItems[0]?.productName ?? "-",
+            topItemRate: sortedItems[0]?.appliedRate ?? null,
+          }, error: null });
+        } else if (snapshotRaw) {
+          const parsed = JSON.parse(snapshotRaw);
+          setRecommend({ data: {
+            savedAt: parsed.savedAt,
+            source: "result_snapshot",
+            purpose: parsed.profile?.purpose ?? "-",
+            kind: parsed.profile?.kind ?? "-",
+            topN: parsed.profile?.topN ?? 0,
+            itemsCount: parsed.items?.length ?? 0,
+            topItemName: parsed.items?.[0]?.productName ?? "-",
+            topItemRate: parsed.items?.[0]?.appliedRate ?? null,
+          }, error: null });
+        }
+      } catch {
+        setRecommend({ data: null, error: "추천 데이터를 읽지 못했습니다." });
+      }
 
-    try {
       const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
       const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
       if (unlocked && csrf) {
         setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
       }
-    } catch {
-      // no-op
-    }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const loadBrief = useCallback(async () => {
     setBrief((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await fetch("/api/dev/dart/brief", { cache: "no-store" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const payload = (await response.json()) as DailyBriefApiPayload;
+      const payload = await response.json();
       setBrief({ loading: false, data: payload.data ?? null, error: null });
     } catch {
       setBrief({ loading: false, data: null, error: "공시 브리핑을 불러오지 못했습니다." });
     }
   }, []);
 
-  useEffect(() => {
-    void loadBrief();
-  }, [loadBrief]);
-
   const loadDailyRefresh = useCallback(async () => {
     setDailyRefresh((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await fetch("/api/dev/daily-refresh/status", { cache: "no-store" });
-      const payload = (await response.json()) as DailyRefreshStatusApiPayload;
-      if (!response.ok || payload.ok !== true) {
-        throw new Error(payload.error?.message ?? `HTTP ${response.status}`);
-      }
-      setDailyRefresh({
-        loading: false,
-        data: payload.data ?? null,
-        error: null,
-      });
+      const payload = await response.json();
+      setDailyRefresh({ loading: false, data: payload.data ?? null, error: null });
     } catch {
-      setDailyRefresh({
-        loading: false,
-        data: null,
-        error: "자동 갱신 상태를 불러오지 못했습니다.",
-      });
+      setDailyRefresh({ loading: false, data: null, error: "갱신 상태를 불러오지 못했습니다." });
+    }
+  }, []);
+
+  const loadFeedback = useCallback(async () => {
+    setFeedback((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await fetch("/api/feedback/list?limit=200", { cache: "no-store" });
+      const payload = (await response.json()) as FeedbackRecentPayload;
+      if (!response.ok || !payload.ok || !Array.isArray(payload.data)) {
+        setFeedback({ loading: false, rows: [], error: payload.error?.message ?? "피드백을 불러오지 못했습니다." });
+        return;
+      }
+      const normalized = payload.data.map((row) => ({
+        ...row,
+        tags: Array.isArray(row.tags) ? row.tags : [],
+        note: typeof row.note === "string" ? row.note : "",
+        tasks: Array.isArray(row.tasks) ? row.tasks : [],
+      }));
+      setFeedback({ loading: false, rows: normalized, error: null });
+    } catch {
+      setFeedback({ loading: false, rows: [], error: "피드백을 불러오지 못했습니다." });
     }
   }, []);
 
   useEffect(() => {
-    void loadDailyRefresh();
-  }, [loadDailyRefresh]);
+    const timer = window.setTimeout(() => {
+      void loadBrief();
+      void loadDailyRefresh();
+      void loadFeedback();
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [loadBrief, loadDailyRefresh, loadFeedback]);
 
   useEffect(() => {
-    let active = true;
     async function loadHealth() {
       try {
         const response = await fetch("/api/dev/data-sources/health", { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const payload = (await response.json()) as DataSourceHealthPayload;
-        if (!active) return;
-        const rows = Array.isArray(payload.data) ? payload.data : [];
-        setHealth({ loading: false, rows, fetchedAt: payload.fetchedAt ?? null, error: null });
+        const payload = await response.json();
+        setHealth({ loading: false, rows: payload.data ?? [], fetchedAt: payload.fetchedAt ?? null, error: null });
       } catch {
-        if (!active) return;
-        setHealth({ loading: false, rows: [], fetchedAt: null, error: "데이터 소스 상태를 불러오지 못했습니다." });
+        setHealth({ loading: false, rows: [], fetchedAt: null, error: "상태를 불러오지 못했습니다." });
       }
     }
     void loadHealth();
-    return () => {
-      active = false;
-    };
   }, []);
+
+  useEffect(() => {
+    feedbackRowsRef.current = feedback.rows;
+  }, [feedback.rows]);
 
   const dataSourceSummary = useMemo(() => {
     const total = health.rows.length;
     const configured = health.rows.filter((row) => row.configured).length;
-    const missingRows = health.rows.filter((row) => !row.configured);
-    return { total, configured, missingRows };
+    return { total, configured };
   }, [health.rows]);
+  const feedbackStats = useMemo(() => computeStats(feedback.rows), [feedback.rows]);
+  const feedbackTop = useMemo(
+    () => pickTop(feedback.rows, { statuses: ["OPEN", "DOING"], limit: 5 }),
+    [feedback.rows],
+  );
+  const feedbackAgenda = useMemo(() => buildAgenda(feedback.rows), [feedback.rows]);
+  const stickyAgenda = useMemo(() => {
+    const todayHighCount = feedbackAgenda.today.filter((item) => item.priority === "P0" || item.priority === "P1").length;
+    return {
+      opsTop: feedbackAgenda.opsTop,
+      overdueCount: feedbackAgenda.overdue.length,
+      todayHighCount,
+      noDueHighCount: feedbackAgenda.noDueHigh.length,
+      overdue: feedbackAgenda.overdue,
+      today: feedbackAgenda.today,
+      noDueHigh: feedbackAgenda.noDueHigh,
+    };
+  }, [feedbackAgenda]);
+  const hasStickyAgenda = useMemo(
+    () => feedbackAgenda.opsTop.length > 0 || feedbackAgenda.overdue.length > 0 || feedbackAgenda.today.length > 0 || feedbackAgenda.noDueHigh.length > 0,
+    [feedbackAgenda],
+  );
 
-  const dailyRefreshBadge = useMemo(() => {
-    if (!dailyRefresh.data) return null;
-    return summarizeDailyRefreshBadge(dailyRefresh.data);
-  }, [dailyRefresh.data]);
+  const patchFeedbackItem = useCallback(async (id: string, patch: FeedbackMutationPatch): Promise<{ ok: boolean; error?: string }> => {
+    const targetId = id.trim();
+    if (!targetId) return { ok: false, error: "id가 비어 있습니다." };
+    const previousItem = feedbackRowsRef.current.find((row) => row.id === targetId);
+    if (!previousItem) return { ok: false, error: "항목을 찾지 못했습니다." };
 
-  const handleRefreshDart = useCallback(async () => {
-    if (!unlock.unlocked || !unlock.csrf) {
-      setDartWatch({
-        loading: false,
-        error: "잠금 해제 후 DART 새로고침을 실행할 수 있습니다.",
-        note: null,
-      });
-      return;
-    }
+    const seq = (patchSeqRef.current[targetId] ?? 0) + 1;
+    patchSeqRef.current[targetId] = seq;
+    setInlineSaving((prev) => ({ ...prev, [targetId]: true }));
+    setInlineErrors((prev) => {
+      if (!(targetId in prev)) return prev;
+      const next = { ...prev };
+      delete next[targetId];
+      return next;
+    });
 
-    setDartWatch({ loading: true, error: null, note: null });
+    const optimisticItem: FeedbackItem = {
+      ...previousItem,
+      ...(patch.status !== undefined ? { status: patch.status } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      ...(Object.prototype.hasOwnProperty.call(patch, "dueDate") ? { dueDate: patch.dueDate ?? null } : {}),
+      ...(patch.tasks !== undefined ? { tasks: patch.tasks.map((task) => ({ ...task })) } : {}),
+    };
+    setFeedback((prev) => ({
+      ...prev,
+      rows: prev.rows.map((row) => (row.id === targetId ? optimisticItem : row)),
+    }));
+
     try {
-      const response = await fetch("/api/dev/dart/watch", {
-        method: "POST",
-        cache: "no-store",
+      const response = await fetch(`/api/feedback/${encodeURIComponent(targetId)}`, {
+        method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ csrf: unlock.csrf }),
+        body: JSON.stringify(patch),
       });
-      const payload = (await response.json()) as DartWatchPayload;
+      const payload = (await response.json()) as FeedbackPatchPayload;
       if (!response.ok || !payload.ok) {
-        const stderrSnippet = clipLogSnippet(payload.stderrTail);
-        const message = payload.error?.message ?? `HTTP ${response.status}`;
-        setDartWatch({
-          loading: false,
-          error: stderrSnippet ? `${message} (${stderrSnippet})` : message,
-          note: null,
-        });
-        return;
+        if (patchSeqRef.current[targetId] === seq) {
+          const message = payload.error?.message ?? "저장에 실패했습니다.";
+          setFeedback((prev) => ({
+            ...prev,
+            rows: prev.rows.map((row) => (row.id === targetId ? previousItem : row)),
+          }));
+          setInlineErrors((prev) => ({ ...prev, [targetId]: message }));
+        }
+        return { ok: false, error: payload.error?.message ?? "저장에 실패했습니다." };
       }
 
-      setDartWatch({
-        loading: false,
+      if (patchSeqRef.current[targetId] !== seq) return { ok: true };
+      const updated = payload.data;
+      setFeedback((prev) => ({
+        ...prev,
         error: null,
-        note: `갱신 완료 (${Math.max(0, Number(payload.tookMs ?? 0))}ms)`,
+        rows: prev.rows.map((row) =>
+          row.id === targetId
+            ? {
+                ...row,
+                ...updated,
+                tasks: Array.isArray(updated?.tasks) ? updated.tasks : row.tasks,
+              }
+            : row
+        ),
+      }));
+      setInlineErrors((prev) => {
+        if (!(targetId in prev)) return prev;
+        const next = { ...prev };
+        delete next[targetId];
+        return next;
       });
-      await loadBrief();
+      return { ok: true };
     } catch {
-      setDartWatch({
-        loading: false,
-        error: "DART 새로고침 요청에 실패했습니다.",
-        note: null,
-      });
+      if (patchSeqRef.current[targetId] === seq) {
+        setFeedback((prev) => ({
+          ...prev,
+          rows: prev.rows.map((row) => (row.id === targetId ? previousItem : row)),
+        }));
+        setInlineErrors((prev) => ({ ...prev, [targetId]: "저장 실패" }));
+      }
+      return { ok: false, error: "저장 실패" };
+    } finally {
+      if (patchSeqRef.current[targetId] === seq) {
+        setInlineSaving((prev) => ({ ...prev, [targetId]: false }));
+      }
     }
-  }, [loadBrief, unlock.csrf, unlock.unlocked]);
+  }, []);
+
+  const handleMarkDoing = useCallback((id: string) => {
+    void patchFeedbackItem(id, { status: "DOING" });
+  }, [patchFeedbackItem]);
+
+  const handleMarkDone = useCallback((id: string) => {
+    void patchFeedbackItem(id, { status: "DONE" });
+  }, [patchFeedbackItem]);
+
+  const toggleInlineEditor = useCallback((id: string) => {
+    const targetId = id.trim();
+    if (!targetId) return;
+    setInlineEditors((prev) => ({ ...prev, [targetId]: !prev[targetId] }));
+  }, []);
+
+  const renderAgendaItem = useCallback(
+    (item: FeedbackItem, keyPrefix: string, tone: "overdue" | "normal") => {
+      const isOpen = Boolean(inlineEditors[item.id]);
+      const isSaving = Boolean(inlineSaving[item.id]);
+      const inlineError = inlineErrors[item.id];
+      return (
+        <li
+          key={`${keyPrefix}-${item.id}`}
+          className={cn(
+            "rounded-lg border px-2.5 py-2",
+            tone === "overdue"
+              ? "border-rose-200 bg-rose-50"
+              : "border-slate-200 bg-slate-50",
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="block min-w-0 flex-1">
+              <p className={cn("text-xs font-semibold", tone === "overdue" ? "text-slate-800 hover:text-rose-700" : "text-slate-800 hover:text-emerald-700")}>
+                {summarizeFeedbackMessage(item.message, 70)}
+              </p>
+              <p className={cn("mt-1 text-[11px]", tone === "overdue" ? "text-rose-700" : "text-slate-500")}>
+                {item.priority} · {dueDateText(item.dueDate)}
+              </p>
+            </Link>
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
+              onClick={() => toggleInlineEditor(item.id)}
+            >
+              {isOpen ? "닫기" : "편집"}
+            </button>
+          </div>
+          {isOpen ? (
+            <>
+              <InlineTodoEditor
+                item={item}
+                onPatch={(patch) => patchFeedbackItem(item.id, patch)}
+                disabled={isSaving}
+              />
+              {inlineError ? (
+                <p className="mt-1 text-[11px] font-semibold text-rose-600">{inlineError}</p>
+              ) : null}
+            </>
+          ) : null}
+        </li>
+      );
+    },
+    [inlineEditors, inlineErrors, inlineSaving, patchFeedbackItem, toggleInlineEditor],
+  );
 
   const handleUnlock = useCallback(async () => {
     const token = unlockToken.trim();
-    if (!token) {
-      setUnlock((prev) => ({ ...prev, error: "잠금 해제 토큰을 입력해 주세요." }));
-      return;
-    }
-
+    if (!token) return;
     setUnlock((prev) => ({ ...prev, loading: true, error: null }));
     try {
       const response = await fetch("/api/dev/unlock", {
         method: "POST",
-        cache: "no-store",
         headers: { "x-dev-token": token },
       });
-      const payload = (await response.json()) as DevUnlockPayload;
-      if (!response.ok || !payload.ok) {
-        const message = payload.error?.message ?? `HTTP ${response.status}`;
-        setUnlock((prev) => ({ ...prev, loading: false, error: message }));
-        return;
-      }
-      if (typeof payload.csrf !== "string" || !payload.csrf.trim()) {
-        setUnlock((prev) => ({ ...prev, loading: false, error: "CSRF 토큰을 받지 못했습니다." }));
-        return;
-      }
-
-      try {
+      const payload = await response.json();
+      if (payload.ok) {
         window.sessionStorage.setItem(DEV_UNLOCKED_SESSION_KEY, "1");
         window.sessionStorage.setItem(DEV_CSRF_SESSION_KEY, payload.csrf);
-      } catch {
-        // no-op
+        setUnlock({ loading: false, unlocked: true, csrf: payload.csrf, error: null });
+      } else {
+        setUnlock((prev) => ({ ...prev, loading: false, error: payload.error?.message || "잠금 해제 실패" }));
       }
-
-      setUnlockToken("");
-      setUnlock({ loading: false, unlocked: true, csrf: payload.csrf, error: null });
-      setDartWatch((prev) => ({ ...prev, error: null }));
     } catch {
-      setUnlock((prev) => ({ ...prev, loading: false, error: "잠금 해제 요청에 실패했습니다." }));
+      setUnlock((prev) => ({ ...prev, loading: false, error: "네트워크 오류" }));
     }
   }, [unlockToken]);
 
-  const handleRerunRecommend = useCallback(() => {
-    setRecommendRerunError(null);
-    try {
-      const rawProfile = window.localStorage.getItem(RECOMMEND_PROFILE_KEY);
-      const profile = parseStoredRecommendProfile(rawProfile);
-      const params = toSearchParams(profile);
-
-      if (isRecommendPurpose(recommend.data?.purpose)) params.set("purpose", recommend.data.purpose);
-      if (isRecommendKind(recommend.data?.kind)) params.set("kind", recommend.data.kind);
-      if (recommend.data?.topN && Number.isFinite(recommend.data.topN) && recommend.data.topN > 0) {
-        params.set("topN", String(recommend.data.topN));
-      }
-
-      params.set("autorun", "1");
-      params.set("save", "1");
-      params.set("go", "history");
-      params.set("from", "dashboard");
-      router.push(`/recommend?${params.toString()}`);
-    } catch {
-      setRecommendRerunError("최근 추천 설정을 읽지 못했습니다.");
-    }
-  }, [recommend.data, router]);
+  const plannerAssets = formatKrw(planner.data?.input?.liquidAssets);
+  const recommendRate = recommend.data?.topItemRate ? `${recommend.data.topItemRate.toFixed(2)}%` : "-";
 
   return (
-    <main data-testid="dashboard-root" className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4">
-        <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
-          <h1 className="text-2xl font-black tracking-tight text-slate-900">통합 대시보드</h1>
-          <p className="mt-2 text-sm text-slate-600">플래너, 추천, 공시 브리핑, 데이터 소스 상태를 한 화면에서 확인합니다.</p>
-        </section>
+    <PageShell>
+      <PageHeader
+        title="개인 재무 의사결정 허브"
+        description="실시간 금융 지표와 AI 분석 산출물을 기반으로 최적의 결정을 내리세요."
+        action={
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => router.refresh()}>새로고침</Button>
+            <Link href="/settings"><Button variant="outline" size="sm">환경 설정</Button></Link>
+          </div>
+        }
+      />
 
-        <section className="grid gap-4 md:grid-cols-2">
-          <Card className="rounded-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">플래너 최근 결과</h2>
-                <p className="mt-1 text-xs text-slate-500">localStorage: planner_last_snapshot_v1</p>
-              </div>
-              <Link href="/planner" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">열기</Link>
-            </div>
+      {hasStickyAgenda ? (
+        <StickyAgendaBar agenda={stickyAgenda} onMarkDoing={handleMarkDoing} onMarkDone={handleMarkDone} />
+      ) : null}
 
-            {planner.error ? (
-              <p className="mt-4 text-sm text-rose-600">{planner.error}</p>
-            ) : !planner.data ? (
-              <p className="mt-4 text-sm text-slate-500">저장된 플래너 결과가 없습니다. 먼저 계산을 실행해 주세요.</p>
-            ) : (
-              <div className="mt-4 space-y-1.5 text-sm text-slate-700">
-                <p>저장시각: {formatDateTime(planner.data.savedAt)}</p>
-                <p>월 소득: {formatKrw(planner.data.input?.monthlyIncomeNet)}</p>
-                <p>월 지출: {formatKrw(Number(planner.data.input?.monthlyFixedExpenses ?? 0) + Number(planner.data.input?.monthlyVariableExpenses ?? 0))}</p>
-                <p>가용 현금성 자산: {formatKrw(planner.data.input?.liquidAssets)}</p>
-                <p>지표/액션: {Array.isArray(planner.data.result?.metrics) ? planner.data.result?.metrics?.length : 0} / {Array.isArray(planner.data.result?.actions) ? planner.data.result?.actions?.length : 0}</p>
-              </div>
-            )}
-          </Card>
+      {/* Top KPI Strip */}
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+        <StatCard label="가용 자산 (최근 설계)" value={plannerAssets} />
+        <StatCard label="최고 추천 금리" value={recommendRate} />
+        <StatCard label="데이터 기준일" value={brief.data?.generatedAt ? new Date(brief.data.generatedAt).toLocaleDateString() : "-"} />
+        <StatCard 
+          label="파이프라인 건강도" 
+          value={dataSourceSummary.total > 0 ? `${Math.round((dataSourceSummary.configured / dataSourceSummary.total) * 100)}%` : "0%"} 
+          trend={dataSourceSummary.configured < dataSourceSummary.total ? { value: "점검 필요", isPositive: false } : undefined}
+        />
+      </section>
 
-          <Card className="rounded-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">추천 최근 실행</h2>
-                <p className="mt-1 text-xs text-slate-500">localStorage 또는 저장된 runs 최신값</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleRerunRecommend}
-                  className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  최근 조건 재실행
-                </button>
-                <Link href="/recommend" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">추천</Link>
-                <Link href="/recommend/history" className="text-xs font-bold text-slate-600 hover:text-slate-800">히스토리</Link>
-              </div>
-            </div>
-
-            {recommend.error ? (
-              <p className="mt-4 text-sm text-rose-600">{recommend.error}</p>
-            ) : !recommend.data ? (
-              <p className="mt-4 text-sm text-slate-500">저장된 추천 결과가 없습니다. 추천 실행 후 다시 확인해 주세요.</p>
-            ) : (
-              <div className="mt-4 space-y-1.5 text-sm text-slate-700">
-                <p>저장시각: {formatDateTime(recommend.data.savedAt)}</p>
-                <p>소스: {recommend.data.source === "saved_run" ? "savedRunsStore" : "recommend_last_result_v1"}</p>
-                <p>프로필: {recommend.data.purpose} / {recommend.data.kind} / topN {recommend.data.topN}</p>
-                <p>항목 수: {recommend.data.itemsCount}</p>
-                <p>1순위: {recommend.data.topItemName}{typeof recommend.data.topItemRate === "number" ? ` (${recommend.data.topItemRate.toFixed(2)}%)` : ""}</p>
-              </div>
-            )}
-            {recommendRerunError ? (
-              <p className="mt-3 text-xs text-rose-600">{recommendRerunError}</p>
-            ) : null}
-          </Card>
-
-          <Card className="rounded-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">공시 브리핑</h2>
-                <p className="mt-1 text-xs text-slate-500">/api/dev/dart/brief</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="password"
-                  value={unlockToken}
-                  onChange={(event) => setUnlockToken(event.target.value)}
-                  placeholder="잠금 해제 토큰"
-                  className="w-36 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 focus:border-emerald-500 focus:outline-none"
-                />
-                <button
-                  type="button"
-                  onClick={() => { void handleUnlock(); }}
-                  disabled={unlock.loading}
-                  className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {unlock.loading ? "검증 중..." : "잠금 해제"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleRefreshDart(); }}
-                  disabled={!unlock.unlocked || !unlock.csrf || dartWatch.loading}
-                  className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {dartWatch.loading ? "새로고침 중..." : "DART 새로고침"}
-                </button>
-                <Link href="/public/dart" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">공시</Link>
-                <Link href="/report" className="text-xs font-bold text-slate-600 hover:text-slate-800">리포트</Link>
-              </div>
-            </div>
-
+      {/* Main Action Queue */}
+      <section className="grid gap-6 lg:grid-cols-2 mb-10">
+        <Card className="flex flex-col">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-black text-slate-900">오늘 할 일: 공시 분석</h2>
+            <Link href="/public/dart">
+              <Button variant="ghost" size="sm" className="text-primary h-8 px-3">탐색하기</Button>
+            </Link>
+          </div>
+          
+          <div className="flex-1">
             {brief.loading ? (
-              <p className="mt-4 text-sm text-slate-500">브리핑 로딩 중...</p>
-            ) : brief.error ? (
-              <p className="mt-4 text-sm text-rose-600">{brief.error}</p>
-            ) : !brief.data || !Array.isArray(brief.data.lines) || brief.data.lines.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500">브리핑 데이터가 없습니다. `pnpm dart:watch`를 실행해 주세요.</p>
-            ) : (
-              <div className="mt-4">
-                <p className="text-sm text-slate-700">생성시각: {formatDateTime(brief.data.generatedAt)}</p>
-                <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-slate-700">
-                  {brief.data.lines.slice(0, 5).map((line, index) => (
-                    <li key={`brief-line-${index}`}>{line}</li>
-                  ))}
-                </ol>
+              <div className="animate-pulse space-y-3">
+                <div className="h-4 bg-surface-muted rounded-full w-3/4" />
+                <div className="h-4 bg-surface-muted rounded-full w-1/2" />
               </div>
+            ) : !brief.data?.lines?.length ? (
+               <div className="py-8 text-center rounded-2xl bg-surface-muted">
+                 <p className="text-sm font-bold text-slate-400">최근 발생한 중요 공시가 없습니다.</p>
+               </div>
+            ) : (
+               <div className="space-y-4">
+                 {brief.data.lines.slice(0, 3).map((line, idx) => (
+                   <div key={idx} className="flex gap-3 p-4 rounded-xl bg-surface-muted text-sm text-slate-700 font-medium">
+                     <span className="text-primary font-black tabular-nums">{idx + 1}.</span>
+                     <p className="leading-snug">{line}</p>
+                   </div>
+                 ))}
+               </div>
             )}
-            {unlock.unlocked ? (
-              <p className="mt-3 text-xs text-emerald-700">잠금 해제됨 (12시간)</p>
-            ) : (
-              <p className="mt-3 text-xs text-slate-500">잠금 해제 후 DART 새로고침을 사용할 수 있습니다.</p>
-            )}
-            {unlock.error ? (
-              <p className="mt-2 text-xs text-rose-600">{unlock.error}</p>
-            ) : null}
-            {dartWatch.error ? (
-              <p className="mt-3 text-xs text-rose-600">{dartWatch.error}</p>
-            ) : dartWatch.note ? (
-              <p className="mt-3 text-xs text-emerald-700">{dartWatch.note}</p>
-            ) : null}
+          </div>
+          
+          <div className="mt-6 pt-4 border-t border-border flex gap-3">
+            <ArtifactQuickActions artifactName="alerts_md" label="공시 알림 설정" />
+            <ArtifactQuickActions artifactName="brief_md" label="브리핑 다운로드" />
+          </div>
+        </Card>
 
-            <div className="mt-4 grid gap-2">
-              <ArtifactQuickActions artifactName="brief_md" label="브리핑 빠른 작업" />
-              <ArtifactQuickActions artifactName="alerts_md" label="공시 알림 빠른 작업" />
-            </div>
-          </Card>
-
-          <Card className="rounded-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">데이터 소스 상태</h2>
-                <p className="mt-1 text-xs text-slate-500">/api/dev/data-sources/health</p>
-              </div>
-              <Link href="/settings/data-sources" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">설정</Link>
-            </div>
-
-            {health.loading ? (
-              <p className="mt-4 text-sm text-slate-500">상태 로딩 중...</p>
-            ) : health.error ? (
-              <p className="mt-4 text-sm text-rose-600">{health.error}</p>
-            ) : health.rows.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-500">데이터 소스 상태 정보가 없습니다.</p>
-            ) : (
-              <div className="mt-4 space-y-2">
-                <p className="text-sm text-slate-700">
-                  configured: {dataSourceSummary.configured} / {dataSourceSummary.total}
-                </p>
-                <p className="text-xs text-slate-500">fetchedAt: {formatDateTime(health.fetchedAt)}</p>
-                {dataSourceSummary.missingRows.length > 0 ? (
-                  <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-amber-700">
-                    {dataSourceSummary.missingRows.slice(0, 4).map((row) => (
-                      <li key={row.sourceKey}>{row.sourceKey} (설정 필요)</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-emerald-700">모든 소스가 configured 상태입니다.</p>
-                )}
-              </div>
-            )}
-          </Card>
-
-          <Card className="rounded-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">마지막 자동 갱신</h2>
-                <p className="mt-1 text-xs text-slate-500">/api/dev/daily-refresh/status</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Link href="/dashboard/artifacts" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">
-                  산출물 보기
-                </Link>
-                {dailyRefreshBadge ? (
-                  <span className={`rounded-full px-2 py-1 text-[11px] font-bold ${dailyRefreshBadge.className}`}>
-                    {dailyRefreshBadge.label}
-                  </span>
-                ) : null}
-              </div>
-            </div>
-
-            {dailyRefresh.loading ? (
-              <p className="mt-4 text-sm text-slate-500">자동 갱신 상태 로딩 중...</p>
-            ) : dailyRefresh.error ? (
-              <p className="mt-4 text-sm text-rose-600">{dailyRefresh.error}</p>
-            ) : !dailyRefresh.data ? (
-              <p className="mt-4 text-sm text-slate-500">아직 기록 없음. `pnpm daily:refresh` 실행 필요</p>
-            ) : (
-              <div className="mt-4 space-y-3">
-                <p className="text-sm text-slate-700">생성시각: {formatDateTime(dailyRefresh.data.generatedAt)}</p>
-                {dailyRefresh.data.steps.length === 0 ? (
-                  <p className="text-xs text-slate-500">기록된 step 정보가 없습니다.</p>
-                ) : (
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="min-w-full text-left text-xs text-slate-700">
-                      <thead className="bg-slate-50 text-slate-600">
-                        <tr>
-                          <th className="px-3 py-2 font-semibold">Step</th>
-                          <th className="px-3 py-2 font-semibold">Status</th>
-                          <th className="px-3 py-2 font-semibold">Took(ms)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dailyRefresh.data.steps.map((step) => (
-                          <tr key={`daily-refresh-step-${step.name}`} className="border-t border-slate-100">
-                            <td className="px-3 py-2 font-medium text-slate-800">{step.name}</td>
-                            <td className="px-3 py-2">{step.status}</td>
-                            <td className="px-3 py-2">{step.tookMs}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+        <div className="flex flex-col gap-6">
+          <Card className="flex-1">
+             <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-black text-slate-900">재무설계 현황</h2>
+              <Link href="/planner"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">설계 수정</Button></Link>
+             </div>
+             {!planner.data ? (
+                <p className="text-sm text-slate-500 py-4">아직 작성된 재무설계가 없습니다.</p>
+             ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">월 소득</p>
+                    <p className="font-bold tabular-nums">{formatKrw(planner.data.input?.monthlyIncomeNet)}</p>
                   </div>
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">월 고정 지출</p>
+                    <p className="font-bold tabular-nums">{formatKrw(planner.data.input?.monthlyFixedExpenses)}</p>
+                  </div>
+                </div>
+             )}
+          </Card>
+          
+          <Card className="flex-1">
+             <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-black text-slate-900">최근 상품 추천</h2>
+              <Link href="/recommend"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">다시 받기</Button></Link>
+             </div>
+             {!recommend.data ? (
+                <p className="text-sm text-slate-500 py-4">추천 기록이 없습니다.</p>
+             ) : (
+                <div>
+                  <p className="font-bold text-slate-900">{recommend.data.topItemName}</p>
+                  <p className="text-xs text-slate-500 mt-1">목적: {recommend.data.purpose} · 최고 금리: <span className="text-primary font-bold">{recommend.data.topItemRate}%</span></p>
+                </div>
+             )}
+          </Card>
+
+          <Card className="flex-1">
+             <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-black text-slate-900">피드백 트래커 요약</h2>
+              <div className="flex items-center gap-2">
+                <Link href="/feedback/list"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">전체 보기</Button></Link>
+                <Link href="/feedback/list?status=OPEN"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">OPEN</Button></Link>
+                <Link href="/feedback/list?status=DOING"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">DOING</Button></Link>
+              </div>
+             </div>
+             {feedback.loading ? (
+               <p className="text-sm text-slate-500 py-4">피드백 로딩 중...</p>
+             ) : feedback.error ? (
+               <p className="text-sm text-rose-600 py-4">{feedback.error}</p>
+             ) : feedbackStats.total === 0 ? (
+               <p className="text-sm text-slate-500 py-4">아직 접수된 피드백이 없습니다.</p>
+             ) : (
+               <div className="space-y-3">
+                 <div className="grid grid-cols-3 gap-2 text-xs">
+                   <Link href="/feedback/list?status=OPEN" className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2 text-center">
+                     <p className="font-semibold text-sky-700">OPEN</p>
+                     <p className="mt-1 text-lg font-black text-sky-800 tabular-nums">{feedbackStats.OPEN}</p>
+                   </Link>
+                   <Link href="/feedback/list?status=DOING" className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center">
+                     <p className="font-semibold text-amber-700">DOING</p>
+                     <p className="mt-1 text-lg font-black text-amber-800 tabular-nums">{feedbackStats.DOING}</p>
+                   </Link>
+                   <Link href="/feedback/list?status=DONE" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-center">
+                     <p className="font-semibold text-emerald-700">DONE</p>
+                     <p className="mt-1 text-lg font-black text-emerald-800 tabular-nums">{feedbackStats.DONE}</p>
+                   </Link>
+                 </div>
+
+                 <div className="space-y-2">
+                   <p className="text-xs font-semibold text-slate-600">OPEN/DOING Top 5</p>
+                   {feedbackTop.length === 0 ? (
+                     <p className="text-xs text-slate-500">진행 중 이슈가 없습니다.</p>
+                   ) : (
+                     <ul className="space-y-2">
+                       {feedbackTop.map((item) => (
+                         <li key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                           <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="block">
+                             <p className="text-xs font-semibold text-slate-800 hover:text-emerald-700">{summarizeFeedbackMessage(item.message)}</p>
+                             <p className="mt-1 text-[11px] text-slate-500">
+                               {item.status} · {feedbackCategoryLabel(item.category)} · {formatDateTime(item.createdAt)}
+                             </p>
+                           </Link>
+                         </li>
+                       ))}
+                     </ul>
+                   )}
+                 </div>
+               </div>
+             )}
+          </Card>
+
+          <Card className="flex-1">
+             <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-black text-slate-900">오늘/이번주 할 일</h2>
+              <Link href="/feedback/list?status=OPEN"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">더보기</Button></Link>
+             </div>
+             {feedback.loading ? (
+               <p className="text-sm text-slate-500 py-4">할 일 로딩 중...</p>
+             ) : feedback.error ? (
+               <p className="text-sm text-rose-600 py-4">{feedback.error}</p>
+             ) : (
+               <div className="space-y-4">
+                 {feedbackAgenda.overdue.length > 0 ? (
+                   <div className="space-y-2">
+                     <div className="flex items-center justify-between">
+                       <p className="text-xs font-black text-rose-700">마감 지남</p>
+                       <Link href="/feedback/list?status=OPEN" className="text-[11px] font-semibold text-rose-600 hover:text-rose-700">더보기</Link>
+                     </div>
+                     <ul className="space-y-1.5">
+                       {feedbackAgenda.overdue.slice(0, 5).map((item) => renderAgendaItem(item, "overdue", "overdue"))}
+                     </ul>
+                   </div>
+                 ) : null}
+
+                 <div className="space-y-2">
+                   <div className="flex items-center justify-between">
+                     <p className="text-xs font-black text-slate-700">오늘</p>
+                     <Link href="/feedback/list?status=OPEN" className="text-[11px] font-semibold text-slate-600 hover:text-slate-700">더보기</Link>
+                   </div>
+                   {feedbackAgenda.today.length === 0 ? (
+                     <p className="text-xs text-slate-400">해당 항목 없음</p>
+                   ) : (
+                     <ul className="space-y-1.5">
+                       {feedbackAgenda.today.slice(0, 5).map((item) => renderAgendaItem(item, "today", "normal"))}
+                     </ul>
+                   )}
+                 </div>
+
+                 <div className="space-y-2">
+                   <div className="flex items-center justify-between">
+                     <p className="text-xs font-black text-slate-700">이번주</p>
+                     <Link href="/feedback/list?status=OPEN" className="text-[11px] font-semibold text-slate-600 hover:text-slate-700">더보기</Link>
+                   </div>
+                   {feedbackAgenda.thisWeek.length === 0 ? (
+                     <p className="text-xs text-slate-400">해당 항목 없음</p>
+                   ) : (
+                     <ul className="space-y-1.5">
+                       {feedbackAgenda.thisWeek.slice(0, 5).map((item) => renderAgendaItem(item, "week", "normal"))}
+                     </ul>
+                   )}
+                 </div>
+
+                 <div className="space-y-2">
+                   <div className="flex items-center justify-between">
+                     <p className="text-xs font-black text-slate-700">기한 미정(P0/P1)</p>
+                     <Link href="/feedback/list?status=OPEN" className="text-[11px] font-semibold text-slate-600 hover:text-slate-700">더보기</Link>
+                   </div>
+                   {feedbackAgenda.noDueHigh.length === 0 ? (
+                     <p className="text-xs text-slate-400">해당 항목 없음</p>
+                   ) : (
+                     <ul className="space-y-1.5">
+                       {feedbackAgenda.noDueHigh.slice(0, 5).map((item) => renderAgendaItem(item, "nodue", "normal"))}
+                     </ul>
+                   )}
+                 </div>
+               </div>
+             )}
+          </Card>
+        </div>
+      </section>
+
+      {/* Advanced Section (Foldable) */}
+      <section className="mb-12">
+        <button 
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="flex items-center gap-2 text-sm font-bold text-slate-600 mb-4 hover:text-slate-900 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={cn("transition-transform", showAdvanced && "rotate-90")}><polyline points="9 18 15 12 9 6"/></svg>
+          시스템 상태 및 로그
+        </button>
+        
+        {showAdvanced && (
+          <div className="grid gap-6 lg:grid-cols-2 animate-in fade-in slide-in-from-top-2">
+            <Card>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-black text-slate-900">데이터 소스 가동률</h3>
+                <Link href="/settings/data-sources"><Button variant="ghost" size="sm" className="h-8">설정</Button></Link>
+              </div>
+              <div className="space-y-2">
+                {health.rows.map(row => (
+                  <div key={row.sourceKey} className={cn("flex items-center gap-2 p-3 rounded-xl text-xs font-bold ring-1", row.configured ? "bg-emerald-50 text-emerald-800 ring-emerald-100" : "bg-amber-50 text-amber-800 ring-amber-100")}>
+                    <div className={cn("h-1.5 w-1.5 rounded-full", row.configured ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
+                    {row.sourceKey}: {row.configured ? "정상" : "연동 필요"}
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-black text-slate-900">자동 갱신 상태</h3>
+                {dailyRefresh.data && (
+                  <Badge variant={dailyRefresh.data.ok ? "success" : "destructive"}>{dailyRefresh.data.ok ? "SUCCESS" : "FAILED"}</Badge>
                 )}
               </div>
-            )}
-          </Card>
-        </section>
-      </div>
-    </main>
+              {!dailyRefresh.data ? (
+                <p className="text-sm text-slate-500">기록 없음</p>
+              ) : (
+                <div className="divide-y divide-border/50">
+                  {dailyRefresh.data.steps.slice(0, 4).map(step => (
+                    <div key={step.name} className="flex items-center justify-between py-2 text-xs">
+                      <span className="font-medium text-slate-700">{step.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-400 tabular-nums">{step.tookMs}ms</span>
+                        <div className={cn("h-1.5 w-1.5 rounded-full", step.status === "ok" ? "bg-emerald-500" : "bg-rose-500")} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <div className="mt-6 pt-4 border-t border-border flex items-center justify-between">
+                 <span className="text-xs font-bold text-slate-500">Developer Actions</span>
+                 {!unlock.unlocked ? (
+                    <div className="flex items-center gap-2 bg-surface-muted p-1 rounded-full pl-3 ring-1 ring-border">
+                      <input type="password" value={unlockToken} onChange={(e) => setUnlockToken(e.target.value)} placeholder="Token" className="bg-transparent border-none outline-none text-xs w-20" />
+                      <Button variant="primary" size="sm" className="h-6 px-3 text-[10px] rounded-full" onClick={handleUnlock} disabled={unlock.loading}>UNLOCK</Button>
+                    </div>
+                 ) : (
+                    <Badge variant="success">UNLOCKED</Badge>
+                 )}
+              </div>
+            </Card>
+          </div>
+        )}
+      </section>
+    </PageShell>
   );
 }

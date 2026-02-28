@@ -6,54 +6,123 @@
       "id": "capital",
       "label": "자본/증자/감자",
       "baseScore": 85,
-      "patterns": ["유상증자", "무상증자", "감자", "전환사채", "신주인수권"]
+      "patterns": [
+        "유상증자",
+        "무상증자",
+        "감자",
+        "전환사채",
+        "신주인수권"
+      ]
     },
     {
       "id": "mna",
       "label": "M&A/투자/양수도",
       "baseScore": 82,
-      "patterns": ["합병", "분할", "주식양수도", "영업양수도", "타법인 주식"]
+      "patterns": [
+        "합병",
+        "분할",
+        "주식양수도",
+        "영업양수도",
+        "타법인 주식"
+      ]
     },
     {
       "id": "debt",
       "label": "채무/보증/담보",
       "baseScore": 78,
-      "patterns": ["채무보증", "담보제공", "차입", "사채", "신용등급"]
+      "patterns": [
+        "채무보증",
+        "담보제공",
+        "차입",
+        "사채",
+        "신용등급"
+      ]
     },
     {
       "id": "contract",
       "label": "공급계약/소송",
       "baseScore": 75,
-      "patterns": ["단일판매ㆍ공급계약", "소송", "계약해지", "영업정지", "회생절차"]
+      "patterns": [
+        "단일판매ㆍ공급계약",
+        "소송",
+        "계약해지",
+        "영업정지",
+        "회생절차",
+        "공급계약",
+        "단일판매",
+        "체결"
+      ]
     },
     {
       "id": "earnings",
       "label": "실적/잠정실적",
       "baseScore": 70,
-      "patterns": ["잠정실적", "매출액", "영업이익", "당기순이익", "실적"]
+      "patterns": [
+        "잠정실적",
+        "매출액",
+        "영업이익",
+        "당기순이익",
+        "실적"
+      ]
     },
     {
       "id": "governance",
       "label": "지배구조/임원",
       "baseScore": 60,
-      "patterns": ["대표이사", "주주총회", "이사 선임", "감사 선임", "임원"]
+      "patterns": [
+        "대표이사",
+        "주주총회",
+        "이사 선임",
+        "감사 선임",
+        "임원"
+      ]
     },
     {
       "id": "disposition",
       "label": "정정/해명/기타",
       "baseScore": 45,
-      "patterns": ["정정", "해명", "조회공시", "기타경영사항", "자진공시"]
+      "patterns": [
+        "정정",
+        "해명",
+        "조회공시",
+        "기타경영사항",
+        "자진공시"
+      ]
     }
   ],
   "boosters": [
-    { "pattern": "정정", "delta": 8 },
-    { "pattern": "결정", "delta": 5 },
-    { "pattern": "체결", "delta": 4 },
-    { "pattern": "해지", "delta": 10 },
-    { "pattern": "소송", "delta": 12 },
-    { "pattern": "영업정지", "delta": 15 },
-    { "pattern": "상장폐지", "delta": 20 },
-    { "pattern": "자진공시", "delta": -3 }
+    {
+      "pattern": "정정",
+      "delta": 8
+    },
+    {
+      "pattern": "결정",
+      "delta": 5
+    },
+    {
+      "pattern": "체결",
+      "delta": 4
+    },
+    {
+      "pattern": "해지",
+      "delta": 10
+    },
+    {
+      "pattern": "소송",
+      "delta": 12
+    },
+    {
+      "pattern": "영업정지",
+      "delta": 15
+    },
+    {
+      "pattern": "상장폐지",
+      "delta": 20
+    },
+    {
+      "pattern": "자진공시",
+      "delta": -3
+    }
   ],
   "thresholds": {
     "high": 85,

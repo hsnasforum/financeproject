@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "kind": "monteCarlo",
+  "key": "9a778ed98a71ea6858885a1b62ea6d53c28c037e3ed8fb382fb7a98183ba2c87",
+  "createdAt": "2026-02-28T07:40:06.516Z",
+  "expiresAt": "2026-03-07T07:40:06.516Z",
+  "meta": {
+    "horizonMonths": 60,
+    "assumptionsHash": "4d529b29a118c742bca7910c64286866503a4ac3cde0363cd2c51a7b885e8838",
+    "optionsHash": "a7f202d55d366bfbe667adb25a131be37fa9b1dd2d15cce45e4b5d74ec72ce62",
+    "snapshot": {
+      "missing": true
+    }
+  },
+  "data": {
+    "meta": {
+      "generatedAt": "2026-02-28T07:40:06.516Z",
+      "snapshot": {
+        "missing": true
+      },
+      "health": {
+        "warningsCount": 1,
+        "criticalCount": 0,
+        "warningCodes": [
+          "SNAPSHOT_MISSING"
+        ],
+        "flags": {
+          "snapshotMissing": true,
+          "optimisticReturn": false,
+          "riskMismatch": false
+        }
+      }
+    },
+    "data": {
+      "baseAssumptionsUsed": {
+        "inflationPct": 2,
+        "investReturnPct": 5,
+        "cashReturnPct": 2,
+        "withdrawalRatePct": 4,
+        "debtRates": {}
+      },
+      "monteCarlo": {
+        "meta": {
+          "paths": 60,
+          "seed": 1
+        },
+        "probabilities": {
+          "lumpSumGoalAchieved": {
+            "goal-home": 1
+          },
+          "retirementAchievedAtRetireAge": 1,
+          "retirementDepletionBeforeEnd": 0
+        },
+        "percentiles": {
+          "endNetWorthKrw": {
+            "p10": 109202905.27,
+            "p50": 112523030.32,
+            "p90": 114906381.92
+          },
+          "worstCashKrw": {
+            "p10": 0,
+            "p50": 0,
+            "p90": 0
+          }
+        },
+        "notes": [
+          "Probabilities are model-based and not guarantees.",
+          "Return and inflation distributions are simplified.",
+          "Retirement cashflow is simplified to zero earned income after retirement start month."
+        ]
+      },
+      "healthWarnings": [
+        {
+          "code": "SNAPSHOT_MISSING",
+          "severity": "warn",
+          "message": "최신 지표 스냅샷이 없어 기본 가정으로 계산했습니다. /ops/assumptions에서 동기화 권장."
+        }
+      ]
+    }
+  }
+}

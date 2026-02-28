@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "012f4ef8-f7c2-4ef7-af92-406bb5543bd6",
+  "name": "수정된 프로필",
+  "profile": {
+    "monthlyIncomeNet": 4300000,
+    "monthlyEssentialExpenses": 1600000,
+    "monthlyDiscretionaryExpenses": 700000,
+    "liquidAssets": 1200000,
+    "investmentAssets": 3500000,
+    "debts": [],
+    "goals": [
+      {
+        "id": "goal-home",
+        "name": "Home",
+        "targetAmount": 12000000,
+        "currentAmount": 0,
+        "targetMonth": 36,
+        "priority": 4,
+        "minimumMonthlyContribution": 0
+      },
+      {
+        "id": "goal-ret",
+        "name": "Retirement",
+        "targetAmount": 25000000,
+        "currentAmount": 0,
+        "targetMonth": 240,
+        "priority": 5,
+        "minimumMonthlyContribution": 0
+      }
+    ]
+  },
+  "createdAt": "2026-02-28T12:13:02.621Z",
+  "updatedAt": "2026-02-28T12:13:02.633Z"
+}

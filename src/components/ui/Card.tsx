@@ -1,4 +1,5 @@
 import type { ReactNode, ElementType } from "react";
+import { cn } from "@/lib/utils";
 
 type CardProps = {
   children: ReactNode;
@@ -6,10 +7,13 @@ type CardProps = {
   as?: ElementType;
 };
 
-export function Card({ children, className = "", as: Component = "article" }: CardProps) {
+export function Card({ children, className, as: Component = "article" }: CardProps) {
   return (
     <Component
-      className={`rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm transition-all duration-500 hover:-translate-y-1 hover:shadow-xl hover:shadow-emerald-900/5 ${className}`.trim()}
+      className={cn(
+        "rounded-2xl bg-surface p-6 shadow-card transition-all duration-300 hover:shadow-card-hover",
+        className
+      )}
     >
       {children}
     </Component>

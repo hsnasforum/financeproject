@@ -6,7 +6,7 @@ import { uiTextKo } from "@/lib/uiText.ko";
 
 export function BrandLogo() {
   return (
-    <Link href="/dashboard" className="flex items-center gap-3 group" aria-label="핀라이프 대시보드">
+    <Link href="/" className="flex items-center gap-3 group" aria-label="핀라이프 홈">
       <div className="relative">
         <div className="absolute inset-0 bg-emerald-100 blur-lg rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
         <Image

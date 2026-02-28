@@ -147,6 +147,12 @@ async function main() {
     plan.push({ name: "data:doctor", required: false, runnable: false, reason: "script_not_found" });
   }
 
+  if (typeof scripts.cleanup === "string" && scripts.cleanup.trim()) {
+    plan.push({ name: "cleanup", required: false, runnable: true, tolerateFailureInNonStrict: true });
+  } else {
+    plan.push({ name: "cleanup", required: false, runnable: false, reason: "script_not_found" });
+  }
+
   if (!hasOpenDartKey) {
     addLog("OPENDART_API_KEY is missing; dart:watch may skip network call (expected).");
   }
@@ -178,8 +184,14 @@ async function main() {
       status = "skipped";
     }
 
+    const nonBlockingFailure = status === "failed" && !options.strict && step.tolerateFailureInNonStrict === true;
+
     if (status === "failed") {
-      addLog(`${stepPrefix} failed (exit ${result.code})`);
+      if (nonBlockingFailure) {
+        addLog(`${stepPrefix} failed (exit ${result.code}, non-blocking)`);
+      } else {
+        addLog(`${stepPrefix} failed (exit ${result.code})`);
+      }
     } else if (status === "skipped") {
       addLog(`${stepPrefix} skipped`);
     } else {
@@ -195,7 +207,15 @@ async function main() {
     });
   }
 
-  const failedCount = records.filter((step) => step.status === "failed").length;
+  let failedCount = 0;
+  for (let i = 0; i < records.length; i += 1) {
+    const record = records[i];
+    if (record.status !== "failed") continue;
+    const planStep = plan[i];
+    const ignoredFailure = !options.strict && planStep?.tolerateFailureInNonStrict === true;
+    if (ignoredFailure) continue;
+    failedCount += 1;
+  }
   const summary = {
     generatedAt,
     steps: records,

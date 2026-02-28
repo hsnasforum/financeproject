@@ -1,5 +1,8 @@
 "use client";
 
+import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
+
 type SortKey = "rateDesc" | "rateAsc" | "nameAsc" | "termAsc";
 type RatePreference = "higher" | "lower";
 type ViewMode = "product" | "option";
@@ -41,53 +44,45 @@ export function ProductResultsHeader({
   showSortControl = true,
 }: Props) {
   return (
-    <div className="flex flex-col md:flex-row md:items-center justify-between py-6 gap-4 border-b border-slate-50">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 text-sm font-bold text-slate-900">
-          검색 결과 <span className="text-emerald-600 font-black">{viewMode === "product" ? shownProducts : shownOptions}</span>개
-          <span className="h-3 w-[1px] bg-slate-200 mx-1" />
-          <span className="text-[11px] text-slate-400 font-medium">
-            전체 {viewMode === "product" ? totalProducts : totalOptions}개 중
+    <div className="flex flex-col md:flex-row md:items-center justify-between py-6 gap-4 border-b border-border/50">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 tracking-tight">
+          검색 결과 <span className="text-primary font-black tabular-nums">{(viewMode === "product" ? shownProducts : shownOptions).toLocaleString()}</span>개
+          <span className="h-3 w-px bg-slate-200 mx-1" />
+          <span className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">
+            Total {(viewMode === "product" ? totalProducts : totalOptions).toLocaleString()}
           </span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-tight">
-          <Badge text={mode ?? "LIVE"} />
-          <span>·</span>
-          <span>{viewMode === "product" ? "상품 중심" : "옵션 중심"}</span>
-          <span>·</span>
+        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+          <Badge variant="secondary" className="px-1.5 py-0 h-4 bg-surface-muted text-slate-400 text-[9px] font-black">{mode ?? "LIVE"}</Badge>
+          <span className="opacity-40">/</span>
+          <span>{viewMode === "product" ? "Product Focused" : "Option Focused"}</span>
+          <span className="opacity-40">/</span>
           {scanMode === "page" ? (
-            <span>PAGE {nowPage ?? "-"}/{maxPage ?? "-"}</span>
+            <span className="tabular-nums">PAGE {nowPage ?? "-"}/{maxPage ?? "-"}</span>
           ) : (
-            <span>SCANNED {pagesFetched ?? "-"} PAGES</span>
+            <span className="tabular-nums">SCANNED {pagesFetched ?? "-"} PAGES</span>
           )}
-          {truncatedByMaxPages && <span className="text-amber-500">· MAX REACHED</span>}
+          {truncatedByMaxPages && <span className="text-amber-500 font-black">· LIMIT REACHED</span>}
         </div>
       </div>
 
-      {showSortControl ? (
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">SORT BY</span>
+      {showSortControl && (
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Sort by</span>
           <select
             value={sortKey}
             onChange={(e) => onSortChange(e.target.value as SortKey)}
-            className="h-9 rounded-xl bg-slate-50 px-4 text-[11px] font-bold text-slate-700 outline-none cursor-pointer hover:bg-slate-100 hover:text-emerald-600 transition-all border border-slate-100"
+            className="h-10 rounded-full bg-surface-muted border-none px-5 text-[11px] font-bold text-slate-700 outline-none cursor-pointer hover:bg-surface hover:ring-2 hover:ring-primary/20 transition-all focus:ring-4 focus:ring-primary/10"
           >
             <option value={ratePreference === "higher" ? "rateDesc" : "rateAsc"}>
-              {ratePreference === "higher" ? "금리 높은 순" : "금리 낮은 순"}
+              {ratePreference === "higher" ? "최고 금리순" : "최저 금리순"}
             </option>
             <option value="termAsc">기간 짧은 순</option>
             <option value="nameAsc">상품 이름 순</option>
           </select>
         </div>
-      ) : null}
+      )}
     </div>
-  );
-}
-
-function Badge({ text }: { text: string }) {
-  return (
-    <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-[9px] font-black tracking-tighter ring-1 ring-slate-200/50">
-      {text.toUpperCase()}
-    </span>
   );
 }

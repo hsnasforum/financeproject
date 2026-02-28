@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 import { SIDO_LIST, normalizeSido } from "@/lib/regions/kr";
 import {
   BENEFIT_ALL_TOPICS_COUNT,
@@ -19,6 +21,7 @@ import {
 import { getBenefitQualityBucket } from "@/lib/publicApis/benefitsQuality";
 import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
 import { parseBenefitsQueryPreset } from "@/lib/planner/actionQuery";
+import { extractApplyLinks } from "@/lib/gov24/applyLinks";
 
 type BenefitItem = BenefitCandidate;
 
@@ -100,6 +103,7 @@ type PlannerBenefitsContext = {
   incomeBand: string;
 };
 
+
 function parseFlag(value: string | null, defaultValue = true): boolean {
   if (value === null) return defaultValue;
   const lowered = value.trim().toLowerCase();
@@ -127,6 +131,13 @@ function ageBandLabel(value: string): string {
 function incomeBandLabel(value: string): string {
   if (!value || value === "all") return "전체";
   return value;
+}
+
+function extractShortcutFromApplyHow(serviceId: string, applyHow?: string): string | null {
+  const raw = (applyHow ?? "").trim();
+  if (!raw) return null;
+  const extracted = extractApplyLinks({ serviceId, applyHow: raw });
+  return extracted.links[0]?.url ?? extracted.primaryUrl ?? null;
 }
 
 export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string }) {
@@ -166,6 +177,10 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   });
   const requestControllerRef = useRef<AbortController | null>(null);
   const initializedFromQueryRef = useRef(false);
+  const selectedApplyShortcut = useMemo(
+    () => (selected ? extractShortcutFromApplyHow(selected.id, selected.applyHow) : null),
+    [selected],
+  );
 
   const summaryLines = useMemo(() => {
     return [
@@ -390,207 +405,199 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   }, [initialQuery, run, searchParams]);
 
   return (
-    <main className="py-8">
-      <Container>
-        <SectionHeader 
-          title="혜택 후보 검색" 
-          subtitle="보조금24 연계 · 조건 기반 참고 목록" 
-          icon="/icons/ic-recommend.png"
-        />
-        <Card>
-          <div className="space-y-2">
-            <p className="text-xs text-slate-600">주제</p>
+    <PageShell className="bg-surface-muted">
+      <PageHeader 
+        title="혜택 후보 검색" 
+        description="보조금24 연계 · 조건 기반 참고 목록" 
+      />
+      
+      <Card>
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">주제 필터</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
+              onClick={() => applyAndRun({ topics: [] })}
+            >
+              전체
+            </Button>
+            {BENEFIT_TOPIC_KEYS.map((topicKey) => (
+              <Button
+                key={topicKey}
+                size="sm"
+                variant={selectedTopics.includes(topicKey) && !isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
+                onClick={() => {
+                  const current = isTopicFilterBypassed(selectedTopics) ? [] : selectedTopics;
+                  let next = current.includes(topicKey)
+                    ? current.filter((entry) => entry !== topicKey)
+                    : [...current, topicKey];
+                  if (next.length === BENEFIT_ALL_TOPICS_COUNT) next = [];
+                  applyAndRun({ topics: next });
+                }}
+              >
+                {BENEFIT_TOPICS[topicKey].label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 mt-4">
+            <Button size="sm" variant="outline" onClick={() => setAdvancedOpen((prev) => !prev)}>
+              고급 검색 {advancedOpen ? "접기" : "펼치기"}
+            </Button>
+            <Button onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0, includeFacets: true })}>
+              {loading ? "로딩..." : "검색 적용"}
+            </Button>
+          </div>
+        </div>
+
+        {advancedOpen ? (
+          <div className="mt-4 space-y-2 rounded-xl border border-border/50 bg-surface-muted p-4 shadow-sm">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">키워드 검색 (선택)</p>
+            <div className="flex gap-2">
+              <input className="h-10 rounded-xl border border-border bg-surface px-4 text-sm font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all flex-1" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="키워드 (예: 청년내일, 의료비)" />
+              <Button onClick={() => applyAndRun({ query })}>적용</Button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-6 space-y-2">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">지역 필터 (시/도)</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={sido ? "outline" : "primary"}
+              onClick={() => applyAndRun({ sido: "", sigungu: "" })}
+              data-testid="benefits-sido"
+              data-sido=""
+            >
+              전체
+            </Button>
+            {SIDO_LIST.map((name) => {
+              const count = facets.sido.find((entry) => entry.key === name)?.count ?? 0;
+              return (
+                <Button
+                  key={name}
+                  size="sm"
+                  variant={sido === name ? "primary" : "outline"}
+                  onClick={() => applyAndRun({ sido: name, sigungu: "" })}
+                  data-testid="benefits-sido"
+                  data-sido={name}
+                >
+                  {name} ({count})
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        {sido ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">상세 지역 (시/군/구)</p>
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
-                variant={isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
-                onClick={() => applyAndRun({ topics: [] })}
+                variant={sigungu ? "outline" : "primary"}
+                onClick={() => applyAndRun({ sigungu: "" })}
+                data-testid="benefits-sigungu"
+                data-sigungu=""
               >
                 전체
               </Button>
-              {BENEFIT_TOPIC_KEYS.map((topicKey) => (
+              {facets.sigungu.map((entry) => (
                 <Button
-                  key={topicKey}
+                  key={entry.key}
                   size="sm"
-                  variant={selectedTopics.includes(topicKey) && !isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
-                  onClick={() => {
-                    const current = isTopicFilterBypassed(selectedTopics) ? [] : selectedTopics;
-                    let next = current.includes(topicKey)
-                      ? current.filter((entry) => entry !== topicKey)
-                      : [...current, topicKey];
-                    if (next.length === BENEFIT_ALL_TOPICS_COUNT) next = [];
-                    applyAndRun({ topics: next });
-                  }}
+                  variant={sigungu === entry.key ? "primary" : "outline"}
+                  onClick={() => applyAndRun({ sigungu: entry.key })}
+                  data-testid="benefits-sigungu"
+                  data-sigungu={entry.key}
                 >
-                  {BENEFIT_TOPICS[topicKey].label}
+                  {entry.key} ({entry.count})
                 </Button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => setAdvancedOpen((prev) => !prev)}>
-                고급 검색 {advancedOpen ? "접기" : "펼치기"}
-              </Button>
-              <Button onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0, includeFacets: true })}>
-                {loading ? "로딩..." : "검색"}
-              </Button>
-            </div>
           </div>
+        ) : null}
 
-          {advancedOpen ? (
-            <div className="mt-3 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
-              <p className="text-xs text-slate-600">자유 텍스트(선택)</p>
-              <div className="flex gap-2">
-                <input className="h-10 rounded-xl border border-border px-3" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="키워드(예: 청년내일, 의료비)" />
-                <Button onClick={() => applyAndRun({ query })}>적용</Button>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-4 space-y-2">
-            <p className="text-xs text-slate-600">시/도</p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant={sido ? "outline" : "primary"}
-                onClick={() => applyAndRun({ sido: "", sigungu: "" })}
-                data-testid="benefits-sido"
-                data-sido=""
-              >
-                전체
-              </Button>
-              {SIDO_LIST.map((name) => {
-                const count = facets.sido.find((entry) => entry.key === name)?.count ?? 0;
-                return (
-                  <Button
-                    key={name}
-                    size="sm"
-                    variant={sido === name ? "primary" : "outline"}
-                    onClick={() => applyAndRun({ sido: name, sigungu: "" })}
-                    data-testid="benefits-sido"
-                    data-sido={name}
-                  >
-                    {name} ({count})
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-
-          {sido ? (
-            <div className="mt-3 space-y-2">
-              <p className="text-xs text-slate-600">시/군/구</p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant={sigungu ? "outline" : "primary"}
-                  onClick={() => applyAndRun({ sigungu: "" })}
-                  data-testid="benefits-sigungu"
-                  data-sigungu=""
-                >
-                  전체
-                </Button>
-                {facets.sigungu.map((entry) => (
-                  <Button
-                    key={entry.key}
-                    size="sm"
-                    variant={sigungu === entry.key ? "primary" : "outline"}
-                    onClick={() => applyAndRun({ sigungu: entry.key })}
-                    data-testid="benefits-sigungu"
-                    data-sigungu={entry.key}
-                  >
-                    {entry.key} ({entry.count})
-                  </Button>
-                ))}
-              </div>
+        <div className="mt-6 flex flex-wrap items-center gap-3 pt-6 border-t border-border/50">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">범위 설정</span>
+          <Button size="sm" variant={includeNationwide ? "primary" : "outline"} onClick={() => applyAndRun({ includeNationwide: !includeNationwide })}>
+            전국 혜택 포함 ({meta.counts?.nationwide ?? 0})
+          </Button>
+          <Button size="sm" variant={includeUnknown ? "primary" : "outline"} onClick={() => applyAndRun({ includeUnknown: !includeUnknown })}>
+            지역 미상 포함 ({meta.counts?.unknown ?? 0})
+          </Button>
+        </div>
+        
+        <div className="mt-4 bg-surface-muted p-4 rounded-2xl border border-border/50">
+          <p className="text-[11px] font-bold text-slate-700">
+            선택 지역: {(sido || "전체")} · 전국 공통: {meta.counts?.nationwide ?? 0} · 지역 미상: {meta.counts?.unknown ?? 0}
+          </p>
+          <p className="mt-1 text-xs font-black text-primary">
+            총 검색 결과: {totalMatched}개 <span className="text-[10px] font-medium text-slate-400 font-normal ml-1">(데이터베이스 {meta.snapshot?.totalItemsInSnapshot ?? "?"}개 중)</span>
+          </p>
+          {topicBuckets.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {topicBuckets.slice(0, 8).map(([label, count]) => (
+                <span key={`${label}-${count}`} className="rounded-full bg-white border border-border px-2.5 py-1 text-[10px] font-bold text-slate-600 shadow-sm">
+                  {label} <span className="text-slate-400 ml-0.5">{count}</span>
+                </span>
+              ))}
             </div>
           ) : null}
+        </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" variant={includeNationwide ? "primary" : "outline"} onClick={() => applyAndRun({ includeNationwide: !includeNationwide })}>
-              전국 포함 ({meta.counts?.nationwide ?? 0})
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {!isTopicFilterBypassed(selectedTopics)
+            ? selectedTopics.map((topic) => (
+              <span key={`topic-${topic}`} className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                주제: {BENEFIT_TOPICS[topic].label}
+                <button onClick={() => applyAndRun({ topics: selectedTopics.filter((entry) => entry !== topic) })} className="hover:text-slate-800 ml-1">×</button>
+              </span>
+            )) : null}
+          {query.trim() ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">검색어: {query.trim()} <button onClick={() => applyAndRun({ query: "" })} className="hover:text-slate-800 ml-1">×</button></span> : null}
+          {sido ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">지역: {sido} <button onClick={() => applyAndRun({ sido: "", sigungu: "" })} className="hover:text-slate-800 ml-1">×</button></span> : null}
+          {sigungu ? <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">상세지역: {sigungu} <button onClick={() => applyAndRun({ sigungu: "" })} className="hover:text-slate-800 ml-1">×</button></span> : null}
+          
+          {(selectedTopics.length > 0 || query.trim() || sido || sigungu || !includeNationwide || !includeUnknown) && (
+            <Button type="button" size="sm" variant="ghost" onClick={() => applyAndRun({ query: "", topics: [], sido: "", sigungu: "", includeNationwide: true, includeUnknown: true })} className="text-[10px] h-6 px-2 underline text-slate-400">
+              모든 필터 지우기
             </Button>
-            <Button size="sm" variant={includeUnknown ? "primary" : "outline"} onClick={() => applyAndRun({ includeUnknown: !includeUnknown })}>
-              미상 포함 ({meta.counts?.unknown ?? 0})
-            </Button>
-          </div>
-          <div className="mt-3">
-            <p className="text-xs font-semibold text-slate-700">
-              {(sido || "선택")} 지역 {meta.counts?.regional ?? 0} · 전국 {meta.counts?.nationwide ?? 0} · 미상 {meta.counts?.unknown ?? 0} · 합계 {meta.counts?.total ?? items.length}
-            </p>
-            <p className="mt-1 text-xs font-semibold text-slate-700">
-              총 결과 {totalMatched}개 (스냅샷 {meta.snapshot?.totalItemsInSnapshot ?? "?"}개 / 업스트림 {meta.upstreamTotalCount ?? "?"}개)
-            </p>
-            {topicBuckets.length > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {topicBuckets.slice(0, 8).map(([label, count]) => (
-                  <span key={`${label}-${count}`} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600">
-                    {label} {count}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {meta.pipeline ? (
-              <p className="mt-1 text-xs text-slate-600">
-                스냅샷 {meta.pipeline.snapshotUnique} → 주제/검색 {meta.pipeline.afterAdvancedQuery} → 토글 {meta.pipeline.afterScopeToggles} → 지역 {sigungu ? meta.pipeline.afterSigungu : meta.pipeline.afterSido} → 표시 {meta.pipeline.afterLimit}
-              </p>
-            ) : null}
-            {meta.pipelineReason ? <p className="mt-1 text-xs text-slate-500">{meta.pipelineReason}</p> : null}
-          </div>
+          )}
+        </div>
 
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            {!isTopicFilterBypassed(selectedTopics)
-              ? selectedTopics.map((topic) => (
-                <Button
-                  key={`topic-${topic}`}
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => applyAndRun({ topics: selectedTopics.filter((entry) => entry !== topic) })}
-                >
-                  주제: {BENEFIT_TOPICS[topic].label} ×
-                </Button>
-              ))
-              : <span className="text-xs text-slate-500">주제: 전체</span>}
-            {query.trim() ? <Button type="button" size="sm" variant="outline" onClick={() => applyAndRun({ query: "" })}>고급검색: {query.trim()} ×</Button> : null}
-            {sido ? <Button type="button" size="sm" variant="outline" onClick={() => applyAndRun({ sido: "", sigungu: "" })}>시/도: {sido} ×</Button> : null}
-            {sigungu ? <Button type="button" size="sm" variant="outline" onClick={() => applyAndRun({ sigungu: "" })}>시군구: {sigungu} ×</Button> : null}
-            {!includeNationwide ? <Button type="button" size="sm" variant="outline" onClick={() => applyAndRun({ includeNationwide: true })}>전국 포함 OFF ×</Button> : null}
-            {!includeUnknown ? <Button type="button" size="sm" variant="outline" onClick={() => applyAndRun({ includeUnknown: true })}>미상 포함 OFF ×</Button> : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => applyAndRun({ query: "", topics: [], sido: "", sigungu: "", includeNationwide: true, includeUnknown: true })}
-            >
-              필터 초기화
-            </Button>
-          </div>
-
-          {(typeof meta.snapshot?.completionRate === "number" && meta.snapshot.completionRate < 0.95) || meta.snapshot?.truncatedByHardCap ? (
-            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-              스냅샷 완주율 {typeof meta.snapshot?.completionRate === "number" ? `${Math.round(meta.snapshot.completionRate * 1000) / 10}%` : "?"} (필요 페이지 {meta.snapshot?.neededPagesEstimate ?? meta.neededPagesEstimate ?? "?"})
-              <div className="mt-2">
-                <Button type="button" size="sm" variant="outline" onClick={() => void refreshSnapshot()}>
-                  전체 수집 다시하기
-                </Button>
-              </div>
+        {(typeof meta.snapshot?.completionRate === "number" && meta.snapshot.completionRate < 0.95) || meta.snapshot?.truncatedByHardCap ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs font-bold text-amber-800 shadow-sm">
+            <span className="flex items-center gap-2 mb-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+              수집 미완료 알림
+            </span>
+            전체 데이터 수집이 지연되어 일부 결과만 표시될 수 있습니다. (완주율 {typeof meta.snapshot?.completionRate === "number" ? `${Math.round(meta.snapshot.completionRate * 1000) / 10}%` : "?"})
+            <div className="mt-3">
+              <Button type="button" size="sm" variant="outline" className="bg-white border-amber-200 text-amber-700" onClick={() => void refreshSnapshot()}>
+                전체 수집 다시 시도하기
+              </Button>
             </div>
-          ) : null}
-
-          <div className="mt-3">
-            <Button size="sm" variant="outline" onClick={() => setAdvancedConfigOpen((prev) => !prev)}>
-              고급 설정 {advancedConfigOpen ? "접기" : "펼치기"}
-            </Button>
           </div>
+        ) : null}
+
+        <div className="mt-6 border-t border-border/50 pt-6">
+          <button 
+            onClick={() => setAdvancedConfigOpen((prev) => !prev)}
+            className="text-[10px] font-bold text-slate-400 hover:text-slate-600 flex items-center gap-1 uppercase tracking-widest transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={cn("transition-transform", advancedConfigOpen && "rotate-180")}><path d="m6 9 6 6 6-6"/></svg>
+            개발자 도구 및 상태 로그
+          </button>
 
           {advancedConfigOpen ? (
-            <div className="mt-3 space-y-2 rounded-xl border border-border bg-slate-50 p-3">
+            <div className="mt-3 space-y-2 rounded-xl border border-border bg-slate-50 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant={scanAll ? "primary" : "outline"} onClick={() => applyAndRun({ scanAll: true })}>전체 수집(스캔)</Button>
                 <Button size="sm" variant={scanAll ? "outline" : "primary"} onClick={() => applyAndRun({ scanAll: false })}>빠른 조회(1페이지)</Button>
                 <label className="text-xs text-slate-600">페이지 크기</label>
                 <select
-                  className="h-8 rounded-lg border border-border px-2 text-xs"
+                  className="h-8 rounded-lg border border-border bg-white px-2 text-xs"
                   value={pageSize}
                   onChange={(e) => applyAndRun({ pageSize: Number(e.target.value) })}
                 >
@@ -598,212 +605,230 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                 </select>
                 <label className="text-xs text-slate-600">최대 페이지</label>
                 <select
-                  className="h-8 rounded-lg border border-border px-2 text-xs"
+                  className="h-8 rounded-lg border border-border bg-white px-2 text-xs"
                   value={String(maxPages)}
                   onChange={(e) => applyAndRun({ maxPages: e.target.value === "auto" ? "auto" : Number(e.target.value) })}
                 >
                   <option value="auto">auto</option>
                   {[5, 10, 20, 30].map((value) => <option key={value} value={value}>{value}</option>)}
                 </select>
-                <Button size="sm" variant="outline" onClick={() => applyAndRun({ maxPages: "auto", scanAll: true })}>
+                <Button size="sm" variant="outline" className="bg-white" onClick={() => applyAndRun({ maxPages: "auto", scanAll: true })}>
                   필요 페이지로 설정
                 </Button>
               </div>
-              <p className="mt-1 text-xs text-slate-600">
-                총 {meta.upstreamTotalCount ?? "?"}개(업스트림) · 수집 {meta.uniqueCount ?? meta.uniqueIds ?? items.length}개(고유) · 표시 {items.length}개
-              </p>
-              <p className="mt-1 text-xs text-slate-600">
-                필요 페이지 {meta.neededPagesEstimate ?? "?"} · 현재 maxPages {String(maxPages)} · 수집률{" "}
-                {typeof meta.upstreamTotalCount === "number" && meta.upstreamTotalCount > 0
-                  ? `${Math.min(100, Math.round((((meta.uniqueCount ?? meta.uniqueIds ?? items.length) / meta.upstreamTotalCount) * 100) * 10) / 10)}%`
-                  : "?"}
-              </p>
-              {meta.snapshot?.generatedAt ? (
-                <p className="mt-1 text-xs text-slate-600">
-                  스냅샷: {new Date(meta.snapshot.generatedAt).toLocaleString("ko-KR")} ({meta.snapshot.fromCache ?? "built"}, age {Math.round((meta.snapshot.ageMs ?? 0) / 60000)}m)
-                </p>
-              ) : null}
-              {meta.snapshot?.requestedMaxPages !== undefined || meta.snapshot?.effectiveMaxPages !== undefined || meta.snapshot?.pagesFetched !== undefined ? (
-                <p className="mt-1 text-xs text-slate-600">
-                  maxPages 요청 {String(meta.snapshot?.requestedMaxPages ?? "?")} · 실제 {meta.snapshot?.effectiveMaxPages ?? "?"} · pagesFetched {meta.snapshot?.pagesFetched ?? meta.pagesFetched ?? "?"}
-                </p>
-              ) : null}
+              <div className="text-[10px] text-slate-500 font-mono mt-2 space-y-1">
+                <p>업스트림: {meta.upstreamTotalCount ?? "?"} | 고유수집: {meta.uniqueCount ?? meta.uniqueIds ?? items.length} | 표시: {items.length}</p>
+                <p>필요 페이지: {meta.neededPagesEstimate ?? "?"} | maxPages: {String(maxPages)}</p>
+                {meta.snapshot?.generatedAt && (
+                  <p>스냅샷: {new Date(meta.snapshot.generatedAt).toLocaleString("ko-KR")} ({meta.snapshot.fromCache ?? "built"}, age {Math.round((meta.snapshot.ageMs ?? 0) / 60000)}m)</p>
+                )}
+                {meta.pipelineReason && <p className="text-amber-600">Pipeline Reason: {meta.pipelineReason}</p>}
+              </div>
               {process.env.NODE_ENV !== "production" ? (
-                <div className="mt-1">
-                  <Button type="button" size="sm" variant="outline" onClick={() => void refreshSnapshot()}>스냅샷 새로고침</Button>
+                <div className="mt-3">
+                  <Button type="button" size="sm" variant="outline" className="bg-white text-xs h-7" onClick={() => void refreshSnapshot()}>스냅샷 강제 갱신</Button>
                 </div>
               ) : null}
-              {meta.paginationSuspected ? <p className="mt-1 text-xs text-amber-700">페이징 미동작 의심(환경설정/URL/파라미터 확인)</p> : null}
-              {meta.truncatedByLimit ? <p className="mt-1 text-xs text-amber-700">현재 페이지 크기로 일부만 표시 중입니다. 더 보기를 눌러 이어서 확인하세요.</p> : null}
-              {meta.truncatedByMaxPages ? <p className="mt-1 text-xs text-amber-700">스캔 상한(maxPages)으로 일부만 수집했습니다.</p> : null}
+            </div>
+          ) : null}
+        </div>
+
+        {error ? <p className="mt-4 text-sm font-bold text-rose-600 bg-rose-50 p-3 rounded-xl" data-testid="benefits-error-banner">{error}</p> : null}
+        {assumption ? <p className="mt-4 text-[10px] text-slate-400 italic text-right">{assumption}</p> : null}
+        
+        <div className="mt-6 pt-6 border-t border-border/50">
+           {!includeNationwide && !includeUnknown ? (
+            <p className="text-[11px] font-bold text-amber-600 mb-3 bg-amber-50 p-2 rounded-lg inline-block">※ 전국/미상 혜택을 제외하면 검색 결과가 0건일 수 있습니다.</p>
+           ) : null}
+           <p className="text-[11px] text-slate-400 mb-4 flex items-center gap-1.5">
+             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+             표시된 혜택은 실제 신청 자격 여부와 다를 수 있으며, 상세 조건을 반드시 확인하시기 바랍니다.
+           </p>
+
+           <div className="grid gap-4 md:grid-cols-2">
+             {items.map((item) => {
+               const quality = getBenefitQualityBucket(item);
+               const applyShortcut = extractShortcutFromApplyHow(item.id, item.applyHow);
+               return (
+                <div key={item.id} className="flex flex-col bg-surface rounded-2xl border border-border shadow-sm hover:shadow-md transition-shadow group overflow-hidden" data-testid="benefits-item">
+                  <div className="p-5 flex-1 flex flex-col">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <h3 className="font-bold text-slate-900 leading-snug group-hover:text-primary transition-colors">{item.title}</h3>
+                      <Badge variant="secondary" className={cn(
+                        "text-[9px] px-2 py-0.5 whitespace-nowrap border-none",
+                        quality === "HIGH" ? "bg-emerald-100 text-emerald-700" :
+                        quality === "MED" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
+                      )}>
+                        {quality === "HIGH" ? "정보 충분" : quality === "MED" ? "보통" : "정보 부족"}
+                      </Badge>
+                    </div>
+                    
+                    <p className="text-xs text-slate-600 line-clamp-2 mb-4 flex-1">{item.summary}</p>
+                    
+                    <div className="space-y-2 mt-auto">
+                      {item.org && <p className="text-[11px] font-medium text-slate-500 flex gap-2"><span className="text-slate-400 w-12 shrink-0">운영기관</span> {item.org}</p>}
+                      {item.applyHow && (
+                        <div className="text-[11px] font-medium text-slate-500 flex gap-2">
+                          <span className="text-slate-400 w-12 shrink-0">신청방법</span>
+                          <span className="min-w-0">
+                            {item.applyHow}
+                            {applyShortcut ? (
+                              <>
+                                {" "}
+                                <a
+                                  href={applyShortcut}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary underline underline-offset-2 font-bold"
+                                >
+                                  바로가기
+                                </a>
+                              </>
+                            ) : null}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {Array.isArray(item.eligibilityChips) && item.eligibilityChips.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-border/50">
+                          {item.eligibilityChips.slice(0, 3).map((chip) => (
+                            <span key={chip} className="rounded-md bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-600">{chip}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-surface-muted border-t border-border/50 p-3 px-5 flex items-center justify-between">
+                     <span className="text-[10px] text-slate-400">
+                        {item.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[item.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : ""}
+                     </span>
+                     <Button size="sm" variant="ghost" className="h-8 px-3 text-xs text-primary font-bold hover:bg-primary/10 rounded-full" onClick={() => void openDetail(item)}>
+                        상세 보기 <span className="ml-1 opacity-50">→</span>
+                     </Button>
+                  </div>
+                </div>
+               );
+             })}
+           </div>
+
+          {!loading && !error && items.length === 0 ? (
+            <div className="mt-8 flex flex-col items-center justify-center py-24 bg-surface rounded-3xl shadow-sm text-center" data-testid="benefits-empty">
+              <div className="h-20 w-20 bg-surface-muted rounded-full flex items-center justify-center text-slate-300 mb-6">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              </div>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">조회된 혜택이 없습니다</h3>
+              <p className="mt-3 text-sm font-medium text-slate-500 max-w-md">
+                 필터를 완화하거나 다른 검색어를 사용해보세요. 미상/전국 데이터를 포함하면 더 많은 결과가 나옵니다.
+              </p>
+              <div className="mt-8 flex gap-3">
+                <Button variant="outline" className="rounded-full px-8 h-12" onClick={() => applyAndRun({ query: "", topics: [], sido: "", sigungu: "", includeNationwide: true, includeUnknown: true })}>필터 초기화</Button>
+              </div>
             </div>
           ) : null}
 
-          {error ? <p className="mt-2 text-sm text-red-700" data-testid="benefits-error-banner">{error}</p> : null}
-          {errorCode ? <p className="mt-1 text-xs text-red-600">오류 코드: {errorCode}</p> : null}
-          {assumption ? <p className="mt-2 text-xs text-slate-500">{assumption}</p> : null}
-          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-sm font-semibold text-slate-800">조건 요약</p>
-            <ul className="mt-1 space-y-1 text-xs text-slate-600">
-              {summaryLines.map((line) => (
-                <li key={line}>- {line}</li>
-              ))}
-            </ul>
-            <p className="mt-3 text-sm font-semibold text-slate-800">다음 행동 체크리스트</p>
-            <ul className="mt-1 space-y-1 text-xs text-slate-600">
-              {checklist.map((item) => (
-                <li key={item}>- {item}</li>
-              ))}
-            </ul>
-          </div>
-          {!includeNationwide && !includeUnknown ? (
-            <p className="mt-1 text-xs text-amber-700">전국/미상을 제외하면 0건이 될 수 있습니다.</p>
-          ) : null}
-          <p className="mt-1 text-xs text-slate-500">혜택은 자격/소득/가구/지역 조건에 따라 실제 적용 여부가 달라질 수 있습니다.</p>
-          <ul className="mt-3 space-y-2 text-sm">
-            {items.map((item) => (
-              <li key={item.id} className="rounded-xl border border-border bg-surface-muted p-2" data-testid="benefits-item">
-                <p className="font-medium">
-                  {item.title}
-                  <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-[10px] text-slate-600">
-                    {(() => {
-                      const q = getBenefitQualityBucket(item);
-                      if (q === "HIGH") return "정보 충분";
-                      if (q === "MED") return "정보 보통";
-                      if (q === "LOW") return "정보 부족";
-                      return "정보 없음";
-                    })()}
-                  </span>
-                </p>
-                <p className="text-slate-600">{item.summary}</p>
-                {item.topicMatch && item.topicMatch.evidence.length > 0 ? (
-                  <p className="mt-1 text-xs text-emerald-700">
-                    매칭: {item.topicMatch.evidence.map((entry) => `${BENEFIT_TOPICS[entry.topic as BenefitTopicKey]?.label ?? entry.topic}(${entry.field})`).join(", ")}
-                  </p>
-                ) : null}
-                {item.org ? <p className="mt-1 text-xs text-slate-500">기관: {item.org}</p> : null}
-                {item.applyHow ? <p className="mt-1 text-xs text-slate-500">신청 방법: {item.applyHow}</p> : null}
-                {Array.isArray(item.eligibilityChips) && item.eligibilityChips.length > 0 ? (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {item.eligibilityChips.slice(0, 3).map((chip) => (
-                      <span key={chip} className="rounded-full border border-border px-2 py-0.5 text-[10px] text-slate-600">{chip}</span>
-                    ))}
-                  </div>
-                ) : null}
-                {item.eligibilityExcerpt ? (
-                  <div className="mt-1">
-                    <p
-                      className="text-xs text-slate-500"
-                      style={
-                        expandedHints[item.id]
-                          ? { whiteSpace: "normal" }
-                          : { display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }
-                      }
-                    >
-                      조건 요약: {expandedHints[item.id] ? (item.eligibilityText ?? item.eligibilityExcerpt) : item.eligibilityExcerpt}
-                    </p>
-                    {item.isEligibilityTruncated ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="mt-1 h-6 px-1 text-[11px]"
-                        onClick={() => setExpandedHints((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                      >
-                        {expandedHints[item.id] ? "접기" : "더보기"}
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : Array.isArray(item.eligibilityHints) && item.eligibilityHints.length > 0 ? (
-                  <p className="mt-1 text-xs text-slate-500">조건 요약: {item.eligibilityHints.slice(0, 2).join(" · ")}</p>
-                ) : null}
-                {(() => {
-                  const q = getBenefitQualityBucket(item);
-                  return q === "LOW" || q === "EMPTY"
-                    ? <p className="mt-1 text-xs text-amber-700">원본 API가 제공하는 조건/신청 정보가 제한적입니다.</p>
-                    : null;
-                })()}
-                <div className="mt-2">
-                  <Button size="sm" variant="outline" onClick={() => void openDetail(item)}>상세 보기</Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {!loading && !error && items.length === 0 ? (
-            <div className="mt-8 flex flex-col items-center justify-center py-16 bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200 backdrop-blur-sm text-center" data-testid="benefits-empty">
-              <div className="relative mb-6">
-                <div className="absolute inset-0 bg-emerald-100/30 blur-3xl rounded-full" />
-                <Image src="/visuals/empty-finance.png" alt="" aria-hidden="true" width={192} height={192} className="relative w-48 h-auto object-contain opacity-60" />
-              </div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight">조회된 혜택이 없습니다</h3>
-              <div className="mt-4 space-y-1 text-sm font-medium text-slate-500">
-                {!includeNationwide && !includeUnknown ? (
-                  <p className="text-amber-700">전국/미상을 제외하면 0건이 될 수 있습니다(원본 지역정보 부족).</p>
-                ) : null}
-                {sido && (facets.sido.find((entry) => entry.key === sido)?.count ?? 0) === 0 ? (
-                  <p className="text-amber-700">현재 스냅샷에서 {sido}로 분류된 항목이 0개입니다(미상/전국 비중이 큼).</p>
-                ) : null}
-                <p>
-                  {(meta.rawMatched ?? meta.matchedRows ?? 0) > 0 && (meta.normalizedCount ?? 0) === 0
-                    ? `원본 후보 ${meta.rawMatched ?? meta.matchedRows ?? 0}건을 찾았지만 정규화 결과는 0건입니다.`
-                    : typeof meta.upstreamTotalCount === "number" && meta.upstreamTotalCount === 0
-                    ? "업스트림 결과가 0건입니다. 키워드/데이터 갱신 시점을 확인하세요."
-                    : `API에서 ${meta.scannedRows ?? 0}건을 받아 검색어 매칭 0건입니다.`}
-                </p>
-              </div>
-              <div className="mt-8 flex gap-3">
-                <Button variant="outline" className="rounded-2xl px-6" onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0, includeFacets: true })}>전체 보기</Button>
-                <Button variant="primary" className="rounded-2xl px-6 shadow-lg shadow-emerald-100" onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { deep: true, cursor: 0, includeFacets: true })}>더 깊게 검색</Button>
-              </div>
-            </div>
-          ) : null}
-          {!loading && !error && items.length > 0 && meta.truncated ? (
-            <p className="mt-2 text-xs text-amber-700">스캔 상한에 도달해 일부 결과만 표시했습니다. 더 깊게 검색을 사용하세요.</p>
-          ) : null}
           {!loading && !error && nextCursor !== null ? (
-            <div className="mt-3">
+            <div className="mt-8 flex justify-center">
               <Button
-                type="button"
-                size="sm"
+                size="lg"
                 variant="outline"
+                className="rounded-full px-12 h-12 shadow-sm bg-surface font-bold text-slate-700"
                 onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: nextCursor, includeFacets: false, append: true, syncUrl: false })}
               >
-                더 보기
+                더 많은 혜택 보기
               </Button>
             </div>
           ) : null}
-        </Card>
-      </Container>
+        </div>
+      </Card>
+      
       {selected ? (
-        <div className="fixed inset-0 z-50 bg-black/30 p-4" onClick={() => setSelected(null)}>
-          <div className="mx-auto mt-10 max-w-2xl rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">{selected.title}</h3>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>닫기</Button>
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm p-4 md:p-8 flex items-center justify-center" onClick={() => setSelected(null)}>
+          <div className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-surface rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 md:px-8 py-6 border-b border-border/50 flex items-start justify-between bg-surface-muted/50">
+              <div className="pr-4">
+                <Badge variant="outline" className="mb-3 border-none bg-primary/10 text-primary px-2.5 py-1 text-[10px] font-black uppercase tracking-widest">
+                  {selected.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[selected.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : "지원 혜택"}
+                </Badge>
+                <h3 className="text-xl md:text-2xl font-black text-slate-900 leading-snug tracking-tight">{selected.title}</h3>
+                {selected.org && <p className="text-sm font-bold text-slate-500 mt-2">{selected.org}</p>}
+              </div>
+              <Button size="sm" variant="ghost" className="rounded-full h-10 w-10 p-0 text-slate-400 bg-surface hover:bg-slate-200 shrink-0" onClick={() => setSelected(null)}>
+                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </Button>
             </div>
-            <details open className="mt-3 rounded-xl border border-border p-3">
-              <summary className="cursor-pointer text-sm font-semibold">서비스 개요</summary>
-              <p className="mt-2 text-sm text-slate-700">{selected.summary}</p>
-              {selected.org ? <p className="mt-1 text-xs text-slate-500">기관: {selected.org}</p> : null}
-              {selected.applyHow ? <p className="mt-1 text-xs text-slate-500">신청 방법: {selected.applyHow}</p> : null}
-            </details>
-            <details className="mt-2 rounded-xl border border-border p-3">
-              <summary className="cursor-pointer text-sm font-semibold">지원 대상/조건</summary>
-              {detailLoading ? <p className="mt-2 text-xs text-slate-500">로딩 중...</p> : null}
-              {!detailLoading && detail?.conditions?.length ? (
-                <ul className="mt-2 list-disc pl-5 text-sm text-slate-700">
-                  {detail.conditions.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {!detailLoading && (!detail?.conditions || detail.conditions.length === 0) ? (
-                <p className="mt-2 text-xs text-slate-500">원본 API에서 지원 대상/조건 필드를 제공하지 않았습니다.</p>
-              ) : null}
-            </details>
+            
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-surface">
+              <section>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                  서비스 개요
+                </h4>
+                <div className="bg-surface-muted rounded-2xl p-5 text-sm font-medium text-slate-700 leading-relaxed border border-border/50">
+                  {selected.summary}
+                </div>
+              </section>
+              
+              <section>
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/><path d="m5 7 3 5-3 5"/><path d="m19 7-3 5 3 5"/></svg>
+                  지원 대상 및 조건
+                </h4>
+                <div className="bg-surface-muted rounded-2xl p-5 border border-border/50">
+                  {detailLoading ? (
+                    <div className="animate-pulse space-y-3">
+                      <div className="h-4 bg-slate-200 rounded-full w-3/4"></div>
+                      <div className="h-4 bg-slate-200 rounded-full w-1/2"></div>
+                    </div>
+                  ) : detail?.conditions?.length ? (
+                    <ul className="space-y-3">
+                      {detail.conditions.map((line, idx) => (
+                        <li key={idx} className="flex gap-3 text-sm text-slate-700">
+                          <span className="text-primary mt-1">•</span>
+                          <span className="leading-relaxed">{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm font-medium text-slate-500 italic">상세 조건 정보가 API에 제공되지 않았습니다.</p>
+                  )}
+                </div>
+              </section>
+
+              {selected.applyHow && (
+                <section>
+                  <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    신청 방법
+                  </h4>
+                  <div className="bg-slate-50 rounded-2xl p-5 border border-slate-100 text-sm font-bold text-slate-800">
+                    <p>
+                      {selected.applyHow}
+                      {selectedApplyShortcut ? (
+                        <>
+                          {" "}
+                          <a
+                            href={selectedApplyShortcut}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline underline-offset-2"
+                          >
+                            바로가기
+                          </a>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="px-6 md:px-8 py-5 border-t border-border/50 bg-surface-muted flex items-center justify-between">
+               <p className="text-[10px] font-bold text-slate-400">데이터 출처: 보조금24 API</p>
+            </div>
           </div>
         </div>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

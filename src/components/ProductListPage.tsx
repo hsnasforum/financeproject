@@ -20,7 +20,7 @@ import {
   type OptionSortKey,
 } from "@/lib/finlife/optionView";
 import { FINLIFE_TOP_GROUPS } from "@/lib/finlife/topGroups";
-import { Container } from "@/components/ui/Container";
+import { PageShell } from "@/components/ui/PageShell";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { ProductExplorerHeaderCard } from "./products/ProductExplorerHeaderCard";
@@ -28,10 +28,12 @@ import { ProductResultsHeader } from "./products/ProductResultsHeader";
 import { ProductRowItem } from "./products/ProductRowItem";
 import { ProductOptionRowItem } from "./products/ProductOptionRowItem";
 import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
 import { type FreshnessSourceSpec } from "@/components/data/freshness";
 import { FallbackBanner } from "@/components/FallbackBanner";
+import { cn } from "@/lib/utils";
 import {
   ensureProductReasons,
   filterProductsForList,
@@ -455,8 +457,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   }, [kind]);
 
   return (
-    <main className="min-h-screen bg-slate-50 py-6 md:py-10">
-      <Container>
+    <PageShell className="bg-surface-muted py-6 md:py-10">
         <SectionHeader 
           title={title} 
           subtitle={`서버 프록시(/api/finlife/${kind}) 기반으로 로드됩니다.`} 
@@ -530,7 +531,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
           onOptionGroupChange={setOptionGroup}
         />
 
-        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="mb-4 rounded-2xl border border-border/50 bg-surface p-4 shadow-sm">
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
             <label className="text-xs font-semibold text-slate-600">
               검색
@@ -541,13 +542,13 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                   setPageNo(1);
                 }}
                 placeholder="은행명 또는 상품명"
-                className="mt-1 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900"
+                className="mt-1 h-10 w-full rounded-xl border border-border/50 bg-surface-muted px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </label>
             <label className="text-xs font-semibold text-slate-600">
               정렬
               <select
-                className="mt-1 h-10 rounded-xl border border-slate-200 px-3 text-sm text-slate-900"
+                className="mt-1 h-10 rounded-xl border border-border/50 bg-surface-muted px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 value={sortKey}
                 onChange={(event) => setSortKey(event.target.value as SortKey)}
               >
@@ -559,7 +560,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
               </select>
             </label>
             <label className="flex items-end">
-              <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-700">
+              <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-border/50 bg-surface px-3 text-xs font-semibold text-slate-700 cursor-pointer hover:bg-surface-muted transition-colors">
                 <input
                   type="checkbox"
                   checked={onlyFavorites}
@@ -567,6 +568,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                     setOnlyFavorites(event.target.checked);
                     setPageNo(1);
                   }}
+                  className="rounded border-border text-primary focus:ring-primary"
                 />
                 즐겨찾기만
               </span>
@@ -574,7 +576,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
             <div className="flex items-end">
               <Link
                 href="/products/compare"
-                className="inline-flex h-10 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700"
+                className="inline-flex h-10 items-center rounded-xl border border-border/50 bg-surface px-3 text-xs font-semibold text-slate-700 hover:bg-surface-muted transition-colors"
               >
                 비교함 {compareCount}/{productShelfConfig.maxCompareBasket}
               </Link>
@@ -582,7 +584,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
           </div>
         </div>
 
-        <div className="rounded-3xl bg-white px-6 shadow-sm ring-1 ring-slate-200/70">
+        <div className="rounded-3xl bg-surface px-6 shadow-card transition-shadow">
           <ProductResultsHeader
             viewMode={viewMode}
             shownProducts={totals.shownProducts}
@@ -601,7 +603,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
             showSortControl={viewMode === "product"}
           />
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-border/30">
             {loading ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <div key={`loading-${idx}`} className="flex items-center gap-4 py-5">
@@ -628,17 +630,14 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                 </Button>
               </div>
             ) : ((viewMode === "product" ? enrichedProducts.length : optionRows.length) === 0) ? (
-              <div className="flex flex-col items-center justify-center py-24 text-center">
-                <div className="relative mb-6">
-                  <div className="absolute inset-0 bg-slate-100/50 blur-2xl rounded-full" />
-                  <Image src="/visuals/empty-finance.png" alt="" aria-hidden="true" width={192} height={192} className="relative w-48 h-auto object-contain opacity-60" />
-                </div>
-                <h3 className="text-xl font-black text-slate-900 tracking-tight">검색 결과가 없습니다</h3>
-                <p className="mt-2 text-sm font-medium text-slate-500">다른 검색어나 필터를 조정해보세요.</p>
-                <Button variant="outline" className="mt-8 rounded-2xl px-8" onClick={resetFilters}>
-                  초기화하기
-                </Button>
-              </div>
+              <EmptyState
+                title="검색 결과가 없습니다"
+                description="다른 검색어나 필터를 조정하여 당신에게 꼭 맞는 상품을 찾아보세요."
+                icon="search"
+                actionLabel="필터 초기화"
+                onAction={resetFilters}
+                className="my-12"
+              />
             ) : (
               viewMode === "product"
                 ? enrichedProducts.map((item: NormalizedProduct, index) => {
@@ -671,7 +670,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                     const open = !!openGroups[groupKey];
                     return (
                       <div key={groupKey} className="py-4">
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                        <div className="rounded-2xl border border-border/50 bg-surface p-4 shadow-sm">
                           <div className="flex items-start justify-between gap-4">
                             <div className="flex min-w-0 items-start gap-3">
                               <ProviderLogo providerKey={group.product.fin_co_no} providerName={group.product.kor_co_nm ?? "-"} size={40} />
@@ -693,7 +692,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                               aria-expanded={open}
                               data-testid="finlife-group-toggle"
                               data-group-key={groupKey}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600"
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
                             >
                               {open ? "접기" : "펼치기"}
                             </button>
@@ -722,7 +721,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                                       <tr key={row.key} className="border-t border-slate-100 text-slate-700">
                                         <td className="px-3 py-2">{term}</td>
                                         <td className="px-3 py-2 text-right tabular-nums">{formatOptionRate(rates.base)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{formatOptionRate(rates.best)}</td>
+                                        <td className="px-3 py-2 text-right tabular-nums text-primary font-bold">{formatOptionRate(rates.best)}</td>
                                         <td className="px-3 py-2 text-right tabular-nums">{formatOptionBonus(rates.bonus)}</td>
                                       </tr>
                                     );
@@ -742,7 +741,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
           </div>
 
           {!loading && !error && (viewMode === "product" ? enrichedProducts.length > 0 : optionRows.length > 0) && scanMode === "page" && (
-            <div className="flex items-center justify-center gap-4 border-t border-slate-100 py-8">
+            <div className="flex items-center justify-center gap-4 border-t border-border/50 py-8">
               <Button
                 variant="outline"
                 size="sm"
@@ -771,7 +770,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
             </div>
           )}
         </div>
-      </Container>
-    </main>
+    </PageShell>
   );
 }
