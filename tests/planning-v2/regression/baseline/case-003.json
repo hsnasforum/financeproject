@@ -1,0 +1,51 @@
+{
+  "id": "case-003",
+  "generatedAt": "2026-02-28T10:23:41.181Z",
+  "expected": {
+    "simulate": {
+      "endNetWorthKrw": 258145327,
+      "worstCashKrw": 0,
+      "warnings": [
+        "EMERGENCY_FUND_DRAWDOWN",
+        "GOAL_MISSED",
+        "NEGATIVE_CASHFLOW"
+      ],
+      "goals": [
+        {
+          "id": "goal-college",
+          "achieved": false
+        },
+        {
+          "id": "goal-retire",
+          "achieved": false
+        }
+      ]
+    },
+    "scenarios": {
+      "baseEndNetWorthKrw": 258145327,
+      "conservativeEndNetWorthKrw": 42949668728409656,
+      "aggressiveEndNetWorthKrw": 466576226
+    },
+    "monteCarlo": {
+      "retirementDepletionBeforeEnd": 0.92,
+      "endNetWorthP50Krw": -121766008
+    },
+    "actions": {
+      "codes": [
+        "BUILD_EMERGENCY_FUND",
+        "COVER_LUMP_SUM_GOAL",
+        "FIX_NEGATIVE_CASHFLOW",
+        "IMPROVE_RETIREMENT_PLAN",
+        "SET_ASSUMPTIONS_REVIEW"
+      ]
+    },
+    "health": {
+      "criticalCount": 0,
+      "warnings": []
+    },
+    "debtStrategy": {
+      "debtServiceRatio": 0.175,
+      "interestSavingsDirection": "none"
+    }
+  }
+}

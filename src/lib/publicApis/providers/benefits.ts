@@ -3,6 +3,7 @@ import { extractOdcloudRows, scanPagedOdcloud } from "../odcloudScan";
 import { type BenefitCandidate, type PublicApiResult, type PublicApiErrorCode, type PublicApiError } from "../contracts/types";
 import { buildSchemaMismatchError } from "../schemaDrift";
 import { extractRegionTagsFromTexts } from "../../regions/kr";
+import { getSnapshotOrNull } from "../benefitsSnapshot";
 
 function normalizeLookupKey(value: string): string {
   return value.toLowerCase().replace(/[\s_\-:/()[\].]/g, "");
@@ -577,11 +578,20 @@ export async function searchBenefits(
 export async function getBenefitItem(serviceId: string): Promise<PublicApiResult<{ item: BenefitCandidate; conditions: string[] }>> {
   const id = serviceId.trim();
   if (!id) return { ok: false, error: { code: "INPUT", message: "serviceId를 입력하세요." } };
-  const searched = await searchBenefits("", { mode: "all", scanPages: 2 });
-  if (!searched.ok) return searched as PublicApiResult<{ item: BenefitCandidate; conditions: string[] }>;
-  const found =
-    searched.data.find((item) => item.id === id) ??
-    searched.data.find((item) => item.title.includes(id));
+  const fromSnapshot = getSnapshotOrNull();
+  let found = fromSnapshot
+    ? findBenefitCandidateByServiceId(fromSnapshot.snapshot.items, id)
+    : null;
+  if (!found) {
+    const searched = await searchBenefits("", {
+      mode: "all",
+      scanPages: "auto",
+      limit: 50_000,
+      maxMatches: 50_000,
+    });
+    if (!searched.ok) return searched as PublicApiResult<{ item: BenefitCandidate; conditions: string[] }>;
+    found = findBenefitCandidateByServiceId(searched.data, id);
+  }
   if (!found) return { ok: false, error: { code: "NO_DATA", message: "상세 대상 서비스를 찾지 못했습니다." } };
 
   const apiKey = (process.env.MOIS_BENEFITS_API_KEY ?? "").trim();
@@ -630,9 +640,14 @@ export async function getBenefitItem(serviceId: string): Promise<PublicApiResult
   };
 }
 
+function findBenefitCandidateByServiceId(items: BenefitCandidate[], id: string): BenefitCandidate | null {
+  return items.find((item) => item.id === id) ?? items.find((item) => item.title.includes(id)) ?? null;
+}
+
 export const __test__ = {
   buildBenefitsConds,
   normalizeBenefits,
   extractConditionTexts,
   extractRegionContext,
+  findBenefitCandidateByServiceId,
 };

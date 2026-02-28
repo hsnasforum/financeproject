@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "createdAt": "2026-02-28T10:19:12.504Z",
+  "checks": {
+    "complete": {
+      "ran": true,
+      "ok": true,
+      "log": ".data/planning/release/logs/complete.log"
+    },
+    "acceptance": {
+      "ran": false,
+      "ok": null,
+      "log": ".data/planning/release/logs/acceptance.log",
+      "note": "requires_running_server"
+    }
+  }
+}

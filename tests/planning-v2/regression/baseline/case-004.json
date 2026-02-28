@@ -1,0 +1,45 @@
+{
+  "id": "case-004",
+  "generatedAt": "2026-02-28T10:23:41.181Z",
+  "expected": {
+    "simulate": {
+      "endNetWorthKrw": -45434076,
+      "worstCashKrw": 0,
+      "warnings": [
+        "CONTRIBUTION_SKIPPED",
+        "DEBT_NEGATIVE_AMORTIZATION",
+        "GOAL_MISSED",
+        "HIGH_DEBT_RATIO",
+        "NEGATIVE_CASHFLOW"
+      ],
+      "goals": [
+        {
+          "id": "goal-emergency",
+          "achieved": false
+        }
+      ]
+    },
+    "scenarios": {
+      "baseEndNetWorthKrw": -45434076,
+      "conservativeEndNetWorthKrw": -45549776,
+      "aggressiveEndNetWorthKrw": -45373686
+    },
+    "actions": {
+      "codes": [
+        "BUILD_EMERGENCY_FUND",
+        "COVER_LUMP_SUM_GOAL",
+        "FIX_NEGATIVE_CASHFLOW",
+        "REDUCE_DEBT_SERVICE",
+        "SET_ASSUMPTIONS_REVIEW"
+      ]
+    },
+    "health": {
+      "criticalCount": 0,
+      "warnings": []
+    },
+    "debtStrategy": {
+      "debtServiceRatio": 0.214,
+      "interestSavingsDirection": "none"
+    }
+  }
+}

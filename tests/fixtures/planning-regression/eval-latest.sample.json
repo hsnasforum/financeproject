@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-28T11:00:00.000Z",
+  "mode": "check",
+  "summary": {
+    "total": 3,
+    "pass": 2,
+    "fail": 1
+  },
+  "cases": [
+    {
+      "id": "case-001",
+      "title": "baseline",
+      "status": "PASS",
+      "diffs": []
+    },
+    {
+      "id": "case-002",
+      "title": "fail sample",
+      "status": "FAIL",
+      "diffs": [
+        {
+          "path": "simulate.endNetWorthKrw",
+          "kind": "money",
+          "expected": 1000000,
+          "actual": 800000,
+          "tolerance": 100000,
+          "diff": 200000
+        }
+      ]
+    }
+  ]
+}

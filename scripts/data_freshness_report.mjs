@@ -38,6 +38,9 @@ function findGeneratedAt(value) {
   if (!value || typeof value !== "object") return null;
   if (typeof value.meta?.generatedAt === "string") return value.meta.generatedAt;
   if (typeof value.generatedAt === "string") return value.generatedAt;
+  if (typeof value.meta?.syncedAt === "string") return value.meta.syncedAt;
+  if (typeof value.status?.lastUpdatedAt === "string") return value.status.lastUpdatedAt;
+  if (typeof value.status?.generatedAt === "string") return value.status.generatedAt;
   return null;
 }
 

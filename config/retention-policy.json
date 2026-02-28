@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "feedbackMaxItems": 500,
+  "fixHistoryMaxItems": 200,
+  "refreshLogMaxBytes": 1048576,
+  "refreshLogKeepTailBytes": 204800,
+  "keepBackupRestorePoint": true
+}

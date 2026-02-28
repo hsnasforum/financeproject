@@ -1,3 +1,6 @@
+import type { TodoSummary, TodoSummaryItem } from "../feedback/todoSummary";
+import type { OpsBriefSummary } from "../ops/opsBriefSummary";
+
 export type DailyBriefAlertItem = {
   id?: string;
   clusterKey?: string;
@@ -54,6 +57,14 @@ export type DailyBrief = {
   topNew: DailyBriefItem[];
   topUpdated: DailyBriefItem[];
   lines: string[];
+  todoSummary?: TodoSummary | null;
+  opsSummary?: OpsBriefSummary | null;
+};
+
+export type DailyBriefBuildOptions = {
+  maxLines?: number;
+  todoSummary?: TodoSummary | null;
+  opsSummary?: OpsBriefSummary | null;
 };
 
 const DEFAULT_MAX_LINES = 10;
@@ -155,10 +166,20 @@ function formatBriefLine(item: DailyBriefItem): string {
 
 export function buildDailyBrief(
   alertsJson: DailyBriefAlertsInput | null | undefined,
-  options?: { maxLines?: number },
+  options?: DailyBriefBuildOptions,
 ): DailyBrief {
   const requestedMax = Math.round(asNumber(options?.maxLines, DEFAULT_MAX_LINES));
   const maxLines = Math.max(1, Math.min(HARD_MAX_LINES, requestedMax || DEFAULT_MAX_LINES));
+  const opsSummary = options?.opsSummary && Array.isArray(options.opsSummary.lines) && options.opsSummary.lines.length > 0
+    ? {
+      lines: options.opsSummary.lines
+        .map((line) => asString(line))
+        .filter((line) => line.length > 0)
+        .slice(0, 3),
+    }
+    : null;
+  const opsPenalty = opsSummary ? Math.min(2, opsSummary.lines.length) : 0;
+  const alertLineLimit = Math.max(1, maxLines - opsPenalty);
   const newHigh = Array.isArray(alertsJson?.newHigh) ? alertsJson.newHigh : [];
   const newMid = Array.isArray(alertsJson?.newMid) ? alertsJson.newMid : [];
   const updatedHigh = Array.isArray(alertsJson?.updatedHigh) ? alertsJson.updatedHigh : [];
@@ -180,7 +201,8 @@ export function buildDailyBrief(
   const sorted = mergedItems.sort(compareDailyBriefItem);
   const topNew = sorted.filter((item) => item.kind === "new").slice(0, TOP_BUCKET_LIMIT);
   const topUpdated = sorted.filter((item) => item.kind === "updated").slice(0, TOP_BUCKET_LIMIT);
-  const lines = sorted.slice(0, maxLines).map(formatBriefLine);
+  const lines = sorted.slice(0, alertLineLimit).map(formatBriefLine);
+  const todoSummary = options?.todoSummary ?? null;
 
   return {
     generatedAt: asString(alertsJson?.generatedAt) || null,
@@ -196,12 +218,51 @@ export function buildDailyBrief(
     topNew,
     topUpdated,
     lines,
+    todoSummary,
+    opsSummary,
   };
 }
 
 function formatTopLine(item: DailyBriefItem): string {
   const pinLabel = item.isPinned ? "PIN " : "";
   return `- [${pinLabel}${item.level.toUpperCase()} ${Math.round(item.clusterScore)}] ${item.corpName} | ${item.title}`;
+}
+
+function summarizeTodoMessage(message: string, maxLength = 44): string {
+  const compact = message.trim().replace(/\s+/g, " ");
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength)}...`;
+}
+
+function formatTodoLine(item: TodoSummaryItem): string {
+  const due = item.dueDate ?? "기한 미정";
+  return `- ${item.priority} | ${due} | ${summarizeTodoMessage(item.message || "메시지 없음")}`;
+}
+
+function buildTodoSectionLines(summary: TodoSummary): string[] {
+  const lines: string[] = [
+    `- 마감 지남: ${summary.overdueCount}건`,
+    `- 오늘(P0/P1): ${summary.todayHighCount}건`,
+  ];
+
+  const picked: TodoSummaryItem[] = [];
+  const seen = new Set<string>();
+  const sources = [...summary.topOverdue, ...summary.topToday];
+  for (const item of sources) {
+    if (!item || typeof item.id !== "string" || !item.id) continue;
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    picked.push(item);
+    if (picked.length >= 3) break;
+  }
+
+  if (picked.length === 0) {
+    lines.push("- 우선 항목 없음");
+  } else {
+    picked.forEach((item) => lines.push(formatTodoLine(item)));
+  }
+
+  return lines.slice(0, 5);
 }
 
 export function toMarkdown(brief: DailyBrief): string {
@@ -212,6 +273,11 @@ export function toMarkdown(brief: DailyBrief): string {
   lines.push(`- Generated at: ${brief.generatedAt ?? "-"}`);
   lines.push(`- Alerts: newHigh=${brief.stats.newHigh}, newMid=${brief.stats.newMid}, updatedHigh=${brief.stats.updatedHigh}, updatedMid=${brief.stats.updatedMid}, total=${brief.stats.total}`);
   lines.push(`- Brief lines: ${brief.stats.shown}/${brief.stats.maxLines}`);
+  if (brief.opsSummary && Array.isArray(brief.opsSummary.lines) && brief.opsSummary.lines.length > 0) {
+    lines.push("");
+    lines.push("## 운영 이슈(OPS)");
+    brief.opsSummary.lines.forEach((line) => lines.push(line.startsWith("- ") ? line : `- ${line}`));
+  }
   lines.push("");
   lines.push("## Top New");
   if (brief.topNew.length === 0) {
@@ -232,6 +298,11 @@ export function toMarkdown(brief: DailyBrief): string {
     lines.push("- 없음");
   } else {
     brief.lines.forEach((line) => lines.push(`- ${line}`));
+  }
+  if (brief.todoSummary) {
+    lines.push("");
+    lines.push("## 오늘 할 일");
+    buildTodoSectionLines(brief.todoSummary).forEach((line) => lines.push(line));
   }
   return `${lines.join("\n").trimEnd()}\n`;
 }

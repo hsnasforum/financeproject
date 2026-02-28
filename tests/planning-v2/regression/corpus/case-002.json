@@ -1,0 +1,57 @@
+{
+  "id": "case-002",
+  "title": "고금리 부채 + 목돈 목표",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 3300000,
+      "monthlyEssentialExpenses": 1800000,
+      "monthlyDiscretionaryExpenses": 800000,
+      "liquidAssets": 1500000,
+      "investmentAssets": 2500000,
+      "debts": [
+        {
+          "id": "debt-card",
+          "name": "Card Loan",
+          "balance": 12000000,
+          "minimumPayment": 350000,
+          "apr": 0.18
+        },
+        {
+          "id": "debt-credit",
+          "name": "Credit Loan",
+          "balance": 9000000,
+          "minimumPayment": 280000,
+          "apr": 0.11
+        }
+      ],
+      "goals": [
+        {
+          "id": "goal-car",
+          "name": "Car Purchase",
+          "targetAmount": 22000000,
+          "targetMonth": 24,
+          "priority": 5,
+          "minimumMonthlyContribution": 120000
+        },
+        {
+          "id": "goal-emergency",
+          "name": "Emergency Fund",
+          "targetAmount": 15600000,
+          "targetMonth": 18,
+          "priority": 4
+        }
+      ],
+      "risk": {
+        "riskTolerance": "low"
+      }
+    },
+    "horizonMonths": 96,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 5.0,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "includeProducts": false
+  }
+}

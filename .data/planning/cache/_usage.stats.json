@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-28T12:38:26.671Z",
+  "totals": {
+    "hits": 410,
+    "misses": 26
+  },
+  "byKind": {
+    "simulate": {
+      "hits": 102,
+      "misses": 5
+    },
+    "scenarios": {
+      "hits": 189,
+      "misses": 11
+    },
+    "monteCarlo": {
+      "hits": 113,
+      "misses": 7
+    },
+    "actions": {
+      "hits": 6,
+      "misses": 3
+    }
+  }
+}

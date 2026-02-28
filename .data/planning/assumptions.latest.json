@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "asOf": "2026-02-28",
+  "fetchedAt": "2026-02-28T08:01:19.775Z",
+  "korea": {},
+  "sources": [
+    {
+      "name": "BOK MPC English",
+      "url": "https://www.bok.or.kr/eng/bbs/E0000634/view.do?nttId=10096672&menuNo=400069",
+      "fetchedAt": "2026-02-28T08:01:19.776Z"
+    },
+    {
+      "name": "BOK Interest Rates English",
+      "url": "https://www.bok.or.kr/eng/bbs/E0000634/view.do?nttId=10096927&menuNo=400069",
+      "fetchedAt": "2026-02-28T08:01:19.814Z"
+    },
+    {
+      "name": "KOSTAT CPI English",
+      "url": "https://kostat.go.kr/board.es?act=view&bid=11799&list_no=437746&mid=a20402000000&nPage=1&tag=&utm_source=chatgpt.com",
+      "fetchedAt": "2026-02-28T08:01:19.815Z"
+    }
+  ],
+  "warnings": [
+    "ECOS_FALLBACK_USED",
+    "BOK MPC fetch failed: fetch failed",
+    "BOK Interest Rates fetch failed: fetch failed",
+    "KOSTAT CPI fetch failed: fetch failed"
+  ]
+}

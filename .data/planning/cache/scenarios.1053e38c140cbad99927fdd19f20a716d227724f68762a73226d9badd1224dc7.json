@@ -1,0 +1,407 @@
+{
+  "version": 1,
+  "kind": "scenarios",
+  "key": "1053e38c140cbad99927fdd19f20a716d227724f68762a73226d9badd1224dc7",
+  "createdAt": "2026-02-28T08:01:04.323Z",
+  "expiresAt": "2026-03-01T08:01:04.323Z",
+  "meta": {
+    "horizonMonths": 18,
+    "assumptionsHash": "24bac2ec743941137167dbdcee4284be7ac8899f5d9ed5dcd12850318eac29e7",
+    "optionsHash": "31bae7f67c2629256953fae4d1a077c4dd252523e07461bc01244041a9c5e0a4",
+    "snapshot": {
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-02-28T12:00:00.000Z",
+      "missing": false
+    }
+  },
+  "data": {
+    "meta": {
+      "generatedAt": "2026-02-28T08:01:04.323Z",
+      "snapshot": {
+        "asOf": "2026-02-28",
+        "fetchedAt": "2026-02-28T12:00:00.000Z",
+        "missing": false,
+        "warningsCount": 1,
+        "sourcesCount": 1
+      },
+      "health": {
+        "warningsCount": 0,
+        "criticalCount": 0,
+        "warningCodes": [],
+        "snapshotStaleDays": 0,
+        "flags": {
+          "snapshotMissing": false,
+          "snapshotStaleDays": 0,
+          "optimisticReturn": false,
+          "riskMismatch": false
+        }
+      }
+    },
+    "data": {
+      "healthWarnings": [],
+      "base": {
+        "id": "base",
+        "title": "Base",
+        "assumptionsUsed": {
+          "inflationPct": 2.4,
+          "investReturnPct": 5,
+          "cashReturnPct": 2.8,
+          "withdrawalRatePct": 4,
+          "debtRates": {}
+        },
+        "summary": {
+          "startNetWorth": 4737333.42,
+          "endNetWorth": 38712865.9,
+          "netWorthDelta": 33975532.48,
+          "worstCashMonthIndex": 0,
+          "worstCashKrw": 0,
+          "goalsAchieved": 1,
+          "warningsCount": 0
+        },
+        "warnings": [],
+        "goalsStatus": [
+          {
+            "goalId": "goal-a",
+            "name": "Goal A",
+            "targetAmount": 3000000,
+            "currentAmount": 3000000,
+            "progressPct": 100,
+            "achieved": true,
+            "achievedMonth": 2,
+            "targetMonth": 12,
+            "onTrack": true,
+            "shortfall": 0
+          }
+        ],
+        "keyTimelinePoints": [
+          {
+            "monthIndex": 0,
+            "row": {
+              "month": 1,
+              "income": 4200000,
+              "expenses": 2170000,
+              "operatingCashflow": 2030000,
+              "debtPayment": 0,
+              "debtInterest": 0,
+              "debtPrincipalPaid": 0,
+              "goalContribution": 2930000,
+              "investmentReturn": 7333.42,
+              "liquidAssets": 0,
+              "investmentAssets": 1807333.42,
+              "goalFundAssets": 2930000,
+              "totalDebt": 0,
+              "netWorth": 4737333.42,
+              "netWorthDelta": 2037333.42,
+              "debtServiceRatio": 0,
+              "goalProgress": {
+                "goal-a": 97.67
+              }
+            }
+          },
+          {
+            "monthIndex": 12,
+            "row": {
+              "month": 13,
+              "income": 4200000,
+              "expenses": 2222080,
+              "operatingCashflow": 1977920,
+              "debtPayment": 0,
+              "debtInterest": 0,
+              "debtPrincipalPaid": 0,
+              "goalContribution": 0,
+              "investmentReturn": 7700.09,
+              "liquidAssets": 23952706.57,
+              "investmentAssets": 1897700.09,
+              "goalFundAssets": 3000000,
+              "totalDebt": 0,
+              "netWorth": 28850406.66,
+              "netWorthDelta": 1985620.09,
+              "debtServiceRatio": 0,
+              "goalProgress": {
+                "goal-a": 100
+              }
+            }
+          },
+          {
+            "monthIndex": 17,
+            "row": {
+              "month": 18,
+              "income": 4200000,
+              "expenses": 2244147.19,
+              "operatingCashflow": 1955852.81,
+              "debtPayment": 0,
+              "debtInterest": 0,
+              "debtPrincipalPaid": 0,
+              "goalContribution": 0,
+              "investmentReturn": 7858.23,
+              "liquidAssets": 33776192.21,
+              "investmentAssets": 1936673.69,
+              "goalFundAssets": 3000000,
+              "totalDebt": 0,
+              "netWorth": 38712865.9,
+              "netWorthDelta": 1963711.04,
+              "debtServiceRatio": 0,
+              "goalProgress": {
+                "goal-a": 100
+              }
+            }
+          }
+        ]
+      },
+      "scenarios": [
+        {
+          "id": "conservative",
+          "title": "Conservative",
+          "assumptionsUsed": {
+            "inflationPct": 2.9,
+            "investReturnPct": 1,
+            "cashReturnPct": 2.3,
+            "withdrawalRatePct": 4,
+            "debtRates": {}
+          },
+          "diffVsBase": {
+            "keyMetrics": {
+              "endNetWorthDeltaKrw": 3016252.55,
+              "worstCashMonthIndex": 0,
+              "worstCashDeltaKrw": 0,
+              "goalsAchievedDelta": 0
+            },
+            "warningsDelta": {
+              "added": [],
+              "removed": []
+            },
+            "shortWhy": [
+              "투자수익률 +95.00%p 변화로 말기 순자산이 +3,016,252.55원 변했습니다.",
+              "인플레이션 +0.50%p 변화로 최저 현금월이 0개월차, 현금 저점은 0원 변했습니다.",
+              "경고/목표 달성 수 변화는 크지 않았고, 주된 차이는 금리/물가 가정 변화에서 발생했습니다."
+            ]
+          },
+          "summary": {
+            "startNetWorth": 4837033.57,
+            "endNetWorth": 41729118.45,
+            "netWorthDelta": 36892084.88,
+            "worstCashMonthIndex": 0,
+            "worstCashKrw": 0,
+            "goalsAchieved": 1,
+            "warningsCount": 0
+          },
+          "warnings": [],
+          "goalsStatus": [
+            {
+              "goalId": "goal-a",
+              "name": "Goal A",
+              "targetAmount": 3000000,
+              "currentAmount": 3000000,
+              "progressPct": 100,
+              "achieved": true,
+              "achievedMonth": 2,
+              "targetMonth": 12,
+              "onTrack": true,
+              "shortfall": 0
+            }
+          ],
+          "keyTimelinePoints": [
+            {
+              "monthIndex": 0,
+              "row": {
+                "month": 1,
+                "income": 4200000,
+                "expenses": 2170000,
+                "operatingCashflow": 2030000,
+                "debtPayment": 0,
+                "debtInterest": 0,
+                "debtPrincipalPaid": 0,
+                "goalContribution": 2930000,
+                "investmentReturn": 107033.57,
+                "liquidAssets": 0,
+                "investmentAssets": 1907033.57,
+                "goalFundAssets": 2930000,
+                "totalDebt": 0,
+                "netWorth": 4837033.57,
+                "netWorthDelta": 2137033.57,
+                "debtServiceRatio": 0,
+                "goalProgress": {
+                  "goal-a": 97.67
+                }
+              }
+            },
+            {
+              "monthIndex": 12,
+              "row": {
+                "month": 13,
+                "income": 4200000,
+                "expenses": 2232930,
+                "operatingCashflow": 1967070,
+                "debtPayment": 0,
+                "debtInterest": 0,
+                "debtPrincipalPaid": 0,
+                "goalContribution": 0,
+                "investmentReturn": 214067.14,
+                "liquidAssets": 23882741.49,
+                "investmentAssets": 3814067.14,
+                "goalFundAssets": 3000000,
+                "totalDebt": 0,
+                "netWorth": 30696808.63,
+                "netWorthDelta": 2181137.14,
+                "debtServiceRatio": 0,
+                "goalProgress": {
+                  "goal-a": 100
+                }
+              }
+            },
+            {
+              "monthIndex": 17,
+              "row": {
+                "month": 18,
+                "income": 4200000,
+                "expenses": 2259686.45,
+                "operatingCashflow": 1940313.55,
+                "debtPayment": 0,
+                "debtInterest": 0,
+                "debtPrincipalPaid": 0,
+                "goalContribution": 0,
+                "investmentReturn": 285745.35,
+                "liquidAssets": 33637949.62,
+                "investmentAssets": 5091168.82,
+                "goalFundAssets": 3000000,
+                "totalDebt": 0,
+                "netWorth": 41729118.45,
+                "netWorthDelta": 2226058.9,
+                "debtServiceRatio": 0,
+                "goalProgress": {
+                  "goal-a": 100
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "aggressive",
+          "title": "Aggressive",
+          "assumptionsUsed": {
+            "inflationPct": 2.1,
+            "investReturnPct": 7,
+            "cashReturnPct": 2.8,
+            "withdrawalRatePct": 4,
+            "debtRates": {}
+          },
+          "diffVsBase": {
+            "keyMetrics": {
+              "endNetWorthDeltaKrw": 138549.82,
+              "worstCashMonthIndex": 0,
+              "worstCashDeltaKrw": 0,
+              "goalsAchievedDelta": 0
+            },
+            "warningsDelta": {
+              "added": [],
+              "removed": []
+            },
+            "shortWhy": [
+              "투자수익률 +2.00%p 변화로 말기 순자산이 +138,549.82원 변했습니다.",
+              "인플레이션 -0.30%p 변화로 최저 현금월이 0개월차, 현금 저점은 0원 변했습니다.",
+              "경고/목표 달성 수 변화는 크지 않았고, 주된 차이는 금리/물가 가정 변화에서 발생했습니다."
+            ]
+          },
+          "summary": {
+            "startNetWorth": 4740177.46,
+            "endNetWorth": 38851415.72,
+            "netWorthDelta": 34111238.26,
+            "worstCashMonthIndex": 0,
+            "worstCashKrw": 0,
+            "goalsAchieved": 1,
+            "warningsCount": 0
+          },
+          "warnings": [],
+          "goalsStatus": [
+            {
+              "goalId": "goal-a",
+              "name": "Goal A",
+              "targetAmount": 3000000,
+              "currentAmount": 3000000,
+              "progressPct": 100,
+              "achieved": true,
+              "achievedMonth": 2,
+              "targetMonth": 12,
+              "onTrack": true,
+              "shortfall": 0
+            }
+          ],
+          "keyTimelinePoints": [
+            {
+              "monthIndex": 0,
+              "row": {
+                "month": 1,
+                "income": 4200000,
+                "expenses": 2170000,
+                "operatingCashflow": 2030000,
+                "debtPayment": 0,
+                "debtInterest": 0,
+                "debtPrincipalPaid": 0,
+                "goalContribution": 2930000,
+                "investmentReturn": 10177.46,
+                "liquidAssets": 0,
+                "investmentAssets": 1810177.46,
+                "goalFundAssets": 2930000,
+                "totalDebt": 0,
+                "netWorth": 4740177.46,
+                "netWorthDelta": 2040177.46,
+                "debtServiceRatio": 0,
+                "goalProgress": {
+                  "goal-a": 97.67
+                }
+              }
+            },
+            {
+              "monthIndex": 12,
+              "row": {
+                "month": 13,
+                "income": 4200000,
+                "expenses": 2215570,
+                "operatingCashflow": 1984430,
+                "debtPayment": 0,
+                "debtInterest": 0,
+                "debtPrincipalPaid": 0,
+                "goalContribution": 0,
+                "investmentReturn": 10889.88,
+                "liquidAssets": 23994735.48,
+                "investmentAssets": 1936889.88,
+                "goalFundAssets": 3000000,
+                "totalDebt": 0,
+                "netWorth": 28931625.36,
+                "netWorthDelta": 1995319.88,
+                "debtServiceRatio": 0,
+                "goalProgress": {
+                  "goal-a": 100
+                }
+              }
+            },
+            {
+              "monthIndex": 17,
+              "row": {
+                "month": 18,
+                "income": 4200000,
+                "expenses": 2234838.8,
+                "operatingCashflow": 1965161.2,
+                "debtPayment": 0,
+                "debtInterest": 0,
+                "debtPrincipalPaid": 0,
+                "goalContribution": 0,
+                "investmentReturn": 11201.25,
+                "liquidAssets": 33859145.83,
+                "investmentAssets": 1992269.89,
+                "goalFundAssets": 3000000,
+                "totalDebt": 0,
+                "netWorth": 38851415.72,
+                "netWorthDelta": 1976362.45,
+                "debtServiceRatio": 0,
+                "goalProgress": {
+                  "goal-a": 100
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

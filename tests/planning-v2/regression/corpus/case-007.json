@@ -1,0 +1,53 @@
+{
+  "id": "case-007",
+  "title": "낙관 가정(투자수익률 15%) + low risk 정합성 경고",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 4700000,
+      "monthlyEssentialExpenses": 1900000,
+      "monthlyDiscretionaryExpenses": 900000,
+      "liquidAssets": 3200000,
+      "investmentAssets": 18000000,
+      "debts": [
+        {
+          "id": "loan-optimistic",
+          "name": "Installment Loan",
+          "balance": 9000000,
+          "minimumPayment": 260000,
+          "apr": 0.07,
+          "remainingMonths": 48,
+          "repaymentType": "amortizing"
+        }
+      ],
+      "goals": [
+        {
+          "id": "goal-retire",
+          "name": "Retirement",
+          "targetAmount": 500000000,
+          "targetMonth": 240,
+          "priority": 5
+        }
+      ],
+      "risk": {
+        "riskTolerance": "low"
+      }
+    },
+    "horizonMonths": 180,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 15.0,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "snapshotMeta": {
+      "asOf": "2026-02-01",
+      "fetchedAt": "2026-02-15T00:00:00.000Z",
+      "missing": false
+    },
+    "monteCarlo": {
+      "paths": 600,
+      "seed": 9988
+    },
+    "includeProducts": false
+  }
+}

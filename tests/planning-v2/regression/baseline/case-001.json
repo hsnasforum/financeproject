@@ -1,0 +1,43 @@
+{
+  "id": "case-001",
+  "generatedAt": "2026-02-28T10:23:41.181Z",
+  "expected": {
+    "simulate": {
+      "endNetWorthKrw": 217056591,
+      "worstCashKrw": 0,
+      "warnings": [],
+      "goals": [
+        {
+          "id": "goal-emergency",
+          "achieved": true
+        },
+        {
+          "id": "goal-home",
+          "achieved": true
+        }
+      ]
+    },
+    "scenarios": {
+      "baseEndNetWorthKrw": 217056591,
+      "conservativeEndNetWorthKrw": 204851916,
+      "aggressiveEndNetWorthKrw": 224293954
+    },
+    "monteCarlo": {
+      "retirementDepletionBeforeEnd": 0,
+      "endNetWorthP50Krw": 215730291
+    },
+    "actions": {
+      "codes": [
+        "SET_ASSUMPTIONS_REVIEW"
+      ]
+    },
+    "health": {
+      "criticalCount": 0,
+      "warnings": []
+    },
+    "debtStrategy": {
+      "debtServiceRatio": 0,
+      "interestSavingsDirection": "none"
+    }
+  }
+}

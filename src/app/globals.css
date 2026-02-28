@@ -1,23 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc; /* bg-slate-50 */
-  --foreground: #0f172a; /* text-slate-900 */
+  --background: #f8fafc;
+  --foreground: #0f172a;
   --surface: #ffffff;
-  --surface-muted: #f1f5f9; /* bg-slate-100 */
-  --border: #e2e8f0; /* border-slate-200 */
+  --surface-muted: #f1f5f9;
+  --border: #e2e8f0;
   --primary: #059669; /* emerald-600 */
   --primary-foreground: #ffffff;
-  --secondary: #475569; /* slate-600 */
+  --secondary: #475569;
   --secondary-foreground: #ffffff;
-  --muted: #94a3b8; /* slate-400 */
-  --accent: #f0fdf4; /* emerald-50 */
-  --radius: 2rem; /* Extra Large 32px radius for 2025 look */
-  --radius-sm: 1rem; /* 16px for smaller items */
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow: 0 4px 20px -1px rgb(0 0 0 / 0.03), 0 2px 4px -2px rgb(0 0 0 / 0.03);
-  --shadow-md: 0 10px 30px -3px rgb(0 0 0 / 0.04), 0 4px 6px -4px rgb(0 0 0 / 0.04);
-  --shadow-lg: 0 25px 50px -12px rgb(0 0 0 / 0.05);
+  --muted: #94a3b8;
+  --accent: #f0fdf4;
+  
+  /* Premium Financial Tokens */
+  --hero-navy: #0f172a;
+  --hero-charcoal: #1e293b;
+  --card-shadow: 0 4px 20px -1px rgb(0 0 0 / 0.03), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+  --card-shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  
+  --radius: 2rem;
+  --radius-sm: 1rem;
   --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", Roboto, Arial, "Noto Sans",
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
@@ -35,14 +38,20 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-hero-navy: var(--hero-navy);
+  --color-hero-charcoal: var(--hero-charcoal);
   --radius-2xl: var(--radius);
   --radius-xl: var(--radius-sm);
-  --shadow-card: var(--shadow);
+  --shadow-card: var(--card-shadow);
+  --shadow-card-hover: var(--card-shadow-hover);
   --font-sans: var(--font-geist-sans);
 }
 
 body {
   background-color: var(--background);
+  background-image: url('/nb/bg-pattern.png');
+  background-repeat: repeat;
+  background-size: 400px;
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
   -webkit-font-smoothing: antialiased;
