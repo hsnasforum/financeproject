@@ -1,0 +1,62 @@
+name: Rules Tune PR
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: rules-tune-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tune:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Run rules eval all
+        run: pnpm dart:rules:eval:all
+
+      - name: Run rules eval labeled (if labels exist)
+        if: ${{ hashFiles('data/dart/labels.csv') != '' }}
+        run: pnpm dart:rules:eval:labeled
+
+      - name: Run rules suggest
+        run: pnpm dart:rules:suggest
+
+      - name: Make rules patch
+        run: pnpm dart:rules:patch:make
+
+      - name: Apply rules patch (with gate)
+        run: pnpm dart:rules:patch:apply
+
+      - name: Create rules tune pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "chore(dart-rules): tune rules"
+          branch: "bot/rules-tune"
+          delete-branch: false
+          title: "chore(dart-rules): tune rules"
+          body: "Automated rules tuning pipeline."
+          add-paths: |
+            config/dart-disclosure-rules.json
+            data/dart/labels.csv
+            docs/dart-rules-*.md
+          labels: |
+            automated
+            dart-rules
