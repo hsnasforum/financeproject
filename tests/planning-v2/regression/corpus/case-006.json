@@ -1,0 +1,34 @@
+{
+  "id": "case-006",
+  "title": "비상금 미달 + 후보 비교 OFF",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 4100000,
+      "monthlyEssentialExpenses": 2100000,
+      "monthlyDiscretionaryExpenses": 1100000,
+      "liquidAssets": 600000,
+      "investmentAssets": 3500000,
+      "debts": [],
+      "goals": [
+        {
+          "id": "goal-emergency",
+          "name": "Emergency Reserve",
+          "targetAmount": 19200000,
+          "targetMonth": 18,
+          "priority": 5
+        }
+      ],
+      "risk": {
+        "riskTolerance": "low"
+      }
+    },
+    "horizonMonths": 60,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 4.5,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "includeProducts": false
+  }
+}

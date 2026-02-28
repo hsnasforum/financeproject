@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-02-27T19:05:52.233Z",
+  "steps": [
+    {
+      "name": "warm:if-stale",
+      "status": "ok",
+      "tookMs": 840,
+      "stdoutTail": "",
+      "stderrTail": ""
+    },
+    {
+      "name": "dart:watch",
+      "status": "ok",
+      "tookMs": 486,
+      "stdoutTail": "",
+      "stderrTail": ""
+    },
+    {
+      "name": "data:doctor",
+      "status": "ok",
+      "tookMs": 2147,
+      "stdoutTail": "",
+      "stderrTail": ""
+    },
+    {
+      "name": "cleanup",
+      "status": "ok",
+      "tookMs": 658,
+      "stdoutTail": "",
+      "stderrTail": ""
+    }
+  ],
+  "ok": true
+}

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
+import { append as appendAuditLog } from "../../../../lib/audit/auditLogStore";
 import {
   assertLocalHost,
   assertSameOrigin,
@@ -9,6 +10,19 @@ import { onlyDev } from "../../../../lib/dev/onlyDev";
 
 const DEV_ACTION_COOKIE_NAME = "dev_action";
 const DEV_ACTION_COOKIE_MAX_AGE_SECONDS = 12 * 60 * 60;
+
+function auditUnlock(summary: string, details: Record<string, unknown>): void {
+  try {
+    appendAuditLog({
+      event: "DEV_UNLOCK",
+      route: "/api/dev/unlock",
+      summary,
+      details,
+    });
+  } catch (error) {
+    console.error("[audit] failed to append dev unlock log", error);
+  }
+}
 
 export async function POST(request: Request) {
   const blocked = onlyDev();
@@ -22,6 +36,11 @@ export async function POST(request: Request) {
     const providedToken = (request.headers.get("x-dev-token") ?? "").trim();
 
     if (!expectedToken) {
+      auditUnlock("Dev unlock 실패: TOKEN_NOT_CONFIGURED", {
+        ok: false,
+        code: "TOKEN_NOT_CONFIGURED",
+        hasProvidedToken: providedToken.length > 0,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -32,6 +51,11 @@ export async function POST(request: Request) {
     }
 
     if (!providedToken || providedToken !== expectedToken) {
+      auditUnlock("Dev unlock 실패: UNAUTHORIZED", {
+        ok: false,
+        code: "UNAUTHORIZED",
+        hasProvidedToken: providedToken.length > 0,
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -61,10 +85,17 @@ export async function POST(request: Request) {
       path: "/",
       maxAge: DEV_ACTION_COOKIE_MAX_AGE_SECONDS,
     });
+    auditUnlock("Dev unlock 성공", {
+      ok: true,
+    });
     return response;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
+      auditUnlock("Dev unlock 실패: INTERNAL", {
+        ok: false,
+        code: "INTERNAL",
+      });
       return NextResponse.json(
         {
           ok: false,
@@ -73,6 +104,10 @@ export async function POST(request: Request) {
         { status: 500 },
       );
     }
+    auditUnlock(`Dev unlock 실패: ${guard.code}`, {
+      ok: false,
+      code: guard.code,
+    });
     return NextResponse.json(
       {
         ok: false,

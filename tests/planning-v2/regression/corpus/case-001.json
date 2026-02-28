@@ -1,0 +1,45 @@
+{
+  "id": "case-001",
+  "title": "부채없음 + 비상금 6개월",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 4200000,
+      "monthlyEssentialExpenses": 1700000,
+      "monthlyDiscretionaryExpenses": 700000,
+      "liquidAssets": 15000000,
+      "investmentAssets": 10000000,
+      "debts": [],
+      "goals": [
+        {
+          "id": "goal-emergency",
+          "name": "Emergency Fund",
+          "targetAmount": 14400000,
+          "targetMonth": 12,
+          "priority": 5
+        },
+        {
+          "id": "goal-home",
+          "name": "Home Down Payment",
+          "targetAmount": 80000000,
+          "targetMonth": 84,
+          "priority": 4
+        }
+      ],
+      "risk": {
+        "riskTolerance": "mid"
+      }
+    },
+    "horizonMonths": 120,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 5.0,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "monteCarlo": {
+      "paths": 1000,
+      "seed": 12345
+    },
+    "includeProducts": false
+  }
+}

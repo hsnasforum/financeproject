@@ -1,0 +1,31 @@
+{
+  "id": "case-009",
+  "title": "스냅샷 missing + defaults 가정",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 3900000,
+      "monthlyEssentialExpenses": 1900000,
+      "monthlyDiscretionaryExpenses": 900000,
+      "liquidAssets": 1200000,
+      "investmentAssets": 4200000,
+      "debts": [],
+      "goals": [
+        {
+          "id": "goal-emergency",
+          "name": "Emergency",
+          "targetAmount": 16800000,
+          "targetMonth": 24,
+          "priority": 5
+        }
+      ],
+      "risk": {
+        "riskTolerance": "mid"
+      }
+    },
+    "horizonMonths": 48,
+    "snapshotMeta": {
+      "missing": true
+    },
+    "includeProducts": false
+  }
+}

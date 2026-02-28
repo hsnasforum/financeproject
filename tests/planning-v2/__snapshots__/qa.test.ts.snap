@@ -1,0 +1,64 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`planning q&a generator > returns deterministic answers with evidence codes 1`] = `
+[
+  {
+    "bullets": [
+      "기한 내 미달 경고가 1건 관측되었습니다.",
+      "Home Goal의 추정 미달액은 12,000,000원로 계산됩니다.",
+      "월 가용 현금과 부채 상환 우선순위에 따라 목표 적립 여력이 줄었을 수 있습니다.",
+      "이 결과는 입력 가정 기반 계산치이며, 지출/수익률 가정 변화에 민감할 수 있습니다.",
+    ],
+    "evidenceCodes": [
+      "GOAL_MISSED",
+    ],
+    "title": "왜 목표가 미달인가?",
+  },
+  {
+    "bullets": [
+      "최저 현금 시점은 24개월차이며 잔고는 -5,305,418원입니다.",
+      "현금 관련 경고(NEGATIVE_CASHFLOW, EMERGENCY_FUND_DRAWDOWN, INSOLVENT)가 관측되었습니다.",
+      "적립 스킵 이벤트는 명확히 관측되지 않았습니다.",
+      "고정지출/부채상환/적립 우선순위 조합이 현금 변동성을 키웠을 가능성이 있습니다.",
+    ],
+    "evidenceCodes": [
+      "EMERGENCY_FUND_DRAWDOWN",
+      "INSOLVENT",
+      "NEGATIVE_CASHFLOW",
+      "WORST_CASH_MONTH",
+    ],
+    "title": "왜 현금이 이렇게 부족해졌나?",
+  },
+  {
+    "bullets": [
+      "부채 리스크 경고(DEBT_NEGATIVE_AMORTIZATION)가 감지되었습니다.",
+      "시뮬레이션 종료 시 총부채는 9,910,939원입니다.",
+      "부채 상환 추적 이벤트 1건 기준으로 이자/원금 분해가 기록되었습니다.",
+      "상환액 대비 소득 비중(DSR)과 이자 누적이 위험도를 높였을 수 있습니다.",
+    ],
+    "evidenceCodes": [
+      "DEBT_NEGATIVE_AMORTIZATION",
+      "DEBT_REPAYMENT_MONTH",
+    ],
+    "title": "왜 부채가 위험한가?",
+  },
+  {
+    "bullets": [
+      "현재 가정은 연 인플레이션 2.0%, 연 기대수익률 4.0% 기준입니다.",
+      "설명가능성 집계에서 영향도가 큰 드라이버는 expenses, income, goalFundingTransfer 순으로 나타났습니다.",
+      "특히 인플레이션/수익률 가정 변화는 지출 증가 속도와 자산 성장률에 함께 영향을 줄 수 있습니다.",
+      "따라서 결과 해석 시 가정값 민감도(시나리오/Monte Carlo)를 함께 확인하는 것이 안전합니다.",
+    ],
+    "evidenceCodes": [
+      "DEBT_NEGATIVE_AMORTIZATION",
+      "DEBT_REPAYMENT_MONTH",
+      "EMERGENCY_FUND_DRAWDOWN",
+      "GOAL_MISSED",
+      "INSOLVENT",
+      "NEGATIVE_CASHFLOW",
+      "WORST_CASH_MONTH",
+    ],
+    "title": "어떤 가정이 결과에 제일 민감했나?",
+  },
+]
+`;

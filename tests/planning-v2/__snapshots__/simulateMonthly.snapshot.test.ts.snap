@@ -1,0 +1,2223 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 deterministic scenarios 1`] = `
+[
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.03,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2365000,
+            "driver": "income",
+          },
+          {
+            "amount": -1495262.37,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2365000,
+            "driver": "income",
+          },
+          {
+            "amount": -1497118.72,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 5050000,
+      "investmentAssets": 551668,
+      "liquidAssets": 16716874.65,
+      "month": 24,
+      "netWorth": 22318542.65,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-emergency-1",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 6,
+        "goalId": "goal-travel-1",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-1",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-2": 0.13999999999999999,
+      },
+      "annualExpectedReturnRate": 0.04,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2430000,
+            "driver": "income",
+          },
+          {
+            "amount": -1755800.8,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2430000,
+            "driver": "income",
+          },
+          {
+            "amount": -1758700.64,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 3900000,
+      "investmentAssets": 832399.36,
+      "liquidAssets": 19293962.54,
+      "month": 36,
+      "netWorth": 24026361.9,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 9,
+        "goalId": "goal-emergency-2",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-2",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-3": 0.065,
+      },
+      "annualExpectedReturnRate": 0.05,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 47,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2495000,
+            "driver": "income",
+          },
+          {
+            "amount": -2050156.37,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 48,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2495000,
+            "driver": "income",
+          },
+          {
+            "amount": -2054379.36,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7150000,
+      "investmentAssets": 1166886,
+      "liquidAssets": 13583878.92,
+      "month": 48,
+      "netWorth": 21900764.92,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 20,
+        "goalId": "goal-emergency-3",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 21,
+        "goalId": "goal-travel-3",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 48,
+    "scenario": "scenario-3",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-4": 0.12,
+      },
+      "annualExpectedReturnRate": 0.06,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 11,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2560000,
+            "driver": "income",
+          },
+          {
+            "amount": -1773143.12,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 12,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2560000,
+            "driver": "income",
+          },
+          {
+            "amount": -1777516.17,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 2500000,
+      "investmentAssets": 1250800,
+      "liquidAssets": 3440094.41,
+      "month": 12,
+      "netWorth": 7190894.41,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 8,
+        "goalId": "goal-emergency-4",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 12,
+    "scenario": "scenario-4",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.07,
+      "annualInflationRate": 0.01,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2625000,
+            "driver": "income",
+          },
+          {
+            "amount": -1359576.92,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2625000,
+            "driver": "income",
+          },
+          {
+            "amount": -1360704.74,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 10350000,
+      "investmentAssets": 1602860,
+      "liquidAssets": 21452480.9,
+      "month": 24,
+      "netWorth": 33405340.9,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-emergency-5",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-travel-5",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 8,
+        "goalId": "goal-education-5",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-5",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-6": 0.055,
+        "debt-card-6": 0,
+      },
+      "annualExpectedReturnRate": 0.02,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2690000,
+            "driver": "income",
+          },
+          {
+            "amount": -1606353.68,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2690000,
+            "driver": "income",
+          },
+          {
+            "amount": -1608347.95,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 3900000,
+      "investmentAssets": 1719156.96,
+      "liquidAssets": 29018536.43,
+      "month": 36,
+      "netWorth": 34637693.39,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 10,
+        "goalId": "goal-emergency-6",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-6",
+    "warnings": [
+      {
+        "meta": {
+          "assumedDebtIds": "debt-card-6",
+        },
+        "month": null,
+        "reasonCode": "DEBT_RATE_ASSUMED",
+      },
+    ],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.03,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 47,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2755000,
+            "driver": "income",
+          },
+          {
+            "amount": -1882620.38,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 48,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2755000,
+            "driver": "income",
+          },
+          {
+            "amount": -1885729.68,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7150000,
+      "investmentAssets": 337652.64,
+      "liquidAssets": 38425214.52,
+      "month": 48,
+      "netWorth": 45912867.16,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 6,
+        "goalId": "goal-emergency-7",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 7,
+        "goalId": "goal-travel-7",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 48,
+    "scenario": "scenario-7",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-8": 0.13,
+      },
+      "annualExpectedReturnRate": 0.04,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 11,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2820000,
+            "driver": "income",
+          },
+          {
+            "amount": -1643472.46,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 12,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2820000,
+            "driver": "income",
+          },
+          {
+            "amount": -1646857.74,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 2500000,
+      "investmentAssets": 540800,
+      "liquidAssets": 8386864.8,
+      "month": 12,
+      "netWorth": 11427664.8,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-emergency-8",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 12,
+    "scenario": "scenario-8",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-9": 0.065,
+      },
+      "annualExpectedReturnRate": 0.05,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2885000,
+            "driver": "income",
+          },
+          {
+            "amount": -1916070.75,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2885000,
+            "driver": "income",
+          },
+          {
+            "amount": -1920796.3,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 5050000,
+      "investmentAssets": 815850,
+      "liquidAssets": 16225255.4,
+      "month": 24,
+      "netWorth": 22091105.4,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 8,
+        "goalId": "goal-emergency-9",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 9,
+        "goalId": "goal-travel-9",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-9",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-10": 0.12,
+      },
+      "annualExpectedReturnRate": 0.06,
+      "annualInflationRate": 0.01,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2950000,
+            "driver": "income",
+          },
+          {
+            "amount": -1460603.16,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 2950000,
+            "driver": "income",
+          },
+          {
+            "amount": -1461814.79,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 8300000,
+      "investmentAssets": 1143375.36,
+      "liquidAssets": 44981892.77,
+      "month": 36,
+      "netWorth": 54425268.13,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-emergency-10",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 7,
+        "goalId": "goal-education-10",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-10",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.07,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 47,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3015000,
+            "driver": "income",
+          },
+          {
+            "amount": -1720441.3,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 48,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3015000,
+            "driver": "income",
+          },
+          {
+            "amount": -1722577.21,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7150000,
+      "investmentAssets": 1546739.29,
+      "liquidAssets": 58400421.77,
+      "month": 48,
+      "netWorth": 67097161.06,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-emergency-11",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-travel-11",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 48,
+    "scenario": "scenario-11",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-12": 0.055,
+        "debt-card-12": 0.11,
+      },
+      "annualExpectedReturnRate": 0.02,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 11,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3080000,
+            "driver": "income",
+          },
+          {
+            "amount": -1514792.26,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 12,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3080000,
+            "driver": "income",
+          },
+          {
+            "amount": -1517294.07,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 2500000,
+      "investmentAssets": 1428000,
+      "liquidAssets": 10277124.07,
+      "month": 12,
+      "netWorth": 14205124.07,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 6,
+        "goalId": "goal-emergency-12",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 12,
+    "scenario": "scenario-12",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.03,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3145000,
+            "driver": "income",
+          },
+          {
+            "amount": -1773495.63,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3145000,
+            "driver": "income",
+          },
+          {
+            "amount": -1777148.74,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 5050000,
+      "investmentAssets": 1718658,
+      "liquidAssets": 29201652.56,
+      "month": 24,
+      "netWorth": 35970310.56,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-emergency-13",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-travel-13",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-13",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-14": 0.16,
+      },
+      "annualExpectedReturnRate": 0.04,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3210000,
+            "driver": "income",
+          },
+          {
+            "amount": -2065978.21,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3210000,
+            "driver": "income",
+          },
+          {
+            "amount": -2071073.47,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 3900000,
+      "investmentAssets": 337459.2,
+      "liquidAssets": 36121811.44,
+      "month": 36,
+      "netWorth": 40359270.64,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 7,
+        "goalId": "goal-emergency-14",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-14",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-15": 0.065,
+      },
+      "annualExpectedReturnRate": 0.05,
+      "annualInflationRate": 0.01,
+    },
+    "explainabilityTail": [
+      {
+        "month": 47,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3275000,
+            "driver": "income",
+          },
+          {
+            "amount": -1563513.97,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 48,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3275000,
+            "driver": "income",
+          },
+          {
+            "amount": -1564810.96,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 10650000,
+      "investmentAssets": 632063.25,
+      "liquidAssets": 67919530.23,
+      "month": 48,
+      "netWorth": 79201593.48,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 7,
+        "goalId": "goal-emergency-15",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 10,
+        "goalId": "goal-travel-15",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 10,
+        "goalId": "goal-education-15",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 48,
+    "scenario": "scenario-15",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-16": 0.12,
+      },
+      "annualExpectedReturnRate": 0.06,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 11,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3340000,
+            "driver": "income",
+          },
+          {
+            "amount": -1387103.72,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 12,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3340000,
+            "driver": "income",
+          },
+          {
+            "amount": -1388825.79,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 2500000,
+      "investmentAssets": 784400,
+      "liquidAssets": 19322133.53,
+      "month": 12,
+      "netWorth": 22606533.53,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-emergency-16",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 12,
+    "scenario": "scenario-16",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.07,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3405000,
+            "driver": "income",
+          },
+          {
+            "amount": -1633230.72,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3405000,
+            "driver": "income",
+          },
+          {
+            "amount": -1635928.13,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 5050000,
+      "investmentAssets": 1099104,
+      "liquidAssets": 39293286.28,
+      "month": 24,
+      "netWorth": 45442390.28,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 2,
+        "goalId": "goal-emergency-17",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-travel-17",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-17",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-18": 0.055,
+        "debt-card-18": 0,
+      },
+      "annualExpectedReturnRate": 0.02,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3470000,
+            "driver": "income",
+          },
+          {
+            "amount": -1908992.79,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3470000,
+            "driver": "income",
+          },
+          {
+            "amount": -1912925,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 3900000,
+      "investmentAssets": 1252225.44,
+      "liquidAssets": 46033019.33,
+      "month": 36,
+      "netWorth": 51185244.77,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 8,
+        "goalId": "goal-emergency-18",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-18",
+    "warnings": [
+      {
+        "meta": {
+          "assumedDebtIds": "debt-card-18",
+        },
+        "month": null,
+        "reasonCode": "DEBT_RATE_ASSUMED",
+      },
+    ],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.03,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 47,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3535000,
+            "driver": "income",
+          },
+          {
+            "amount": -2223155.66,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 48,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3535000,
+            "driver": "income",
+          },
+          {
+            "amount": -2228638.56,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7150000,
+      "investmentAssets": 1575712.33,
+      "liquidAssets": 61943075.31,
+      "month": 48,
+      "netWorth": 70668787.65,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-emergency-19",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-travel-19",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 48,
+    "scenario": "scenario-19",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-20": 0.13,
+      },
+      "annualExpectedReturnRate": 0.04,
+      "annualInflationRate": 0.01,
+    },
+    "explainabilityTail": [
+      {
+        "month": 11,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3600000,
+            "driver": "income",
+          },
+          {
+            "amount": -1260408.02,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 12,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3600000,
+            "driver": "income",
+          },
+          {
+            "amount": -1261453.58,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7800000,
+      "investmentAssets": 1684800,
+      "liquidAssets": 18920899.83,
+      "month": 12,
+      "netWorth": 28405699.83,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 2,
+        "goalId": "goal-emergency-20",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-education-20",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 12,
+    "scenario": "scenario-20",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-21": 0.065,
+      },
+      "annualExpectedReturnRate": 0.05,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3665000,
+            "driver": "income",
+          },
+          {
+            "amount": -1495262.37,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3665000,
+            "driver": "income",
+          },
+          {
+            "amount": -1497118.72,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 5050000,
+      "investmentAssets": 330750,
+      "liquidAssets": 44351510.54,
+      "month": 24,
+      "netWorth": 49732260.54,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-emergency-21",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-travel-21",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-21",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-22": 0.13999999999999999,
+      },
+      "annualExpectedReturnRate": 0.06,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3730000,
+            "driver": "income",
+          },
+          {
+            "amount": -1755800.8,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3730000,
+            "driver": "income",
+          },
+          {
+            "amount": -1758700.64,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 3900000,
+      "investmentAssets": 619328.32,
+      "liquidAssets": 66490518.55,
+      "month": 36,
+      "netWorth": 71009846.87,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-emergency-22",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-22",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.07,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 47,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3795000,
+            "driver": "income",
+          },
+          {
+            "amount": -2050156.37,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 48,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3795000,
+            "driver": "income",
+          },
+          {
+            "amount": -2054379.36,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7150000,
+      "investmentAssets": 969989.05,
+      "liquidAssets": 82166587.1,
+      "month": 48,
+      "netWorth": 90286576.15,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-emergency-23",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-travel-23",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 48,
+    "scenario": "scenario-23",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-24": 0.055,
+        "debt-card-24": 0.11,
+      },
+      "annualExpectedReturnRate": 0.02,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 11,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3860000,
+            "driver": "income",
+          },
+          {
+            "amount": -1773143.12,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 12,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3860000,
+            "driver": "income",
+          },
+          {
+            "amount": -1777516.17,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 2500000,
+      "investmentAssets": 979200,
+      "liquidAssets": 15317640.04,
+      "month": 12,
+      "netWorth": 18796840.04,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-emergency-24",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 12,
+    "scenario": "scenario-24",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.03,
+      "annualInflationRate": 0.01,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3925000,
+            "driver": "income",
+          },
+          {
+            "amount": -1359576.92,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3925000,
+            "driver": "income",
+          },
+          {
+            "amount": -1360704.74,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 9450000,
+      "investmentAssets": 1251862,
+      "liquidAssets": 52832480.9,
+      "month": 24,
+      "netWorth": 63534342.9,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 2,
+        "goalId": "goal-emergency-25",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-travel-25",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 4,
+        "goalId": "goal-education-25",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-25",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-26": 0.13,
+      },
+      "annualExpectedReturnRate": 0.04,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3990000,
+            "driver": "income",
+          },
+          {
+            "amount": -1606353.68,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 3990000,
+            "driver": "income",
+          },
+          {
+            "amount": -1608347.95,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 3900000,
+      "investmentAssets": 1574809.6,
+      "liquidAssets": 81011258.58,
+      "month": 36,
+      "netWorth": 86486068.18,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-emergency-26",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-26",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-27": 0.065,
+      },
+      "annualExpectedReturnRate": 0.05,
+      "annualInflationRate": 0.02,
+    },
+    "explainabilityTail": [
+      {
+        "month": 47,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4055000,
+            "driver": "income",
+          },
+          {
+            "amount": -1882620.38,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 48,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4055000,
+            "driver": "income",
+          },
+          {
+            "amount": -1885729.68,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7150000,
+      "investmentAssets": 1969120.13,
+      "liquidAssets": 95439612.97,
+      "month": 48,
+      "netWorth": 104558733.1,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-emergency-27",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 6,
+        "goalId": "goal-travel-27",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 48,
+    "scenario": "scenario-27",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-card-28": 0.12,
+      },
+      "annualExpectedReturnRate": 0.06,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 11,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4120000,
+            "driver": "income",
+          },
+          {
+            "amount": -1643472.46,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 12,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4120000,
+            "driver": "income",
+          },
+          {
+            "amount": -1646857.74,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 2500000,
+      "investmentAssets": 318000,
+      "liquidAssets": 24377315.85,
+      "month": 12,
+      "netWorth": 27195315.85,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-emergency-28",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 12,
+    "scenario": "scenario-28",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {},
+      "annualExpectedReturnRate": 0.07,
+      "annualInflationRate": 0.03,
+    },
+    "explainabilityTail": [
+      {
+        "month": 23,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4185000,
+            "driver": "income",
+          },
+          {
+            "amount": -1916070.75,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 24,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4185000,
+            "driver": "income",
+          },
+          {
+            "amount": -1920796.3,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 5050000,
+      "investmentAssets": 595348,
+      "liquidAssets": 51721910.25,
+      "month": 24,
+      "netWorth": 57367258.25,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 2,
+        "goalId": "goal-emergency-29",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 3,
+        "goalId": "goal-travel-29",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 24,
+    "scenario": "scenario-29",
+    "warnings": [],
+  },
+  {
+    "assumptionsUsed": {
+      "annualDebtRates": {
+        "debt-auto-30": 0.055,
+        "debt-card-30": 0,
+      },
+      "annualExpectedReturnRate": 0.02,
+      "annualInflationRate": 0.01,
+    },
+    "explainabilityTail": [
+      {
+        "month": 35,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4250000,
+            "driver": "income",
+          },
+          {
+            "amount": -1460603.16,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+      {
+        "month": 36,
+        "reasonCode": "RETURN_BOOST",
+        "why": [
+          {
+            "amount": 4250000,
+            "driver": "income",
+          },
+          {
+            "amount": -1461814.79,
+            "driver": "expenses",
+          },
+          {
+            "amount": 0,
+            "driver": "debtInterest",
+          },
+        ],
+      },
+    ],
+    "finalRow": {
+      "goalFundAssets": 7400000,
+      "investmentAssets": 785293.92,
+      "liquidAssets": 87150858.71,
+      "month": 36,
+      "netWorth": 95336152.63,
+      "totalDebt": 0,
+    },
+    "goalStatus": [
+      {
+        "achieved": true,
+        "achievedMonth": 5,
+        "goalId": "goal-emergency-30",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+      {
+        "achieved": true,
+        "achievedMonth": 6,
+        "goalId": "goal-education-30",
+        "onTrack": true,
+        "progressPct": 100,
+        "shortfall": 0,
+      },
+    ],
+    "horizonMonths": 36,
+    "scenario": "scenario-30",
+    "warnings": [
+      {
+        "meta": {
+          "assumedDebtIds": "debt-card-30",
+        },
+        "month": null,
+        "reasonCode": "DEBT_RATE_ASSUMED",
+      },
+    ],
+  },
+]
+`;

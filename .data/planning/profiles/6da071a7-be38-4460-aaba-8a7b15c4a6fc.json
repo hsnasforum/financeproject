@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "id": "6da071a7-be38-4460-aaba-8a7b15c4a6fc",
+  "name": "Demo Profile",
+  "profile": {
+    "monthlyIncomeNet": 5100000,
+    "monthlyEssentialExpenses": 1800000,
+    "monthlyDiscretionaryExpenses": 850000,
+    "liquidAssets": 6500000,
+    "investmentAssets": 18000000,
+    "debts": [
+      {
+        "id": "demo-loan-1",
+        "name": "Mortgage A",
+        "balance": 78000000,
+        "minimumPayment": 1120000,
+        "apr": 0.048,
+        "remainingMonths": 180,
+        "repaymentType": "amortizing"
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal-emergency",
+        "name": "Emergency Fund",
+        "targetAmount": 16000000,
+        "currentAmount": 3500000,
+        "targetMonth": 24,
+        "priority": 5,
+        "minimumMonthlyContribution": 300000
+      },
+      {
+        "id": "goal-home-downpayment",
+        "name": "Lump Sum Goal",
+        "targetAmount": 45000000,
+        "currentAmount": 5000000,
+        "targetMonth": 84,
+        "priority": 4,
+        "minimumMonthlyContribution": 350000
+      },
+      {
+        "id": "goal-retirement",
+        "name": "Retirement",
+        "targetAmount": 420000000,
+        "currentAmount": 20000000,
+        "targetMonth": 300,
+        "priority": 5,
+        "minimumMonthlyContribution": 450000
+      }
+    ],
+    "cashflow": {
+      "monthlyIncomeKrw": 5100000,
+      "monthlyFixedExpensesKrw": 1800000,
+      "monthlyVariableExpensesKrw": 850000,
+      "phases": [
+        {
+          "id": "phase-work",
+          "title": "Working",
+          "range": {
+            "startMonth": 0,
+            "endMonth": 239
+          },
+          "monthlyIncomeKrw": 5100000,
+          "monthlyFixedExpensesKrw": 1800000,
+          "monthlyVariableExpensesKrw": 850000,
+          "incomeGrowthPctYoY": 0.02
+        },
+        {
+          "id": "phase-retire",
+          "title": "Retired",
+          "range": {
+            "startMonth": 240,
+            "endMonth": 359
+          },
+          "monthlyIncomeKrw": 450000,
+          "monthlyFixedExpensesKrw": 1550000,
+          "monthlyVariableExpensesKrw": 700000
+        }
+      ],
+      "pensions": [
+        {
+          "id": "pension-nps",
+          "title": "National Pension",
+          "range": {
+            "startMonth": 240,
+            "endMonth": 359
+          },
+          "monthlyPayoutKrw": 1200000
+        }
+      ],
+      "contributions": [
+        {
+          "id": "contrib-invest",
+          "title": "Invest Auto Transfer",
+          "range": {
+            "startMonth": 0,
+            "endMonth": 239
+          },
+          "from": "cash",
+          "to": "investments",
+          "monthlyAmountKrw": 300000
+        },
+        {
+          "id": "contrib-pension",
+          "title": "Pension Auto Transfer",
+          "range": {
+            "startMonth": 0,
+            "endMonth": 239
+          },
+          "from": "cash",
+          "to": "pension",
+          "monthlyAmountKrw": 150000
+        }
+      ],
+      "rules": {
+        "phaseOverlapPolicy": "sum"
+      }
+    }
+  },
+  "createdAt": "2026-02-28T08:59:13.416Z",
+  "updatedAt": "2026-02-28T08:59:13.416Z"
+}

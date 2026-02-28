@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { HelpDialog } from "@/components/HelpDialog";
 import { Container } from "@/components/ui/Container";
 import { Button } from "@/components/ui/Button";
 import { uiTextKo } from "@/lib/uiText.ko";
-
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { cn } from "@/lib/utils";
+import { buildTodoSummary } from "@/lib/feedback/todoSummary";
 
 const navItems = [
   { href: "/dashboard", label: "대시보드" },
@@ -15,99 +17,148 @@ const navItems = [
   { href: "/recommend", label: uiTextKo.nav.recommend },
   { href: "/planner", label: uiTextKo.nav.planner },
   { href: "/benefits", label: "혜택" },
-  { href: "/housing/subscription", label: "청약" },
 ];
 
+type HeaderFeedbackItem = {
+  id: string;
+  status: "OPEN" | "DOING" | "DONE";
+  priority: "P0" | "P1" | "P2" | "P3";
+  dueDate: string | null;
+  createdAt: string;
+  message: string;
+};
+
+type FeedbackListPayload = {
+  ok?: boolean;
+  data?: HeaderFeedbackItem[];
+};
+
 export function SiteHeader() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const isDevEnv = process.env.NODE_ENV !== "production";
+  const [todoCounts, setTodoCounts] = useState<{ overdue: number; todayHigh: number } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadTodoCounts() {
+      try {
+        const response = await fetch("/api/feedback/list?limit=200", { cache: "no-store" });
+        const payload = (await response.json()) as FeedbackListPayload;
+        if (!active) return;
+        if (!response.ok || !payload.ok || !Array.isArray(payload.data)) {
+          setTodoCounts(null);
+          return;
+        }
+        const summary = buildTodoSummary(payload.data);
+        setTodoCounts({
+          overdue: summary.overdueCount,
+          todayHigh: summary.todayHighCount,
+        });
+      } catch {
+        if (active) {
+          setTodoCounts(null);
+        }
+      }
+    }
+    void loadTodoCounts();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const badges = useMemo(() => {
+    if (!todoCounts) return [];
+    const next: Array<{ key: string; label: string; tone: "overdue" | "today" }> = [];
+    if (todoCounts.overdue > 0) {
+      next.push({ key: "overdue", label: `마감 ${todoCounts.overdue}`, tone: "overdue" });
+    }
+    if (todoCounts.todayHigh > 0) {
+      next.push({ key: "today", label: `오늘 ${todoCounts.todayHigh}`, tone: "today" });
+    }
+    return next;
+  }, [todoCounts]);
+
+  const navItemsWithOps = useMemo(
+    () => (isDevEnv ? [...navItems, { href: "/ops", label: "Ops" }] : navItems),
+    [isDevEnv],
+  );
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-100/60 bg-white/70 backdrop-blur-2xl">
+    <header className="sticky top-0 z-50 w-full bg-surface/80 backdrop-blur-xl transition-all duration-300">
       <Container>
-        <div className="flex h-16 items-center justify-between gap-4">
+        <div className="flex h-16 items-center justify-between gap-8">
           <div className="flex items-center gap-10">
             <BrandLogo />
 
-            <nav className="hidden md:flex items-center gap-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-slate-600 transition-all hover:bg-emerald-50 hover:text-emerald-700 active:scale-95"
-                >
-                  {item.label}
-                </Link>
-              ))}
+            <nav className="hidden md:flex items-center gap-1 bg-surface-muted/50 p-1 rounded-full">
+              {navItemsWithOps.map((item) => {
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "rounded-full px-5 py-2 text-sm font-bold transition-all duration-300",
+                      isActive 
+                        ? "bg-surface text-primary shadow-sm" 
+                        : "text-slate-500 hover:text-slate-900"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
             </nav>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden lg:flex items-center mr-2">
+          <div className="flex items-center gap-4">
+            <div className="hidden lg:flex items-center">
               <form action="/products/catalog" method="GET" className="relative group">
                 <input
                   name="q"
-                  className="h-10 w-64 rounded-[2rem] border border-slate-200 bg-slate-50 pl-4 pr-10 text-[11px] font-medium text-slate-900 outline-none transition-all duration-300 focus:w-72 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-300"
-                  placeholder="금융상품을 검색해보세요"
+                  className="h-10 w-64 rounded-full border-none bg-surface-muted pl-4 pr-10 text-xs font-semibold text-slate-900 outline-none transition-all duration-300 focus:w-80 focus:bg-surface focus:ring-2 focus:ring-primary/20 focus:shadow-sm"
+                  placeholder="금융상품, 기업, 혜택 검색"
                 />
-                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-emerald-600 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 </button>
               </form>
             </div>
             
-            <HelpDialog />
-            
-            <Button
-              variant="ghost"
-              size="sm"
-              className="md:hidden rounded-xl h-10 w-10 p-0"
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              aria-label="메뉴 열기"
-            >
-              {isMenuOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
-              )}
-            </Button>
+            <div className="flex items-center gap-2">
+              {badges.length > 0 ? (
+                <Link
+                  href="/feedback/list?status=OPEN"
+                  className="hidden md:inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-700 hover:border-slate-300"
+                >
+                  {badges.map((badge) => (
+                    <span
+                      key={badge.key}
+                      className={cn(
+                        "rounded-full px-2 py-0.5",
+                        badge.tone === "overdue"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-amber-100 text-amber-700",
+                      )}
+                    >
+                      {badge.label}
+                    </span>
+                  ))}
+                </Link>
+              ) : null}
+              <HelpDialog />
+              <div className="h-4 w-px bg-border mx-1 hidden md:block" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full h-10 w-10 p-0 text-slate-400 hover:text-primary hover:bg-surface-muted"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </Button>
+            </div>
           </div>
         </div>
       </Container>
-
-      {/* Mobile Menu Overlay */}
-      {isMenuOpen && (
-        <div className="fixed inset-0 top-16 z-50 bg-white/95 backdrop-blur-xl md:hidden animate-in fade-in slide-in-from-top-4 duration-300">
-          <nav className="flex flex-col p-4 gap-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center justify-between rounded-2xl p-4 text-base font-bold text-slate-900 transition-colors active:bg-slate-50"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {item.label}
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-slate-300"><path d="m9 18 6-6-6-6"/></svg>
-              </Link>
-            ))}
-            <div className="mt-4 border-t border-slate-100 pt-4 px-2">
-               <Link
-                href="/help"
-                className="flex items-center justify-between rounded-2xl p-3 text-sm font-semibold text-slate-500 hover:bg-slate-50"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {uiTextKo.nav.help}
-              </Link>
-              <Link
-                href="/public/dart"
-                className="flex items-center justify-between rounded-2xl p-3 text-sm font-semibold text-slate-500 hover:bg-slate-50"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                기업개황
-              </Link>
-            </div>
-          </nav>
-        </div>
-      )}
     </header>
   );
 }

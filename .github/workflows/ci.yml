@@ -50,5 +50,14 @@ jobs:
       - name: Verify
         run: pnpm verify
 
+      - name: Planning V2 Static Guard
+        run: pnpm planning:v2:guard
+
+      - name: Planning V2 Regression Gate
+        run: pnpm planning:v2:regress
+
+      - name: Planning V2 Smoke
+        run: pnpm planning:v2:smoke
+
       - name: Build
         run: pnpm build

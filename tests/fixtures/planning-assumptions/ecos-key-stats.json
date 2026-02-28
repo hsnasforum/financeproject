@@ -1,0 +1,37 @@
+[
+  {
+    "CLASS_NAME": "금리",
+    "KEYSTAT_NAME": "한국은행 기준금리",
+    "DATA_VALUE": "2.50",
+    "CYCLE": "20260215",
+    "UNIT_NAME": "%"
+  },
+  {
+    "CLASS_NAME": "금리",
+    "KEYSTAT_NAME": "콜금리(익일물)",
+    "DATA_VALUE": "2.73",
+    "CYCLE": "202602",
+    "UNIT_NAME": "%"
+  },
+  {
+    "CLASS_NAME": "금리",
+    "KEYSTAT_NAME": "CD수익률(91일)",
+    "DATA_VALUE": "2.88",
+    "CYCLE": "20260220",
+    "UNIT_NAME": "%"
+  },
+  {
+    "CLASS_NAME": "금리",
+    "KEYSTAT_NAME": "KORIBOR(3개월)",
+    "DATA_VALUE": "2.95",
+    "CYCLE": "20260220",
+    "UNIT_NAME": "%"
+  },
+  {
+    "CLASS_NAME": "금리",
+    "KEYSTAT_NAME": "통안증권수익률(364일)",
+    "DATA_VALUE": "2.91",
+    "CYCLE": "20260220",
+    "UNIT_NAME": "%"
+  }
+]

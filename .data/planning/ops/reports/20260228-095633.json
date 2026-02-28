@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "startedAt": "2026-02-28T09:56:33.600Z",
+  "finishedAt": "2026-02-28T09:56:36.170Z",
+  "steps": [
+    {
+      "name": "doctor",
+      "command": "pnpm planning:v2:doctor",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 529
+    },
+    {
+      "name": "assumptions-sync",
+      "command": "pnpm planning:assumptions:sync",
+      "status": "SKIPPED",
+      "note": "FRESH_DAYS_0"
+    },
+    {
+      "name": "complete",
+      "command": "pnpm planning:v2:complete",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 1891
+    },
+    {
+      "name": "regress",
+      "command": "pnpm planning:v2:regress",
+      "status": "SKIPPED",
+      "note": "with_regress_flag_not_set"
+    }
+  ],
+  "snapshot": {
+    "before": {
+      "id": "2026-02-28_2026-02-28-08-01-19",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-02-28T08:01:19.775Z"
+    },
+    "after": {
+      "id": "2026-02-28_2026-02-28-08-01-19",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-02-28T08:01:19.775Z"
+    },
+    "syncAttempted": false,
+    "syncResult": "SKIPPED",
+    "syncReason": "FRESH_DAYS_0"
+  }
+}

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 type Tab = {
   label: string;
@@ -21,7 +23,7 @@ export function SegmentedTabs() {
   const pathname = usePathname();
 
   return (
-    <div className="flex w-full overflow-hidden rounded-full bg-slate-100/80 p-1 ring-1 ring-slate-200/50">
+    <div className="flex w-full overflow-hidden rounded-full bg-slate-100 p-1 ring-1 ring-slate-200/50">
       {TABS.map((tab) => {
         const isActive = pathname === tab.href;
         
@@ -41,13 +43,19 @@ export function SegmentedTabs() {
           <Link
             key={tab.label}
             href={tab.href}
-            className={`flex-1 rounded-full px-4 py-2 text-center text-[11px] font-bold transition-all duration-300 ${
-              isActive
-                ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200/50"
-                : "text-slate-500 hover:text-slate-700 hover:bg-white/50"
-            }`}
+            className={cn(
+              "relative flex-1 rounded-full px-4 py-2 text-center text-[11px] font-bold transition-all duration-300 active:scale-95",
+              isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-700"
+            )}
           >
-            {tab.label}
+            {isActive && (
+              <motion.div
+                layoutId="product-nav-active"
+                className="absolute inset-0 rounded-full bg-white shadow-sm"
+                transition={{ type: "spring", bounce: 0.15, duration: 0.5 }}
+              />
+            )}
+            <span className="relative z-10">{tab.label}</span>
           </Link>
         );
       })}

@@ -1,0 +1,85 @@
+{
+  "id": "case-005",
+  "title": "은퇴 phase + 연금 수령 + 대환 오퍼",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 5200000,
+      "monthlyEssentialExpenses": 2300000,
+      "monthlyDiscretionaryExpenses": 900000,
+      "liquidAssets": 9000000,
+      "investmentAssets": 78000000,
+      "debts": [
+        {
+          "id": "mortgage-1",
+          "name": "Home Mortgage",
+          "balance": 165000000,
+          "minimumPayment": 980000,
+          "apr": 0.052,
+          "remainingMonths": 300,
+          "repaymentType": "amortizing"
+        }
+      ],
+      "goals": [
+        {
+          "id": "goal-retire",
+          "name": "Retirement Fund",
+          "targetAmount": 680000000,
+          "targetMonth": 240,
+          "priority": 5,
+          "minimumMonthlyContribution": 450000
+        }
+      ],
+      "cashflow": {
+        "phases": [
+          {
+            "id": "phase-work",
+            "title": "Work",
+            "range": { "startMonth": 0, "endMonth": 119 },
+            "monthlyIncomeKrw": 5200000,
+            "monthlyFixedExpensesKrw": 2300000,
+            "monthlyVariableExpensesKrw": 900000
+          },
+          {
+            "id": "phase-retire",
+            "title": "Retirement",
+            "range": { "startMonth": 120, "endMonth": 359 },
+            "monthlyIncomeKrw": 0,
+            "monthlyFixedExpensesKrw": 2100000,
+            "monthlyVariableExpensesKrw": 700000
+          }
+        ],
+        "pensions": [
+          {
+            "id": "pension-public",
+            "title": "Public Pension",
+            "range": { "startMonth": 120, "endMonth": 359 },
+            "monthlyPayoutKrw": 1400000
+          }
+        ]
+      },
+      "risk": {
+        "riskTolerance": "mid"
+      }
+    },
+    "horizonMonths": 360,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 5.0,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "monteCarlo": {
+      "paths": 700,
+      "seed": 11223
+    },
+    "debtOffers": [
+      {
+        "liabilityId": "mortgage-1",
+        "newAprPct": 4.1,
+        "feeKrw": 150000,
+        "title": "Refi Offer A"
+      }
+    ],
+    "includeProducts": false
+  }
+}

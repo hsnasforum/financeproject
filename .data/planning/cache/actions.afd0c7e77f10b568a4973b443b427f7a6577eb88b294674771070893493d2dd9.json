@@ -1,0 +1,272 @@
+{
+  "version": 1,
+  "kind": "actions",
+  "key": "afd0c7e77f10b568a4973b443b427f7a6577eb88b294674771070893493d2dd9",
+  "createdAt": "2026-02-28T07:40:06.538Z",
+  "expiresAt": "2026-02-28T13:40:06.538Z",
+  "meta": {
+    "horizonMonths": 12,
+    "assumptionsHash": "4d529b29a118c742bca7910c64286866503a4ac3cde0363cd2c51a7b885e8838",
+    "optionsHash": "3b8ca464735d8c936b02345588fcf92eaae8041883b9e0073a9a4d789b136bd5",
+    "snapshot": {
+      "missing": true
+    }
+  },
+  "data": {
+    "meta": {
+      "generatedAt": "2026-02-28T07:40:06.538Z",
+      "snapshot": {
+        "missing": true
+      },
+      "health": {
+        "warningsCount": 1,
+        "criticalCount": 0,
+        "warningCodes": [
+          "SNAPSHOT_MISSING"
+        ],
+        "flags": {
+          "snapshotMissing": true,
+          "optimisticReturn": false,
+          "riskMismatch": false
+        }
+      }
+    },
+    "data": {
+      "planSummary": {
+        "startNetWorthKrw": 601222.24,
+        "endNetWorthKrw": -1839514.92,
+        "worstCashMonthIndex": 11,
+        "worstCashKrw": -2139514.92,
+        "warningsCount": 4,
+        "goalsMissedCount": 1
+      },
+      "actions": [
+        {
+          "code": "FIX_NEGATIVE_CASHFLOW",
+          "severity": "critical",
+          "title": "월 현금흐름 적자 우선 해소",
+          "summary": "가용현금이 음수로 누적되어 자산 방어가 어려운 상태입니다. 지출 구조와 부채상환 조건을 먼저 조정하세요.",
+          "why": [
+            {
+              "code": "NEGATIVE_CASHFLOW",
+              "message": "Monthly obligations exceeded recurring income in at least one period.",
+              "data": {
+                "months": 12
+              }
+            },
+            {
+              "code": "INSOLVENT",
+              "message": "Liquid and investment assets were both insufficient to cover obligations.",
+              "data": {
+                "months": 10
+              }
+            },
+            {
+              "code": "METRIC_WORST_CASH",
+              "message": "최저 현금 시점이 확인되었습니다.",
+              "data": {
+                "worstCashMonthIndex": 11,
+                "worstCashKrw": -2139514.92
+              }
+            }
+          ],
+          "metrics": {
+            "monthlyDeficitKrw": 240299.96,
+            "worstCashMonthIndex": 11,
+            "worstCashKrw": -2139514.92
+          },
+          "steps": [
+            "고정지출 10% 절감 시나리오를 추가로 비교합니다.",
+            "월별 적자 폭이 큰 구간부터 생활비/고정비를 우선 조정합니다.",
+            "부채 상환조건(금리/기간/상환방식) 재검토 항목을 체크합니다."
+          ],
+          "cautions": [
+            "본 액션은 시뮬레이션 기반 운영 가이드입니다.",
+            "상품 가입/대환 실행 전 실제 약정 조건을 반드시 확인하세요."
+          ]
+        },
+        {
+          "code": "BUILD_EMERGENCY_FUND",
+          "severity": "warn",
+          "title": "비상금 완충 구간 확보",
+          "summary": "유동성 완충이 부족해 자산 인출 또는 차입으로 이어질 가능성이 있습니다. 비상금 목표를 먼저 채우세요.",
+          "why": [
+            {
+              "code": "EMERGENCY_FUND_DRAWDOWN",
+              "message": "Liquid cash went negative and required drawdown from investments.",
+              "data": {
+                "months": 2
+              }
+            },
+            {
+              "code": "INSOLVENT",
+              "message": "Liquid and investment assets were both insufficient to cover obligations.",
+              "data": {
+                "months": 10
+              }
+            }
+          ],
+          "metrics": {
+            "emergencyTargetKrw": 13200000,
+            "emergencyGapKrw": 12700000,
+            "currentCashKrw": 500000
+          },
+          "steps": [
+            "비상금 목표(기본 6개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.",
+            "중도 인출 비용/제약이 작은 후보를 우선 비교합니다.",
+            "비상금 달성 전에는 고위험 자산 비중 확대를 보류합니다."
+          ],
+          "cautions": [
+            "비상금은 수익률보다 접근성과 안정성을 우선합니다.",
+            "확률 결과는 보장이 아니며 시장/소득 변동에 따라 달라질 수 있습니다."
+          ],
+          "candidates": [
+            {
+              "kind": "deposit",
+              "finPrdtCd": "deposit-6",
+              "company": "Bank 6",
+              "name": "Deposit Product 6",
+              "termMonths": 6,
+              "rateMinPct": 2.5,
+              "rateMaxPct": 2.9,
+              "whyThis": [
+                "비상금 목적에 맞춰 단기 운용/접근성 중심으로 비교 가능한 후보입니다.",
+                "기간(6개월)과 금리 범위를 함께 확인하세요."
+              ],
+              "notes": [
+                "우대조건/중도해지/가입채널 조건은 실제 상품 상세에서 추가 확인이 필요합니다."
+              ]
+            },
+            {
+              "kind": "deposit",
+              "finPrdtCd": "deposit-7",
+              "company": "Bank 7",
+              "name": "Deposit Product 7",
+              "termMonths": 9,
+              "rateMinPct": 2.6,
+              "rateMaxPct": 3,
+              "whyThis": [
+                "비상금 목적에 맞춰 단기 운용/접근성 중심으로 비교 가능한 후보입니다.",
+                "기간(9개월)과 금리 범위를 함께 확인하세요."
+              ],
+              "notes": [
+                "우대조건/중도해지/가입채널 조건은 실제 상품 상세에서 추가 확인이 필요합니다."
+              ]
+            }
+          ]
+        },
+        {
+          "code": "COVER_LUMP_SUM_GOAL",
+          "severity": "warn",
+          "title": "목표자금 갭 축소: Home",
+          "summary": "목표월 기준 부족자금이 확인되었습니다. 기간에 맞는 적립 구조로 갭을 줄이세요.",
+          "why": [
+            {
+              "code": "GOAL_MISSED",
+              "message": "A goal was not fully funded by its target month.",
+              "data": {
+                "goalId": "goal-home",
+                "goalName": "Home",
+                "shortfall": 5700000
+              }
+            },
+            {
+              "code": "GOAL_GAP",
+              "message": "목표월 도달 시점 부족자금이 계산되었습니다.",
+              "data": {
+                "goalId": "goal-home",
+                "goalName": "Home",
+                "gapKrw": 5700000,
+                "targetMonth": 12
+              }
+            }
+          ],
+          "metrics": {
+            "gapKrw": 5700000,
+            "targetMonth": 12
+          },
+          "steps": [
+            "목표월까지의 월 적립 필요액을 재계산하고 자동이체로 고정합니다.",
+            "목표 기간과 유사한 만기 옵션 중심으로 후보를 비교합니다.",
+            "목표 우선순위를 조정해 재원 배분을 단순화합니다."
+          ],
+          "cautions": [
+            "후보 비교 결과는 선택지 제시이며 특정 상품 권유가 아닙니다."
+          ],
+          "candidates": [
+            {
+              "kind": "saving",
+              "finPrdtCd": "saving-8",
+              "company": "Bank 8",
+              "name": "Saving Product 8",
+              "termMonths": 12,
+              "rateMinPct": 2.7,
+              "rateMaxPct": 3.1,
+              "whyThis": [
+                "목표자금 만기 시점과 맞는 기간 옵션 비교 후보입니다.",
+                "기간-금리 균형 관점에서 비교하세요."
+              ],
+              "notes": [
+                "우대조건/중도해지/가입채널 조건은 실제 상품 상세에서 추가 확인이 필요합니다."
+              ]
+            },
+            {
+              "kind": "saving",
+              "finPrdtCd": "saving-4",
+              "company": "Bank 4",
+              "name": "Saving Product 4",
+              "termMonths": 12,
+              "rateMinPct": 2.3,
+              "rateMaxPct": 2.7,
+              "whyThis": [
+                "목표자금 만기 시점과 맞는 기간 옵션 비교 후보입니다.",
+                "기간-금리 균형 관점에서 비교하세요."
+              ],
+              "notes": [
+                "우대조건/중도해지/가입채널 조건은 실제 상품 상세에서 추가 확인이 필요합니다."
+              ]
+            }
+          ]
+        },
+        {
+          "code": "SET_ASSUMPTIONS_REVIEW",
+          "severity": "info",
+          "title": "가정값 정기 점검",
+          "summary": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+          "why": [
+            {
+              "code": "ASSUMPTIONS_BASELINE",
+              "message": "엔진 기본/스냅샷/오버라이드 가정이 결합되어 계산됩니다.",
+              "data": {
+                "snapshotAsOf": null,
+                "snapshotMissing": true,
+                "inflationPct": 2,
+                "investReturnPct": 5
+              }
+            }
+          ],
+          "metrics": {
+            "inflationPct": 2,
+            "investReturnPct": 5,
+            "cashReturnPct": 2
+          },
+          "steps": [
+            "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+            "가정 변경 전/후 시나리오 결과를 비교합니다.",
+            "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+          ],
+          "cautions": [
+            "가정값은 결과를 크게 바꿀 수 있으므로 변경 이력을 남기세요."
+          ]
+        }
+      ],
+      "healthWarnings": [
+        {
+          "code": "SNAPSHOT_MISSING",
+          "severity": "warn",
+          "message": "최신 지표 스냅샷이 없어 기본 가정으로 계산했습니다. /ops/assumptions에서 동기화 권장."
+        }
+      ]
+    }
+  }
+}

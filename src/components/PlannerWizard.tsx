@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
 import { QuickViewModal, type QuickViewKind } from "@/components/QuickViewModal";
 import { PlaybookModal } from "@/components/PlaybookModal";
 import { SnapshotDeltaCards } from "@/components/SnapshotDeltaCards";
@@ -24,15 +26,17 @@ import { uiTextKo } from "@/lib/uiText.ko";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Container } from "@/components/ui/Container";
+import { PageShell } from "@/components/ui/PageShell";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { AssumptionsCallout } from "@/components/ui/AssumptionsCallout";
+import { cn } from "@/lib/utils";
 
 const STEPS = [
-  uiTextKo.planner.stepGoal,
-  uiTextKo.planner.stepAnalysis,
-  uiTextKo.planner.stepAlternatives,
-  uiTextKo.planner.stepExecution,
-  uiTextKo.planner.stepMonitoring,
+  { label: uiTextKo.planner.stepGoal, icon: "🎯", color: "text-rose-500", bg: "bg-rose-50" },
+  { label: uiTextKo.planner.stepAnalysis, icon: "📊", color: "text-blue-500", bg: "bg-blue-50" },
+  { label: uiTextKo.planner.stepAlternatives, icon: "✨", color: "text-emerald-500", bg: "bg-emerald-50" },
+  { label: uiTextKo.planner.stepExecution, icon: "⚡", color: "text-amber-500", bg: "bg-amber-50" },
+  { label: uiTextKo.planner.stepMonitoring, icon: "📅", color: "text-indigo-500", bg: "bg-indigo-50" },
 ] as const;
 
 const DEFAULT_INPUT: PlannerInput = {
@@ -86,7 +90,87 @@ const INITIAL_QUICK_VIEW: QuickViewState = {
 
 function formatMoney(baseValue: number, unit: PlannerInput["unit"]): string {
   const divided = unit === "MANWON" ? baseValue / 10000 : baseValue;
-  return `${divided.toLocaleString()} ${unit === "MANWON" ? "만원" : "원"}`;
+  if (divided >= 10000) return `${(divided / 10000).toFixed(1)}억원`;
+  if (divided >= 1) return `${divided.toLocaleString()}만원`;
+  return `${(divided * 10000).toLocaleString()}원`;
+}
+
+function InputHint({ value, unit }: { value: number, unit: PlannerInput["unit"] }) {
+  if (!value) return null;
+  const inManwon = unit === "MANWON" ? value : value / 10000;
+  if (inManwon >= 10000) {
+    return <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{(inManwon / 10000).toFixed(1)}억원</span>;
+  }
+  return <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{inManwon.toLocaleString()}만원</span>;
+}
+
+function FinancialHealthGauge({ score }: { score: number }) {
+  const circumference = 2 * Math.PI * 40;
+  
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative h-24 w-24">
+        <svg className="h-full w-full -rotate-90">
+          <circle cx="48" cy="48" r="40" fill="none" stroke="currentColor" strokeWidth="8" className="text-slate-100" />
+          <motion.circle 
+            cx="48" cy="48" r="40" fill="none" stroke="currentColor" strokeWidth="8" 
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            animate={{ strokeDashoffset: circumference - (score / 100) * circumference }}
+            transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
+            strokeLinecap="round"
+            className={cn(
+              score > 70 ? "text-emerald-500" : score > 40 ? "text-amber-500" : "text-rose-500"
+            )}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.span 
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 1 }}
+            className="text-xl font-black text-slate-900 tabular-nums"
+          >
+            {score}
+          </motion.span>
+        </div>
+      </div>
+      <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">Health Score</p>
+    </div>
+  );
+}
+
+function MascotGuide({ step }: { step: number }) {
+  const messages = [
+    "안녕하세요! 먼저 당신이 이루고 싶은 재무 목표를 알려주세요. 구체적일수록 정확한 설계가 가능합니다.",
+    "현재의 수입과 지출을 꼼꼼히 적어주세요. 이 데이터가 모든 분석의 기초가 됩니다.",
+    "분석이 완료되었습니다! 현재 상태를 진단하고, 목표 달성을 위한 최적의 경로를 제안해 드립니다.",
+    "이제 실행할 시간입니다. 이번 주와 이번 달에 꼭 해야 할 일들을 체크리스트로 정리했습니다.",
+    "설계된 내용을 저장하고 주기적으로 점검하세요. 변화가 생기면 언제든 다시 설계를 수정할 수 있습니다."
+  ];
+
+  return (
+    <motion.div 
+      key={step}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative mb-8 flex items-center gap-6 p-6 bg-white rounded-3xl shadow-card border border-emerald-100 overflow-hidden group"
+    >
+      <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
+        <Image src="/nb/mascot.png" alt="" width={160} height={160} />
+      </div>
+      <motion.div 
+        whileHover={{ scale: 1.05, rotate: 5 }}
+        className="relative shrink-0 h-16 w-16 rounded-2xl bg-emerald-50 flex items-center justify-center overflow-hidden ring-4 ring-emerald-50/50"
+      >
+        <Image src="/nb/mascot.png" alt="Mascot" width={64} height={64} className="object-cover" />
+      </motion.div>
+      <div className="relative">
+        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Financial Assistant</p>
+        <p className="text-sm font-bold text-slate-700 leading-relaxed">{messages[step]}</p>
+      </div>
+    </motion.div>
+  );
 }
 
 function openNewTab(href: string) {
@@ -115,15 +199,20 @@ function TrendRow({ label, values, color }: { label: string; values: number[]; c
   const sign = diff > 0 ? "+" : "";
 
   return (
-    <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white p-4 shadow-sm">
+    <motion.div 
+      whileHover={{ y: -2 }}
+      className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 shadow-sm transition-all hover:border-primary/20"
+    >
       <div>
-        <p className="text-sm font-bold text-slate-700">{label}</p>
-        <p className={`text-xs font-medium ${diff >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-          최근 변화 {sign}{diff.toFixed(1)}%
+        <p className="text-[11px] font-black text-slate-400 uppercase mb-1 tracking-tight">{label}</p>
+        <p className={cn("text-xs font-bold tabular-nums", diff >= 0 ? "text-emerald-600" : "text-red-600")}>
+          {sign}{diff.toFixed(1)}%
         </p>
       </div>
-      <Sparkline values={values} color={color} />
-    </div>
+      <div className="w-24">
+        <Sparkline values={values} color={color} />
+      </div>
+    </motion.div>
   );
 }
 
@@ -209,6 +298,15 @@ export function PlannerWizard() {
   const emergencyGapTrend = trendSource.map((s) => s.metrics.emergencyGap);
   const goalRequiredTrend = trendSource.map((s) => s.metrics.goalRequiredMonthly);
   const debtRatioTrend = trendSource.map((s) => s.metrics.debtPaymentRatio * 100);
+  
+  const healthScore = useMemo(() => {
+    let score = 70;
+    if (plan.metrics.debtPaymentRatio > 0.3) score -= 20;
+    if (plan.metrics.emergencyGap > 0) score -= 15;
+    if (!plan.metrics.goalFeasible) score -= 10;
+    return Math.max(0, Math.min(100, score));
+  }, [plan]);
+
   const insuranceMetrics = useMemo(
     () =>
       computeInsuranceMetrics({
@@ -245,596 +343,689 @@ export function PlannerWizard() {
   );
 
   return (
-    <main className="py-10 bg-background min-h-screen">
-      <Container>
-        <SectionHeader 
-          title={uiTextKo.planner.title} 
-          subtitle={uiTextKo.planner.subtitle} 
-          icon="/icons/ic-planner.png"
-          className="mb-8"
-        />
+    <PageShell className="bg-surface-muted">
+      <SectionHeader 
+        title={uiTextKo.planner.title} 
+        subtitle={uiTextKo.planner.subtitle} 
+        icon="/icons/ic-planner.png"
+        className="mb-8"
+      />
 
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar Navigation */}
-          <div className="md:w-64 flex-shrink-0">
-             <div className="sticky top-24 space-y-2">
-                {STEPS.map((label, idx) => (
-                  <button
-                    key={label}
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Sidebar Navigation */}
+        <div className="md:w-72 flex-shrink-0">
+           <div className="sticky top-24 space-y-3">
+              {STEPS.map((stepItem, idx) => {
+                const isActive = step === idx;
+                const isCompleted = step > idx;
+                return (
+                  <motion.button
+                    key={stepItem.label}
                     type="button"
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                      step === idx 
-                        ? "bg-primary text-white shadow-lg shadow-primary/20 scale-[1.02]" 
-                        : "bg-white text-slate-500 hover:bg-slate-50 border border-slate-100"
-                    }`}
+                    whileHover={{ x: 4 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={cn(
+                      "w-full group flex items-center gap-4 px-5 py-4 rounded-[1.5rem] text-sm font-bold transition-all duration-300",
+                      isActive 
+                        ? "bg-primary text-white shadow-xl shadow-primary/20 scale-[1.03]" 
+                        : "bg-surface text-slate-500 hover:bg-slate-50 hover:text-slate-900 shadow-sm border border-border/50"
+                    )}
                     onClick={() => setStep(idx)}
                   >
-                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] ${step === idx ? "bg-white/20 text-white" : "bg-slate-100 text-slate-400"}`}>
-                      {idx + 1}
-                    </span>
-                    {label}
-                  </button>
-                ))}
-
-                <div className="mt-8 p-4 bg-slate-900 rounded-xl text-white shadow-xl">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-3 tracking-widest">설정</p>
-                  <p className="text-xs font-bold mb-2">링크 오픈 방식</p>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${linkOpenMode === "quickview" ? "border-primary" : "border-slate-600"}`}>
-                        {linkOpenMode === "quickview" && <div className="h-2 w-2 rounded-full bg-primary" />}
-                      </div>
-                      <input
-                        type="radio"
-                        className="hidden"
-                        name="link-open-mode"
-                        checked={linkOpenMode === "quickview"}
-                        onChange={() => {
-                          setLinkOpenModeState("quickview");
-                          setLinkOpenMode("quickview");
-                        }}
-                      />
-                      <span className={`text-[11px] ${linkOpenMode === "quickview" ? "text-white" : "text-slate-400"}`}>빠른 보기(추천)</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center ${linkOpenMode === "newtab" ? "border-primary" : "border-slate-600"}`}>
-                        {linkOpenMode === "newtab" && <div className="h-2 w-2 rounded-full bg-primary" />}
-                      </div>
-                      <input
-                        type="radio"
-                        className="hidden"
-                        name="link-open-mode"
-                        checked={linkOpenMode === "newtab"}
-                        onChange={() => {
-                          setLinkOpenModeState("newtab");
-                          setLinkOpenMode("newtab");
-                        }}
-                      />
-                      <span className={`text-[11px] ${linkOpenMode === "newtab" ? "text-white" : "text-slate-400"}`}>새 탭 열기</span>
-                    </label>
-                  </div>
-                </div>
-             </div>
-          </div>
-
-          {/* Main Content Area */}
-          <div className="flex-1 space-y-6">
-            {step === 0 && (
-              <Card className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <div className="border-l-4 border-primary pl-4">
-                  <h2 className="text-xl font-bold text-slate-900">목표 설정</h2>
-                  <p className="text-sm text-slate-500 mt-1">이루고 싶은 재무 목표를 구체적으로 입력해주세요.</p>
-                </div>
-                
-                <div className="grid gap-6 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">목표 명칭</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.goalName} onChange={(e) => setText("goalName", e.target.value)} placeholder="예: 결혼 자금, 내 집 마련" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">금액 단위</label>
-                    <select className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none" value={input.unit} onChange={(e) => setText("unit", e.target.value as PlannerInput["unit"])}>
-                      <option value="MANWON">만원</option>
-                      <option value="KRW">원</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">목표 금액 ({input.unit === "MANWON" ? "만원" : "원"})</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm font-bold focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.goalAmount} onChange={(e) => setNumber("goalAmount", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">목표 기한 (개월)</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.goalDeadlineMonths} onChange={(e) => setNumber("goalDeadlineMonths", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">우선 순위</label>
-                    <select className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none" value={input.goalPriority} onChange={(e) => setText("goalPriority", e.target.value as PlannerInput["goalPriority"])}>
-                      <option value="high">높음 (필수 목표)</option>
-                      <option value="medium">보통</option>
-                      <option value="low">낮음 (여유 시)</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">위험 성향</label>
-                    <select className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none" value={input.riskProfile} onChange={(e) => setText("riskProfile", e.target.value as PlannerInput["riskProfile"])}>
-                      <option value="conservative">안정형 (원금 보전 중시)</option>
-                      <option value="balanced">중립형 (적정 수익 추구)</option>
-                      <option value="aggressive">공격형 (높은 수익 추구)</option>
-                    </select>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {step === 1 && (
-              <Card className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <div className="border-l-4 border-primary pl-4">
-                  <h2 className="text-xl font-bold text-slate-900">현황 분석</h2>
-                  <p className="text-sm text-slate-500 mt-1">현재의 소득과 지출, 자산 상태를 분석합니다.</p>
-                </div>
-                
-                <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">월 소득 (세후)</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm font-bold text-emerald-600 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.monthlyIncome} onChange={(e) => setNumber("monthlyIncome", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">월 고정 지출</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm text-red-500 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.monthlyFixedExpense} onChange={(e) => setNumber("monthlyFixedExpense", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">월 변동 지출</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm text-red-500 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.monthlyVariableExpense} onChange={(e) => setNumber("monthlyVariableExpense", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">현금성 자산</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.cashAssets} onChange={(e) => setNumber("cashAssets", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">부채 총액</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.debtBalance} onChange={(e) => setNumber("debtBalance", e.target.value)} />
-                  </div>
-                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">월 부채 상환액</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.monthlyDebtPayment} onChange={(e) => setNumber("monthlyDebtPayment", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">비상금 목표 (개월)</label>
-                    <select className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none" value={input.emergencyTargetMonths} onChange={(e) => setNumber("emergencyTargetMonths", e.target.value)}>
-                      <option value={3}>3개월</option>
-                      <option value={6}>6개월</option>
-                      <option value={12}>12개월</option>
-                    </select>
-                  </div>
-                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">가정 연 수익률 (%)</label>
-                    <input className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all" value={input.assumedAnnualReturn} onChange={(e) => setNumber("assumedAnnualReturn", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-500 uppercase">보험 가입 상태</label>
-                    <select className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none transition-all appearance-none" value={input.insuranceStatus} onChange={(e) => setText("insuranceStatus", e.target.value as PlannerInput["insuranceStatus"])}>
-                      <option value="unknown">모름</option>
-                      <option value="none">없음</option>
-                      <option value="basic">기본 가입</option>
-                      <option value="adequate">충분</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-border bg-surface-muted p-4">
-                    <p className="text-sm font-semibold text-slate-900">보험 점검(입력 기반)</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase">월 보험료 ({input.unit === "MANWON" ? "만원" : "원"})
-                        <input className="mt-1 h-10 w-full rounded-xl border border-border bg-white px-3" value={input.monthlyInsurancePremium} onChange={(e) => setNumber("monthlyInsurancePremium", e.target.value)} />
-                      </label>
-                      <label className="text-xs font-bold text-slate-500 uppercase">실손 가입 여부
-                        <select className="mt-1 h-10 w-full rounded-xl border border-border bg-white px-3" value={input.indemnityStatus} onChange={(e) => setText("indemnityStatus", e.target.value as PlannerInput["indemnityStatus"])}>
-                          <option value="unknown">모름</option>
-                          <option value="yes">가입</option>
-                          <option value="no">미가입</option>
-                        </select>
-                      </label>
+                    <div className={cn(
+                      "h-8 w-8 rounded-xl flex items-center justify-center text-base transition-all",
+                      isActive ? "bg-white/20" : cn("bg-surface-muted group-hover:bg-white", stepItem.color)
+                    )}>
+                      {isCompleted ? "✓" : stepItem.icon}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                      <label className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-2 py-1">
-                        <input type="checkbox" checked={input.insurancePurposeHealth} onChange={(e) => setBoolean("insurancePurposeHealth", e.target.checked)} />
-                        건강
-                      </label>
-                      <label className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-2 py-1">
-                        <input type="checkbox" checked={input.insurancePurposeAccident} onChange={(e) => setBoolean("insurancePurposeAccident", e.target.checked)} />
-                        상해
-                      </label>
-                      <label className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-2 py-1">
-                        <input type="checkbox" checked={input.insurancePurposeLife} onChange={(e) => setBoolean("insurancePurposeLife", e.target.checked)} />
-                        사망
-                      </label>
-                      <label className="inline-flex items-center gap-1 rounded-full border border-border bg-white px-2 py-1">
-                        <input type="checkbox" checked={input.insurancePurposeIncome} onChange={(e) => setBoolean("insurancePurposeIncome", e.target.checked)} />
-                        소득보장
-                      </label>
-                    </div>
-                    <p className="mt-3 text-sm text-slate-700">
-                      보험료 부담률: <span className="font-semibold">{insuranceMetrics.premiumRatioPct.toFixed(1)}%</span>{" "}
-                      · 상태:{" "}
-                      <span className="font-semibold">
-                        {insuranceMetrics.level === "high" ? "주의" : insuranceMetrics.level === "ok" ? "적정(참고)" : "여유"}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">{insuranceMetrics.explain}</p>
-                  </div>
+                    <span className="flex-1 text-left tracking-tight">{stepItem.label}</span>
+                    {isActive && <motion.div layoutId="active-step-dot" className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />}
+                  </motion.button>
+                );
+              })}
 
-                  <div className="rounded-2xl border border-border bg-surface-muted p-4">
-                    <p className="text-sm font-semibold text-slate-900">노후 준비 점검(입력 기반)</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase">연금자산 합계 ({input.unit === "MANWON" ? "만원" : "원"})
-                        <input className="mt-1 h-10 w-full rounded-xl border border-border bg-white px-3" value={input.retirementAssets} onChange={(e) => setNumber("retirementAssets", e.target.value)} />
-                      </label>
-                      <label className="text-xs font-bold text-slate-500 uppercase">월 납입액 ({input.unit === "MANWON" ? "만원" : "원"})
-                        <input className="mt-1 h-10 w-full rounded-xl border border-border bg-white px-3" value={input.retirementMonthlyContribution} onChange={(e) => setNumber("retirementMonthlyContribution", e.target.value)} />
-                      </label>
-                      <label className="text-xs font-bold text-slate-500 uppercase">예상 국민연금 월수령액 ({input.unit === "MANWON" ? "만원" : "원"})
-                        <input className="mt-1 h-10 w-full rounded-xl border border-border bg-white px-3" value={input.npsExpectedMonthly} onChange={(e) => setNumber("npsExpectedMonthly", e.target.value)} />
-                      </label>
-                      <label className="text-xs font-bold text-slate-500 uppercase">은퇴후 필요비율(%)
-                        <input className="mt-1 h-10 w-full rounded-xl border border-border bg-white px-3" value={input.retirementNeedRatioPct} onChange={(e) => setNumber("retirementNeedRatioPct", e.target.value)} />
-                      </label>
-                    </div>
-                    <p className="mt-3 text-sm text-slate-700">
-                      필요 생활비(월): <span className="font-semibold">{formatMoney(retirementMetrics.retirementNeedMonthlyWon, input.unit)}</span>
-                    </p>
-                    <p className="mt-1 text-sm text-slate-700">
-                      준비 격차(자산환산): <span className="font-semibold">{formatMoney(retirementMetrics.gapWon, input.unit)}</span>
-                    </p>
-                    <ul className="mt-2 list-disc pl-5 text-xs text-slate-600">
-                      {retirementMetrics.actions.map((action) => (
-                        <li key={action}>{action}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <PlannerExternalModules />
-                
-                <Card className="p-0 overflow-hidden border-none shadow-lg">
-                   <div className="bg-slate-900 p-6 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                      <div>
-                        <Badge variant="success" className="mb-2 bg-emerald-500 text-white border-none">종합 진단 결과</Badge>
-                        <h3 className="text-2xl font-black">{plan.summaryLine}</h3>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">월 가용 자금</p>
-                         <p className="text-2xl font-black text-emerald-400">{formatMoney(plan.metrics.freeCashflow, input.unit)}</p>
-                      </div>
-                   </div>
-                   <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-slate-100 bg-white">
-                      <div className="p-6">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">월 저축 가능액</p>
-                        <p className="text-lg font-bold text-slate-900">{formatMoney(plan.metrics.monthlySaving, input.unit)}</p>
-                      </div>
-                      <div className="p-6">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">비상금 준비</p>
-                        <p className={`text-lg font-bold ${plan.metrics.emergencyGap <= 0 ? "text-emerald-600" : "text-amber-600"}`}>
-                          {plan.metrics.emergencyMonths.toFixed(1)}개월분
-                        </p>
-                      </div>
-                      <div className="p-6">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">부채 상환 비중</p>
-                        <p className={`text-lg font-bold ${(plan.metrics.debtPaymentRatio * 100) > 30 ? "text-red-600" : "text-slate-900"}`}>
-                          {(plan.metrics.debtPaymentRatio * 100).toFixed(1)}%
-                        </p>
-                      </div>
-                      <div className="p-6">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">목표 달성 가능성</p>
-                        <Badge variant={plan.metrics.goalFeasible ? "success" : "warning"} className="font-black text-sm px-3">
-                          {plan.metrics.goalFeasible ? "매우 높음" : "추가 필요"}
-                        </Badge>
-                      </div>
-                   </div>
-                </Card>
-
+              <Card className="mt-8 p-6 bg-hero-navy text-white border-none shadow-2xl relative overflow-hidden">
+                <div className="absolute -right-4 -bottom-4 h-24 w-24 bg-white/5 rounded-full blur-2xl" />
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-widest">UI Prefs</p>
                 <div className="space-y-4">
-                   <h3 className="text-lg font-bold text-slate-900 px-2 flex items-center gap-2">
-                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/><path d="m5 7 3 5-3 5"/><path d="m19 7-3 5 3 5"/></svg>
-                     단계별 맞춤 제언
-                   </h3>
-                   {plan.recommendations.map((rec) => (
-                    <Card key={rec.id} className="p-0 overflow-hidden group hover:ring-2 hover:ring-primary/10 transition-all">
-                      <div className="flex flex-col md:flex-row">
-                        <div className={`w-full md:w-2 ${rec.priority === "P0" ? "bg-red-500" : rec.priority === "P1" ? "bg-amber-500" : "bg-blue-500"}`} />
-                        <div className="flex-1 p-6">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-tighter border-slate-200">
-                              {rec.category}
-                            </Badge>
-                            {SHOW_RULE_DEBUG ? <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{rec.id}</span> : null}
-                          </div>
-                          
-                          <h4 className="text-xl font-bold text-slate-900 mb-4">{rec.title}</h4>
+                  <div>
+                    <p className="text-xs font-bold mb-3 text-slate-300">상품 상세 열기</p>
+                    <div className="grid grid-cols-2 gap-2 bg-black/20 p-1 rounded-xl">
+                      <button 
+                        onClick={() => { setLinkOpenModeState("quickview"); setLinkOpenMode("quickview"); }}
+                        className={cn("py-1.5 rounded-lg text-[10px] font-bold transition-all", linkOpenMode === "quickview" ? "bg-white text-primary" : "text-slate-400")}
+                      >
+                        빠른 보기
+                      </button>
+                      <button 
+                        onClick={() => { setLinkOpenModeState("newtab"); setLinkOpenMode("newtab"); }}
+                        className={cn("py-1.5 rounded-lg text-[10px] font-bold transition-all", linkOpenMode === "newtab" ? "bg-white text-primary" : "text-slate-400")}
+                      >
+                        새 탭
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+           </div>
+        </div>
 
-                          <div className="grid md:grid-cols-2 gap-8">
-                            <div>
-                               <p className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-widest flex items-center gap-1.5">
-                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
-                                 제안 배경
-                               </p>
-                               <ul className="space-y-2">
-                                {rec.rationale.map((line, i) => (
-                                  <li key={i} className="text-sm text-slate-600 leading-relaxed flex items-start gap-2">
-                                    <span className="h-1.5 w-1.5 rounded-full bg-slate-300 mt-1.5 shrink-0" />
-                                    {line}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div>
-                               <p className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-widest flex items-center gap-1.5">
-                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="m5 9 7-7 7 7"/><path d="m5 15 7 7 7-7"/></svg>
-                                 실행 방안
-                               </p>
-                               <div className="space-y-3">
-                                {rec.actions.map((action, i) => (
-                                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
-                                    <span className="text-sm font-bold text-slate-700">{action.label}</span>
-                                    {action.href && (
-                                      <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] bg-white" onClick={() => openAction(action)}>
-                                        {linkOpenMode === "newtab" ? "새 탭" : "빠른 보기"}
-                                      </Button>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between">
-                             <p className="text-[10px] text-slate-400 italic font-medium">
-                               <span className="font-black text-slate-500 mr-2 uppercase tracking-tighter">Caution</span>
-                               {rec.caution || "확정 수익이 아닌 가정 기반 데이터입니다."}
-                             </p>
-                             {SHOW_RULE_DEBUG ? (
-                               <div className="flex gap-1">
-                                  {rec.triggeredBy.map(tag => (
-                                    <Badge key={tag} className="text-[9px] bg-slate-100 text-slate-500 border-none px-1.5">#{tag}</Badge>
-                                  ))}
-                               </div>
-                             ) : null}
+        {/* Main Content Area */}
+        <div className="flex-1 space-y-6">
+          <MascotGuide step={step} />
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, ease: "easeInOut" }}
+            >
+              {step === 0 && (
+                <Card className="p-10 space-y-10">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Step 1. 목표 설정</h2>
+                      <p className="text-sm font-medium text-slate-500 mt-1">당신의 꿈을 현실로 바꾸기 위한 첫 걸음입니다.</p>
+                    </div>
+                    <div className="h-12 w-12 rounded-2xl bg-rose-50 flex items-center justify-center text-2xl shadow-sm ring-1 ring-rose-100">🎯</div>
+                  </div>
+                  
+                  <div className="grid gap-8 sm:grid-cols-2 bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100 shadow-inner">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">목표 명칭</label>
+                      <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none" value={input.goalName} onChange={(e) => setText("goalName", e.target.value)} placeholder="예: 결혼 자금, 내 집 마련" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">금액 단위</label>
+                      <select className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none appearance-none cursor-pointer" value={input.unit} onChange={(e) => setText("unit", e.target.value as PlannerInput["unit"])}>
+                        <option value="MANWON">만원 (Default)</option>
+                        <option value="KRW">원 (Won)</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">목표 금액</label>
+                      <div className="relative">
+                        <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 pr-24 text-base font-black text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none tabular-nums" value={input.goalAmount} onChange={(e) => setNumber("goalAmount", e.target.value)} />
+                        <InputHint value={input.goalAmount} unit={input.unit} />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">목표 기한 (개월)</label>
+                      <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-black text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none tabular-nums" value={input.goalDeadlineMonths} onChange={(e) => setNumber("goalDeadlineMonths", e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">우선 순위</label>
+                      <div className="grid grid-cols-3 gap-2 p-1.5 bg-white rounded-2xl border border-border shadow-sm">
+                        {["low", "medium", "high"].map((p) => (
+                          <button 
+                            key={p} 
+                            onClick={() => setText("goalPriority", p)}
+                            className={cn(
+                              "py-2 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all",
+                              input.goalPriority === p ? "bg-primary text-white shadow-md" : "text-slate-400 hover:bg-slate-50"
+                            )}
+                          >
+                            {p === "high" ? "필수" : p === "medium" ? "보통" : "여유"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">위험 성향</label>
+                      <select className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none appearance-none cursor-pointer" value={input.riskProfile} onChange={(e) => setText("riskProfile", e.target.value as PlannerInput["riskProfile"])}>
+                        <option value="conservative">안정형 (원금 보전)</option>
+                        <option value="balanced">중립형 (적정 수익)</option>
+                        <option value="aggressive">공격형 (높은 수익)</option>
+                      </select>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {step === 1 && (
+                <Card className="p-10 space-y-10">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Step 2. 자산 현황 분석</h2>
+                      <p className="text-sm font-medium text-slate-500 mt-1">정확한 진단을 위해 수입과 지출 정보를 입력해주세요.</p>
+                    </div>
+                    <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-2xl shadow-sm ring-1 ring-blue-100">📊</div>
+                  </div>
+                  
+                  <div className="space-y-10">
+                    <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+                      {[
+                        { key: "monthlyIncome", label: "월 소득 (세후)", color: "emerald" },
+                        { key: "monthlyFixedExpense", label: "월 고정 지출", color: "rose" },
+                        { key: "monthlyVariableExpense", label: "월 변동 지출", color: "rose" },
+                        { key: "cashAssets", label: "현금성 자산", color: "primary" },
+                        { key: "debtBalance", label: "부채 총액", color: "slate" },
+                        { key: "monthlyDebtPayment", label: "월 부채 상환", color: "slate" },
+                      ].map((field) => (
+                        <div key={field.key} className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] ml-1">{field.label}</label>
+                          <div className="relative">
+                            <input 
+                              className={cn(
+                                "w-full h-12 rounded-2xl border border-border bg-white px-4 pr-24 text-sm font-black transition-all outline-none focus:ring-4 shadow-sm",
+                                field.color === "emerald" ? "text-emerald-600 focus:ring-emerald-500/10" :
+                                field.color === "rose" ? "text-rose-600 focus:ring-rose-500/10" :
+                                "text-slate-900 focus:ring-primary/10"
+                              )}
+                              value={input[field.key as keyof PlannerInput] as string} 
+                              onChange={(e) => setNumber(field.key as keyof PlannerInput, e.target.value)} 
+                            />
+                            <InputHint value={input[field.key as keyof PlannerInput] as number} unit={input.unit} />
                           </div>
                         </div>
-                      </div>
-                    </Card>
-                   ))}
-                </div>
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <Card className="p-8">
-                  <div className="flex items-center justify-between mb-8">
-                    <div className="border-l-4 border-primary pl-4">
-                      <h2 className="text-xl font-bold text-slate-900">{uiTextKo.planner.sectionExecution}</h2>
-                      <p className="text-sm text-slate-500 mt-1">오늘 바로 시작할 수 있는 항목들입니다.</p>
+                      ))}
                     </div>
-                    <Badge variant="secondary" className="px-3 py-1 text-xs">
-                      완료 {Object.values(checkedMap).filter(Boolean).length} / {plan.checklist.length}
-                    </Badge>
-                  </div>
 
-                  <div className="grid gap-8 md:grid-cols-2">
-                    {["이번 주", "이번 달"].map(bucket => (
-                      <div key={bucket} className="space-y-4">
-                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2">{bucket}</h3>
-                        <div className="space-y-3">
-                          {plan.checklist.filter(it => it.bucket === bucket).map(item => (
-                            <div key={item.id} className={`flex items-start gap-4 p-4 rounded-xl border transition-all ${checkedMap[item.id] ? "bg-slate-50 border-slate-200 opacity-60" : "bg-white border-slate-100 shadow-sm"}`}>
-                              <button 
-                                className={`mt-1 flex-shrink-0 h-5 w-5 rounded border flex items-center justify-center transition-colors ${checkedMap[item.id] ? "bg-primary border-primary text-white" : "border-slate-300 hover:border-primary"}`}
-                                onClick={() => toggleChecklist(item.id)}
-                              >
-                                {checkedMap[item.id] && <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>}
-                              </button>
-                              <div className="flex-1">
-                                <p className={`text-sm font-bold ${checkedMap[item.id] ? "text-slate-400 line-through" : "text-slate-900"}`}>{item.label}</p>
-                                <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">{item.reason}</p>
-                                <div className="mt-3 flex gap-2">
-                                  {item.href && (
-                                    <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] bg-white" onClick={() => openAction({ label: item.label, href: item.href })}>
-                                      이동하기
-                                    </Button>
-                                  )}
-                                  {item.playbookId && (
-                                    <Button variant="secondary" size="sm" className="h-7 px-2 text-[10px]" onClick={() => openPlaybook(item.playbookId)}>
-                                      방법 보기
-                                    </Button>
-                                  )}
+                    {/* Quick Calculator View */}
+                    <div className="p-6 rounded-[2.5rem] bg-emerald-900 text-white shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                       <div className="absolute inset-0 bg-gradient-to-r from-emerald-800 to-transparent pointer-events-none" />
+                       <div className="relative z-10">
+                          <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Estimated Monthly Saving</p>
+                          <p className="text-3xl font-black tabular-nums tracking-tight">
+                            {formatMoney(plan.metrics.monthlySaving, input.unit)}
+                          </p>
+                       </div>
+                       <div className="relative z-10 text-right">
+                          <div className={cn(
+                            "inline-flex items-center gap-2 px-4 py-2 rounded-full font-black text-xs",
+                            plan.metrics.goalFeasible ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                          )}>
+                            {plan.metrics.goalFeasible ? "✓ 목표 달성 가능" : "⚠ 재원 부족 예상"}
+                          </div>
+                       </div>
+                    </div>
+
+                    <div className="grid gap-6 lg:grid-cols-2 border-t border-slate-100 pt-10">
+                      <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 shadow-sm space-y-6">
+                        <p className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-emerald-500" /> 보험 점검
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">월 보험료</label>
+                            <input className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all shadow-sm" value={input.monthlyInsurancePremium} onChange={(e) => setNumber("monthlyInsurancePremium", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">실손 가입 여부</label>
+                            <select className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm font-bold outline-none shadow-sm cursor-pointer" value={input.indemnityStatus} onChange={(e) => setText("indemnityStatus", e.target.value as PlannerInput["indemnityStatus"])}>
+                              <option value="unknown">모름</option>
+                              <option value="yes">가입됨</option>
+                              <option value="no">미가입</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {[
+                            { key: "insurancePurposeHealth", label: "건강" },
+                            { key: "insurancePurposeAccident", label: "상해" },
+                            { key: "insurancePurposeLife", label: "사망" },
+                            { key: "insurancePurposeIncome", label: "소득" },
+                          ].map((item) => (
+                            <motion.label 
+                              key={item.key} 
+                              whileTap={{ scale: 0.95 }}
+                              className={cn(
+                                "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer",
+                                input[item.key as keyof PlannerInput] ? "bg-primary text-white border-primary shadow-sm" : "bg-white text-slate-500 border-border hover:bg-slate-100"
+                              )}
+                            >
+                              <input type="checkbox" checked={input[item.key as keyof PlannerInput] as boolean} onChange={(e) => setBoolean(item.key as keyof PlannerInput, e.target.checked)} className="hidden" />
+                              {item.label}
+                            </motion.label>
+                          ))}
+                        </div>
+                        <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 shadow-inner">
+                          <p className="text-xs text-slate-700 leading-relaxed">
+                            보험료 부담률: <span className="font-black text-emerald-600">{insuranceMetrics.premiumRatioPct.toFixed(1)}%</span> (권장 10% 내외)
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500 font-medium">{insuranceMetrics.explain}</p>
+                        </div>
+                      </div>
+
+                      <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 shadow-sm space-y-6">
+                        <p className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" /> 노후 준비
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">연금 자산 합계</label>
+                            <input className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm font-bold shadow-sm" value={input.retirementAssets} onChange={(e) => setNumber("retirementAssets", e.target.value)} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">월 연금 납입</label>
+                            <input className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm font-bold shadow-sm" value={input.retirementMonthlyContribution} onChange={(e) => setNumber("retirementMonthlyContribution", e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-100 shadow-inner">
+                          <p className="text-xs text-slate-700 font-bold">
+                            필요 생활비(월): {formatMoney(retirementMetrics.retirementNeedMonthlyWon, input.unit)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-700">
+                            준비 격차: <span className="font-black text-rose-600">{formatMoney(retirementMetrics.gapWon, input.unit)}</span>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {step === 2 && (
+                <div className="space-y-6">
+                  <PlannerExternalModules />
+                  
+                  <Card className="p-0 overflow-hidden border-none shadow-card">
+                     <div className="bg-hero-navy p-8 text-white flex flex-col md:flex-row justify-between items-start md:items-center gap-8 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-12 opacity-5 scale-150 rotate-12">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/><path d="m5 7 3 5-3 5"/><path d="m19 7-3 5 3 5"/></svg>
+                        </div>
+                        <div className="relative z-10">
+                          <Badge variant="success" className="mb-4 bg-emerald-500 text-white border-none px-4 py-1.5 text-xs font-black shadow-lg shadow-emerald-900/40">진단 레포트 완료</Badge>
+                          <h3 className="text-2xl md:text-4xl font-black tracking-tight leading-[1.1]">{plan.summaryLine}</h3>
+                        </div>
+                        <div className="relative z-10 shrink-0 bg-white/10 p-6 rounded-[2.5rem] backdrop-blur-xl border border-white/10 flex items-center gap-6 shadow-2xl">
+                           <FinancialHealthGauge score={healthScore} />
+                           <div className="text-left">
+                              <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">월 가용 자금</p>
+                              <p className="text-3xl font-black text-emerald-400 tabular-nums tracking-tighter">{formatMoney(plan.metrics.freeCashflow, input.unit)}</p>
+                           </div>
+                        </div>
+                     </div>
+                     <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border bg-surface">
+                        {[
+                          { label: "월 저축 가능", value: formatMoney(plan.metrics.monthlySaving, input.unit), trend: "저축 성향" },
+                          { label: "비상금 지수", value: `${plan.metrics.emergencyMonths.toFixed(1)}개월분`, trend: plan.metrics.emergencyGap <= 0 ? "안전" : "부족" },
+                          { label: "부채 상환 비중", value: `${(plan.metrics.debtPaymentRatio * 100).toFixed(1)}%`, trend: (plan.metrics.debtPaymentRatio * 100) > 30 ? "주의" : "양호" },
+                          { label: "목표 달성", value: plan.metrics.goalFeasible ? "가능성 높음" : "추가 재원 필요", trend: "예측 결과" },
+                        ].map((m) => (
+                          <div key={m.label} className="p-6 transition-colors hover:bg-slate-50">
+                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">{m.label}</p>
+                            <p className={cn("text-xl font-black tracking-tight text-slate-900 tabular-nums", m.trend === "주의" || m.trend === "부족" ? "text-rose-600" : "")}>{m.value}</p>
+                            <p className="text-[10px] font-bold text-slate-400 mt-1">{m.trend}</p>
+                          </div>
+                        ))}
+                     </div>
+                  </Card>
+
+                  <div className="space-y-6">
+                     <div className="flex items-center justify-between px-2 mt-10">
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-primary" /> 단계별 맞춤 제언
+                        </h3>
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none font-bold text-[10px]">총 {plan.recommendations.length}개의 분석 항목</Badge>
+                     </div>
+                     
+                     {plan.recommendations.map((rec) => (
+                      <Card key={rec.id} className="p-0 overflow-hidden border-none shadow-card hover:shadow-card-hover transition-all duration-500">
+                        <div className="flex flex-col md:flex-row min-h-[240px]">
+                          <div className={cn(
+                            "w-full md:w-3 shrink-0",
+                            rec.priority === "P0" ? "bg-rose-500" : rec.priority === "P1" ? "bg-amber-500" : "bg-emerald-500"
+                          )} />
+                          <div className="flex-1 p-8 lg:p-10">
+                            <div className="flex items-center gap-2 mb-6">
+                              <Badge variant="outline" className="text-[10px] uppercase font-black tracking-[0.2em] border-slate-200 text-slate-400 px-3 py-1">
+                                {rec.category}
+                              </Badge>
+                              {SHOW_RULE_DEBUG && <span className="font-mono text-[9px] text-slate-300">ID: {rec.id}</span>}
+                            </div>
+                            
+                            <h4 className="text-2xl md:text-3xl font-black text-slate-900 mb-8 tracking-tight">{rec.title}</h4>
+
+                            <div className="grid lg:grid-cols-[1.2fr_1fr] gap-12">
+                              <div className="space-y-4">
+                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                   <span className="h-1 w-4 bg-slate-200 rounded-full" /> 제안 배경 및 근거
+                                 </p>
+                                 <ul className="space-y-3.5">
+                                  {rec.rationale.map((line, i) => (
+                                    <li key={i} className="text-sm font-medium text-slate-600 leading-relaxed flex items-start gap-3">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-slate-300 mt-2 shrink-0" />
+                                      {line}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className="space-y-4">
+                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                   <span className="h-1 w-4 bg-slate-200 rounded-full" /> 구체적 실행 방안
+                                 </p>
+                                 <div className="space-y-3">
+                                  {rec.actions.map((action, i) => (
+                                    <div key={i} className="group/action flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-all hover:bg-white hover:shadow-md hover:border-primary/20">
+                                      <span className="text-sm font-bold text-slate-800">{action.label}</span>
+                                      {action.href && (
+                                        <Button variant="outline" size="sm" className="h-8 px-4 text-[10px] font-black bg-white shadow-sm border-slate-200 group-hover/action:bg-primary group-hover/action:text-white group-hover/action:border-primary transition-all rounded-full" onClick={() => openAction(action)}>
+                                          {linkOpenMode === "newtab" ? "NEW TAB" : "OPEN QUICK"}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
-
-                <Card className="p-8 bg-slate-900 text-white border-none shadow-xl overflow-hidden relative">
-                   <div className="absolute top-0 right-0 p-8 opacity-10">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                   </div>
-                   <div className="relative z-10">
-                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                      추천 서비스 바로가기
-                    </h3>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="ghost" className="bg-slate-800 text-white hover:bg-slate-700 border-none text-[11px] h-9" onClick={() => openAction({ label: "환율 도구", href: "/tools/fx" })}>환율 도구</Button>
-                      <Button variant="ghost" className="bg-slate-800 text-white hover:bg-slate-700 border-none text-[11px] h-9" onClick={() => openAction({ label: "예금 검색", href: "/products/deposit" })}>예금 검색</Button>
-                      <Button variant="ghost" className="bg-slate-800 text-white hover:bg-slate-700 border-none text-[11px] h-9" onClick={() => openAction({ label: "적금 검색", href: "/products/saving" })}>적금 검색</Button>
-                      <Button variant="ghost" className="bg-slate-800 text-white hover:bg-slate-700 border-none text-[11px] h-9" onClick={() => openAction({ label: "맞춤 추천", href: "/recommend" })}>맞춤 추천</Button>
-                      {benefitQueries.map((query) => (
-                        <Button
-                          key={query}
-                          variant="ghost"
-                          className="bg-slate-800 text-white hover:bg-slate-700 border-none text-[11px] h-9"
-                          onClick={() => openAction({ label: `혜택(${query})`, href: `/benefits?query=${encodeURIComponent(query)}` })}
-                        >
-                          혜택({query})
-                        </Button>
-                      ))}
-                      <Button
-                        variant="ghost"
-                        className="bg-slate-800 text-white hover:bg-slate-700 border-none text-[11px] h-9"
-                        onClick={() => openAction({ label: `청약(${subscriptionRegion})`, href: `/housing/subscription?region=${encodeURIComponent(subscriptionRegion)}` })}
-                      >
-                        청약({subscriptionRegion})
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </div>
-            )}
-
-            {step === 4 && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <div className="grid md:grid-cols-3 gap-6">
-                  <Card className="md:col-span-2 p-8">
-                     <div className="flex items-center justify-between mb-8">
-                        <div className="border-l-4 border-primary pl-4">
-                          <h2 className="text-xl font-bold text-slate-900">{uiTextKo.planner.sectionMonitoring}</h2>
-                          <p className="text-sm text-slate-500 mt-1">지속적인 점검이 재무 성공의 핵심입니다.</p>
-                        </div>
-                        <Button variant="primary" size="sm" onClick={saveCurrentSnapshot} className="font-bold shadow-md shadow-primary/20">
-                          스냅샷 저장
-                        </Button>
-                     </div>
-                     
-                     <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 flex items-center justify-between">
-                        <div>
-                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">다음 점검 권장일</p>
-                           <p className="text-2xl font-black text-slate-900">{plan.monitoring.nextReviewDate}</p>
-                        </div>
-                        <div className="h-12 w-12 rounded-full bg-white border border-slate-200 flex items-center justify-center text-primary shadow-sm">
-                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
-                        </div>
-                     </div>
-
-                     <div className="mt-8 space-y-4">
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">이런 상황이 발생하면 즉시 점검하세요</p>
-                        <ul className="grid sm:grid-cols-2 gap-3">
-                          {plan.monitoring.triggers.map((t) => (
-                            <li key={t} className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 bg-white text-xs font-bold text-slate-700">
-                              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                              {t}
-                            </li>
-                          ))}
-                        </ul>
-                     </div>
-                  </Card>
-
-                  <Card className="p-8">
-                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-6">최근 히스토리</h3>
-                    <div className="space-y-3">
-                      {snapshots.length === 0 ? (
-                        <p className="text-xs text-slate-400 text-center py-12 italic">저장된 스냅샷이 없습니다.</p>
-                      ) : (
-                        snapshots.slice(0, 5).map((snap) => (
-                          <div key={snap.id} className="p-3 rounded-xl border border-slate-100 bg-slate-50 group hover:border-primary transition-all">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{snap.createdAt.slice(0, 10)}</p>
-                            <p className="text-xs font-bold text-slate-800 line-clamp-1 mb-3">{snap.input.goalName}</p>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                               <Button variant="outline" size="sm" className="h-6 px-2 text-[9px] bg-white" onClick={() => applySnapshot(snap.id)}>불러오기</Button>
-                               <Button variant="ghost" size="sm" className="h-6 px-2 text-[9px] text-red-500" onClick={() => { deleteSnapshot(snap.id); setSnapshots(listSnapshots()); }}>삭제</Button>
+                            
+                            <div className="mt-10 pt-6 border-t border-border/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                               <p className="text-[11px] text-slate-400 font-bold flex items-center gap-2">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                                 {rec.caution || "확정 수익이 아닌 가정 기반 데이터입니다."}
+                               </p>
+                               <div className="flex gap-1.5">
+                                  {rec.triggeredBy.map(tag => (
+                                    <span key={tag} className="text-[9px] font-black text-slate-300 uppercase tracking-tighter">#{tag}</span>
+                                  ))}
+                               </div>
                             </div>
                           </div>
-                        ))
-                      )}
+                        </div>
+                      </Card>
+                     ))}
+                  </div>
+
+                  <AssumptionsCallout className="mt-12 bg-white border-emerald-100 shadow-sm">
+                    본 재무설계 결과는 사용자가 입력한 데이터와 가정(물가상승률 {input.assumedInflationRate}%, 기대수익률 {input.assumedAnnualReturn}%)을 바탕으로 산출된 참고용 자료이며, 실제 금융 서비스 이용 시 해당 기관의 약관을 반드시 확인하시기 바랍니다.
+                  </AssumptionsCallout>
+                </div>
+              )}
+
+              {step === 3 && (
+                <div className="space-y-6">
+                  <Card className="p-10 space-y-10">
+                    <div className="flex items-center justify-between border-b border-border/50 pb-8">
+                      <div>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">{uiTextKo.planner.sectionExecution}</h2>
+                        <p className="text-sm font-medium text-slate-500 mt-1">오늘 바로 시작할 수 있는 작은 실천들이 큰 미래를 만듭니다.</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Progress</p>
+                        <Badge variant="secondary" className="px-4 py-1.5 text-xs font-black bg-emerald-50 text-emerald-700 border-none shadow-sm">
+                          완료 {Object.values(checkedMap).filter(Boolean).length} / {plan.checklist.length}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-10 lg:grid-cols-2">
+                      {["이번 주", "이번 달"].map(bucket => (
+                        <div key={bucket} className="space-y-6">
+                          <div className="flex items-center gap-3">
+                            <span className={cn("h-6 w-1 rounded-full", bucket === "이번 주" ? "bg-rose-500" : "bg-primary")} />
+                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{bucket}</h3>
+                          </div>
+                          <div className="space-y-4">
+                            {plan.checklist.filter(it => it.bucket === bucket).map(item => {
+                              const isChecked = !!checkedMap[item.id];
+                              return (
+                                <motion.div 
+                                  layout
+                                  key={item.id} 
+                                  className={cn(
+                                    "flex items-start gap-5 p-5 rounded-3xl border transition-all duration-300",
+                                    isChecked 
+                                      ? "bg-slate-50 border-border/50 opacity-60 scale-[0.98]" 
+                                      : "bg-white border-border shadow-sm hover:shadow-md hover:border-primary/30"
+                                  )}
+                                >
+                                  <button 
+                                    className={cn(
+                                      "mt-1.5 flex-shrink-0 h-6 w-6 rounded-xl border-2 flex items-center justify-center transition-all",
+                                      isChecked ? "bg-primary border-primary text-white rotate-[360deg]" : "border-slate-200 bg-white hover:border-primary shadow-sm"
+                                    )}
+                                    onClick={() => toggleChecklist(item.id)}
+                                  >
+                                    {isChecked && <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>}
+                                  </button>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={cn("text-base font-black tracking-tight", isChecked ? "text-slate-400 line-through font-bold" : "text-slate-900")}>{item.label}</p>
+                                    <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">{item.reason}</p>
+                                    {!isChecked && (
+                                      <div className="mt-4 flex flex-wrap gap-2">
+                                        {item.href && (
+                                          <Button variant="outline" size="sm" className="h-8 px-4 text-[10px] font-black bg-white rounded-full shadow-sm" onClick={() => openAction({ label: item.label, href: item.href })}>
+                                            바로가기
+                                          </Button>
+                                        )}
+                                        {item.playbookId && (
+                                          <Button variant="secondary" size="sm" className="h-8 px-4 text-[10px] font-black rounded-full" onClick={() => openPlaybook(item.playbookId)}>
+                                            가이드 보기
+                                          </Button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  <Card className="p-10 bg-hero-charcoal text-white border-none shadow-2xl overflow-hidden relative">
+                     <div className="absolute top-0 right-0 p-12 opacity-[0.03] scale-150 group-hover:rotate-12 transition-transform duration-1000">
+                        <Image src="/nb/mascot.png" alt="" width={300} height={300} />
+                     </div>
+                     <div className="relative z-10">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md mb-6 border border-white/10">
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">추천 서비스</span>
+                      </div>
+                      <h3 className="text-xl md:text-2xl font-black mb-8 tracking-tight">당신에게 필요한 금융 도구들을 준비했습니다.</h3>
+                      <div className="flex flex-wrap gap-3">
+                        {[
+                          { label: "실시간 환율", href: "/tools/fx", icon: "🌍" },
+                          { label: "예금 탐색", href: "/products/deposit", icon: "🏦" },
+                          { label: "적금 탐색", href: "/products/saving", icon: "💰" },
+                          { label: "AI 맞춤 추천", href: "/recommend", icon: "✨" },
+                        ].map(tool => (
+                          <Button 
+                            key={tool.label}
+                            variant="outline" 
+                            className="border-white/10 bg-white/5 text-white hover:bg-white/10 text-[11px] font-bold h-12 px-6 rounded-2xl backdrop-blur-sm transition-all shadow-sm" 
+                            onClick={() => openAction({ label: tool.label, href: tool.href })}
+                          >
+                            <span className="mr-2 opacity-70">{tool.icon}</span> {tool.label}
+                          </Button>
+                        ))}
+                        {benefitQueries.map((query) => (
+                          <Button
+                            key={query}
+                            variant="outline"
+                            className="border-white/10 bg-white/5 text-white hover:bg-white/10 text-[11px] font-bold h-12 px-6 rounded-2xl backdrop-blur-sm"
+                            onClick={() => openAction({ label: `혜택(${query})`, href: `/benefits?query=${encodeURIComponent(query)}` })}
+                          >
+                            💎 혜택({query})
+                          </Button>
+                        ))}
+                        <Button
+                          variant="outline"
+                          className="border-white/10 bg-white/5 text-white hover:bg-white/10 text-[11px] font-bold h-12 px-6 rounded-2xl backdrop-blur-sm"
+                          onClick={() => openAction({ label: `청약(${subscriptionRegion})`, href: `/housing/subscription?region=${encodeURIComponent(subscriptionRegion)}` })}
+                        >
+                          🏠 청약({subscriptionRegion})
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 </div>
+              )}
 
-                <Card className="p-8">
-                   <div className="flex items-center gap-2 mb-8">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-                      <h3 className="text-lg font-bold text-slate-900">추세 분석 및 비교</h3>
-                   </div>
+              {step === 4 && (
+                <div className="space-y-6">
+                  <div className="grid lg:grid-cols-3 gap-6">
+                    <Card className="lg:col-span-2 p-10 space-y-10">
+                       <div className="flex items-start justify-between border-b border-border/50 pb-8">
+                          <div>
+                            <h2 className="text-2xl font-black text-slate-900 tracking-tight">{uiTextKo.planner.sectionMonitoring}</h2>
+                            <p className="text-sm font-medium text-slate-500 mt-1">지속적인 모니터링은 성공적인 재무 관리의 핵심입니다.</p>
+                          </div>
+                          <Button variant="primary" size="lg" onClick={saveCurrentSnapshot} className="font-black shadow-xl shadow-primary/20 rounded-full px-8 h-12 text-sm uppercase tracking-widest transition-all hover:scale-105 active:scale-95">
+                            Save Snapshot
+                          </Button>
+                       </div>
+                       
+                       <div className="bg-slate-900 text-white rounded-[2.5rem] p-8 flex items-center justify-between shadow-2xl relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none" />
+                          <div className="relative z-10">
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Next Review Recommended</p>
+                             <p className="text-3xl font-black tabular-nums tracking-tight text-primary">{plan.monitoring.nextReviewDate}</p>
+                          </div>
+                          <div className="relative z-10 h-16 w-16 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500 shadow-2xl">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
+                          </div>
+                       </div>
 
-                   <div className="grid md:grid-cols-2 gap-8 mb-8">
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">기준 스냅샷</label>
-                        <select className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm font-bold outline-none" value={compareA} onChange={(e) => setCompareA(e.target.value)}>
-                          <option value="">비교 대상을 선택하세요</option>
-                          {snapshots.map((snap) => <option key={snap.id} value={snap.id}>{snap.createdAt.slice(0, 16)} - {snap.input.goalName}</option>)}
-                        </select>
+                       <div className="space-y-6">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">즉시 점검이 필요한 신호</p>
+                          <div className="grid sm:grid-cols-2 gap-4">
+                            {plan.monitoring.triggers.map((t) => (
+                              <motion.div 
+                                key={t} 
+                                whileHover={{ scale: 1.02 }}
+                                className="flex items-center gap-4 p-5 rounded-2xl border border-border bg-white text-xs font-bold text-slate-700 shadow-sm transition-all hover:border-primary/30"
+                              >
+                                <div className="h-2 w-2 rounded-full bg-primary shrink-0 animate-pulse" />
+                                {t}
+                              </motion.div>
+                            ))}
+                          </div>
+                       </div>
+                    </Card>
+
+                    <Card className="p-8 bg-surface border-border/50">
+                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8 border-b border-border/50 pb-4">Recent History</h3>
+                      <div className="space-y-4">
+                        {snapshots.length === 0 ? (
+                          <div className="py-20 text-center space-y-4">
+                            <div className="h-12 w-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center text-slate-200">∅</div>
+                            <p className="text-[11px] font-bold text-slate-400">저장된 기록이 없습니다.</p>
+                          </div>
+                        ) : (
+                          snapshots.slice(0, 5).map((snap) => (
+                            <motion.div 
+                              layout
+                              key={snap.id} 
+                              className="p-5 rounded-2xl border border-border bg-white group hover:border-primary transition-all duration-300 shadow-sm"
+                            >
+                              <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{snap.createdAt.slice(0, 10)}</p>
+                              <p className="text-sm font-black text-slate-800 line-clamp-1 mb-4">{snap.input.goalName}</p>
+                              <div className="flex gap-2">
+                                 <Button variant="outline" size="sm" className="h-8 flex-1 text-[10px] font-black bg-slate-50 border-none rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm" onClick={() => applySnapshot(snap.id)}>LOAD</Button>
+                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl" onClick={() => { deleteSnapshot(snap.id); setSnapshots(listSnapshots()); }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                 </Button>
+                              </div>
+                            </motion.div>
+                          ))
+                        )}
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">대조 스냅샷</label>
-                        <select className="w-full h-11 rounded-xl border border-border bg-slate-50 px-4 text-sm font-bold outline-none" value={compareB} onChange={(e) => setCompareB(e.target.value)}>
-                          <option value="">비교 대상을 선택하세요</option>
-                          {snapshots.map((snap) => <option key={snap.id} value={snap.id}>{snap.createdAt.slice(0, 16)} - {snap.input.goalName}</option>)}
-                        </select>
-                      </div>
-                   </div>
+                    </Card>
+                  </div>
 
-                   {compareSnapA && compareSnapB && (
-                     <div className="mb-12 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                        <SnapshotDeltaCards prev={compareSnapA} next={compareSnapB} />
+                  <Card className="p-10">
+                     <div className="flex items-center justify-between mb-10">
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm ring-1 ring-indigo-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+                          </div>
+                          <h3 className="text-xl font-black text-slate-900 tracking-tight">트렌드 분석 및 성과 비교</h3>
+                        </div>
+                        <Badge variant="outline" className="px-3 py-1 font-black text-[10px] border-slate-200 text-slate-400">LAST 10 SNAPSHOTS</Badge>
                      </div>
-                   )}
 
-                   <div className="space-y-4">
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">성과 지표 트렌드 (최근 10회)</p>
-                      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <TrendRow label="월 저축액" values={monthlySavingTrend} color="#2563eb" />
-                        <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#dc2626" />
-                        <TrendRow label="필요 월적립" values={goalRequiredTrend} color="#10b981" />
-                        <TrendRow label="부채비율" values={debtRatioTrend} color="#7c3aed" />
-                      </div>
-                   </div>
-                </Card>
-              </div>
-            )}
+                     <div className="grid md:grid-cols-2 gap-8 mb-12">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">기준 스냅샷 (A)</label>
+                          <select className="w-full h-12 rounded-2xl border border-border bg-slate-50 px-5 text-sm font-bold outline-none cursor-pointer hover:bg-white transition-all shadow-inner" value={compareA} onChange={(e) => setCompareA(e.target.value)}>
+                            <option value="">비교 대상을 선택하세요</option>
+                            {snapshots.map((snap) => <option key={snap.id} value={snap.id}>{snap.createdAt.slice(0, 16)} - {snap.input.goalName}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">대조 스냅샷 (B)</label>
+                          <select className="w-full h-12 rounded-2xl border border-border bg-slate-50 px-5 text-sm font-bold outline-none cursor-pointer hover:bg-white transition-all shadow-inner" value={compareB} onChange={(e) => setCompareB(e.target.value)}>
+                            <option value="">비교 대상을 선택하세요</option>
+                            {snapshots.map((snap) => <option key={snap.id} value={snap.id}>{snap.createdAt.slice(0, 16)} - {snap.input.goalName}</option>)}
+                          </select>
+                        </div>
+                     </div>
 
-            <div className="mt-12 flex justify-between items-center pt-8 border-t border-slate-100">
-              <Button 
-                variant="outline" 
-                size="lg"
-                className="w-32"
-                disabled={step === 0} 
-                onClick={() => {
-                  setStep((s) => Math.max(0, s - 1));
-                  window.scrollTo(0, 0);
-                }}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="m15 18-6-6 6-6"/></svg>
-                이전 단계
-              </Button>
-              <div className="hidden sm:flex gap-2">
-                 {STEPS.map((_, i) => (
-                   <div key={i} className={`h-1.5 w-8 rounded-full transition-all ${i === step ? "bg-primary w-12" : i < step ? "bg-primary/30" : "bg-slate-200"}`} />
-                 ))}
-              </div>
-              <Button 
-                variant="primary" 
-                size="lg"
-                className="w-32 shadow-lg shadow-primary/20"
-                disabled={step === STEPS.length - 1} 
-                onClick={() => {
-                  setStep((s) => Math.min(STEPS.length - 1, s + 1));
-                  window.scrollTo(0, 0);
-                }}
-              >
-                다음 단계
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ml-2"><path d="m9 18 6-6-6-6"/></svg>
-              </Button>
+                     {compareSnapA && compareSnapB && (
+                       <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="mb-12 p-8 bg-surface-muted rounded-[2.5rem] border border-border/50 shadow-inner"
+                       >
+                          <SnapshotDeltaCards prev={compareSnapA} next={compareSnapB} />
+                       </motion.div>
+                     )}
+
+                     <div className="space-y-6">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center gap-3">
+                           <span className="h-px bg-slate-200 flex-1" />
+                           Performance Indicators
+                           <span className="h-px bg-slate-200 flex-1" />
+                        </p>
+                        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <TrendRow label="월 저축액" values={monthlySavingTrend} color="#059669" />
+                          <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#dc2626" />
+                          <TrendRow label="필요 적립액" values={goalRequiredTrend} color="#059669" />
+                          <TrendRow label="부채 상환율" values={debtRatioTrend} color="#6366f1" />
+                        </div>
+                     </div>
+                  </Card>
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          <div className="mt-12 flex justify-between items-center py-10 border-t border-border/50">
+            <Button 
+              variant="outline" 
+              size="lg"
+              className="w-44 h-14 rounded-full font-black text-xs uppercase tracking-widest bg-white shadow-md border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
+              disabled={step === 0} 
+              onClick={() => {
+                setStep((s) => Math.max(0, s - 1));
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="mr-3"><path d="m15 18-6-6 6-6"/></svg>
+              PREVIOUS
+            </Button>
+            
+            <div className="hidden sm:flex gap-3">
+               {STEPS.map((_, i) => (
+                 <div key={i} className={cn(
+                   "h-1.5 rounded-full transition-all duration-500",
+                   i === step ? "bg-primary w-12 shadow-[0_0_8px_var(--color-primary)]" : i < step ? "bg-primary/30 w-6" : "bg-slate-200 w-6"
+                 )} />
+               ))}
             </div>
+
+            <Button 
+              variant="primary" 
+              size="lg"
+              className="w-44 h-14 shadow-2xl shadow-primary/30 rounded-full font-black text-xs uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
+              disabled={step === STEPS.length - 1} 
+              onClick={() => {
+                setStep((s) => Math.min(STEPS.length - 1, s + 1));
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              CONTINUE
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="ml-3"><path d="m9 18 6-6-6-6"/></svg>
+            </Button>
           </div>
         </div>
-      </Container>
+      </div>
 
       <QuickViewModal
         open={quickView.open}
@@ -845,6 +1036,6 @@ export function PlannerWizard() {
       />
 
       <PlaybookModal open={playbookOpen} onClose={() => setPlaybookOpen(false)} playbookId={playbookId} />
-    </main>
+    </PageShell>
   );
 }

@@ -16,6 +16,8 @@ const TOP_HIGHLIGHT_LIMIT = 20;
 const DAILY_BRIEF_DEFAULT_LINES = 10;
 const DAILY_BRIEF_MAX_LINES = 15;
 const DAILY_BRIEF_TOP_BUCKET_LIMIT = 3;
+const FEEDBACK_STORE_RELATIVE_PATH = path.join("tmp", "user_feedback.json");
+const TODO_TIME_ZONE = "Asia/Seoul";
 const DEFAULT_ALERT_PREFS = Object.freeze({
   minScore: 70,
   includeCategories: [],
@@ -1739,6 +1741,149 @@ function collectBriefEntries(alerts) {
   return entries;
 }
 
+function normalizeFeedbackStatus(value) {
+  const status = asString(value).toUpperCase();
+  if (status === "OPEN" || status === "DOING" || status === "DONE") return status;
+  return "OPEN";
+}
+
+function normalizeFeedbackPriority(value) {
+  const priority = asString(value).toUpperCase();
+  if (priority === "P0" || priority === "P1" || priority === "P2" || priority === "P3") return priority;
+  return "P2";
+}
+
+function normalizeFeedbackDueDate(value) {
+  const text = asString(value);
+  if (!text) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  return text;
+}
+
+function compareTodoItem(a, b) {
+  const priorityRank = (value) => {
+    if (value === "P0") return 0;
+    if (value === "P1") return 1;
+    if (value === "P2") return 2;
+    return 3;
+  };
+
+  const priorityDiff = priorityRank(a.priority) - priorityRank(b.priority);
+  if (priorityDiff !== 0) return priorityDiff;
+
+  const dueA = normalizeFeedbackDueDate(a.dueDate);
+  const dueB = normalizeFeedbackDueDate(b.dueDate);
+  if (dueA && dueB) {
+    if (dueA !== dueB) return dueA.localeCompare(dueB);
+  } else if (dueA) {
+    return -1;
+  } else if (dueB) {
+    return 1;
+  }
+
+  return toDateMillis(b.createdAt) - toDateMillis(a.createdAt);
+}
+
+function dateKeyInTimeZone(value, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(value);
+  const year = parts.find((entry) => entry.type === "year")?.value ?? "1970";
+  const month = parts.find((entry) => entry.type === "month")?.value ?? "01";
+  const day = parts.find((entry) => entry.type === "day")?.value ?? "01";
+  return `${year}-${month}-${day}`;
+}
+
+function readFeedbackItems(filePath) {
+  const parsed = readJson(filePath, []);
+  if (!Array.isArray(parsed)) return [];
+
+  const rows = [];
+  for (let index = 0; index < parsed.length; index += 1) {
+    const row = isRecord(parsed[index]) ? parsed[index] : null;
+    if (!row) continue;
+    const message = asString(row.message);
+    if (!message) continue;
+    rows.push({
+      id: asString(row.id) || `feedback-${index}`,
+      status: normalizeFeedbackStatus(row.status),
+      priority: normalizeFeedbackPriority(row.priority),
+      dueDate: normalizeFeedbackDueDate(row.dueDate),
+      createdAt: asString(row.createdAt) || new Date(0).toISOString(),
+      message,
+      traceId: asString(row.traceId) || "",
+      tags: normalizeStringArray(row.tags),
+      note: asString(row.note),
+    });
+  }
+  return rows;
+}
+
+function isOpsTicketFromFeedback(item) {
+  if (!isRecord(item)) return false;
+  if (asString(item.priority).toUpperCase() !== "P0") return false;
+  const tags = normalizeStringArray(item.tags).map((entry) => entry.toLowerCase());
+  const hasOpsTag = tags.includes("ops");
+  const message = asString(item.message);
+  const hasOpsMessage = /^\[OPS\]\[[^\]]+\]/i.test(message);
+  return hasOpsTag || hasOpsMessage;
+}
+
+function summarizeOpsMessage(message, maxLength = 64) {
+  const compact = asString(message).replace(/\s+/g, " ");
+  const withoutPrefix = compact.replace(/^\[OPS\]\[[^\]]+\]\s*실패:\s*/i, "");
+  if (withoutPrefix.length <= maxLength) return withoutPrefix;
+  return `${withoutPrefix.slice(0, maxLength)}...`;
+}
+
+function compareOpsBriefItem(a, b) {
+  const dueA = normalizeFeedbackDueDate(a?.dueDate);
+  const dueB = normalizeFeedbackDueDate(b?.dueDate);
+  if (dueA && dueB && dueA !== dueB) return dueA.localeCompare(dueB);
+  if (dueA && !dueB) return -1;
+  if (!dueA && dueB) return 1;
+  return toDateMillis(b?.createdAt) - toDateMillis(a?.createdAt);
+}
+
+function buildOpsBriefSummary(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { lines: [] };
+  }
+  const selected = items
+    .filter((item) => (item.status === "OPEN" || item.status === "DOING") && item.priority === "P0" && isOpsTicketFromFeedback(item))
+    .sort(compareOpsBriefItem)
+    .slice(0, 3);
+  const lines = selected.map((item) => {
+    const id = asString(item.id) || "unknown";
+    const traceId = asString(item.traceId);
+    const tracePart = traceId ? ` (traceId: ${traceId})` : "";
+    return `- [OPS][P0] ${summarizeOpsMessage(item.message || "운영 이슈")} → /feedback/${id}${tracePart}`;
+  });
+  return { lines };
+}
+
+function buildTodoSummaryFromFeedback(items, now = new Date(), tz = TODO_TIME_ZONE) {
+  const todayKey = dateKeyInTimeZone(now, tz);
+  const active = items.filter((item) => item.status === "OPEN" || item.status === "DOING");
+  const overdue = active
+    .filter((item) => item.dueDate && item.dueDate < todayKey)
+    .sort(compareTodoItem);
+  const today = active
+    .filter((item) => item.dueDate === todayKey)
+    .sort(compareTodoItem);
+  const todayHighCount = today.filter((item) => item.priority === "P0" || item.priority === "P1").length;
+
+  return {
+    overdueCount: overdue.length,
+    todayHighCount,
+    topOverdue: overdue,
+    topToday: today,
+  };
+}
+
 export function buildDailyBrief(alertsJson, options = {}) {
   const entries = collectBriefEntries(alertsJson).sort(compareDailyBriefItem);
   const maxLines = Math.max(
@@ -1748,14 +1893,25 @@ export function buildDailyBrief(alertsJson, options = {}) {
       Math.round(toNumber(options.maxLines, DAILY_BRIEF_DEFAULT_LINES)) || DAILY_BRIEF_DEFAULT_LINES,
     ),
   );
+  const opsSummary = isRecord(options.opsSummary) && Array.isArray(options.opsSummary.lines) && options.opsSummary.lines.length > 0
+    ? {
+      lines: options.opsSummary.lines
+        .map((line) => asString(line))
+        .filter(Boolean)
+        .slice(0, 3),
+    }
+    : null;
+  const opsPenalty = opsSummary ? Math.min(2, opsSummary.lines.length) : 0;
+  const alertLineLimit = Math.max(1, maxLines - opsPenalty);
   const topNew = entries
     .filter((item) => item.kind === "new")
     .slice(0, DAILY_BRIEF_TOP_BUCKET_LIMIT);
   const topUpdated = entries
     .filter((item) => item.kind === "updated")
     .slice(0, DAILY_BRIEF_TOP_BUCKET_LIMIT);
-  const lines = entries.slice(0, maxLines).map(toDailyBriefLine);
+  const lines = entries.slice(0, alertLineLimit).map(toDailyBriefLine);
   const counts = alertCounts(alertsJson);
+  const todoSummary = isRecord(options.todoSummary) ? options.todoSummary : null;
   return {
     generatedAt: asString(alertsJson?.generatedAt) || null,
     stats: {
@@ -1770,12 +1926,50 @@ export function buildDailyBrief(alertsJson, options = {}) {
     topNew,
     topUpdated,
     lines,
+    todoSummary,
+    opsSummary,
   };
 }
 
 function formatBriefTopLine(item) {
   const pinLabel = item.isPinned ? "PIN " : "";
   return `- [${pinLabel}${asString(item.level).toUpperCase()} ${Math.round(toNumber(item.clusterScore, 0))}] ${asString(item.corpName) || "-"} | ${asString(item.title) || "(제목 없음)"}`;
+}
+
+function summarizeTodoMessage(message, maxLength = 44) {
+  const compact = asString(message).replace(/\s+/g, " ");
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength)}...`;
+}
+
+function formatTodoBriefLine(item) {
+  return `- ${asString(item.priority) || "P2"} | ${asString(item.dueDate) || "기한 미정"} | ${summarizeTodoMessage(item.message || "메시지 없음")}`;
+}
+
+function buildTodoSectionLines(summary) {
+  const lines = [
+    `- 마감 지남: ${toNumber(summary?.overdueCount, 0)}건`,
+    `- 오늘(P0/P1): ${toNumber(summary?.todayHighCount, 0)}건`,
+  ];
+  const picked = [];
+  const seen = new Set();
+  const sourceRows = [
+    ...(Array.isArray(summary?.topOverdue) ? summary.topOverdue : []),
+    ...(Array.isArray(summary?.topToday) ? summary.topToday : []),
+  ];
+  for (const row of sourceRows) {
+    const id = asString(row?.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    picked.push(row);
+    if (picked.length >= 3) break;
+  }
+  if (picked.length === 0) {
+    lines.push("- 우선 항목 없음");
+  } else {
+    picked.forEach((row) => lines.push(formatTodoBriefLine(row)));
+  }
+  return lines.slice(0, 5);
 }
 
 export function buildDailyBriefMarkdown(brief) {
@@ -1786,6 +1980,15 @@ export function buildDailyBriefMarkdown(brief) {
   lines.push(`- Generated at: ${asString(brief?.generatedAt) || "-"}`);
   lines.push(`- Alerts: newHigh=${toNumber(brief?.stats?.newHigh, 0)}, newMid=${toNumber(brief?.stats?.newMid, 0)}, updatedHigh=${toNumber(brief?.stats?.updatedHigh, 0)}, updatedMid=${toNumber(brief?.stats?.updatedMid, 0)}, total=${toNumber(brief?.stats?.total, 0)}`);
   lines.push(`- Brief lines: ${toNumber(brief?.stats?.shown, 0)}/${toNumber(brief?.stats?.maxLines, DAILY_BRIEF_DEFAULT_LINES)}`);
+  if (isRecord(brief?.opsSummary) && Array.isArray(brief.opsSummary.lines) && brief.opsSummary.lines.length > 0) {
+    lines.push("");
+    lines.push("## 운영 이슈(OPS)");
+    brief.opsSummary.lines.forEach((line) => {
+      const text = asString(line);
+      if (!text) return;
+      lines.push(text.startsWith("- ") ? text : `- ${text}`);
+    });
+  }
   lines.push("");
   lines.push("## Top New");
   if (!Array.isArray(brief?.topNew) || brief.topNew.length === 0) {
@@ -1806,6 +2009,11 @@ export function buildDailyBriefMarkdown(brief) {
     lines.push("- 없음");
   } else {
     brief.lines.forEach((line) => lines.push(`- ${asString(line)}`));
+  }
+  if (isRecord(brief?.todoSummary)) {
+    lines.push("");
+    lines.push("## 오늘 할 일");
+    buildTodoSectionLines(brief.todoSummary).forEach((line) => lines.push(line));
   }
   return `${lines.join("\n").trimEnd()}\n`;
 }
@@ -1939,11 +2147,19 @@ async function run() {
   const digestMdPath = path.join(cwd, "docs", "dart-disclosure-digest.md");
   const alertsMdPath = path.join(cwd, "docs", "dart-disclosure-alerts.md");
   const dailyBriefMdPath = path.join(cwd, "docs", "dart-daily-brief.md");
+  const feedbackStorePath = path.join(cwd, FEEDBACK_STORE_RELATIVE_PATH);
 
   const now = new Date();
   const generatedAt = now.toISOString();
   const from = toYyyymmdd(shiftDays(now, -args.days));
   const to = toYyyymmdd(now);
+  const feedbackItems = readFeedbackItems(feedbackStorePath);
+  const todoSummary = feedbackItems.length > 0
+    ? buildTodoSummaryFromFeedback(feedbackItems, now, TODO_TIME_ZONE)
+    : null;
+  const opsSummary = feedbackItems.length > 0
+    ? buildOpsBriefSummary(feedbackItems)
+    : { lines: [] };
 
   const watchlistRaw = readJson(watchlistPath, null);
   if (!watchlistRaw) {
@@ -2003,7 +2219,7 @@ async function run() {
       rawCounts: alertCounts(rawAlerts),
       filteredCounts: alertCounts(filteredAlerts),
     });
-    const dailyBrief = buildDailyBrief(filteredAlerts, { maxLines: DAILY_BRIEF_DEFAULT_LINES });
+    const dailyBrief = buildDailyBrief(filteredAlerts, { maxLines: DAILY_BRIEF_DEFAULT_LINES, todoSummary, opsSummary });
     if (previousDigest) {
       writeJson(digestPrevJsonPath, previousDigest);
     }
@@ -2181,7 +2397,7 @@ async function run() {
     rawCounts: alertCounts(rawAlerts),
     filteredCounts: alertCounts(filteredAlerts),
   });
-  const dailyBrief = buildDailyBrief(filteredAlerts, { maxLines: DAILY_BRIEF_DEFAULT_LINES });
+  const dailyBrief = buildDailyBrief(filteredAlerts, { maxLines: DAILY_BRIEF_DEFAULT_LINES, todoSummary, opsSummary });
   if (previousDigest) {
     writeJson(digestPrevJsonPath, previousDigest);
   }

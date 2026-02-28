@@ -1,17 +1,24 @@
 # DART Daily Brief
 
 ## 요약
-- Generated at: 2026-02-26T14:13:41.732Z
-- Alerts: newHigh=0, newMid=2, updatedHigh=0, updatedMid=0, total=2
-- Brief lines: 2/10
+- Generated at: 2026-02-27T19:10:29.946Z
+- Alerts: newHigh=0, newMid=0, updatedHigh=0, updatedMid=0, total=0
+- Brief lines: 0/10
+
+## 운영 이슈(OPS)
+- [OPS][P0] UNKNOWN → /feedback/55bd4e43-916f-45a9-b58a-8a28f4279b49
+- [OPS][P0] UNKNOWN → /feedback/787ad238-bd6c-4681-946f-1f5a81c38a19
 
 ## Top New
-- [MID 79] 삼성전자 | 임원 주요주주특정증권등소유상황보고서
-- [MID 72] 삼성전자 | 매출액또는손익구조30% 대규모법인은15% 이상변경
+- 없음
 
 ## Top Updated
 - 없음
 
 ## 10줄 요약
-- [NEW/MID 79] 삼성전자 | 임원 주요주주특정증권등소유상황보고서 (지배구조/임원, 2026-02-06, 20260205000625)
-- [NEW/MID 72] 삼성전자 | 매출액또는손익구조30% 대규모법인은15% 이상변경 (실적/잠정실적, 2026-01-29, 20260129800005)
+- 없음
+
+## 오늘 할 일
+- 마감 지남: 0건
+- 오늘(P0/P1): 0건
+- 우선 항목 없음
