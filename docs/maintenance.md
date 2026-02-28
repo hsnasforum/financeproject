@@ -23,3 +23,8 @@
 - 배포 전 최소 게이트: `pnpm verify && pnpm build`
 - 릴리즈 태그 기준 운영 (`v*`)
 - dev 전용 기능은 production 차단 상태 유지
+
+## Ops 캐시 점검 (Planning)
+- 통합 상태는 `/ops/planning`에서 assumptions/regression/cache/store를 한 번에 확인할 수 있습니다.
+- `/ops/planning-cache`에서 planning v2 캐시 엔트리/히트율을 확인할 수 있습니다.
+- 만료 캐시 정리가 필요하면 `Purge expired`를 실행합니다.

@@ -1,0 +1,6971 @@
+[
+  {
+    "id": "c82192a0-91bb-43a9-8de4-a49f12a0bc4c",
+    "createdAt": "2026-02-27T17:39:10.893Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "e89c416a-0278-4e89-a554-5aebb0fdfa62",
+    "createdAt": "2026-02-27T17:39:10.906Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "59b660a6-0d59-44ce-a399-4378c8c4068f",
+    "createdAt": "2026-02-27T17:39:10.911Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "eccef9f8-7ca1-44d2-86aa-490fd393f036",
+    "createdAt": "2026-02-27T17:39:11.467Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "05fecbca-4a48-4b3b-807e-610a48683cfa",
+    "createdAt": "2026-02-27T17:42:35.086Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "4a4f3a77-e4d5-4d1a-8025-5bdf167a1fcc",
+    "createdAt": "2026-02-27T17:42:35.100Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "bce6dc03-c0d6-4a3c-b70e-b1582d27f657",
+    "createdAt": "2026-02-27T17:42:35.110Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "3ccf2c2c-8a99-4cd1-9c87-74784a2e5751",
+    "createdAt": "2026-02-27T17:42:35.589Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "98a5a51c-4817-4088-aa12-3e79f56ee9af",
+    "createdAt": "2026-02-27T17:45:37.545Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "c7dec23a-b1aa-4fb2-8abb-f94c8ff6098a",
+    "createdAt": "2026-02-27T17:45:37.552Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "44988f4d-8903-48bc-aa97-e016952102bb",
+    "createdAt": "2026-02-27T17:45:37.557Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "dc927116-7a0a-42b8-8c94-47df58243b2b",
+    "createdAt": "2026-02-27T17:45:37.743Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "8d0d3a15-04aa-4d9e-83d0-ce984f1c0e89",
+    "createdAt": "2026-02-27T17:49:40.640Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "50fdc2fe-cda7-47da-bf58-fdb1180bd7a0",
+    "createdAt": "2026-02-27T17:49:40.651Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "4d036bf3-8979-475d-b570-b3b8140e339a",
+    "createdAt": "2026-02-27T17:49:40.657Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "ba1bb4e0-bfb6-493c-b068-38fd6ad9111f",
+    "createdAt": "2026-02-27T17:49:41.570Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "628e95e1-c15c-455f-8716-08a1dbb2427b",
+    "createdAt": "2026-02-27T17:54:27.501Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "c582c584-95fa-4b08-8966-1b3e6a5a3f4a",
+    "createdAt": "2026-02-27T17:54:27.517Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "d5dd948d-1c02-4fd2-9397-a0d19c803172",
+    "createdAt": "2026-02-27T17:54:27.530Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "e7a083b4-d50e-4b4d-b700-83d231b3999b",
+    "createdAt": "2026-02-27T17:54:27.658Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "c1bbb669-cfc1-4919-b63c-03b96bef6094",
+    "createdAt": "2026-02-27T18:00:22.014Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "0854c26e-c691-4b7a-b2a5-e61d85278f7f",
+    "createdAt": "2026-02-27T18:00:22.026Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "00257877-c93a-4dfe-b8cb-8839d66e6125",
+    "createdAt": "2026-02-27T18:00:22.035Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "9b5bc11c-2b03-4fbf-b7e2-94af110a5747",
+    "createdAt": "2026-02-27T18:00:22.825Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "a9ed2437-d153-4dea-a294-cdbc69b9a4bf",
+    "createdAt": "2026-02-27T18:03:04.608Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "5dea5abc-4394-43e2-b30e-fa0774223597",
+    "createdAt": "2026-02-27T18:03:04.617Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "c0c4b7ba-5c9f-43b8-b3eb-2d8bc221d03c",
+    "createdAt": "2026-02-27T18:03:04.625Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "3642fd4c-d1ae-4bfd-b099-1ad9d36f0ca9",
+    "createdAt": "2026-02-27T18:03:05.422Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "c3bea4b6-e067-459a-929d-39fd278eb551",
+    "createdAt": "2026-02-27T18:07:04.247Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "dd7e9f30-ba84-4bde-b528-db2f63c03231",
+    "createdAt": "2026-02-27T18:07:04.263Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "b0360f9b-fd8e-4e74-b52a-3b1700b59f42",
+    "createdAt": "2026-02-27T18:07:04.271Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "1185ab19-01eb-4102-a399-db5f4d08260e",
+    "createdAt": "2026-02-27T18:07:04.582Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "7cffe91c-f5df-44ba-a871-0be418229dc8",
+    "createdAt": "2026-02-27T18:10:23.898Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "d973a659-2978-407d-967d-e2680fbb87a5",
+    "createdAt": "2026-02-27T18:10:23.906Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "b082f7f0-9194-4970-b5b3-0c18aaa929fa",
+    "createdAt": "2026-02-27T18:10:23.915Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "77d997af-b2be-4a0a-a65f-005f24c8f420",
+    "createdAt": "2026-02-27T18:10:24.597Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "acfee834-2624-4aa0-9a94-7bdd7c89a9cc",
+    "createdAt": "2026-02-27T18:14:26.529Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "37986b12-4a15-4444-9525-756b32fb6055",
+    "createdAt": "2026-02-27T18:14:26.546Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "d4ee6e49-2763-4f6e-a1ae-78be9404c7be",
+    "createdAt": "2026-02-27T18:14:26.554Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "92f11e87-3535-4847-aaee-a30ddd168e03",
+    "createdAt": "2026-02-27T18:14:26.734Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "43d5a189-b409-46a7-8d9e-6b9b1bceef65",
+    "createdAt": "2026-02-27T18:16:01.297Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "1fda2f42-5b3e-4f8a-8513-c27fa117ba2b",
+    "createdAt": "2026-02-27T18:16:01.305Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "b8a19bb2-f118-4e14-9af3-3658e1aa8781",
+    "createdAt": "2026-02-27T18:16:01.328Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "5bb3c0b2-1cc3-4ed6-af64-d9f0048891b0",
+    "createdAt": "2026-02-27T18:16:02.625Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "02f97cc0-fa90-4839-b5c7-4385daa0218f",
+    "createdAt": "2026-02-27T18:20:38.476Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "9723e07d-f443-4809-b088-c3a73d4f1ab3",
+    "createdAt": "2026-02-27T18:25:09.275Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b2d031b0-c490-41d8-9c47-49c7b92affbf",
+    "createdAt": "2026-02-27T18:25:09.283Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "87e1e9ce-512d-43a1-aac2-c44f476685f0",
+    "createdAt": "2026-02-27T18:25:09.292Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "1899f3bc-78cf-4043-983d-18570e57ec51",
+    "createdAt": "2026-02-27T18:25:10.149Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "10c38c66-555a-40d7-93e7-5e19eab6d6ab",
+    "createdAt": "2026-02-27T18:27:32.013Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "3a55f11a-d750-45f0-87c2-e08bbeec0fd8",
+    "createdAt": "2026-02-27T18:27:32.037Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "f338aa13-7d94-4dba-b8c7-5e451b8bfffb",
+    "createdAt": "2026-02-27T18:27:32.051Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "fe3ca31e-c1aa-446c-82b2-cdf0ab75d6f1",
+    "createdAt": "2026-02-27T18:27:33.004Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "26abeecb-e970-44a7-bd9b-f23c3fddc6df",
+    "createdAt": "2026-02-27T18:31:43.202Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "9b8c988e-224b-4c75-b328-5b7e2847740c",
+    "createdAt": "2026-02-27T18:31:43.235Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "aa845c14-9839-4d39-b29e-00c0837be3f3",
+    "createdAt": "2026-02-27T18:31:43.241Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "150b8053-991e-4733-9c49-f3f76183569f",
+    "createdAt": "2026-02-27T18:31:44.704Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "5a193e3a-a0ad-4d81-a7b4-c6033de0cd3d",
+    "createdAt": "2026-02-27T18:34:42.897Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "087be0e5-9d56-454c-b5d3-6887644626a8",
+    "createdAt": "2026-02-27T18:34:42.906Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "461d8b90-9a60-438b-b8cd-3c1520f5bf15",
+    "createdAt": "2026-02-27T18:34:42.924Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "b3d36348-8781-4552-973d-5f46dffb2695",
+    "createdAt": "2026-02-27T18:34:43.742Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "e5c7e559-3908-4859-a000-34b65de6ff1f",
+    "createdAt": "2026-02-27T18:35:12.724Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "8e61782d-5caf-48f2-a30c-a3fe0ef897e6",
+    "createdAt": "2026-02-27T18:35:12.731Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "1e5a5e33-fdb4-4de2-85d2-d07e398c52aa",
+    "createdAt": "2026-02-27T18:35:12.737Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "bd9ce663-7291-4937-bec3-0f4ef78a2177",
+    "createdAt": "2026-02-27T18:35:13.149Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "d5790ac2-ecaf-4f0d-b619-bc71be5d4452",
+    "createdAt": "2026-02-27T18:39:15.172Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "9533ba75-3b63-4366-a52a-b575a34ab412",
+    "createdAt": "2026-02-27T18:39:15.180Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "7b0395ef-d7c0-4b23-977e-d8cbc1d93d52",
+    "createdAt": "2026-02-27T18:39:15.186Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "2b9ebe13-dfbb-45e4-bcbf-e498602119aa",
+    "createdAt": "2026-02-27T18:39:15.684Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "8045839a-8193-4e43-8768-03e659121044",
+    "createdAt": "2026-02-27T18:41:51.812Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "5ab804f8-1e2e-4d8d-8221-14c82fe5dcc7",
+    "createdAt": "2026-02-27T18:41:51.876Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "ace7c139-18f3-4244-95d4-a4d59478f4bb",
+    "createdAt": "2026-02-27T18:41:51.884Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "ce4b6177-6706-4cdc-9e75-2773aebbcb14",
+    "createdAt": "2026-02-27T18:41:51.893Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "20c8daf8-4e59-4113-96cd-7954b3c0e3ef",
+    "createdAt": "2026-02-27T18:46:33.707Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "efa4cd7f-274b-45f9-a407-fa6ac8b84aeb",
+    "createdAt": "2026-02-27T18:46:33.714Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "887c22ae-4dd8-41f0-9d4e-84429f2fc39e",
+    "createdAt": "2026-02-27T18:46:33.720Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "4897c1ee-8519-46d6-b56b-7f99d099edf5",
+    "createdAt": "2026-02-27T18:46:34.414Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "be9d1415-3273-48be-bab9-032a3b9be37e",
+    "createdAt": "2026-02-27T18:50:54.653Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "f263e0d8-53bb-4e20-8c89-c0f3f904a4de",
+    "createdAt": "2026-02-27T18:50:54.662Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "5979c3d5-1ff9-4e5e-9ab4-2b1a0755dbd5",
+    "createdAt": "2026-02-27T18:50:54.668Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "ac542e02-2b9a-4890-a13e-101f981d97a0",
+    "createdAt": "2026-02-27T18:50:54.977Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "762810f0-7516-4fb2-8f5b-8f0888c0925d",
+    "createdAt": "2026-02-27T18:57:29.789Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "ca2104d6-d32c-4754-9c14-2f7db6c50b47",
+    "createdAt": "2026-02-27T18:57:29.799Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "66ccafd0-1a26-406c-9f8d-d7b4a8198ff4",
+    "createdAt": "2026-02-27T18:57:29.807Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "28742f9e-e683-4221-ad31-a9e33c0667ed",
+    "createdAt": "2026-02-27T18:57:31.033Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "229b30a1-f39f-43a8-b7bb-6ffa7d82781a",
+    "createdAt": "2026-02-27T19:01:43.980Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "b636f2a2-48c7-4731-b59d-43ecd4f8ffaf",
+    "createdAt": "2026-02-27T19:01:50.516Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "f1211f87-919d-4883-a64d-ea7c0ad51b76",
+    "createdAt": "2026-02-27T19:01:50.527Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "65171c39-0641-4cb1-a623-4c264c5c0ef5",
+    "createdAt": "2026-02-27T19:01:50.534Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "1591738d-f015-43bf-8cec-3788c3817530",
+    "createdAt": "2026-02-27T19:01:51.678Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "8f79f459-d948-4d9c-af0b-a65d783d4fad",
+    "createdAt": "2026-02-27T19:06:13.456Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "7e8050d5-fed8-482f-9b11-16327ff67508",
+    "createdAt": "2026-02-27T19:06:13.465Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "92d7f802-77b6-4df6-ad32-20a1a4e3d8e4",
+    "createdAt": "2026-02-27T19:06:13.472Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "2b0c23ad-f57d-4500-b3a7-383d546cbc98",
+    "createdAt": "2026-02-27T19:06:14.493Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "811d0f97-652d-44e6-a327-bdf77b7d1e96",
+    "createdAt": "2026-02-27T19:07:57.424Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "eb5842c5-90db-47fa-838d-41c13de87481",
+    "createdAt": "2026-02-27T19:07:57.433Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "a1b419d6-9745-4d3f-87ed-8d5f31decad1",
+    "createdAt": "2026-02-27T19:07:57.442Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "dc4a12b1-0345-4243-890c-1d9cc488695c",
+    "createdAt": "2026-02-27T19:07:58.807Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "f3009d13-f956-45df-9e22-59b391f89e9e",
+    "createdAt": "2026-02-27T19:10:35.810Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "46f50360-536f-4494-9e7c-00c3027655a4",
+    "createdAt": "2026-02-27T19:10:35.821Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "ab81daa1-16fb-4d29-b4e5-8c3463cf5ab0",
+    "createdAt": "2026-02-27T19:10:35.830Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "ceafadf9-392d-4b76-9ea3-3c47a36490aa",
+    "createdAt": "2026-02-27T19:10:36.729Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "b372e1f5-6763-4eb8-80e9-d7a9e5110ac9",
+    "createdAt": "2026-02-27T19:37:49.550Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "18d14c41-cb84-4a55-84ce-da46b90a2e27",
+    "createdAt": "2026-02-27T19:37:49.559Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "e5947127-794e-40ab-94af-2c418fea4f0a",
+    "createdAt": "2026-02-27T19:37:49.565Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "7c5ae960-2497-4684-8483-44f553195457",
+    "createdAt": "2026-02-27T19:37:49.859Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "782bb6a0-43cc-49fa-8eea-8dc6176dae3d",
+    "createdAt": "2026-02-27T19:38:42.830Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "632109ba-8fc8-4320-ba88-4cf49855e080",
+    "createdAt": "2026-02-27T19:38:42.837Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "4d174678-e0da-4b11-9187-4f38bf9a478e",
+    "createdAt": "2026-02-27T19:38:42.844Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "544c6617-b2f7-4e17-8d27-ffb3b5252a23",
+    "createdAt": "2026-02-27T19:38:43.043Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "a048e2fa-86ca-4b18-ad2f-4e8e2311e35d",
+    "createdAt": "2026-02-27T19:40:17.687Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "90f00827-3e96-4032-841f-a98aed87599e",
+    "createdAt": "2026-02-27T19:40:17.694Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "15c2caef-9a2c-43f4-9a4a-4224032d5c41",
+    "createdAt": "2026-02-27T19:40:17.700Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "3ca98d18-ec8d-4210-b120-8071fb554850",
+    "createdAt": "2026-02-27T19:40:18.700Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "dddc7912-73ad-472c-aac3-801c5256e811",
+    "createdAt": "2026-02-27T19:41:46.072Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "f6c0c36f-33f4-41d2-ab07-9d1ba3dfdac1",
+    "createdAt": "2026-02-27T19:41:46.082Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "0473b4b4-dffd-4e43-af7f-ae89bf371b5f",
+    "createdAt": "2026-02-27T19:41:46.091Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "89720fbd-ee34-4e60-96d5-1a7cdeac1eb9",
+    "createdAt": "2026-02-27T19:41:46.412Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "7ba3e2c9-966b-4565-b28a-a79f7988da5c",
+    "createdAt": "2026-02-28T06:23:00.832Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "6a948b84-7c5a-4879-8c60-593991240700",
+    "createdAt": "2026-02-28T06:23:00.840Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "506e0dd7-6193-4322-9d63-05e5586ae9e7",
+    "createdAt": "2026-02-28T06:23:00.849Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "51351c91-9d4a-4673-b858-b7cf1a4a97a9",
+    "createdAt": "2026-02-28T06:23:01.652Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "f7d0e685-1cfa-4e4a-a521-1e4444754362",
+    "createdAt": "2026-02-28T06:28:16.596Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "60b087c7-f938-412e-998e-5b6843f79e77",
+    "createdAt": "2026-02-28T06:28:16.613Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "0400f9de-081a-4901-a59d-1518fd0aa173",
+    "createdAt": "2026-02-28T06:28:16.622Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "d1abe4ff-7595-4fbd-ac68-e2a713bc3f66",
+    "createdAt": "2026-02-28T06:28:17.799Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "eb0739c4-8a27-40bf-9d85-6ff07a5e6cf4",
+    "createdAt": "2026-02-28T06:29:15.460Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "c8f2c031-f871-452d-b919-58bd9362bdda",
+    "createdAt": "2026-02-28T06:29:15.469Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "0660a4d9-5676-4bb7-b1ff-e35e47c10cde",
+    "createdAt": "2026-02-28T06:29:15.479Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "2e7c6d29-bf77-4342-ad97-1acaee2afbcc",
+    "createdAt": "2026-02-28T06:29:16.019Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "c98c2dec-fd70-4959-8308-06b2db929b09",
+    "createdAt": "2026-02-28T06:35:26.687Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b577e1ec-a980-437d-8ac4-1a525be51a1a",
+    "createdAt": "2026-02-28T06:35:26.694Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "504a2aae-5f26-4629-a514-064aac7d576d",
+    "createdAt": "2026-02-28T06:35:26.700Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "709ca3c7-88f3-4631-8f15-01524ff53724",
+    "createdAt": "2026-02-28T06:35:27.742Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "45058469-0e65-4132-ac97-9ec1f9d78296",
+    "createdAt": "2026-02-28T06:40:37.759Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "e5c3c16f-ba1e-499d-a0dc-a2289ac939da",
+    "createdAt": "2026-02-28T06:40:37.767Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "cdd200f5-6f77-42a1-be33-7d279fa6ffcc",
+    "createdAt": "2026-02-28T06:40:37.772Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "e0751233-4b1a-4fb4-80fc-cab0f088f673",
+    "createdAt": "2026-02-28T06:40:41.167Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "42c6dc77-43f8-4296-9dae-fd2ed03b4688",
+    "createdAt": "2026-02-28T06:46:44.050Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "a059bf50-d565-4ecf-9b97-509226b7eac4",
+    "createdAt": "2026-02-28T06:46:44.092Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "8e9fafe5-1290-46e9-ae12-929d8d5cdfb0",
+    "createdAt": "2026-02-28T06:46:44.100Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "596c483d-f41c-442c-addd-ed744f0eca61",
+    "createdAt": "2026-02-28T06:46:44.108Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "1ffbb6c0-cfe0-4922-a16a-edc806670893",
+    "createdAt": "2026-02-28T06:53:13.472Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "d020c67b-96b0-4d48-ae4b-9110876b2917",
+    "createdAt": "2026-02-28T06:53:13.481Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "e1c364bd-cb7f-4275-9027-5dd08627e7ab",
+    "createdAt": "2026-02-28T06:53:13.493Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "025b0a84-8b8e-4a44-94e2-7c3edb9d07b0",
+    "createdAt": "2026-02-28T06:53:14.431Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "54d588a1-4a93-4a20-8519-95b868c7647a",
+    "createdAt": "2026-02-28T06:58:21.142Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "37a15d8b-db73-4aa4-9f99-6857be10b694",
+    "createdAt": "2026-02-28T06:58:21.152Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "fdda1472-a976-47a2-8a03-700d247b404e",
+    "createdAt": "2026-02-28T06:58:21.159Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "84d08821-f98e-4d25-8706-31bbb406f7bb",
+    "createdAt": "2026-02-28T06:58:21.530Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "ea8e3154-bc70-4ac5-ad34-72ffb543eca1",
+    "createdAt": "2026-02-28T07:13:53.825Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "f45671e5-5e1b-4dfe-b7f1-50e75c80214c",
+    "createdAt": "2026-02-28T07:13:53.837Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "40318a0d-bcb6-4c9b-9b4e-a24950784216",
+    "createdAt": "2026-02-28T07:13:53.844Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "a63e5816-630d-4e04-a8fa-f7d039c51eb7",
+    "createdAt": "2026-02-28T07:13:54.252Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "84be34c1-9f2c-4bee-86d9-76876afeb77a",
+    "createdAt": "2026-02-28T07:20:14.160Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN FAIL",
+    "details": {
+      "result": "FAIL",
+      "totalCases": 3,
+      "failCount": 3
+    }
+  },
+  {
+    "id": "fbc767c8-5bc5-4116-8015-c99cbf05f415",
+    "createdAt": "2026-02-28T07:20:14.164Z",
+    "event": "PLANNING_V2_BASELINE_UPDATE",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_BASELINE_UPDATE SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "changedCases": 3,
+      "confirmMatched": true
+    }
+  },
+  {
+    "id": "72fde042-373f-4fc6-8223-28472bb87311",
+    "createdAt": "2026-02-28T07:20:29.597Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "04f3e3f1-8dc1-4ea9-a92f-8874b95bf7c0",
+    "createdAt": "2026-02-28T07:21:15.692Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "17d52870-721b-492d-ab6b-19816a908900",
+    "createdAt": "2026-02-28T07:21:15.701Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "21c61b61-f51b-4945-9ee6-a7d7cb2c119d",
+    "createdAt": "2026-02-28T07:21:15.710Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "989be9cb-81f5-4ecb-8c93-1091fbe5a136",
+    "createdAt": "2026-02-28T07:21:16.226Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "a26b962f-3772-4aa1-aac5-c8154c7c3fc1",
+    "createdAt": "2026-02-28T07:21:29.583Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "f2c8e8ef-de78-4b3c-9065-c4aff9369d9d",
+    "createdAt": "2026-02-28T07:21:29.696Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "e3a51431-a738-4c56-ae1f-e468886a716e",
+    "createdAt": "2026-02-28T07:21:29.705Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "99d2043a-f910-4872-a7e1-efb301a650d2",
+    "createdAt": "2026-02-28T07:21:29.713Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "3c80dfbb-7caf-44a3-841b-d1f5dd3475af",
+    "createdAt": "2026-02-28T07:21:39.712Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "d66d3c82-e513-48ec-95ef-873cc8b31c18",
+    "createdAt": "2026-02-28T07:29:45.743Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "510f27c8-c935-424e-a082-9342252b6359",
+    "createdAt": "2026-02-28T07:29:45.757Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "1bbf7a84-386b-4919-ac18-86fec6d46068",
+    "createdAt": "2026-02-28T07:29:45.780Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "9b73ee99-33e6-47b3-a055-9676129468d0",
+    "createdAt": "2026-02-28T07:29:46.668Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "64a27321-61e2-4d6e-8352-0cf1678ba34f",
+    "createdAt": "2026-02-28T07:30:13.344Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "64c28d23-370b-4705-aee1-45761272a3d5",
+    "createdAt": "2026-02-28T07:30:13.353Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "2c521d8c-2bbc-4e75-9f19-c01adf636453",
+    "createdAt": "2026-02-28T07:30:13.360Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "52732dbc-3948-4733-b959-fa697151316d",
+    "createdAt": "2026-02-28T07:30:14.912Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "a77939d0-69f1-4f64-a0c6-8f0ef9c53a1c",
+    "createdAt": "2026-02-28T07:39:52.151Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "deeffebc-c1c6-426e-9b58-d3311400e99a",
+    "createdAt": "2026-02-28T07:39:52.164Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "0b048663-5104-42b9-809f-43dc61545732",
+    "createdAt": "2026-02-28T07:39:52.174Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "015795b0-f908-4892-b328-44f47e169bcc",
+    "createdAt": "2026-02-28T07:39:53.228Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "1472c3ba-6553-4ef6-a192-d44bd956783e",
+    "createdAt": "2026-02-28T07:40:06.576Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "aa3aeae5-1be7-4323-99e6-2990dcaa948b",
+    "createdAt": "2026-02-28T07:40:07.412Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "af190fc3-12ab-412a-b7bd-b92c79ddac2c",
+    "createdAt": "2026-02-28T07:40:07.422Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "c38574ea-b3c1-4f06-ac54-07ce075a935f",
+    "createdAt": "2026-02-28T07:40:07.430Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "11f1fb7e-138a-458f-b6e3-de7d1a8d07f8",
+    "createdAt": "2026-02-28T07:40:08.656Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "31f04dc8-2201-4549-b001-6f5e4bef3014",
+    "createdAt": "2026-02-28T07:40:29.515Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "16712db6-6853-4a50-80e3-5dc60251385d",
+    "createdAt": "2026-02-28T07:40:31.240Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "8a08ee69-b923-4181-8a24-aa2ad97cb4e4",
+    "createdAt": "2026-02-28T07:40:31.257Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "586b55e7-6392-48c3-ace0-945a76d80736",
+    "createdAt": "2026-02-28T07:40:31.271Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "0a24db95-d171-4fb0-a387-b860b7fa2e7a",
+    "createdAt": "2026-02-28T07:40:31.884Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "a2713a3c-cf67-4635-a06b-27fbc2b5cea3",
+    "createdAt": "2026-02-28T07:41:07.460Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "cd62abc6-b69a-41bd-b210-52f98232eb16",
+    "createdAt": "2026-02-28T07:41:07.488Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "d4291ecb-6d88-4a40-8860-154c4f3f2b30",
+    "createdAt": "2026-02-28T07:41:07.499Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "5646bcbd-7769-478f-a971-b1cc7e4fab68",
+    "createdAt": "2026-02-28T07:41:07.510Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "52c0d257-1083-4dbb-bcab-06d7bec2d581",
+    "createdAt": "2026-02-28T07:41:08.372Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "5777c67a-bba4-4300-b03a-cfcb47d0ad94",
+    "createdAt": "2026-02-28T07:50:17.161Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "0f127566-f953-401c-8204-9e7956ef52e6",
+    "createdAt": "2026-02-28T07:50:17.832Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "9ca5f933-1ffe-4373-9156-d85ce9233d21",
+    "createdAt": "2026-02-28T07:50:17.843Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "ef57be5f-0c96-4f23-8818-a6051731ede6",
+    "createdAt": "2026-02-28T07:50:17.853Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "7acf6f5c-deff-40e1-929e-7b2b16af9738",
+    "createdAt": "2026-02-28T07:50:18.072Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "0ccdd2a3-1917-4320-a3ce-6f913128429f",
+    "createdAt": "2026-02-28T08:01:04.360Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "faa63d7f-9249-40aa-b6f8-3ec424125bcc",
+    "createdAt": "2026-02-28T08:01:04.943Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "78a7ff75-8c2a-44fd-a3f1-c07744fd131c",
+    "createdAt": "2026-02-28T08:01:04.952Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "4e5ac938-5ee7-4d89-a159-02e3e198a5b3",
+    "createdAt": "2026-02-28T08:01:04.965Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "22b51da6-26b2-4a34-a0f8-d49c1f2f318a",
+    "createdAt": "2026-02-28T08:01:05.194Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "779df7d4-a01b-4028-b203-a1208da69bea",
+    "createdAt": "2026-02-28T08:10:49.440Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "0dfa7b76-e758-45c5-8535-591ed917d2e4",
+    "createdAt": "2026-02-28T08:10:49.886Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "94320c2f-d5e8-4b25-87f7-d657978fb034",
+    "createdAt": "2026-02-28T08:10:49.896Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "4b6b406c-e6af-4378-8a06-179cffe89ddb",
+    "createdAt": "2026-02-28T08:10:49.904Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "0e5c59cc-77c2-4f4a-8a3f-1ef68b8cc331",
+    "createdAt": "2026-02-28T08:10:50.991Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "f9bfd5c7-7824-4579-a723-4f4db3f23be4",
+    "createdAt": "2026-02-28T08:16:56.177Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "814036b1-9434-4748-901f-6ea52514e6e6",
+    "createdAt": "2026-02-28T08:16:56.489Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "8db39928-13c3-4081-9f6d-9d01495a237e",
+    "createdAt": "2026-02-28T08:16:56.512Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "fa8df1d6-20c6-4060-a841-5cda776ca658",
+    "createdAt": "2026-02-28T08:16:56.520Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "0af7bb42-a162-4920-b702-42c22e008b6a",
+    "createdAt": "2026-02-28T08:16:57.858Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "29c18c3e-d5be-4b50-a872-84c1f8b5e35b",
+    "createdAt": "2026-02-28T08:17:46.743Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "55e56fc7-6fa0-428f-a973-02f5c0582e31",
+    "createdAt": "2026-02-28T08:17:46.758Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "9dcebb55-264f-411e-a77c-733f6dcd5036",
+    "createdAt": "2026-02-28T08:17:46.769Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "d41565a2-1b2d-4f71-b00d-5fdb84fe1329",
+    "createdAt": "2026-02-28T08:17:46.787Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "70a8a4b1-1916-4811-9fa3-6a91ce2a5aec",
+    "createdAt": "2026-02-28T08:17:47.541Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "fc19b5b8-a7fc-457a-aed5-6f1ef4ec8a35",
+    "createdAt": "2026-02-28T08:26:34.881Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "b244d232-6250-45cc-b300-fae8787ad8da",
+    "createdAt": "2026-02-28T08:26:35.075Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "ae2a0289-7198-4168-843c-73d21b77c5f3",
+    "createdAt": "2026-02-28T08:26:35.084Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "9feb30c0-d29d-4998-86df-f2515864585a",
+    "createdAt": "2026-02-28T08:26:35.092Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "cc53769d-c094-4f66-9b81-826685055607",
+    "createdAt": "2026-02-28T08:26:36.196Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "986b7d32-e64b-42aa-ad8d-05ff1d6b8ad2",
+    "createdAt": "2026-02-28T08:32:55.096Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "ff3ee859-ba61-4d1e-9e6e-892c13f027e8",
+    "createdAt": "2026-02-28T08:32:56.032Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "56fe6b01-91f5-4308-8705-202566b22224",
+    "createdAt": "2026-02-28T08:32:56.043Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "bb6666c9-56fa-440d-9ef6-f6af035c1237",
+    "createdAt": "2026-02-28T08:32:56.053Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "beed73b5-fe3b-4404-879a-e7bbb7bff2df",
+    "createdAt": "2026-02-28T08:32:56.457Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "4b3d0894-a4b6-439c-8455-3dd5610690d0",
+    "createdAt": "2026-02-28T08:41:21.921Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "9fe892fa-e2d2-4e17-85e6-08e9bf9d3ef5",
+    "createdAt": "2026-02-28T08:41:22.294Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "ca3cb77b-b78d-473c-887c-1d86f50a3d4c",
+    "createdAt": "2026-02-28T08:41:22.305Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "9c90b8f0-24a9-4579-9d0d-77fc19312fdc",
+    "createdAt": "2026-02-28T08:41:22.314Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "eb4e39ee-c83d-4aa4-b589-e6809ad8c71c",
+    "createdAt": "2026-02-28T08:41:22.804Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "d7be52ae-6347-42d6-af3f-912373db1069",
+    "createdAt": "2026-02-28T08:45:44.565Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "5178f277-1238-4d5b-bf56-42b2bc9b659c",
+    "createdAt": "2026-02-28T08:45:52.542Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "40921016-8d85-4662-bfb6-a98acad1bd57",
+    "createdAt": "2026-02-28T08:45:53.297Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "6e30baa4-0b6c-4e85-bbf1-40b924fd1052",
+    "createdAt": "2026-02-28T08:45:53.307Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "cfcc198c-ab5a-472d-a74e-cdb6f6288a97",
+    "createdAt": "2026-02-28T08:45:53.314Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "64f80cee-efb0-4f8b-915d-b79b813255e0",
+    "createdAt": "2026-02-28T08:45:54.389Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "13f3c134-1e26-4045-b54e-07c0b4cbe59f",
+    "createdAt": "2026-02-28T08:46:00.528Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "82c8f8be-386d-444e-a9ab-8e9e088447da",
+    "createdAt": "2026-02-28T08:46:53.378Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "3f982f8a-f11d-49ca-9862-e7639b6826fc",
+    "createdAt": "2026-02-28T08:47:01.384Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "749e1aa7-3281-4da4-9a3d-dec6d27747e3",
+    "createdAt": "2026-02-28T08:47:02.385Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "8d0550c2-8d8e-4abf-ae0b-27050a97e658",
+    "createdAt": "2026-02-28T08:47:02.396Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "5cd98227-b092-4e50-88c6-7f254661db51",
+    "createdAt": "2026-02-28T08:47:02.404Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "e2346051-b941-459a-9a79-fc4eef8a400b",
+    "createdAt": "2026-02-28T08:47:03.205Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "5622d141-a035-48d0-9df5-c65d4391dab8",
+    "createdAt": "2026-02-28T08:54:29.298Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "4d461c0b-00da-4c3b-a324-e09122825fb3",
+    "createdAt": "2026-02-28T08:54:30.299Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "339bb949-d8aa-4fbc-a32b-cf0377e1bde4",
+    "createdAt": "2026-02-28T08:54:30.308Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "8fb0a6ea-f1e8-4483-939f-5a8f2a2c4af5",
+    "createdAt": "2026-02-28T08:54:30.316Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "3ed535f5-a021-48e6-805f-2e7100426452",
+    "createdAt": "2026-02-28T08:54:30.812Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "ccefee4d-438a-4f02-a2ae-48384523cacb",
+    "createdAt": "2026-02-28T09:20:37.049Z",
+    "event": "PLANNING_PROFILE_CREATE",
+    "route": "/api/planning/v2/profiles",
+    "summary": "PLANNING_PROFILE_CREATE SUCCESS: planning profile created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "b0a59207-5c17-44c9-b6fc-7b81103b7a5c",
+      "message": "planning profile created"
+    }
+  },
+  {
+    "id": "4aea2d3f-5164-4884-af0e-88ab4cf67df0",
+    "createdAt": "2026-02-28T09:20:38.166Z",
+    "event": "PLANNING_PROFILE_UPDATE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_UPDATE SUCCESS: planning profile updated",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "b0a59207-5c17-44c9-b6fc-7b81103b7a5c",
+      "message": "planning profile updated"
+    }
+  },
+  {
+    "id": "76f0c10e-f5e7-4d44-96de-c88665986183",
+    "createdAt": "2026-02-28T09:20:39.520Z",
+    "event": "PLANNING_RUN_CREATE",
+    "route": "/api/planning/v2/runs",
+    "summary": "PLANNING_RUN_CREATE SUCCESS: planning run created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "c98c3f14-bda7-4066-916b-ee7b52a04b34",
+      "message": "planning run created"
+    }
+  },
+  {
+    "id": "b380c39f-a843-40c0-9443-ac430d708282",
+    "createdAt": "2026-02-28T09:20:40.354Z",
+    "event": "PLANNING_RUN_DELETE",
+    "route": "/api/planning/v2/runs/[id]",
+    "summary": "PLANNING_RUN_DELETE SUCCESS: planning run deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "c98c3f14-bda7-4066-916b-ee7b52a04b34",
+      "message": "planning run deleted"
+    }
+  },
+  {
+    "id": "26b670cf-a235-4b3f-98a4-f878aec81128",
+    "createdAt": "2026-02-28T09:20:40.417Z",
+    "event": "PLANNING_PROFILE_DELETE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_DELETE SUCCESS: planning profile deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "b0a59207-5c17-44c9-b6fc-7b81103b7a5c",
+      "message": "planning profile deleted"
+    }
+  },
+  {
+    "id": "445728af-16c0-4cdd-9f75-e6ef774a4746",
+    "createdAt": "2026-02-28T09:20:49.606Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "cd195b5b-e4a4-41a6-8cfa-1758cb12214c",
+    "createdAt": "2026-02-28T09:20:50.579Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "5e6e0556-bd35-4855-bd4f-9a09967ee5ac",
+    "createdAt": "2026-02-28T09:20:50.607Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "adffeb7d-9e0e-4054-bdff-36d9abef6915",
+    "createdAt": "2026-02-28T09:20:50.621Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "aa5e5788-06ea-4fd2-bc66-8095bfd859b6",
+    "createdAt": "2026-02-28T09:20:51.679Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "7544cb50-345f-41e3-a067-67895b9d0ce9",
+    "createdAt": "2026-02-28T09:21:35.283Z",
+    "event": "PLANNING_PROFILE_CREATE",
+    "route": "/api/planning/v2/profiles",
+    "summary": "PLANNING_PROFILE_CREATE SUCCESS: planning profile created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "999444ce-5b66-4229-9016-44fb2dbfb273",
+      "message": "planning profile created"
+    }
+  },
+  {
+    "id": "840fec26-e95b-4868-a26e-dce42067c4e8",
+    "createdAt": "2026-02-28T09:21:36.203Z",
+    "event": "PLANNING_PROFILE_UPDATE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_UPDATE SUCCESS: planning profile updated",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "999444ce-5b66-4229-9016-44fb2dbfb273",
+      "message": "planning profile updated"
+    }
+  },
+  {
+    "id": "4ede9f42-a20d-4a44-9acf-d60c679777f7",
+    "createdAt": "2026-02-28T09:21:37.332Z",
+    "event": "PLANNING_RUN_CREATE",
+    "route": "/api/planning/v2/runs",
+    "summary": "PLANNING_RUN_CREATE SUCCESS: planning run created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "44ba389d-9358-4a7f-943d-43e1e305b403",
+      "message": "planning run created"
+    }
+  },
+  {
+    "id": "690799cf-536d-4e17-9add-180b725d329f",
+    "createdAt": "2026-02-28T09:21:38.164Z",
+    "event": "PLANNING_RUN_DELETE",
+    "route": "/api/planning/v2/runs/[id]",
+    "summary": "PLANNING_RUN_DELETE SUCCESS: planning run deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "44ba389d-9358-4a7f-943d-43e1e305b403",
+      "message": "planning run deleted"
+    }
+  },
+  {
+    "id": "7fb8b0f5-2624-4b98-b36a-b90326f83ea7",
+    "createdAt": "2026-02-28T09:21:38.216Z",
+    "event": "PLANNING_PROFILE_DELETE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_DELETE SUCCESS: planning profile deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "999444ce-5b66-4229-9016-44fb2dbfb273",
+      "message": "planning profile deleted"
+    }
+  },
+  {
+    "id": "3a31cf5f-3cda-4667-9717-1a11cda11dcd",
+    "createdAt": "2026-02-28T09:21:50.542Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "70568a6a-ad1b-4b2a-acf7-6b46a7712263",
+    "createdAt": "2026-02-28T09:21:50.555Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "d4118b4b-b07e-4ee7-9b85-625c37967e39",
+    "createdAt": "2026-02-28T09:21:50.565Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "97e8d93c-8cfa-47a2-824e-3c27d525cf0e",
+    "createdAt": "2026-02-28T09:21:51.050Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "913abd1f-9264-424b-aa42-03a18d4bc187",
+    "createdAt": "2026-02-28T09:21:51.202Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "c9c572f4-c1ed-4059-9534-23226caa2f2d",
+    "createdAt": "2026-02-28T09:29:42.115Z",
+    "event": "PLANNING_PROFILE_CREATE",
+    "route": "/api/planning/v2/profiles",
+    "summary": "PLANNING_PROFILE_CREATE SUCCESS: planning profile created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "fd25fe7d-97d7-4f7e-8424-eefa63cec4d2",
+      "message": "planning profile created"
+    }
+  },
+  {
+    "id": "bb8b373e-b2e1-4ac4-a6cf-633f89153460",
+    "createdAt": "2026-02-28T09:29:42.991Z",
+    "event": "PLANNING_PROFILE_UPDATE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_UPDATE SUCCESS: planning profile updated",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "fd25fe7d-97d7-4f7e-8424-eefa63cec4d2",
+      "message": "planning profile updated"
+    }
+  },
+  {
+    "id": "dbcc4a54-8975-436c-9a42-c17014868198",
+    "createdAt": "2026-02-28T09:29:44.012Z",
+    "event": "PLANNING_RUN_CREATE",
+    "route": "/api/planning/v2/runs",
+    "summary": "PLANNING_RUN_CREATE SUCCESS: planning run created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "cddb0329-563c-4143-9dfb-1f5091b5c744",
+      "message": "planning run created"
+    }
+  },
+  {
+    "id": "927150d6-8944-4416-b2cc-46aa5ccf77de",
+    "createdAt": "2026-02-28T09:29:44.756Z",
+    "event": "PLANNING_RUN_DELETE",
+    "route": "/api/planning/v2/runs/[id]",
+    "summary": "PLANNING_RUN_DELETE SUCCESS: planning run deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "cddb0329-563c-4143-9dfb-1f5091b5c744",
+      "message": "planning run deleted"
+    }
+  },
+  {
+    "id": "8cb67e7b-f7ee-459d-b6e8-548d34309002",
+    "createdAt": "2026-02-28T09:29:44.801Z",
+    "event": "PLANNING_PROFILE_DELETE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_DELETE SUCCESS: planning profile deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "fd25fe7d-97d7-4f7e-8424-eefa63cec4d2",
+      "message": "planning profile deleted"
+    }
+  },
+  {
+    "id": "0a25a6f4-f614-4fa4-89b1-6b94112b3ec8",
+    "createdAt": "2026-02-28T09:29:48.815Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "69ab5db0-872d-4c02-8e8b-16c9ef4261a9",
+    "createdAt": "2026-02-28T09:29:49.175Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "30bd2a30-35e8-4777-a675-3fc03fd3ab87",
+    "createdAt": "2026-02-28T09:29:49.191Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "a8cd3ac9-d44b-46cc-b593-b6a3522bfa12",
+    "createdAt": "2026-02-28T09:29:49.200Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "e002eba6-e02a-497d-b6c5-9aa1b125d4c2",
+    "createdAt": "2026-02-28T09:29:50.620Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "4a287820-5c13-457c-aed8-2d2c4315a965",
+    "createdAt": "2026-02-28T09:40:32.359Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "f4954b98-4dac-4baa-8adb-11688c097bbd",
+    "createdAt": "2026-02-28T09:40:32.971Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "5cb99fe0-e0dd-4ad5-8134-9e1aa5df7678",
+    "createdAt": "2026-02-28T09:40:32.980Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "2b5ffbad-4a1c-42a0-ba3c-3e3c962d58ea",
+    "createdAt": "2026-02-28T09:40:32.987Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "2d3e9a52-aad6-4bb0-9d01-5b0e3e91cc28",
+    "createdAt": "2026-02-28T09:40:33.687Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "02e2e3d2-aa08-4792-af35-e635eb9353b5",
+    "createdAt": "2026-02-28T09:40:55.559Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "9b60cdf8-55da-41e9-b6bf-65f5702f089c",
+    "createdAt": "2026-02-28T09:40:56.538Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "e35765aa-61bf-489d-bedf-6200987f3f1b",
+    "createdAt": "2026-02-28T09:40:56.549Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "1f3ec88f-ac40-4428-ad9a-bd042a8692e2",
+    "createdAt": "2026-02-28T09:40:56.559Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "d3735f0c-9e36-48c0-b2dc-87f227d6632e",
+    "createdAt": "2026-02-28T09:40:57.314Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "ea78c9a0-8ade-4cd4-a2bb-ba5e1d1f49b8",
+    "createdAt": "2026-02-28T09:41:13.467Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "8b932ee4-8c36-4684-a7f3-6c3188c7d617",
+    "createdAt": "2026-02-28T09:41:14.139Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "5f3b68e0-e46b-45b9-846d-e506b4f9c04e",
+    "createdAt": "2026-02-28T09:41:14.151Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "6cb5e926-6436-4c7a-8e7e-41d74d268ecd",
+    "createdAt": "2026-02-28T09:41:14.159Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "1f964a91-dee8-4ca5-b100-5f730a4e82ef",
+    "createdAt": "2026-02-28T09:41:14.222Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "0582ffca-c65d-4df0-883b-7f3c7c4b8c83",
+    "createdAt": "2026-02-28T09:41:56.457Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "29358ff3-1354-4deb-84e3-dda9e5e043aa",
+    "createdAt": "2026-02-28T09:41:57.103Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b1ea5910-58f8-4b7d-b769-c6d72157a7e0",
+    "createdAt": "2026-02-28T09:41:57.115Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "cb59715c-4707-4f33-aed3-2a1dff240dbb",
+    "createdAt": "2026-02-28T09:41:57.124Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "54ab22e2-9be6-4456-9a4b-e92b83f6288d",
+    "createdAt": "2026-02-28T09:41:58.295Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "89bdb563-63d5-41b8-bae0-9fe834aff53e",
+    "createdAt": "2026-02-28T09:45:39.757Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "9ae5221b-0212-444e-9114-e703c8deea39",
+    "createdAt": "2026-02-28T09:45:48.118Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "5725c806-ea6c-4af0-a3c1-c4a6f715df9d",
+    "createdAt": "2026-02-28T09:45:48.693Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "cc9f1af1-20b1-4327-aa77-4e9a22c7d643",
+    "createdAt": "2026-02-28T09:45:48.704Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "5ff4b41f-8293-458b-974b-547118fdfdde",
+    "createdAt": "2026-02-28T09:45:48.712Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "bf1dd89c-c938-47b4-b39e-748d40f7d965",
+    "createdAt": "2026-02-28T09:45:49.243Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "930c6422-f5a5-4440-8261-99db5a830130",
+    "createdAt": "2026-02-28T09:46:35.323Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "81d3c44a-b1d3-4644-a6d7-42af1426b516",
+    "createdAt": "2026-02-28T09:46:36.018Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "2b285526-b863-474a-9486-1799876f6b93",
+    "createdAt": "2026-02-28T09:46:36.028Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "7d527bcf-b563-4172-ad3c-19712e73f6cf",
+    "createdAt": "2026-02-28T09:46:36.038Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "09a3938e-d54b-4467-b1d0-04390b4eaa15",
+    "createdAt": "2026-02-28T09:46:36.217Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "736c95be-5218-407f-af31-b60556426b8d",
+    "createdAt": "2026-02-28T09:46:44.250Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "796845f0-f828-41c4-99b2-c1e68b156f26",
+    "createdAt": "2026-02-28T09:47:11.438Z",
+    "event": "PLANNING_PROFILE_CREATE",
+    "route": "/api/planning/v2/profiles",
+    "summary": "PLANNING_PROFILE_CREATE SUCCESS: planning profile created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "e1721525-e075-4edf-ba9c-271afe395e58",
+      "message": "planning profile created"
+    }
+  },
+  {
+    "id": "f83d191a-ab7a-4118-bff1-e23ff4de16d4",
+    "createdAt": "2026-02-28T09:47:12.391Z",
+    "event": "PLANNING_PROFILE_UPDATE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_UPDATE SUCCESS: planning profile updated",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "e1721525-e075-4edf-ba9c-271afe395e58",
+      "message": "planning profile updated"
+    }
+  },
+  {
+    "id": "e5a4d985-1c54-4460-ae52-546eb29a4e41",
+    "createdAt": "2026-02-28T09:47:13.483Z",
+    "event": "PLANNING_RUN_CREATE",
+    "route": "/api/planning/v2/runs",
+    "summary": "PLANNING_RUN_CREATE SUCCESS: planning run created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "9a10ddcb-4ee3-4836-85d6-5898b57bfbd4",
+      "message": "planning run created"
+    }
+  },
+  {
+    "id": "1ee161e2-c8a1-463a-bd59-f807e818ef1f",
+    "createdAt": "2026-02-28T09:47:14.242Z",
+    "event": "PLANNING_RUN_DELETE",
+    "route": "/api/planning/v2/runs/[id]",
+    "summary": "PLANNING_RUN_DELETE SUCCESS: planning run deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "9a10ddcb-4ee3-4836-85d6-5898b57bfbd4",
+      "message": "planning run deleted"
+    }
+  },
+  {
+    "id": "412ef09a-a072-402f-946f-758d6385080e",
+    "createdAt": "2026-02-28T09:47:14.294Z",
+    "event": "PLANNING_PROFILE_DELETE",
+    "route": "/api/planning/v2/profiles/[id]",
+    "summary": "PLANNING_PROFILE_DELETE SUCCESS: planning profile deleted",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "e1721525-e075-4edf-ba9c-271afe395e58",
+      "message": "planning profile deleted"
+    }
+  },
+  {
+    "id": "9a45e049-ec7c-4899-bf69-51f3906cc95a",
+    "createdAt": "2026-02-28T09:51:55.400Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "60286c25-74f6-479e-bc34-ddee0065fa98",
+    "createdAt": "2026-02-28T09:51:55.780Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "4fda319b-6c06-40e7-8123-721db416f5fc",
+    "createdAt": "2026-02-28T09:51:55.794Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "cf745e4c-cc33-4f2c-a475-591c27a8131c",
+    "createdAt": "2026-02-28T09:51:55.804Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "199a4aa1-d7d7-4acc-84de-b89b50850e1b",
+    "createdAt": "2026-02-28T09:51:56.393Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "6303b791-38e2-4b8c-9880-7da13364ecc3",
+    "createdAt": "2026-02-28T09:56:52.098Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "cb9d14c6-6832-4442-ae5d-222a46901c4c",
+    "createdAt": "2026-02-28T09:56:52.581Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "5399c9d4-058f-471d-a8e2-a2f725a96493",
+    "createdAt": "2026-02-28T09:56:52.594Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "8dee2c7b-64c1-44e2-b5ac-35b00e21e6bf",
+    "createdAt": "2026-02-28T09:56:52.603Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "4777b1f8-78af-475f-bc42-26a48619068d",
+    "createdAt": "2026-02-28T09:56:53.197Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "bbd12ea2-3369-4d57-9467-49849ef49b2e",
+    "createdAt": "2026-02-28T09:57:40.043Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 3,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "01313e1f-d820-4c7f-ad4d-563d3b0f968f",
+    "createdAt": "2026-02-28T10:00:04.901Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "125e5ca3-b03d-42b4-8e82-fb55699c8394",
+    "createdAt": "2026-02-28T10:05:33.417Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "ab682a4f-092f-4365-8f12-9558284fa873",
+    "createdAt": "2026-02-28T10:05:34.133Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "40ba68e5-4542-487f-9776-8cbd3904105b",
+    "createdAt": "2026-02-28T10:05:34.152Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "fd260786-3d25-43aa-93f7-27a19de423ce",
+    "createdAt": "2026-02-28T10:05:34.162Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "94f6778e-927c-408f-b162-5753bcfe108e",
+    "createdAt": "2026-02-28T10:05:35.125Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "8738d5f0-aecd-4966-80f2-6b84eaf47391",
+    "createdAt": "2026-02-28T10:13:10.217Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "90c124f5-3b54-4d0f-b56c-77ca275af96d",
+    "createdAt": "2026-02-28T10:13:10.657Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "4a5e701d-536a-40f1-8fba-dc7284fe4183",
+    "createdAt": "2026-02-28T10:13:10.669Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "2ee252de-f052-423e-ab2f-23b0d11c26ad",
+    "createdAt": "2026-02-28T10:13:10.681Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "cfeb3048-3b67-4a6d-a100-89ef45651a94",
+    "createdAt": "2026-02-28T10:13:11.165Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "20604ca5-2173-4774-8c43-a556cef2461d",
+    "createdAt": "2026-02-28T10:16:36.731Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "ca361af3-6128-4bba-9cb8-69d9787b64c7",
+    "createdAt": "2026-02-28T10:16:37.542Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "bb35d887-eaab-418a-872c-a72db4b452f4",
+    "createdAt": "2026-02-28T10:16:37.554Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "2b991573-bbcb-42f8-880d-b854a51cfa47",
+    "createdAt": "2026-02-28T10:16:37.565Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "5103d245-931f-4662-a722-5ec91d903635",
+    "createdAt": "2026-02-28T10:16:38.837Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "4de9e899-88d6-4d59-aecc-becbd702ab15",
+    "createdAt": "2026-02-28T10:18:50.245Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "b0a15e4f-39b6-45b3-90f1-4d5b753008c2",
+    "createdAt": "2026-02-28T10:18:50.618Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "f6e67754-03dd-4a55-a908-7fbff1ba778a",
+    "createdAt": "2026-02-28T10:18:50.630Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "e4418122-7d46-465b-8d69-f7f1745c9f35",
+    "createdAt": "2026-02-28T10:18:50.639Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "2192ec02-3d05-4ed0-b565-fd3c34c10c3b",
+    "createdAt": "2026-02-28T10:18:51.622Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "1f1fa99b-d5bb-4a67-9e29-5f7cd69f64d1",
+    "createdAt": "2026-02-28T10:23:17.769Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN FAIL",
+    "details": {
+      "result": "FAIL",
+      "totalCases": 9,
+      "failCount": 6
+    }
+  },
+  {
+    "id": "4d6774cf-c6ed-4fef-8bcb-f5c9cfed7146",
+    "createdAt": "2026-02-28T10:23:17.775Z",
+    "event": "PLANNING_V2_BASELINE_UPDATE",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_BASELINE_UPDATE SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 9,
+      "changedCases": 6,
+      "confirmMatched": true
+    }
+  },
+  {
+    "id": "d418ea38-7a84-4607-84a2-9d9600f8d8ef",
+    "createdAt": "2026-02-28T10:23:42.001Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN FAIL",
+    "details": {
+      "result": "FAIL",
+      "totalCases": 9,
+      "failCount": 7
+    }
+  },
+  {
+    "id": "94af5fd5-b2a3-437c-8043-5f0110a704a1",
+    "createdAt": "2026-02-28T10:23:42.008Z",
+    "event": "PLANNING_V2_BASELINE_UPDATE",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_BASELINE_UPDATE SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 9,
+      "changedCases": 7,
+      "confirmMatched": true
+    }
+  },
+  {
+    "id": "10b98885-011f-4fb3-bc13-051aaeb3043d",
+    "createdAt": "2026-02-28T10:23:57.840Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 9,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "9b2a202f-1c8f-436f-be01-6704e910a09f",
+    "createdAt": "2026-02-28T10:24:12.575Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "4e459ada-246f-4b04-9e06-886ed3d546a6",
+    "createdAt": "2026-02-28T10:24:13.323Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "197cbe9a-8a65-40bd-b414-38b5fff62984",
+    "createdAt": "2026-02-28T10:24:13.336Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "e64d9359-b4a2-45d8-bd5c-2a509d3ecb82",
+    "createdAt": "2026-02-28T10:24:13.348Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "07927028-7b76-4ede-97d7-3fe046b05469",
+    "createdAt": "2026-02-28T10:24:14.315Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "3cf1d6be-603c-4343-8de9-4774f166ff34",
+    "createdAt": "2026-02-28T10:27:20.847Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "e30b5eff-d551-4392-bf1f-2904d76eda91",
+    "createdAt": "2026-02-28T10:27:21.227Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "5d63eb45-9197-4b95-802d-d16899ca1a21",
+    "createdAt": "2026-02-28T10:27:21.240Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "e2c88c67-4b7c-4522-b6ce-d2e256b2489e",
+    "createdAt": "2026-02-28T10:27:21.252Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "32cbd601-979d-4724-a025-d589b0f993a8",
+    "createdAt": "2026-02-28T10:27:25.903Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "923e7dcc-94b0-43fb-a133-4ef0bef17d4a",
+    "createdAt": "2026-02-28T10:28:13.650Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 9,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "f96fe878-f860-4886-8d88-9849dbe1b3fa",
+    "createdAt": "2026-02-28T10:28:20.408Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "423bc4ca-b5ff-48f3-98ac-d7e7f66c8f12",
+    "createdAt": "2026-02-28T10:28:21.288Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "2ba96728-b38c-4ae8-8bf9-a4b288f29958",
+    "createdAt": "2026-02-28T10:28:21.303Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "d47b1eef-0502-4fd4-bea8-9011b282a10b",
+    "createdAt": "2026-02-28T10:28:21.314Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "7d6995ba-26f9-4dfa-8b0b-ed2f6349ed5a",
+    "createdAt": "2026-02-28T10:28:22.684Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "20fe66a5-0967-4ee5-a58c-52f13e398505",
+    "createdAt": "2026-02-28T10:36:16.457Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "62c21b1c-9e98-4821-8777-2b814263082b",
+    "createdAt": "2026-02-28T10:37:35.698Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "788bd84b-ad4b-4170-9ff3-a24cfef2d97c",
+    "createdAt": "2026-02-28T10:37:41.859Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b2e4fc40-e710-43f1-b7ce-3d7754c9bb92",
+    "createdAt": "2026-02-28T10:37:41.871Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "6c0449f4-c632-4037-abf0-640c56a850cd",
+    "createdAt": "2026-02-28T10:37:41.881Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "37d5537d-c548-4980-bef5-f06fc7e38e3b",
+    "createdAt": "2026-02-28T10:37:41.932Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "dc5f2301-b382-4e72-89d6-b33f527ba25f",
+    "createdAt": "2026-02-28T10:37:43.168Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "fd0f4f3c-ecde-45f7-bb2a-3538b5424926",
+    "createdAt": "2026-02-28T10:48:28.320Z",
+    "event": "PLANNING_MIGRATE_DRYRUN",
+    "route": "/scripts/planning_v2_migrate",
+    "summary": "planning migrate dry-run 완료",
+    "details": {
+      "result": "SUCCESS",
+      "scanned": 4,
+      "upgradable": 1,
+      "changedCount": 1,
+      "failedCount": 0
+    }
+  },
+  {
+    "id": "b10713b4-68c3-4ef0-a82e-792929ad7e2b",
+    "createdAt": "2026-02-28T10:48:45.169Z",
+    "event": "PLANNING_MIGRATE_DRYRUN",
+    "route": "/scripts/planning_v2_migrate",
+    "summary": "planning migrate dry-run 완료",
+    "details": {
+      "result": "SUCCESS",
+      "scanned": 4,
+      "upgradable": 1,
+      "changedCount": 1,
+      "failedCount": 0
+    }
+  },
+  {
+    "id": "2d89c18b-fa27-4bef-95d5-dfdd04863c5c",
+    "createdAt": "2026-02-28T10:49:04.531Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "0b951faa-9820-4e33-97b8-cdd69b7ac8bf",
+    "createdAt": "2026-02-28T10:49:04.705Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "d623098d-8753-4f32-9a62-8993955c9618",
+    "createdAt": "2026-02-28T10:49:05.120Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b29e4dba-0c42-44a1-9969-86764a025597",
+    "createdAt": "2026-02-28T10:49:05.133Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "084c2f3d-c3a4-4472-8c30-8b28f65a9b0c",
+    "createdAt": "2026-02-28T10:49:05.144Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "41f3ffd9-8ad6-46d4-aa48-f1e34ed56750",
+    "createdAt": "2026-02-28T11:02:00.494Z",
+    "event": "PLANNING_MIGRATE_DRYRUN",
+    "route": "/scripts/planning_v2_migrate",
+    "summary": "planning migrate dry-run 완료",
+    "details": {
+      "result": "SUCCESS",
+      "scanned": 4,
+      "upgradable": 1,
+      "changedCount": 1,
+      "failedCount": 0
+    }
+  },
+  {
+    "id": "ac9f8a09-51e2-4db0-8540-b65fa58f47ef",
+    "createdAt": "2026-02-28T11:02:00.523Z",
+    "event": "PLANNING_MIGRATE_DRYRUN",
+    "route": "/scripts/planning_v2_migrate",
+    "summary": "planning migrate dry-run 완료",
+    "details": {
+      "result": "SUCCESS",
+      "scanned": 4,
+      "upgradable": 1,
+      "changedCount": 1,
+      "failedCount": 0,
+      "namespaceUser": "default",
+      "namespaceScanned": 2,
+      "namespaceMovable": 2,
+      "namespaceFailed": 0
+    }
+  },
+  {
+    "id": "e7219f2d-ed9b-419c-9316-fd6ba87edc0f",
+    "createdAt": "2026-02-28T11:02:05.502Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "aa12c39f-2e0a-4abc-90f5-e05556e6d877",
+    "createdAt": "2026-02-28T11:02:05.831Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "bcc75b5c-3f1c-4231-beca-b7cc27bdd7a9",
+    "createdAt": "2026-02-28T11:02:05.844Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "f13fb4ff-044c-4df9-8e78-953c5d6d802c",
+    "createdAt": "2026-02-28T11:02:05.882Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "58521b35-2199-4957-b9e1-6b2a5bf8c571",
+    "createdAt": "2026-02-28T11:02:07.033Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "3845485d-4fbd-4a9d-94c9-2a532be0b173",
+    "createdAt": "2026-02-28T11:06:16.546Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "9ac982b1-82e4-4491-8102-13a26871a348",
+    "createdAt": "2026-02-28T11:06:16.556Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "cfcbfdef-257a-4ddd-a18c-c82c99809aee",
+    "createdAt": "2026-02-28T11:06:16.566Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "bad2db80-5814-4568-8e6b-4368885ab61d",
+    "createdAt": "2026-02-28T11:06:16.676Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "9b3b2347-8b7f-40be-9e3b-a4a41783cac4",
+    "createdAt": "2026-02-28T11:06:17.849Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "5f204519-4642-4139-9be7-3ef61eaccbfa",
+    "createdAt": "2026-02-28T11:11:06.992Z",
+    "event": "PLANNING_V2_REGRESS_RUN",
+    "route": "scripts/planning_v2_regression.mjs",
+    "summary": "PLANNING_V2_REGRESS_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "totalCases": 9,
+      "failCount": 0
+    }
+  },
+  {
+    "id": "daf57a95-eb23-4352-8b2c-d55e37aa9224",
+    "createdAt": "2026-02-28T11:11:07.649Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "3c412e9b-09b3-42ae-8634-3069d93d9f83",
+    "createdAt": "2026-02-28T11:11:08.500Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "9422f287-de71-42ff-b8d0-3ba26551cc73",
+    "createdAt": "2026-02-28T11:11:08.513Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "66bb2376-d0f1-453e-86d8-a2b81e8275c6",
+    "createdAt": "2026-02-28T11:11:08.524Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "a8307d12-cd82-46b8-b0fe-ddd4a2653f1c",
+    "createdAt": "2026-02-28T11:11:08.969Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "cbddcc06-83bb-45f4-8229-2147f560aa94",
+    "createdAt": "2026-02-28T11:18:20.790Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "0e5dfd21-83fa-4a7c-a7b0-b184e59abb30",
+    "createdAt": "2026-02-28T11:18:21.176Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b5494682-0143-4cd6-b820-b7c0edbbbfa8",
+    "createdAt": "2026-02-28T11:18:21.190Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "b3f32d46-a8ec-4465-801d-c694d47a12f1",
+    "createdAt": "2026-02-28T11:18:21.200Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "083ed3c3-d06a-43b9-bdc3-7f06aa78c599",
+    "createdAt": "2026-02-28T11:18:21.896Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "73cd7ea0-d78f-4eeb-be4c-e45f4b44d9e1",
+    "createdAt": "2026-02-28T11:18:36.963Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "88be6b89-6555-46f7-96bf-91bf20f6c3e9",
+    "createdAt": "2026-02-28T11:18:37.331Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "0d091a67-658e-44ee-86fe-d0c2ec2fe592",
+    "createdAt": "2026-02-28T11:18:37.343Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "d20387b8-6e78-4ea7-8f9b-34658ed599da",
+    "createdAt": "2026-02-28T11:18:37.359Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "10f8cd5f-3fb1-4154-832d-6c37a2d477dc",
+    "createdAt": "2026-02-28T11:18:38.007Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "fca7a9d8-baa7-4c57-b97e-1b4f903701d9",
+    "createdAt": "2026-02-28T11:26:57.212Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "d5a9dc08-086e-470a-b79c-d7418d668d6f",
+    "createdAt": "2026-02-28T11:26:57.350Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "2b2071d7-8a93-465c-8e69-8cb02bc6206a",
+    "createdAt": "2026-02-28T11:26:57.366Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "1b38b78c-a108-4222-83de-350334f506ce",
+    "createdAt": "2026-02-28T11:26:57.376Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "6f73f3bd-ba80-4b6c-b823-338a1dee660c",
+    "createdAt": "2026-02-28T11:26:58.800Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "16b782dd-3895-459f-b481-1f509720530a",
+    "createdAt": "2026-02-28T11:32:15.561Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "fb916de8-02da-41b5-9614-e1e43ec0341d",
+    "createdAt": "2026-02-28T11:32:15.912Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "339fa8a2-0468-4cb8-a564-48a9e5d82a93",
+    "createdAt": "2026-02-28T11:32:15.924Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "cf0393b0-74f6-4541-b7d0-594206fd05f2",
+    "createdAt": "2026-02-28T11:32:15.936Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "6f7d7f59-0ae4-46e2-919e-52a7b5cde699",
+    "createdAt": "2026-02-28T11:32:16.910Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "6de7ee14-0872-429c-9d19-7d83cbce5053",
+    "createdAt": "2026-02-28T11:32:41.481Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "e026de60-dcd5-40fe-9fe2-19a878986536",
+    "createdAt": "2026-02-28T11:32:41.897Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "ae9a56dd-2eb9-4cec-bc0e-1d3455ef9ce2",
+    "createdAt": "2026-02-28T11:32:41.909Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "0d0d59a4-ea96-4427-a37c-00f183f2791c",
+    "createdAt": "2026-02-28T11:32:41.922Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "99b521ea-ac9c-4e9d-81cc-e395ab2d664d",
+    "createdAt": "2026-02-28T11:32:43.065Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "d499d4a3-9eba-44f9-aa30-c013aa89dc7b",
+    "createdAt": "2026-02-28T11:33:28.974Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "0f4e100e-f420-4153-87c8-c39284484a4d",
+    "createdAt": "2026-02-28T11:33:29.447Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "12f4f280-bbff-415d-8e93-520ed632abb8",
+    "createdAt": "2026-02-28T11:33:29.460Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "8cac6359-e6cd-4785-90c7-a72a3f7e781e",
+    "createdAt": "2026-02-28T11:33:29.471Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "253ee5d8-dee3-4a59-bbe1-d1ec0049271b",
+    "createdAt": "2026-02-28T11:33:30.087Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "303ef369-e402-44f4-9571-ca1a1b445d09",
+    "createdAt": "2026-02-28T11:40:10.646Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "c8fbe6b5-d7fe-4099-8be6-b580a7f3d509",
+    "createdAt": "2026-02-28T11:40:11.282Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "3cc5bdc8-74da-4098-8af1-2ea912c8fb8c",
+    "createdAt": "2026-02-28T11:40:11.297Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "91b18192-90ae-4f85-8dc1-877853fe2e79",
+    "createdAt": "2026-02-28T11:40:11.313Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "6c606ef0-e1ad-44ef-89aa-38c6c7d9e0e9",
+    "createdAt": "2026-02-28T11:40:11.807Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "6ae4688f-39b7-42bc-8712-070b413931b3",
+    "createdAt": "2026-02-28T11:40:40.819Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "05b4ba96-535b-4df2-ab60-0f53d01b9344",
+    "createdAt": "2026-02-28T11:40:41.160Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "41e8c1f4-8de4-4b69-943f-f4a78eb51b10",
+    "createdAt": "2026-02-28T11:40:41.172Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "d11b7fc8-3f85-4610-a87a-23760ba67b61",
+    "createdAt": "2026-02-28T11:40:41.183Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "940cd008-0f9e-4724-b60d-bf454118ed29",
+    "createdAt": "2026-02-28T11:40:41.750Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "1f662daa-6065-4747-b199-d5bd783fc783",
+    "createdAt": "2026-02-28T11:49:25.828Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "11b645c1-9827-4b7b-a7e4-842b7e284fa7",
+    "createdAt": "2026-02-28T11:49:29.915Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "c8d1be75-62bb-4d54-955f-d44449984427",
+    "createdAt": "2026-02-28T11:49:29.938Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "b0d017df-e718-4a29-a19c-134e9b407e5e",
+    "createdAt": "2026-02-28T11:49:29.949Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "1a26fddc-e999-44b7-a803-68cc8080aefc",
+    "createdAt": "2026-02-28T11:49:30.900Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "e367c77a-e65f-497f-9c9c-e197bdd4b8b2",
+    "createdAt": "2026-02-28T11:49:48.029Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "5bc3517a-0252-4a74-976d-0d288424830b",
+    "createdAt": "2026-02-28T11:49:48.571Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "416b91c9-4039-4141-b43b-cd2d75e7d43f",
+    "createdAt": "2026-02-28T11:49:48.580Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "fe198111-50f4-4d0e-96d4-1e2796c76958",
+    "createdAt": "2026-02-28T11:49:48.592Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "08b8e720-4559-4e21-921a-f2b1ac30da2b",
+    "createdAt": "2026-02-28T11:49:49.792Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "f6ada663-e7e4-4cb0-bf40-8291ffe797f4",
+    "createdAt": "2026-02-28T11:52:06.808Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "93515729-b441-40a1-b254-403ea42f000b",
+    "createdAt": "2026-02-28T11:53:17.572Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "d2e3154c-32d9-4998-9487-38971319e545",
+    "createdAt": "2026-02-28T11:53:18.944Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "f91f739d-26f8-49b0-8840-42fb582de4c0",
+    "createdAt": "2026-02-28T11:53:18.962Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "7568d3f8-7de2-4479-9248-638468d993b1",
+    "createdAt": "2026-02-28T11:53:18.983Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "b2fd27ce-0389-4cb5-9e0f-d930e1908037",
+    "createdAt": "2026-02-28T11:53:20.015Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "6ebc8025-7049-44e3-be8c-4d9b04e29e0d",
+    "createdAt": "2026-02-28T11:57:38.806Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "e9bd7e08-f578-42f1-bec0-e656eda844d9",
+    "createdAt": "2026-02-28T11:57:38.985Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "dc647f5d-7c04-4781-a255-74a888acdb4b",
+    "createdAt": "2026-02-28T11:57:39.002Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "10128e62-025c-4ddd-980c-2cc45a795bf5",
+    "createdAt": "2026-02-28T11:57:39.014Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "7d44bfba-68af-4ef6-89e7-02b9a6694c0f",
+    "createdAt": "2026-02-28T11:57:40.665Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "e97deab3-8dac-4065-8d6b-035085ee2554",
+    "createdAt": "2026-02-28T12:00:05.146Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "04286ae2-12cd-4538-b89d-023713701435",
+    "createdAt": "2026-02-28T12:00:05.329Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "e4aeeba3-2109-41af-906e-e43f0a2c67e0",
+    "createdAt": "2026-02-28T12:00:05.357Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "025944b1-47ed-4b80-8859-66e4cc055ca5",
+    "createdAt": "2026-02-28T12:00:05.381Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "75d7f59f-7359-418b-abca-efb38718b634",
+    "createdAt": "2026-02-28T12:00:07.123Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "ca16c3f0-4871-4a78-ad8e-6ed0c54214f9",
+    "createdAt": "2026-02-28T12:13:03.926Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "8e7c7562-912e-4556-b2ac-ffb3a7559664",
+    "createdAt": "2026-02-28T12:13:04.031Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b77c4d80-c793-4da7-b072-b0725fa20037",
+    "createdAt": "2026-02-28T12:13:04.044Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "58c6cfa0-25a0-4e87-b2ca-ea492109989e",
+    "createdAt": "2026-02-28T12:13:04.055Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "072fd567-ff28-4d4a-aa22-256de6825305",
+    "createdAt": "2026-02-28T12:13:04.927Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "ca768f8d-8d1d-4df3-b910-f0fc33875e05",
+    "createdAt": "2026-02-28T12:18:44.673Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "e86e5f3c-b158-4fb4-a504-2b6c3c0bdb54",
+    "createdAt": "2026-02-28T12:18:46.032Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "3b61768d-2e28-49f1-b8ec-38f4b0881292",
+    "createdAt": "2026-02-28T12:18:46.057Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "a690f46f-8e93-44b9-93f4-5d7047cebcfb",
+    "createdAt": "2026-02-28T12:18:46.070Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "c2b89035-0fd4-4899-ba43-39b8612deb0a",
+    "createdAt": "2026-02-28T12:18:46.894Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "1a7ac736-9734-4969-82ec-a0cdf426c8f6",
+    "createdAt": "2026-02-28T12:19:06.749Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "b17b46cc-34f5-4e69-a10a-0865565812b8",
+    "createdAt": "2026-02-28T12:19:06.768Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "dc0ecd86-984b-4c46-b1b5-abe7707c9d0d",
+    "createdAt": "2026-02-28T12:19:06.779Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "d2df13de-5341-4649-9ce9-6e514067dea1",
+    "createdAt": "2026-02-28T12:19:06.895Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "11b0d992-2ea1-4c86-9d5f-b9751620094f",
+    "createdAt": "2026-02-28T12:19:08.311Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "88675b4c-3903-42c0-a543-6579ead80942",
+    "createdAt": "2026-02-28T12:24:59.158Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "92be3981-a343-439b-9411-325521744910",
+    "createdAt": "2026-02-28T12:24:59.618Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "40b5ed38-dd11-4806-a660-9b68660d2473",
+    "createdAt": "2026-02-28T12:24:59.635Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "40f8673c-4530-45eb-bf02-509ea8900081",
+    "createdAt": "2026-02-28T12:24:59.663Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "a0c0c5e3-56c1-492d-941e-799829f6ad48",
+    "createdAt": "2026-02-28T12:25:01.324Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "0da0074f-69df-46cb-84cc-b625c6d9ef33",
+    "createdAt": "2026-02-28T12:26:12.659Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "0828f7a2-99cd-4f19-abb8-4edb7ab125b0",
+    "createdAt": "2026-02-28T12:26:12.676Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "8902d44c-4b93-447c-955c-0ef258183e99",
+    "createdAt": "2026-02-28T12:26:12.688Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "703b241d-f70f-41b5-8f74-7613ec3d6c84",
+    "createdAt": "2026-02-28T12:26:12.866Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "cb1e89dc-4e26-4b79-a8fa-aceb47d8b365",
+    "createdAt": "2026-02-28T12:26:14.822Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "3ec3bcd0-a4cf-408c-b9ff-b4bafb848569",
+    "createdAt": "2026-02-28T12:26:54.306Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "ed8fe915-3c68-4708-b3aa-22e5d0ba7d14",
+    "createdAt": "2026-02-28T12:38:25.056Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "1b69db08-7de9-4c31-8772-592ae077bfa7",
+    "createdAt": "2026-02-28T12:38:26.155Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "474e52bd-f05d-43eb-a95b-a774b5aa459a",
+    "createdAt": "2026-02-28T12:38:26.169Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "b0ea65f2-190e-4b2e-bdf9-f312559bb141",
+    "createdAt": "2026-02-28T12:38:26.181Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "cc476d28-e393-458d-9737-cc9ba93d4a2f",
+    "createdAt": "2026-02-28T12:38:28.084Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  }
+]

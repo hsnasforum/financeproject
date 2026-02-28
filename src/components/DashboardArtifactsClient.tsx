@@ -37,6 +37,16 @@ const ARTIFACT_OPTIONS: ArtifactOption[] = [
   { name: "alerts_json", label: "alerts_json", isJson: true },
   { name: "digest_json", label: "digest_json", isJson: true },
   { name: "brief_json", label: "brief_json", isJson: true },
+  { name: "rules_eval_md", label: "rules_eval_md", isJson: false },
+  { name: "rules_quality_md", label: "rules_quality_md", isJson: false },
+  { name: "rules_suggest_md", label: "rules_suggest_md", isJson: false },
+  { name: "rules_patch_diff_md", label: "rules_patch_diff_md", isJson: false },
+  { name: "rules_labeled_md", label: "rules_labeled_md", isJson: false },
+  { name: "rules_eval_json", label: "rules_eval_json", isJson: true },
+  { name: "rules_labeled_json", label: "rules_labeled_json", isJson: true },
+  { name: "rules_suggest_json", label: "rules_suggest_json", isJson: true },
+  { name: "rules_patch_json", label: "rules_patch_json", isJson: true },
+  { name: "rules_pr_patch", label: "rules_pr_patch", isJson: false },
 ];
 
 const ARTIFACT_FILENAMES: Record<string, string> = {
@@ -48,6 +58,16 @@ const ARTIFACT_FILENAMES: Record<string, string> = {
   alerts_json: "disclosure_alerts.json",
   digest_json: "disclosure_digest.json",
   brief_json: "daily_brief.json",
+  rules_eval_md: "dart-rules-eval-report.md",
+  rules_quality_md: "dart-rules-quality-report.md",
+  rules_suggest_md: "dart-rules-suggestions.md",
+  rules_patch_diff_md: "dart-rules-patch-diff.md",
+  rules_labeled_md: "dart-rules-labeled-report.md",
+  rules_eval_json: "rules_eval.json",
+  rules_labeled_json: "rules_labeled_eval.json",
+  rules_suggest_json: "rules_suggestions.json",
+  rules_patch_json: "rules_patch.json",
+  rules_pr_patch: "rules_pr.patch",
 };
 
 export default function DashboardArtifactsPage() {

@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "kind": "monteCarlo",
+  "key": "9e814db1c96bc0df347a348ea856d9ffeac8c539ba093e68eaf7417652370512",
+  "createdAt": "2026-02-28T11:49:25.808Z",
+  "expiresAt": "2026-03-07T11:49:25.808Z",
+  "meta": {
+    "horizonMonths": 60,
+    "assumptionsHash": "a07924a0aae9ee46c3678e8d02108b44c24db22f3bc288526a554979dc772b45",
+    "optionsHash": "8fba7cbd6ad94f40d51c7971d231ff917ed4264fe283f64158bd1e98784cee78",
+    "snapshot": {
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-02-28T12:00:00.000Z",
+      "missing": false
+    }
+  },
+  "data": {
+    "meta": {
+      "generatedAt": "2026-02-28T11:49:25.808Z",
+      "snapshot": {
+        "asOf": "2026-02-28",
+        "fetchedAt": "2026-02-28T12:00:00.000Z",
+        "missing": false,
+        "warningsCount": 0,
+        "sourcesCount": 0
+      },
+      "health": {
+        "warningsCount": 0,
+        "criticalCount": 0,
+        "warningCodes": [],
+        "snapshotStaleDays": 0,
+        "flags": {
+          "snapshotMissing": false,
+          "snapshotStaleDays": 0,
+          "optimisticReturn": false,
+          "riskMismatch": false
+        }
+      }
+    },
+    "data": {
+      "baseAssumptionsUsed": {
+        "inflationPct": 1.1,
+        "investReturnPct": 7.2,
+        "cashReturnPct": 3.1,
+        "withdrawalRatePct": 4,
+        "debtRates": {}
+      },
+      "monteCarlo": {
+        "meta": {
+          "paths": 80,
+          "seed": 9
+        },
+        "probabilities": {
+          "lumpSumGoalAchieved": {
+            "goal-home": 1
+          },
+          "retirementAchievedAtRetireAge": 1,
+          "retirementDepletionBeforeEnd": 0
+        },
+        "percentiles": {
+          "endNetWorthKrw": {
+            "p10": 113228624.32,
+            "p50": 115757457.48,
+            "p90": 119257052.89
+          },
+          "worstCashKrw": {
+            "p10": 0,
+            "p50": 0,
+            "p90": 0
+          }
+        },
+        "notes": [
+          "확률 값은 모델 기반 추정치이며 보장이 아닙니다.",
+          "수익률/물가 분포는 단순화된 가정입니다.",
+          "현금흐름 스케줄(phase/pension/contribution)은 경로마다 동일 규칙으로 적용됩니다."
+        ]
+      },
+      "healthWarnings": []
+    }
+  }
+}

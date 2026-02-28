@@ -1,0 +1,55 @@
+{
+  "id": "case-003",
+  "title": "은퇴 목표 + 장기 시뮬레이션",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 5200000,
+      "monthlyEssentialExpenses": 2200000,
+      "monthlyDiscretionaryExpenses": 1000000,
+      "liquidAssets": 8000000,
+      "investmentAssets": 40000000,
+      "debts": [
+        {
+          "id": "mortgage",
+          "name": "Mortgage",
+          "balance": 180000000,
+          "minimumPayment": 950000,
+          "apr": 0.045
+        }
+      ],
+      "goals": [
+        {
+          "id": "goal-retire",
+          "name": "Retirement",
+          "targetAmount": 900000000,
+          "targetMonth": 300,
+          "priority": 5,
+          "minimumMonthlyContribution": 600000
+        },
+        {
+          "id": "goal-college",
+          "name": "College",
+          "targetAmount": 120000000,
+          "targetMonth": 180,
+          "priority": 3,
+          "minimumMonthlyContribution": 250000
+        }
+      ],
+      "risk": {
+        "riskTolerance": "high"
+      }
+    },
+    "horizonMonths": 360,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 5.0,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "monteCarlo": {
+      "paths": 1000,
+      "seed": 24680
+    },
+    "includeProducts": false
+  }
+}

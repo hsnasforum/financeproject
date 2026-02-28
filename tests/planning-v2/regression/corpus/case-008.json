@@ -1,0 +1,53 @@
+{
+  "id": "case-008",
+  "title": "목돈 목표 2개(단기/중기)",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 4500000,
+      "monthlyEssentialExpenses": 2200000,
+      "monthlyDiscretionaryExpenses": 1000000,
+      "liquidAssets": 1800000,
+      "investmentAssets": 6500000,
+      "debts": [
+        {
+          "id": "loan-small",
+          "name": "Small Loan",
+          "balance": 5500000,
+          "minimumPayment": 190000,
+          "apr": 0.082,
+          "remainingMonths": 36,
+          "repaymentType": "amortizing"
+        }
+      ],
+      "goals": [
+        {
+          "id": "goal-trip",
+          "name": "Family Trip",
+          "targetAmount": 18000000,
+          "targetMonth": 12,
+          "priority": 5,
+          "minimumMonthlyContribution": 350000
+        },
+        {
+          "id": "goal-home",
+          "name": "Home Down Payment",
+          "targetAmount": 90000000,
+          "targetMonth": 72,
+          "priority": 4,
+          "minimumMonthlyContribution": 450000
+        }
+      ],
+      "risk": {
+        "riskTolerance": "mid"
+      }
+    },
+    "horizonMonths": 84,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 5.0,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "includeProducts": false
+  }
+}

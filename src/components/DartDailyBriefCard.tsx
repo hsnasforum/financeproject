@@ -44,13 +44,13 @@ export function DartDailyBriefCard({ showQuickActions = false }: { showQuickActi
     };
   }, []);
 
-  const lines = Array.isArray(brief?.lines) ? brief.lines.slice(0, 10) : [];
+  const lines = Array.isArray(brief?.lines) ? brief.lines.slice(0, 5) : [];
 
   return (
     <Card className="p-8 border-slate-100 bg-white shadow-lg shadow-slate-200/30 rounded-[2rem] hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-bold text-slate-800">일일 브리핑 (10줄)</h3>
+          <h3 className="text-sm font-bold text-slate-800">일일 브리핑</h3>
           <p className="text-xs text-slate-400 mt-1">DART 신규/업데이트 요약</p>
         </div>
         <Link href="/public/dart" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">
@@ -65,13 +65,14 @@ export function DartDailyBriefCard({ showQuickActions = false }: { showQuickActi
       ) : lines.length === 0 ? (
         <p className="mt-4 text-xs text-slate-500">dart:watch 실행 필요</p>
       ) : (
-        <ol className="mt-4 space-y-2 list-decimal pl-4">
+        <ul className="mt-4 space-y-2">
           {lines.map((line, index) => (
-            <li key={`${index}-${line}`} className="text-[11px] font-medium text-slate-700 leading-relaxed">
-              {line}
+            <li key={`${index}-${line}`} className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+              <p className="text-xs font-bold text-slate-800 leading-relaxed">{line}</p>
+              <p className="mt-1 text-[11px] text-slate-500">핵심 라인 {index + 1}</p>
             </li>
           ))}
-        </ol>
+        </ul>
       )}
 
       {showQuickActions ? (

@@ -1,4 +1,9 @@
 import { spawn } from "node:child_process";
+import { ALLOWED_FIX_MAP, isAllowedFixId, type AllowedFixId } from "./fixCatalog";
+
+if (typeof window !== "undefined") {
+  throw new Error("runScript is server-only.");
+}
 
 export type RunScriptErrorCode =
   | "NOT_ALLOWED"
@@ -27,9 +32,24 @@ export type RunScriptResult = {
 };
 
 type AllowedCommand = {
-  command: "pnpm";
-  args: ["dart:watch"] | ["data:doctor"];
+  command: "pnpm" | "node";
+  args: string[];
 };
+export { ALLOWED_FIX_MAP, isAllowedFixId };
+export type { AllowedFixId };
+
+export const ALLOWED_RULE_ACTION_MAP = {
+  EVAL_ALL: { command: "pnpm", args: ["dart:rules:eval:all"] },
+  EVAL_LABELED: { command: "pnpm", args: ["dart:rules:eval:labeled"] },
+  SUGGEST: { command: "pnpm", args: ["dart:rules:suggest"] },
+  PATCH_MAKE: { command: "pnpm", args: ["dart:rules:patch:make"] },
+  PATCH_DRY: { command: "pnpm", args: ["dart:rules:patch:dry"] },
+  PATCH_APPLY: { command: "pnpm", args: ["dart:rules:patch:apply"] },
+  GATE: { command: "pnpm", args: ["dart:rules:gate"] },
+  PR_PREPARE_RULES: { command: "node", args: ["scripts/rules_pr_prepare.mjs", "--scope=both"] },
+} as const;
+
+export type AllowedRuleAction = keyof typeof ALLOWED_RULE_ACTION_MAP;
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MAX_TAIL_CHARS = 2_000;
@@ -43,11 +63,109 @@ function appendTail(current: string, chunk: string, maxChars = MAX_TAIL_CHARS): 
 export function sanitizeRunScriptInput(input: RunScriptInput): AllowedCommand | null {
   const command = (input.command ?? "").trim();
   const args = Array.isArray(input.args) ? input.args.map((entry) => String(entry).trim()).filter(Boolean) : [];
-  if (command !== "pnpm" || args.length !== 1) return null;
+  if (command === "pnpm") {
+    if (args.length === 1) {
+      const script = args[0];
+      if (
+        script === "seed:debug"
+        || script === "dart:watch"
+        || script === "data:doctor"
+        || script === "daily:refresh"
+        || script === "dart:rules:eval:all"
+        || script === "dart:rules:eval:labeled"
+        || script === "dart:rules:suggest"
+        || script === "dart:rules:patch:make"
+        || script === "dart:rules:patch:dry"
+        || script === "dart:rules:patch:apply"
+        || script === "dart:rules:gate"
+      ) {
+        return { command: "pnpm", args: [script] };
+      }
+    }
 
-  const script = args[0];
-  if (script !== "dart:watch" && script !== "data:doctor") return null;
-  return { command: "pnpm", args: [script] };
+    if (args.length === 3 && args[0] === "prisma" && args[1] === "db" && args[2] === "push") {
+      return { command: "pnpm", args: ["prisma", "db", "push"] };
+    }
+    return null;
+  }
+
+  if (command === "node") {
+    if (args[0] !== "scripts/rules_pr_prepare.mjs") return null;
+    const flags = new Set(args.slice(1));
+    if (flags.size !== args.length - 1) return null;
+
+    let hasScope = false;
+    for (const token of flags) {
+      if (token === "--scope=rules" || token === "--scope=labels" || token === "--scope=both") {
+        hasScope = true;
+        continue;
+      }
+      if (token === "--includeTmpPatch=0" || token === "--includeTmpPatch=1") {
+        continue;
+      }
+      return null;
+    }
+    if (!hasScope) return null;
+    return { command: "node", args: [...args] };
+  }
+
+  return null;
+}
+
+export function isAllowedRuleAction(value: string): value is AllowedRuleAction {
+  return Object.prototype.hasOwnProperty.call(ALLOWED_RULE_ACTION_MAP, value);
+}
+
+export async function runAllowedFix(
+  fixId: string,
+  options?: { timeoutMs?: number; cwd?: string },
+): Promise<RunScriptResult> {
+  const normalized = String(fixId ?? "").trim();
+  if (!isAllowedFixId(normalized)) {
+    return {
+      ok: false,
+      tookMs: 0,
+      stdoutTail: "",
+      stderrTail: "",
+      error: {
+        code: "NOT_ALLOWED",
+        message: `허용되지 않은 fixId 입니다: ${normalized || "(empty)"}`,
+      },
+    };
+  }
+  const target = ALLOWED_FIX_MAP[normalized];
+  return runScript({
+    command: target.command,
+    args: [...target.args],
+    timeoutMs: options?.timeoutMs,
+    cwd: options?.cwd,
+  });
+}
+
+export async function runAllowedRuleAction(
+  action: string,
+  options?: { timeoutMs?: number; cwd?: string },
+): Promise<RunScriptResult> {
+  const normalized = String(action ?? "").trim();
+  if (!isAllowedRuleAction(normalized)) {
+    return {
+      ok: false,
+      tookMs: 0,
+      stdoutTail: "",
+      stderrTail: "",
+      error: {
+        code: "NOT_ALLOWED",
+        message: `허용되지 않은 action 입니다: ${normalized || "(empty)"}`,
+      },
+    };
+  }
+  const target = ALLOWED_RULE_ACTION_MAP[normalized];
+  return runScript({
+    command: target.command,
+    args: [...target.args],
+    timeoutMs: options?.timeoutMs,
+    cwd: options?.cwd,
+  });
 }
 
 export async function runScript(input: RunScriptInput): Promise<RunScriptResult> {

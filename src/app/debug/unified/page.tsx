@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import DebugUnifiedClient from "@/components/DebugUnifiedClient";
-import { isProductionEnv } from "@/lib/dev/onlyDev";
+import { isDebugPageAccessible } from "@/lib/dev/debugAccess";
 
-export default function DebugUnifiedPage() {
-  if (isProductionEnv()) {
+export default async function DebugUnifiedPage() {
+  if (!(await isDebugPageAccessible())) {
     notFound();
   }
 

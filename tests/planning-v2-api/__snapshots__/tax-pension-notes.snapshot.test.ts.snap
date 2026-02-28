@@ -1,0 +1,12 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`planning v2 precision note snapshot > includes placeholder note once in simulate and scenarios outputs 1`] = `
+{
+  "scenarios": [
+    "정밀 세금/연금 계산은 아직 적용되지 않았습니다. 입력값은 보관만 합니다.",
+  ],
+  "simulate": [
+    "정밀 세금/연금 계산은 아직 적용되지 않았습니다. 입력값은 보관만 합니다.",
+  ],
+}
+`;

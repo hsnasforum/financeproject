@@ -10,6 +10,16 @@ export const ARTIFACT_WHITELIST = {
   alerts_json: "tmp/dart/disclosure_alerts.json",
   digest_json: "tmp/dart/disclosure_digest.json",
   brief_json: "tmp/dart/daily_brief.json",
+  rules_eval_md: "docs/dart-rules-eval-report.md",
+  rules_quality_md: "docs/dart-rules-quality-report.md",
+  rules_suggest_md: "docs/dart-rules-suggestions.md",
+  rules_patch_diff_md: "docs/dart-rules-patch-diff.md",
+  rules_labeled_md: "docs/dart-rules-labeled-report.md",
+  rules_eval_json: "tmp/dart/rules_eval.json",
+  rules_labeled_json: "tmp/dart/rules_labeled_eval.json",
+  rules_suggest_json: "tmp/dart/rules_suggestions.json",
+  rules_patch_json: "tmp/dart/rules_patch.json",
+  rules_pr_patch: "tmp/dart/rules_pr.patch",
 } as const;
 
 export type ArtifactName = keyof typeof ARTIFACT_WHITELIST;

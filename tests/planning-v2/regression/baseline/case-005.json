@@ -1,0 +1,47 @@
+{
+  "id": "case-005",
+  "generatedAt": "2026-02-28T10:23:41.181Z",
+  "expected": {
+    "simulate": {
+      "endNetWorthKrw": -518145117,
+      "worstCashKrw": -523156935,
+      "warnings": [
+        "EMERGENCY_FUND_DRAWDOWN",
+        "GOAL_MISSED",
+        "INSOLVENT",
+        "NEGATIVE_CASHFLOW"
+      ],
+      "goals": [
+        {
+          "id": "goal-retire",
+          "achieved": false
+        }
+      ]
+    },
+    "scenarios": {
+      "baseEndNetWorthKrw": -518145117,
+      "conservativeEndNetWorthKrw": -698120237,
+      "aggressiveEndNetWorthKrw": -413931476
+    },
+    "monteCarlo": {
+      "retirementDepletionBeforeEnd": 0.999,
+      "endNetWorthP50Krw": -536226635
+    },
+    "actions": {
+      "codes": [
+        "BUILD_EMERGENCY_FUND",
+        "FIX_NEGATIVE_CASHFLOW",
+        "IMPROVE_RETIREMENT_PLAN",
+        "SET_ASSUMPTIONS_REVIEW"
+      ]
+    },
+    "health": {
+      "criticalCount": 0,
+      "warnings": []
+    },
+    "debtStrategy": {
+      "debtServiceRatio": 0.189,
+      "interestSavingsDirection": "positive"
+    }
+  }
+}

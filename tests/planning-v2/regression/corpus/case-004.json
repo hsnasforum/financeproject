@@ -1,0 +1,56 @@
+{
+  "id": "case-004",
+  "title": "적자 가계 + 적립 스킵",
+  "input": {
+    "profile": {
+      "monthlyIncomeNet": 2800000,
+      "monthlyEssentialExpenses": 1800000,
+      "monthlyDiscretionaryExpenses": 850000,
+      "liquidAssets": 400000,
+      "investmentAssets": 1200000,
+      "debts": [
+        {
+          "id": "loan-high-1",
+          "name": "High APR Loan",
+          "balance": 32000000,
+          "minimumPayment": 760000,
+          "apr": 0.14,
+          "remainingMonths": 84,
+          "repaymentType": "amortizing"
+        }
+      ],
+      "goals": [
+        {
+          "id": "goal-emergency",
+          "name": "Emergency Buffer",
+          "targetAmount": 15900000,
+          "targetMonth": 24,
+          "priority": 5
+        }
+      ],
+      "cashflow": {
+        "contributions": [
+          {
+            "id": "contrib-invest-1",
+            "title": "Auto Invest",
+            "range": { "startMonth": 0, "endMonth": 35 },
+            "from": "cash",
+            "to": "investments",
+            "monthlyAmountKrw": 250000
+          }
+        ]
+      },
+      "risk": {
+        "riskTolerance": "mid"
+      }
+    },
+    "horizonMonths": 36,
+    "assumptions": {
+      "inflationPct": 2.0,
+      "investReturnPct": 5.0,
+      "cashReturnPct": 2.0,
+      "retirementWithdrawalRatePct": 4.0
+    },
+    "includeProducts": false
+  }
+}

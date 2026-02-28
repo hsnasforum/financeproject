@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-28T12:27:27.398Z",
+  "sourceEval": "tmp/dart/rules_eval.json",
+  "unknownRate": 0.08046,
+  "correctionFlagRate": 0.183908,
+  "highRate": 0,
+  "categoryRates": {
+    "disposition": 0.057471,
+    "earnings": 0.034483,
+    "governance": 0.827586,
+    "other": 0.08046
+  }
+}
