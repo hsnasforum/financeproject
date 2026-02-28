@@ -1,6 +1,6 @@
 # DART 분류 룰 평가 리포트
 
-- 생성시각: 2026-02-28T10:00:50.544Z
+- 생성시각: 2026-02-28T12:27:53.440Z
 - Rules: config/dart-disclosure-rules.json
 - Corpus: tmp/dart/disclosure_corpus.json
 - 표본 수: 87
