@@ -573,6 +573,7 @@ export function DashboardClient() {
 
   return (
     <PageShell>
+      <div data-testid="dashboard-root">
       <PageHeader
         title="개인 재무 의사결정 허브"
         description="실시간 금융 지표와 AI 분석 산출물을 기반으로 최적의 결정을 내리세요."
@@ -865,6 +866,7 @@ export function DashboardClient() {
           </div>
         )}
       </section>
+      </div>
     </PageShell>
   );
 }

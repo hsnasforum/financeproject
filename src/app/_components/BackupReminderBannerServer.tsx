@@ -1,5 +1,5 @@
 import { getAppInfo } from "@/lib/planning/server/runtime/appInfo";
-import { BackupReminderBanner } from "./BackupReminderBanner";
+import { BackupReminderBanner } from "@/components/BackupReminderBanner";
 
 export async function BackupReminderBannerServer(props: {
   scope: "planning" | "ops";
@@ -14,4 +14,3 @@ export async function BackupReminderBannerServer(props: {
     />
   );
 }
-
