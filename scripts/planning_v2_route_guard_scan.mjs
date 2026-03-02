@@ -30,7 +30,7 @@ async function gatherFiles(baseDir, suffix) {
 }
 
 function hasLocalGuard(content) {
-  return /assertLocalHost\s*\(/.test(content);
+  return /assertLocalHost\s*\(/.test(content) || /guardLocalRequest\s*\(/.test(content);
 }
 
 function hasDevGate(content) {
@@ -41,14 +41,59 @@ function hasDebugGate(content) {
   return /isDebugPageAccessible\s*\(/.test(content);
 }
 
+function parseRouteProxy(content) {
+  const importMatch = content.match(
+    /import\s+\{\s*(GET|POST|PUT|PATCH|DELETE)\s+as\s+([A-Za-z0-9_$]+)\s*\}\s+from\s+["'](.+)["'];?/,
+  );
+  if (!importMatch) return null;
+  const method = importMatch[1];
+  const alias = importMatch[2];
+  const source = importMatch[3];
+  const exportPattern = new RegExp(
+    `export\\s+async\\s+function\\s+${method}\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\breturn\\s+${alias}\\s*\\(`,
+  );
+  if (!exportPattern.test(content)) return null;
+  return { source };
+}
+
+async function resolveProxyFile(fromFile, sourcePath) {
+  if (!sourcePath.startsWith(".")) return null;
+  const baseDir = path.dirname(fromFile);
+  const candidates = [];
+  const resolved = path.resolve(baseDir, sourcePath);
+  if (resolved.endsWith(".ts") || resolved.endsWith(".tsx")) {
+    candidates.push(resolved);
+  } else {
+    candidates.push(`${resolved}.ts`);
+    candidates.push(`${resolved}.tsx`);
+  }
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
 async function validateRouteGroup(name, files) {
   const issues = [];
   for (const filePath of files) {
     const content = await fs.readFile(filePath, "utf8");
-    if (!hasLocalGuard(content)) {
+    let scanContent = content;
+    const proxy = parseRouteProxy(content);
+    if (proxy) {
+      const proxyFile = await resolveProxyFile(filePath, proxy.source);
+      if (proxyFile) {
+        scanContent = await fs.readFile(proxyFile, "utf8");
+      }
+    }
+    if (!hasLocalGuard(scanContent)) {
       issues.push(`${name}: missing local guard -> ${rel(filePath)}`);
     }
-    if (!hasDevGate(content)) {
+    if (!hasDevGate(scanContent)) {
       issues.push(`${name}: missing onlyDev gate -> ${rel(filePath)}`);
     }
   }
