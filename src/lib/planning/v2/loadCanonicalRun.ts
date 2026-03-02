@@ -7,6 +7,8 @@ type CanonicalRunLoadResult = {
   run: PlanningRunRecord;
 };
 
+type PlanningRunStage = NonNullable<PlanningRunRecord["stages"]>[number];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -33,11 +35,11 @@ function normalizeStages(value: unknown): PlanningRunRecord["stages"] {
       const id = normalizeStageId(row.id);
       if (!id) return null;
       return {
-        ...(row as PlanningRunRecord["stages"][number]),
-        id: id as PlanningRunRecord["stages"][number]["id"],
+        ...(row as PlanningRunStage),
+        id: id as PlanningRunStage["id"],
       };
     })
-    .filter((entry): entry is PlanningRunRecord["stages"][number] => entry !== null);
+    .filter((entry): entry is PlanningRunStage => entry !== null);
 }
 
 function readSchemaVersion(value: Record<string, unknown>): number {

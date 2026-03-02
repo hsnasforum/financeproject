@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 
@@ -146,7 +147,7 @@ async function listTrashFilesForKind(
   baseDir = process.cwd(),
 ): Promise<PlanningTrashItem[]> {
   const dir = resolveTrashKindDir(kind, baseDir);
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch (error) {
@@ -210,7 +211,7 @@ export async function emptyPlanningTrash(
   let deleted = 0;
   for (const row of kinds) {
     const dir = resolveTrashKindDir(row, base);
-    let entries: Awaited<ReturnType<typeof fs.readdir>>;
+    let entries: Dirent[];
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch (error) {

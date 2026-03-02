@@ -125,13 +125,13 @@ function buildInsight(dto: ResultDtoV1) {
     })),
     goals: dto.goals.map((goal) => ({
       name: goal.title,
-      targetAmount: goal.targetKrw,
-      currentAmount: goal.currentKrw,
-      shortfall: goal.shortfallKrw,
-      targetMonth: goal.targetMonth,
+      targetAmount: asNumber(goal.targetKrw) ?? 0,
+      currentAmount: asNumber(goal.currentKrw) ?? 0,
+      shortfall: asNumber(goal.shortfallKrw) ?? 0,
+      targetMonth: asNumber(goal.targetMonth) ?? 0,
       achieved: goal.achieved === true,
       achievedMonth: undefined,
-      comment: goal.comment,
+      comment: goal.comment ?? "",
     })),
     actionsTop: dto.actions?.top3,
     snapshotMeta: {

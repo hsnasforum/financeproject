@@ -26,7 +26,8 @@ import {
   assessRiskAssumptionConsistency,
   combineAssumptionsHealth,
 } from "../../../../../lib/planning/server/v2/assumptionsHealth";
-import { isAllocationPolicyId, type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
+import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
+import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { runScenarios } from "../../../../../lib/planning/server/v2/runScenarios";
 import { type AssumptionsV2, type RiskTolerance, toScenarioAssumptionsV2, toSimulationAssumptionsV2 } from "../../../../../lib/planning/server/v2/scenarios";
 import { simulateMonthly } from "../../../../../lib/planning/server/v2/simulateMonthly";
@@ -355,16 +356,18 @@ function parseRunInputScenario(value: unknown): RunInputScenario | undefined {
 function scenarioPatchToLegacyPatch(
   patch: ScenarioPatch,
 ): { path: string; op: "set" | "multiply"; value: number } {
-  if (patch.op === "set") {
-    return { path: `/${patch.field}`, op: "set", value: patch.value };
+  if ("field" in patch) {
+    return {
+      path: `/${patch.field}`,
+      op: patch.op === "set" ? "set" : "multiply",
+      value: patch.value,
+    };
   }
-  if (patch.op === "mul") {
-    return { path: `/${patch.field}`, op: "multiply", value: patch.value };
-  }
-  if (patch.op === "debt.setMinimumPayment") {
-    return { path: `/debts/${patch.debtId}/minimumPayment`, op: "set", value: patch.value };
-  }
-  return { path: `/debts/${patch.debtId}/minimumPayment`, op: "multiply", value: patch.value };
+  return {
+    path: `/debts/${patch.debtId}/minimumPayment`,
+    op: patch.op === "debt.setMinimumPayment" ? "set" : "multiply",
+    value: patch.value,
+  };
 }
 
 function toLegacyScenarioMetaFromInput(inputScenario: RunInputScenario): ScenarioMeta {
@@ -1175,7 +1178,14 @@ export async function POST(request: Request) {
     });
 
     stages = pipeline.stages;
-    if (!plan || pipeline.overallStatus === "FAILED") {
+    const simulatePlan = (plan ?? pipeline.outputs.simulate) as SimulationResultV2 | null;
+    const scenariosOutput = (scenariosResult ?? pipeline.outputs.scenarios) as ReturnType<typeof runScenarios> | null;
+    const monteCarloOutput = (monteCarloResult ?? pipeline.outputs.monteCarlo) as ReturnType<typeof runMonteCarlo> | null;
+    const actionsOutput = (actionsResult ?? pipeline.outputs.actions) as Awaited<ReturnType<typeof matchCandidates>>
+      | ReturnType<typeof buildActionsFromPlan>
+      | null;
+    const debtStrategyOutput = (debtStrategyResult ?? pipeline.outputs.debtStrategy) as ReturnType<typeof computeDebtStrategy> | null;
+    if (!simulatePlan || pipeline.overallStatus === "FAILED") {
       await appendRunStageMetrics({
         requestId: runRequestId,
         profileId: profileRecord.id,
@@ -1201,20 +1211,20 @@ export async function POST(request: Request) {
 
     const outputs = {
       simulate: {
-        summary: summarizePlan(plan),
-        warnings: plan.warnings.map((warning) => warning.reasonCode),
-        goalsStatus: plan.goalStatus,
-        keyTimelinePoints: pickKeyTimelinePoints(plan.timeline),
+        summary: summarizePlan(simulatePlan),
+        warnings: simulatePlan.warnings.map((warning) => warning.reasonCode),
+        goalsStatus: simulatePlan.goalStatus,
+        keyTimelinePoints: pickKeyTimelinePoints(simulatePlan.timeline),
       },
-      ...(scenariosResult ? {
+      ...(scenariosOutput ? {
         scenarios: {
           table: [
             {
               id: "base",
               title: "Base",
-              ...summarizeScenarioResult(scenariosResult.base),
+              ...summarizeScenarioResult(scenariosOutput.base),
             },
-            ...scenariosResult.scenarios.map((entry) => ({
+            ...scenariosOutput.scenarios.map((entry) => ({
               id: entry.spec.id,
               title: entry.spec.title,
               ...summarizeScenarioResult(entry.result),
@@ -1222,36 +1232,36 @@ export async function POST(request: Request) {
             })),
           ],
           shortWhyByScenario: Object.fromEntries(
-            scenariosResult.scenarios.map((entry) => [entry.spec.id, entry.diffVsBase.shortWhy]),
+            scenariosOutput.scenarios.map((entry) => [entry.spec.id, entry.diffVsBase.shortWhy]),
           ),
         },
       } : {}),
-      ...(monteCarloResult ? {
+      ...(monteCarloOutput ? {
         monteCarlo: {
-          probabilities: monteCarloResult.probabilities,
-          percentiles: monteCarloResult.percentiles,
-          notes: monteCarloResult.notes,
+          probabilities: monteCarloOutput.probabilities,
+          percentiles: monteCarloOutput.percentiles,
+          notes: monteCarloOutput.notes,
         },
       } : {}),
-      ...(Array.isArray(actionsResult) ? {
+      ...(Array.isArray(actionsOutput) ? {
         actions: {
-          actions: actionsResult,
+          actions: actionsOutput,
         },
       } : {}),
-      ...(debtStrategyResult ? {
+      ...(debtStrategyOutput ? {
         debtStrategy: {
           summary: {
-            debtServiceRatio: debtStrategyResult.meta.debtServiceRatio,
-            totalMonthlyPaymentKrw: debtStrategyResult.meta.totalMonthlyPaymentKrw,
-            warningsCount: debtStrategyResult.warnings.length,
+            debtServiceRatio: debtStrategyOutput.meta.debtServiceRatio,
+            totalMonthlyPaymentKrw: debtStrategyOutput.meta.totalMonthlyPaymentKrw,
+            warningsCount: debtStrategyOutput.warnings.length,
           },
-          warnings: debtStrategyResult.warnings.map((warning) => ({
+          warnings: debtStrategyOutput.warnings.map((warning) => ({
             code: warning.code,
             message: warning.message,
           })),
-          summaries: debtStrategyResult.summaries,
-          ...(debtStrategyResult.refinance ? { refinance: debtStrategyResult.refinance } : {}),
-          whatIf: debtStrategyResult.whatIf,
+          summaries: debtStrategyOutput.summaries,
+          ...(debtStrategyOutput.refinance ? { refinance: debtStrategyOutput.refinance } : {}),
+          whatIf: debtStrategyOutput.whatIf,
         },
       } : {}),
     };
@@ -1315,7 +1325,7 @@ export async function POST(request: Request) {
       outputs: {
         resultDto,
         ...outputs,
-      },
+      } as unknown as PlanningRunRecord["outputs"],
     }, {
       storeRawOutputs: asString(process.env.PLANNING_RUN_STORE_RAW_OUTPUTS).toLowerCase() === "true",
     });

@@ -7,7 +7,7 @@ test("dashboard renders", async ({ page }) => {
 
 test("planning page renders", async ({ page }) => {
   await page.goto("/planning");
-  await expect(page.getByRole("heading", { name: /재무설계 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
 });
 
 test("recommend page renders", async ({ page }) => {

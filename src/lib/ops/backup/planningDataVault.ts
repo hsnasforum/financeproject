@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { type Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { loadAssumptionsSnapshotById, loadLatestAssumptionsSnapshot, saveLatestAssumptionsSnapshot } from "../../planning/assumptions/storage";
@@ -373,7 +374,7 @@ async function collectRunBlobBuffers(runId: string, profileId?: string): Promise
   const blobsDir = profileId
     ? resolveProfileRunBlobsDir(profileId, runId)
     : resolveRunBlobsDir(runId);
-  let entries;
+  let entries: Dirent<string>[];
   try {
     entries = await fs.readdir(blobsDir, { withFileTypes: true, encoding: "utf-8" });
   } catch (error) {
@@ -902,7 +903,7 @@ export async function buildPlanningDataVaultZip(options?: {
 
   let latestSnapshotId: string | undefined;
   const historyDir = resolveAssumptionsHistoryDir();
-  let historyEntries;
+  let historyEntries: Dirent<string>[];
   try {
     historyEntries = await fs.readdir(historyDir, { withFileTypes: true, encoding: "utf-8" });
   } catch (error) {

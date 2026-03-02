@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type BackupReminderBannerProps = {
   scope: "planning" | "ops";
@@ -13,12 +13,10 @@ const STORAGE_KEY_PREFIX = "planning:update-backup-reminder:dismissed:";
 
 export function BackupReminderBanner({ scope, appVersion, className = "" }: BackupReminderBannerProps) {
   const storageKey = useMemo(() => `${STORAGE_KEY_PREFIX}${scope}`, [scope]);
-  const [hidden, setHidden] = useState(false);
-
-  useEffect(() => {
-    const dismissed = window.sessionStorage.getItem(storageKey) === "1";
-    if (dismissed) setHidden(true);
-  }, [storageKey]);
+  const [hidden, setHidden] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem(storageKey) === "1";
+  });
 
   if (hidden) return null;
 

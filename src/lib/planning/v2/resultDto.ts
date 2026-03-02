@@ -235,16 +235,20 @@ function buildTimelinePoints(simulate: Record<string, unknown>): ResultDtoV1["ti
     ? simulate.keyTimelinePoints
     : simulate.timeline;
   const rows = pickTimelinePoints(source);
-  return rows.map((row) => ({
-    label: row.label === "시작" ? "start" : row.label === "중간" ? "mid" : "end",
-    monthIndex: row.monthIndex,
-    ...(typeof row.income === "number" ? { incomeKrw: row.income } : {}),
-    ...(typeof row.expenses === "number" ? { expensesKrw: row.expenses } : {}),
-    ...(typeof row.debtPayment === "number" ? { debtPaymentKrw: row.debtPayment } : {}),
-    ...(typeof row.cash === "number" ? { cashKrw: row.cash } : {}),
-    ...(typeof row.netWorth === "number" ? { netWorthKrw: row.netWorth } : {}),
-    ...(typeof row.totalDebt === "number" ? { totalDebtKrw: row.totalDebt } : {}),
-  })).slice(0, LIMITS.timelinePoints);
+  return rows.map((row) => {
+    const label: ResultDtoV1["timeline"]["points"][number]["label"] =
+      row.label === "시작" ? "start" : row.label === "중간" ? "mid" : "end";
+    return {
+      label,
+      monthIndex: row.monthIndex,
+      ...(typeof row.income === "number" ? { incomeKrw: row.income } : {}),
+      ...(typeof row.expenses === "number" ? { expensesKrw: row.expenses } : {}),
+      ...(typeof row.debtPayment === "number" ? { debtPaymentKrw: row.debtPayment } : {}),
+      ...(typeof row.cash === "number" ? { cashKrw: row.cash } : {}),
+      ...(typeof row.netWorth === "number" ? { netWorthKrw: row.netWorth } : {}),
+      ...(typeof row.totalDebt === "number" ? { totalDebtKrw: row.totalDebt } : {}),
+    };
+  }).slice(0, LIMITS.timelinePoints);
 }
 
 function buildSimulationSummary(simulate: Record<string, unknown>, goals: ResultDtoV1["goals"]): {
@@ -553,7 +557,7 @@ export function buildResultDtoV1(input: BuildResultDtoV1Input): ResultDtoV1 {
   const actionsDto = buildActionsDto(actionItems);
   const scenariosDto = buildScenariosDto(scenarios);
   const monteCarloDto = buildMonteCarloDto(monteCarlo);
-  const rawDto = buildRawDto(input);
+  const rawDto = buildRawDto(input) ?? {};
 
   const summary: ResultDtoV1["summary"] = {
     ...(simulateSummary.endNetWorthKrw !== undefined ? { endNetWorthKrw: simulateSummary.endNetWorthKrw } : {}),

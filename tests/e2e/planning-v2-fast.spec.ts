@@ -26,8 +26,10 @@ test("/planning shows form by default and hides raw JSON until Advanced toggle",
 });
 
 test("/planning/reports shows run-based dashboard by default and keeps raw hidden", async ({ page, request }) => {
-  const runId = await seedRunForReports(request);
-  await page.goto(`/planning/reports?runId=${encodeURIComponent(runId)}`);
+  const seeded = await seedRunForReports(request);
+  await page.goto(
+    `/planning/reports?runId=${encodeURIComponent(seeded.runId)}&profileId=${encodeURIComponent(seeded.profileId)}`,
+  );
   await expect(page).toHaveURL(/\/planning\/reports(\?|$)/, { timeout: 30_000 });
 
   await expect(page.getByTestId("report-print-button")).toBeVisible();
@@ -57,7 +59,9 @@ test("key interactive controls expose accessible names", async ({ page, request 
   await expect(page.getByTestId("run-button")).toHaveAccessibleName("실행");
   await expect(page.getByTestId("planning-snapshot-ops-link")).toBeVisible();
 
-  const runId = await seedRunForReports(request);
-  await page.goto(`/planning/reports?runId=${encodeURIComponent(runId)}`);
+  const seeded = await seedRunForReports(request);
+  await page.goto(
+    `/planning/reports?runId=${encodeURIComponent(seeded.runId)}&profileId=${encodeURIComponent(seeded.profileId)}`,
+  );
   await expect(page.getByTestId("report-advanced-toggle")).toContainText("고급 보기");
 });

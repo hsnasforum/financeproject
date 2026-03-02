@@ -128,7 +128,8 @@ export async function GET(request: Request) {
       },
     }).catch(() => undefined);
 
-    return new NextResponse(bundle.bytes, {
+    const zipBody = Uint8Array.from(bundle.bytes).buffer;
+    return new NextResponse(zipBody, {
       status: 200,
       headers: {
         "content-type": "application/zip",

@@ -159,7 +159,7 @@ async function seedRunWithFixture(request: APIRequestContext, fixture: GoldenRun
   return { runId, profileId };
 }
 
-export async function seedRunForReports(request: APIRequestContext): Promise<string> {
+export async function seedRunForReports(request: APIRequestContext): Promise<{ runId: string; profileId: string }> {
   await ensureMigrationsReady(request);
   const seeded = await seedRunWithFixture(request, {
     id: "pw-default",
@@ -187,7 +187,7 @@ export async function seedRunForReports(request: APIRequestContext): Promise<str
     },
     runInput: DEFAULT_RUN_INPUT,
   });
-  return seeded.runId;
+  return seeded;
 }
 
 export async function seedGoldenRuns(request: APIRequestContext): Promise<SeededGoldenRun[]> {

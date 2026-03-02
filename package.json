@@ -14,6 +14,7 @@
     "lint": "eslint",
     "typecheck": "pnpm exec tsc --noEmit",
     "test": "vitest run",
+    "postinstall": "prisma generate",
     "smoke:benefits": "node scripts/smoke_benefits.mjs",
     "env:setup": "node scripts/env_setup.mjs",
     "env:doctor": "node scripts/env_doctor.mjs",

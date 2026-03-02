@@ -191,7 +191,7 @@ function getActionItemsFromRun(run: PlanningRunRecord): ActionItemV2[] {
   const dto = isResultDtoV1(run.outputs.resultDto)
     ? run.outputs.resultDto
     : buildResultDtoV1FromRunRecord(run);
-  return dto.actions.items;
+  return dto.actions?.items ?? [];
 }
 
 export function buildRunActionPlanItemsFromActionItems(actions: ActionItemV2[]): PlanningRunActionPlanItem[] {
@@ -237,9 +237,9 @@ function buildActionPlanFromRun(run: PlanningRunRecord): PlanningRunActionPlan {
   const dto = isResultDtoV1(run.outputs.resultDto)
     ? run.outputs.resultDto
     : buildResultDtoV1FromRunRecord(run);
+  const monteCarloProbabilities = asRecord(dto.monteCarlo?.probabilities);
   const interpretation = buildInterpretationVM({
     summary: {
-      ...(typeof dto.summary.monthlySurplusKrw === "number" ? { monthlySurplusKrw: dto.summary.monthlySurplusKrw } : {}),
       ...(typeof dto.summary.dsrPct === "number" ? { dsrPct: dto.summary.dsrPct } : {}),
       ...(typeof dto.summary.endNetWorthKrw === "number" ? { endNetWorthKrw: dto.summary.endNetWorthKrw } : {}),
       ...(typeof dto.summary.worstCashKrw === "number" ? { worstCashKrw: dto.summary.worstCashKrw } : {}),
@@ -260,8 +260,8 @@ function buildActionPlanFromRun(run: PlanningRunRecord): PlanningRunActionPlan {
         ...(typeof dto.meta.health?.snapshotStaleDays === "number" ? { staleDays: dto.meta.health.snapshotStaleDays } : {}),
       },
       monteCarlo: {
-        ...(typeof dto.monteCarlo?.probabilities.retirementDepletionBeforeEnd === "number"
-          ? { retirementDepletionBeforeEnd: dto.monteCarlo.probabilities.retirementDepletionBeforeEnd }
+        ...(typeof monteCarloProbabilities.retirementDepletionBeforeEnd === "number"
+          ? { retirementDepletionBeforeEnd: monteCarloProbabilities.retirementDepletionBeforeEnd }
           : {}),
       },
       runId: run.id,

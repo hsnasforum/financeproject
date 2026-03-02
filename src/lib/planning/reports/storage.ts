@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteFile, atomicWriteJson } from "../storage/atomicWrite";
@@ -156,7 +157,7 @@ export async function listReports(limit = 50): Promise<PlanningReportListItem[]>
   assertServerOnly();
 
   const safeLimit = Math.max(1, Math.min(500, Math.trunc(Number(limit)) || 50));
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(resolveReportsDir(), { withFileTypes: true });
   } catch (error) {

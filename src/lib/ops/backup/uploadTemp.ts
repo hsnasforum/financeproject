@@ -3,6 +3,7 @@ import { createWriteStream } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
+import { type ReadableStream as NodeReadableStream } from "node:stream/web";
 import { pipeline } from "node:stream/promises";
 
 type TempUpload = {
@@ -13,7 +14,7 @@ type TempUpload = {
 export async function saveUploadToTempFile(file: File, prefix = "planning-backup-upload"): Promise<TempUpload> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`));
   const filePath = path.join(dir, "payload.bin");
-  const source = Readable.fromWeb(file.stream() as any);
+  const source = Readable.fromWeb(file.stream() as unknown as NodeReadableStream);
   await pipeline(source, createWriteStream(filePath, { flags: "w" }));
   return { dir, filePath };
 }
