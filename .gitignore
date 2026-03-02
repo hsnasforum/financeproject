@@ -46,6 +46,7 @@ tmp/api-samples/
 tmp/api-cache/
 tmp/dart/
 tmp/finlife-fixtures/
+tmp/*.json
 
 # generic build/cache
 dist/
@@ -67,3 +68,8 @@ public/providers/*
 !public/providers/README.md
 /.pnpm-store/
 /artifacts/
+
+# runtime data artifacts (keep local only)
+.data/ops/
+.data/planning/
+.data/planning-e2e/
