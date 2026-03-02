@@ -272,11 +272,18 @@ export function PlanningRunsClient({
       const response = await fetch(`/api/planning/runs/${encodeURIComponent(runId)}`, { cache: "no-store" });
       const rawPayload = await response.json().catch(() => null);
       const payload = parsePlanningV2Response<PlanningRunRecord>(rawPayload);
-      if (!response.ok || !payload.ok || !payload.data) {
+      if (!payload.ok) {
         setSelectedActionPlan(null);
         setSelectedActionProgress(null);
         setActionNoteDrafts({});
         setActionCenterError(payload.error.message ?? "Action Center를 불러오지 못했습니다.");
+        return;
+      }
+      if (!response.ok || !payload.data) {
+        setSelectedActionPlan(null);
+        setSelectedActionProgress(null);
+        setActionNoteDrafts({});
+        setActionCenterError("Action Center를 불러오지 못했습니다.");
         return;
       }
       const actionCenter = payload.data.actionCenter as RunActionCenterPayload | undefined;
@@ -336,8 +343,12 @@ export function PlanningRunsClient({
         progress?: PlanningRunActionProgress;
         completion?: { done?: number; total?: number; pct?: number };
       }>(rawPayload);
-      if (!response.ok || !payload.ok || !payload.data?.progress) {
+      if (!payload.ok) {
         window.alert(payload.error.message ?? "Action progress 업데이트에 실패했습니다.");
+        return;
+      }
+      if (!response.ok || !payload.data?.progress) {
+        window.alert("Action progress 업데이트에 실패했습니다.");
         return;
       }
       setSelectedActionProgress(payload.data.progress);
@@ -435,8 +446,12 @@ export function PlanningRunsClient({
       });
       const rawPayload = await res.json().catch(() => null);
       const payload = parsePlanningV2Response<{ deleted?: boolean }>(rawPayload);
-      if (!res.ok || !payload.ok) {
+      if (!payload.ok) {
         window.alert(payload.error.message ?? "실행 기록 삭제에 실패했습니다.");
+        return;
+      }
+      if (!res.ok) {
+        window.alert("실행 기록 삭제에 실패했습니다.");
         return;
       }
 
@@ -463,8 +478,12 @@ export function PlanningRunsClient({
       });
       const restoreRaw = await restoreRes.json().catch(() => null);
       const restorePayload = parsePlanningV2Response<{ restored?: boolean }>(restoreRaw);
-      if (!restoreRes.ok || !restorePayload.ok) {
+      if (!restorePayload.ok) {
         window.alert(restorePayload.error.message ?? "복구에 실패했습니다.");
+        return;
+      }
+      if (!restoreRes.ok) {
+        window.alert("복구에 실패했습니다.");
         return;
       }
       await loadRuns(filterProfileId);
@@ -500,8 +519,12 @@ export function PlanningRunsClient({
       });
       const rawPayload = await res.json().catch(() => null);
       const payload = parsePlanningV2Response<{ id?: string }>(rawPayload);
-      if (!res.ok || !payload.ok || !payload.data?.id) {
+      if (!payload.ok) {
         window.alert(payload.error.message ?? "공유 리포트 생성에 실패했습니다.");
+        return;
+      }
+      if (!res.ok || !payload.data?.id) {
+        window.alert("공유 리포트 생성에 실패했습니다.");
         return;
       }
       setGeneratedShareReportByRun((prev) => ({

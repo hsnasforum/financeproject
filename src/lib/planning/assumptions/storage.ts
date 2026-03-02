@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
 import { atomicWriteJson } from "../storage/atomicWrite";
@@ -204,7 +205,7 @@ export async function listAssumptionsHistory(limit = 50): Promise<SnapshotRef[]>
   assertServerOnly();
 
   const dirPath = resolveHistoryDir();
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {
@@ -272,7 +273,7 @@ export async function findAssumptionsSnapshotId(snapshot: AssumptionsSnapshot): 
     return baseId;
   }
 
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {

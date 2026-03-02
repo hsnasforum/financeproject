@@ -4,13 +4,9 @@ import { OpsDoctorClient } from "@/components/OpsDoctorClient";
 import { shouldBlockOpsPageInCurrentRuntime } from "@/lib/ops/pageAccess";
 
 type OpsDoctorPageProps = {
-  searchParams?:
-    | {
-        state?: string | string[];
-      }
-    | Promise<{
-        state?: string | string[];
-      }>;
+  searchParams?: Promise<{
+    state?: string | string[];
+  }>;
 };
 
 function pickSingle(value: string | string[] | undefined): string {
@@ -23,7 +19,7 @@ export default async function OpsDoctorPage({ searchParams }: OpsDoctorPageProps
     notFound();
   }
 
-  const resolvedSearchParams = await Promise.resolve(searchParams);
+  const resolvedSearchParams = await searchParams;
   const state = pickSingle(resolvedSearchParams?.state);
 
   const cookieStore = await cookies();

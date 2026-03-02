@@ -4,15 +4,10 @@ import { normalizeProfileId } from "@/lib/planning/profileScope";
 import { getDefaultProfileId } from "@/lib/planning/server/store/profileStore";
 
 type PlanningRunsPageProps = {
-      searchParams?:
-    | {
-        selected?: string | string[];
-        profileId?: string | string[];
-      }
-    | Promise<{
-        selected?: string | string[];
-        profileId?: string | string[];
-      }>;
+  searchParams?: Promise<{
+    selected?: string | string[];
+    profileId?: string | string[];
+  }>;
 };
 
 function pickSelected(value: string | string[] | undefined): string {
@@ -26,7 +21,7 @@ function pickProfileId(value: string | string[] | undefined): string {
 }
 
 export default async function PlanningRunsPage({ searchParams }: PlanningRunsPageProps) {
-  const resolvedSearchParams = await Promise.resolve(searchParams);
+  const resolvedSearchParams = await searchParams;
   const initialSelectedRunId = pickSelected(resolvedSearchParams?.selected);
   const initialFilterProfileId = pickProfileId(resolvedSearchParams?.profileId) || (await getDefaultProfileId()) || "";
   const featureFlags = getPlanningFeatureFlags();

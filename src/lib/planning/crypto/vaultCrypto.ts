@@ -1,7 +1,21 @@
 import crypto from "node:crypto";
-import { promisify } from "node:util";
 
-const scryptAsync = promisify(crypto.scrypt);
+function scryptAsync(
+  passphrase: string,
+  salt: Buffer,
+  keyLength: number,
+  options: { N: number; r: number; p: number; maxmem: number },
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(passphrase, salt, keyLength, options, (error, derivedKey) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(derivedKey as Buffer);
+    });
+  });
+}
 
 export type VaultKdfParams = {
   name: "scrypt";
@@ -82,7 +96,7 @@ export async function deriveKeyFromPassphrase(
     r: kdf.r,
     p: kdf.p,
     maxmem: 256 * 1024 * 1024,
-  }) as Promise<Buffer>;
+  });
 }
 
 export function encryptBytesWithKey(key: Buffer, bytes: Buffer): VaultEncryptedEnvelope {

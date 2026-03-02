@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
@@ -316,7 +317,7 @@ async function syncProfileRegistry(records: PlanningProfileRecord[], defaultProf
 
 async function listPartitionProfiles(): Promise<PlanningProfileRecord[]> {
   const dirPath = resolveProfilePartitionsDir();
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {
@@ -344,7 +345,7 @@ async function listPartitionProfiles(): Promise<PlanningProfileRecord[]> {
 
 async function listLegacyProfiles(): Promise<PlanningProfileRecord[]> {
   const dirPath = resolveProfilesDir();
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {

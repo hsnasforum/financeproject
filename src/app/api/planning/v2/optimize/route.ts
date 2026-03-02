@@ -11,7 +11,7 @@ import { generateCandidatePlans } from "../../../../../lib/planning/server/v2/op
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
-import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
+import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 
 type OptimizeRequestBody = {
@@ -248,7 +248,7 @@ export async function POST(request: Request) {
   const guardFailure = withLocalWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
-  let profile: unknown;
+  let profile: ProfileV2;
   let horizonMonths: number;
   let assumptionsOverrides: Record<string, unknown>;
   let requestedSnapshotId: string | undefined;

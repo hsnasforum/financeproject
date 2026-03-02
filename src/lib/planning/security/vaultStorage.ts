@@ -2,6 +2,7 @@ import {
   decryptPlanningJson,
   encryptPlanningJson,
   isPlanningEncryptedEnvelope,
+  type PlanningEncryptedEnvelope,
 } from "../crypto/encrypt";
 import {
   decryptJsonWithKey,
@@ -24,7 +25,7 @@ function hasLegacyPassphrase(): boolean {
   return options.encryptionEnabled && typeof options.encryptionPassphrase === "string" && options.encryptionPassphrase.length > 0;
 }
 
-async function decryptLegacyEnvelope(payload: unknown): Promise<unknown> {
+async function decryptLegacyEnvelope(payload: PlanningEncryptedEnvelope): Promise<unknown> {
   const options = getPlanningStorageSecurityOptions();
   if (!options.encryptionEnabled || !options.encryptionPassphrase) {
     throw new Error("PLANNING_ENCRYPTION_PASSPHRASE_REQUIRED");

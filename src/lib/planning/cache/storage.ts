@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteJson } from "../storage/atomicWrite";
@@ -109,7 +110,7 @@ export async function setCache<T>(entry: PlanningCacheEntry<T>): Promise<void> {
 export async function purgeExpired(): Promise<{ purged: number }> {
   const dirPath = resolveCacheDir();
 
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {
@@ -144,7 +145,7 @@ export async function purgeExpired(): Promise<{ purged: number }> {
 export async function cacheStats(): Promise<{ total: number; byKind: Record<string, number> }> {
   const dirPath = resolveCacheDir();
 
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {

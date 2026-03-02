@@ -13,7 +13,8 @@ import { getCache, recordCacheUsage, setCache } from "../../../../../lib/plannin
 import { checkMonteCarloBudget } from "../../../../../lib/planning/server/v2/budget";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
-import { isAllocationPolicyId, type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
+import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
+import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
@@ -30,6 +31,7 @@ type MonteCarloRequestBody = {
 
 const MONTE_CARLO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const planningService = createPlanningService();
+type AssumptionsContext = Awaited<ReturnType<typeof planningService.resolveAssumptionsContext>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -212,22 +214,10 @@ export async function POST(request: Request) {
     });
   }
 
-  let baseAssumptions:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["assumptions"]
-      : never;
-  let snapshotMeta:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["snapshotMeta"]
-      : never;
-  let health:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["health"]
-      : never;
-  let scenarioOverrideForCache:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["scenarioOverrideForCache"]
-      : never;
+  let baseAssumptions: AssumptionsContext["assumptions"];
+  let snapshotMeta: AssumptionsContext["snapshotMeta"];
+  let health: AssumptionsContext["health"];
+  let scenarioOverrideForCache: AssumptionsContext["scenarioOverrideForCache"];
   let snapshotId: string | undefined;
   try {
     const context = await planningService.resolveAssumptionsContext({
