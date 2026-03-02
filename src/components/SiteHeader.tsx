@@ -12,11 +12,8 @@ import { cn } from "@/lib/utils";
 import { buildTodoSummary } from "@/lib/feedback/todoSummary";
 
 const navItems = [
-  { href: "/dashboard", label: "대시보드" },
-  { href: "/products/catalog", label: "통합탐색" },
-  { href: "/recommend", label: uiTextKo.nav.recommend },
-  { href: "/planner", label: uiTextKo.nav.planner },
-  { href: "/benefits", label: "혜택" },
+  { href: "/planning", label: uiTextKo.nav.planner },
+  { href: "/planning/runs", label: "실행 기록" },
 ];
 
 type HeaderFeedbackItem = {

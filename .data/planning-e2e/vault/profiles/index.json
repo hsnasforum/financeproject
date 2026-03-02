@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "defaultProfileId": "b26c6911-0c79-46e9-995f-a0891e00479b",
+  "profiles": [
+    {
+      "profileId": "b01202e4-e69f-4ac6-84e9-ae504f6c2e85",
+      "name": "Golden RISK Goals Pressure",
+      "createdAt": "2026-03-01T19:32:33.503Z",
+      "updatedAt": "2026-03-01T19:32:33.503Z"
+    },
+    {
+      "profileId": "521b9683-d713-44af-9e37-0c0466487742",
+      "name": "Golden CAUTION Multi Debt Refi",
+      "createdAt": "2026-03-01T19:32:33.347Z",
+      "updatedAt": "2026-03-01T19:32:33.347Z"
+    },
+    {
+      "profileId": "fecbb45e-a9cd-424c-9669-560fd2afe9c8",
+      "name": "Golden RISK Negative Cashflow",
+      "createdAt": "2026-03-01T19:32:33.144Z",
+      "updatedAt": "2026-03-01T19:32:33.144Z"
+    },
+    {
+      "profileId": "9e41fa48-97ad-40eb-9fb1-db57393afe7f",
+      "name": "Golden CAUTION Tight Cashflow",
+      "createdAt": "2026-03-01T19:32:32.923Z",
+      "updatedAt": "2026-03-01T19:32:32.923Z"
+    },
+    {
+      "profileId": "c3e6ac65-3a6c-4419-ae76-da8fee31d9d0",
+      "name": "Golden GOOD Basic",
+      "createdAt": "2026-03-01T19:32:31.972Z",
+      "updatedAt": "2026-03-01T19:32:31.972Z"
+    },
+    {
+      "profileId": "9218b7a8-7025-43c7-80c2-2dbbf16dd1fc",
+      "name": "Golden RISK Goals Pressure",
+      "createdAt": "2026-03-01T19:31:54.759Z",
+      "updatedAt": "2026-03-01T19:31:54.759Z"
+    },
+    {
+      "profileId": "8e16e0f9-bd6c-43d9-80ee-7bd505810971",
+      "name": "Golden CAUTION Multi Debt Refi",
+      "createdAt": "2026-03-01T19:31:54.589Z",
+      "updatedAt": "2026-03-01T19:31:54.589Z"
+    },
+    {
+      "profileId": "494c3f70-df94-4813-b984-821d02c6cadb",
+      "name": "Golden RISK Negative Cashflow",
+      "createdAt": "2026-03-01T19:31:54.412Z",
+      "updatedAt": "2026-03-01T19:31:54.412Z"
+    },
+    {
+      "profileId": "d348611b-0282-4eb1-be12-964b10f3cb65",
+      "name": "Golden CAUTION Tight Cashflow",
+      "createdAt": "2026-03-01T19:31:54.195Z",
+      "updatedAt": "2026-03-01T19:31:54.195Z"
+    },
+    {
+      "profileId": "24a4b0e7-45a8-49da-acfc-14e7a4cd97d3",
+      "name": "Golden GOOD Basic",
+      "createdAt": "2026-03-01T19:31:53.266Z",
+      "updatedAt": "2026-03-01T19:31:53.266Z"
+    },
+    {
+      "profileId": "c2cd957d-4bf2-4c91-b0f9-55b79684f8fb",
+      "name": "Golden RISK Goals Pressure",
+      "createdAt": "2026-03-01T19:30:50.714Z",
+      "updatedAt": "2026-03-01T19:30:50.714Z"
+    },
+    {
+      "profileId": "2a330957-0d86-4ff5-b874-66146abba667",
+      "name": "Golden CAUTION Multi Debt Refi",
+      "createdAt": "2026-03-01T19:30:50.563Z",
+      "updatedAt": "2026-03-01T19:30:50.563Z"
+    },
+    {
+      "profileId": "3095fa31-25eb-4ca3-b1c3-1e72ebe6f641",
+      "name": "Golden RISK Negative Cashflow",
+      "createdAt": "2026-03-01T19:30:50.383Z",
+      "updatedAt": "2026-03-01T19:30:50.383Z"
+    },
+    {
+      "profileId": "b6f885b6-b902-49e5-8c5b-e7023703ff33",
+      "name": "Golden CAUTION Tight Cashflow",
+      "createdAt": "2026-03-01T19:30:50.172Z",
+      "updatedAt": "2026-03-01T19:30:50.172Z"
+    },
+    {
+      "profileId": "05c6fd43-6b34-44a2-9f95-6ac865309335",
+      "name": "Golden GOOD Basic",
+      "createdAt": "2026-03-01T19:30:49.228Z",
+      "updatedAt": "2026-03-01T19:30:49.228Z"
+    },
+    {
+      "profileId": "1d9149c0-2364-4fe5-9267-0e23bf06de6c",
+      "name": "Golden RISK Goals Pressure",
+      "createdAt": "2026-03-01T19:29:44.881Z",
+      "updatedAt": "2026-03-01T19:29:44.881Z"
+    },
+    {
+      "profileId": "68db6792-e3d5-4d1d-af09-adc4dca04f55",
+      "name": "Golden CAUTION Multi Debt Refi",
+      "createdAt": "2026-03-01T19:29:44.727Z",
+      "updatedAt": "2026-03-01T19:29:44.727Z"
+    },
+    {
+      "profileId": "ab246e1c-7dde-4f30-9405-6156395db6db",
+      "name": "Golden RISK Negative Cashflow",
+      "createdAt": "2026-03-01T19:29:44.557Z",
+      "updatedAt": "2026-03-01T19:29:44.557Z"
+    },
+    {
+      "profileId": "76a59402-f4e9-416c-b63b-938d59bb2918",
+      "name": "Golden CAUTION Tight Cashflow",
+      "createdAt": "2026-03-01T19:29:44.350Z",
+      "updatedAt": "2026-03-01T19:29:44.350Z"
+    },
+    {
+      "profileId": "b26c6911-0c79-46e9-995f-a0891e00479b",
+      "name": "Golden GOOD Basic",
+      "createdAt": "2026-03-01T19:29:43.361Z",
+      "updatedAt": "2026-03-01T19:29:43.361Z"
+    }
+  ]
+}

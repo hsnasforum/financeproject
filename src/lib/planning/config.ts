@@ -4,6 +4,7 @@ export type PlanningFeatureFlags = {
   monteCarloEnabled: boolean;
   includeProductsEnabled: boolean;
   optimizerEnabled: boolean;
+  pdfEnabled: boolean;
 };
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -22,5 +23,6 @@ export function getPlanningFeatureFlags(env: NodeJS.ProcessEnv = process.env): P
     monteCarloEnabled: parseBoolean(env.PLANNING_MONTE_CARLO_ENABLED, true),
     includeProductsEnabled: parseBoolean(env.PLANNING_INCLUDE_PRODUCTS_ENABLED, false),
     optimizerEnabled: parseBoolean(env.PLANNING_OPTIMIZER_ENABLED, false),
+    pdfEnabled: parseBoolean(env.PLANNING_PDF_ENABLED, false),
   };
 }

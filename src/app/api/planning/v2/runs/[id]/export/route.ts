@@ -5,6 +5,7 @@ import {
 import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
 import { jsonError } from "../../../../../../../lib/http/apiResponse";
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
+import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -32,11 +33,15 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const run = await getRun(id);
     if (!run) {
-      return jsonError("NO_DATA", "실행 이력을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
 
-    const fileName = `planning-run-${run.id}.json`;
-    return new Response(`${JSON.stringify(run, null, 2)}\n`, {
+    const outputs = run.outputs && typeof run.outputs === "object" ? run.outputs : {};
+    const resultDto = isResultDtoV1((outputs as Record<string, unknown>).resultDto)
+      ? (outputs as Record<string, unknown>).resultDto
+      : buildResultDtoV1FromRunRecord(run);
+    const fileName = `planning-run-result-${run.id}.json`;
+    return new Response(`${JSON.stringify(resultDto, null, 2)}\n`, {
       status: 200,
       headers: {
         "content-type": "application/json; charset=utf-8",
@@ -45,7 +50,7 @@ export async function GET(request: Request, context: RouteContext) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "실행 이력 export에 실패했습니다.";
+    const message = error instanceof Error ? error.message : "실행 기록 export에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }

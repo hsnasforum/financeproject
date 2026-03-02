@@ -1,0 +1,94 @@
+{
+  "id": "golden-caution-multi-debt-refi",
+  "name": "Golden CAUTION Multi Debt Refi",
+  "profile": {
+    "monthlyIncomeNet": 5600000,
+    "monthlyEssentialExpenses": 2300000,
+    "monthlyDiscretionaryExpenses": 900000,
+    "liquidAssets": 6200000,
+    "investmentAssets": 14500000,
+    "debts": [
+      {
+        "id": "multi-loan-home",
+        "name": "Home Loan",
+        "balance": 74000000,
+        "minimumPayment": 980000,
+        "aprPct": 4.9,
+        "remainingMonths": 204,
+        "repaymentType": "amortizing"
+      },
+      {
+        "id": "multi-loan-credit",
+        "name": "Credit Loan",
+        "balance": 19000000,
+        "minimumPayment": 560000,
+        "aprPct": 9.8,
+        "remainingMonths": 66,
+        "repaymentType": "amortizing"
+      },
+      {
+        "id": "multi-loan-card",
+        "name": "Card Balance",
+        "balance": 4300000,
+        "minimumPayment": 210000,
+        "aprPct": 17.2,
+        "remainingMonths": 48,
+        "repaymentType": "interestOnly"
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal-emergency",
+        "name": "Emergency Fund",
+        "targetAmount": 15000000,
+        "currentAmount": 6200000,
+        "targetMonth": 12,
+        "priority": 5
+      },
+      {
+        "id": "goal-education",
+        "name": "Education",
+        "targetAmount": 28000000,
+        "currentAmount": 3500000,
+        "targetMonth": 72,
+        "priority": 4
+      },
+      {
+        "id": "goal-retire",
+        "name": "Retirement",
+        "targetAmount": 420000000,
+        "currentAmount": 14500000,
+        "targetMonth": 300,
+        "priority": 5
+      }
+    ]
+  },
+  "runInput": {
+    "horizonMonths": 120,
+    "assumptionsOverride": {},
+    "runScenarios": true,
+    "getActions": true,
+    "analyzeDebt": true,
+    "includeProducts": false,
+    "monteCarlo": null,
+    "debtStrategy": {
+      "offers": [
+        {
+          "liabilityId": "multi-loan-credit",
+          "newAprPct": 6.4,
+          "feeKrw": 150000,
+          "title": "신용대출 전환"
+        },
+        {
+          "liabilityId": "multi-loan-card",
+          "newAprPct": 11.8,
+          "feeKrw": 50000,
+          "title": "카드론 통합"
+        }
+      ],
+      "options": {
+        "extraPaymentKrw": 200000
+      }
+    }
+  }
+}

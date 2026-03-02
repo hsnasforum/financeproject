@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 
 const CORPUS_DIR = path.join("tests", "planning-v2", "regression", "corpus");
@@ -119,7 +120,7 @@ function toLiabilitiesFromProfile(profile, fallbackMonths) {
     name: asString(debt?.name) || `Debt ${index + 1}`,
     type: debt?.repaymentType === "interestOnly" ? "interestOnly" : "amortizing",
     principalKrw: Math.max(0, Number(debt?.balance) || 0),
-    aprPct: normalizeAprPct(debt?.apr ?? 0),
+    aprPct: normalizeAprPct(debt?.aprPct ?? debt?.apr ?? 0),
     remainingMonths: Math.max(1, toInt(debt?.remainingMonths, fallbackMonths)),
     minimumPaymentKrw: Math.max(0, Number(debt?.minimumPayment) || 0),
   }));
@@ -218,6 +219,22 @@ function readLatestReport(cwd) {
     throw new Error(`report missing: ${path.relative(cwd, filePath)}`);
   }
   return readJson(filePath);
+}
+
+function runPnpmScript(script, cwd, extraEnv = {}) {
+  return new Promise((resolve, reject) => {
+    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    const child = spawn(command, [script], {
+      cwd,
+      env: {
+        ...process.env,
+        ...extraEnv,
+      },
+      stdio: "inherit",
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolve(code ?? 1));
+  });
 }
 
 async function loadTsExports(specifier) {
@@ -543,6 +560,12 @@ async function runRegression() {
 
   if (fail > 0) {
     process.exit(1);
+  }
+
+  const externalBaseUrl = asString(process.env.PLANNING_BASE_URL);
+  const e2eExitCode = await runPnpmScript("planning:v2:e2e:full", cwd, externalBaseUrl ? { E2E_BASE_URL: externalBaseUrl } : {});
+  if (e2eExitCode !== 0) {
+    throw new Error(`planning:v2:e2e:full failed with code ${e2eExitCode}`);
   }
 }
 

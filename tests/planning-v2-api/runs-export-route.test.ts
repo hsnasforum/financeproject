@@ -107,8 +107,9 @@ describe("GET /api/planning/v2/runs/[id]/export", () => {
 
     expect(exportResponse.status).toBe(200);
     expect(exportResponse.headers.get("content-type")).toContain("application/json");
-    expect(exportResponse.headers.get("content-disposition")).toContain(`planning-run-${runId}.json`);
-    expect(text).toContain(`\"id\": \"${runId}\"`);
-    expect(text).toContain(`\"profileId\": \"${profileId}\"`);
+    expect(exportResponse.headers.get("content-disposition")).toContain(`planning-run-result-${runId}.json`);
+    expect(text).toContain("\"version\": 1");
+    expect(text).toContain("\"summary\"");
+    expect(text).toContain("\"warnings\"");
   });
 });

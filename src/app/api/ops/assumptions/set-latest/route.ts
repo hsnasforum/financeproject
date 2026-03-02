@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
-import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
+import { append as appendAuditLog } from "@/lib/audit/auditLogStore";
 import {
   assertCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
+} from "@/lib/dev/devGuards";
+import { onlyDev } from "@/lib/dev/onlyDev";
+import { opsErrorResponse } from "@/lib/ops/errorContract";
 import {
   findAssumptionsSnapshotId,
   loadAssumptionsSnapshotById,
   loadLatestAssumptionsSnapshot,
   setLatestSnapshotFromHistory,
-} from "../../../../../../lib/planning/assumptions/storage";
+} from "@/lib/planning/assumptions/storage";
 
 type SetLatestBody = {
   csrf?: unknown;
@@ -67,14 +68,27 @@ export async function POST(request: Request) {
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
-      return NextResponse.json({ ok: false, message: "요청 검증 중 오류가 발생했습니다." }, { status: 500 });
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: "요청 검증 중 오류가 발생했습니다.",
+        status: 500,
+      });
     }
-    return NextResponse.json({ ok: false, message: guard.message }, { status: guard.status });
+    return opsErrorResponse({
+      code: guard.code,
+      message: guard.message,
+      status: guard.status,
+    });
   }
 
   const snapshotId = asString(body?.snapshotId);
   if (!snapshotId) {
-    return NextResponse.json({ ok: false, message: "snapshotId가 필요합니다." }, { status: 400 });
+    return opsErrorResponse({
+      code: "VALIDATION",
+      message: "snapshotId가 필요합니다.",
+      status: 400,
+      fixHref: "/ops/assumptions",
+    });
   }
 
   const currentLatest = await loadLatestAssumptionsSnapshot().catch(() => null);
@@ -92,7 +106,14 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        message: `confirm 값이 올바르지 않습니다. (${expectedConfirm})`,
+        error: {
+          code: "VALIDATION",
+          message: `confirm 값이 올바르지 않습니다. (${expectedConfirm})`,
+          fixHref: "/ops/assumptions/history",
+          details: {
+            expectedConfirm,
+          },
+        },
       },
       { status: 400 },
     );
@@ -109,7 +130,11 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         ok: false,
-        message: "요청한 스냅샷을 찾을 수 없습니다.",
+        error: {
+          code: "STALE_ASSUMPTIONS",
+          message: "요청한 스냅샷을 찾을 수 없습니다.",
+          fixHref: "/ops/assumptions/history",
+        },
       },
       { status: 404 },
     );
@@ -141,12 +166,10 @@ export async function POST(request: Request) {
       toId: snapshotId,
       message,
     });
-    return NextResponse.json(
-      {
-        ok: false,
-        message,
-      },
-      { status: 500 },
-    );
+    return opsErrorResponse({
+      code: "STORAGE_CORRUPT",
+      message,
+      status: 500,
+    });
   }
 }

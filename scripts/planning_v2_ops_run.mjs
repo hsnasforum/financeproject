@@ -17,6 +17,8 @@ import {
 const DEFAULT_STALE_DAYS = 45;
 const DEFAULT_KEEP = 50;
 const LOG_TAIL_LINES = 50;
+let redactTextImpl = fallbackRedactText;
+let redactTextLoaded = false;
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -35,13 +37,33 @@ function safeNowIso(input) {
   return new Date(ms).toISOString();
 }
 
-function maskSecrets(text) {
+function fallbackRedactText(text) {
   const raw = asString(text);
   if (!raw) return "";
   return raw
-    .replace(/(authorization\s*:\s*bearer\s+)[^\s]+/gi, "$1***")
-    .replace(/(ECOS_API_KEY|GITHUB_TOKEN|FINLIFE_API_KEY)\s*=\s*[^\s]+/gi, "$1=***")
-    .replace(/(["']?(?:token|api[_-]?key|secret|password)["']?\s*[:=]\s*["'])[^"']+(["'])/gi, "$1***$2");
+    .replace(/\b(Bearer\s+)[^\s"'`]+/gi, "$1***")
+    .replace(/(BOK_ECOS_API_KEY|ECOS_API_KEY|GITHUB_TOKEN|FINLIFE_API_KEY)\s*=\s*[^\s]+/gi, "$1=***")
+    .replace(/(["']?(?:token|api[_-]?key|secret|password)["']?\s*[:=]\s*["'])[^"']+(["'])/gi, "$1***$2")
+    .replace(/\.data(?:[\\/][^\s"'`)\]}]+)+/g, "<DATA_PATH>")
+    .replace(/\b\d{7,}\b/g, "<AMOUNT>");
+}
+
+function maskSecrets(text) {
+  return redactTextImpl(asString(text));
+}
+
+async function ensureRedactTextLoaded() {
+  if (redactTextLoaded) return;
+  redactTextLoaded = true;
+  try {
+    const moduleRaw = await tsImport("../src/lib/planning/privacy/redact.ts", { parentURL: import.meta.url });
+    const resolved = moduleRaw?.default && typeof moduleRaw.default === "object" ? moduleRaw.default : moduleRaw;
+    if (typeof resolved?.redactText === "function") {
+      redactTextImpl = (value) => resolved.redactText(asString(value));
+    }
+  } catch {
+    redactTextImpl = fallbackRedactText;
+  }
 }
 
 function sanitizeCommandForReport(command, args) {
@@ -189,6 +211,7 @@ function findFallbackCompleteScripts(scripts) {
 }
 
 export async function runOpsPipeline(options = {}) {
+  await ensureRedactTextLoaded();
   const cwd = path.resolve(options.cwd || process.cwd());
   const startedAt = safeNowIso(options.nowIso);
   const keep = normalizeKeep(options.keep, DEFAULT_KEEP);

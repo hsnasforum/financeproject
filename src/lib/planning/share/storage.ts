@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { atomicWriteFile, atomicWriteJson } from "../storage/atomicWrite";
 import { getProfile } from "../store/profileStore";
 import { getRun } from "../store/runStore";
 import { type AssumptionsV2 } from "../v2/scenarios";
@@ -82,14 +83,11 @@ function toIsoToken(date = new Date()): string {
 }
 
 async function writeTextAtomic(filePath: string, content: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmpPath, content, "utf-8");
-  await fs.rename(tmpPath, filePath);
+  await atomicWriteFile(filePath, content);
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
-  await writeTextAtomic(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+  await atomicWriteJson(filePath, payload);
 }
 
 function toRef(meta: ShareReportMeta): ShareReportRef {

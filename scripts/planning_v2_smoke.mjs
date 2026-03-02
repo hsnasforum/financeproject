@@ -48,7 +48,7 @@ function toDebtLiabilities(profile) {
     name: debt.name,
     type: debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing",
     principalKrw: Math.max(0, Number(debt.balance) || 0),
-    aprPct: normalizeAprPct(Number(debt.apr) || 0),
+    aprPct: normalizeAprPct(Number(debt.aprPct ?? debt.apr) || 0),
     remainingMonths: Math.max(1, Math.trunc(Number(debt.remainingMonths) || DEFAULT_DEBT_HORIZON)),
     minimumPaymentKrw: Math.max(0, Number(debt.minimumPayment) || 0),
   }));

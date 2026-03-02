@@ -14,6 +14,11 @@ export function formatPct(locale: Locale, pct: number): string {
   return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(pct)}%`;
 }
 
+export function formatMonths(locale: Locale, months: number): string {
+  if (!Number.isFinite(months)) return "-";
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(months)}개월`;
+}
+
 export function formatDate(locale: Locale, iso: string | undefined | null): string {
   if (!iso) return "-";
   const ts = Date.parse(iso);

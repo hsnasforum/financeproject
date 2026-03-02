@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-27T19:05:56.346Z",
+  "generatedAt": "2026-03-01T03:54:18.250Z",
   "policy": {
     "version": 1,
     "feedbackMaxItems": 500,
@@ -19,22 +19,22 @@
     {
       "target": "tmp/fix_history.json",
       "status": "kept",
-      "beforeCount": 12,
-      "afterCount": 12,
+      "beforeCount": 21,
+      "afterCount": 21,
       "removedCount": 0
     },
     {
       "target": "tmp/user_feedback.json",
       "status": "kept",
-      "beforeCount": 3,
-      "afterCount": 3,
+      "beforeCount": 10,
+      "afterCount": 10,
       "removedCount": 0
     },
     {
       "target": "tmp/daily_refresh.log",
       "status": "kept",
-      "beforeBytes": 564,
-      "afterBytes": 564
+      "beforeBytes": 535,
+      "afterBytes": 535
     },
     {
       "target": "tmp/backup_restore_point.json",

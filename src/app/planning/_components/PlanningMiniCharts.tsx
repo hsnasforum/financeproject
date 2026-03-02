@@ -91,10 +91,10 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
           </caption>
           <thead className="bg-slate-50">
             <tr>
-              <th className="px-2 py-2">Month</th>
-              <th className="px-2 py-2">Net Worth</th>
-              <th className="px-2 py-2">Cash</th>
-              <th className="px-2 py-2">Total Debt</th>
+              <th className="px-2 py-2">월</th>
+              <th className="px-2 py-2">순자산</th>
+              <th className="px-2 py-2">현금</th>
+              <th className="px-2 py-2">총부채</th>
             </tr>
           </thead>
           <tbody>

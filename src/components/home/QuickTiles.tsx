@@ -10,7 +10,7 @@ type QuickLink = {
 
 const coreLinks: QuickLink[] = [
   { label: "대시보드", description: "통합 현황 확인", href: "/dashboard", icon: "/icons/ic-dashboard.png" },
-  { label: "재무설계", description: "액션 중심 계획", href: "/planner", icon: "/icons/ic-planner.png" },
+  { label: "플래닝", description: "액션 중심 계획", href: "/planning", icon: "/icons/ic-planner.png" },
   { label: "추천", description: "조건 기반 추천", href: "/recommend", icon: "/icons/ic-recommend.png" },
   { label: "공시(DART)", description: "기업 공시 탐색", href: "/public/dart", icon: "/icons/ic-dart.png" },
   { label: "데이터 소스", description: "연동 상태 관리", href: "/settings/data-sources", icon: "/icons/ic-datasource.png" },

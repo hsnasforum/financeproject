@@ -61,11 +61,14 @@ export function suggestProfileNormalizations(profile: ProfileV2): NormalizationS
   const debts = asDebts(profile.debts);
   debts.forEach((debt, index) => {
     const debtId = typeof debt.id === "string" && debt.id.trim().length > 0 ? debt.id.trim() : `debt-${index + 1}`;
-    if (isFiniteNumber(debt.apr) && debt.apr > 0 && debt.apr < 1) {
+    const aprPct = isFiniteNumber(debt.aprPct)
+      ? debt.aprPct
+      : (isFiniteNumber(debt.ratePct) ? debt.ratePct : null);
+    if (typeof aprPct === "number" && aprPct > 0 && aprPct < 1) {
       suggestions.push({
         code: `APR_SCALE_SUSPECTED_${debtId}`,
         message: `${debtId} 금리가 0~1 범위입니다. 퍼센트(예: 7.5)로 입력하려던 값인지 확인하세요.`,
-        patch: [{ op: "replace", path: `/debts/${index}/apr`, value: Math.round(debt.apr * 1000) / 10 }],
+        patch: [{ op: "replace", path: `/debts/${index}/aprPct`, value: Math.round(aprPct * 1000) / 10 }],
         severity: "info",
       });
     }

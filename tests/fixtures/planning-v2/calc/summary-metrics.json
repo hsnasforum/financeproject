@@ -1,0 +1,23 @@
+{
+  "id": "summary-metrics-v1",
+  "formula": {
+    "monthlySurplusKrw": "surplus = income - expenses - debtPayment",
+    "dsrPct": "dsr = (debtPayment / income) * 100",
+    "emergencyFundMonths": "months = emergencyFund / expenses"
+  },
+  "input": {
+    "monthlyIncomeKrw": 5100000,
+    "monthlyExpensesKrw": 3000000,
+    "monthlyDebtPaymentKrw": 550000,
+    "emergencyFundKrw": 12500000
+  },
+  "rounding": {
+    "dsrPctDigits": 4,
+    "emergencyMonthsDigits": 1
+  },
+  "expected": {
+    "monthlySurplusKrw": 1550000,
+    "dsrPct": 10.7843,
+    "emergencyFundMonths": 4.2
+  }
+}

@@ -19,9 +19,13 @@ function sanitizeMessage(input) {
   const text = asString(input);
   if (!text) return "unknown";
   return text
-    .replace(/(GITHUB_TOKEN(?:_DISPATCH)?|ECOS_API_KEY|FINLIFE_[A-Z0-9_]*(?:KEY|TOKEN))/gi, "$1***")
+    .replace(/(GITHUB_TOKEN(?:_DISPATCH)?|BOK_ECOS_API_KEY|ECOS_API_KEY|FINLIFE_[A-Z0-9_]*(?:KEY|TOKEN))/gi, "$1***")
     .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer ***")
     .replace(/\.data\/[^\s"'`)]*/g, ".data/***");
+}
+
+function buildConfirmString(action, id) {
+  return `${asString(action).replace(/\s+/g, " ")} ${asString(id)}`.trim();
 }
 
 function assertNoLeak(label, payload) {
@@ -68,6 +72,39 @@ async function requestJson(baseUrl, input) {
   return { response, payload, url };
 }
 
+async function requestLegacyRedirect(baseUrl, path) {
+  const url = `${baseUrl}${path}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      origin: baseUrl,
+      referer: `${baseUrl}/planning`,
+    },
+    redirect: "manual",
+    cache: "no-store",
+  });
+  return { response, url };
+}
+
+async function assertLegacyPlannerRedirect(baseUrl, legacyPath, label) {
+  const legacyPlanner = await requestLegacyRedirect(baseUrl, legacyPath);
+  if (legacyPlanner.response.status !== 307 && legacyPlanner.response.status !== 308) {
+    throw new Error(`legacy route redirect failed: ${legacyPath} status=${legacyPlanner.response.status}`);
+  }
+  const legacyLocation = asString(legacyPlanner.response.headers.get("location"));
+  if (!legacyLocation) {
+    throw new Error(`legacy route redirect failed: ${legacyPath} missing Location header`);
+  }
+  const legacyRedirectPath = new URL(legacyLocation, baseUrl).pathname;
+  const expectedPath = legacyPath.startsWith("/planner/")
+    ? `/planning/${legacyPath.slice("/planner/".length)}`
+    : "/planning";
+  if (legacyRedirectPath !== expectedPath) {
+    throw new Error(`legacy route redirect failed: ${legacyPath} location=${legacyLocation}`);
+  }
+  printStep(true, label, `${legacyPlanner.response.status} -> ${legacyRedirectPath}`);
+}
+
 function printStep(ok, label, detail = "") {
   const status = ok ? "PASS" : "FAIL";
   console.log(`[planning:v2:smoke:http] ${status} ${label}${detail ? ` - ${detail}` : ""}`);
@@ -86,7 +123,7 @@ function buildSmokeProfile() {
         name: "Smoke Loan",
         balance: 16_000_000,
         minimumPayment: 390_000,
-        apr: 0.061,
+        aprPct: 6.1,
         remainingMonths: 72,
         repaymentType: "amortizing",
       },
@@ -127,6 +164,9 @@ async function run() {
     } else {
       printStep(true, "health", "skipped (no /api/health endpoint)");
     }
+
+    await assertLegacyPlannerRedirect(baseUrl, "/planner", "legacy /planner redirect");
+    await assertLegacyPlannerRedirect(baseUrl, "/planner/legacy", "legacy /planner/* redirect");
 
     const listProfiles = await requestJson(baseUrl, {
       method: "GET",
@@ -302,7 +342,9 @@ async function run() {
       const runDelete = await requestJson(baseUrl, {
         method: "DELETE",
         path: `/api/planning/v2/runs/${encodeURIComponent(runId)}`,
-        body: {},
+        body: {
+          confirmText: buildConfirmString("DELETE run", runId),
+        },
       });
       if (!runDelete.response.ok || !runDelete.payload?.ok) {
         throw new Error(`runs delete failed: ${runDelete.response.status} ${toApiErrorMessage(runDelete.payload)}`);
@@ -314,7 +356,9 @@ async function run() {
       const profileDelete = await requestJson(baseUrl, {
         method: "DELETE",
         path: `/api/planning/v2/profiles/${encodeURIComponent(profileId)}`,
-        body: {},
+        body: {
+          confirmText: buildConfirmString("DELETE profile", profileId),
+        },
       });
       if (!profileDelete.response.ok || !profileDelete.payload?.ok) {
         throw new Error(`profiles delete failed: ${profileDelete.response.status} ${toApiErrorMessage(profileDelete.payload)}`);

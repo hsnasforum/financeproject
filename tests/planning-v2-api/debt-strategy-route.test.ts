@@ -27,7 +27,7 @@ function profileFixture() {
         name: "Loan 1",
         balance: 12_000_000,
         minimumPayment: 360_000,
-        apr: 0.075,
+        aprPct: 7.5,
         remainingMonths: 48,
         repaymentType: "amortizing",
       },
@@ -88,5 +88,27 @@ describe("POST /api/planning/v2/debt-strategy", () => {
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INPUT");
     expect(payload.error?.issues?.some((issue) => issue.includes("offers[0].feeKrw"))).toBe(true);
+  });
+
+  it("returns INPUT error when offer liabilityId does not match debt ids", async () => {
+    const response = await POST(request({
+      profile: profileFixture(),
+      offers: [
+        {
+          liabilityId: "loan-x",
+          newAprPct: 5.4,
+        },
+      ],
+    }));
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: { code?: string; issues?: string[] };
+    };
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("INPUT");
+    expect(payload.error?.issues?.some((issue) => issue.includes("DEBT_OFFER_ID_MISMATCH"))).toBe(true);
+    expect(payload.error?.issues?.some((issue) => issue.includes("expected ids: loan-1"))).toBe(true);
   });
 });

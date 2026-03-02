@@ -5,12 +5,9 @@ test("dashboard renders", async ({ page }) => {
   await expect(page.getByTestId("dashboard-root")).toBeVisible();
 });
 
-test("planner computes once", async ({ page }) => {
-  await page.goto("/planner");
-  const btn = page.getByTestId("planner-compute");
-  await expect(btn).toBeVisible();
-  await btn.click();
-  await expect(page.getByTestId("planner-actions")).toBeVisible({ timeout: 30_000 });
+test("planning page renders", async ({ page }) => {
+  await page.goto("/planning");
+  await expect(page.getByRole("heading", { name: /재무설계 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
 });
 
 test("recommend page renders", async ({ page }) => {

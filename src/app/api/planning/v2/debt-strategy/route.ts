@@ -11,6 +11,8 @@ import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
 import { validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
+import { validateProfile } from "../../../../../lib/planning/v2/profileValidation";
 
 type DebtStrategyRequestBody = {
   profile?: unknown;
@@ -32,11 +34,6 @@ function isFiniteNumber(value: unknown): value is number {
 
 function toIssueMessages(error: PlanningV2ValidationError): string[] {
   return error.issues.map((issue) => `${issue.path}: ${issue.message}`);
-}
-
-function normalizeAprPct(value: number): number {
-  if (Math.abs(value) <= 1) return value * 100;
-  return value;
 }
 
 function parseOffers(value: unknown): RefiOffer[] {
@@ -75,9 +72,21 @@ function parseOffers(value: unknown): RefiOffer[] {
 
     const title = typeof row.title === "string" ? row.title.trim() : "";
 
+    let normalizedRate;
+    try {
+      normalizedRate = toEngineRateBoundary(row.newAprPct, "newAprPct");
+    } catch {
+      throw new PlanningV2ValidationError("Invalid offers", [
+        {
+          path: `offers[${index}].newAprPct`,
+          message: "must be 0, legacy decimal(0<x<=1), or percent(1<x<=100)",
+        },
+      ]);
+    }
+
     return {
       liabilityId,
-      newAprPct: row.newAprPct,
+      newAprPct: normalizedRate.pct,
       ...(row.feeKrw !== undefined ? { feeKrw: Math.round(row.feeKrw) } : {}),
       ...(title ? { title } : {}),
     };
@@ -129,10 +138,26 @@ function toLiabilitiesFromProfile(profile: ReturnType<typeof validateProfileV2>)
     name: debt.name,
     type: debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing",
     principalKrw: Math.max(0, debt.balance),
-    aprPct: normalizeAprPct(debt.apr ?? 0),
+    aprPct: isFiniteNumber(debt.aprPct) ? debt.aprPct : decimalToAprPct(debt.apr ?? 0),
     remainingMonths: Math.max(1, debt.remainingMonths ?? DEFAULT_REMAINING_MONTHS),
     minimumPaymentKrw: Math.max(0, debt.minimumPayment),
   }));
+}
+
+function assertOfferLiabilityIdsMatch(offers: RefiOffer[], liabilities: LiabilityV2[]): void {
+  const issues = validateProfile(
+    { debts: liabilities.map((liability) => ({ id: liability.id })) },
+    { offers: offers.map((offer) => ({ liabilityId: offer.liabilityId })) },
+  );
+  const mismatch = issues.find((issue) => issue.code === "DEBT_OFFER_ID_MISMATCH");
+  if (!mismatch) return;
+
+  throw new PlanningV2ValidationError("Invalid offers", [
+    {
+      path: "offers",
+      message: `DEBT_OFFER_ID_MISMATCH: ${mismatch.message}`,
+    },
+  ]);
 }
 
 function hasCsrfCookie(request: Request): boolean {
@@ -143,8 +168,9 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
-    if (hasCsrfCookie(request)) {
-      assertCsrf(request, body);
+    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
+    if (hasCsrfCookie(request) && csrfToken) {
+      assertCsrf(request, { csrf: csrfToken });
     }
     return null;
   } catch (error) {
@@ -179,6 +205,8 @@ export async function POST(request: Request) {
     const profile = validateProfileV2(body.profile);
     const offers = parseOffers(body.offers);
     const options = parseOptions(body.options);
+    const liabilities = toLiabilitiesFromProfile(profile);
+    assertOfferLiabilityIdsMatch(offers, liabilities);
 
     const monthlyIncomeKrw = Math.max(
       0,
@@ -186,7 +214,7 @@ export async function POST(request: Request) {
     );
 
     const result = planningService.computeDebtStrategy({
-      liabilities: toLiabilitiesFromProfile(profile),
+      liabilities,
       monthlyIncomeKrw,
       offers,
       options,

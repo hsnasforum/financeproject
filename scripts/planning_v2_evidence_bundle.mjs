@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { tsImport } from "tsx/esm/api";
 import { writeJsonAtomic, writeTextAtomic } from "./planning_v2_ops_common.mjs";
+let redactTextImpl = fallbackRedactText;
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -28,13 +30,19 @@ function defaultVersionFromDate(now = new Date()) {
   return `${yyyy}.${mm}.${dd}`;
 }
 
-function maskSecrets(text) {
+function fallbackRedactText(text) {
   const raw = asString(text);
   if (!raw) return "";
   return raw
-    .replace(/(authorization\s*:\s*bearer\s+)[^\s]+/gi, "$1***")
-    .replace(/(ECOS_API_KEY|GITHUB_TOKEN|FINLIFE_API_KEY)\s*=\s*[^\s]+/gi, "$1=***")
-    .replace(/(["']?(?:token|api[_-]?key|secret|password)["']?\s*[:=]\s*["'])[^"']+(["'])/gi, "$1***$2");
+    .replace(/\b(Bearer\s+)[^\s"'`]+/gi, "$1***")
+    .replace(/(BOK_ECOS_API_KEY|ECOS_API_KEY|GITHUB_TOKEN|FINLIFE_API_KEY)\s*=\s*[^\s]+/gi, "$1=***")
+    .replace(/(["']?(?:token|api[_-]?key|secret|password)["']?\s*[:=]\s*["'])[^"']+(["'])/gi, "$1***$2")
+    .replace(/\.data(?:[\\/][^\s"'`)\]}]+)+/g, "<DATA_PATH>")
+    .replace(/\b\d{7,}\b/g, "<AMOUNT>");
+}
+
+function maskSecrets(text) {
+  return redactTextImpl(asString(text));
 }
 
 function tailText(text, maxLines = 80) {
@@ -45,6 +53,18 @@ function tailText(text, maxLines = 80) {
 
 function hasScript(scripts, scriptName) {
   return typeof scripts?.[scriptName] === "string" && scripts[scriptName].trim().length > 0;
+}
+
+async function loadRedactText() {
+  try {
+    const moduleRaw = await tsImport("../src/lib/planning/privacy/redact.ts", { parentURL: import.meta.url });
+    const resolved = moduleRaw?.default && typeof moduleRaw.default === "object" ? moduleRaw.default : moduleRaw;
+    if (typeof resolved?.redactText === "function") {
+      redactTextImpl = (value) => resolved.redactText(asString(value));
+    }
+  } catch {
+    redactTextImpl = fallbackRedactText;
+  }
 }
 
 async function readPackageJson(cwd) {
@@ -219,6 +239,7 @@ async function buildBundleTree(cwd, version, releaseNotesRel, paths, checks, fin
 }
 
 async function main() {
+  await loadRedactText();
   const cwd = path.resolve(process.cwd());
   const args = parseArgs(process.argv.slice(2));
   const version = asString(args.version) || defaultVersionFromDate();
@@ -325,4 +346,3 @@ main().catch((error) => {
   console.error(`[planning:v2:release:evidence] FAIL\n${maskSecrets(message)}`);
   process.exit(1);
 });
-

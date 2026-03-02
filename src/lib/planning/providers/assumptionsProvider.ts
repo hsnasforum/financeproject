@@ -86,17 +86,20 @@ async function resolveSnapshot(snapshotId?: string): Promise<{
   snapshot: Awaited<ReturnType<typeof loadLatestAssumptionsSnapshot>>;
   snapshotId?: string;
 }> {
-  if (snapshotId) {
-    const found = await loadAssumptionsSnapshotById(snapshotId);
+  const requested = typeof snapshotId === "string" ? snapshotId.trim() : "";
+  const useLatest = requested.length === 0 || requested.toLowerCase() === "latest";
+
+  if (!useLatest) {
+    const found = await loadAssumptionsSnapshotById(requested);
     if (!found) {
       throw {
         code: "SNAPSHOT_NOT_FOUND",
-        message: "snapshot not found",
+        message: `snapshotId '${requested}' not found. Use 'latest' or select a valid id from /ops/assumptions.`,
       };
     }
     return {
       snapshot: found,
-      snapshotId,
+      snapshotId: requested,
     };
   }
 

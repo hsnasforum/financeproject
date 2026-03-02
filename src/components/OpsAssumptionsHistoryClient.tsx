@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { resolveClientApiError } from "@/lib/http/clientApiError";
 import { type AssumptionsSnapshot } from "@/lib/planning/assumptions/types";
 
 type HistoryItem = {
@@ -21,6 +22,7 @@ type HistoryListPayload = {
   ok?: boolean;
   items?: HistoryItem[];
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
 };
 
 type SnapshotDetailPayload = {
@@ -28,11 +30,13 @@ type SnapshotDetailPayload = {
   snapshotId?: string;
   snapshot?: AssumptionsSnapshot;
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
 };
 
 type SetLatestPayload = {
   ok?: boolean;
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
 };
 
 type OpsAssumptionsHistoryClientProps = {
@@ -83,6 +87,8 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
   const [confirmText, setConfirmText] = useState("");
   const [settingLatest, setSettingLatest] = useState(false);
   const [currentLatestId, setCurrentLatestId] = useState("");
+  const [showSourceDetails, setShowSourceDetails] = useState(false);
+  const [errorFixHref, setErrorFixHref] = useState("");
 
   const hasCsrf = props.csrf.trim().length > 0;
 
@@ -115,10 +121,13 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
       const response = await fetch(`/api/ops/assumptions/history?limit=30&csrf=${encodeURIComponent(props.csrf)}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as HistoryListPayload | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.message ?? "스냅샷 히스토리 조회에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "스냅샷 히스토리 조회에 실패했습니다.");
+        setErrorFixHref(apiError.fixHref ?? "");
+        throw new Error(apiError.message);
       }
       const items = Array.isArray(payload.items) ? payload.items : [];
       setHistory(items);
+      setErrorFixHref("");
       setSelectedId((prev) => prev || items[0]?.id || "");
       setSelectedForDiffA((prev) => prev || items[0]?.id || "");
       setSelectedForDiffB((prev) => prev || items[1]?.id || "");
@@ -140,9 +149,12 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
       const response = await fetch(`/api/ops/assumptions/history/${encodeURIComponent(id)}?csrf=${encodeURIComponent(props.csrf)}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as SnapshotDetailPayload | null;
       if (!response.ok || !payload?.ok || !payload.snapshot) {
-        throw new Error(payload?.message ?? "스냅샷 상세 조회에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "스냅샷 상세 조회에 실패했습니다.");
+        setErrorFixHref(apiError.fixHref ?? "");
+        throw new Error(apiError.message);
       }
       setSelectedSnapshot(payload.snapshot);
+      setErrorFixHref("");
     } catch (detailError) {
       setSelectedSnapshot(null);
       setError(detailError instanceof Error ? detailError.message : "스냅샷 상세 조회 중 오류가 발생했습니다.");
@@ -164,7 +176,8 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
       });
       const payload = (await response.json().catch(() => null)) as SetLatestPayload | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.message ?? "latest 포인터 변경에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "latest 포인터 변경에 실패했습니다.");
+        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
       }
       window.alert(payload.message ?? "latest 포인터를 변경했습니다.");
       setConfirmText("");
@@ -242,7 +255,17 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
         <h2 className="text-base font-black text-slate-900">History</h2>
         <p className="mt-2 text-sm text-slate-600">현재 latest snapshotId: <span className="font-semibold">{currentLatestId || "-"}</span></p>
         {!hasCsrf ? <p className="mt-3 text-sm font-semibold text-amber-700">Dev unlock/CSRF가 없어 조회/롤백이 차단됩니다.</p> : null}
-        {error ? <p className="mt-3 text-sm font-semibold text-rose-600">{error}</p> : null}
+        {error ? (
+          <p className="mt-3 text-sm font-semibold text-rose-600">
+            {error}
+            {errorFixHref ? (
+              <>
+                {" "}
+                <Link href={errorFixHref} className="underline">{errorFixHref}</Link>
+              </>
+            ) : null}
+          </p>
+        ) : null}
 
         <div className="mt-4 overflow-auto">
           <table className="w-full min-w-[900px] text-left text-xs">
@@ -314,10 +337,21 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
           </div>
           <div>
             <h3 className="text-sm font-black text-slate-900">Sources ({selectedSnapshot?.sources.length ?? 0})</h3>
+            <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
+              <input
+                checked={showSourceDetails}
+                onChange={(event) => setShowSourceDetails(event.target.checked)}
+                type="checkbox"
+              />
+              고급 보기(소스 URL)
+            </label>
             {selectedSnapshot?.sources.length ? (
               <ul className="mt-2 space-y-1 text-xs text-slate-600">
                 {selectedSnapshot.sources.map((source, index) => (
-                  <li key={`${source.name}-${index}`}>- {source.name} ({toHost(source.url)} / {formatDateTime(source.fetchedAt)})</li>
+                  <li key={`${source.name}-${index}`}>
+                    - {source.name} ({formatDateTime(source.fetchedAt)})
+                    {showSourceDetails ? ` / ${toHost(source.url)} / ${source.url}` : ""}
+                  </li>
                 ))}
               </ul>
             ) : (

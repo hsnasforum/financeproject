@@ -21,11 +21,11 @@ export function HomePortalClient() {
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">최근 재무 스냅샷</h3>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight">최근 플래닝 스냅샷</h3>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Recently Saved Plans</p>
           </div>
-          <Link href="/planner" className="group inline-flex items-center gap-2 text-sm font-bold text-emerald-600">
-            재무설계로 이동
+          <Link href="/planning" className="group inline-flex items-center gap-2 text-sm font-bold text-emerald-600">
+            플래닝으로 이동
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
           </Link>
         </div>
@@ -38,9 +38,9 @@ export function HomePortalClient() {
              </div>
              <p className="text-base font-black text-slate-900">아직 저장된 스냅샷이 없습니다.</p>
              <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-tight">저장된 데이터가 없어 추천을 시작할 수 없습니다</p>
-             <Link href="/planner" className="mt-8">
+             <Link href="/planning" className="mt-8">
                 <Button variant="outline" className="rounded-full px-8 h-12 font-black border-slate-200 bg-white shadow-sm hover:border-emerald-200 hover:bg-emerald-50 transition-all">
-                  첫 스냅샷 만들기
+                  첫 플래닝 시작
                 </Button>
              </Link>
           </div>
@@ -59,7 +59,7 @@ export function HomePortalClient() {
                     </p>
                  </div>
               </div>
-              <Link href="/planner" className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-emerald-600 hover:text-white transition-all">
+              <Link href="/planning" className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-emerald-600 hover:text-white transition-all">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
               </Link>
             </div>

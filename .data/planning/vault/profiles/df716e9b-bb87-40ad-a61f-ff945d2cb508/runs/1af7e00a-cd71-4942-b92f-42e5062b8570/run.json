@@ -1,0 +1,781 @@
+{
+  "version": 1,
+  "schemaVersion": 2,
+  "id": "1af7e00a-cd71-4942-b92f-42e5062b8570",
+  "profileId": "df716e9b-bb87-40ad-a61f-ff945d2cb508",
+  "title": "Golden Replay golden-caution-multi-debt-refi",
+  "createdAt": "2026-03-01T19:27:09.085Z",
+  "overallStatus": "SUCCESS",
+  "stages": [
+    {
+      "id": "simulate",
+      "status": "SUCCESS",
+      "startedAt": "2026-03-01T19:27:09.078Z",
+      "endedAt": "2026-03-01T19:27:09.079Z",
+      "outputRef": {
+        "key": "outputs.simulate",
+        "hasData": true,
+        "ref": {
+          "name": "simulate",
+          "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/simulate.json",
+          "sizeBytes": 3781
+        }
+      },
+      "durationMs": 1
+    },
+    {
+      "id": "scenarios",
+      "status": "SUCCESS",
+      "startedAt": "2026-03-01T19:27:09.079Z",
+      "endedAt": "2026-03-01T19:27:09.084Z",
+      "outputRef": {
+        "key": "outputs.scenarios",
+        "hasData": true,
+        "ref": {
+          "name": "scenarios",
+          "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/scenarios.json",
+          "sizeBytes": 1784
+        }
+      },
+      "durationMs": 5
+    },
+    {
+      "id": "monteCarlo",
+      "status": "SKIPPED",
+      "startedAt": "2026-03-01T19:27:09.078Z",
+      "endedAt": "2026-03-01T19:27:09.084Z",
+      "reason": "OPTION_DISABLED",
+      "errorSummary": "옵션 비활성",
+      "durationMs": 6
+    },
+    {
+      "id": "actions",
+      "status": "SUCCESS",
+      "startedAt": "2026-03-01T19:27:09.084Z",
+      "endedAt": "2026-03-01T19:27:09.084Z",
+      "outputRef": {
+        "key": "outputs.actions",
+        "hasData": true,
+        "ref": {
+          "name": "actions",
+          "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/actions.json",
+          "sizeBytes": 3723
+        }
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "debt",
+      "status": "SUCCESS",
+      "startedAt": "2026-03-01T19:27:09.084Z",
+      "endedAt": "2026-03-01T19:27:09.085Z",
+      "outputRef": {
+        "key": "outputs.debtStrategy",
+        "hasData": true,
+        "ref": {
+          "name": "debtStrategy",
+          "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/debtStrategy.json",
+          "sizeBytes": 4901
+        }
+      },
+      "durationMs": 1
+    }
+  ],
+  "input": {
+    "horizonMonths": 120,
+    "policyId": "balanced",
+    "debtStrategy": {
+      "offers": [
+        {
+          "liabilityId": "multi-loan-credit",
+          "newAprPct": 6.4,
+          "feeKrw": 150000,
+          "title": "신용대출 전환"
+        },
+        {
+          "liabilityId": "multi-loan-card",
+          "newAprPct": 11.8,
+          "feeKrw": 50000,
+          "title": "카드론 통합"
+        }
+      ],
+      "options": {
+        "extraPaymentKrw": 200000
+      }
+    }
+  },
+  "meta": {
+    "snapshot": {
+      "missing": true
+    },
+    "normalization": {
+      "defaultsApplied": [],
+      "fixesApplied": []
+    },
+    "health": {
+      "warningsCodes": [
+        "SNAPSHOT_MISSING"
+      ],
+      "criticalCount": 0
+    }
+  },
+  "reproducibility": {
+    "appVersion": "1.0.2",
+    "engineVersion": "planning-v2",
+    "profileHash": "1b1f13cc2d13101edb11b6eaed827b5b587197bd472a1751774edb84d07f2fad",
+    "effectiveAssumptionsHash": "2863babd50cf4735232dc3c694c3883cfb7bb042f42a92f095bc568044b79daa",
+    "policy": {
+      "dsr": {
+        "cautionPct": 40,
+        "riskPct": 60
+      },
+      "emergencyFundMonths": {
+        "caution": 3,
+        "risk": 1
+      },
+      "monthlySurplusKrw": {
+        "cautionMax": 0,
+        "riskMax": -1
+      },
+      "monteCarlo": {
+        "cautionDepletionPct": 10,
+        "riskDepletionPct": 30
+      },
+      "snapshot": {
+        "staleCautionDays": 45,
+        "staleRiskDays": 120
+      },
+      "warnings": {
+        "cautionCount": 8
+      }
+    }
+  },
+  "outputs": {
+    "resultDto": {
+      "version": 1,
+      "meta": {
+        "generatedAt": "2026-03-01T19:27:09.085Z",
+        "snapshot": {
+          "missing": true
+        },
+        "health": {
+          "criticalCount": 0
+        },
+        "policyId": "balanced"
+      },
+      "summary": {
+        "endNetWorthKrw": 195614927.78,
+        "worstCashKrw": 0,
+        "worstCashMonthIndex": 0,
+        "goalsAchieved": {
+          "achieved": 2,
+          "total": 3
+        },
+        "dsrPct": 17.33,
+        "criticalWarnings": 0,
+        "totalWarnings": 0
+      },
+      "warnings": {
+        "aggregated": [],
+        "top": []
+      },
+      "goals": [
+        {
+          "id": "goal-emergency",
+          "title": "Emergency Fund",
+          "type": "emergencyFund",
+          "targetKrw": 15000000,
+          "currentKrw": 15000000,
+          "shortfallKrw": 0,
+          "targetMonth": 12,
+          "achieved": true,
+          "comment": "달성"
+        },
+        {
+          "id": "goal-education",
+          "title": "Education",
+          "type": "lumpSum",
+          "targetKrw": 28000000,
+          "currentKrw": 28000000,
+          "shortfallKrw": 0,
+          "targetMonth": 72,
+          "achieved": true,
+          "comment": "달성"
+        },
+        {
+          "id": "goal-retire",
+          "title": "Retirement",
+          "type": "retirement",
+          "targetKrw": 420000000,
+          "currentKrw": 128995955.69,
+          "shortfallKrw": 291004044.31,
+          "targetMonth": 300,
+          "achieved": false,
+          "comment": "부족액 존재"
+        }
+      ],
+      "timeline": {
+        "points": [
+          {
+            "label": "start",
+            "monthIndex": 0,
+            "incomeKrw": 5600000,
+            "expensesKrw": 3200000,
+            "debtPaymentKrw": 8600000,
+            "cashKrw": 0,
+            "netWorthKrw": -50442364.79,
+            "totalDebtKrw": 89201439.59
+          },
+          {
+            "label": "mid",
+            "monthIndex": 12,
+            "incomeKrw": 5600000,
+            "expensesKrw": 3264000,
+            "debtPaymentKrw": 2336000,
+            "cashKrw": 0,
+            "netWorthKrw": -25476245.06,
+            "totalDebtKrw": 64963273.59
+          },
+          {
+            "label": "end",
+            "monthIndex": 119,
+            "incomeKrw": 5600000,
+            "expensesKrw": 3894350.31,
+            "debtPaymentKrw": 0,
+            "cashKrw": 0,
+            "netWorthKrw": 195614927.78,
+            "totalDebtKrw": 0
+          }
+        ]
+      },
+      "actions": {
+        "items": [
+          {
+            "code": "BUILD_EMERGENCY_FUND",
+            "severity": "warn",
+            "title": "비상금 완충 구간 확보",
+            "summary": "유동성 완충이 부족해 자산 인출 또는 차입으로 이어질 가능성이 있습니다. 비상금 목표를 먼저 채우세요.",
+            "why": [],
+            "metrics": {
+              "emergencyTargetKrw": 19200000,
+              "emergencyGapKrw": 13000000,
+              "currentCashKrw": 6200000
+            },
+            "steps": [
+              "비상금 목표(기본 6개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.",
+              "중도 인출 비용/제약이 작은 후보를 우선 비교합니다.",
+              "비상금 달성 전에는 고위험 자산 비중 확대를 보류합니다."
+            ],
+            "cautions": [
+              "비상금은 수익률보다 접근성과 안정성을 우선합니다.",
+              "확률 결과는 보장이 아니며 시장/소득 변동에 따라 달라질 수 있습니다.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          },
+          {
+            "code": "IMPROVE_RETIREMENT_PLAN",
+            "severity": "warn",
+            "title": "은퇴자금 계획 보강",
+            "summary": "은퇴 시점 목표 대비 부족 가능성이 있어, 적립 속도와 리스크 가정 점검이 필요합니다.",
+            "why": [
+              {
+                "code": "RETIREMENT_GOAL_GAP",
+                "message": "은퇴 관련 목표의 부족자금이 확인되었습니다.",
+                "data": {
+                  "goalId": "goal-retire",
+                  "gapKrw": 291004044.31,
+                  "targetMonth": 300
+                }
+              }
+            ],
+            "metrics": {
+              "retirementGapKrw": 291004044.31,
+              "retirementTargetMonth": 300
+            },
+            "steps": [
+              "은퇴 목표월 전까지의 월 적립액/수익률 가정을 재조정합니다.",
+              "리스크 성향별 시나리오와 Monte Carlo 퍼센타일을 함께 확인합니다.",
+              "필요 시 은퇴 시점/목표금액을 현실화해 재계획합니다."
+            ],
+            "cautions": [
+              "확률 지표는 참고값이며 미래 성과를 보장하지 않습니다.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          },
+          {
+            "code": "SET_ASSUMPTIONS_REVIEW",
+            "severity": "info",
+            "title": "가정값 정기 점검",
+            "summary": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+            "why": [
+              {
+                "code": "ASSUMPTIONS_BASELINE",
+                "message": "엔진 기본/스냅샷/오버라이드 가정이 결합되어 계산됩니다.",
+                "data": {
+                  "snapshotAsOf": null,
+                  "snapshotMissing": true,
+                  "inflationPct": 2,
+                  "investReturnPct": 5
+                }
+              }
+            ],
+            "metrics": {
+              "inflationPct": 2,
+              "investReturnPct": 5,
+              "cashReturnPct": 2
+            },
+            "steps": [
+              "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+              "가정 변경 전/후 시나리오 결과를 비교합니다.",
+              "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+            ],
+            "cautions": [
+              "가정값은 결과를 크게 바꿀 수 있으므로 변경 이력을 남기세요.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          }
+        ],
+        "top3": [
+          {
+            "code": "BUILD_EMERGENCY_FUND",
+            "severity": "warn",
+            "title": "비상금 완충 구간 확보",
+            "summary": "유동성 완충이 부족해 자산 인출 또는 차입으로 이어질 가능성이 있습니다. 비상금 목표를 먼저 채우세요.",
+            "why": [],
+            "metrics": {
+              "emergencyTargetKrw": 19200000,
+              "emergencyGapKrw": 13000000,
+              "currentCashKrw": 6200000
+            },
+            "steps": [
+              "비상금 목표(기본 6개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.",
+              "중도 인출 비용/제약이 작은 후보를 우선 비교합니다.",
+              "비상금 달성 전에는 고위험 자산 비중 확대를 보류합니다."
+            ],
+            "cautions": [
+              "비상금은 수익률보다 접근성과 안정성을 우선합니다.",
+              "확률 결과는 보장이 아니며 시장/소득 변동에 따라 달라질 수 있습니다.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          },
+          {
+            "code": "IMPROVE_RETIREMENT_PLAN",
+            "severity": "warn",
+            "title": "은퇴자금 계획 보강",
+            "summary": "은퇴 시점 목표 대비 부족 가능성이 있어, 적립 속도와 리스크 가정 점검이 필요합니다.",
+            "why": [
+              {
+                "code": "RETIREMENT_GOAL_GAP",
+                "message": "은퇴 관련 목표의 부족자금이 확인되었습니다.",
+                "data": {
+                  "goalId": "goal-retire",
+                  "gapKrw": 291004044.31,
+                  "targetMonth": 300
+                }
+              }
+            ],
+            "metrics": {
+              "retirementGapKrw": 291004044.31,
+              "retirementTargetMonth": 300
+            },
+            "steps": [
+              "은퇴 목표월 전까지의 월 적립액/수익률 가정을 재조정합니다.",
+              "리스크 성향별 시나리오와 Monte Carlo 퍼센타일을 함께 확인합니다.",
+              "필요 시 은퇴 시점/목표금액을 현실화해 재계획합니다."
+            ],
+            "cautions": [
+              "확률 지표는 참고값이며 미래 성과를 보장하지 않습니다.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          },
+          {
+            "code": "SET_ASSUMPTIONS_REVIEW",
+            "severity": "info",
+            "title": "가정값 정기 점검",
+            "summary": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+            "why": [
+              {
+                "code": "ASSUMPTIONS_BASELINE",
+                "message": "엔진 기본/스냅샷/오버라이드 가정이 결합되어 계산됩니다.",
+                "data": {
+                  "snapshotAsOf": null,
+                  "snapshotMissing": true,
+                  "inflationPct": 2,
+                  "investReturnPct": 5
+                }
+              }
+            ],
+            "metrics": {
+              "inflationPct": 2,
+              "investReturnPct": 5,
+              "cashReturnPct": 2
+            },
+            "steps": [
+              "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+              "가정 변경 전/후 시나리오 결과를 비교합니다.",
+              "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+            ],
+            "cautions": [
+              "가정값은 결과를 크게 바꿀 수 있으므로 변경 이력을 남기세요.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          }
+        ],
+        "top": [
+          {
+            "code": "BUILD_EMERGENCY_FUND",
+            "severity": "warn",
+            "title": "비상금 완충 구간 확보",
+            "summary": "유동성 완충이 부족해 자산 인출 또는 차입으로 이어질 가능성이 있습니다. 비상금 목표를 먼저 채우세요.",
+            "why": [],
+            "metrics": {
+              "emergencyTargetKrw": 19200000,
+              "emergencyGapKrw": 13000000,
+              "currentCashKrw": 6200000
+            },
+            "steps": [
+              "비상금 목표(기본 6개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.",
+              "중도 인출 비용/제약이 작은 후보를 우선 비교합니다.",
+              "비상금 달성 전에는 고위험 자산 비중 확대를 보류합니다."
+            ],
+            "cautions": [
+              "비상금은 수익률보다 접근성과 안정성을 우선합니다.",
+              "확률 결과는 보장이 아니며 시장/소득 변동에 따라 달라질 수 있습니다.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          },
+          {
+            "code": "IMPROVE_RETIREMENT_PLAN",
+            "severity": "warn",
+            "title": "은퇴자금 계획 보강",
+            "summary": "은퇴 시점 목표 대비 부족 가능성이 있어, 적립 속도와 리스크 가정 점검이 필요합니다.",
+            "why": [
+              {
+                "code": "RETIREMENT_GOAL_GAP",
+                "message": "은퇴 관련 목표의 부족자금이 확인되었습니다.",
+                "data": {
+                  "goalId": "goal-retire",
+                  "gapKrw": 291004044.31,
+                  "targetMonth": 300
+                }
+              }
+            ],
+            "metrics": {
+              "retirementGapKrw": 291004044.31,
+              "retirementTargetMonth": 300
+            },
+            "steps": [
+              "은퇴 목표월 전까지의 월 적립액/수익률 가정을 재조정합니다.",
+              "리스크 성향별 시나리오와 Monte Carlo 퍼센타일을 함께 확인합니다.",
+              "필요 시 은퇴 시점/목표금액을 현실화해 재계획합니다."
+            ],
+            "cautions": [
+              "확률 지표는 참고값이며 미래 성과를 보장하지 않습니다.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          },
+          {
+            "code": "SET_ASSUMPTIONS_REVIEW",
+            "severity": "info",
+            "title": "가정값 정기 점검",
+            "summary": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+            "why": [
+              {
+                "code": "ASSUMPTIONS_BASELINE",
+                "message": "엔진 기본/스냅샷/오버라이드 가정이 결합되어 계산됩니다.",
+                "data": {
+                  "snapshotAsOf": null,
+                  "snapshotMissing": true,
+                  "inflationPct": 2,
+                  "investReturnPct": 5
+                }
+              }
+            ],
+            "metrics": {
+              "inflationPct": 2,
+              "investReturnPct": 5,
+              "cashReturnPct": 2
+            },
+            "steps": [
+              "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+              "가정 변경 전/후 시나리오 결과를 비교합니다.",
+              "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+            ],
+            "cautions": [
+              "가정값은 결과를 크게 바꿀 수 있으므로 변경 이력을 남기세요.",
+              "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+              "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+            ]
+          }
+        ]
+      },
+      "scenarios": {
+        "table": [
+          {
+            "id": "base",
+            "title": "Base",
+            "endNetWorthKrw": 195614927.78,
+            "worstCashMonthIndex": 0,
+            "worstCashKrw": 0,
+            "goalsAchievedCount": 2,
+            "warningsCount": 0
+          },
+          {
+            "id": "conservative",
+            "title": "Conservative",
+            "endNetWorthKrw": 178783702.98,
+            "worstCashMonthIndex": 0,
+            "worstCashKrw": 0,
+            "goalsAchievedCount": 2,
+            "warningsCount": 0,
+            "diffVsBase": {
+              "endNetWorthDeltaKrw": -16831224.8,
+              "worstCashMonthIndex": 0,
+              "worstCashDeltaKrw": 0,
+              "goalsAchievedDelta": 0
+            }
+          },
+          {
+            "id": "aggressive",
+            "title": "Aggressive",
+            "endNetWorthKrw": 205600396.98,
+            "worstCashMonthIndex": 0,
+            "worstCashKrw": 0,
+            "goalsAchievedCount": 2,
+            "warningsCount": 0,
+            "diffVsBase": {
+              "endNetWorthDeltaKrw": 9985469.2,
+              "worstCashMonthIndex": 0,
+              "worstCashDeltaKrw": 0,
+              "goalsAchievedDelta": 0
+            }
+          }
+        ],
+        "shortWhy": [
+          "투자수익률 -3.00%p 변화로 말기 순자산이 -16,831,224.8원 변했습니다.",
+          "인플레이션 +0.50%p 변화로 최저 현금월이 0개월차, 현금 저점은 0원 변했습니다.",
+          "경고/목표 달성 수 변화는 크지 않았고, 주된 차이는 금리/물가 가정 변화에서 발생했습니다.",
+          "투자수익률 +1.50%p 변화로 말기 순자산이 +9,985,469.2원 변했습니다.",
+          "인플레이션 -0.30%p 변화로 최저 현금월이 0개월차, 현금 저점은 0원 변했습니다.",
+          "경고/목표 달성 수 변화는 크지 않았고, 주된 차이는 금리/물가 가정 변화에서 발생했습니다."
+        ]
+      },
+      "debt": {
+        "dsrPct": 17.33,
+        "summaries": [
+          {
+            "liabilityId": "multi-loan-home",
+            "name": "Home Loan",
+            "type": "amortizing",
+            "principalKrw": 74000000,
+            "aprPct": 4.9,
+            "remainingMonths": 204,
+            "monthlyPaymentKrw": 535264,
+            "monthlyInterestKrw": 302167,
+            "totalInterestRemainingKrw": 35193862,
+            "payoffMonthIndex": 205
+          },
+          {
+            "liabilityId": "multi-loan-credit",
+            "name": "Credit Loan",
+            "type": "amortizing",
+            "principalKrw": 19000000,
+            "aprPct": 9.8,
+            "remainingMonths": 66,
+            "monthlyPaymentKrw": 373544,
+            "monthlyInterestKrw": 155167,
+            "totalInterestRemainingKrw": 5653916,
+            "payoffMonthIndex": 66
+          },
+          {
+            "liabilityId": "multi-loan-card",
+            "name": "Card Balance",
+            "type": "interestOnly",
+            "principalKrw": 4300000,
+            "aprPct": 17.2,
+            "remainingMonths": 48,
+            "monthlyPaymentKrw": 61633,
+            "monthlyInterestKrw": 61633,
+            "totalInterestRemainingKrw": 2958384,
+            "payoffMonthIndex": 48
+          }
+        ],
+        "refinance": [
+          {
+            "liabilityId": "multi-loan-credit",
+            "offerTitle": "신용대출 전환",
+            "newAprPct": 6.4,
+            "feeKrw": 150000,
+            "currentMonthlyPaymentKrw": 373544,
+            "newMonthlyPaymentKrw": 342271,
+            "monthlyPaymentDeltaKrw": -31273,
+            "interestSavingsKrw": 1914035,
+            "breakEvenMonths": 5,
+            "notes": [
+              "수수료가 반영되었습니다."
+            ]
+          },
+          {
+            "liabilityId": "multi-loan-card",
+            "offerTitle": "카드론 통합",
+            "newAprPct": 11.8,
+            "feeKrw": 50000,
+            "currentMonthlyPaymentKrw": 61633,
+            "newMonthlyPaymentKrw": 42283,
+            "monthlyPaymentDeltaKrw": -19350,
+            "interestSavingsKrw": 878800,
+            "breakEvenMonths": 3,
+            "notes": [
+              "수수료가 반영되었습니다."
+            ]
+          }
+        ],
+        "whatIf": {
+          "termExtensions": [
+            {
+              "liabilityId": "multi-loan-credit",
+              "newTermMonths": 120,
+              "newMonthlyPaymentKrw": 248987,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            }
+          ],
+          "termReductions": [
+            {
+              "liabilityId": "multi-loan-home",
+              "newTermMonths": 12,
+              "newMonthlyPaymentKrw": 6331563,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-home",
+              "newTermMonths": 24,
+              "newMonthlyPaymentKrw": 3243170,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-home",
+              "newTermMonths": 36,
+              "newMonthlyPaymentKrw": 2214525,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-home",
+              "newTermMonths": 60,
+              "newMonthlyPaymentKrw": 1393084,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-home",
+              "newTermMonths": 120,
+              "newMonthlyPaymentKrw": 781273,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-credit",
+              "newTermMonths": 12,
+              "newMonthlyPaymentKrw": 1668635,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-credit",
+              "newTermMonths": 24,
+              "newMonthlyPaymentKrw": 875001,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-credit",
+              "newTermMonths": 36,
+              "newMonthlyPaymentKrw": 611294,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-credit",
+              "newTermMonths": 60,
+              "newMonthlyPaymentKrw": 401827,
+              "notes": [
+                "Assumes same principal and APR; only term changed."
+              ]
+            },
+            {
+              "liabilityId": "multi-loan-card",
+              "newTermMonths": 48,
+              "newMonthlyPaymentKrw": 124522,
+              "notes": [
+                "Converts interest-only repayment to amortizing repayment over the same remaining term."
+              ]
+            }
+          ],
+          "extraPayments": [
+            {
+              "liabilityId": "multi-loan-home",
+              "extraPaymentKrw": 200000,
+              "payoffMonthsReduced": 75,
+              "interestSavingsKrw": 13696961
+            },
+            {
+              "liabilityId": "multi-loan-credit",
+              "extraPaymentKrw": 200000,
+              "payoffMonthsReduced": 27,
+              "interestSavingsKrw": 2409104
+            }
+          ]
+        }
+      },
+      "raw": {}
+    },
+    "simulate": {
+      "ref": {
+        "name": "simulate",
+        "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/simulate.json",
+        "sizeBytes": 3781
+      }
+    },
+    "scenarios": {
+      "ref": {
+        "name": "scenarios",
+        "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/scenarios.json",
+        "sizeBytes": 1784
+      }
+    },
+    "actions": {
+      "ref": {
+        "name": "actions",
+        "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/actions.json",
+        "sizeBytes": 3723
+      }
+    },
+    "debtStrategy": {
+      "ref": {
+        "name": "debtStrategy",
+        "path": ".data/planning/vault/profiles/df716e9b-bb87-40ad-a61f-ff945d2cb508/runs/1af7e00a-cd71-4942-b92f-42e5062b8570/blobs/debtStrategy.json",
+        "sizeBytes": 4901
+      }
+    }
+  }
+}

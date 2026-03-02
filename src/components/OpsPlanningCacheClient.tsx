@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { resolveClientApiError } from "@/lib/http/clientApiError";
 
 type OpsPlanningCacheClientProps = {
   csrf: string;
@@ -14,6 +15,7 @@ type OpsPlanningCacheClientProps = {
 type StatsPayload = {
   ok?: boolean;
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
   data?: {
     entries?: {
       total?: number;
@@ -35,6 +37,7 @@ type StatsPayload = {
 type PurgePayload = {
   ok?: boolean;
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
   data?: {
     purged?: number;
   };
@@ -60,6 +63,7 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
   const [loading, setLoading] = useState(true);
   const [purging, setPurging] = useState(false);
   const [error, setError] = useState("");
+  const [errorFixHref, setErrorFixHref] = useState("");
   const [stats, setStats] = useState<StatsPayload["data"] | null>(null);
 
   const hasCsrf = props.csrf.trim().length > 0;
@@ -69,18 +73,22 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
       setLoading(false);
       setStats(null);
       setError("Dev unlock/CSRF가 없어 조회할 수 없습니다.");
+      setErrorFixHref("");
       return;
     }
 
     setLoading(true);
     setError("");
+    setErrorFixHref("");
     try {
       const response = await fetch(`/api/ops/planning-cache/stats?csrf=${encodeURIComponent(props.csrf)}`, {
         cache: "no-store",
       });
       const payload = (await response.json().catch(() => null)) as StatsPayload | null;
       if (!response.ok || !payload?.ok || !payload.data) {
-        throw new Error(payload?.message ?? "캐시 통계 조회에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "캐시 통계 조회에 실패했습니다.");
+        setErrorFixHref(apiError.fixHref ?? "");
+        throw new Error(apiError.message);
       }
       setStats(payload.data);
     } catch (loadError) {
@@ -106,7 +114,8 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
       });
       const payload = (await response.json().catch(() => null)) as PurgePayload | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.message ?? "만료 캐시 정리에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "만료 캐시 정리에 실패했습니다.");
+        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
       }
 
       window.alert(payload.message ?? `정리 완료: ${toNum(payload.data?.purged)}건`);
@@ -142,18 +151,18 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
   return (
     <PageShell>
       <PageHeader
-        title="Planning Cache"
-        description="재무설계 v2 API 캐시 상태/히트율을 조회하고 만료 엔트리를 정리합니다. (Dev only)"
+        title="플래닝 캐시"
+        description="플래닝 v2 API 캐시 상태/히트율을 조회하고 만료 엔트리를 정리합니다. (Dev only)"
         action={(
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => void loadStats()} disabled={loading || purging || !hasCsrf}>
               {loading ? "로딩 중..." : "새로고침"}
             </Button>
             <Button type="button" size="sm" onClick={() => void purgeCache()} disabled={purging || !hasCsrf}>
-              {purging ? "정리 중..." : "Purge expired"}
+              {purging ? "정리 중..." : "만료 캐시 정리"}
             </Button>
             <Link href="/ops">
-              <Button type="button" variant="outline" size="sm">Ops Hub</Button>
+              <Button type="button" variant="outline" size="sm">Ops 허브</Button>
             </Link>
           </div>
         )}
@@ -169,29 +178,32 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
 
       {error ? (
         <Card>
-          <p className="text-sm font-semibold text-rose-600">{error}</p>
+          <p className="text-sm font-semibold text-rose-600">
+            {error}
+            {errorFixHref ? <> <Link href={errorFixHref} className="underline">{errorFixHref}</Link></> : null}
+          </p>
         </Card>
       ) : null}
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Cache Summary</h2>
+        <h2 className="text-base font-black text-slate-900">캐시 요약</h2>
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">entries.total: <span className="font-semibold">{toNum(stats?.entries?.total)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">usage.hits: <span className="font-semibold">{toNum(stats?.usage?.totals?.hits)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">usage.misses: <span className="font-semibold">{toNum(stats?.usage?.totals?.misses)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">hitRate: <span className="font-semibold">{toPercent(stats?.usage?.hitRate)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 엔트리: <span className="font-semibold">{toNum(stats?.entries?.total)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히트 수: <span className="font-semibold">{toNum(stats?.usage?.totals?.hits)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">미스 수: <span className="font-semibold">{toNum(stats?.usage?.totals?.misses)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히트율: <span className="font-semibold">{toPercent(stats?.usage?.hitRate)}</span></div>
         </div>
-        <p className="mt-3 text-xs text-slate-500">updatedAt: {formatDateTime(stats?.usage?.updatedAt)}</p>
+        <p className="mt-3 text-xs text-slate-500">갱신 시각: {formatDateTime(stats?.usage?.updatedAt)}</p>
 
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-xs text-slate-700">
             <thead>
               <tr className="border-b border-slate-200">
-                <th className="px-2 py-2">kind</th>
-                <th className="px-2 py-2">entries</th>
-                <th className="px-2 py-2">hits</th>
-                <th className="px-2 py-2">misses</th>
-                <th className="px-2 py-2">hitRate</th>
+                <th className="px-2 py-2">종류</th>
+                <th className="px-2 py-2">엔트리</th>
+                <th className="px-2 py-2">히트</th>
+                <th className="px-2 py-2">미스</th>
+                <th className="px-2 py-2">히트율</th>
               </tr>
             </thead>
             <tbody>

@@ -68,6 +68,7 @@ function parseSnapshotId(value: unknown): string | undefined {
   }
   const trimmed = value.trim();
   if (!trimmed) return undefined;
+  if (trimmed.toLowerCase() === "latest") return undefined;
   return trimmed;
 }
 
@@ -89,8 +90,9 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
-    if (hasCsrfCookie(request)) {
-      assertCsrf(request, body);
+    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
+    if (hasCsrfCookie(request) && csrfToken) {
+      assertCsrf(request, { csrf: csrfToken });
     }
     return null;
   } catch (error) {
@@ -185,7 +187,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const normalized = toPlanningError(error);
     if (normalized.code === "SNAPSHOT_NOT_FOUND") {
-      return fail("SNAPSHOT_NOT_FOUND", undefined, { status: 400 });
+      return fail("SNAPSHOT_NOT_FOUND", "snapshotId를 찾을 수 없습니다. latest 또는 /ops/assumptions 목록에서 선택하세요.", {
+        status: 400,
+        ...(requestedSnapshotId ? { issues: [`snapshotId: '${requestedSnapshotId}' not found`] } : {}),
+      });
     }
     return fail(normalized.code, normalized.message);
   }

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { atomicWriteJson } from "../storage/atomicWrite";
 import {
   DEFAULT_PLANNING_USER_ID,
   resolvePlanningUserId,
@@ -47,10 +48,7 @@ function toBase64(value: Buffer): string {
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
-  await fs.rename(tmpPath, filePath);
+  await atomicWriteJson(filePath, payload);
 }
 
 async function loadUsersIndex(cwd = process.cwd()): Promise<LocalPlanningUsersIndex> {
@@ -169,4 +167,3 @@ export async function verifyLocalPlanningUserPin(
   if (!user) return false;
   return verifyPlanningPinHash(pin, user);
 }
-

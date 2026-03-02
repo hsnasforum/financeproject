@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "c61c06e9-f0da-4fa4-a316-42615cf12c23",
+      "profileId": "b01202e4-e69f-4ac6-84e9-ae504f6c2e85",
+      "title": "Golden Replay golden-risk-goals-pressure",
+      "createdAt": "2026-03-01T19:32:33.575Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 1,
+      "criticalCount": 0
+    },
+    {
+      "id": "b699a3eb-5bfb-416d-811a-fc7cf6d31054",
+      "profileId": "521b9683-d713-44af-9e37-0c0466487742",
+      "title": "Golden Replay golden-caution-multi-debt-refi",
+      "createdAt": "2026-03-01T19:32:33.412Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "0b8719d1-ec62-4764-b7d8-d18b10b86bff",
+      "profileId": "fecbb45e-a9cd-424c-9669-560fd2afe9c8",
+      "title": "Golden Replay golden-risk-negative-cashflow",
+      "createdAt": "2026-03-01T19:32:33.227Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 6,
+      "criticalCount": 0
+    },
+    {
+      "id": "58092a99-9fad-4d36-bd76-1452d7817d46",
+      "profileId": "9e41fa48-97ad-40eb-9fb1-db57393afe7f",
+      "title": "Golden Replay golden-caution-tight-cashflow",
+      "createdAt": "2026-03-01T19:32:33.001Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "b244e8bf-62d0-4777-a9a0-96536b943bba",
+      "profileId": "c3e6ac65-3a6c-4419-ae76-da8fee31d9d0",
+      "title": "Golden Replay golden-good-basic",
+      "createdAt": "2026-03-01T19:32:32.128Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "a0ff5eff-71f3-42c3-b220-b88033b6b774",
+      "profileId": "9218b7a8-7025-43c7-80c2-2dbbf16dd1fc",
+      "title": "Golden Replay golden-risk-goals-pressure",
+      "createdAt": "2026-03-01T19:31:54.832Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 1,
+      "criticalCount": 0
+    },
+    {
+      "id": "c2cd8062-5ece-4f86-97cf-6d85d8dcdc8f",
+      "profileId": "8e16e0f9-bd6c-43d9-80ee-7bd505810971",
+      "title": "Golden Replay golden-caution-multi-debt-refi",
+      "createdAt": "2026-03-01T19:31:54.661Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "5ac91ffc-d889-4b54-b4b3-ad3c370d7af1",
+      "profileId": "494c3f70-df94-4813-b984-821d02c6cadb",
+      "title": "Golden Replay golden-risk-negative-cashflow",
+      "createdAt": "2026-03-01T19:31:54.476Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 6,
+      "criticalCount": 0
+    },
+    {
+      "id": "2cfb92bf-b39e-4b55-8c64-11c8327f29f4",
+      "profileId": "d348611b-0282-4eb1-be12-964b10f3cb65",
+      "title": "Golden Replay golden-caution-tight-cashflow",
+      "createdAt": "2026-03-01T19:31:54.268Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "1084f156-e3e7-4886-8d96-9ecf6caa5272",
+      "profileId": "24a4b0e7-45a8-49da-acfc-14e7a4cd97d3",
+      "title": "Golden Replay golden-good-basic",
+      "createdAt": "2026-03-01T19:31:53.419Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "1403d716-d725-4d0e-8bd7-870589aeebea",
+      "profileId": "c2cd957d-4bf2-4c91-b0f9-55b79684f8fb",
+      "title": "Golden Replay golden-risk-goals-pressure",
+      "createdAt": "2026-03-01T19:30:50.774Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 1,
+      "criticalCount": 0
+    },
+    {
+      "id": "bf34c6c3-f038-4c6a-b793-7af7e27aabc5",
+      "profileId": "2a330957-0d86-4ff5-b874-66146abba667",
+      "title": "Golden Replay golden-caution-multi-debt-refi",
+      "createdAt": "2026-03-01T19:30:50.622Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "5d5f68f6-d32d-411b-9b0b-3c793f5594bf",
+      "profileId": "3095fa31-25eb-4ca3-b1c3-1e72ebe6f641",
+      "title": "Golden Replay golden-risk-negative-cashflow",
+      "createdAt": "2026-03-01T19:30:50.443Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 6,
+      "criticalCount": 0
+    },
+    {
+      "id": "e9c6b7d6-ee5f-4426-95e4-dd54180690b1",
+      "profileId": "b6f885b6-b902-49e5-8c5b-e7023703ff33",
+      "title": "Golden Replay golden-caution-tight-cashflow",
+      "createdAt": "2026-03-01T19:30:50.236Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "d4897ad0-0c60-47f0-86b8-cf90e9faed23",
+      "profileId": "05c6fd43-6b34-44a2-9f95-6ac865309335",
+      "title": "Golden Replay golden-good-basic",
+      "createdAt": "2026-03-01T19:30:49.375Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "cad36fad-6d87-4ebf-9aa5-5c7f4bfb268f",
+      "profileId": "1d9149c0-2364-4fe5-9267-0e23bf06de6c",
+      "title": "Golden Replay golden-risk-goals-pressure",
+      "createdAt": "2026-03-01T19:29:44.943Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 1,
+      "criticalCount": 0
+    },
+    {
+      "id": "8c5d7570-4152-4b7a-abe1-000141bc4be8",
+      "profileId": "68db6792-e3d5-4d1d-af09-adc4dca04f55",
+      "title": "Golden Replay golden-caution-multi-debt-refi",
+      "createdAt": "2026-03-01T19:29:44.783Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "5d0248a8-c111-4d40-bc60-c4b22e23e3ea",
+      "profileId": "ab246e1c-7dde-4f30-9405-6156395db6db",
+      "title": "Golden Replay golden-risk-negative-cashflow",
+      "createdAt": "2026-03-01T19:29:44.617Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 6,
+      "criticalCount": 0
+    },
+    {
+      "id": "25270116-7595-4bbd-8fce-a8ecc17e7fef",
+      "profileId": "76a59402-f4e9-416c-b63b-938d59bb2918",
+      "title": "Golden Replay golden-caution-tight-cashflow",
+      "createdAt": "2026-03-01T19:29:44.408Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "b2a7cfec-d3eb-4b6d-8d01-9974f312c7c6",
+      "profileId": "b26c6911-0c79-46e9-995f-a0891e00479b",
+      "title": "Golden Replay golden-good-basic",
+      "createdAt": "2026-03-01T19:29:43.509Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    }
+  ]
+}

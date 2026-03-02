@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "meta": {
+    "generatedAt": "2026-03-01T00:00:00.000Z",
+    "snapshot": {
+      "id": "snapshot-risk-2026-02",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-02-28T01:20:00.000Z",
+      "missing": false
+    },
+    "health": {
+      "warningsCodes": ["NEGATIVE_CASHFLOW", "INSOLVENT"],
+      "criticalCount": 1,
+      "snapshotStaleDays": 20
+    },
+    "policyId": "balanced"
+  },
+  "summary": {
+    "endNetWorthKrw": 98000000,
+    "worstCashKrw": -2200000,
+    "worstCashMonthIndex": 10,
+    "goalsAchieved": { "achieved": 0, "total": 2 },
+    "dsrPct": 62,
+    "criticalWarnings": 1,
+    "totalWarnings": 4
+  },
+  "warnings": {
+    "aggregated": [
+      {
+        "code": "NEGATIVE_CASHFLOW",
+        "severity": "critical",
+        "count": 3,
+        "firstMonth": 8,
+        "lastMonth": 16,
+        "sampleMessage": "현금 흐름이 음수입니다."
+      },
+      {
+        "code": "GOAL_MISSED",
+        "severity": "warn",
+        "count": 1,
+        "firstMonth": 120,
+        "lastMonth": 120,
+        "sampleMessage": "목표 달성이 어렵습니다."
+      }
+    ],
+    "top": [
+      { "code": "NEGATIVE_CASHFLOW", "severity": "critical", "message": "현금 부족" }
+    ]
+  },
+  "goals": [
+    {
+      "id": "goal-emergency",
+      "title": "비상금 6개월",
+      "type": "emergencyFund",
+      "targetKrw": 18000000,
+      "currentKrw": 4000000,
+      "shortfallKrw": 14000000,
+      "targetMonth": 18,
+      "achieved": false,
+      "comment": "현금 고갈 구간 존재"
+    },
+    {
+      "id": "goal-retire",
+      "title": "은퇴 준비",
+      "type": "retirement",
+      "targetKrw": 300000000,
+      "currentKrw": 120000000,
+      "shortfallKrw": 180000000,
+      "targetMonth": 360,
+      "achieved": false,
+      "comment": "목표치 크게 부족"
+    }
+  ],
+  "timeline": {
+    "points": [
+      { "label": "start", "monthIndex": 0, "incomeKrw": 4200000, "expensesKrw": 3900000, "cashKrw": 3000000, "netWorthKrw": 130000000 },
+      { "label": "mid", "monthIndex": 60, "incomeKrw": 4300000, "expensesKrw": 4200000, "cashKrw": -900000, "netWorthKrw": 112000000 },
+      { "label": "end", "monthIndex": 120, "incomeKrw": 4400000, "expensesKrw": 4300000, "cashKrw": -1500000, "netWorthKrw": 98000000 }
+    ]
+  },
+  "actions": {
+    "items": [
+      {
+        "code": "FIX_NEGATIVE_CASHFLOW",
+        "severity": "critical",
+        "title": "현금흐름 적자 해소",
+        "summary": "고정지출 축소 및 상환계획 재조정",
+        "why": [{ "code": "NEGATIVE_CASHFLOW", "message": "최저 현금이 음수" }],
+        "metrics": { "cashGapKrw": 2200000 },
+        "steps": ["필수지출 구조 재점검", "추가상환 중단 후 비상금 복구", "3개월 단위 재실행"],
+        "cautions": ["비상금 확보 전 투자확대 금지"]
+      }
+    ],
+    "top3": [
+      {
+        "code": "FIX_NEGATIVE_CASHFLOW",
+        "severity": "critical",
+        "title": "현금흐름 적자 해소",
+        "summary": "고정지출 축소 및 상환계획 재조정",
+        "why": [{ "code": "NEGATIVE_CASHFLOW", "message": "최저 현금이 음수" }],
+        "metrics": { "cashGapKrw": 2200000 },
+        "steps": ["필수지출 구조 재점검", "추가상환 중단 후 비상금 복구", "3개월 단위 재실행"],
+        "cautions": ["비상금 확보 전 투자확대 금지"]
+      }
+    ],
+    "top": [
+      {
+        "code": "FIX_NEGATIVE_CASHFLOW",
+        "severity": "critical",
+        "title": "현금흐름 적자 해소",
+        "summary": "고정지출 축소 및 상환계획 재조정",
+        "why": [{ "code": "NEGATIVE_CASHFLOW", "message": "최저 현금이 음수" }],
+        "metrics": { "cashGapKrw": 2200000 },
+        "steps": ["필수지출 구조 재점검", "추가상환 중단 후 비상금 복구", "3개월 단위 재실행"],
+        "cautions": ["비상금 확보 전 투자확대 금지"]
+      }
+    ]
+  },
+  "raw": {
+    "simulate": {
+      "assumptionsUsed": {
+        "inflationPct": 2.2,
+        "expectedReturnPct": 4,
+        "cashReturnPct": 1.8,
+        "withdrawalRatePct": 4
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "updatedAt": "2026-03-01T19:32:33.839Z",
+  "migrations": {
+    "storage-schema-v2": {
+      "status": "failed",
+      "attempts": 8,
+      "lastAttemptAt": "2026-03-01T19:32:33.838Z",
+      "lastMessage": "스토리지 마이그레이션 검사 실패 (1건)",
+      "lastError": {
+        "code": "MIGRATION_FAILED",
+        "message": "스토리지 마이그레이션 검사 실패 (1건)",
+        "fixHref": "/ops/doctor"
+      }
+    },
+    "vault-config-v2": {
+      "status": "applied",
+      "attempts": 8,
+      "lastAttemptAt": "2026-03-01T19:32:33.838Z",
+      "lastMessage": "Vault 설정 버전이 최신입니다.",
+      "appliedAt": "2026-03-01T19:29:43.353Z"
+    }
+  },
+  "lastAttempt": {
+    "at": "2026-03-01T19:32:33.838Z",
+    "trigger": "startup",
+    "result": "failed"
+  }
+}

@@ -5,9 +5,10 @@ import {
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
-import { loadAssumptionsSnapshotById } from "../../../../../../../lib/planning/assumptions/storage";
+} from "@/lib/dev/devGuards";
+import { onlyDev } from "@/lib/dev/onlyDev";
+import { opsErrorResponse } from "@/lib/ops/errorContract";
+import { loadAssumptionsSnapshotById } from "@/lib/planning/assumptions/storage";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -31,23 +32,37 @@ export async function GET(
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
-      return NextResponse.json({ ok: false, message: "요청 검증 중 오류가 발생했습니다." }, { status: 500 });
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: "요청 검증 중 오류가 발생했습니다.",
+        status: 500,
+      });
     }
-    return NextResponse.json({ ok: false, message: guard.message }, { status: guard.status });
+    return opsErrorResponse({
+      code: guard.code,
+      message: guard.message,
+      status: guard.status,
+    });
   }
 
   const params = await context.params;
   const id = asString(params.id);
   if (!id) {
-    return NextResponse.json({ ok: false, message: "snapshot id가 필요합니다." }, { status: 400 });
+    return opsErrorResponse({
+      code: "VALIDATION",
+      message: "snapshot id가 필요합니다.",
+      status: 400,
+      fixHref: "/ops/assumptions",
+    });
   }
 
   try {
     const snapshot = await loadAssumptionsSnapshotById(id);
     if (!snapshot) {
-      return NextResponse.json({
-        ok: false,
+      return opsErrorResponse({
+        code: "STALE_ASSUMPTIONS",
         message: "요청한 스냅샷을 찾을 수 없습니다.",
+        status: 404,
       });
     }
 
@@ -57,12 +72,10 @@ export async function GET(
       snapshot,
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        message: error instanceof Error ? error.message : "스냅샷 상세 조회에 실패했습니다.",
-      },
-      { status: 500 },
-    );
+    return opsErrorResponse({
+      code: "STORAGE_CORRUPT",
+      message: error instanceof Error ? error.message : "스냅샷 상세 조회에 실패했습니다.",
+      status: 500,
+    });
   }
 }

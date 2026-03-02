@@ -34,7 +34,7 @@ export function HomeHero() {
           
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
             복잡한 금융 정보를 한눈에 파악하고 실질적인 액션을 취하세요. 
-            개인화된 재무설계와 근거 기반의 상품 추천을 제공합니다.
+            개인화된 플래닝과 근거 기반의 상품 추천을 제공합니다.
           </p>
           
           <div className="mt-10 flex flex-wrap gap-4">
@@ -43,9 +43,9 @@ export function HomeHero() {
                 대시보드 시작하기
               </Button>
             </Link>
-            <Link href="/planner">
+            <Link href="/planning">
               <Button size="lg" variant="outline" className="h-14 border-white/20 bg-white/5 rounded-full px-10 text-base text-white backdrop-blur-sm hover:bg-white/10">
-                재무설계 계획
+                플래닝 시작
               </Button>
             </Link>
           </div>

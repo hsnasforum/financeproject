@@ -1,7 +1,7 @@
 export type RedactionIssueCode =
   | "INTERNAL_PATH"
   | "GITHUB_TOKEN"
-  | "ECOS_API_KEY"
+  | "BOK_ECOS_API_KEY"
   | "BEARER"
   | "FINLIFE_KEY";
 
@@ -13,7 +13,7 @@ export type RedactionIssue = {
 const LEAK_PATTERNS: Array<{ code: RedactionIssueCode; regex: RegExp; pattern: string }> = [
   { code: "INTERNAL_PATH", regex: /\.data\//i, pattern: ".data/" },
   { code: "GITHUB_TOKEN", regex: /GITHUB_TOKEN/i, pattern: "GITHUB_TOKEN" },
-  { code: "ECOS_API_KEY", regex: /ECOS_API_KEY/i, pattern: "ECOS_API_KEY" },
+  { code: "BOK_ECOS_API_KEY", regex: /BOK_ECOS_API_KEY|ECOS_API_KEY/i, pattern: "BOK_ECOS_API_KEY" },
   { code: "BEARER", regex: /Bearer\s+/i, pattern: "Bearer " },
   { code: "FINLIFE_KEY", regex: /FINLIFE_[A-Z0-9_]*(KEY|TOKEN)/i, pattern: "FINLIFE_*KEY|TOKEN" },
 ];

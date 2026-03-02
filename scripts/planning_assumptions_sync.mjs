@@ -16,7 +16,7 @@ async function main() {
     `snapshotId=${snapshotId}`,
     `asOf=${snapshot.asOf}`,
     `fetchedAt=${snapshot.fetchedAt}`,
-    `ecosConfigured=${Boolean((process.env.ECOS_API_KEY ?? process.env.BOK_ECOS_API_KEY ?? "").trim())}`,
+    `ecosConfigured=${Boolean((process.env.BOK_ECOS_API_KEY ?? process.env.ECOS_API_KEY ?? "").trim())}`,
     `ecosUsed=${ecosUsed}`,
     `policyRatePct=${fmt(snapshot.korea.policyRatePct)}`,
     `callOvernightPct=${fmt(snapshot.korea.callOvernightPct)}`,

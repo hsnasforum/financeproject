@@ -68,7 +68,7 @@ function toLiabilitiesFromProfile(profile, fallbackMonths = 120) {
     name: debt.name,
     type: debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing",
     principalKrw: Math.max(0, Number(debt.balance) || 0),
-    aprPct: normalizeAprPct(debt.apr ?? 0),
+    aprPct: normalizeAprPct(debt.aprPct ?? debt.apr ?? 0),
     remainingMonths: Math.max(1, Math.trunc(Number(debt.remainingMonths) || fallbackMonths)),
     minimumPaymentKrw: Math.max(0, Number(debt.minimumPayment) || 0),
   }));

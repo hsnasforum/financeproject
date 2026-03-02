@@ -32,15 +32,15 @@ export default async function OpsPlanningEvalPage() {
   return (
     <PageShell>
       <PageHeader
-        title="Planning Regression Eval"
+        title="재무설계 회귀 평가"
         description="planning:v2:regress 최신 실행 리포트를 확인합니다."
         action={(
           <div className="flex items-center gap-2">
             <Link href="/ops">
-              <Button size="sm" variant="outline" type="button">Ops Hub</Button>
+              <Button size="sm" variant="outline" type="button">Ops 허브</Button>
             </Link>
             <Link href="/settings/backup">
-              <Button size="sm" variant="outline" type="button">Backup</Button>
+              <Button size="sm" variant="outline" type="button">백업</Button>
             </Link>
           </div>
         )}
@@ -54,15 +54,15 @@ export default async function OpsPlanningEvalPage() {
         <>
           <Card className="mb-6">
             <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2 lg:grid-cols-4">
-              <div>generatedAt: <span className="font-semibold">{formatDateTime(report.generatedAt)}</span></div>
-              <div>mode: <span className="font-semibold">{report.mode ?? "-"}</span></div>
-              <div>pass/fail: <span className="font-semibold">{report.summary?.pass ?? 0} / {report.summary?.fail ?? 0}</span></div>
-              <div>total: <span className="font-semibold">{report.summary?.total ?? 0}</span></div>
+              <div>생성 시각: <span className="font-semibold">{formatDateTime(report.generatedAt)}</span></div>
+              <div>모드: <span className="font-semibold">{report.mode ?? "-"}</span></div>
+              <div>통과/실패: <span className="font-semibold">{report.summary?.pass ?? 0} / {report.summary?.fail ?? 0}</span></div>
+              <div>총 케이스: <span className="font-semibold">{report.summary?.total ?? 0}</span></div>
             </div>
           </Card>
 
           <Card>
-            <h2 className="text-base font-bold text-slate-900">Fail Cases ({failedCases.length})</h2>
+            <h2 className="text-base font-bold text-slate-900">실패 케이스 ({failedCases.length})</h2>
             {failedCases.length === 0 ? (
               <p className="mt-2 text-sm text-slate-600">실패 케이스가 없습니다.</p>
             ) : (
@@ -74,11 +74,11 @@ export default async function OpsPlanningEvalPage() {
                       <table className="min-w-full text-left text-xs text-rose-900">
                         <thead>
                           <tr className="border-b border-rose-200">
-                            <th className="px-2 py-1">path</th>
-                            <th className="px-2 py-1">kind</th>
-                            <th className="px-2 py-1">expected</th>
-                            <th className="px-2 py-1">actual</th>
-                            <th className="px-2 py-1">delta/tolerance</th>
+                            <th className="px-2 py-1">경로</th>
+                            <th className="px-2 py-1">종류</th>
+                            <th className="px-2 py-1">기대값</th>
+                            <th className="px-2 py-1">실측값</th>
+                            <th className="px-2 py-1">차이/허용오차</th>
                           </tr>
                         </thead>
                         <tbody>

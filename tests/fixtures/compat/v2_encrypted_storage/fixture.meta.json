@@ -1,0 +1,5 @@
+{
+  "id": "v2_encrypted_storage",
+  "description": "Vault-encrypted profile/run/assumptions storage",
+  "vaultPassphrase": "compat-passphrase-1"
+}

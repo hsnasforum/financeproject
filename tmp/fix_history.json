@@ -622,5 +622,71 @@
         "errorMessage": null
       }
     ]
+  },
+  {
+    "id": "1772337240314-vu3hsjs6",
+    "createdAt": "2026-03-01T03:54:00.314Z",
+    "fixId": "DATA_DOCTOR",
+    "ok": true,
+    "tookMs": 2429,
+    "stdoutTail": "\n> finance@1.0.0 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.0 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=26\n\n> finance@1.0.0 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=10 fresh=8 stale=2 missing=0 invalid=0\n",
+    "stderrTail": "",
+    "errorCode": null,
+    "errorMessage": null
+  },
+  {
+    "id": "1772337241346-qqtjic70",
+    "createdAt": "2026-03-01T03:54:01.347Z",
+    "fixId": "DATA_DOCTOR",
+    "ok": true,
+    "tookMs": 2219,
+    "stdoutTail": "\n> finance@1.0.0 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.0 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=26\n\n> finance@1.0.0 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=10 fresh=8 stale=2 missing=0 invalid=0\n",
+    "stderrTail": "",
+    "errorCode": null,
+    "errorMessage": null
+  },
+  {
+    "id": "1772337243543-5ic77pc3",
+    "createdAt": "2026-03-01T03:54:03.543Z",
+    "fixId": "DART_WATCH",
+    "ok": true,
+    "tookMs": 3207,
+    "stdoutTail": "\n> finance@1.0.0 dart:watch /home/xpdlqj/code/finance\n> node scripts/dart_disclosure_watch.mjs\n\n[dart:watch] watchlist=/home/xpdlqj/code/finance/config/dart-watchlist.json\n[dart:watch] rules=/home/xpdlqj/code/finance/config/dart-disclosure-rules.json\n[dart:watch] profile=/home/xpdlqj/code/finance/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1797 totalNew=1297 errors=0\n[dart:watch] delta new=0 updated=5 highMid=5\n[dart:watch] alerts filtered total=2 raw=5\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json\n",
+    "stderrTail": "",
+    "errorCode": null,
+    "errorMessage": null
+  },
+  {
+    "id": "1772337258302-05onff71",
+    "createdAt": "2026-03-01T03:54:18.302Z",
+    "fixId": "DAILY_REFRESH",
+    "ok": true,
+    "tookMs": 20839,
+    "stdoutTail": "nce/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1797 totalNew=1297 errors=0\n[dart:watch] delta new=0 updated=3 highMid=3\n[dart:watch] alerts filtered total=2 raw=3\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json\n[daily:refresh] [2/4] dart:watch done\n[daily:refresh] [3/4] data:doctor start\n\n> finance@1.0.0 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.0 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=26\n\n> finance@1.0.0 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=10 fresh=8 stale=2 missing=0 invalid=0\n[daily:refresh] [3/4] data:doctor done\n[daily:refresh] [4/4] cleanup start\n\n> finance@1.0.0 cleanup /home/xpdlqj/code/finance\n> node --import tsx scripts/cleanup.mjs\n\n[cleanup] ok=Y\n[cleanup] summary removed=0 truncated=0 kept=3 skipped=1 errors=0\n[cleanup] - tmp/fix_history.json: kept\n[cleanup] - tmp/user_feedback.json: kept\n[cleanup] - tmp/daily_refresh.log: kept\n[cleanup] - tmp/backup_restore_point.json: skipped\n[cleanup] report: /home/xpdlqj/code/finance/tmp/cleanup_report.json\n[daily:refresh] [4/4] cleanup done\n[daily:refresh] summary: steps=4, failed=0, strict=N, ok=Y\n[daily:refresh] result json: tmp/daily_refresh_result.json\n[daily:refresh] log file: tmp/daily_refresh.log\n",
+    "stderrTail": "",
+    "errorCode": null,
+    "errorMessage": null
+  },
+  {
+    "id": "1772337259232-ldb92c31",
+    "createdAt": "2026-03-01T03:54:19.232Z",
+    "fixId": "DATA_DOCTOR",
+    "ok": true,
+    "tookMs": 1935,
+    "stdoutTail": "\n> finance@1.0.0 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.0 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=26\n\n> finance@1.0.0 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=10 fresh=8 stale=2 missing=0 invalid=0\n",
+    "stderrTail": "",
+    "errorCode": null,
+    "errorMessage": null
+  },
+  {
+    "id": "1772338445735-i4xqrqfa",
+    "createdAt": "2026-03-01T04:14:05.735Z",
+    "fixId": "DATA_DOCTOR",
+    "ok": true,
+    "tookMs": 1750,
+    "stdoutTail": "\n> finance@1.0.0 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.0 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=26\n\n> finance@1.0.0 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=10 fresh=8 stale=2 missing=0 invalid=0\n",
+    "stderrTail": "",
+    "errorCode": null,
+    "errorMessage": null
   }
 ]

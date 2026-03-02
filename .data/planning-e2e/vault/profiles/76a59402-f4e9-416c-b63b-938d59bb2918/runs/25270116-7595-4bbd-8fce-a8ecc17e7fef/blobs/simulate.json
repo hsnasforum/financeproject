@@ -1,0 +1,143 @@
+{
+  "summary": {
+    "startNetWorthKrw": 4034082.09,
+    "endNetWorthKrw": 132330466.61,
+    "netWorthDeltaKrw": 128296384.52,
+    "worstCashMonthIndex": 0,
+    "worstCashKrw": 0,
+    "goalsAchievedCount": 2,
+    "goalsMissedCount": 1,
+    "warningsCount": 0
+  },
+  "warnings": [],
+  "goalsStatus": [
+    {
+      "goalId": "goal-emergency",
+      "name": "Emergency Fund",
+      "targetAmount": 12000000,
+      "currentAmount": 12000000,
+      "progressPct": 100,
+      "achieved": true,
+      "achievedMonth": 27,
+      "targetMonth": 12,
+      "onTrack": true,
+      "shortfall": 0
+    },
+    {
+      "goalId": "goal-home",
+      "name": "Home Move",
+      "targetAmount": 45000000,
+      "currentAmount": 45000000,
+      "progressPct": 100,
+      "achieved": true,
+      "achievedMonth": 59,
+      "targetMonth": 60,
+      "onTrack": true,
+      "shortfall": 0
+    },
+    {
+      "goalId": "goal-retire",
+      "name": "Retirement",
+      "targetAmount": 360000000,
+      "currentAmount": 62625088.52,
+      "progressPct": 17.4,
+      "achieved": false,
+      "achievedMonth": null,
+      "targetMonth": 300,
+      "onTrack": false,
+      "shortfall": 297374911.48
+    }
+  ],
+  "keyTimelinePoints": [
+    {
+      "monthIndex": 0,
+      "row": {
+        "month": 1,
+        "income": 4700000,
+        "pensionIncome": 0,
+        "expenses": 3300000,
+        "operatingCashflow": 480000,
+        "debtPayment": 5900000,
+        "debtInterest": 197696.08,
+        "debtPrincipalPaid": 5702303.92,
+        "contributionToInvest": 0,
+        "contributionToPension": 0,
+        "goalContribution": 0,
+        "investmentReturn": 31778.17,
+        "liquidAssets": 0,
+        "investmentAssets": 7831778.17,
+        "pensionAssets": 0,
+        "goalFundAssets": 21300000,
+        "totalDebt": 25097696.08,
+        "netWorth": 4034082.09,
+        "netWorthDelta": 1234082.09,
+        "debtServiceRatio": 0.2,
+        "goalProgress": {
+          "goal-emergency": 37.5,
+          "goal-home": 20,
+          "goal-retire": 2.17
+        }
+      }
+    },
+    {
+      "monthIndex": 12,
+      "row": {
+        "month": 13,
+        "income": 4700000,
+        "pensionIncome": 0,
+        "expenses": 3366000,
+        "operatingCashflow": 414000,
+        "debtPayment": 1334000,
+        "debtInterest": 67685.98,
+        "debtPrincipalPaid": 1266314.02,
+        "contributionToInvest": 0,
+        "contributionToPension": 0,
+        "goalContribution": 0,
+        "investmentReturn": 33367.07,
+        "liquidAssets": 0,
+        "investmentAssets": 8223367.07,
+        "pensionAssets": 0,
+        "goalFundAssets": 21300000,
+        "totalDebt": 10083611.93,
+        "netWorth": 19439755.14,
+        "netWorthDelta": 1299681.1,
+        "debtServiceRatio": 0.2,
+        "goalProgress": {
+          "goal-emergency": 37.5,
+          "goal-home": 20,
+          "goal-retire": 2.17
+        }
+      }
+    },
+    {
+      "monthIndex": 24,
+      "row": {
+        "month": 25,
+        "income": 4700000,
+        "pensionIncome": 0,
+        "expenses": 3433320,
+        "operatingCashflow": 1266680,
+        "debtPayment": 0,
+        "debtInterest": 0,
+        "debtPrincipalPaid": 0,
+        "contributionToInvest": 0,
+        "contributionToPension": 0,
+        "goalContribution": 1266082.19,
+        "investmentReturn": 35035.43,
+        "liquidAssets": 31879.81,
+        "investmentAssets": 8634535.43,
+        "pensionAssets": 0,
+        "goalFundAssets": 26506739.24,
+        "totalDebt": 0,
+        "netWorth": 35173154.47,
+        "netWorthDelta": 1301715.43,
+        "debtServiceRatio": 0,
+        "goalProgress": {
+          "goal-emergency": 80.86,
+          "goal-home": 20.01,
+          "goal-retire": 2.17
+        }
+      }
+    }
+  ]
+}

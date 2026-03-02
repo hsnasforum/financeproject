@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+const SELF_TEST_DOC_PATH = "docs/planning-v2-5min-selftest.md";
+
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -128,6 +130,12 @@ async function main() {
     "",
     renderSection("실행 커맨드", commandBullets),
     "",
+    renderSection("완성 확인 (3단계)", [
+      "pnpm planning:v2:complete",
+      "서버 실행 후 pnpm planning:v2:acceptance",
+      `5분 셀프 테스트 체크 완료: ${SELF_TEST_DOC_PATH}`,
+    ]),
+    "",
     renderSection("Known Limitations", knownLimitations),
   ].join("\n");
 
@@ -140,4 +148,3 @@ main().catch((error) => {
   console.error(`[planning:v2:release:notes] FAIL\n${message}`);
   process.exit(1);
 });
-

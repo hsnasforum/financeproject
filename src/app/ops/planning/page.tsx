@@ -127,16 +127,16 @@ export default async function OpsPlanningPage() {
   const failedCases = (report?.cases ?? []).filter((row) => row.status === "FAIL").slice(0, 5);
 
   const assumptionsMetrics = snapshot ? [
-    { label: "Policy Rate", value: snapshot.korea.policyRatePct },
-    { label: "Base Rate", value: snapshot.korea.baseRatePct },
-    { label: "CPI YoY", value: snapshot.korea.cpiYoYPct },
-    { label: "Core CPI YoY", value: snapshot.korea.coreCpiYoYPct },
-    { label: "New Deposit Avg", value: snapshot.korea.newDepositAvgPct },
-    { label: "New Loan Avg", value: snapshot.korea.newLoanAvgPct },
-    { label: "CD 91D", value: snapshot.korea.cd91Pct },
-    { label: "KORIBOR 3M", value: snapshot.korea.koribor3mPct },
-    { label: "Call Overnight", value: snapshot.korea.callOvernightPct },
-    { label: "MSB 364D", value: snapshot.korea.msb364Pct },
+    { label: "기준금리", value: snapshot.korea.policyRatePct },
+    { label: "기준금리(Base Rate)", value: snapshot.korea.baseRatePct },
+    { label: "CPI 전년동월비", value: snapshot.korea.cpiYoYPct },
+    { label: "근원 CPI 전년동월비", value: snapshot.korea.coreCpiYoYPct },
+    { label: "신규 예금 평균", value: snapshot.korea.newDepositAvgPct },
+    { label: "신규 대출 평균", value: snapshot.korea.newLoanAvgPct },
+    { label: "CD 91일", value: snapshot.korea.cd91Pct },
+    { label: "KORIBOR 3개월", value: snapshot.korea.koribor3mPct },
+    { label: "콜금리 익일물", value: snapshot.korea.callOvernightPct },
+    { label: "통안증권 364일", value: snapshot.korea.msb364Pct },
   ].filter((row) => typeof row.value === "number" && Number.isFinite(row.value)).map((row) => ({
     label: row.label,
     value: row.value as number,

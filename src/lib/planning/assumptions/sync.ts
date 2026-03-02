@@ -1,6 +1,12 @@
 import { fetchKoreaAssumptions } from "./fetchers/korea.ts";
 import { saveAssumptionsSnapshotToHistory, saveLatestAssumptionsSnapshot } from "./storage.ts";
+import {
+  appendStorageTransactionStep,
+  beginStorageTransaction,
+  endStorageTransaction,
+} from "../storage/journal";
 import { type AssumptionsSnapshot } from "./types.ts";
+import { ASSUMPTIONS_SCHEMA_VERSION } from "../v2/schemaVersion";
 
 function assertServerOnly(): void {
   if (typeof window !== "undefined") {
@@ -53,17 +59,34 @@ export async function buildAssumptionsSnapshot(): Promise<BuildAssumptionsSnapsh
 
   const snapshot: AssumptionsSnapshot = {
     version: 1,
+    schemaVersion: ASSUMPTIONS_SCHEMA_VERSION,
     asOf,
     fetchedAt,
     korea: korea.partial,
     sources: korea.sources,
     warnings: korea.warnings,
   };
-  const { id: snapshotId } = await saveAssumptionsSnapshotToHistory(snapshot);
-  await saveLatestAssumptionsSnapshot(snapshot);
+  const tx = await beginStorageTransaction("SNAPSHOT_WRITE", {
+    asOf: snapshot.asOf,
+    fetchedAt: snapshot.fetchedAt,
+  });
+  try {
+    const { id: snapshotId } = await saveAssumptionsSnapshotToHistory(snapshot);
+    await appendStorageTransactionStep(tx, "WRITE_HISTORY", { snapshotId });
+    await saveLatestAssumptionsSnapshot(snapshot);
+    await appendStorageTransactionStep(tx, "WRITE_LATEST", { snapshotId });
+    await endStorageTransaction(tx, "COMMIT");
+    return {
+      snapshot,
+      snapshotId,
+    };
+  } catch (error) {
+    await endStorageTransaction(
+      tx,
+      "ROLLBACK",
+      error instanceof Error ? error.message : "snapshot write failed",
+    ).catch(() => undefined);
+    throw error;
+  }
 
-  return {
-    snapshot,
-    snapshotId,
-  };
 }

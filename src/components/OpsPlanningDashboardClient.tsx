@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { copyToClipboard } from "@/lib/browser/clipboard";
+import { resolveClientApiError } from "@/lib/http/clientApiError";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -64,14 +65,16 @@ type OpsPlanningDashboardClientProps = {
   };
 };
 
-type SyncPayload = {
+type RefreshPayload = {
   ok?: boolean;
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
 };
 
 type PurgePayload = {
   ok?: boolean;
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
   data?: {
     purged?: number;
   };
@@ -80,6 +83,7 @@ type PurgePayload = {
 type DoctorPayload = {
   ok?: boolean;
   message?: string;
+  error?: { code?: string; message?: string; fixHref?: string };
   data?: OpsPlanningDashboardClientProps["doctor"];
 };
 
@@ -109,15 +113,15 @@ function formatMetric(value: number): string {
 
 function staleTag(days: number | undefined): { label: string; className: string } {
   if (typeof days !== "number" || !Number.isFinite(days)) {
-    return { label: "staleDays: -", className: "text-slate-500" };
+    return { label: "신선도 경과일: -", className: "text-slate-500" };
   }
   if (days > 120) {
-    return { label: `staleDays: ${days} (critical)`, className: "text-rose-700 font-semibold" };
+    return { label: `신선도 경과일: ${days}일 (치명)`, className: "text-rose-700 font-semibold" };
   }
   if (days > 45) {
-    return { label: `staleDays: ${days} (warn)`, className: "text-amber-700 font-semibold" };
+    return { label: `신선도 경과일: ${days}일 (경고)`, className: "text-amber-700 font-semibold" };
   }
-  return { label: `staleDays: ${days}`, className: "text-emerald-700 font-semibold" };
+  return { label: `신선도 경과일: ${days}일`, className: "text-emerald-700 font-semibold" };
 }
 
 export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProps) {
@@ -129,7 +133,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
   const hasCsrf = props.csrf.trim().length > 0;
   const stale = staleTag(props.assumptions.staleDays);
 
-  async function syncSnapshotNow(): Promise<void> {
+  async function refreshSnapshotNow(): Promise<void> {
     if (!hasCsrf) {
       window.alert("Dev unlock/CSRF가 없어 동기화할 수 없습니다.");
       return;
@@ -137,14 +141,15 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
     setSyncing(true);
     try {
-      const response = await fetch("/api/ops/assumptions/sync", {
+      const response = await fetch("/api/ops/assumptions/refresh", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ csrf: props.csrf }),
       });
-      const payload = (await response.json().catch(() => null)) as SyncPayload | null;
+      const payload = (await response.json().catch(() => null)) as RefreshPayload | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.message ?? "스냅샷 동기화에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "스냅샷 동기화에 실패했습니다.");
+        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
       }
       window.alert(payload.message ?? "스냅샷 동기화를 완료했습니다.");
       window.location.reload();
@@ -170,7 +175,8 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
       });
       const payload = (await response.json().catch(() => null)) as PurgePayload | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.message ?? "만료 캐시 정리에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "만료 캐시 정리에 실패했습니다.");
+        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
       }
       window.alert(payload.message ?? `만료 캐시 ${payload?.data?.purged ?? 0}건을 정리했습니다.`);
       window.location.reload();
@@ -205,7 +211,8 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
       });
       const payload = (await response.json().catch(() => null)) as DoctorPayload | null;
       if (!response.ok || !payload?.ok || !payload.data) {
-        throw new Error(payload?.message ?? "planning doctor 실행에 실패했습니다.");
+        const apiError = resolveClientApiError(payload, "planning doctor 실행에 실패했습니다.");
+        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
       }
       setDoctorReport(payload.data);
       window.alert(payload.message ?? "planning doctor 실행을 완료했습니다.");
@@ -219,18 +226,18 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
   return (
     <PageShell>
       <PageHeader
-        title="Ops Planning"
-        description="Planning 운영 상태를 한 화면에서 점검하고 동기화/정리 액션을 실행합니다. (Dev only)"
+        title="Ops 플래닝 운영"
+        description="플래닝 운영 상태를 한 화면에서 점검하고 동기화/정리 액션을 실행합니다. (Dev only)"
         action={(
           <div className="flex items-center gap-2">
             <Link href="/ops/planning-cleanup">
-              <Button type="button" variant="outline" size="sm">Planning Cleanup</Button>
+              <Button type="button" variant="outline" size="sm">플래닝 정리</Button>
             </Link>
             <Link href="/ops">
-              <Button type="button" variant="outline" size="sm">Ops Hub</Button>
+              <Button type="button" variant="outline" size="sm">Ops 허브</Button>
             </Link>
             <Link href="/planning">
-              <Button type="button" variant="outline" size="sm">Planning User</Button>
+              <Button type="button" variant="outline" size="sm">사용자 화면</Button>
             </Link>
           </div>
         )}
@@ -239,13 +246,13 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">Assumptions Snapshot Status</h2>
+            <h2 className="text-base font-black text-slate-900">가정 스냅샷 상태</h2>
             <div className="flex items-center gap-2">
               <Link href="/ops/assumptions">
-                <Button type="button" variant="outline" size="sm">Go to /ops/assumptions</Button>
+                <Button type="button" variant="outline" size="sm">/ops/assumptions 이동</Button>
               </Link>
-              <Button type="button" size="sm" onClick={() => void syncSnapshotNow()} disabled={syncing || !hasCsrf}>
-                {syncing ? "Syncing..." : "Sync snapshot now"}
+              <Button type="button" size="sm" onClick={() => void refreshSnapshotNow()} disabled={syncing || !hasCsrf}>
+                {syncing ? "새로고침 중..." : "스냅샷 새로고침"}
               </Button>
             </div>
           </div>
@@ -253,13 +260,13 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
           {!hasCsrf ? <p className="mt-2 text-xs font-semibold text-amber-700">Dev unlock/CSRF가 없어 동기화 버튼이 비활성화됩니다.</p> : null}
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">snapshotId: <span className="font-semibold">{props.assumptions.snapshotId ?? "-"}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">missing: <span className="font-semibold">{props.assumptions.missing ? "true" : "false"}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">스냅샷 ID: <span className="font-semibold">{props.assumptions.snapshotId ?? "-"}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">누락 여부: <span className="font-semibold">{props.assumptions.missing ? "true" : "false"}</span></div>
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">asOf: <span className="font-semibold">{props.assumptions.asOf ?? "-"}</span></div>
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">fetchedAt: <span className="font-semibold">{formatDateTime(props.assumptions.fetchedAt)}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">warnings: <span className="font-semibold">{props.assumptions.warningsCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">sources: <span className="font-semibold">{props.assumptions.sourcesCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">history count: <span className="font-semibold">{props.assumptions.historyCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">경고 수: <span className="font-semibold">{props.assumptions.warningsCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">소스 수: <span className="font-semibold">{props.assumptions.sourcesCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히스토리 개수: <span className="font-semibold">{props.assumptions.historyCount}</span></div>
             <div className={`rounded-md border border-slate-200 bg-slate-50 px-3 py-2 ${stale.className}`}>{stale.label}</div>
           </div>
 
@@ -274,26 +281,26 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">Regression Status</h2>
+            <h2 className="text-base font-black text-slate-900">회귀 상태</h2>
             <div className="flex items-center gap-2">
               <Link href="/ops/planning-eval">
-                <Button type="button" variant="outline" size="sm">Open /ops/planning-eval</Button>
+                <Button type="button" variant="outline" size="sm">/ops/planning-eval 이동</Button>
               </Link>
               <Button type="button" variant="outline" size="sm" onClick={() => void copyRegressionCommand()}>
-                Copy CLI command
+                CLI 명령 복사
               </Button>
             </div>
           </div>
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">lastRunAt: <span className="font-semibold">{formatDateTime(props.regression.generatedAt)}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">totalCases: <span className="font-semibold">{props.regression.totalCases}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">passCount: <span className="font-semibold">{props.regression.passCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">failCount: <span className="font-semibold">{props.regression.failCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">마지막 실행: <span className="font-semibold">{formatDateTime(props.regression.generatedAt)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 케이스: <span className="font-semibold">{props.regression.totalCases}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">통과: <span className="font-semibold">{props.regression.passCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">실패: <span className="font-semibold">{props.regression.failCount}</span></div>
           </div>
 
           <div className="mt-4">
-            <h3 className="text-sm font-black text-slate-900">Top Fail Cases (max 5)</h3>
+            <h3 className="text-sm font-black text-slate-900">상위 실패 케이스 (최대 5건)</h3>
             {props.regression.topFails.length === 0 ? (
               <p className="mt-2 text-xs text-slate-500">실패 케이스가 없습니다.</p>
             ) : (
@@ -311,13 +318,13 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">Cache Status</h2>
+            <h2 className="text-base font-black text-slate-900">캐시 상태</h2>
             <div className="flex items-center gap-2">
               <Link href="/ops/planning-cache">
-                <Button type="button" variant="outline" size="sm">Go to /ops/planning-cache</Button>
+                <Button type="button" variant="outline" size="sm">/ops/planning-cache 이동</Button>
               </Link>
               <Button type="button" size="sm" onClick={() => void purgeExpiredCache()} disabled={purging || !hasCsrf}>
-                {purging ? "Purging..." : "Purge expired"}
+                {purging ? "정리 중..." : "만료 캐시 정리"}
               </Button>
             </div>
           </div>
@@ -325,18 +332,18 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
           {!hasCsrf ? <p className="mt-2 text-xs font-semibold text-amber-700">Dev unlock/CSRF가 없어 purge 버튼이 비활성화됩니다.</p> : null}
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">entries.total: <span className="font-semibold">{props.cache.totalEntries}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">lookups.total: <span className="font-semibold">{props.cache.totalLookups}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">hitRate: <span className="font-semibold">{formatPercent(props.cache.hitRate)}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">updatedAt: <span className="font-semibold">{formatDateTime(props.cache.updatedAt)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 엔트리: <span className="font-semibold">{props.cache.totalEntries}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 조회: <span className="font-semibold">{props.cache.totalLookups}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히트율: <span className="font-semibold">{formatPercent(props.cache.hitRate)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">갱신 시각: <span className="font-semibold">{formatDateTime(props.cache.updatedAt)}</span></div>
           </div>
 
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full text-left text-xs text-slate-700">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="px-2 py-2">kind</th>
-                  <th className="px-2 py-2">entries</th>
+                  <th className="px-2 py-2">종류</th>
+                  <th className="px-2 py-2">엔트리</th>
                 </tr>
               </thead>
               <tbody>
@@ -353,21 +360,21 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">Store Status</h2>
+            <h2 className="text-base font-black text-slate-900">저장소 상태</h2>
             <Link href="/planning">
-              <Button type="button" variant="outline" size="sm">Go to /planning</Button>
+              <Button type="button" variant="outline" size="sm">/planning 이동</Button>
             </Link>
           </div>
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">profiles: <span className="font-semibold">{props.store.profilesCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">runs: <span className="font-semibold">{props.store.runsCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">approx size: <span className="font-semibold">{formatBytes(props.store.approxBytes)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">프로필 수: <span className="font-semibold">{props.store.profilesCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">실행 기록 수: <span className="font-semibold">{props.store.runsCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">예상 용량: <span className="font-semibold">{formatBytes(props.store.approxBytes)}</span></div>
           </div>
 
           <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-black text-slate-900">Planning Integrity Doctor</h3>
+              <h3 className="text-sm font-black text-slate-900">플래닝 무결성 점검(Doctor)</h3>
               <div className="flex items-center gap-2">
                 <label className="inline-flex items-center gap-1 text-xs text-slate-600">
                   <input
@@ -378,7 +385,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
                   strict
                 </label>
                 <Button type="button" size="sm" onClick={() => void runPlanningDoctor()} disabled={!hasCsrf || runningDoctor}>
-                  {runningDoctor ? "Running..." : "Run Planning Doctor"}
+                  {runningDoctor ? "실행 중..." : "Doctor 실행"}
                 </Button>
               </div>
             </div>
@@ -386,17 +393,17 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
             {!hasCsrf ? <p className="mt-2 text-xs font-semibold text-amber-700">Dev unlock/CSRF가 없어 doctor 버튼이 비활성화됩니다.</p> : null}
 
             <div className="mt-3 grid gap-2 text-xs md:grid-cols-3">
-              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">ok: <span className="font-semibold">{doctorReport.ok ? "true" : "false"}</span></div>
-              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">missing: <span className="font-semibold">{doctorReport.missing.length}</span></div>
-              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">invalidJson: <span className="font-semibold">{doctorReport.invalidJson.length}</span></div>
-              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">optionalMissing: <span className="font-semibold">{doctorReport.optionalMissing.length}</span></div>
-              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">profiles: <span className="font-semibold">{doctorReport.counts.profiles}</span></div>
-              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">runs: <span className="font-semibold">{doctorReport.counts.runs}</span></div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">정상 여부: <span className="font-semibold">{doctorReport.ok ? "true" : "false"}</span></div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">누락: <span className="font-semibold">{doctorReport.missing.length}</span></div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">손상 JSON: <span className="font-semibold">{doctorReport.invalidJson.length}</span></div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">선택 누락: <span className="font-semibold">{doctorReport.optionalMissing.length}</span></div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">프로필 수: <span className="font-semibold">{doctorReport.counts.profiles}</span></div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-1">실행 기록 수: <span className="font-semibold">{doctorReport.counts.runs}</span></div>
             </div>
 
             <div className="mt-3 grid gap-3 lg:grid-cols-2">
               <div>
-                <p className="text-xs font-semibold text-slate-800">Missing</p>
+                <p className="text-xs font-semibold text-slate-800">누락 항목</p>
                 {doctorReport.missing.length > 0 ? (
                   <ul className="mt-1 space-y-1 text-[11px] text-amber-700">
                     {doctorReport.missing.slice(0, 8).map((item) => <li key={item}>- {item}</li>)}
@@ -404,7 +411,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
                 ) : <p className="mt-1 text-[11px] text-slate-500">없음</p>}
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-800">Invalid JSON</p>
+                <p className="text-xs font-semibold text-slate-800">손상 JSON</p>
                 {doctorReport.invalidJson.length > 0 ? (
                   <ul className="mt-1 space-y-1 text-[11px] text-rose-700">
                     {doctorReport.invalidJson.slice(0, 8).map((item) => <li key={item}>- {item}</li>)}

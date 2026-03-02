@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "runId": "fb673986-9e2c-4a6f-8dd7-cbf47e56eaf7",
+  "generatedAt": "2026-03-01T17:17:46.816Z",
+  "items": [
+    {
+      "actionKey": "act_716bf9d65d90040e",
+      "sourceActionId": "SET_ASSUMPTIONS_REVIEW",
+      "title": "가정값 정기 점검",
+      "description": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+      "steps": [
+        "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+        "가정 변경 전/후 시나리오 결과를 비교합니다.",
+        "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+      ],
+      "href": "/ops/assumptions"
+    }
+  ]
+}

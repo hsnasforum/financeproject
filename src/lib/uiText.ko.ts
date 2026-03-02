@@ -3,7 +3,7 @@ import { helpSections } from "@/lib/helpContent.ko";
 export const uiTextKo = {
   app: {
     title: "핀라이프 로컬 시제품",
-    description: "개인용 금융상품 비교, 추천, 재무설계를 위한 로컬 우선 서비스",
+    description: "개인용 금융상품 비교, 추천, 플래닝을 위한 로컬 우선 서비스",
     brand: "핀라이프",
   },
   nav: {
@@ -11,18 +11,18 @@ export const uiTextKo = {
     deposit: "예금",
     saving: "적금",
     recommend: "추천",
-    planner: "재무설계",
+    planner: "플래닝",
     help: "도움말",
   },
   home: {
     heading: "개인 금융 의사결정을 빠르게 정리하세요",
     subtitle:
-      "예금·적금 비교, 프로필 기반 추천, 간단 재무설계를 한 화면 흐름으로 점검할 수 있습니다.",
+      "예금·적금 비교, 프로필 기반 추천, 간단 플래닝을 한 화면 흐름으로 점검할 수 있습니다.",
     cards: [
       { href: "/products/deposit", title: "예금 상품 보기", desc: "최고금리와 기간별 옵션 확인" },
       { href: "/products/saving", title: "적금 상품 보기", desc: "적립 방식과 우대금리 비교" },
       { href: "/recommend", title: "추천 보기", desc: "점수 근거가 보이는 맞춤 추천" },
-      { href: "/planner", title: "재무설계 보기", desc: "저축률과 목표 달성 시뮬레이션" },
+      { href: "/planning", title: "플래닝 보기", desc: "저축률과 목표 달성 시뮬레이션" },
       { href: "/help", title: "도움말", desc: "사용법, 계산 가정, 데이터 모드 안내" },
     ],
   },
@@ -71,7 +71,7 @@ export const uiTextKo = {
     ],
   },
   planner: {
-    title: "5단계 재무설계(초안)",
+    title: "5단계 플래닝(초안)",
     subtitle:
       "목표 설정 → 상태 분석 → 대안 제시 → 실행 → 모니터링 순서로 자동 초안을 생성합니다. 모든 결과는 가정 기반이며 보험·세금·연금·자산배분은 단계적으로 확장됩니다.",
     stepGoal: "목표 설정",

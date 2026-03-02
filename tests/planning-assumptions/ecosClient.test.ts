@@ -3,17 +3,17 @@ import { fetchEcosKeyStatisticList } from "../../src/lib/planning/assumptions/fe
 
 describe("fetchEcosKeyStatisticList", () => {
   const originalFetch = globalThis.fetch;
-  const originalApiKey = process.env.ECOS_API_KEY;
+  const originalApiKey = process.env.BOK_ECOS_API_KEY;
 
   beforeEach(() => {
     globalThis.fetch = vi.fn() as unknown as typeof fetch;
-    process.env.ECOS_API_KEY = "test-ecos-secret-key";
+    process.env.BOK_ECOS_API_KEY = "test-ecos-secret-key";
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    if (typeof originalApiKey === "string") process.env.ECOS_API_KEY = originalApiKey;
-    else delete process.env.ECOS_API_KEY;
+    if (typeof originalApiKey === "string") process.env.BOK_ECOS_API_KEY = originalApiKey;
+    else delete process.env.BOK_ECOS_API_KEY;
   });
 
   it("returns rows from KeyStatisticList payload", async () => {

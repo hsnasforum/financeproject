@@ -27,6 +27,9 @@ export type ProfileV2Debt = {
   name: string;
   balance: number;
   minimumPayment: number;
+  // Canonical profile APR unit is percent (e.g. 4.8).
+  aprPct?: number;
+  // Legacy/internal decimal APR (e.g. 0.048). Kept for backward compatibility.
   apr?: number;
   remainingMonths?: number;
   repaymentType?: "amortizing" | "interestOnly";
@@ -111,6 +114,17 @@ export type PensionProfileV1 = {
   notes?: string;
 };
 
+export type ProfileDefaultsAppliedV2 = {
+  version: 1;
+  items: string[];
+  assumptions: {
+    emergencyMonths: number;
+    goalPriority: number;
+    missingFieldsPolicy: string;
+  };
+  appliedAt?: string;
+};
+
 export type ProfileV2 = {
   currentAge?: number;
   birthYear?: number;
@@ -124,6 +138,7 @@ export type ProfileV2 = {
   cashflow?: ProfileCashflowV2;
   tax?: TaxProfileV1;
   pensionsDetailed?: PensionProfileV1;
+  defaultsApplied?: ProfileDefaultsAppliedV2;
 };
 
 export type SimulationAssumptionsV2 = {
