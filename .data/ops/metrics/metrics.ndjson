@@ -1,6 +1,0 @@
-{"at":"2026-03-02T04:36:42.816Z","type":"RUN_STAGE","status":"SUCCESS","runId":"f64841b7","stage":"simulate","durationMs":4}
-{"at":"2026-03-02T04:36:42.817Z","type":"RUN_STAGE","status":"SUCCESS","runId":"f64841b7","stage":"scenarios","durationMs":17}
-{"at":"2026-03-02T04:36:42.817Z","type":"RUN_STAGE","status":"SKIPPED","runId":"f64841b7","stage":"montecarlo","durationMs":21,"errorCode":"OPTION_DISABLED"}
-{"at":"2026-03-02T04:36:42.817Z","type":"RUN_STAGE","status":"SUCCESS","runId":"f64841b7","stage":"actions","durationMs":1}
-{"at":"2026-03-02T04:36:42.817Z","type":"RUN_STAGE","status":"SUCCESS","runId":"f64841b7","stage":"debtstrategy","durationMs":0}
-{"at":"2026-03-02T04:36:42.817Z","type":"RUN_PIPELINE","status":"SUCCESS","runId":"f64841b7","durationMs":43}
