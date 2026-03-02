@@ -14,7 +14,7 @@ import {
   updateProfile,
 } from "../../../../../../lib/planning/server/store/profileStore";
 import { PlanningV2ValidationError } from "../../../../../../lib/planning/server/v2/types";
-import { validateProfileV2 } from "../../../../../../lib/planning/server/v2/validate";
+import { loadCanonicalProfile } from "../../../../../../lib/planning/v2/loadCanonicalProfile";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -50,8 +50,9 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
+    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request)) {
-      assertCsrf(request, body);
+      assertCsrf(request, { csrf: csrfToken });
     }
     return null;
   } catch (error) {
@@ -107,6 +108,10 @@ function appendTrashAudit(input: {
   }
 }
 
+function normalizeCanonicalProfile(input: unknown) {
+  return loadCanonicalProfile(input);
+}
+
 export async function GET(request: Request, context: RouteContext) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -145,11 +150,16 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   const name = asString(body?.name);
   const hasProfilePatch = body?.profile !== undefined;
+  let normalizationMeta: ReturnType<typeof normalizeCanonicalProfile>["normalization"] | undefined;
 
   try {
-    const patch: { name?: string; profile?: ReturnType<typeof validateProfileV2> } = {};
+    const patch: { name?: string; profile?: ReturnType<typeof normalizeCanonicalProfile>["profile"] } = {};
     if (name) patch.name = name;
-    if (hasProfilePatch) patch.profile = validateProfileV2(body?.profile);
+    if (hasProfilePatch) {
+      const canonical = normalizeCanonicalProfile(body?.profile);
+      patch.profile = canonical.profile;
+      normalizationMeta = canonical.normalization;
+    }
 
     if (!patch.name && !patch.profile) {
       appendProfileAudit({
@@ -182,7 +192,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       message: "planning profile updated",
     });
 
-    return jsonOk({ data: updated });
+    return jsonOk({
+      data: updated,
+      ...(normalizationMeta ? { meta: { normalization: normalizationMeta } } : {}),
+    });
   } catch (error) {
     if (error instanceof PlanningV2ValidationError) {
       const message = error.issues.map((issue) => `${issue.path}: ${issue.message}`).join(", ");

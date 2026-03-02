@@ -1,5 +1,11 @@
 # Planning v2 Done Definition
 
+## 완성 선언 게이트 (최종)
+아래 3가지만 만족하면 Planning v2 완성 선언 기준을 충족합니다.
+- 기술 게이트: `pnpm planning:v2:complete` PASS
+- 기술 게이트(가능 시): 서버 실행 후 `pnpm planning:v2:acceptance` PASS
+- 사용자 게이트: `docs/planning-v2-5min-selftest.md` 체크 항목 1회 완료
+
 ## 기능 Done (사용자)
 - `/planning`에서 프로필 생성/편집/삭제가 가능하다.
 - `/planning`에서 latest(또는 snapshotId) 기준으로 `simulate + scenarios`를 실행할 수 있다.
@@ -16,9 +22,10 @@
 
 ## 품질 Done (게이트)
 - `pnpm planning:v2:complete`가 통과한다.
+- 로컬 서버 기동 후 `pnpm planning:v2:acceptance`가 통과한다(가능한 환경에서).
+- `docs/planning-v2-5min-selftest.md` 체크를 1회 완료한다.
 - 구성된 경우 `pnpm planning:v2:regress`가 통과한다.
 - 로컬 서버 기동 후 `PLANNING_BASE_URL=... pnpm planning:v2:smoke:http`가 통과한다.
-- 로컬 서버 기동 후 `PLANNING_BASE_URL=... pnpm planning:v2:acceptance`가 통과한다.
 
 ## 보안/프라이버시 Done
 - planning/ops API는 local-only 정책을 준수한다.

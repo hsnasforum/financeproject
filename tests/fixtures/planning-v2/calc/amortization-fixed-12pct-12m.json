@@ -1,0 +1,37 @@
+{
+  "id": "amortization-fixed-12pct-12m-v1",
+  "formula": {
+    "monthlyPayment": "M = P*r*(1+r)^n / ((1+r)^n - 1), r = APR/12",
+    "interestPerMonth": "interest_i = opening_i * r",
+    "principalPaidPerMonth": "principal_i = payment - interest_i"
+  },
+  "input": {
+    "principalKrw": 1200000,
+    "aprPct": 12,
+    "months": 12,
+    "extraPaymentKrw": 0
+  },
+  "expected": {
+    "monthlyPaymentRaw": 106618.54641401001,
+    "payoffMonths": 12,
+    "totalInterestKrw": 79423,
+    "monthlyPaymentKrw": 106619,
+    "negativeAmortizationRisk": false,
+    "firstRow": {
+      "monthIndex": 1,
+      "openingPrincipalKrw": 1200000,
+      "interestKrw": 12000,
+      "paymentKrw": 106619,
+      "principalPaidKrw": 94619,
+      "closingPrincipalKrw": 1105381
+    },
+    "lastRow": {
+      "monthIndex": 12,
+      "openingPrincipalKrw": 105563,
+      "interestKrw": 1056,
+      "paymentKrw": 106619,
+      "principalPaidKrw": 105563,
+      "closingPrincipalKrw": 0
+    }
+  }
+}

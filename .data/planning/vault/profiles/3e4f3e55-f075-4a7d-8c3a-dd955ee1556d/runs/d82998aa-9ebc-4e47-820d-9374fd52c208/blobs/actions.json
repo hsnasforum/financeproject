@@ -1,0 +1,202 @@
+{
+  "actions": [
+    {
+      "code": "FIX_NEGATIVE_CASHFLOW",
+      "severity": "critical",
+      "title": "월 현금흐름 적자 우선 해소",
+      "summary": "가용현금이 음수로 누적되어 자산 방어가 어려운 상태입니다. 지출 구조와 부채상환 조건을 먼저 조정하세요.",
+      "why": [
+        {
+          "code": "NEGATIVE_CASHFLOW",
+          "message": "월 고정 지출/상환 부담이 반복 소득을 초과한 구간이 있습니다.",
+          "data": {
+            "months": 120
+          }
+        },
+        {
+          "code": "INSOLVENT",
+          "message": "현금/투자 자산만으로 월 의무지출을 감당하지 못한 구간이 있습니다.",
+          "data": {
+            "months": 24
+          }
+        },
+        {
+          "code": "METRIC_WORST_CASH",
+          "message": "최저 현금 시점이 확인되었습니다.",
+          "data": {
+            "worstCashMonthIndex": 119,
+            "worstCashKrw": -6519011.17
+          }
+        }
+      ],
+      "metrics": {
+        "monthlyDeficitKrw": 1279445.65,
+        "worstCashMonthIndex": 119,
+        "worstCashKrw": -6519011.17
+      },
+      "steps": [
+        "고정지출 10% 절감 시나리오를 추가로 비교합니다.",
+        "월별 적자 폭이 큰 구간부터 생활비/고정비를 우선 조정합니다.",
+        "부채 상환조건(금리/기간/상환방식) 재검토 항목을 체크합니다."
+      ],
+      "cautions": [
+        "본 액션은 시뮬레이션 기반 운영 가이드입니다.",
+        "상품 가입/대환 실행 전 실제 약정 조건을 확인하세요.",
+        "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+        "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+      ]
+    },
+    {
+      "code": "BUILD_EMERGENCY_FUND",
+      "severity": "warn",
+      "title": "비상금 완충 구간 확보",
+      "summary": "유동성 완충이 부족해 자산 인출 또는 차입으로 이어질 가능성이 있습니다. 비상금 목표를 먼저 채우세요.",
+      "why": [
+        {
+          "code": "EMERGENCY_FUND_DRAWDOWN",
+          "message": "현금 부족 구간에서 투자자산 인출이 발생했습니다.",
+          "data": {
+            "months": 31
+          }
+        },
+        {
+          "code": "INSOLVENT",
+          "message": "현금/투자 자산만으로 월 의무지출을 감당하지 못한 구간이 있습니다.",
+          "data": {
+            "months": 24
+          }
+        }
+      ],
+      "metrics": {
+        "emergencyTargetKrw": 21000000,
+        "emergencyGapKrw": 19500000,
+        "currentCashKrw": 1500000
+      },
+      "steps": [
+        "비상금 목표(기본 6개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.",
+        "중도 인출 비용/제약이 작은 후보를 우선 비교합니다.",
+        "비상금 달성 전에는 고위험 자산 비중 확대를 보류합니다."
+      ],
+      "cautions": [
+        "비상금은 수익률보다 접근성과 안정성을 우선합니다.",
+        "확률 결과는 보장이 아니며 시장/소득 변동에 따라 달라질 수 있습니다.",
+        "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+        "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+      ]
+    },
+    {
+      "code": "COVER_LUMP_SUM_GOAL",
+      "severity": "warn",
+      "title": "목표자금 갭 축소: Emergency Fund",
+      "summary": "목표월 기준 부족자금이 확인되었습니다. 기간에 맞는 적립 구조로 갭을 줄이세요.",
+      "why": [
+        {
+          "code": "GOAL_MISSED",
+          "message": "목표월까지 목표 금액을 채우지 못한 목표가 있습니다.",
+          "data": {
+            "goalId": "goal-emergency",
+            "goalName": "Emergency Fund",
+            "shortfall": 10500000
+          }
+        },
+        {
+          "code": "GOAL_MISSED",
+          "message": "목표월까지 목표 금액을 채우지 못한 목표가 있습니다.",
+          "data": {
+            "goalId": "goal-lump",
+            "goalName": "Lump Sum",
+            "shortfall": 30000000
+          }
+        },
+        {
+          "code": "GOAL_GAP",
+          "message": "목표월 도달 시점 부족자금이 계산되었습니다.",
+          "data": {
+            "goalId": "goal-emergency",
+            "goalName": "Emergency Fund",
+            "gapKrw": 10500000,
+            "targetMonth": 6
+          }
+        }
+      ],
+      "metrics": {
+        "gapKrw": 10500000,
+        "targetMonth": 6
+      },
+      "steps": [
+        "목표월까지의 월 적립 필요액을 재계산하고 자동이체로 고정합니다.",
+        "목표 기간과 유사한 만기 옵션 중심으로 후보를 비교합니다.",
+        "목표 우선순위를 조정해 재원 배분을 단순화합니다."
+      ],
+      "cautions": [
+        "후보 비교 결과는 선택지 제시이며 특정 상품 권유가 아닙니다.",
+        "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+        "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+      ]
+    },
+    {
+      "code": "IMPROVE_RETIREMENT_PLAN",
+      "severity": "warn",
+      "title": "은퇴자금 계획 보강",
+      "summary": "은퇴 시점 목표 대비 부족 가능성이 있어, 적립 속도와 리스크 가정 점검이 필요합니다.",
+      "why": [
+        {
+          "code": "RETIREMENT_GOAL_GAP",
+          "message": "은퇴 관련 목표의 부족자금이 확인되었습니다.",
+          "data": {
+            "goalId": "goal-retire",
+            "gapKrw": 297800000,
+            "targetMonth": 300
+          }
+        }
+      ],
+      "metrics": {
+        "retirementGapKrw": 297800000,
+        "retirementTargetMonth": 300
+      },
+      "steps": [
+        "은퇴 목표월 전까지의 월 적립액/수익률 가정을 재조정합니다.",
+        "리스크 성향별 시나리오와 Monte Carlo 퍼센타일을 함께 확인합니다.",
+        "필요 시 은퇴 시점/목표금액을 현실화해 재계획합니다."
+      ],
+      "cautions": [
+        "확률 지표는 참고값이며 미래 성과를 보장하지 않습니다.",
+        "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+        "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+      ]
+    },
+    {
+      "code": "SET_ASSUMPTIONS_REVIEW",
+      "severity": "info",
+      "title": "가정값 정기 점검",
+      "summary": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+      "why": [
+        {
+          "code": "ASSUMPTIONS_BASELINE",
+          "message": "엔진 기본/스냅샷/오버라이드 가정이 결합되어 계산됩니다.",
+          "data": {
+            "snapshotAsOf": null,
+            "snapshotMissing": true,
+            "inflationPct": 2,
+            "investReturnPct": 5
+          }
+        }
+      ],
+      "metrics": {
+        "inflationPct": 2,
+        "investReturnPct": 5,
+        "cashReturnPct": 2
+      },
+      "steps": [
+        "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+        "가정 변경 전/후 시나리오 결과를 비교합니다.",
+        "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+      ],
+      "cautions": [
+        "가정값은 결과를 크게 바꿀 수 있으므로 변경 이력을 남기세요.",
+        "가정 기반 결과이며 미래 성과를 보장하지 않습니다.",
+        "후보 정보는 비교용이며 특정 상품 가입 권유가 아닙니다."
+      ]
+    }
+  ]
+}

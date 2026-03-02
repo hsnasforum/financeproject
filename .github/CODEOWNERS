@@ -1,0 +1,6 @@
+# Replace @OWNER with your real GitHub user or team (e.g. @your-id or @org/team)
+
+src/lib/planning/v2/ @OWNER
+src/app/planning/ @OWNER
+src/app/api/planning/ @OWNER
+src/app/ops/ @OWNER

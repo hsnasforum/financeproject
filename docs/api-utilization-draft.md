@@ -26,7 +26,7 @@
 3. 정규화 결합 점검:
    - `rg -n "baseList|optionList|fin_prdt_cd" src/lib/finlife src/app/api/finlife`
 4. 추천/플래너 설명가능성 점검:
-   - `rg -n "weight|score|assumptions|근거|참고 지표" src/lib/recommend src/lib/planner src/app/recommend src/app/planner`
+   - `rg -n "weight|score|assumptions|근거|참고 지표" src/lib/recommend src/lib/planner src/app/recommend src/app/planning`
 5. 회귀 확인:
    - `pnpm lint`
    - `pnpm test`
@@ -39,7 +39,7 @@
 ## A. 한국수출입은행 환율 (P0)
 - 사용자 가치: 외화 자산/여행 예산을 원화 기준으로 합산하고 변동성 가정을 반영한다.
 - 플래너 반영: 환율 기준일(asOfDate) + 통화별 환산표 + 총 원화합계를 표시한다.
-- UI 위치: `/planner` 환율 모듈, (선택) `/tools/fx`.
+- UI 위치: `/planning` 환율 모듈, (선택) `/tools/fx`.
 - 입력값: `pairs=USD:1000,JPY:50000`, `date`.
 - 캐싱/주의: TTL 12h, 키 `fx + sorted params`; 비영업일 fallback 시 기준일을 명시.
 - 신규 정규화 라우트: `GET /api/public/exchange?date=YYYYMMDD` → `{ base:\"KRW\", asOf, rates }`.
@@ -151,7 +151,7 @@
 ## B. 국토부 아파트 매매 실거래 (P0)
 - 사용자 가치: 내집마련 목표금액의 현실성(중앙값 대비 괴리)을 점검한다.
 - 플래너 반영: 지역/월/면적대 기준 `min/median/p75/max` 카드 표시.
-- UI 위치: `/planner` 벤치마크 모듈(전용 매매 화면 경로는 현재 미제공).
+- UI 위치: `/planning` 벤치마크 모듈(전용 매매 화면 경로는 현재 미제공).
 - 입력값: `regionCode`, `month(YYYYMM)`, `areaBand`.
 - 캐싱/주의: TTL 14d~30d, 트래픽 절감을 위해 파라미터별 캐시 강제.
 - 엔드포인트: `https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade` + `getRTMSDataSvcAptTrade`.

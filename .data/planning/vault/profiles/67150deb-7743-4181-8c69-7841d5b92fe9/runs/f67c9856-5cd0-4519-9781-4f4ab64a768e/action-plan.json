@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "runId": "f67c9856-5cd0-4519-9781-4f4ab64a768e",
+  "generatedAt": "2026-03-01T19:27:07.907Z",
+  "items": [
+    {
+      "actionKey": "act_08d1caa357654d4e",
+      "sourceActionId": "IMPROVE_RETIREMENT_PLAN",
+      "title": "은퇴자금 계획 보강",
+      "description": "은퇴 시점 목표 대비 부족 가능성이 있어, 적립 속도와 리스크 가정 점검이 필요합니다.",
+      "steps": [
+        "은퇴 목표월 전까지의 월 적립액/수익률 가정을 재조정합니다.",
+        "리스크 성향별 시나리오와 Monte Carlo 퍼센타일을 함께 확인합니다.",
+        "필요 시 은퇴 시점/목표금액을 현실화해 재계획합니다."
+      ]
+    },
+    {
+      "actionKey": "act_d08332bd52220422",
+      "sourceActionId": "SET_ASSUMPTIONS_REVIEW",
+      "title": "가정값 정기 점검",
+      "description": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+      "steps": [
+        "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+        "가정 변경 전/후 시나리오 결과를 비교합니다.",
+        "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+      ],
+      "href": "/ops/assumptions"
+    }
+  ]
+}

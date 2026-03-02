@@ -1,10 +1,22 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { OpsHubClient } from "@/components/OpsHubClient";
+import { VaultLockScreenClient } from "@/components/VaultLockScreenClient";
+import { OpsDashboardClient } from "@/components/OpsDashboardClient";
+import { shouldBlockOpsPageInCurrentRuntime } from "@/lib/ops/pageAccess";
+import { getVaultStatus } from "@/lib/planning/security/vaultState";
 
-export default function OpsPage() {
-  if (process.env.NODE_ENV === "production") {
+export default async function OpsPage() {
+  if (shouldBlockOpsPageInCurrentRuntime()) {
     notFound();
   }
 
-  return <OpsHubClient />;
+  const status = await getVaultStatus();
+  if (status.configured && !status.unlocked) {
+    return <VaultLockScreenClient scope="ops" />;
+  }
+
+  const cookieStore = await cookies();
+  const csrf = cookieStore.get("dev_csrf")?.value ?? "";
+
+  return <OpsDashboardClient csrf={csrf} />;
 }

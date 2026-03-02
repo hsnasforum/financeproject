@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "defaultProfileId": "default-profile",
+  "profiles": [
+    {
+      "profileId": "5162962c-2d5b-420b-899d-fef476e82e02",
+      "name": "Golden RISK Goals Pressure",
+      "createdAt": "2026-03-01T19:28:16.469Z",
+      "updatedAt": "2026-03-01T19:28:16.469Z"
+    },
+    {
+      "profileId": "15764b92-e560-4a53-8c09-a594693286de",
+      "name": "Golden CAUTION Multi Debt Refi",
+      "createdAt": "2026-03-01T19:28:16.313Z",
+      "updatedAt": "2026-03-01T19:28:16.313Z"
+    },
+    {
+      "profileId": "3e4f3e55-f075-4a7d-8c3a-dd955ee1556d",
+      "name": "Golden RISK Negative Cashflow",
+      "createdAt": "2026-03-01T19:28:16.131Z",
+      "updatedAt": "2026-03-01T19:28:16.131Z"
+    },
+    {
+      "profileId": "564b72ad-322a-41a9-83e5-32f11f164bae",
+      "name": "Golden CAUTION Tight Cashflow",
+      "createdAt": "2026-03-01T19:28:15.889Z",
+      "updatedAt": "2026-03-01T19:28:15.889Z"
+    },
+    {
+      "profileId": "08428f6f-88f9-49f1-b408-d4514aee95c0",
+      "name": "Golden GOOD Basic",
+      "createdAt": "2026-03-01T19:28:14.928Z",
+      "updatedAt": "2026-03-01T19:28:14.928Z"
+    },
+    {
+      "profileId": "02b136f2-2e44-4390-863e-b601697a88e5",
+      "name": "Golden RISK Goals Pressure",
+      "createdAt": "2026-03-01T19:27:09.189Z",
+      "updatedAt": "2026-03-01T19:27:09.189Z"
+    },
+    {
+      "profileId": "df716e9b-bb87-40ad-a61f-ff945d2cb508",
+      "name": "Golden CAUTION Multi Debt Refi",
+      "createdAt": "2026-03-01T19:27:09.026Z",
+      "updatedAt": "2026-03-01T19:27:09.026Z"
+    },
+    {
+      "profileId": "57ae0e93-cbbe-4e70-b9c7-fee6b76db400",
+      "name": "Golden RISK Negative Cashflow",
+      "createdAt": "2026-03-01T19:27:08.852Z",
+      "updatedAt": "2026-03-01T19:27:08.852Z"
+    },
+    {
+      "profileId": "071b98fa-f5fa-4811-86c3-887d88a1bd9e",
+      "name": "Golden CAUTION Tight Cashflow",
+      "createdAt": "2026-03-01T19:27:08.611Z",
+      "updatedAt": "2026-03-01T19:27:08.611Z"
+    },
+    {
+      "profileId": "67150deb-7743-4181-8c69-7841d5b92fe9",
+      "name": "Golden GOOD Basic",
+      "createdAt": "2026-03-01T19:27:07.693Z",
+      "updatedAt": "2026-03-01T19:27:07.693Z"
+    },
+    {
+      "profileId": "default-profile",
+      "name": "기본 프로필",
+      "createdAt": "2026-03-01T17:17:04.590Z",
+      "updatedAt": "2026-03-01T17:17:04.590Z"
+    }
+  ]
+}

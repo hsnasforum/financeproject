@@ -1,30 +1,22 @@
 import { type DebtSummary, type LiabilityV2 } from "./types";
-
-const EPSILON = 1e-9;
-
-function roundMoney(value: number): number {
-  return Math.round(value);
-}
+import {
+  amortizingMonthlyPayment as ssotAmortizingMonthlyPayment,
+  monthlyRateFromAprPct as ssotMonthlyRateFromAprPct,
+  normalizeAprPct as ssotNormalizeAprPct,
+  roundKrw,
+  simulateAmortizingPayoff as ssotSimulateAmortizingPayoff,
+} from "../../../calc";
 
 export function normalizeAprPct(aprInput: number): number {
-  if (!Number.isFinite(aprInput)) return 0;
-  if (Math.abs(aprInput) <= 1) return aprInput * 100;
-  return aprInput;
+  return ssotNormalizeAprPct(aprInput);
 }
 
 export function monthlyRateFromAprPct(aprPct: number): number {
-  const normalizedAprPct = normalizeAprPct(aprPct);
-  return normalizedAprPct / 100 / 12;
+  return ssotMonthlyRateFromAprPct(aprPct);
 }
 
 export function amortizingMonthlyPayment(principalKrw: number, aprPct: number, months: number): number {
-  const principal = Math.max(0, principalKrw);
-  const n = Math.max(1, Math.trunc(months));
-  const monthlyRate = monthlyRateFromAprPct(aprPct);
-
-  if (monthlyRate <= 0) return principal / n;
-  const growth = (1 + monthlyRate) ** n;
-  return (principal * monthlyRate * growth) / (growth - 1);
+  return ssotAmortizingMonthlyPayment(principalKrw, aprPct, months);
 }
 
 export function simulateAmortizingPayoff(
@@ -38,51 +30,7 @@ export function simulateAmortizingPayoff(
   monthlyPaymentKrw: number;
   negativeAmortizationRisk: boolean;
 } {
-  const principal = Math.max(0, principalKrw);
-  const n = Math.max(1, Math.trunc(months));
-  const extraPayment = Math.max(0, extraPaymentKrw);
-  const monthlyRate = monthlyRateFromAprPct(aprPct);
-  const monthlyPayment = amortizingMonthlyPayment(principal, aprPct, n);
-
-  if (principal <= 0) {
-    return {
-      payoffMonths: 0,
-      totalInterestKrw: 0,
-      monthlyPaymentKrw: roundMoney(monthlyPayment),
-      negativeAmortizationRisk: false,
-    };
-  }
-
-  let remain = principal;
-  let month = 0;
-  let totalInterest = 0;
-  let negativeAmortizationRisk = false;
-  const maxMonths = n + 1_200;
-
-  while (remain > EPSILON && month < maxMonths) {
-    month += 1;
-    const interest = remain * monthlyRate;
-    const payment = monthlyPayment + extraPayment;
-    if (payment <= interest + EPSILON) {
-      negativeAmortizationRisk = true;
-      break;
-    }
-
-    const principalPaid = Math.min(remain, payment - interest);
-    remain -= principalPaid;
-    totalInterest += interest;
-  }
-
-  if (remain > EPSILON && !negativeAmortizationRisk) {
-    negativeAmortizationRisk = true;
-  }
-
-  return {
-    payoffMonths: month,
-    totalInterestKrw: roundMoney(totalInterest),
-    monthlyPaymentKrw: roundMoney(monthlyPayment),
-    negativeAmortizationRisk,
-  };
+  return ssotSimulateAmortizingPayoff(principalKrw, aprPct, months, extraPaymentKrw);
 }
 
 export function summarizeDebt(liability: LiabilityV2, nowMonthIndex = 0): DebtSummary {
@@ -90,19 +38,19 @@ export function summarizeDebt(liability: LiabilityV2, nowMonthIndex = 0): DebtSu
   const remainingMonths = Math.max(1, Math.trunc(liability.remainingMonths));
   const aprPct = normalizeAprPct(liability.aprPct);
   const monthlyRate = monthlyRateFromAprPct(aprPct);
-  const monthlyInterestKrw = roundMoney(principalKrw * monthlyRate);
+  const monthlyInterestKrw = roundKrw(principalKrw * monthlyRate);
 
   if (liability.type === "interestOnly") {
     return {
       liabilityId: liability.id,
       name: liability.name,
       type: "interestOnly",
-      principalKrw: roundMoney(principalKrw),
+      principalKrw: roundKrw(principalKrw),
       aprPct,
       remainingMonths,
       monthlyPaymentKrw: monthlyInterestKrw,
       monthlyInterestKrw,
-      totalInterestRemainingKrw: roundMoney(monthlyInterestKrw * remainingMonths),
+      totalInterestRemainingKrw: roundKrw(monthlyInterestKrw * remainingMonths),
       payoffMonthIndex: nowMonthIndex + remainingMonths,
     };
   }
@@ -112,7 +60,7 @@ export function summarizeDebt(liability: LiabilityV2, nowMonthIndex = 0): DebtSu
     liabilityId: liability.id,
     name: liability.name,
     type: "amortizing",
-    principalKrw: roundMoney(principalKrw),
+    principalKrw: roundKrw(principalKrw),
     aprPct,
     remainingMonths,
     monthlyPaymentKrw: payoff.monthlyPaymentKrw,

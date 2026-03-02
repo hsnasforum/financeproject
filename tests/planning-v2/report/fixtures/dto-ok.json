@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "meta": {
+    "generatedAt": "2026-03-01T00:00:00.000Z",
+    "snapshot": {
+      "id": "snapshot-ok-2026-02",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-02-28T01:00:00.000Z",
+      "missing": false
+    },
+    "health": {
+      "warningsCodes": [],
+      "criticalCount": 0,
+      "snapshotStaleDays": 3
+    },
+    "policyId": "balanced"
+  },
+  "summary": {
+    "endNetWorthKrw": 420000000,
+    "worstCashKrw": 12000000,
+    "worstCashMonthIndex": 24,
+    "goalsAchieved": { "achieved": 2, "total": 2 },
+    "dsrPct": 28,
+    "criticalWarnings": 0,
+    "totalWarnings": 0
+  },
+  "warnings": {
+    "aggregated": [],
+    "top": []
+  },
+  "goals": [
+    {
+      "id": "goal-emergency",
+      "title": "비상금 6개월",
+      "type": "emergencyFund",
+      "targetKrw": 18000000,
+      "currentKrw": 18000000,
+      "shortfallKrw": 0,
+      "targetMonth": 18,
+      "achieved": true,
+      "comment": "목표 달성"
+    },
+    {
+      "id": "goal-retire",
+      "title": "은퇴 준비",
+      "type": "retirement",
+      "targetKrw": 300000000,
+      "currentKrw": 305000000,
+      "shortfallKrw": 0,
+      "targetMonth": 360,
+      "achieved": true,
+      "comment": "계획 범위 내"
+    }
+  ],
+  "timeline": {
+    "points": [
+      { "label": "start", "monthIndex": 0, "incomeKrw": 5100000, "expensesKrw": 3200000, "cashKrw": 14000000, "netWorthKrw": 310000000 },
+      { "label": "mid", "monthIndex": 60, "incomeKrw": 5300000, "expensesKrw": 3400000, "cashKrw": 16000000, "netWorthKrw": 360000000 },
+      { "label": "end", "monthIndex": 120, "incomeKrw": 5500000, "expensesKrw": 3500000, "cashKrw": 17000000, "netWorthKrw": 420000000 }
+    ]
+  },
+  "actions": {
+    "items": [
+      {
+        "code": "SET_ASSUMPTIONS_REVIEW",
+        "severity": "info",
+        "title": "분기별 가정 점검",
+        "summary": "금리/물가 변화 반영",
+        "why": [{ "code": "SNAPSHOT_STALE", "message": "가정 최신성 유지" }],
+        "metrics": { "reviewIntervalMonths": 3 },
+        "steps": ["분기마다 /ops/assumptions 동기화", "동기화 후 /planning 재실행"],
+        "cautions": []
+      }
+    ],
+    "top3": [
+      {
+        "code": "SET_ASSUMPTIONS_REVIEW",
+        "severity": "info",
+        "title": "분기별 가정 점검",
+        "summary": "금리/물가 변화 반영",
+        "why": [{ "code": "SNAPSHOT_STALE", "message": "가정 최신성 유지" }],
+        "metrics": { "reviewIntervalMonths": 3 },
+        "steps": ["분기마다 /ops/assumptions 동기화", "동기화 후 /planning 재실행"],
+        "cautions": []
+      }
+    ],
+    "top": [
+      {
+        "code": "SET_ASSUMPTIONS_REVIEW",
+        "severity": "info",
+        "title": "분기별 가정 점검",
+        "summary": "금리/물가 변화 반영",
+        "why": [{ "code": "SNAPSHOT_STALE", "message": "가정 최신성 유지" }],
+        "metrics": { "reviewIntervalMonths": 3 },
+        "steps": ["분기마다 /ops/assumptions 동기화", "동기화 후 /planning 재실행"],
+        "cautions": []
+      }
+    ]
+  },
+  "raw": {
+    "simulate": {
+      "assumptionsUsed": {
+        "inflationPct": 2,
+        "expectedReturnPct": 5,
+        "cashReturnPct": 2.2,
+        "withdrawalRatePct": 4
+      }
+    }
+  }
+}

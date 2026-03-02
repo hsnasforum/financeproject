@@ -142,7 +142,9 @@ describe("planning reports api", () => {
     expect(readRes.status).toBe(200);
     expect(readPayload.ok).toBe(true);
     expect(readPayload.data?.id).toBe(reportId);
-    expect(readPayload.data?.markdown).toContain("## Q&A");
+    expect(readPayload.data?.markdown).toContain("## Executive Summary");
+    expect(readPayload.data?.markdown).toContain("## Warnings Summary");
+    expect(readPayload.data?.markdown).toContain("## Actions Top 5");
     expect(JSON.stringify(readPayload)).not.toContain(".data");
 
     const downloadRes = await reportDownloadGET(
@@ -153,7 +155,7 @@ describe("planning reports api", () => {
     expect(downloadRes.status).toBe(200);
     expect(downloadRes.headers.get("content-type")).toContain("text/markdown");
     expect(downloadRes.headers.get("content-disposition")).toContain(`planning-report-${reportId}.md`);
-    expect(markdown).toContain("## Summary");
+    expect(markdown).toContain("## Executive Summary");
 
     const deleteRes = await reportDELETE(
       buildJsonRequest("DELETE", `/api/planning/v2/reports/${reportId}`, {

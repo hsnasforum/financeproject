@@ -1,0 +1,22 @@
+{
+  "id": "saving-simple-tax-v1",
+  "formula": {
+    "grossInterest": "gross = monthlyPayment * months * (annualRatePct / 100) * ((months + 1) / 2 / 12)",
+    "tax": "tax = gross * (taxRatePct / 100)",
+    "netInterest": "net = gross - tax",
+    "maturity": "maturity = principal + net, principal = monthlyPayment * months"
+  },
+  "input": {
+    "monthlyPaymentKrw": 500000,
+    "termMonths": 12,
+    "annualRatePct": 4,
+    "taxRatePct": 15.4
+  },
+  "expected": {
+    "principalKrw": 6000000,
+    "grossInterestKrw": 130000,
+    "taxKrw": 20020,
+    "netInterestKrw": 109980,
+    "maturityAmountKrw": 6109980
+  }
+}

@@ -33,7 +33,7 @@ describe("suggestProfileNormalizations", () => {
     expect(suggestions.some((item) => item.code === "UNIT_SUSPECTED_INVESTMENT_ASSETS")).toBe(true);
   });
 
-  it("suggests APR scale review for debt apr values between 0 and 1", () => {
+  it("does not suggest APR scale review for canonical engine apr(decimal) values", () => {
     const suggestions = suggestProfileNormalizations({
       ...baseProfile(),
       debts: [
@@ -47,8 +47,26 @@ describe("suggestProfileNormalizations", () => {
       ],
     });
     const aprSuggestion = suggestions.find((item) => item.code.startsWith("APR_SCALE_SUSPECTED_"));
+    expect(aprSuggestion).toBeUndefined();
+  });
+
+  it("suggests APR scale review for legacy aprPct values between 0 and 1", () => {
+    const legacyProfile = {
+      ...baseProfile(),
+      debts: [
+        {
+          id: "loan-1",
+          name: "Loan 1",
+          balance: 10_000_000,
+          minimumPayment: 300_000,
+          aprPct: 0.12,
+        },
+      ],
+    } as unknown as ProfileV2;
+    const suggestions = suggestProfileNormalizations(legacyProfile);
+    const aprSuggestion = suggestions.find((item) => item.code.startsWith("APR_SCALE_SUSPECTED_"));
     expect(aprSuggestion).toBeDefined();
-    expect(aprSuggestion?.patch[0].path).toBe("/debts/0/apr");
+    expect(aprSuggestion?.patch[0].path).toBe("/debts/0/aprPct");
   });
 
   it("suggests remainingMonths correction when value is zero", () => {

@@ -1,0 +1,15 @@
+{
+  "id": "golden-good-basic",
+  "title": "Golden GOOD run",
+  "createdAt": "2026-03-01T00:00:00.000Z",
+  "profileId": "golden-profile-good-basic",
+  "overallStatus": "SUCCESS",
+  "stages": {
+    "simulate": "SUCCESS",
+    "scenarios": "SUCCESS",
+    "monteCarlo": "SKIPPED",
+    "actions": "SUCCESS",
+    "debt": "SUCCESS"
+  },
+  "resultDtoFixture": "tests/planning-v2/report/fixtures/dto-ok.json"
+}

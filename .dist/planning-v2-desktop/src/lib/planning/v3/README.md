@@ -1,0 +1,17 @@
+# Planning v3 Workspace
+
+Planning v3는 신규 기능(연동/정밀 계산/멀티유저) 전용 작업 공간입니다.
+
+## v2와의 차이
+- v2: 동결 상태, bugfix/경미 개선만 허용
+- v3: 신규 기능/아키텍처 확장 전용
+
+## 작업 원칙
+- v2 코어(`src/lib/planning/v2`, `src/lib/planning/core/v2`) 수정으로 신규 기능을 넣지 않습니다.
+- 신규 기능은 v3 디렉토리에서 설계/구현합니다.
+- v2 영향이 필요한 경우, 먼저 문서(`docs/planning-v3-kickoff.md`)에 영향 범위를 기록합니다.
+
+## 권장 구조 (가이드만, 구현은 추후)
+- `src/lib/planning/v3/providers/`
+- `src/lib/planning/v3/service/`
+- `src/lib/planning/v3/domain/`

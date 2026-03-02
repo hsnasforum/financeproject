@@ -1,0 +1,41 @@
+name: "Planning Improvement"
+description: "v2 범위 내 개선 요청 템플릿"
+title: "[IMPROVE] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: user_value
+    attributes:
+      label: 사용자 가치 (왜 필요한가)
+      placeholder: "어떤 사용자 문제를 줄이는지 적어주세요."
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_pain
+    attributes:
+      label: 현재 불편
+      placeholder: "현재 흐름에서 불편한 점을 구체적으로 적어주세요."
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired_outcome
+    attributes:
+      label: 원하는 결과 (구체)
+      placeholder: "완료 상태를 측정 가능한 형태로 적어주세요."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: v2_scope
+    attributes:
+      label: v2 범위 여부
+      description: v2는 계약/출력 변경 없는 개선만 허용됩니다.
+      options:
+        - "v2 범위 맞음 (계약/출력 변경 없음)"
+        - "경계선 - 리뷰 필요"
+        - "v2 범위 아님 (v3로 이관 필요)"
+    validations:
+      required: true

@@ -8,6 +8,7 @@ const original = {
   PLANNING_MONTE_CARLO_ENABLED: process.env.PLANNING_MONTE_CARLO_ENABLED,
   PLANNING_INCLUDE_PRODUCTS_ENABLED: process.env.PLANNING_INCLUDE_PRODUCTS_ENABLED,
   PLANNING_OPTIMIZER_ENABLED: process.env.PLANNING_OPTIMIZER_ENABLED,
+  PLANNING_PDF_ENABLED: process.env.PLANNING_PDF_ENABLED,
 };
 
 afterEach(() => {
@@ -24,6 +25,7 @@ describe("getPlanningFeatureFlags", () => {
     delete env.PLANNING_MONTE_CARLO_ENABLED;
     delete env.PLANNING_INCLUDE_PRODUCTS_ENABLED;
     delete env.PLANNING_OPTIMIZER_ENABLED;
+    delete env.PLANNING_PDF_ENABLED;
 
     expect(getPlanningFeatureFlags()).toEqual({
       debugEnabled: false,
@@ -31,6 +33,7 @@ describe("getPlanningFeatureFlags", () => {
       monteCarloEnabled: true,
       includeProductsEnabled: false,
       optimizerEnabled: false,
+      pdfEnabled: false,
     });
   });
 
@@ -40,6 +43,7 @@ describe("getPlanningFeatureFlags", () => {
     env.PLANNING_MONTE_CARLO_ENABLED = "0";
     env.PLANNING_INCLUDE_PRODUCTS_ENABLED = "1";
     env.PLANNING_OPTIMIZER_ENABLED = "true";
+    env.PLANNING_PDF_ENABLED = "yes";
 
     expect(getPlanningFeatureFlags()).toEqual({
       debugEnabled: true,
@@ -47,6 +51,7 @@ describe("getPlanningFeatureFlags", () => {
       monteCarloEnabled: false,
       includeProductsEnabled: true,
       optimizerEnabled: true,
+      pdfEnabled: true,
     });
   });
 });

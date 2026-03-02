@@ -1,0 +1,14 @@
+{
+  "summary": {
+    "debtServiceRatio": 0,
+    "totalMonthlyPaymentKrw": 0,
+    "warningsCount": 0
+  },
+  "warnings": [],
+  "summaries": [],
+  "whatIf": {
+    "termExtensions": [],
+    "termReductions": [],
+    "extraPayments": []
+  }
+}

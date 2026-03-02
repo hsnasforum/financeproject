@@ -1,0 +1,41 @@
+name: "Planning v3 Feature"
+description: "v3 신규 기능 요청 템플릿"
+title: "[V3] "
+labels:
+  - feature
+  - v3
+body:
+  - type: textarea
+    id: goal_scope
+    attributes:
+      label: 목표 / 범위
+      placeholder: "무엇을 만들지, 범위를 명확히 적어주세요."
+    validations:
+      required: true
+
+  - type: textarea
+    id: why_not_v2
+    attributes:
+      label: 왜 v2가 아닌가
+      placeholder: "freeze 기준에서 v2에 넣을 수 없는 이유를 적어주세요."
+    validations:
+      required: true
+
+  - type: textarea
+    id: migration_impact
+    attributes:
+      label: 마이그레이션 영향 (저장 포맷/스냅샷/보고서)
+      placeholder: |
+        저장 포맷:
+        snapshot 영향:
+        report 영향:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: v2_guard
+    attributes:
+      label: v2 동결 확인
+      options:
+        - label: "v2 파일 변경 금지(신규 기능은 v3에서만 진행)"
+          required: true

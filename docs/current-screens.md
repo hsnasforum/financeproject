@@ -13,7 +13,7 @@
 - `/housing/afford`
 - `/housing/subscription`
 - `/invest/companies`
-- `/planner`
+- `/planning`
 - `/products`
 - `/products/catalog`
 - `/products/catalog/[id]`

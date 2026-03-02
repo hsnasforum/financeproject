@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --border: #e2e8f0;
+  --primary: #059669; /* emerald-600 */
+  --primary-foreground: #ffffff;
+  --secondary: #475569;
+  --secondary-foreground: #ffffff;
+  --muted: #94a3b8;
+  --accent: #f0fdf4;
+  
+  /* Premium Financial Tokens */
+  --hero-navy: #0f172a;
+  --hero-charcoal: #1e293b;
+  --card-shadow: 0 4px 20px -1px rgb(0 0 0 / 0.03), 0 2px 4px -2px rgb(0 0 0 / 0.03);
+  --card-shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  
+  --radius: 2rem;
+  --radius-sm: 1rem;
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", Roboto, Arial, "Noto Sans",
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-hero-navy: var(--hero-navy);
+  --color-hero-charcoal: var(--hero-charcoal);
+  --radius-2xl: var(--radius);
+  --radius-xl: var(--radius-sm);
+  --shadow-card: var(--card-shadow);
+  --shadow-card-hover: var(--card-shadow-hover);
+  --font-sans: var(--font-geist-sans);
+}
+
+body {
+  background-color: var(--background);
+  background-image: url('/nb/bg-pattern.png');
+  background-repeat: repeat;
+  background-size: 400px;
+  color: var(--foreground);
+  font-family: var(--font-sans), sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+}
+
+@media print {
+  header,
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .report-root {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0.5cm !important;
+    gap: 0.4cm !important;
+  }
+
+  .print-card,
+  .print-card table,
+  .print-card tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .print-card {
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
+    border-radius: 0.5rem !important;
+  }
+
+  a {
+    color: #000000 !important;
+    text-decoration: none !important;
+  }
+}

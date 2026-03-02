@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "meta": {
+    "generatedAt": "2026-03-01T00:00:00.000Z",
+    "snapshot": {
+      "id": "snapshot-warn-2026-02",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-02-28T01:10:00.000Z",
+      "missing": false
+    },
+    "health": {
+      "warningsCodes": ["HIGH_DEBT_RATIO"],
+      "criticalCount": 0,
+      "snapshotStaleDays": 12
+    },
+    "policyId": "balanced"
+  },
+  "summary": {
+    "endNetWorthKrw": 245000000,
+    "worstCashKrw": 1800000,
+    "worstCashMonthIndex": 30,
+    "goalsAchieved": { "achieved": 1, "total": 2 },
+    "dsrPct": 45,
+    "criticalWarnings": 0,
+    "totalWarnings": 3
+  },
+  "warnings": {
+    "aggregated": [
+      {
+        "code": "HIGH_DEBT_RATIO",
+        "severity": "warn",
+        "count": 2,
+        "firstMonth": 6,
+        "lastMonth": 18,
+        "sampleMessage": "DSR이 높아 부담이 큽니다."
+      },
+      {
+        "code": "GOAL_MISSED",
+        "severity": "warn",
+        "count": 1,
+        "firstMonth": 120,
+        "lastMonth": 120,
+        "sampleMessage": "목표 달성이 지연됩니다."
+      }
+    ],
+    "top": [
+      { "code": "HIGH_DEBT_RATIO", "severity": "warn", "message": "부채 비율 높음" }
+    ]
+  },
+  "goals": [
+    {
+      "id": "goal-emergency",
+      "title": "비상금 6개월",
+      "type": "emergencyFund",
+      "targetKrw": 18000000,
+      "currentKrw": 18000000,
+      "shortfallKrw": 0,
+      "targetMonth": 18,
+      "achieved": true,
+      "comment": "달성"
+    },
+    {
+      "id": "goal-lumpsum",
+      "title": "목돈 목표",
+      "type": "lumpSum",
+      "targetKrw": 50000000,
+      "currentKrw": 32000000,
+      "shortfallKrw": 18000000,
+      "targetMonth": 120,
+      "achieved": false,
+      "comment": "적립 속도 부족"
+    }
+  ],
+  "timeline": {
+    "points": [
+      { "label": "start", "monthIndex": 0, "incomeKrw": 4600000, "expensesKrw": 3400000, "cashKrw": 5000000, "netWorthKrw": 180000000 },
+      { "label": "mid", "monthIndex": 60, "incomeKrw": 4800000, "expensesKrw": 3600000, "cashKrw": 2600000, "netWorthKrw": 210000000 },
+      { "label": "end", "monthIndex": 120, "incomeKrw": 5000000, "expensesKrw": 3700000, "cashKrw": 2200000, "netWorthKrw": 245000000 }
+    ]
+  },
+  "actions": {
+    "items": [
+      {
+        "code": "REDUCE_DEBT_SERVICE",
+        "severity": "warn",
+        "title": "부채 상환 부담 완화",
+        "summary": "고금리 대출 우선 상환",
+        "why": [{ "code": "HIGH_DEBT_RATIO", "message": "DSR 45% 수준" }],
+        "metrics": { "targetDsrPct": 38 },
+        "steps": ["고금리 대출부터 추가상환", "상환계획 변경 후 재실행"],
+        "cautions": ["비상금 최소 3개월 유지"]
+      }
+    ],
+    "top3": [
+      {
+        "code": "REDUCE_DEBT_SERVICE",
+        "severity": "warn",
+        "title": "부채 상환 부담 완화",
+        "summary": "고금리 대출 우선 상환",
+        "why": [{ "code": "HIGH_DEBT_RATIO", "message": "DSR 45% 수준" }],
+        "metrics": { "targetDsrPct": 38 },
+        "steps": ["고금리 대출부터 추가상환", "상환계획 변경 후 재실행"],
+        "cautions": ["비상금 최소 3개월 유지"]
+      }
+    ],
+    "top": [
+      {
+        "code": "REDUCE_DEBT_SERVICE",
+        "severity": "warn",
+        "title": "부채 상환 부담 완화",
+        "summary": "고금리 대출 우선 상환",
+        "why": [{ "code": "HIGH_DEBT_RATIO", "message": "DSR 45% 수준" }],
+        "metrics": { "targetDsrPct": 38 },
+        "steps": ["고금리 대출부터 추가상환", "상환계획 변경 후 재실행"],
+        "cautions": ["비상금 최소 3개월 유지"]
+      }
+    ]
+  },
+  "raw": {
+    "simulate": {
+      "assumptionsUsed": {
+        "inflationPct": 2,
+        "expectedReturnPct": 4.6,
+        "cashReturnPct": 2,
+        "withdrawalRatePct": 4
+      }
+    }
+  }
+}

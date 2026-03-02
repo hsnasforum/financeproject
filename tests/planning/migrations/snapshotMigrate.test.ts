@@ -42,11 +42,12 @@ describe("migrateAssumptionsSnapshot", () => {
     expect(result.errors).toContain("MISSING_FETCHED_AT");
   });
 
-  it("keeps valid v1 snapshot unchanged", () => {
+  it("upgrades valid v1 snapshot with schemaVersion", () => {
     const row = validSnapshot();
     const result = migrateAssumptionsSnapshot(row);
     expect(result.ok).toBe(true);
-    expect(result.changed).toBe(false);
+    expect(result.changed).toBe(true);
     expect(result.warnings).toEqual([]);
+    expect(result.data?.schemaVersion).toBe(2);
   });
 });

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createProfile,
   deleteProfile,
+  getDefaultProfileId,
   getProfile,
   listProfiles,
   restoreProfileFromTrash,
@@ -19,12 +20,15 @@ import {
   restoreRunFromTrash,
 } from "../src/lib/planning/store/runStore";
 import { listPlanningTrash, purgePlanningTrashOlderThan } from "../src/lib/planning/store/trash";
+import { type PlanningRunRecord } from "../src/lib/planning/store/types";
+import { LIMITS } from "../src/lib/planning/v2/limits";
 
 const env = process.env as Record<string, string | undefined>;
 
 const originalProfilesDir = process.env.PLANNING_PROFILES_DIR;
 const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const originalTrashDir = process.env.PLANNING_TRASH_DIR;
+const originalProfileRegistryPath = process.env.PLANNING_PROFILE_REGISTRY_PATH;
 
 function sampleProfile() {
   return {
@@ -46,6 +50,7 @@ describe("planning store", () => {
     env.PLANNING_PROFILES_DIR = path.join(root, "profiles");
     env.PLANNING_RUNS_DIR = path.join(root, "runs");
     env.PLANNING_TRASH_DIR = path.join(root, "trash");
+    env.PLANNING_PROFILE_REGISTRY_PATH = path.join(root, "vault", "profiles", "index.json");
   });
 
   afterEach(() => {
@@ -57,6 +62,9 @@ describe("planning store", () => {
 
     if (typeof originalTrashDir === "string") env.PLANNING_TRASH_DIR = originalTrashDir;
     else delete env.PLANNING_TRASH_DIR;
+
+    if (typeof originalProfileRegistryPath === "string") env.PLANNING_PROFILE_REGISTRY_PATH = originalProfileRegistryPath;
+    else delete env.PLANNING_PROFILE_REGISTRY_PATH;
 
     fs.rmSync(root, { recursive: true, force: true });
     vi.restoreAllMocks();
@@ -149,6 +157,186 @@ describe("planning store", () => {
     expect(afterRestore?.id).toBe(target.id);
   });
 
+  it("isolates runs by profileId partition", async () => {
+    const profileA = await createProfile({
+      name: "가족 A",
+      profile: sampleProfile(),
+    });
+    const profileB = await createProfile({
+      name: "가족 B",
+      profile: sampleProfile(),
+    });
+
+    await createRun({
+      profileId: profileA.id,
+      title: "run-a-1",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: {
+          summary: { endNetWorthKrw: 100 },
+          warnings: [],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+        },
+      },
+    });
+    await createRun({
+      profileId: profileB.id,
+      title: "run-b-1",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: {
+          summary: { endNetWorthKrw: 200 },
+          warnings: [],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+        },
+      },
+    });
+
+    const runsA = await listRuns({ profileId: profileA.id, limit: 20 });
+    const runsB = await listRuns({ profileId: profileB.id, limit: 20 });
+
+    expect(runsA.length).toBe(1);
+    expect(runsB.length).toBe(1);
+    expect(runsA[0]?.profileId).toBe(profileA.id);
+    expect(runsB[0]?.profileId).toBe(profileB.id);
+    expect(runsA.some((row) => row.profileId === profileB.id)).toBe(false);
+    expect(runsB.some((row) => row.profileId === profileA.id)).toBe(false);
+  });
+
+  it("migrates legacy single-profile file into partition and sets default profile", async () => {
+    const legacyProfile = {
+      version: 1,
+      id: "legacy-profile",
+      name: "레거시 프로필",
+      profile: sampleProfile(),
+      createdAt: "2026-03-01T00:00:00.000Z",
+      updatedAt: "2026-03-01T00:00:00.000Z",
+    };
+    const legacyProfilesDir = env.PLANNING_PROFILES_DIR as string;
+    fs.mkdirSync(legacyProfilesDir, { recursive: true });
+    const legacyPath = path.join(legacyProfilesDir, "legacy-profile.json");
+    fs.writeFileSync(legacyPath, `${JSON.stringify(legacyProfile, null, 2)}\n`, "utf-8");
+
+    const profiles = await listProfiles();
+    const migrated = profiles.find((row) => row.id === "legacy-profile");
+    expect(migrated).toBeDefined();
+
+    const defaultProfileId = await getDefaultProfileId();
+    expect(defaultProfileId).toBe("legacy-profile");
+
+    const partitionPath = path.join(root, "vault", "profiles", "legacy-profile", "profile.json");
+    expect(fs.existsSync(partitionPath)).toBe(true);
+    expect(fs.existsSync(legacyPath)).toBe(false);
+
+    const registryPath = env.PLANNING_PROFILE_REGISTRY_PATH as string;
+    const registryPayload = JSON.parse(fs.readFileSync(registryPath, "utf-8")) as {
+      version?: number;
+      defaultProfileId?: string;
+      profiles?: Array<{ profileId?: string }>;
+    };
+    expect(registryPayload.version).toBe(1);
+    expect(registryPayload.defaultProfileId).toBe("legacy-profile");
+    expect((registryPayload.profiles ?? []).some((row) => row.profileId === "legacy-profile")).toBe(true);
+
+    const listedAgain = await listProfiles();
+    expect(listedAgain.filter((row) => row.id === "legacy-profile")).toHaveLength(1);
+  });
+
+  it("migrates legacy run meta into profile partition on read", async () => {
+    const profile = await createProfile({
+      name: "레거시 런 프로필",
+      profile: sampleProfile(),
+    });
+    const createdRun = await createRun({
+      profileId: profile.id,
+      title: "legacy-run",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: {
+          summary: { endNetWorthKrw: 1234 },
+          warnings: [],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+        },
+      },
+    });
+
+    const partitionRunPath = path.join(root, "vault", "profiles", profile.id, "runs", createdRun.id, "run.json");
+    const legacyRunPath = path.join(root, "runs", `${createdRun.id}.json`);
+    const payload = fs.readFileSync(partitionRunPath, "utf-8");
+    fs.mkdirSync(path.dirname(legacyRunPath), { recursive: true });
+    fs.writeFileSync(legacyRunPath, payload, "utf-8");
+    fs.rmSync(path.dirname(partitionRunPath), { recursive: true, force: true });
+
+    const loaded = await getRun(createdRun.id);
+    expect(loaded?.id).toBe(createdRun.id);
+    expect(fs.existsSync(path.join(root, "vault", "profiles", profile.id, "runs", createdRun.id, "run.json"))).toBe(true);
+  });
+
+  it("stores only resultDto by default and keeps compact raw outputs only when enabled", async () => {
+    const profile = await createProfile({
+      name: "런 축약 테스트",
+      profile: sampleProfile(),
+    });
+
+    const resultDto = {
+      version: 1,
+      meta: { generatedAt: "2026-03-01T00:00:00.000Z", snapshot: {} },
+      summary: { totalWarnings: 0 },
+      warnings: { aggregated: [], top: [] },
+      goals: [],
+      timeline: { points: [] },
+      raw: {},
+    };
+
+    const createdDefault = await createRun({
+      profileId: profile.id,
+      title: "compact-default",
+      input: { horizonMonths: 24 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        resultDto: resultDto as unknown as PlanningRunRecord["outputs"]["resultDto"],
+        simulate: {
+          summary: { endNetWorthKrw: 1_000_000 },
+          warnings: Array.from({ length: 100 }).map((_, idx) => `WARN_${idx + 1}`),
+          goalsStatus: [],
+          keyTimelinePoints: [],
+        },
+      },
+    });
+    const loadedDefault = await getRun(createdDefault.id);
+    expect(loadedDefault?.outputs.resultDto).toBeDefined();
+    expect(loadedDefault?.outputs.simulate?.ref?.name).toBe("simulate");
+    expect((loadedDefault?.outputs.simulate as { summary?: unknown } | undefined)?.summary).toBeUndefined();
+    expect((loadedDefault?.outputs.simulate as { warnings?: unknown[] } | undefined)?.warnings).toBeUndefined();
+
+    const createdRaw = await createRun({
+      profileId: profile.id,
+      title: "compact-raw",
+      input: { horizonMonths: 24 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        resultDto: resultDto as unknown as PlanningRunRecord["outputs"]["resultDto"],
+        simulate: {
+          summary: { endNetWorthKrw: 2_000_000 },
+          warnings: Array.from({ length: 100 }).map((_, idx) => `WARN_${idx + 1}`),
+          goalsStatus: [],
+          keyTimelinePoints: [],
+          traces: Array.from({ length: 100 }).map((_, idx) => ({ code: `TRACE_${idx + 1}`, message: "trace" })),
+        },
+      },
+    }, { storeRawOutputs: true });
+    const loadedRaw = await getRun(createdRaw.id);
+    expect(loadedRaw?.outputs.simulate?.ref?.name).toBe("simulate");
+    expect((loadedRaw?.outputs.simulate as { warnings?: unknown[] } | undefined)?.warnings).toBeUndefined();
+    expect((loadedRaw?.outputs.simulate as { traces?: unknown[] } | undefined)?.traces).toBeUndefined();
+  });
+
   it("purges old trash entries by keepDays policy", async () => {
     const profile = await createProfile({
       name: "휴지통 purge",
@@ -207,5 +395,48 @@ describe("planning store", () => {
 
     expect(profileFiles.some((name) => name.includes(".tmp-"))).toBe(false);
     expect(runFiles.some((name) => name.includes(".tmp-"))).toBe(false);
+  });
+
+  it("maintains runs index on create/delete", async () => {
+    const profile = await createProfile({
+      name: "index-test",
+      profile: sampleProfile(),
+    });
+
+    const created = await createRun({
+      profileId: profile.id,
+      input: {
+        horizonMonths: 24,
+      },
+      meta: {
+        snapshot: { id: "snap-1", asOf: "2026-03-01", missing: false },
+        health: { warningsCodes: [], criticalCount: 0 },
+      },
+      outputs: {
+        resultDto: {
+          version: 1,
+          meta: { generatedAt: "2026-03-01T00:00:00.000Z", snapshot: {} },
+          summary: { totalWarnings: 0 },
+          warnings: { aggregated: [], top: [] },
+          goals: [],
+          timeline: { points: [] },
+          raw: {},
+        } as unknown as PlanningRunRecord["outputs"]["resultDto"],
+      },
+    });
+
+    const indexPath = path.join(env.PLANNING_RUNS_DIR as string, "index.json");
+    const indexAfterCreate = JSON.parse(fs.readFileSync(indexPath, "utf-8")) as {
+      entries?: Array<{ id: string }>;
+    };
+    expect(indexAfterCreate.entries?.some((row) => row.id === created.id)).toBe(true);
+
+    const deleted = await deleteRun(created.id);
+    expect(deleted).toBe(true);
+
+    const indexAfterDelete = JSON.parse(fs.readFileSync(indexPath, "utf-8")) as {
+      entries?: Array<{ id: string }>;
+    };
+    expect(indexAfterDelete.entries?.some((row) => row.id === created.id)).toBe(false);
   });
 });

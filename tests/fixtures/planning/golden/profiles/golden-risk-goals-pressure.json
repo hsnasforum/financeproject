@@ -1,0 +1,58 @@
+{
+  "id": "golden-risk-goals-pressure",
+  "name": "Golden RISK Goals Pressure",
+  "profile": {
+    "schemaVersion": 2,
+    "monthlyIncomeNet": 5200000,
+    "monthlyEssentialExpenses": 2500000,
+    "monthlyDiscretionaryExpenses": 1200000,
+    "liquidAssets": 2800000,
+    "investmentAssets": 5100000,
+    "debts": [
+      {
+        "id": "goal-risk-loan-1",
+        "name": "Primary Loan",
+        "balance": 36000000,
+        "minimumPayment": 760000,
+        "aprPct": 10.4,
+        "remainingMonths": 84,
+        "repaymentType": "amortizing"
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal-emergency",
+        "name": "Emergency Fund",
+        "targetAmount": 22000000,
+        "currentAmount": 2800000,
+        "targetMonth": 9,
+        "priority": 5
+      },
+      {
+        "id": "goal-house",
+        "name": "House Plan",
+        "targetAmount": 90000000,
+        "currentAmount": 5100000,
+        "targetMonth": 36,
+        "priority": 5
+      },
+      {
+        "id": "goal-retire",
+        "name": "Retirement",
+        "targetAmount": 500000000,
+        "currentAmount": 5100000,
+        "targetMonth": 300,
+        "priority": 5
+      }
+    ]
+  },
+  "runInput": {
+    "horizonMonths": 120,
+    "assumptionsOverride": {},
+    "runScenarios": true,
+    "getActions": true,
+    "analyzeDebt": true,
+    "includeProducts": false,
+    "monteCarlo": null
+  }
+}
