@@ -126,6 +126,29 @@ function sortByUpdatedAtDesc(records: PlanningProfileRecord[]): PlanningProfileR
 function resolveProfileMetaPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_PROFILE_META_PATH);
   if (override) return path.resolve(cwd, override);
+
+  const registryOverride = asString(process.env.PLANNING_PROFILE_REGISTRY_PATH);
+  if (registryOverride) {
+    return path.join(path.dirname(path.resolve(cwd, registryOverride)), "profiles.meta.json");
+  }
+
+  const partitionsOverride = asString(process.env.PLANNING_PROFILE_PARTITIONS_DIR);
+  if (partitionsOverride) {
+    return path.join(path.dirname(path.resolve(cwd, partitionsOverride)), "profiles.meta.json");
+  }
+
+  const profilesOverride = asString(process.env.PLANNING_PROFILES_DIR);
+  if (profilesOverride) {
+    const profilesDir = path.resolve(cwd, profilesOverride);
+    return path.join(path.dirname(profilesDir), "vault", "profiles.meta.json");
+  }
+
+  const runsOverride = asString(process.env.PLANNING_RUNS_DIR);
+  if (runsOverride) {
+    const runsDir = path.resolve(cwd, runsOverride);
+    return path.join(path.dirname(runsDir), "vault", "profiles.meta.json");
+  }
+
   return path.join(resolvePlanningDataDir({ cwd }), "vault", "profiles.meta.json");
 }
 

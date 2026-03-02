@@ -79,7 +79,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
   {
     "assumptionsUsed": {
       "annualDebtRates": {
-        "debt-card-2": 0.13999999999999999,
+        "debt-card-2": 0.14,
       },
       "annualExpectedReturnRate": 0.04,
       "annualInflationRate": 0.02,
@@ -1558,7 +1558,7 @@ exports[`planning v2 monthly simulation snapshots > matches snapshot for 30 dete
   {
     "assumptionsUsed": {
       "annualDebtRates": {
-        "debt-card-22": 0.13999999999999999,
+        "debt-card-22": 0.14,
       },
       "annualExpectedReturnRate": 0.06,
       "annualInflationRate": 0.02,
