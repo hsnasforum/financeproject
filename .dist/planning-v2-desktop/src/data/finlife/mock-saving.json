@@ -1,0 +1,61 @@
+{
+  "result": {
+    "baseList": [
+      {
+        "fin_prdt_cd": "S001",
+        "kor_co_nm": "한빛은행",
+        "fin_prdt_nm": "한빛 자유적금",
+        "join_way": "영업점, 인터넷"
+      },
+      {
+        "fin_prdt_cd": "S002",
+        "kor_co_nm": "새싹은행",
+        "fin_prdt_nm": "청년 응원 적금",
+        "join_way": "모바일"
+      },
+      {
+        "fin_prdt_cd": "S003",
+        "kor_co_nm": "푸른저축은행",
+        "fin_prdt_nm": "드림 정기적금",
+        "join_way": "인터넷"
+      }
+    ],
+    "optionList": [
+      {
+        "fin_prdt_cd": "S001",
+        "save_trm": "12",
+        "intr_rate": "3.40",
+        "intr_rate2": "4.00",
+        "rsrv_type_nm": "정액적립식"
+      },
+      {
+        "fin_prdt_cd": "S001",
+        "save_trm": "24",
+        "intr_rate": "3.50",
+        "intr_rate2": "4.20",
+        "rsrv_type_nm": "자유적립식"
+      },
+      {
+        "fin_prdt_cd": "S002",
+        "save_trm": "12",
+        "intr_rate": "3.60",
+        "intr_rate2": "4.50",
+        "rsrv_type_nm": "정액적립식"
+      },
+      {
+        "fin_prdt_cd": "S003",
+        "save_trm": "6",
+        "intr_rate": "3.10",
+        "intr_rate2": "3.60",
+        "rsrv_type_nm": "자유적립식"
+      },
+      {
+        "fin_prdt_cd": "S003",
+        "save_trm": "12",
+        "intr_rate": "3.30",
+        "intr_rate2": "3.90",
+        "rsrv_type_nm": "정액적립식"
+      }
+    ]
+  }
+}

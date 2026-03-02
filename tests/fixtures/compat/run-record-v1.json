@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "id": "compat-run-1",
+  "profileId": "compat-profile-1",
+  "createdAt": "2026-01-05T00:00:00.000Z",
+  "input": {
+    "horizonMonths": 120,
+    "snapshotId": "compat-snapshot-1",
+    "runScenarios": true,
+    "getActions": true,
+    "analyzeDebt": true
+  },
+  "meta": {
+    "snapshot": {
+      "id": "compat-snapshot-1",
+      "asOf": "2026-01-01",
+      "fetchedAt": "2026-01-01T00:00:00.000Z",
+      "missing": false
+    },
+    "health": {
+      "warningsCodes": ["SNAPSHOT_STALE"],
+      "criticalCount": 0,
+      "snapshotStaleDays": 46
+    }
+  },
+  "outputs": {
+    "simulate": {
+      "summary": {
+        "endNetWorthKrw": 210000000,
+        "worstCashKrw": 1800000,
+        "worstCashMonthIndex": 2,
+        "goalsAchieved": {
+          "achieved": 0,
+          "total": 1
+        },
+        "dsrPct": 32
+      },
+      "warnings": ["SNAPSHOT_STALE"],
+      "goalsStatus": [],
+      "keyTimelinePoints": []
+    },
+    "scenarios": {
+      "table": [],
+      "shortWhyByScenario": {}
+    },
+    "actions": {
+      "actions": []
+    },
+    "debtStrategy": {
+      "summary": {
+        "debtServiceRatio": 32,
+        "totalMonthlyPaymentKrw": 920000,
+        "warningsCount": 0
+      },
+      "warnings": [],
+      "summaries": []
+    }
+  }
+}

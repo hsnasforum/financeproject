@@ -12,7 +12,7 @@
 ## ECOS KeyStatisticList
 - 기본 수집 경로는 ECOS Open API `KeyStatisticList` 입니다.
 - 필수/옵션 환경변수:
-  - `ECOS_API_KEY`
+  - `BOK_ECOS_API_KEY`
   - `ECOS_LANGUAGE` (기본 `kr`)
   - `ECOS_MAX_ROWS` (기본 `100`)
   - `ECOS_ENABLED` (기본 `true`)

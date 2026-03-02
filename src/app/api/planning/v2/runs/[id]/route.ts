@@ -1,7 +1,7 @@
 import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
 import {
-  assertCsrf,
   assertLocalHost,
+  requireCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
@@ -13,10 +13,6 @@ import { deleteRun, getRun } from "../../../../../../lib/planning/server/store/r
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
-
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
 
 function withLocalReadGuard(request: Request) {
   try {
@@ -33,9 +29,8 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
-    if (hasCsrfCookie(request)) {
-      assertCsrf(request, body);
-    }
+    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
+    requireCsrf(request, { csrf: csrfToken }, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -101,11 +96,11 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const run = await getRun(id);
     if (!run) {
-      return jsonError("NO_DATA", "실행 이력을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
     return jsonOk({ data: run });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "실행 이력 조회에 실패했습니다.";
+    const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }
@@ -151,7 +146,7 @@ export async function DELETE(request: Request, context: RouteContext) {
         recordId: id,
         message: "run not found",
       });
-      return jsonError("NO_DATA", "실행 이력을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
 
     appendRunAudit({
@@ -169,7 +164,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     });
     return jsonOk({ data: { id, deleted: true, softDeleted: true } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "실행 이력 삭제에 실패했습니다.";
+    const message = error instanceof Error ? error.message : "실행 기록 삭제에 실패했습니다.";
     appendRunAudit({
       event: "PLANNING_RUN_DELETE",
       route: "/api/planning/v2/runs/[id]",

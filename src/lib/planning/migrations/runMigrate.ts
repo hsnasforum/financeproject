@@ -1,5 +1,6 @@
 import { LATEST_RUN_VERSION } from "./versions.ts";
 import { type MigrationResult } from "./types.ts";
+import { RUN_SCHEMA_VERSION } from "../v2/schemaVersion.ts";
 
 type RunSnapshotMetaLike = {
   id?: string;
@@ -18,6 +19,7 @@ type RunHealthMetaLike = {
 
 type PlanningRunRecordLike = {
   version: 1;
+  schemaVersion?: 2;
   id: string;
   profileId: string;
   title?: string;
@@ -202,6 +204,7 @@ export function migrateRunRecord(input: unknown): MigrationResult<PlanningRunRec
 
   const data: PlanningRunRecordLike = {
     version: LATEST_RUN_VERSION,
+    schemaVersion: RUN_SCHEMA_VERSION,
     id,
     profileId,
     ...(asString(input.title) ? { title: asString(input.title) } : {}),

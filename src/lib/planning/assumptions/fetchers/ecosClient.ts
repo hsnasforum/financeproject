@@ -24,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveApiKey(explicit?: string): string {
-  const value = explicit ?? process.env.ECOS_API_KEY ?? process.env.BOK_ECOS_API_KEY ?? "";
+  const value = explicit ?? process.env.BOK_ECOS_API_KEY ?? process.env.ECOS_API_KEY ?? "";
   return value.trim();
 }
 

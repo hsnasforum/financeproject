@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { atomicWriteJson } from "../storage/atomicWrite";
 import { type PlanningCacheEntry, type PlanningCacheKind, type PlanningCacheUsageStats } from "./types";
 
 export const CACHE_DIR = ".data/planning/cache";
@@ -39,10 +40,7 @@ function isExpired(expiresAt: string): boolean {
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
-  await fs.rename(tmpPath, filePath);
+  await atomicWriteJson(filePath, payload);
 }
 
 function defaultUsageStats(): PlanningCacheUsageStats {

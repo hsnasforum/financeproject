@@ -33,6 +33,7 @@ function detectWorkspaceRoot(startDir: string, maxDepth = 8): string {
 const workspaceRoot = detectWorkspaceRoot(__dirname);
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   turbopack: {
     root: workspaceRoot,
   },

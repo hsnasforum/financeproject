@@ -1,6 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
+import { atomicWriteJson } from "../storage/atomicWrite";
+import { resolvePlanningDataDir } from "../storage/dataDir";
 import { type AssumptionsSnapshot } from "./types.ts";
+import { ASSUMPTIONS_SCHEMA_VERSION } from "../v2/schemaVersion";
 
 export const ASSUMPTIONS_PATH = ".data/planning/assumptions.latest.json";
 export const ASSUMPTIONS_HISTORY_DIR = ".data/planning/assumptions/history";
@@ -21,12 +25,14 @@ assertServerOnly();
 
 function resolveAssumptionsPath(): string {
   const override = process.env.PLANNING_ASSUMPTIONS_PATH?.trim();
-  return path.resolve(process.cwd(), override || ASSUMPTIONS_PATH);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolvePlanningDataDir(), "assumptions.latest.json");
 }
 
 function resolveHistoryDir(): string {
   const override = process.env.PLANNING_ASSUMPTIONS_HISTORY_DIR?.trim();
-  return path.resolve(process.cwd(), override || ASSUMPTIONS_HISTORY_DIR);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolvePlanningDataDir(), "assumptions", "history");
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -40,6 +46,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isSnapshot(value: unknown): value is AssumptionsSnapshot {
   if (!isRecord(value)) return false;
   if (value.version !== 1) return false;
+  if (value.schemaVersion !== undefined) {
+    const schemaVersion = Math.trunc(Number(value.schemaVersion));
+    if (!Number.isFinite(schemaVersion) || schemaVersion < 1 || schemaVersion > ASSUMPTIONS_SCHEMA_VERSION) return false;
+  }
   if (typeof value.asOf !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.asOf)) return false;
   if (typeof value.fetchedAt !== "string") return false;
 
@@ -92,17 +102,24 @@ function sanitizeSnapshotId(id: string): string {
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
-  await fs.rename(tmpPath, filePath);
+  await atomicWriteJson(filePath, payload);
 }
 
 async function readSnapshotFile(filePath: string): Promise<AssumptionsSnapshot | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
-    const parsed = JSON.parse(raw) as unknown;
-    return isSnapshot(parsed) ? parsed : null;
+    const loaded = JSON.parse(raw) as unknown;
+    const decoded = await decodeStoragePayload(loaded);
+    const parsed = decoded.payload;
+    if (!isSnapshot(parsed)) return null;
+    const snapshot: AssumptionsSnapshot = {
+      ...parsed,
+      schemaVersion: ASSUMPTIONS_SCHEMA_VERSION,
+    };
+    if (decoded.rewriteToVault) {
+      await writeJsonAtomic(filePath, await encodeStoragePayload(snapshot));
+    }
+    return snapshot;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError?.code === "ENOENT") return null;
@@ -132,7 +149,11 @@ export async function saveLatestAssumptionsSnapshot(snapshot: AssumptionsSnapsho
   assertServerOnly();
 
   const filePath = resolveAssumptionsPath();
-  await writeJsonAtomic(filePath, snapshot);
+  const payload = {
+    ...snapshot,
+    schemaVersion: ASSUMPTIONS_SCHEMA_VERSION,
+  };
+  await writeJsonAtomic(filePath, await encodeStoragePayload(payload));
 }
 
 export async function saveAssumptionsSnapshotToHistory(snapshot: AssumptionsSnapshot): Promise<{ id: string }> {
@@ -156,7 +177,11 @@ export async function saveAssumptionsSnapshotToHistory(snapshot: AssumptionsSnap
     }
   }
 
-  await writeJsonAtomic(path.join(dirPath, `${nextId}.json`), snapshot);
+  const payload = {
+    ...snapshot,
+    schemaVersion: ASSUMPTIONS_SCHEMA_VERSION,
+  };
+  await writeJsonAtomic(path.join(dirPath, `${nextId}.json`), await encodeStoragePayload(payload));
   return { id: nextId };
 }
 

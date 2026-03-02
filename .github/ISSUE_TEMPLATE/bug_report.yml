@@ -1,0 +1,78 @@
+name: "Planning Bug Report"
+description: "v2 freeze 기준 버그 제보 템플릿"
+title: "[BUG] "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: screen
+    attributes:
+      label: 화면
+      description: 문제가 발생한 화면/경로를 선택하세요.
+      options:
+        - /planning
+        - /planning/runs
+        - /planning/reports
+        - /ops/assumptions
+        - /ops/planning
+        - /ops/planning-cache
+        - /ops/planning-cleanup
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 단계
+      description: 1~5 단계로 재현 순서를 적어주세요.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: 기대 결과 vs 실제 결과
+      placeholder: |
+        기대:
+        실제:
+    validations:
+      required: true
+
+  - type: input
+    id: snapshot_ref
+    attributes:
+      label: snapshotRef (id/asOf/fetchedAt/missing)
+      placeholder: "id=..., asOf=..., fetchedAt=..., missing=false"
+    validations:
+      required: true
+
+  - type: input
+    id: run_report_id
+    attributes:
+      label: runId / reportId (있으면)
+      placeholder: "runId=..., reportId=..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: gate_results
+    attributes:
+      label: 게이트 결과 (가능하면)
+      description: 실행 결과 요약을 붙여주세요.
+      placeholder: |
+        pnpm planning:v2:complete: PASS/FAIL
+        pnpm planning:v2:acceptance: PASS/FAIL
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety_checks
+    attributes:
+      label: 사전 확인
+      options:
+        - label: 데이터 누출/보안 이슈 가능성이 있음
+        - label: 단위/금리 스케일(0.048 vs 4.8) 문제 가능성이 있음

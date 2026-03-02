@@ -1,11 +1,7 @@
-import { amortizingMonthlyPayment, simulateAmortizingPayoff } from "./calc";
+import { amortizingMonthlyPayment, roundKrw, simulateAmortizingPayoff } from "../../../calc";
 import { type DebtStrategyInput, type DebtSummary, type DebtStrategyResult } from "./types";
 
 const DEFAULT_COMPARE_TERMS = [12, 24, 36, 60, 120];
-
-function roundMoney(value: number): number {
-  return Math.round(value);
-}
 
 function normalizeCompareTerms(terms: number[] | undefined): number[] {
   const source = Array.isArray(terms) && terms.length > 0 ? terms : DEFAULT_COMPARE_TERMS;
@@ -38,7 +34,7 @@ export function buildDebtWhatIf(
       termReductions.push({
         liabilityId: summary.liabilityId,
         newTermMonths: summary.remainingMonths,
-        newMonthlyPaymentKrw: roundMoney(convertedMonthly),
+        newMonthlyPaymentKrw: roundKrw(convertedMonthly),
         notes: ["Converts interest-only repayment to amortizing repayment over the same remaining term."],
       });
       continue;
@@ -51,7 +47,7 @@ export function buildDebtWhatIf(
       const row = {
         liabilityId: summary.liabilityId,
         newTermMonths: term,
-        newMonthlyPaymentKrw: roundMoney(monthlyPayment),
+        newMonthlyPaymentKrw: roundKrw(monthlyPayment),
         notes: ["Assumes same principal and APR; only term changed."],
       };
 
@@ -67,7 +63,7 @@ export function buildDebtWhatIf(
       const extraPayoff = simulateAmortizingPayoff(summary.principalKrw, summary.aprPct, summary.remainingMonths, extraPaymentKrw);
       extraPayments.push({
         liabilityId: summary.liabilityId,
-        extraPaymentKrw: roundMoney(extraPaymentKrw),
+        extraPaymentKrw: roundKrw(extraPaymentKrw),
         payoffMonthsReduced: Math.max(0, basePayoff.payoffMonths - extraPayoff.payoffMonths),
         interestSavingsKrw: Math.max(0, basePayoff.totalInterestKrw - extraPayoff.totalInterestKrw),
       });

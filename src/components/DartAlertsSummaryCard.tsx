@@ -138,6 +138,17 @@ function toDateMillis(value: string | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function dedupeByAlertId<T extends { id: string }>(items: T[]): T[] {
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
+}
+
 export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickActions?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<AlertsData>(EMPTY_ALERTS);
@@ -203,7 +214,7 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
   const visibleItems = useMemo(() => {
     const prefsFiltered = applyLocalPrefs(listItems, localPrefs);
     const rulesFiltered = applyRules(prefsFiltered, alertRules);
-    return applyState(rulesFiltered, alertState).slice(0, 5);
+    return dedupeByAlertId(applyState(rulesFiltered, alertState)).slice(0, 5);
   }, [alertRules, alertState, listItems, localPrefs]);
 
   function updateAlertState(updater: (prev: AlertState) => AlertState): void {

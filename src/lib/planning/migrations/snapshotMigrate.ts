@@ -1,5 +1,6 @@
 import { LATEST_SNAPSHOT_VERSION } from "./versions.ts";
 import { type MigrationResult } from "./types.ts";
+import { ASSUMPTIONS_SCHEMA_VERSION } from "../v2/schemaVersion.ts";
 
 type AssumptionsSourceLike = {
   name: string;
@@ -9,6 +10,7 @@ type AssumptionsSourceLike = {
 
 type AssumptionsSnapshotLike = {
   version: 1;
+  schemaVersion?: 2;
   asOf: string;
   fetchedAt: string;
   korea: Record<string, number | undefined>;
@@ -156,6 +158,7 @@ export function migrateAssumptionsSnapshot(input: unknown): MigrationResult<Assu
 
   const data: AssumptionsSnapshotLike = {
     version: LATEST_SNAPSHOT_VERSION,
+    schemaVersion: ASSUMPTIONS_SCHEMA_VERSION,
     asOf: new Date(asOf).toISOString().slice(0, 10),
     fetchedAt: new Date(fetchedAt).toISOString(),
     korea,

@@ -75,11 +75,13 @@ describe("ops assumptions routes", () => {
     loadLatestAssumptionsSnapshotMock.mockResolvedValue(null);
 
     const response = await latestGET(buildGetRequest());
-    const payload = (await response.json()) as { ok?: boolean; message?: string };
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string; message?: string; fixHref?: string } };
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(409);
     expect(payload.ok).toBe(false);
-    expect(payload.message).toContain("없습니다");
+    expect(payload.error?.code).toBe("STALE_ASSUMPTIONS");
+    expect(payload.error?.message).toContain("없습니다");
+    expect(payload.error?.fixHref).toBe("/ops/assumptions");
     expect(loadLatestAssumptionsSnapshotMock).toHaveBeenCalledTimes(1);
   });
 
@@ -148,11 +150,12 @@ describe("ops assumptions routes", () => {
     buildAssumptionsSnapshotMock.mockRejectedValue(new Error("fetch failed"));
 
     const response = await syncPOST(buildPostRequest());
-    const payload = (await response.json()) as { ok?: boolean; message?: string };
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string; message?: string } };
 
     expect(response.status).toBe(500);
     expect(payload.ok).toBe(false);
-    expect(payload.message).toContain("fetch failed");
+    expect(payload.error?.code).toBe("INTERNAL");
+    expect(payload.error?.message).toContain("fetch failed");
 
     expect(appendAuditMock).toHaveBeenCalledTimes(1);
     const [auditInput] = appendAuditMock.mock.calls[0] as [

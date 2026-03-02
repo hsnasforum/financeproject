@@ -8,6 +8,7 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
+import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { checkPlanningIntegrity } from "@/lib/ops/planningDoctor";
 
 type DoctorBody = {
@@ -61,9 +62,17 @@ export async function POST(request: Request) {
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
-      return NextResponse.json({ ok: false, message: "요청 검증 중 오류가 발생했습니다." }, { status: 500 });
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: "요청 검증 중 오류가 발생했습니다.",
+        status: 500,
+      });
     }
-    return NextResponse.json({ ok: false, message: guard.message }, { status: guard.status });
+    return opsErrorResponse({
+      code: guard.code,
+      message: guard.message,
+      status: guard.status,
+    });
   }
 
   const strict = body?.strict === true;
@@ -88,6 +97,10 @@ export async function POST(request: Request) {
       strict,
       message,
     });
-    return NextResponse.json({ ok: false, message }, { status: 500 });
+    return opsErrorResponse({
+      code: "STORAGE_CORRUPT",
+      message,
+      status: 500,
+    });
   }
 }

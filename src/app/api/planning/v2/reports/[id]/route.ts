@@ -36,8 +36,9 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
-    if (hasCsrfCookie(request)) {
-      assertCsrf(request, body);
+    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
+    if (hasCsrfCookie(request) && csrfToken) {
+      assertCsrf(request, { csrf: csrfToken });
     }
     return null;
   } catch (error) {

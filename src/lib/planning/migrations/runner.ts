@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ASSUMPTIONS_HISTORY_DIR, ASSUMPTIONS_PATH } from "../assumptions/storage.ts";
 import { encryptPlanningJson, isPlanningEncryptedEnvelope } from "../crypto/encrypt";
+import { atomicWriteJson } from "../storage/atomicWrite";
 import { getPlanningUserDir, sanitizePlanningUserId } from "../store/namespace";
 import { PROFILES_DIR, RUNS_DIR } from "../store/paths.ts";
 import { migrateAnyFile, type MigrationFileKind } from "./index.ts";
@@ -108,10 +109,7 @@ async function readJsonFile(filePath: string): Promise<{ ok: true; json: unknown
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmpPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
-  await fs.rename(tmpPath, filePath);
+  await atomicWriteJson(filePath, payload);
 }
 
 export async function planMigrations(

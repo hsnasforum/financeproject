@@ -1,4 +1,5 @@
 import path from "node:path";
+import { resolvePlanningDataDir } from "../storage/dataDir";
 
 export const DEFAULT_PLANNING_USER_ID = "default";
 export const PLANNING_USERS_DIR = ".data/planning/users";
@@ -36,6 +37,5 @@ export function resolvePlanningUserId(
 
 export function getPlanningUserDir(userId: string, cwd = process.cwd()): string {
   const safeUserId = sanitizePlanningUserId(userId);
-  return path.resolve(cwd, PLANNING_USERS_DIR, safeUserId);
+  return path.join(resolvePlanningDataDir({ cwd }), "users", safeUserId);
 }
-

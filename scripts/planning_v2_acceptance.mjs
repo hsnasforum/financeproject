@@ -1,3 +1,5 @@
+import { spawn } from "node:child_process";
+
 let findRedactionIssues = () => [];
 let diffRuns = null;
 
@@ -20,17 +22,47 @@ function sanitizeMessage(input) {
   const text = asString(input);
   if (!text) return "unknown";
   return text
-    .replace(/(GITHUB_TOKEN(?:_DISPATCH)?|ECOS_API_KEY|FINLIFE_[A-Z0-9_]*(?:KEY|TOKEN))/gi, "$1***")
+    .replace(/(GITHUB_TOKEN(?:_DISPATCH)?|BOK_ECOS_API_KEY|ECOS_API_KEY|FINLIFE_[A-Z0-9_]*(?:KEY|TOKEN))/gi, "$1***")
     .replace(/Bearer\s+[A-Za-z0-9._-]+/g, "Bearer ***")
     .replace(/\.data\/[^\s\"'`)]*/g, ".data/***");
 }
 
 function parseArgs(argv) {
-  const args = new Set(argv.slice(2));
+  const rawArgs = argv.slice(2);
+  const args = new Set(rawArgs);
+  const suiteArg = rawArgs.find((arg) => arg.startsWith("--suite="));
+  const suiteRaw = suiteArg ? asString(suiteArg.split("=")[1]).toLowerCase() : "";
+  const suite = suiteRaw === "fast" ? "fast" : "full";
   return {
     keep: args.has("--keep"),
     withProducts: args.has("--with-products"),
+    suite,
   };
+}
+
+function runPnpmScript(script, env) {
+  return new Promise((resolve, reject) => {
+    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    const child = spawn(command, [script], {
+      cwd: process.cwd(),
+      env,
+      stdio: "inherit",
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
+async function runPlaywrightAcceptance(baseUrl, suite) {
+  const script = suite === "fast" ? "planning:v2:e2e:fast" : "planning:v2:e2e:full";
+  const exitCode = await runPnpmScript(script, {
+    ...process.env,
+    E2E_BASE_URL: baseUrl,
+  });
+  if (exitCode !== 0) {
+    throw new Error(`${script} failed with code ${exitCode}`);
+  }
+  return script;
 }
 
 function printStep(ok, label, detail = "") {
@@ -98,6 +130,39 @@ async function requestText(baseUrl, input) {
   return { response, text, url };
 }
 
+async function requestLegacyRedirect(baseUrl, path) {
+  const url = `${baseUrl}${path}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      origin: baseUrl,
+      referer: `${baseUrl}/planning`,
+    },
+    redirect: "manual",
+    cache: "no-store",
+  });
+  return { response, url };
+}
+
+async function assertLegacyPlannerRedirect(baseUrl, legacyPath, label) {
+  const legacyPlanner = await requestLegacyRedirect(baseUrl, legacyPath);
+  if (legacyPlanner.response.status !== 307 && legacyPlanner.response.status !== 308) {
+    throw new Error(`legacy route redirect failed: ${legacyPath} status=${legacyPlanner.response.status}`);
+  }
+  const legacyLocation = asString(legacyPlanner.response.headers.get("location"));
+  if (!legacyLocation) {
+    throw new Error(`legacy route redirect failed: ${legacyPath} missing Location header`);
+  }
+  const legacyRedirectPath = new URL(legacyLocation, baseUrl).pathname;
+  const expectedPath = legacyPath.startsWith("/planner/")
+    ? `/planning/${legacyPath.slice("/planner/".length)}`
+    : "/planning";
+  if (legacyRedirectPath !== expectedPath) {
+    throw new Error(`legacy route redirect failed: ${legacyPath} location=${legacyLocation}`);
+  }
+  printStep(true, label, `${legacyPlanner.response.status} -> ${legacyRedirectPath}`);
+}
+
 function buildAcceptanceProfile() {
   return {
     monthlyIncomeNet: 4_800_000,
@@ -111,7 +176,7 @@ function buildAcceptanceProfile() {
         name: "Acceptance Loan",
         balance: 18_000_000,
         minimumPayment: 420_000,
-        apr: 0.062,
+        aprPct: 6.2,
         remainingMonths: 84,
         repaymentType: "amortizing",
       },
@@ -177,6 +242,9 @@ async function run() {
   const createdName = `Acceptance Profile ${Date.now()}`;
 
   try {
+    await assertLegacyPlannerRedirect(baseUrl, "/planner", "legacy /planner redirect");
+    await assertLegacyPlannerRedirect(baseUrl, "/planner/legacy", "legacy /planner/* redirect");
+
     const createProfile = await requestJson(baseUrl, {
       method: "POST",
       path: "/api/planning/v2/profiles",
@@ -334,7 +402,12 @@ async function run() {
     }
     assertNoLeak("runs:export", runExport.text);
     const exported = JSON.parse(runExport.text);
-    if (!exported || exported.id !== runOneId) {
+    if (
+      !exported
+      || exported.version !== 1
+      || !exported.summary
+      || !exported.warnings
+    ) {
       throw new Error("run export payload mismatch");
     }
     printStep(true, "run export", `content-type=${contentType.split(";")[0]}`);
@@ -347,6 +420,9 @@ async function run() {
     } else {
       printStep(true, "cleanup", "skipped (--keep)");
     }
+
+    const executedSuite = await runPlaywrightAcceptance(baseUrl, options.suite);
+    printStep(true, "ui acceptance", executedSuite);
 
     printStep(true, "complete", "ACCEPTANCE PASS");
     console.log("ACCEPTANCE PASS");

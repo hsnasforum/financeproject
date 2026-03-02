@@ -13,6 +13,7 @@ function buildRequest(input?: {
   origin?: string;
   referer?: string;
   cookie?: string;
+  fetchSite?: string;
 }): Request {
   const host = input?.host ?? "localhost:3000";
   const headers = new Headers();
@@ -20,6 +21,7 @@ function buildRequest(input?: {
   if (input?.origin) headers.set("origin", input.origin);
   if (input?.referer) headers.set("referer", input.referer);
   if (input?.cookie) headers.set("cookie", input.cookie);
+  if (input?.fetchSite) headers.set("sec-fetch-site", input.fetchSite);
   return new Request(`http://${host}/api/dev/test`, { method: "POST", headers });
 }
 
@@ -68,5 +70,21 @@ describe("dev guards", () => {
     assertSameOrigin(request);
     assertDevUnlocked(request);
     assertCsrf(request, { csrf: "token-ok" });
+  });
+
+  it("accepts localhost/127.0.0.1 alias as same-origin in local mode", () => {
+    const request = buildRequest({
+      host: "127.0.0.1:3000",
+      origin: "http://localhost:3000",
+    });
+    assertSameOrigin(request);
+  });
+
+  it("accepts same-origin fetch-site when origin headers are missing", () => {
+    const request = buildRequest({
+      host: "localhost:3000",
+      fetchSite: "same-origin",
+    });
+    assertSameOrigin(request);
   });
 });

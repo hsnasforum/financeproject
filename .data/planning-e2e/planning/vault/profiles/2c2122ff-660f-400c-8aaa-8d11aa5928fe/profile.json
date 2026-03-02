@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "schemaVersion": 2,
+  "id": "2c2122ff-660f-400c-8aaa-8d11aa5928fe",
+  "name": "Golden RISK Negative Cashflow",
+  "profile": {
+    "monthlyIncomeNet": 3900000,
+    "monthlyEssentialExpenses": 2400000,
+    "monthlyDiscretionaryExpenses": 1100000,
+    "liquidAssets": 1500000,
+    "investmentAssets": 2200000,
+    "debts": [
+      {
+        "id": "risk-loan-1",
+        "name": "High APR Loan",
+        "balance": 28000000,
+        "minimumPayment": 920000,
+        "aprPct": 15.9,
+        "remainingMonths": 60,
+        "repaymentType": "amortizing"
+      },
+      {
+        "id": "risk-loan-2",
+        "name": "Card Revolver",
+        "balance": 7200000,
+        "minimumPayment": 260000,
+        "aprPct": 19.8,
+        "remainingMonths": 48,
+        "repaymentType": "interestOnly"
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal-emergency",
+        "name": "Emergency Fund",
+        "targetAmount": 12000000,
+        "currentAmount": 1500000,
+        "targetMonth": 6,
+        "priority": 5
+      },
+      {
+        "id": "goal-lump",
+        "name": "Lump Sum",
+        "targetAmount": 30000000,
+        "targetMonth": 24,
+        "priority": 4
+      },
+      {
+        "id": "goal-retire",
+        "name": "Retirement",
+        "targetAmount": 300000000,
+        "currentAmount": 2200000,
+        "targetMonth": 300,
+        "priority": 5
+      }
+    ]
+  },
+  "createdAt": "2026-03-01T19:26:14.958Z",
+  "updatedAt": "2026-03-01T19:26:14.958Z"
+}

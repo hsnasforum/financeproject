@@ -1,0 +1,172 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { PageShell } from "@/components/ui/PageShell";
+
+type DoctorCheck = {
+  id: string;
+  title: string;
+  status: "PASS" | "WARN" | "FAIL";
+  message: string;
+  fixHref?: string;
+  details?: Record<string, unknown>;
+};
+
+type DoctorReport = {
+  ok: boolean;
+  generatedAt: string;
+  checks: DoctorCheck[];
+  summary: {
+    pass: number;
+    warn: number;
+    fail: number;
+  };
+};
+
+type DoctorPayload = {
+  ok?: boolean;
+  data?: DoctorReport;
+  message?: string;
+};
+
+type OpsDoctorClientProps = {
+  csrf: string;
+};
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function formatDateTime(value: string): string {
+  const ts = Date.parse(value);
+  if (!Number.isFinite(ts)) return value;
+  return new Date(ts).toLocaleString("ko-KR", { hour12: false });
+}
+
+function statusTone(status: DoctorCheck["status"]): string {
+  if (status === "PASS") return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  if (status === "WARN") return "border-amber-200 bg-amber-50 text-amber-900";
+  return "border-rose-200 bg-rose-50 text-rose-900";
+}
+
+export function OpsDoctorClient({ csrf }: OpsDoctorClientProps) {
+  const [report, setReport] = useState<DoctorReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const hasCsrf = asString(csrf).length > 0;
+
+  const loadDoctor = useCallback(async () => {
+    if (!hasCsrf) {
+      setError("Dev unlock/CSRF가 없어 doctor 실행이 차단됩니다.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const params = new URLSearchParams();
+      params.set("csrf", csrf);
+      const response = await fetch(`/api/ops/doctor?${params.toString()}`, { cache: "no-store" });
+      const payload = (await response.json().catch(() => null)) as DoctorPayload | null;
+      if (!response.ok || !payload?.ok || !payload.data) {
+        throw new Error(payload?.message ?? "doctor 실행에 실패했습니다.");
+      }
+      setReport(payload.data);
+    } catch (doctorError) {
+      setError(doctorError instanceof Error ? doctorError.message : "doctor 실행에 실패했습니다.");
+      setReport(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [csrf, hasCsrf]);
+
+  useEffect(() => {
+    void loadDoctor();
+  }, [loadDoctor]);
+
+  return (
+    <PageShell>
+      <PageHeader
+        title="Ops Doctor"
+        description="핵심 운영 체크를 PASS/FAIL로 빠르게 점검"
+        action={(
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => void loadDoctor()} disabled={loading || !hasCsrf}>
+              {loading ? "실행 중..." : "재실행"}
+            </Button>
+            <Link href="/ops">
+              <Button type="button" size="sm" variant="outline">Ops 허브</Button>
+            </Link>
+          </div>
+        )}
+      />
+
+      {!hasCsrf ? (
+        <Card className="mb-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          Dev unlock/CSRF가 없어 doctor를 실행할 수 없습니다.
+        </Card>
+      ) : null}
+
+      {loading && !report ? (
+        <LoadingState className="mb-4" title="ops doctor를 실행하는 중입니다" />
+      ) : null}
+      {error ? <ErrorState className="mb-4" message={error} onRetry={() => void loadDoctor()} retryLabel="다시 실행" /> : null}
+      {!loading && !error && !report ? (
+        <EmptyState
+          actionLabel="다시 실행"
+          className="mb-4"
+          description="점검 리포트를 아직 불러오지 못했습니다."
+          icon="data"
+          onAction={() => void loadDoctor()}
+          title="doctor 결과가 없습니다"
+        />
+      ) : null}
+
+      {report ? (
+        <Card className="mb-4 p-4">
+          <h2 className="text-base font-black text-slate-900">요약</h2>
+          <p className="mt-2 text-sm text-slate-700">
+            generatedAt: <span className="font-semibold">{formatDateTime(report.generatedAt)}</span>
+          </p>
+          <div className="mt-3 grid gap-2 md:grid-cols-4 text-sm">
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">전체 판정: <span className="font-semibold">{report.ok ? "PASS" : "FAIL"}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">PASS: <span className="font-semibold">{report.summary.pass}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">WARN: <span className="font-semibold">{report.summary.warn}</span></div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">FAIL: <span className="font-semibold">{report.summary.fail}</span></div>
+          </div>
+        </Card>
+      ) : null}
+
+      <div className="space-y-3">
+        {report?.checks.map((check) => (
+          <Card className={`p-4 border ${statusTone(check.status)}`} key={check.id}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-black">{check.title}</h3>
+              <span className="text-xs font-bold">{check.status}</span>
+            </div>
+            <p className="mt-2 text-sm">{check.message}</p>
+            {check.fixHref ? (
+              <p className="mt-2 text-xs">
+                <Link className="font-semibold underline" href={check.fixHref}>{check.fixHref}</Link>
+              </p>
+            ) : null}
+            {check.details ? (
+              <details className="mt-2 text-xs">
+                <summary className="cursor-pointer">details</summary>
+                <pre className="mt-1 overflow-auto rounded border border-slate-200 bg-white p-2 text-[11px] text-slate-700">{JSON.stringify(check.details, null, 2)}</pre>
+              </details>
+            ) : null}
+          </Card>
+        ))}
+      </div>
+    </PageShell>
+  );
+}

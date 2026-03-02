@@ -15,7 +15,7 @@ export const SAMPLE_PROFILE_V2_KO: ProfileV2 = {
       name: "주택담보대출",
       balance: 180_000_000,
       minimumPayment: 850_000,
-      apr: 4.2,
+      aprPct: 4.2,
       remainingMonths: 240,
       repaymentType: "amortizing",
     },

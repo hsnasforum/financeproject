@@ -1,8 +1,11 @@
 import { LATEST_PROFILE_VERSION } from "./versions.ts";
 import { type MigrationResult } from "./types.ts";
+import { normalizeProfileInput } from "../v2/profileNormalize.ts";
+import { PROFILE_SCHEMA_VERSION } from "../v2/schemaVersion.ts";
 
 type PlanningProfileRecordLike = {
   version: 1;
+  schemaVersion?: 2;
   id: string;
   name: string;
   profile: Record<string, unknown>;
@@ -71,11 +74,26 @@ export function migrateProfileRecord(input: unknown): MigrationResult<PlanningPr
     return failProfile(fromVersion, errors, warnings);
   }
 
+  const normalized = normalizeProfileInput(profile);
+  warnings.push(...normalized.warnings.map((warning) => `NORMALIZE:${warning}`));
+  if (normalized.fixes.length > 0) {
+    warnings.push(`NORMALIZE_FIXES:${normalized.fixes.length}`);
+  }
+  if (!normalized.ok) {
+    warnings.push("NORMALIZE:PARTIAL");
+  }
+
+  const normalizedProfile = normalized.profile as unknown as Record<string, unknown>;
+  if (JSON.stringify(profile) !== JSON.stringify(normalizedProfile)) {
+    changed = true;
+  }
+
   const data: PlanningProfileRecordLike = {
     version: LATEST_PROFILE_VERSION,
+    schemaVersion: PROFILE_SCHEMA_VERSION,
     id,
     name,
-    profile: profile as PlanningProfileRecordLike["profile"],
+    profile: normalizedProfile as PlanningProfileRecordLike["profile"],
     createdAt: new Date(createdAt).toISOString(),
     updatedAt: new Date(updatedAt).toISOString(),
   };

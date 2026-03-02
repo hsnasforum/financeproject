@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { withDevCsrf } from "@/lib/dev/clientCsrf";
 
 const DEFAULT_PROFILE_JSON = `{
   "monthlyIncomeNet": 4200000,
@@ -13,7 +14,7 @@ const DEFAULT_PROFILE_JSON = `{
   "liquidAssets": 1200000,
   "investmentAssets": 3500000,
   "debts": [
-    { "id": "debt-card", "name": "Card Loan", "balance": 5200000, "minimumPayment": 230000, "apr": 0.16 }
+    { "id": "debt-card", "name": "Card Loan", "balance": 5200000, "minimumPayment": 230000, "aprPct": 16.0 }
   ],
   "goals": [
     { "id": "goal-home", "name": "Home Fund", "targetAmount": 12000000, "currentAmount": 1000000, "targetMonth": 36, "priority": 5, "minimumMonthlyContribution": 150000 },
@@ -326,6 +327,23 @@ export default function DebugPlanningV2Client() {
   const [debtOffersJson, setDebtOffersJson] = useState(DEFAULT_DEBT_OFFERS_JSON);
   const [debtResponse, setDebtResponse] = useState<DebtStrategyApiPayload | null>(null);
 
+  useEffect(() => {
+    const suppressPerfTimestampError = (event: ErrorEvent) => {
+      const message = String(event?.message ?? "");
+      if (
+        message.includes("cannot have a negative time stamp")
+        && message.includes("DebugPlanningV2Page")
+      ) {
+        event.preventDefault();
+      }
+    };
+
+    window.addEventListener("error", suppressPerfTimestampError);
+    return () => {
+      window.removeEventListener("error", suppressPerfTimestampError);
+    };
+  }, []);
+
   const timelineSample = useMemo(
     () => pickTimelineRows(response?.data?.timeline ?? []),
     [response?.data?.timeline],
@@ -360,7 +378,7 @@ export default function DebugPlanningV2Client() {
       const res = await fetch("/api/planning/v2/simulate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(withDevCsrf(parsed)),
       });
 
       const payload = (await res.json().catch(() => null)) as SimulateApiPayload | null;
@@ -395,7 +413,7 @@ export default function DebugPlanningV2Client() {
       const res = await fetch("/api/planning/v2/scenarios", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(withDevCsrf(parsed)),
       });
 
       const payload = (await res.json().catch(() => null)) as ScenariosApiPayload | null;
@@ -441,13 +459,13 @@ export default function DebugPlanningV2Client() {
       const res = await fetch("/api/planning/v2/monte-carlo", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withDevCsrf({
           ...parsed,
           monteCarlo: {
             paths,
             seed,
           },
-        }),
+        })),
       });
 
       const payload = (await res.json().catch(() => null)) as MonteCarloApiPayload | null;
@@ -488,11 +506,11 @@ export default function DebugPlanningV2Client() {
       const res = await fetch("/api/planning/v2/actions", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withDevCsrf({
           ...parsed,
           includeProducts: actionsIncludeProducts,
           maxCandidatesPerAction: maxCandidates,
-        }),
+        })),
       });
 
       const payload = (await res.json().catch(() => null)) as ActionsApiPayload | null;
@@ -543,13 +561,13 @@ export default function DebugPlanningV2Client() {
       const res = await fetch("/api/planning/v2/debt-strategy", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withDevCsrf({
           profile: parsed.profile,
           offers,
           options: {
             extraPaymentKrw,
           },
-        }),
+        })),
       });
 
       const payload = (await res.json().catch(() => null)) as DebtStrategyApiPayload | null;

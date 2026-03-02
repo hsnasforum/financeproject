@@ -1,5 +1,6 @@
 export type AssumptionsSnapshot = {
   version: 1;
+  schemaVersion?: 2;
   asOf: string;
   fetchedAt: string;
   korea: {

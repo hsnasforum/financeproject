@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "schemaVersion": 2,
+  "id": "b26c6911-0c79-46e9-995f-a0891e00479b",
+  "name": "Golden GOOD Basic",
+  "profile": {
+    "monthlyIncomeNet": 6500000,
+    "monthlyEssentialExpenses": 2100000,
+    "monthlyDiscretionaryExpenses": 900000,
+    "liquidAssets": 18000000,
+    "investmentAssets": 42000000,
+    "debts": [
+      {
+        "id": "good-home-loan",
+        "name": "Home Loan",
+        "balance": 52000000,
+        "minimumPayment": 720000,
+        "aprPct": 3.9,
+        "remainingMonths": 180,
+        "repaymentType": "amortizing"
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal-emergency",
+        "name": "Emergency Fund",
+        "targetAmount": 18000000,
+        "currentAmount": 18000000,
+        "targetMonth": 12,
+        "priority": 5
+      },
+      {
+        "id": "goal-lump",
+        "name": "Down Payment",
+        "targetAmount": 60000000,
+        "currentAmount": 22000000,
+        "targetMonth": 84,
+        "priority": 4
+      },
+      {
+        "id": "goal-retire",
+        "name": "Retirement",
+        "targetAmount": 420000000,
+        "currentAmount": 42000000,
+        "targetMonth": 300,
+        "priority": 5
+      }
+    ]
+  },
+  "createdAt": "2026-03-01T19:29:43.361Z",
+  "updatedAt": "2026-03-01T19:29:43.361Z"
+}

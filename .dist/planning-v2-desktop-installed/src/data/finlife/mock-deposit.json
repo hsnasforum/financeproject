@@ -1,0 +1,61 @@
+{
+  "result": {
+    "baseList": [
+      {
+        "fin_prdt_cd": "D001",
+        "kor_co_nm": "한빛은행",
+        "fin_prdt_nm": "한빛 정기예금",
+        "join_way": "영업점, 인터넷"
+      },
+      {
+        "fin_prdt_cd": "D002",
+        "kor_co_nm": "푸른저축은행",
+        "fin_prdt_nm": "푸른 플러스 예금",
+        "join_way": "인터넷"
+      },
+      {
+        "fin_prdt_cd": "D003",
+        "kor_co_nm": "국민가상은행",
+        "fin_prdt_nm": "스텝업 정기예금",
+        "join_way": "모바일"
+      }
+    ],
+    "optionList": [
+      {
+        "fin_prdt_cd": "D001",
+        "save_trm": "6",
+        "intr_rate": "2.90",
+        "intr_rate2": "3.15",
+        "intr_rate_type_nm": "단리"
+      },
+      {
+        "fin_prdt_cd": "D001",
+        "save_trm": "12",
+        "intr_rate": "3.20",
+        "intr_rate2": "3.45",
+        "intr_rate_type_nm": "단리"
+      },
+      {
+        "fin_prdt_cd": "D002",
+        "save_trm": "12",
+        "intr_rate": "3.35",
+        "intr_rate2": "3.80",
+        "intr_rate_type_nm": "단리"
+      },
+      {
+        "fin_prdt_cd": "D002",
+        "save_trm": "24",
+        "intr_rate": "3.50",
+        "intr_rate2": "3.95",
+        "intr_rate_type_nm": "복리"
+      },
+      {
+        "fin_prdt_cd": "D003",
+        "save_trm": "12",
+        "intr_rate": "3.10",
+        "intr_rate2": "3.30",
+        "intr_rate_type_nm": "단리"
+      }
+    ]
+  }
+}

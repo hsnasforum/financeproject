@@ -275,7 +275,7 @@ slug_auto() {
   if [[ "$joined" == *"src/app/api/finlife"* || "$joined" == *"src/lib/finlife"* ]]; then echo "finlife"; return; fi
   if [[ "$joined" == *"/help/"* || "$joined" == *"Help"* || "$joined" == *"help"* ]]; then echo "help"; return; fi
   if [[ "$joined" == *"/recommend/"* || "$joined" == *"Recommend"* || "$joined" == *"recommend"* ]]; then echo "recommend"; return; fi
-  if [[ "$joined" == *"/planner/"* || "$joined" == *"Planner"* || "$joined" == *"planner"* ]]; then echo "planner"; return; fi
+  if [[ "$joined" == *"/planning/"* || "$joined" == *"Planner"* || "$joined" == *"planner"* ]]; then echo "planner"; return; fi
   if [[ "$joined" == *"/products/"* ]]; then echo "products"; return; fi
 
   first="${FILES[0]:-update}"

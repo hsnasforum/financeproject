@@ -25,6 +25,13 @@ describe("api response helper", () => {
     expect(json.error?.issues).toEqual(["kind must be one of deposit|saving"]);
   });
 
+  it("adds fixHref for mapped failure codes", async () => {
+    const res = jsonError("BACKUP_INVALID", "invalid backup");
+    const json = await res.json() as { error?: { code?: string; fixHref?: string } };
+    expect(json.error?.code).toBe("BACKUP_INVALID");
+    expect(json.error?.fixHref).toBe("/ops/backup");
+  });
+
   it("keeps object payload top-level for jsonOk", async () => {
     const res = jsonOk({ result: { score: 1 } });
     const json = await res.json() as { ok?: boolean; result?: { score?: number } };
@@ -32,5 +39,21 @@ describe("api response helper", () => {
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
     expect(json.result?.score).toBe(1);
+  });
+
+  it("returns INTERNAL when error payload violates response schema", async () => {
+    const res = jsonError("INPUT", "   ");
+    const json = await res.json() as {
+      ok?: boolean;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
+    expect(res.status).toBe(500);
+    expect(json.ok).toBe(false);
+    expect(json.error?.code).toBe("INTERNAL");
+    expect(json.error?.message).toContain("API response contract violation");
   });
 });

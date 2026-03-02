@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { buildConfirmString } from "@/lib/ops/confirm";
 
 type TrashKind = "profiles" | "runs" | "reports";
@@ -78,7 +79,7 @@ export function PlanningTrashClient() {
       const res = await fetch("/api/planning/v2/trash/restore", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind, id, confirmText }),
+        body: JSON.stringify(withDevCsrf({ kind, id, confirmText })),
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<{ restored?: boolean }> | null;
       if (!res.ok || !payload?.ok) {
@@ -104,7 +105,7 @@ export function PlanningTrashClient() {
       const res = await fetch("/api/planning/v2/trash", {
         method: "DELETE",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind, id, confirmText }),
+        body: JSON.stringify(withDevCsrf({ kind, id, confirmText })),
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<{ deleted?: boolean }> | null;
       if (!res.ok || !payload?.ok) {
@@ -130,7 +131,7 @@ export function PlanningTrashClient() {
       const res = await fetch("/api/planning/v2/trash/empty", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ kind: kindFilter, confirmText }),
+        body: JSON.stringify(withDevCsrf({ kind: kindFilter, confirmText })),
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<{ deleted?: number }> | null;
       if (!res.ok || !payload?.ok) {
@@ -152,20 +153,19 @@ export function PlanningTrashClient() {
   return (
     <PageShell>
       <PageHeader
-        title="Planning Trash"
+        title="플래닝 휴지통"
         description="profiles/runs/reports 소프트 삭제 항목을 복구하거나 영구 삭제합니다."
         action={(
           <div className="flex items-center gap-4 text-sm">
-            <Link className="font-semibold text-emerald-700" href="/planning/runs">실행 이력</Link>
-            <Link className="font-semibold text-emerald-700" href="/planning/reports">리포트</Link>
-            <Link className="font-semibold text-emerald-700" href="/planning">재무설계</Link>
+            <Link className="font-semibold text-emerald-700" href="/planning/runs">실행 기록</Link>
+            <Link className="font-semibold text-emerald-700" href="/planning">플래닝</Link>
           </div>
         )}
       />
 
       <Card className="mb-6 border border-amber-200 bg-amber-50">
         <p className="text-sm font-semibold text-amber-900">영구 삭제는 되돌릴 수 없습니다.</p>
-        <p className="mt-1 text-xs text-amber-800">복구가 필요한 경우 먼저 Restore를 사용하세요.</p>
+        <p className="mt-1 text-xs text-amber-800">복구가 필요한 경우 먼저 복구 버튼을 사용하세요.</p>
       </Card>
 
       <Card>
@@ -190,7 +190,7 @@ export function PlanningTrashClient() {
           </select>
 
           <Button disabled={loading} onClick={() => void loadTrash()} size="sm" variant="ghost">새로고침</Button>
-          <Button disabled={loading} onClick={() => void emptyTrashAction()} size="sm" variant="outline">Empty trash</Button>
+          <Button disabled={loading} onClick={() => void emptyTrashAction()} size="sm" variant="outline">휴지통 비우기</Button>
         </div>
 
         <div className="mt-3 overflow-x-auto">
@@ -219,7 +219,7 @@ export function PlanningTrashClient() {
                       onClick={() => void restoreItem(item.kind, item.id)}
                       type="button"
                     >
-                      Restore
+                      복구
                     </button>
                     <span className="mx-1 text-slate-300">|</span>
                     <button
@@ -227,7 +227,7 @@ export function PlanningTrashClient() {
                       onClick={() => void deletePermanently(item.kind, item.id)}
                       type="button"
                     >
-                      Delete permanently
+                      영구 삭제
                     </button>
                   </td>
                 </tr>

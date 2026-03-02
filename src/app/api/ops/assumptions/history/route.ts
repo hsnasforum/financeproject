@@ -5,10 +5,11 @@ import {
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
-import { listAssumptionsHistory, loadAssumptionsSnapshotById } from "../../../../../../lib/planning/assumptions/storage";
-import { type AssumptionsSnapshot } from "../../../../../../lib/planning/assumptions/types";
+} from "@/lib/dev/devGuards";
+import { onlyDev } from "@/lib/dev/onlyDev";
+import { opsErrorResponse } from "@/lib/ops/errorContract";
+import { listAssumptionsHistory, loadAssumptionsSnapshotById } from "@/lib/planning/assumptions/storage";
+import { type AssumptionsSnapshot } from "@/lib/planning/assumptions/types";
 
 type SnapshotHistorySummary = {
   id: string;
@@ -45,9 +46,17 @@ export async function GET(request: Request) {
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
-      return NextResponse.json({ ok: false, message: "요청 검증 중 오류가 발생했습니다." }, { status: 500 });
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: "요청 검증 중 오류가 발생했습니다.",
+        status: 500,
+      });
     }
-    return NextResponse.json({ ok: false, message: guard.message }, { status: guard.status });
+    return opsErrorResponse({
+      code: guard.code,
+      message: guard.message,
+      status: guard.status,
+    });
   }
 
   try {
@@ -71,12 +80,10 @@ export async function GET(request: Request) {
       items: summaries,
     });
   } catch (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        message: error instanceof Error ? error.message : "스냅샷 히스토리 조회에 실패했습니다.",
-      },
-      { status: 500 },
-    );
+    return opsErrorResponse({
+      code: "STORAGE_CORRUPT",
+      message: error instanceof Error ? error.message : "스냅샷 히스토리 조회에 실패했습니다.",
+      status: 500,
+    });
   }
 }

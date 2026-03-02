@@ -642,7 +642,7 @@ export function DashboardClient() {
           <Card className="flex-1">
              <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-black text-slate-900">재무설계 현황</h2>
-              <Link href="/planner"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">설계 수정</Button></Link>
+              <Link href="/planning"><Button variant="ghost" size="sm" className="text-primary h-8 px-3">설계 수정</Button></Link>
              </div>
              {!planner.data ? (
                 <p className="text-sm text-slate-500 py-4">아직 작성된 재무설계가 없습니다.</p>

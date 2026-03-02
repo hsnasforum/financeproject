@@ -16,6 +16,7 @@ import {
   type ValidatedSimulationInputV2,
 } from "./types";
 import { resolveAllocationPolicyId } from "./policy/presets";
+import { toEngineRateBoundary } from "../../v2/aprBoundary";
 
 const MIN_ANNUAL_RATE = -0.99;
 const MAX_ANNUAL_RATE = 2;
@@ -516,11 +517,28 @@ function normalizeDebt(input: unknown, index: number, issues: ValidationIssueV2[
   const minimumPayment = assertNonNegativeNumber(input.minimumPayment, `${path}.minimumPayment`, issues);
 
   let apr: number | undefined;
-  if (input.apr !== undefined) {
-    if (!isFiniteNumber(input.apr)) {
-      issues.push({ path: `${path}.apr`, message: "must be a finite number" });
+  let aprPct: number | undefined;
+  const rawAprPct = input.aprPct ?? input.apr;
+  if (rawAprPct !== undefined) {
+    if (!isFiniteNumber(rawAprPct)) {
+      issues.push({ path: `${path}.aprPct`, message: "must be a finite number" });
     } else {
-      apr = normalizeAnnualRate(input.apr, `${path}.apr`, issues);
+      try {
+        const normalized = toEngineRateBoundary(rawAprPct);
+        aprPct = normalized.pct;
+        apr = normalized.decimal;
+      } catch {
+        issues.push({
+          path: `${path}.aprPct`,
+          message: "must be 0, legacy decimal(0<x<=1), or percent(1<x<=100)",
+        });
+      }
+      if (typeof apr === "number" && (apr < MIN_ANNUAL_RATE || apr > MAX_ANNUAL_RATE)) {
+        issues.push({
+          path: `${path}.aprPct`,
+          message: `rate must be between ${MIN_ANNUAL_RATE * 100} and ${MAX_ANNUAL_RATE * 100}% after normalization`,
+        });
+      }
     }
   }
 
@@ -549,9 +567,61 @@ function normalizeDebt(input: unknown, index: number, issues: ValidationIssueV2[
     name,
     balance,
     minimumPayment,
+    aprPct,
     apr,
     remainingMonths,
     repaymentType,
+  };
+}
+
+function normalizeDefaultsApplied(
+  input: unknown,
+  issues: ValidationIssueV2[],
+): ProfileV2["defaultsApplied"] | undefined {
+  if (input === undefined) return undefined;
+  if (!isRecord(input)) {
+    issues.push({ path: "profile.defaultsApplied", message: "must be an object" });
+    return undefined;
+  }
+
+  const rawItems = Array.isArray(input.items) ? input.items : [];
+  const items = Array.from(new Set(
+    rawItems
+      .map((item, index) => {
+        if (typeof item !== "string") {
+          issues.push({ path: `profile.defaultsApplied.items[${index}]`, message: "must be a string" });
+          return "";
+        }
+        return item.trim();
+      })
+      .filter((item) => item.length > 0),
+  ));
+
+  const assumptionsInput = isRecord(input.assumptions) ? input.assumptions : {};
+  const emergencyMonthsRaw = Number(assumptionsInput.emergencyMonths);
+  const goalPriorityRaw = Number(assumptionsInput.goalPriority);
+  const missingFieldsPolicyRaw = typeof assumptionsInput.missingFieldsPolicy === "string"
+    ? assumptionsInput.missingFieldsPolicy.trim()
+    : "";
+
+  const emergencyMonths = Number.isFinite(emergencyMonthsRaw) && emergencyMonthsRaw >= 1
+    ? Math.trunc(emergencyMonthsRaw)
+    : 6;
+  const goalPriority = Number.isFinite(goalPriorityRaw) && goalPriorityRaw >= 1
+    ? Math.trunc(goalPriorityRaw)
+    : 3;
+  const missingFieldsPolicy = missingFieldsPolicyRaw || "fill-with-defaults";
+
+  const appliedAt = normalizeOptionalNotes(input.appliedAt);
+  return {
+    version: 1,
+    items,
+    assumptions: {
+      emergencyMonths,
+      goalPriority,
+      missingFieldsPolicy,
+    },
+    ...(appliedAt ? { appliedAt } : {}),
   };
 }
 
@@ -565,6 +635,7 @@ export function validateProfileV2(input: unknown): ProfileV2 {
   const normalizedCashflow = normalizeCashflow(input.cashflow, issues);
   const normalizedTaxProfile = normalizeTaxProfile(input.tax, issues);
   const normalizedPensionsDetailed = normalizePensionProfile(input.pensionsDetailed, issues);
+  const normalizedDefaultsApplied = normalizeDefaultsApplied(input.defaultsApplied, issues);
   const currentAge = normalizeOptionalAge(input.currentAge, "profile.currentAge", issues);
   const birthYear = normalizeOptionalBirthYear(input.birthYear, "profile.birthYear", issues);
 
@@ -581,6 +652,7 @@ export function validateProfileV2(input: unknown): ProfileV2 {
     ...(normalizedCashflow ? { cashflow: normalizedCashflow } : {}),
     ...(normalizedTaxProfile ? { tax: normalizedTaxProfile } : {}),
     ...(normalizedPensionsDetailed ? { pensionsDetailed: normalizedPensionsDetailed } : {}),
+    ...(normalizedDefaultsApplied ? { defaultsApplied: normalizedDefaultsApplied } : {}),
   };
 
   if (!Array.isArray(input.debts)) {

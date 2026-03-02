@@ -44,17 +44,33 @@
 ## 보안/운영 가드
 - Sync/Purge는 기존 route의 local-only + same-origin + dev unlock + csrf 가드를 그대로 사용합니다.
 - purge 실행 시 audit log 이벤트 `PLANNING_CACHE_PURGE`가 기록됩니다.
+- Vault 암호화:
+  - 설정 화면: `/ops/security`
+  - 설정 후 저장 데이터(profile/run/assumptions/action)는 at-rest 암호화(envelope)로 저장됩니다.
+  - 서버 재시작 후 vault는 잠김 상태로 시작하며, `/ops/security` 또는 잠금 화면에서 암호를 입력해 unlock 해야 합니다.
+- export/evidence bundle은 문서/게이트 로그 중심으로만 구성하며, `.data/planning/profiles` 및 `.data/planning/runs` 원문 JSON은 포함하지 않습니다.
+- planning v2 운영 로그(`complete/ops:run/release/evidence/final-report`)는 민감정보 마스킹(`Bearer`, API 키/토큰, `.data/...` 경로, 큰 금액 숫자) 적용 후 저장합니다.
 
 ## 자동 운영(Ops Run)
 - 스케줄러 복붙 템플릿: [planning-v2-scheduler.md](./planning-v2-scheduler.md)
-- Daily 운영:
+- 유지보수 체크리스트: [planning-v2-maintenance.md](./planning-v2-maintenance.md)
+- 장애 보고 템플릿: [planning-v2-bug-report-template.md](./planning-v2-bug-report-template.md)
+- 월간 로컬 CLI(서버 cron 없음):
+  - `pnpm ops:refresh-assumptions`
+  - `pnpm planning:run:monthly`
+  - `planning:run:monthly`는 기본 profile + latest snapshot으로 run 생성, retention 정책(`defaultKeepCount`)을 적용합니다.
+  - Vault가 잠겨 있으면 두 명령 모두 즉시 실패(`code=LOCKED`, exit code 2)하며 `/ops/security` unlock이 필요합니다.
+  - 실행 결과는 `/ops/metrics`의 `SCHEDULED_TASK` 이벤트로 기록됩니다.
+- 주간 운영(권장: 일요일 오전):
   - `pnpm planning:v2:ops:run`
   - 기본 순서: doctor -> 조건부 assumptions sync -> complete
   - regress는 기본 비활성(시간 절약)
-- 주간/업데이트 후 운영:
+- 격주/월간 또는 업데이트 후 운영:
   - `pnpm planning:v2:ops:run:regress`
 - 보관 정책 정리:
-  - `pnpm planning:v2:ops:prune -- --keep=50`
+  - `pnpm planning:v2:ops:prune --keep=50`
+- 마이그레이션 점검(선택):
+  - `pnpm planning:v2:migrate:dry`
 - 조건부 스냅샷 동기화:
   - snapshot 없음 또는 `fetchedAt` 기준 45일 초과 시에만 `planning:assumptions:sync` 시도
   - sync 실패는 WARN으로 기록하고 complete 게이트는 계속 진행
@@ -136,6 +152,11 @@
 3. 문제 발생 시 `/ops/assumptions/history`에서 이전 snapshot을 선택 후 `Set as latest`
    - confirm 문자열 필요
 
+### 1-1) 스케줄 실행 상태 점검
+1. `/ops/metrics`에서 `type=SCHEDULED_TASK` 필터를 선택
+2. `taskName=OPS_REFRESH_ASSUMPTIONS` / `PLANNING_RUN_MONTHLY` 성공/실패를 확인
+3. `/ops/doctor`의 `Scheduled monthly run failures` 경고가 뜨면 최근 실패 코드(LOCKED/STALE/INTERNAL)를 확인
+
 ### 2) Regression 점검
 1. `pnpm planning:v2:regress` 실행
 2. `/ops/planning` 또는 `/ops/planning-eval`에서 FAIL 케이스 확인
@@ -153,9 +174,10 @@
 3. 필요 시 retention/캐시 정책 점검
 
 ### 4) Backup/Import/Restore
-1. `/settings/backup`에서 export/import 실행
-2. Import 후 `/ops/planning`에서 Planning Doctor 실행
-3. 문제 시 restore point rollback 실행 후 doctor 재확인
+1. `/ops/backup`에서 Full/Delta export를 선택해 실행
+2. Delta 정책(결정적): `runId` 충돌 시 `skip`, `snapshotId` 충돌 시 `skip`
+3. Import 후 `/ops/planning`에서 Planning Doctor 실행
+4. 문제 시 restore point rollback 실행 후 doctor 재확인
 
 ### 5) 업데이트/복구 절차 (고정)
 1. 업데이트 전:

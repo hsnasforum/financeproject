@@ -110,7 +110,8 @@ describe("planning report storage", () => {
     expect(report?.meta.id).toBe(created.id);
     expect(report?.meta.runId).toBe(run.id);
     expect(report?.markdown).toContain("# report run");
-    expect(report?.markdown).toContain("## Q&A");
+    expect(report?.markdown).toContain("## Executive Summary");
+    expect(report?.markdown).toContain("## Warnings Summary");
 
     const deleted = await deleteReport(created.id);
     expect(deleted).toBe(true);

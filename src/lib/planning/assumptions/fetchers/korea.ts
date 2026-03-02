@@ -1,5 +1,5 @@
 import { type AssumptionsSnapshot } from "../types.ts";
-import { getPlanningFeatureFlags } from "../../config";
+import { getPlanningFeatureFlags } from "../../config.ts";
 import { fetchEcosKeyStatisticList } from "./ecosClient.ts";
 import { parseEcosKeyStats } from "./ecosParse.ts";
 import { parseBokInterestRates, parseBokMpcBaseRate, parseCpi } from "./koreaParse.ts";
@@ -220,7 +220,7 @@ function isEcosEnabled(): boolean {
 }
 
 function resolveEcosApiKey(): string {
-  return (process.env.ECOS_API_KEY ?? process.env.BOK_ECOS_API_KEY ?? "").trim();
+  return (process.env.BOK_ECOS_API_KEY ?? process.env.ECOS_API_KEY ?? "").trim();
 }
 
 export async function fetchKoreaAssumptions(): Promise<KoreaFetchResult> {

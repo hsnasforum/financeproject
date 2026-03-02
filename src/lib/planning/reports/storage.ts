@@ -1,18 +1,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { atomicWriteFile, atomicWriteJson } from "../storage/atomicWrite";
 import { type PlanningRunRecord } from "../store/types";
-import { getProfile } from "../store/profileStore";
 import { getRun } from "../store/runStore";
 import {
   deleteFileFromTrash,
   moveFileToTrash,
   restoreFileFromTrash,
 } from "../store/trash";
-import { createPlanningService } from "../v2/service";
-import { toMarkdownReport } from "../v2/report";
-import { type AssumptionsV2, type RiskTolerance } from "../v2/scenarios";
-import { type ProfileV2 } from "../v2/types";
-import { validateHorizonMonths, validateProfileV2 } from "../v2/validate";
+import {
+  buildResultDtoV1FromRunRecord,
+  isResultDtoV1,
+  toMarkdownFromResultDto,
+} from "../v2/resultDto";
 
 export const REPORTS_DIR = ".data/planning/reports";
 
@@ -93,38 +93,12 @@ function toIsoToken(date = new Date()): string {
   return `${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
 }
 
-function parseRiskTolerance(profile: ProfileV2): RiskTolerance {
-  const direct = asString((profile as unknown as Record<string, unknown>).riskTolerance).toLowerCase();
-  if (direct === "low" || direct === "mid" || direct === "high") return direct;
-  if (isRecord(profile.risk)) {
-    const nested = asString(profile.risk.riskTolerance).toLowerCase();
-    if (nested === "low" || nested === "mid" || nested === "high") return nested;
-  }
-  return "mid";
-}
-
-function parseAssumptionsOverrides(run: PlanningRunRecord): Record<string, unknown> {
-  return isRecord(run.input?.assumptionsOverride)
-    ? run.input.assumptionsOverride
-    : {};
-}
-
-function parseMonteCarloConfig(run: PlanningRunRecord): { paths: number; seed: number } | null {
-  if (!isRecord(run.input?.monteCarlo)) return null;
-  const paths = Math.max(1, Math.min(20_000, Math.trunc(Number(run.input.monteCarlo.paths ?? 2000)) || 2000));
-  const seed = Math.trunc(Number(run.input.monteCarlo.seed ?? 12345)) >>> 0;
-  return { paths, seed };
-}
-
 async function writeTextAtomic(filePath: string, content: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
-  await fs.writeFile(tmpPath, content, "utf-8");
-  await fs.rename(tmpPath, filePath);
+  await atomicWriteFile(filePath, content);
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
-  await writeTextAtomic(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+  await atomicWriteJson(filePath, payload);
 }
 
 function isMeta(value: unknown): value is PlanningReportMeta {
@@ -165,22 +139,6 @@ async function ensureUniqueReportId(baseId: string): Promise<string> {
       throw error;
     }
   }
-}
-
-function resolveRunScenarioPayload(run: PlanningRunRecord, recomputed: unknown): unknown {
-  return run.outputs?.scenarios ?? recomputed;
-}
-
-function resolveRunMonteCarloPayload(run: PlanningRunRecord): unknown {
-  return run.outputs?.monteCarlo ?? null;
-}
-
-function resolveRunActionsPayload(run: PlanningRunRecord, recomputed: unknown): unknown {
-  return run.outputs?.actions ?? recomputed;
-}
-
-function toAssumptionsLabel(assumptions: AssumptionsV2): string {
-  return `${assumptions.inflationPct.toFixed(1)}% inflation / ${assumptions.investReturnPct.toFixed(1)}% return`;
 }
 
 function toReportMeta(meta: PlanningReportMeta): PlanningReportListItem {
@@ -266,55 +224,20 @@ export async function createReportFromRun(runId: string): Promise<{ id: string }
   const run = await getRun(safeRunId);
   if (!run) throw new Error("run not found");
 
-  const profileRecord = await getProfile(run.profileId);
-  if (!profileRecord) throw new Error("profile not found");
-
-  const profile = validateProfileV2(profileRecord.profile);
-  const horizonMonths = validateHorizonMonths(run.input?.horizonMonths ?? 120);
-  const planningService = createPlanningService();
-  const riskTolerance = parseRiskTolerance(profile);
-  const resolved = await planningService.resolveAssumptionsContext({
-    profile,
-    riskTolerance,
-    assumptionsOverridesRaw: parseAssumptionsOverrides(run),
-    requestedSnapshotId: asString(run.input?.snapshotId) || undefined,
-  });
-
-  const plan = planningService.simulate(profile, resolved.simulationAssumptions, horizonMonths);
-  const scenarios = run.input?.runScenarios === false
-    ? null
-    : resolveRunScenarioPayload(run, planningService.scenarios({
-      profile,
-      horizonMonths,
-      baseAssumptions: resolved.assumptions,
-      riskTolerance,
-    }));
-
-  const monteCarloConfig = parseMonteCarloConfig(run);
-  const monteCarlo = monteCarloConfig
-    ? resolveRunMonteCarloPayload(run)
-    : null;
-
-  const recomputedActions = run.input?.getActions === false
-    ? null
-    : { actions: planningService.buildActions({ plan, profile, baseAssumptions: resolved.assumptions }) };
-  const actions = resolveRunActionsPayload(run, recomputedActions);
-
   const reportIdBase = `report-${toIsoToken()}-${safeRunId.slice(0, 8)}`;
   const reportId = await ensureUniqueReportId(reportIdBase);
   const markdownPath = mdPathById(reportId);
   const metaPath = metaPathById(reportId);
   const createdAt = new Date().toISOString();
 
-  const markdown = toMarkdownReport({
+  const rawResultDto = isRecord(run.outputs) ? run.outputs.resultDto : undefined;
+  const resultDto = isResultDtoV1(rawResultDto)
+    ? rawResultDto
+    : buildResultDtoV1FromRunRecord(run);
+  const markdown = toMarkdownFromResultDto(resultDto, {
     title: run.title || `Planning Report (${run.id})`,
-    generatedAt: createdAt,
-    snapshot: resolved.snapshotMeta,
-    assumptionsLabel: toAssumptionsLabel(resolved.assumptions),
-    plan,
-    ...(scenarios ? { scenarios } : {}),
-    ...(monteCarlo ? { monteCarlo } : {}),
-    ...(actions ? { actions } : {}),
+    reportId,
+    runId: run.id,
   });
 
   const meta: PlanningReportMeta = {

@@ -1,0 +1,21 @@
+{
+  "id": "deposit-simple-tax-v1",
+  "formula": {
+    "grossInterest": "gross = principal * (annualRatePct / 100) * (termMonths / 12)",
+    "tax": "tax = gross * (taxRatePct / 100)",
+    "netInterest": "net = gross - tax",
+    "maturity": "maturity = principal + net"
+  },
+  "input": {
+    "principalKrw": 10000000,
+    "termMonths": 12,
+    "annualRatePct": 4,
+    "taxRatePct": 15.4
+  },
+  "expected": {
+    "grossInterestKrw": 400000,
+    "taxKrw": 61600,
+    "netInterestKrw": 338400,
+    "maturityAmountKrw": 10338400
+  }
+}

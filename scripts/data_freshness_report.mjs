@@ -10,6 +10,10 @@ const SOURCE_RULES = [
   { source: "benefits", pattern: /^benefits_.*\.json$/i, maxAgeDays: 7 },
   { source: "gov24", pattern: /^gov24_.*\.json$/i, maxAgeDays: 7 },
 ];
+const AUXILIARY_FILE_PATTERNS = [
+  /_partial\.json$/i,
+  /_checkpoint\.json$/i,
+];
 
 function resolveSourceRule(fileName) {
   for (const rule of SOURCE_RULES) {
@@ -28,6 +32,10 @@ function listSnapshots() {
     .readdirSync(dataDir)
     .filter((name) => name.endsWith(".json"))
     .sort((a, b) => a.localeCompare(b));
+}
+
+function isAuxiliaryFile(fileName) {
+  return AUXILIARY_FILE_PATTERNS.some((pattern) => pattern.test(fileName));
 }
 
 function readJson(filePath) {
@@ -84,6 +92,16 @@ function buildReportMarkdown(input) {
     );
   }
   lines.push("");
+  if (input.ignoredFiles.length > 0) {
+    lines.push("## Ignored Auxiliary Files");
+    lines.push("");
+    lines.push("| File | Reason |");
+    lines.push("| --- | --- |");
+    for (const fileName of input.ignoredFiles) {
+      lines.push(`| ${fileName} | auxiliary snapshot (excluded from freshness gate) |`);
+    }
+    lines.push("");
+  }
   lines.push("## Summary");
   lines.push("");
   lines.push(`- total: ${input.rows.length}`);
@@ -91,6 +109,7 @@ function buildReportMarkdown(input) {
   lines.push(`- stale: ${input.summary.stale}`);
   lines.push(`- missingTimestamp: ${input.summary.missingTimestamp}`);
   lines.push(`- invalidTimestamp: ${input.summary.invalidTimestamp}`);
+  lines.push(`- ignoredAuxiliary: ${input.ignoredFiles.length}`);
   lines.push("");
 
   return `${lines.join("\n").trimEnd()}\n`;
@@ -101,9 +120,14 @@ function main() {
   const strict = args.includes("--strict");
   const now = new Date();
 
-  const fileNames = listSnapshots();
-  if (fileNames.length === 0) {
+  const allFileNames = listSnapshots();
+  if (allFileNames.length === 0) {
     throw new Error("No .json snapshots found under .data/");
+  }
+  const ignoredFiles = allFileNames.filter((fileName) => isAuxiliaryFile(fileName));
+  const fileNames = allFileNames.filter((fileName) => !isAuxiliaryFile(fileName));
+  if (fileNames.length === 0) {
+    throw new Error("No tracked .json snapshots found under .data/ (only auxiliary files found)");
   }
 
   const rows = [];
@@ -144,6 +168,7 @@ function main() {
     strict,
     rows,
     summary,
+    ignoredFiles,
   });
 
   ensureDir(reportPath);

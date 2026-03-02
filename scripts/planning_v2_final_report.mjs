@@ -4,6 +4,9 @@ import { spawn } from "node:child_process";
 import { tsImport } from "tsx/esm/api";
 import { writeTextAtomic } from "./planning_v2_ops_common.mjs";
 
+const SELF_TEST_DOC_PATH = "docs/planning-v2-5min-selftest.md";
+let redactTextImpl = fallbackRedactText;
+
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -29,13 +32,19 @@ function defaultVersionFromDate(now = new Date()) {
   return `${yyyy}.${mm}.${dd}`;
 }
 
-function maskSecrets(text) {
+function fallbackRedactText(text) {
   const raw = asString(text);
   if (!raw) return "";
   return raw
-    .replace(/(authorization\s*:\s*bearer\s+)[^\s]+/gi, "$1***")
-    .replace(/(ECOS_API_KEY|GITHUB_TOKEN|FINLIFE_API_KEY)\s*=\s*[^\s]+/gi, "$1=***")
-    .replace(/(["']?(?:token|api[_-]?key|secret|password)["']?\s*[:=]\s*["'])[^"']+(["'])/gi, "$1***$2");
+    .replace(/\b(Bearer\s+)[^\s"'`]+/gi, "$1***")
+    .replace(/(BOK_ECOS_API_KEY|ECOS_API_KEY|GITHUB_TOKEN|FINLIFE_API_KEY)\s*=\s*[^\s]+/gi, "$1=***")
+    .replace(/(["']?(?:token|api[_-]?key|secret|password)["']?\s*[:=]\s*["'])[^"']+(["'])/gi, "$1***$2")
+    .replace(/\.data(?:[\\/][^\s"'`)\]}]+)+/g, "<DATA_PATH>")
+    .replace(/\b\d{7,}\b/g, "<AMOUNT>");
+}
+
+function maskSecrets(text) {
+  return redactTextImpl(asString(text));
 }
 
 function tailText(text, maxLines = 80) {
@@ -136,6 +145,18 @@ async function loadTemplateBuilder() {
   return fn;
 }
 
+async function loadRedactText() {
+  try {
+    const moduleRaw = await tsImport("../src/lib/planning/privacy/redact.ts", { parentURL: import.meta.url });
+    const resolved = moduleRaw?.default && typeof moduleRaw.default === "object" ? moduleRaw.default : moduleRaw;
+    if (typeof resolved?.redactText === "function") {
+      redactTextImpl = (value) => resolved.redactText(asString(value));
+    }
+  } catch {
+    redactTextImpl = fallbackRedactText;
+  }
+}
+
 async function runGateWithLog(cwd, version, stepId, scriptName, extraEnv = {}) {
   const result = await runPnpm(scriptName, [], cwd, extraEnv);
   const logsDirAbs = path.resolve(cwd, ".data/planning/release/logs");
@@ -154,6 +175,7 @@ function printGate(status, stepId, note = "") {
 }
 
 async function main() {
+  await loadRedactText();
   const cwd = path.resolve(process.cwd());
   const args = parseArgs(process.argv.slice(2));
   const version = asString(args.version) || defaultVersionFromDate();
@@ -268,6 +290,7 @@ async function main() {
     "docs/planning-v2-architecture.md",
     "docs/planning-v2-done-definition.md",
     "docs/planning-v2-release-checklist.md",
+    SELF_TEST_DOC_PATH,
   ];
 
   const markdown = buildFinalReportMarkdown({
@@ -305,6 +328,7 @@ async function main() {
     throw new Error("one or more required gates failed");
   }
 
+  console.log(`[planning:v2:final-report] User Gate (manual): complete ${SELF_TEST_DOC_PATH}`);
   console.log("✅ P97 COMPLETE — 모든 게이트 통과(테스트/스모크/가드/회귀)");
 }
 
@@ -313,4 +337,3 @@ main().catch((error) => {
   console.error(`[planning:v2:final-report] FAIL\n${maskSecrets(message)}`);
   process.exit(1);
 });
-
