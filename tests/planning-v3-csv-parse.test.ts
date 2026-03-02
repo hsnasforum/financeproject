@@ -69,4 +69,32 @@ describe("parseCsvTransactions", () => {
       { rowIndex: 3, code: "INVALID_AMOUNT", path: ["amount"] },
     ]);
   });
+
+  it("maps KR aliases for type/category without manual mapping options", () => {
+    const csv = [
+      "날짜,입출금액,거래내용,거래구분,카테고리",
+      "2026-04-01,1500000,월급,입금,수입",
+      "2026-04-03,150000,커피,출금,생활",
+    ].join("\n");
+
+    const result = parseCsvTransactions(csv);
+    expect(result.errors).toEqual([]);
+    expect(result.stats).toEqual({ rows: 2, parsed: 2, skipped: 0 });
+    expect(result.transactions).toEqual([
+      expect.objectContaining({
+        date: "2026-04-01",
+        amountKrw: 1_500_000,
+        description: "월급",
+        type: "입금",
+        category: "수입",
+      }),
+      expect.objectContaining({
+        date: "2026-04-03",
+        amountKrw: -150_000,
+        description: "커피",
+        type: "출금",
+        category: "생활",
+      }),
+    ]);
+  });
 });
