@@ -7,6 +7,8 @@ import { appendProfileIdQuery, normalizeProfileId } from "@/lib/planning/profile
 import { getDefaultProfileId } from "@/lib/planning/server/store/profileStore";
 import { listRuns } from "@/lib/planning/server/store/runStore";
 
+export const dynamic = "force-dynamic";
+
 type PlanningReportsPageProps = {
   searchParams?:
     | {
@@ -27,12 +29,22 @@ function asString(value: unknown): string {
 export default async function PlanningReportsPage(props: PlanningReportsPageProps) {
   const searchParams = props.searchParams ? await props.searchParams : undefined;
   const requestedProfileId = normalizeProfileId(searchParams?.profileId);
+  const requestedRunId = asString(searchParams?.runId);
   const defaultProfileId = await getDefaultProfileId();
-  const effectiveProfileId = requestedProfileId || defaultProfileId || "";
-  const runs = await listRuns({
-    ...(effectiveProfileId ? { profileId: effectiveProfileId } : {}),
+  let effectiveProfileId = requestedProfileId || defaultProfileId || "";
+  let runs = await listRuns({
+    ...(requestedProfileId ? { profileId: requestedProfileId } : {}),
     limit: 50,
   });
+  if (requestedRunId && !runs.some((run) => run.id === requestedRunId)) {
+    const unscopedRuns = await listRuns({ limit: 50 });
+    const requestedRun = unscopedRuns.find((run) => run.id === requestedRunId);
+    if (requestedRun) {
+      effectiveProfileId = requestedRun.profileId;
+      runs = unscopedRuns.filter((run) => run.profileId === effectiveProfileId);
+    }
+  }
+
   if (runs.length < 1) {
     const planningHref = appendProfileIdQuery("/planning", effectiveProfileId);
     return (
@@ -51,7 +63,6 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
     );
   }
 
-  const requestedRunId = asString(searchParams?.runId);
   const initialRunId = runs.some((run) => run.id === requestedRunId)
     ? requestedRunId
     : runs[0].id;
