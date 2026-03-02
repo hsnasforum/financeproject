@@ -1,7 +1,10 @@
 export type AccountTransaction = {
+  id: string;
   date: string;
   amountKrw: number;
   description?: string;
+  type?: string;
+  category?: string;
   source: "csv";
   meta?: {
     rowIndex: number;

@@ -12,11 +12,16 @@ describe("parseCsvTransactions", () => {
     const csvText = loadFixture("sample.csv");
     const first = parseCsvTransactions(csvText);
     const second = parseCsvTransactions(csvText);
+    const firstIds = first.transactions.map((item) => item.id);
+    const secondIds = second.transactions.map((item) => item.id);
 
     expect(first).toEqual(second);
+    expect(firstIds).toEqual(secondIds);
+    expect(new Set(firstIds).size).toBe(firstIds.length);
     expect(first.stats).toEqual({ rows: 9, parsed: 9, skipped: 0 });
     expect(first.errors).toEqual([]);
     expect(first.transactions[0]).toMatchObject({
+      id: expect.stringMatching(/^csv-/),
       date: "2026-01-05",
       amountKrw: 3_000_000,
       description: "Salary",
@@ -24,6 +29,7 @@ describe("parseCsvTransactions", () => {
       meta: { rowIndex: 1 },
     });
     expect(first.transactions[1]).toMatchObject({
+      id: expect.stringMatching(/^csv-/),
       date: "2026-01-08",
       amountKrw: -850_000,
       description: "Rent, monthly",

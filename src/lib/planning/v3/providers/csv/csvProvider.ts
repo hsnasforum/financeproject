@@ -1,7 +1,7 @@
 import { type AccountTransaction } from "../../domain/types";
 import { parseCsvText, type ParseCsvTextOptions } from "./csvParse";
 
-export type CsvColumnRef = string | number;
+type CsvColumnRef = string | number;
 
 export type ParseCsvError = {
   rowIndex: number;
@@ -16,6 +16,7 @@ export type ParseCsvTransactionsOptions = ParseCsvTextOptions & {
     descColumn?: CsvColumnRef;
     descriptionColumn?: CsvColumnRef;
     typeColumn?: CsvColumnRef;
+    categoryColumn?: CsvColumnRef;
   };
 };
 
@@ -34,10 +35,11 @@ const HEADER_ALIASES = {
   amount: ["amount", "금액", "거래금액", "입출금액"],
   description: ["description", "desc", "적요", "내용", "메모", "거래내용", "내역"],
   type: ["type", "구분", "거래구분"],
+  category: ["category", "카테고리"],
 } as const;
 
 function normalizeHeaderKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, "");
+  return value.trim().toLowerCase().replace(/[\s\-_/().]/g, "");
 }
 
 const ALIAS_TO_CANONICAL = (() => {
@@ -155,6 +157,21 @@ function normalizeAmountByType(amount: number, rawType?: string): number {
   return amount;
 }
 
+function buildStableTransactionId(
+  date: string,
+  amountKrw: number,
+  description: string | undefined,
+  rowIndex: number,
+): string {
+  const seed = `${date}|${amountKrw}|${description ?? ""}|${rowIndex}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return `csv-${(hash >>> 0).toString(16).padStart(8, "0")}-${rowIndex}`;
+}
+
 export function parseCsvTransactions(
   csvText: string,
   options: ParseCsvTransactionsOptions = {},
@@ -181,6 +198,8 @@ export function parseCsvTransactions(
       ?? (parsed.header ? null : 2);
     const typeIndex = resolveRefIndex(mapping.typeColumn, headerMap, row.length)
       ?? pickHeaderIndex(headerMap, "type");
+    const categoryIndex = resolveRefIndex(mapping.categoryColumn, headerMap, row.length)
+      ?? pickHeaderIndex(headerMap, "category");
 
     if (dateIndex === null) {
       errors.push({ rowIndex, code: "MISSING_COLUMN", path: ["date"] });
@@ -204,11 +223,16 @@ export function parseCsvTransactions(
     }
     const amountKrw = normalizeAmountByType(amountRaw, typeIndex !== null ? row[typeIndex] : undefined);
     const description = descIndex !== null ? (row[descIndex] ?? "").trim() || undefined : undefined;
+    const type = typeIndex !== null ? (row[typeIndex] ?? "").trim() || undefined : undefined;
+    const category = categoryIndex !== null ? (row[categoryIndex] ?? "").trim() || undefined : undefined;
 
     transactions.push({
+      id: buildStableTransactionId(date, amountKrw, description, rowIndex),
       date,
       amountKrw,
       ...(description ? { description } : {}),
+      ...(type ? { type } : {}),
+      ...(category ? { category } : {}),
       source: "csv",
       meta: { rowIndex },
     });
