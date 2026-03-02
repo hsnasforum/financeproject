@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { POST } from "../src/app/api/planning/v3/import/csv/route";
-import { importCsvToDraft } from "../src/lib/planning/v3/service/importCsvDraft";
+import { POST } from "../../src/app/api/planning/v3/import/csv/route";
+import { importCsvToDraft } from "../../src/lib/planning/v3/service/importCsvToDraft";
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -32,7 +32,7 @@ function makeRequest(csvText: string, contentType = "text/csv"): Request {
 }
 
 describe("POST /api/planning/v3/import/csv", () => {
-  it("returns deterministic draft/cashflow for sample fixture", async () => {
+  it("returns deterministic result for sample fixture", async () => {
     const sample = readFixture("sample.csv");
     const expected = importCsvToDraft(sample);
 
@@ -50,19 +50,12 @@ describe("POST /api/planning/v3/import/csv", () => {
     expect(responseA.status).toBe(200);
     expect(payloadA.ok).toBe(true);
     expect(payloadA).toEqual(payloadB);
-    expect(payloadA.cashflow).toEqual(expected.cashflows);
-    expect(payloadA.draftPatch).toEqual({
-      monthlyIncomeNet: expected.draft.monthlyIncomeNet,
-      monthlyEssentialExpenses: expected.draft.monthlyEssentialExpenses,
-      monthlyDiscretionaryExpenses: expected.draft.monthlyDiscretionaryExpenses,
-    });
-    expect(payloadA.meta).toEqual({
-      rows: expected.parsed.stats.rows,
-      months: expected.cashflows.length,
-    });
+    expect(payloadA.cashflow).toEqual(expected.cashflow);
+    expect(payloadA.draftPatch).toEqual(expected.draftPatch);
+    expect(payloadA.meta).toEqual(expected.meta);
   });
 
-  it("supports mixed date/amount formats without manual mapping", async () => {
+  it("supports mixed date and amount formats", async () => {
     const csv = [
       "date,amount,description",
       "2026-01-01,\"1,200,000\",salary",
@@ -106,28 +99,28 @@ describe("POST /api/planning/v3/import/csv", () => {
     expect(payload.meta).toEqual({ rows: 5, months: 2 });
   });
 
-  it("does not expose raw csv values in success/error payloads", async () => {
-    const successMarker = "SECRET_MARKER_SUCCESS_ABC123";
+  it("does not leak SECRET_PII_SHOULD_NOT_LEAK in success/error payload", async () => {
+    const piiMarker = "SECRET_PII_SHOULD_NOT_LEAK";
+
     const successCsv = [
       "date,amount,description",
-      `2026-01-01,1000,${successMarker}`,
+      `2026-01-01,1000,${piiMarker}`,
     ].join("\n");
 
     const successResponse = await POST(makeRequest(successCsv));
     const successText = await successResponse.text();
     expect(successResponse.status).toBe(200);
-    expect(successText.includes(successMarker)).toBe(false);
+    expect(successText.includes(piiMarker)).toBe(false);
 
-    const errorMarker = "SECRET_MARKER_ERROR_XYZ987";
     const errorCsv = [
       "date,amount,description",
-      `${errorMarker},1000,desc`,
+      `${piiMarker},1000,desc`,
     ].join("\n");
 
     const errorResponse = await POST(makeRequest(errorCsv));
     const errorText = await errorResponse.text();
     expect(errorResponse.status).toBe(400);
-    expect(errorText.includes(errorMarker)).toBe(false);
+    expect(errorText.includes(piiMarker)).toBe(false);
     expect(errorText.includes("desc")).toBe(false);
   });
 });

@@ -6,24 +6,15 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../../lib/dev/onlyDev";
-import { importCsvToDraft } from "../../../../../../lib/planning/v3/service/importCsvDraft";
+import {
+  CsvImportInputError,
+  importCsvToDraft,
+} from "../../../../../../lib/planning/v3/service/importCsvToDraft";
 
 const MAX_CSV_BYTES = 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = new Set(["text/csv", "text/plain"]);
 
-type ImportSuccessPayload = {
-  ok: true;
-  cashflow: ReturnType<typeof importCsvToDraft>["cashflows"];
-  draftPatch: {
-    monthlyIncomeNet: number;
-    monthlyEssentialExpenses: number;
-    monthlyDiscretionaryExpenses: number;
-  };
-  meta: {
-    rows: number;
-    months: number;
-  };
-};
+type ImportSuccessPayload = { ok: true } & ReturnType<typeof importCsvToDraft>;
 
 type ImportErrorPayload = {
   ok: false;
@@ -77,16 +68,6 @@ function pickCsrfToken(request: Request): string {
   return (url.searchParams.get("csrf") ?? "").trim();
 }
 
-function summarizeParseErrors(errors: Array<{ code: string }>): Array<{ code: string; count: number }> {
-  const counts = new Map<string, number>();
-  for (const row of errors) {
-    counts.set(row.code, (counts.get(row.code) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([code, count]) => ({ code, count }));
-}
-
 function guardRequest(request: Request): NextResponse<ImportErrorPayload> | null {
   const csrf = pickCsrfToken(request);
   try {
@@ -129,33 +110,16 @@ export async function POST(request: Request) {
     return jsonErr(400, "INPUT", "CSV 본문이 비어 있습니다.");
   }
 
-  const imported = importCsvToDraft(csvText);
-  const errorCount = imported.parsed.errors.length;
-  if (errorCount > 0) {
-    return jsonErr(400, "INPUT", "일부 CSV 행을 해석하지 못했습니다.", {
-      rows: imported.parsed.stats.rows,
-      skippedRows: imported.parsed.stats.skipped,
-      parseErrorSummary: summarizeParseErrors(imported.parsed.errors),
+  try {
+    const imported = importCsvToDraft(csvText);
+    return jsonOk({
+      ok: true,
+      ...imported,
     });
+  } catch (error) {
+    if (error instanceof CsvImportInputError) {
+      return jsonErr(400, error.code, error.message, error.meta);
+    }
+    return jsonErr(500, "INTERNAL", "CSV 처리 중 오류가 발생했습니다.");
   }
-  if (imported.cashflows.length < 1) {
-    return jsonErr(400, "INPUT", "유효한 거래 행이 없습니다.", {
-      rows: imported.parsed.stats.rows,
-      skippedRows: imported.parsed.stats.skipped,
-    });
-  }
-
-  return jsonOk({
-    ok: true,
-    cashflow: imported.cashflows,
-    draftPatch: {
-      monthlyIncomeNet: imported.draft.monthlyIncomeNet,
-      monthlyEssentialExpenses: imported.draft.monthlyEssentialExpenses,
-      monthlyDiscretionaryExpenses: imported.draft.monthlyDiscretionaryExpenses,
-    },
-    meta: {
-      rows: imported.parsed.stats.rows,
-      months: imported.cashflows.length,
-    },
-  });
 }
