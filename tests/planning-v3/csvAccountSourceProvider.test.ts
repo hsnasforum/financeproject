@@ -23,15 +23,14 @@ describe("CsvAccountSourceProvider", () => {
       hasHeader: true,
     });
 
-    expect(transactions).toHaveLength(6);
+    expect(transactions).toHaveLength(9);
     expect(transactions[0]).toMatchObject({
-      date: "2026-01-01",
-      amount: 3_000_000,
-      desc: "Salary",
+      date: "2026-01-05",
+      amountKrw: 3_000_000,
+      description: "Salary",
       source: "csv",
       meta: { rowIndex: 1 },
     });
-    expect(transactions[0]?.id).toMatch(/^csv-/);
   });
 
   it("throws sanitized validation issues without raw cell values", async () => {

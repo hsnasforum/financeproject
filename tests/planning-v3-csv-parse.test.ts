@@ -12,30 +12,24 @@ describe("parseCsvTransactions", () => {
     const csvText = loadFixture("sample.csv");
     const first = parseCsvTransactions(csvText);
     const second = parseCsvTransactions(csvText);
-    const firstIds = first.transactions.map((tx) => tx.id);
-    const secondIds = second.transactions.map((tx) => tx.id);
 
     expect(first).toEqual(second);
-    expect(firstIds).toEqual(secondIds);
-    expect(new Set(firstIds).size).toBe(firstIds.length);
-    expect(first.stats).toEqual({ rows: 6, parsed: 6, skipped: 0 });
+    expect(first.stats).toEqual({ rows: 9, parsed: 9, skipped: 0 });
     expect(first.errors).toEqual([]);
     expect(first.transactions[0]).toMatchObject({
-      date: "2026-01-01",
-      amount: 3_000_000,
-      desc: "Salary",
+      date: "2026-01-05",
+      amountKrw: 3_000_000,
+      description: "Salary",
       source: "csv",
       meta: { rowIndex: 1 },
     });
-    expect(first.transactions[0]?.id).toMatch(/^csv-/);
     expect(first.transactions[1]).toMatchObject({
-      date: "2026-01-03",
-      amount: -850_000,
-      desc: "Rent, monthly",
+      date: "2026-01-08",
+      amountKrw: -850_000,
+      description: "Rent, monthly",
       source: "csv",
       meta: { rowIndex: 2 },
     });
-    expect(first.transactions[1]?.id).toMatch(/^csv-/);
   });
 
   it("detects common KR headers and skips invalid rows safely", () => {
@@ -52,22 +46,21 @@ describe("parseCsvTransactions", () => {
     expect(result.transactions).toHaveLength(2);
     expect(result.transactions[0]).toMatchObject({
       date: "2026-03-01",
-      amount: 1_000_000,
-      desc: "급여",
+      amountKrw: 1_000_000,
+      description: "급여",
       source: "csv",
       meta: { rowIndex: 1 },
     });
     expect(result.transactions[1]).toMatchObject({
       date: "2026-03-04",
-      amount: -123_000,
-      desc: "관리비",
+      amountKrw: -123_000,
+      description: "관리비",
       source: "csv",
       meta: { rowIndex: 4 },
     });
-    expect(new Set(result.transactions.map((tx) => tx.id)).size).toBe(2);
     expect(result.errors).toEqual([
-      { rowIndex: 2, code: "INVALID_DATE", path: "date" },
-      { rowIndex: 3, code: "INVALID_AMOUNT", path: "amount" },
+      { rowIndex: 2, code: "INVALID_DATE", path: ["date"] },
+      { rowIndex: 3, code: "INVALID_AMOUNT", path: ["amount"] },
     ]);
   });
 });

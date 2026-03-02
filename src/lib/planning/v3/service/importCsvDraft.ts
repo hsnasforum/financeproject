@@ -1,4 +1,3 @@
-import { type MonthlyCashflow, type ProfileDraftPatch } from "../domain/types";
 import {
   parseCsvTransactions,
   type ParseCsvTransactionsOptions,
@@ -6,6 +5,7 @@ import {
 } from "../providers/csv/csvProvider";
 import { aggregateMonthlyCashflow } from "./aggregate";
 import { buildProfileDraftPatchFromCashflow } from "./draftPatch";
+import { type MonthlyCashflow, type ProfileDraftPatch } from "../domain/types";
 
 export type ImportCsvToDraftResult = {
   parsed: ParseCsvTransactionsResult;

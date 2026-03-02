@@ -1,8 +1,7 @@
 export type AccountTransaction = {
-  id: string;
-  date: `${number}-${number}-${number}`;
-  amount: number;
-  desc?: string;
+  date: string;
+  amountKrw: number;
+  description?: string;
   source: "csv";
   meta?: {
     rowIndex: number;
@@ -10,10 +9,10 @@ export type AccountTransaction = {
 };
 
 export type MonthlyCashflow = {
-  ym: `${number}-${number}`;
-  income: number;
-  expense: number;
-  net: number;
+  ym: string;
+  incomeKrw: number;
+  expenseKrw: number;
+  netKrw: number;
   txCount: number;
 };
 

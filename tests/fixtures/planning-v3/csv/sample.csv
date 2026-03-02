@@ -1,7 +1,10 @@
-date,amount,description,type,category
-2026-01-01,"3,000,000",Salary,credit,income
-2026.01.03,"(850,000)","Rent, monthly",debit,housing
-2026/01/15,"-350,000",Card,debit,living
-2026-02-01,"3,100,000",Salary,credit,income
-2026/02/07,"-900,000",Rent,debit,housing
-2026.02.20,"-450000",Card,debit,living
+거래일,금액,적요,거래구분,카테고리
+2026-01-05,"3,000,000",Salary,입금,income
+2026/01/08,"(850,000)","Rent, monthly",출금,housing
+20260120,"-350000",Card,출금,living
+2026.02.01,"₩3,100,000",Salary,입금,income
+2026-02-14 09:10:00,"1,234원",Refund,입금,misc
+2026/02/18,"-900,000",Rent,출금,housing
+2026.03.01,"+3,050,000",Salary,입금,income
+2026/03/10,"1,200,000",Savings maturity,입금,misc
+2026-03-21,"(1,050,000)",Card,출금,living
