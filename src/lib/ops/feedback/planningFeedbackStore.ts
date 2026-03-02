@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import type {
   PlanningFeedback,
@@ -175,7 +176,7 @@ async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void
 
 async function listFiles(): Promise<string[]> {
   const dir = resolveDirPath();
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch (error) {

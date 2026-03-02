@@ -63,7 +63,7 @@ function expectedConfirmText(target: CleanupTarget, deleteCount: number): string
   return buildConfirmString(`CLEANUP ${target}`, String(deleteCount));
 }
 
-function sampleActions(plan: CleanupPlan): CleanupActionResult["data"]["sample"] {
+function sampleActions(plan: CleanupPlan): NonNullable<CleanupActionResult["data"]>["sample"] {
   return plan.actions.slice(0, 10).map((row) => ({
     path: row.path,
     reason: row.reason,

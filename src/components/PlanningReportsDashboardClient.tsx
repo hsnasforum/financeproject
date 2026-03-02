@@ -323,12 +323,28 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         const rawPayload = await response.json().catch(() => null);
         const payload = parsePlanningV2Response<PlanningRunRecord[]>(rawPayload);
         if (!active) return;
-        if (!response.ok || !payload.ok || !Array.isArray(payload.data)) {
+        if (!payload.ok) {
           setRuns([]);
           setSelectedRunId("");
           setBaselineRunId("");
           setCompareMode(false);
           setError(payload.error.message ?? "실행 기록을 불러오지 못했습니다.");
+          return;
+        }
+        if (!response.ok) {
+          setRuns([]);
+          setSelectedRunId("");
+          setBaselineRunId("");
+          setCompareMode(false);
+          setError("실행 기록을 불러오지 못했습니다.");
+          return;
+        }
+        if (!Array.isArray(payload.data)) {
+          setRuns([]);
+          setSelectedRunId("");
+          setBaselineRunId("");
+          setCompareMode(false);
+          setError("실행 기록을 불러오지 못했습니다.");
           return;
         }
         setRuns(payload.data);

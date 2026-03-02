@@ -135,7 +135,7 @@ export function buildPlanningWizardOutput(
 
   const goalsSource = Array.isArray(input.goals) ? input.goals : [];
   const goals = goalsSource
-    .map((row, index) => {
+    .map((row, index): ProfileV2["goals"][number] | null => {
       const name = asString(row.name);
       if (!name) return null;
       const id = asString(row.id) || goalId(index);

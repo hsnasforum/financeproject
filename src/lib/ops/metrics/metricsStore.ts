@@ -161,7 +161,15 @@ function sanitizeDuration(value: unknown): number | undefined {
   return Math.round(duration * 100) / 100;
 }
 
-function sanitizeEvent(input: Partial<MetricsEvent> & { type: unknown; at?: unknown }): MetricsEvent {
+function sanitizeEvent(input: {
+  type: unknown;
+  at?: unknown;
+  status?: unknown;
+  runId?: unknown;
+  stage?: unknown;
+  durationMs?: unknown;
+  errorCode?: unknown;
+}): MetricsEvent {
   return {
     at: toIso(input.at),
     type: normalizeType(input.type),

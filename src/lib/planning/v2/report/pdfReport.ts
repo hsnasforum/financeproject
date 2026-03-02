@@ -72,23 +72,35 @@ function hasChromiumMissingMessage(error: unknown): boolean {
     || message.includes("playwright install");
 }
 
-export async function renderPdfReport(dto: ResultDtoV1, options?: RenderPdfReportOptions): Promise<Buffer> {
-  const fontFamily = detectKoreanFontFamily();
-  if (!fontFamily) {
-    throw new PdfReportError("PDF_FONT_MISSING", "PDF 한글 폰트를 찾을 수 없습니다. 시스템 폰트를 설치하거나 HTML 리포트를 사용하세요.");
-  }
-
-  let chromium: { launch: (options?: Record<string, unknown>) => Promise<{
+type ChromiumLauncher = {
+  launch: (options?: Record<string, unknown>) => Promise<{
     newPage: (options?: Record<string, unknown>) => Promise<{
       setContent: (html: string, options?: Record<string, unknown>) => Promise<void>;
       pdf: (options?: Record<string, unknown>) => Promise<Uint8Array | Buffer>;
       close: () => Promise<void>;
     }>;
     close: () => Promise<void>;
-  }> };
+  }>;
+};
+
+async function importPlaywrightRuntime(): Promise<{ chromium?: ChromiumLauncher }> {
+  const dynamicImport = new Function("specifier", "return import(specifier);") as (specifier: string) => Promise<unknown>;
+  return dynamicImport("playwright") as Promise<{ chromium?: ChromiumLauncher }>;
+}
+
+export async function renderPdfReport(dto: ResultDtoV1, options?: RenderPdfReportOptions): Promise<Buffer> {
+  const fontFamily = detectKoreanFontFamily();
+  if (!fontFamily) {
+    throw new PdfReportError("PDF_FONT_MISSING", "PDF 한글 폰트를 찾을 수 없습니다. 시스템 폰트를 설치하거나 HTML 리포트를 사용하세요.");
+  }
+
+  let chromium: ChromiumLauncher;
 
   try {
-    const playwright = await import("playwright");
+    const playwright = await importPlaywrightRuntime();
+    if (!playwright.chromium) {
+      throw new Error("PLAYWRIGHT_CHROMIUM_MISSING");
+    }
     chromium = playwright.chromium;
   } catch {
     throw new PdfReportError("PDF_ENGINE_MISSING", "PDF 엔진을 찾을 수 없습니다. 서버 환경에서 Playwright를 확인하세요.");

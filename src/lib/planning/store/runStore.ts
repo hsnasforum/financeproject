@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { type Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
@@ -260,7 +261,7 @@ function compactRunOutputs(
   if (Object.keys(actions).length > 0) {
     const actionsRef = pickBlobRef(actions.ref);
     const actionRows = Array.isArray(actions.actions)
-      ? (takeTop(actions.actions, LIMITS.actionsTop) as PlanningRunRecord["outputs"]["actions"]["actions"])
+      ? takeTop(actions.actions, LIMITS.actionsTop)
       : [];
     const actionsOutput = {
       ...(actionsRef ? { ref: actionsRef } : {}),
@@ -277,10 +278,10 @@ function compactRunOutputs(
     const debtOutput = {
       ...(debtStrategyRef ? { ref: debtStrategyRef } : {}),
       ...(isRecord(debtStrategy.summary)
-        ? { summary: debtStrategy.summary as PlanningRunRecord["outputs"]["debtStrategy"]["summary"] }
+        ? { summary: debtStrategy.summary as NonNullable<PlanningRunRecord["outputs"]["debtStrategy"]>["summary"] }
         : {}),
       ...(Array.isArray(debtStrategy.warnings)
-        ? { warnings: takeTop(debtStrategy.warnings, LIMITS.warningsTop) as PlanningRunRecord["outputs"]["debtStrategy"]["warnings"] }
+        ? { warnings: takeTop(debtStrategy.warnings, LIMITS.warningsTop) as NonNullable<PlanningRunRecord["outputs"]["debtStrategy"]>["warnings"] }
         : {}),
       ...(Array.isArray(debtStrategy.summaries) ? { summaries: takeTop(debtStrategy.summaries, LIMITS.actionsTop) } : {}),
       ...(debtStrategy.refinance !== undefined ? { refinance: takeTop(asArray(debtStrategy.refinance), LIMITS.actionsTop) } : {}),
@@ -294,7 +295,7 @@ function compactRunOutputs(
   return compacted;
 }
 
-function sortByCreatedAtDesc(records: Array<{ id: string; createdAt: string }>): Array<{ id: string; createdAt: string }> {
+function sortByCreatedAtDesc<T extends { id: string; createdAt: string }>(records: T[]): T[] {
   return [...records].sort((a, b) => {
     const aTs = Date.parse(a.createdAt);
     const bTs = Date.parse(b.createdAt);
@@ -441,7 +442,7 @@ async function readRunMetaByPath(filePath: string): Promise<PlanningRunRecord | 
 async function findPartitionMetaPathByRunId(runId: string): Promise<string | null> {
   const safeRunId = sanitizeRecordId(runId);
   const partitionRoot = resolveProfilePartitionsDir();
-  let profileEntries: Awaited<ReturnType<typeof fs.readdir>>;
+  let profileEntries: Dirent[];
   try {
     profileEntries = await fs.readdir(partitionRoot, { withFileTypes: true });
   } catch (error) {
@@ -496,7 +497,7 @@ async function readRunMeta(id: string, profileIdHint?: string): Promise<Planning
 
 async function scanPartitionRunsForIndex(): Promise<RunIndexEntry[]> {
   const partitionRoot = resolveProfilePartitionsDir();
-  let profileEntries: Awaited<ReturnType<typeof fs.readdir>>;
+  let profileEntries: Dirent[];
   try {
     profileEntries = await fs.readdir(partitionRoot, { withFileTypes: true });
   } catch (error) {
@@ -512,7 +513,7 @@ async function scanPartitionRunsForIndex(): Promise<RunIndexEntry[]> {
     if (!profileId) continue;
 
     const runsDir = path.join(partitionRoot, profileId, "runs");
-    let runEntries: Awaited<ReturnType<typeof fs.readdir>>;
+    let runEntries: Dirent[];
     try {
       runEntries = await fs.readdir(runsDir, { withFileTypes: true });
     } catch (error) {
@@ -539,7 +540,7 @@ async function scanRunsDirForIndex(): Promise<RunIndexEntry[]> {
   out.push(...partitionRows);
 
   const dirPath = resolveRunsDir();
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {

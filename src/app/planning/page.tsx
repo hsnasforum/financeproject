@@ -5,15 +5,10 @@ import { resolvePlanningLocale } from "@/lib/planning/i18n";
 import { normalizeProfileId } from "@/lib/planning/profileScope";
 
 type PlanningPageProps = {
-      searchParams?:
-    | {
-        lang?: string | string[];
-        profileId?: string | string[];
-      }
-    | Promise<{
-        lang?: string | string[];
-        profileId?: string | string[];
-      }>;
+  searchParams?: Promise<{
+    lang?: string | string[];
+    profileId?: string | string[];
+  }>;
 };
 
 function pickLang(value: string | string[] | undefined): string | undefined {
@@ -28,7 +23,7 @@ function pickProfileId(value: string | string[] | undefined): string {
 
 export default async function PlanningPage({ searchParams }: PlanningPageProps) {
   const featureFlags = getPlanningFeatureFlags();
-  const resolvedSearchParams = await Promise.resolve(searchParams);
+  const resolvedSearchParams = await searchParams;
   const locale = resolvePlanningLocale(pickLang(resolvedSearchParams?.lang), process.env.PLANNING_LOCALE);
   const snapshotItems = await loadSnapshotListForPlanning(20);
   const initialSelectedProfileId = pickProfileId(resolvedSearchParams?.profileId);

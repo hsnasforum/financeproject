@@ -11,7 +11,8 @@ import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import { getCache, recordCacheUsage, setCache } from "../../../../../lib/planning/server/cache/storage";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
-import { isAllocationPolicyId, type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
+import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
+import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
@@ -30,6 +31,7 @@ type ActionsRequestBody = {
 const ACTIONS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const ACTIONS_PRODUCTS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const planningService = createPlanningService();
+type AssumptionsContext = Awaited<ReturnType<typeof planningService.resolveAssumptionsContext>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -189,26 +191,11 @@ export async function POST(request: Request) {
     return fail("INPUT", "서버 설정으로 includeProducts 기능이 비활성화되어 있습니다.", { status: 400 });
   }
 
-  let finalSimulationAssumptions:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["simulationAssumptions"]
-      : never;
-  let baseAssumptions:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["assumptions"]
-      : never;
-  let snapshotMeta:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["snapshotMeta"]
-      : never;
-  let health:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["health"]
-      : never;
-  let scenarioOverrideForCache:
-    ReturnType<typeof planningService.resolveAssumptionsContext> extends Promise<infer T>
-      ? T["scenarioOverrideForCache"]
-      : never;
+  let finalSimulationAssumptions: AssumptionsContext["simulationAssumptions"];
+  let baseAssumptions: AssumptionsContext["assumptions"];
+  let snapshotMeta: AssumptionsContext["snapshotMeta"];
+  let health: AssumptionsContext["health"];
+  let scenarioOverrideForCache: AssumptionsContext["scenarioOverrideForCache"];
   let snapshotId: string | undefined;
   try {
     const context = await planningService.resolveAssumptionsContext({

@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -58,7 +59,7 @@ function summarizeDiff(row: { path?: string; kind?: string; diff?: number; toler
 }
 
 async function countJsonFiles(dirPath: string): Promise<DirStats> {
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {
@@ -81,7 +82,7 @@ async function countJsonFiles(dirPath: string): Promise<DirStats> {
 
 async function countAssumptionsHistory(): Promise<number> {
   const dirPath = resolveAssumptionsHistoryDir();
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {

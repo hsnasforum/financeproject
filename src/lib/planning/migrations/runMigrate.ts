@@ -274,7 +274,7 @@ export function migrateRunRecord(input: unknown): MigrationResult<PlanningRunRec
       ...(isRecord(outputsRecord.actions)
         ? {
           actions: {
-            actions: normalizedActions as PlanningRunRecordLike["outputs"]["actions"]["actions"],
+            actions: normalizedActions as NonNullable<PlanningRunRecordLike["outputs"]["actions"]>["actions"],
           },
         }
         : {}),

@@ -9,6 +9,7 @@ import { getPlanningFeatureFlags } from "../../../../../../../lib/planning/confi
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
 import { PdfReportError, renderPdfReport } from "../../../../../../../lib/planning/v2/report/pdfReport";
 import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
+import { type ResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -49,15 +50,17 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const outputs = run.outputs && typeof run.outputs === "object" ? run.outputs : {};
-    const resultDto = isResultDtoV1((outputs as Record<string, unknown>).resultDto)
-      ? (outputs as Record<string, unknown>).resultDto
+    const rawResultDto = (outputs as Record<string, unknown>).resultDto;
+    const resultDto: ResultDtoV1 = isResultDtoV1(rawResultDto)
+      ? rawResultDto
       : buildResultDtoV1FromRunRecord(run);
 
     const pdf = await renderPdfReport(resultDto, {
       title: run.title ? `${run.title} - 재무설계 결과 리포트` : "재무설계 결과 리포트",
     });
+    const pdfBody = Uint8Array.from(pdf).buffer;
 
-    return new Response(pdf, {
+    return new Response(pdfBody, {
       status: 200,
       headers: {
         "content-type": "application/pdf",

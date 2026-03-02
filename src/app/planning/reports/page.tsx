@@ -10,15 +10,10 @@ import { listRuns } from "@/lib/planning/server/store/runStore";
 export const dynamic = "force-dynamic";
 
 type PlanningReportsPageProps = {
-  searchParams?:
-    | {
-        runId?: string | string[];
-        profileId?: string | string[];
-      }
-    | Promise<{
-        runId?: string | string[];
-        profileId?: string | string[];
-      }>;
+  searchParams?: Promise<{
+    runId?: string | string[];
+    profileId?: string | string[];
+  }>;
 };
 
 function asString(value: unknown): string {
@@ -27,7 +22,7 @@ function asString(value: unknown): string {
 }
 
 export default async function PlanningReportsPage(props: PlanningReportsPageProps) {
-  const searchParams = props.searchParams ? await props.searchParams : undefined;
+  const searchParams = await props.searchParams;
   const requestedProfileId = normalizeProfileId(searchParams?.profileId);
   const requestedRunId = asString(searchParams?.runId);
   const defaultProfileId = await getDefaultProfileId();

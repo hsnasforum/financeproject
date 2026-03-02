@@ -11,6 +11,7 @@ import {
   summarizeRunActionProgress,
   updateRunActionProgress,
 } from "../../../../../../../lib/planning/server/store/runActionStore";
+import { type PlanningRunActionStatus } from "../../../../../../../lib/planning/server/store/types";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -25,6 +26,15 @@ type ActionProgressPatchBody = {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function parseActionStatus(value: unknown): PlanningRunActionStatus | undefined {
+  const normalized = asString(value);
+  if (!normalized) return undefined;
+  if (normalized === "todo" || normalized === "doing" || normalized === "done" || normalized === "snoozed") {
+    return normalized;
+  }
+  return undefined;
 }
 
 function withLocalReadGuard(request: Request) {
@@ -92,12 +102,13 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (guardFailure) return guardFailure;
 
   const actionKey = asString(body?.actionKey);
-  const status = asString(body?.status);
+  const statusRaw = asString(body?.status);
+  const status = parseActionStatus(body?.status);
   const note = body?.note === undefined ? undefined : asString(body.note);
   if (!actionKey) {
     return jsonError("INPUT", "actionKey가 필요합니다.", { status: 400 });
   }
-  if (status && !(status === "todo" || status === "doing" || status === "done" || status === "snoozed")) {
+  if (statusRaw && !status) {
     return jsonError("INPUT", "status는 todo|doing|done|snoozed 중 하나여야 합니다.", { status: 400 });
   }
 
