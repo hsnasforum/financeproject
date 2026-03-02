@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "schemaVersion": 2,
+  "id": "default-profile",
+  "name": "기본 프로필",
+  "profile": {
+    "monthlyIncomeNet": 0,
+    "monthlyEssentialExpenses": 0,
+    "monthlyDiscretionaryExpenses": 0,
+    "liquidAssets": 0,
+    "investmentAssets": 0,
+    "debts": [],
+    "goals": []
+  },
+  "createdAt": "2026-03-01T17:17:04.590Z",
+  "updatedAt": "2026-03-01T17:17:04.590Z"
+}

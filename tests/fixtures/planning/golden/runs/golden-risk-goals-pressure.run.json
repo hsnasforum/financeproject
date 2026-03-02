@@ -1,0 +1,15 @@
+{
+  "id": "golden-risk-goals-pressure",
+  "title": "Golden RISK goals pressure run",
+  "createdAt": "2026-03-01T00:00:00.000Z",
+  "profileId": "golden-profile-risk-goals-pressure",
+  "overallStatus": "FAILED",
+  "stages": {
+    "simulate": "SUCCESS",
+    "scenarios": "SUCCESS",
+    "monteCarlo": "SKIPPED",
+    "actions": "SUCCESS",
+    "debt": "SUCCESS"
+  },
+  "resultDtoFixture": "tests/planning-v2/report/fixtures/dto-risk.json"
+}

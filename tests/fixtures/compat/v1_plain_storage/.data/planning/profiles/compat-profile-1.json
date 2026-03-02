@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "id": "compat-profile-1",
+  "name": "Compat Profile",
+  "profile": {
+    "schemaVersion": 1,
+    "monthlyIncomeNet": 5100000,
+    "monthlyEssentialExpenses": 2200000,
+    "monthlyDiscretionaryExpenses": 700000,
+    "liquidAssets": 8000000,
+    "investmentAssets": 12000000,
+    "debts": [
+      {
+        "id": "loan-compat-1",
+        "name": "주담대",
+        "balance": 120000000,
+        "apr": 0.042,
+        "monthlyPayment": 920000,
+        "remainingMonths": 220
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal-emergency",
+        "name": "비상금",
+        "targetAmount": 18000000,
+        "currentAmount": 8000000,
+        "targetMonth": 24,
+        "priority": 5,
+        "minimumMonthlyContribution": 300000
+      }
+    ],
+    "debtOffers": [
+      {
+        "liabilityId": "loan-compat-1",
+        "newApr": 0.036
+      }
+    ]
+  },
+  "createdAt": "2025-12-31T00:00:00.000Z",
+  "updatedAt": "2026-01-05T00:00:00.000Z"
+}

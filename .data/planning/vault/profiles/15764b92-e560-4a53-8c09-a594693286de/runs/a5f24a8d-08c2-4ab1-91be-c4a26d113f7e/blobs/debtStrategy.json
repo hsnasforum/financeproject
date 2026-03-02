@@ -1,0 +1,184 @@
+{
+  "summary": {
+    "debtServiceRatio": 0.1733,
+    "totalMonthlyPaymentKrw": 970441,
+    "warningsCount": 0
+  },
+  "warnings": [],
+  "summaries": [
+    {
+      "liabilityId": "multi-loan-home",
+      "name": "Home Loan",
+      "type": "amortizing",
+      "principalKrw": 74000000,
+      "aprPct": 4.9,
+      "remainingMonths": 204,
+      "monthlyPaymentKrw": 535264,
+      "monthlyInterestKrw": 302167,
+      "totalInterestRemainingKrw": 35193862,
+      "payoffMonthIndex": 205
+    },
+    {
+      "liabilityId": "multi-loan-credit",
+      "name": "Credit Loan",
+      "type": "amortizing",
+      "principalKrw": 19000000,
+      "aprPct": 9.8,
+      "remainingMonths": 66,
+      "monthlyPaymentKrw": 373544,
+      "monthlyInterestKrw": 155167,
+      "totalInterestRemainingKrw": 5653916,
+      "payoffMonthIndex": 66
+    },
+    {
+      "liabilityId": "multi-loan-card",
+      "name": "Card Balance",
+      "type": "interestOnly",
+      "principalKrw": 4300000,
+      "aprPct": 17.2,
+      "remainingMonths": 48,
+      "monthlyPaymentKrw": 61633,
+      "monthlyInterestKrw": 61633,
+      "totalInterestRemainingKrw": 2958384,
+      "payoffMonthIndex": 48
+    }
+  ],
+  "refinance": [
+    {
+      "liabilityId": "multi-loan-credit",
+      "offerTitle": "신용대출 전환",
+      "newAprPct": 6.4,
+      "feeKrw": 150000,
+      "currentMonthlyPaymentKrw": 373544,
+      "newMonthlyPaymentKrw": 342271,
+      "monthlyPaymentDeltaKrw": -31273,
+      "interestSavingsKrw": 1914035,
+      "breakEvenMonths": 5,
+      "notes": [
+        "수수료가 반영되었습니다."
+      ]
+    },
+    {
+      "liabilityId": "multi-loan-card",
+      "offerTitle": "카드론 통합",
+      "newAprPct": 11.8,
+      "feeKrw": 50000,
+      "currentMonthlyPaymentKrw": 61633,
+      "newMonthlyPaymentKrw": 42283,
+      "monthlyPaymentDeltaKrw": -19350,
+      "interestSavingsKrw": 878800,
+      "breakEvenMonths": 3,
+      "notes": [
+        "수수료가 반영되었습니다."
+      ]
+    }
+  ],
+  "whatIf": {
+    "termExtensions": [
+      {
+        "liabilityId": "multi-loan-credit",
+        "newTermMonths": 120,
+        "newMonthlyPaymentKrw": 248987,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      }
+    ],
+    "termReductions": [
+      {
+        "liabilityId": "multi-loan-home",
+        "newTermMonths": 12,
+        "newMonthlyPaymentKrw": 6331563,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-home",
+        "newTermMonths": 24,
+        "newMonthlyPaymentKrw": 3243170,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-home",
+        "newTermMonths": 36,
+        "newMonthlyPaymentKrw": 2214525,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-home",
+        "newTermMonths": 60,
+        "newMonthlyPaymentKrw": 1393084,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-home",
+        "newTermMonths": 120,
+        "newMonthlyPaymentKrw": 781273,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-credit",
+        "newTermMonths": 12,
+        "newMonthlyPaymentKrw": 1668635,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-credit",
+        "newTermMonths": 24,
+        "newMonthlyPaymentKrw": 875001,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-credit",
+        "newTermMonths": 36,
+        "newMonthlyPaymentKrw": 611294,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-credit",
+        "newTermMonths": 60,
+        "newMonthlyPaymentKrw": 401827,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "multi-loan-card",
+        "newTermMonths": 48,
+        "newMonthlyPaymentKrw": 124522,
+        "notes": [
+          "Converts interest-only repayment to amortizing repayment over the same remaining term."
+        ]
+      }
+    ],
+    "extraPayments": [
+      {
+        "liabilityId": "multi-loan-home",
+        "extraPaymentKrw": 200000,
+        "payoffMonthsReduced": 75,
+        "interestSavingsKrw": 13696961
+      },
+      {
+        "liabilityId": "multi-loan-credit",
+        "extraPaymentKrw": 200000,
+        "payoffMonthsReduced": 27,
+        "interestSavingsKrw": 2409104
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "vaultVersion": 2,
+  "kdf": {
+    "name": "scrypt",
+    "N": 16384,
+    "r": 8,
+    "p": 1,
+    "keyLength": 32
+  },
+  "salt": "PGt3DrOkTbpQu+11ge0TjA==",
+  "wrappedMasterKey": {
+    "version": 2,
+    "alg": "aes-256-gcm",
+    "enc": "key",
+    "iv": "kNgJ/xIW2tHduPeR",
+    "tag": "9JhXPCIW0Mcr8j09NWgWTw==",
+    "ciphertext": "4+32o9WErtldqcKEFwrIybfsJKx+fWpiEMWSDbJTiG8="
+  },
+  "lockPolicy": {
+    "autoLockMinutes": 30,
+    "maxFailedAttempts": 5,
+    "failedWindowSeconds": 300,
+    "backoffBaseSeconds": 30,
+    "maxBackoffSeconds": 900
+  },
+  "createdAt": "2026-03-01T18:16:21.298Z",
+  "updatedAt": "2026-03-01T18:16:21.298Z"
+}

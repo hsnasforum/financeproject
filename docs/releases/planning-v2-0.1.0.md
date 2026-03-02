@@ -1,7 +1,7 @@
 # Planning v2 Release Notes (0.1.0)
 
 - Version: `0.1.0`
-- Date: `2026-02-28`
+- Date: `2026-03-01`
 
 ## Done Definition 요약
 - `/planning`에서 프로필 생성/편집/삭제가 가능하다.
@@ -10,14 +10,14 @@
 - `/ops/assumptions`에서 snapshot sync와 latest 상태 확인이 가능하다.
 - assumptions history가 있으면 조회/rollback(set latest, confirm)이 가능하다.
 - `pnpm planning:v2:complete`가 통과한다.
-- 구성된 경우 `pnpm planning:v2:regress`가 통과한다.
+- 로컬 서버 기동 후 `pnpm planning:v2:acceptance`가 통과한다(가능한 환경에서).
 
 ## 사용자 기능 요약
 - `/planning`에서 프로필을 선택/편집합니다.
-- 필요하면 `snapshotId`를 지정하고 `Run plan`을 실행합니다.
+- 필요하면 `snapshotId`를 지정하고 `실행` 버튼을 눌러 계산합니다.
 - Summary/Simulate/Scenarios/Monte Carlo/Actions/Debt 탭으로 결과를 확인합니다.
-- health critical 경고가 있으면 ack 후 `Save run`으로 저장합니다.
-- `/planning/runs`에서 run 비교(diff)와 export를 수행합니다.
+- health critical 경고가 있으면 ack 후 `실행 기록 저장`을 수행합니다.
+- `/planning/runs`에서 실행 기록 비교(diff)와 export를 수행합니다.
 
 ## OPS/운영 기능 요약
 - `/ops/assumptions`에서 snapshot sync, history, rollback을 관리합니다.
@@ -38,8 +38,13 @@
 - `pnpm planning:v2:regress`
 - `pnpm planning:v2:smoke`
 - `pnpm planning:v2:guard`
+- `pnpm planning:v2:freeze:guard`
 - `pnpm planning:v2:scan:guards`
-- `pnpm planning:v2:seed`
+
+## 완성 확인 (3단계)
+- pnpm planning:v2:complete
+- 서버 실행 후 pnpm planning:v2:acceptance
+- 5분 셀프 테스트 체크 완료: docs/planning-v2-5min-selftest.md
 
 ## Known Limitations
 - 확률/시나리오 결과는 가정 기반이며 보장값이 아닙니다.

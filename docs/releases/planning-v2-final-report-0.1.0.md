@@ -1,7 +1,7 @@
 # Planning v2 Final Report (0.1.0)
 
 - Version: `0.1.0`
-- GeneratedAt: `2026-02-28T10:28:13.847Z`
+- GeneratedAt: `2026-03-01T09:29:30.741Z`
 
 ## 1) Done Definition 요약
 - `/planning`에서 프로필 생성/편집/삭제가 가능하다.
@@ -18,10 +18,10 @@
 ## 2) 기능 범위
 ### 사용자
 - `/planning`에서 프로필을 선택/편집합니다.
-- 필요하면 `snapshotId`를 지정하고 `Run plan`을 실행합니다.
+- 필요하면 `snapshotId`를 지정하고 `실행` 버튼을 눌러 계산합니다.
 - Summary/Simulate/Scenarios/Monte Carlo/Actions/Debt 탭으로 결과를 확인합니다.
-- health critical 경고가 있으면 ack 후 `Save run`으로 저장합니다.
-- `/planning/runs`에서 run 비교(diff)와 export를 수행합니다.
+- health critical 경고가 있으면 ack 후 `실행 기록 저장`을 수행합니다.
+- `/planning/runs`에서 실행 기록 비교(diff)와 export를 수행합니다.
 ### OPS
 - `/ops/assumptions`에서 snapshot sync, history, rollback을 관리합니다.
 - `/ops/planning`에서 snapshot/regression/cache/store 상태를 점검합니다.
@@ -34,7 +34,7 @@
 |---|---|---|---|---|
 | complete | PASS | `pnpm planning:v2:complete` | `.data/planning/release/logs/final-report-0.1.0-complete.log` | - |
 | regress | PASS | `pnpm planning:v2:regress` | `.data/planning/release/logs/final-report-0.1.0-regress.log` | - |
-| acceptance | SKIPPED | `pnpm planning:v2:acceptance` | `.data/planning/release/logs/final-report-0.1.0-acceptance.log` | base-url-not-provided |
+| acceptance | PASS | `PLANNING_BASE_URL=http://localhost:3100 pnpm planning:v2:acceptance` | `.data/planning/release/logs/final-report-0.1.0-acceptance.log` | - |
 
 ## 4) 문서/증빙
 - docs/planning-v2-onepage.md
@@ -43,6 +43,7 @@
 - docs/planning-v2-architecture.md
 - docs/planning-v2-done-definition.md
 - docs/planning-v2-release-checklist.md
+- docs/planning-v2-5min-selftest.md
 - 릴리즈 노트: `docs/releases/planning-v2-0.1.0.md`
 
 ## 5) 운영 루틴

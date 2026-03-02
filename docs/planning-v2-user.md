@@ -1,29 +1,35 @@
 # Planning v2 User Guide
 
 ## 화면 경로
-- `/planning`: 프로필 생성/편집, 실행 옵션 설정, Run/Save
-- `/planning/runs`: run 목록/상세, run 2개 비교, 단일 run export
+- `/planning`: 프로필 생성/편집, 실행 옵션 설정, 실행/실행 기록 저장
+- `/planning/runs`: 실행 기록 목록/상세, 실행 기록 2개 비교, 단일 실행 기록 export
+- `/planning/reports`: 최근 실행 기록 20개 리포트 허브(HTML 보기/다운로드, 메뉴 비노출)
 - `/planning/trash`: profiles/runs/reports 휴지통 복구/영구삭제
+
+## 멀티 프로필 범위
+- 프로필/실행기록/액션 진행상태는 `vault/profiles/<profileId>/...`로 분리 저장됩니다.
+- `/planning` 헤더의 프로필 선택값이 `/planning/runs`, `/planning/reports` 기본 스코프로 이어집니다.
+- 가정 스냅샷(assumptions history/latest)은 전 프로필 공용으로 사용합니다.
 
 ## 10분 온보딩 흐름
 1. `/planning`에서 `New`로 프로필을 생성합니다.
 2. 프로필(JSON 또는 폼)을 수정하고 `Save`를 눌러 저장합니다.
-3. Snapshot 선택:
+3. 스냅샷 선택:
    - `Snapshot ID` 비움: latest
    - `Snapshot ID` 입력: 해당 스냅샷으로 재현 실행
-4. Run 옵션 선택:
+4. 실행 옵션 선택:
    - 기본: `simulate + scenarios + actions`
    - 필요 시 `monte-carlo`, `debt` 추가
-5. `Run plan` 실행 후 Summary/Simulate/Scenarios/Monte Carlo/Actions/Debt 탭에서 결과 확인
-6. `Save run`으로 실행 결과를 이력에 저장
-7. `/planning/runs`에서 run 2개를 선택해 Compare, 필요 시 JSON export
+5. `실행` 버튼으로 계산 후 Summary/Simulate/Scenarios/Monte Carlo/Actions/Debt 탭에서 결과 확인
+6. `실행 기록 저장`으로 결과를 저장
+7. `/planning/runs`에서 실행 기록 2개를 선택해 Compare, 필요 시 JSON export
 8. 삭제한 항목을 되돌려야 하면 `/planning/trash`에서 Restore
 
 ## Allocation Policy 프리셋
 - `Balanced` (기본): 기존 v2 우선순위 로직과 동일하게 동작합니다.
 - `Safety-first`: 비상금/부채 상환을 더 보수적으로 우선합니다.
 - `Growth-first`: 투자 기여를 우선하되, 적자/비상금 최소 보호 가드를 유지합니다.
-- 선택값은 run 저장 시 함께 기록되어 비교/재현 시 사용됩니다.
+- 선택값은 실행 기록 저장 시 함께 기록되어 비교/재현 시 사용됩니다.
 
 ## snapshotId 재현 실행
 - 입력 위치: `/planning`의 `Snapshot ID`
@@ -33,8 +39,8 @@
 ## Ack 게이트 (Health Critical)
 - `meta.health.criticalCount > 0`이면 확인 체크박스(ack)가 표시됩니다.
 - ack 전:
-  - `Run plan`은 허용
-  - `Save run` 및 고비용/부가 액션(`Monte Carlo`, `Actions`) 제한
+  - `실행`은 허용
+  - `실행 기록 저장` 및 고비용/부가 액션(`Monte Carlo`, `Actions`) 제한
 - ack 후:
   - 저장/고비용 실행 허용
 - 권장 조치:
@@ -47,20 +53,23 @@
   - Export:
     - `Copy JSON`
     - `Download JSON` (`/api/planning/v2/runs/{id}/export`)
+  - 사용자 기본 리포트:
+    - `리포트 보기`로 HTML 리포트를 새 탭에서 확인합니다.
+    - `다운로드(HTML)`로 파일 저장 후 보관/공유할 수 있습니다.
+    - 브라우저 인쇄(`Ctrl/Cmd + P`)에서 `PDF로 저장`을 선택하면 PDF 파일로 변환됩니다.
+    - 서버 PDF 다운로드(`/report.pdf`)는 옵션 기능이며 `PLANNING_PDF_ENABLED=true` + 한글 폰트/브라우저 런타임이 필요합니다.
   - Delete:
     - 기본 동작은 영구 삭제가 아니라 휴지통 이동(soft delete)
     - `/planning/trash`에서 복구 또는 영구 삭제 가능
 
-## 리포트 생성/보기/다운로드
+## 리포트 보기/다운로드
 - `/planning/runs`:
-  - 각 run 행의 `리포트 생성` 또는 상세의 `Generate report` 버튼으로 markdown 리포트를 생성합니다.
-  - `공유 리포트(Create share report)`는 기본 마스킹(`standard`)으로 요약 리포트를 생성하고 다운로드할 수 있습니다.
-  - 공유 리포트는 워터마크(가정 기반/보장 아님/비권유)가 항상 포함됩니다.
-- 생성 후 `보기` 링크로 `/planning/reports` 화면으로 이동할 수 있습니다.
+  - 각 실행 기록에서 `리포트 보기`로 HTML 리포트를 즉시 확인할 수 있습니다.
+  - `다운로드(HTML)`로 같은 리포트를 바로 저장할 수 있습니다.
+  - `공유 리포트 생성`은 마스킹(`light|standard|strict`)된 공유본을 별도로 생성/다운로드합니다.
 - `/planning/reports`:
-  - 목록에서 리포트를 선택하면 markdown 원문을 바로 확인할 수 있습니다.
-  - `Download MD`로 파일을 다운로드할 수 있습니다.
-  - 삭제는 confirm 후 수행됩니다.
+  - 별도 리포트 저장소가 아니라 실행 기록 기반 `리포트 허브`입니다.
+  - 현재 선택 프로필 스코프에서 최근 실행 기록 20개를 기준으로 `리포트 보기`, `다운로드(HTML)`, `실행 기록 열기` 바로가기를 제공합니다.
 
 ## 자주 발생하는 오류
 - `snapshot missing/stale`
@@ -83,7 +92,7 @@
 - `INTERNAL`: 서버 처리 오류입니다. 입력을 단순화해 재시도하고, 반복되면 OPS 로그를 확인하세요.
 
 ## 부분 실패 원칙
-- `Run plan`은 `simulate`를 기준 결과로 유지합니다.
+- `실행`은 `simulate`를 기준 결과로 유지합니다.
 - 부가 단계(`scenarios`, `monte-carlo`, `actions`, `debt`) 중 일부가 실패해도 기본 결과는 화면에 유지됩니다.
 - 실패 원인은 코드/메시지로 표시되며, 실패 단계만 다시 실행해도 됩니다.
 

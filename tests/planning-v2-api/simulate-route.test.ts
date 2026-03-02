@@ -345,7 +345,7 @@ describe("POST /api/planning/v2/simulate", () => {
     expect(payload.ok).toBe(true);
 
     const serialized = JSON.stringify(payload);
-    expect(serialized).not.toMatch(/GITHUB_TOKEN|ECOS_API_KEY|FINLIFE/i);
+    expect(serialized).not.toMatch(/GITHUB_TOKEN|BOK_ECOS_API_KEY|ECOS_API_KEY|FINLIFE/i);
     expect(serialized).not.toContain(".data/");
     expect(payload.meta?.snapshot).not.toHaveProperty("path");
     expect(payload.meta?.snapshot).not.toHaveProperty("sources");

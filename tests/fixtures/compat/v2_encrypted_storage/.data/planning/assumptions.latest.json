@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "alg": "aes-256-gcm",
+  "enc": "key",
+  "iv": "zXVKJ7CgVlSNRVK3",
+  "tag": "a1sI0CwU/d2zFZkaGilatw==",
+  "ciphertext": "cWD28aFntgejhCilj8a2Qk1EvyOPAtjpxCc1Q4pQ7y+jvmU489Rl0ZdW2GESHCeGImuJEBLWV6cP8ZMs3BAcdEaS1JYghKIQ9+gTf1uTpDTAvm/h7koMSJzSGy1LRAjncOen/OMfY1YhgHEDBfqar3B/r56PjkyFvaHftV8e/YlSSb70zJhaA8vBR4VH3zQC7IgSMoG/BxLIwj1HhZq4xuDfoda4l5T95gXR+kjNGnSG0wk+F47dIlgc7jdCdrRup/ODGQXK8eQE73el6HW4q85ZotYLJ7J+eZTL+by1rhJpRYk0o9mTsTb5zUUoWY1aVGTCie9iaQCjAtTp1ZsOC4O7MlAl9alIlH2BR7JkHSagsQCWJvSm4wAMrYNyejnw9LxdSXOhPLzp83UtOIHpmZbdj/CE8FyYFYQqxDrhOkCH7KXC9C8PaS5rJQ=="
+}

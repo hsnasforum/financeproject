@@ -1,16 +1,16 @@
 # Planning v2 One-page
 
 ## 무엇을 하는 도구인가
-- 개인용 로컬 재무설계 시뮬레이터입니다.
+- 개인용 로컬 플래닝 시뮬레이터입니다.
 - 엔진은 오프라인 순수함수로 계산하고, 최신성은 snapshot 주입으로 분리합니다.
 - 결과는 단일값뿐 아니라 시나리오/확률/액션/부채전략 비교를 제공합니다.
 
 ## 사용자 흐름 (5줄)
 - `/planning`에서 프로필을 선택/편집합니다.
-- 필요하면 `snapshotId`를 지정하고 `Run plan`을 실행합니다.
+- 필요하면 `snapshotId`를 지정하고 `실행` 버튼을 눌러 계산합니다.
 - Summary/Simulate/Scenarios/Monte Carlo/Actions/Debt 탭으로 결과를 확인합니다.
-- health critical 경고가 있으면 ack 후 `Save run`으로 저장합니다.
-- `/planning/runs`에서 run 비교(diff)와 export를 수행합니다.
+- health critical 경고가 있으면 ack 후 `실행 기록 저장`을 수행합니다.
+- `/planning/runs`에서 실행 기록 비교(diff)와 export를 수행합니다.
 
 ## 운영 흐름 (5줄)
 - `/ops/assumptions`에서 snapshot sync, history, rollback을 관리합니다.

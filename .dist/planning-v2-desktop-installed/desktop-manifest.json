@@ -1,0 +1,10 @@
+{
+  "kind": "planning-v2-desktop",
+  "version": "1.0.1",
+  "builtAt": "2026-03-01T15:31:59.007Z",
+  "localOnlyDefault": true,
+  "runtimeMode": "next-dev-local-only",
+  "runCommand": "./run.sh",
+  "installCommand": "./install.sh",
+  "note": "onlyDev/local-only 정책 때문에 기본 실행은 dev 모드입니다."
+}

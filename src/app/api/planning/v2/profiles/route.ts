@@ -12,7 +12,7 @@ import {
   listProfiles,
 } from "../../../../../lib/planning/server/store/profileStore";
 import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
-import { validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { loadCanonicalProfile } from "../../../../../lib/planning/v2/loadCanonicalProfile";
 
 type CreateProfileBody = {
   name?: unknown;
@@ -43,8 +43,9 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
+    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request)) {
-      assertCsrf(request, body);
+      assertCsrf(request, { csrf: csrfToken });
     }
     return null;
   } catch (error) {
@@ -75,6 +76,10 @@ function appendProfileAudit(input: {
   } catch (error) {
     console.error("[audit] failed to append planning profile audit", error);
   }
+}
+
+function normalizeCanonicalProfile(input: unknown) {
+  return loadCanonicalProfile(input);
 }
 
 export async function GET(request: Request) {
@@ -109,10 +114,10 @@ export async function POST(request: Request) {
 
   const name = asString(body?.name);
   try {
-    const profile = validateProfileV2(body?.profile);
+    const canonical = normalizeCanonicalProfile(body?.profile);
     const created = await createProfile({
       name: name || "기본 프로필",
-      profile,
+      profile: canonical.profile,
     });
 
     appendProfileAudit({
@@ -123,7 +128,12 @@ export async function POST(request: Request) {
       message: "planning profile created",
     });
 
-    return jsonOk({ data: created }, { status: 201 });
+    return jsonOk({
+      data: created,
+      meta: {
+        normalization: canonical.normalization,
+      },
+    }, { status: 201 });
   } catch (error) {
     if (error instanceof PlanningV2ValidationError) {
       const message = error.issues.map((issue) => `${issue.path}: ${issue.message}`).join(", ");

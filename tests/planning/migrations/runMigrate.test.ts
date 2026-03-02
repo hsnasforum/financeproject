@@ -46,6 +46,7 @@ describe("migrateRunRecord", () => {
     expect(result.ok).toBe(true);
     expect(result.warnings).toContain("VERSION_MISSING_DEFAULTED");
     expect(result.data?.outputs.simulate?.warnings).toEqual(["A_CODE", "B_CODE"]);
+    expect(result.data?.schemaVersion).toBe(2);
   });
 
   it("adds warning when snapshot id is missing but asOf/fetchedAt exists", () => {

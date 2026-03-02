@@ -8,17 +8,14 @@ import { debtStrategyWarningMessage } from "../warningsCatalog.ko";
 import { analyzeRefinance } from "./refi";
 import { buildDebtWhatIf } from "./whatIf";
 import { type DebtStrategyInput, type DebtStrategyResult, type LiabilityV2 } from "./types";
+import { roundKrw, roundToDigits } from "../../../calc";
 
 const DEFAULT_HORIZON_MONTHS = 120;
 const DSR_WARN_THRESHOLD = 0.4;
 const DSR_CRITICAL_THRESHOLD = 0.6;
 
-function roundMoney(value: number): number {
-  return Math.round(value);
-}
-
 function round4(value: number): number {
-  return Math.round((value + Number.EPSILON) * 10_000) / 10_000;
+  return roundToDigits(value, 4);
 }
 
 function sanitizeLiability(liability: LiabilityV2, fallbackMonths: number): LiabilityV2 {
@@ -49,8 +46,8 @@ function buildNegativeAmortizationWarnings(liabilities: LiabilityV2[]) {
         message: debtStrategyWarningMessage("NEGATIVE_AMORTIZATION_RISK"),
         data: {
           liabilityId: liability.id,
-          minimumPaymentKrw: roundMoney(minimumPaymentKrw as number),
-          firstMonthInterestKrw: roundMoney(firstMonthInterest),
+          minimumPaymentKrw: roundKrw(minimumPaymentKrw as number),
+          firstMonthInterestKrw: roundKrw(firstMonthInterest),
         },
       });
     }
@@ -107,7 +104,7 @@ export function computeDebtStrategy(input: DebtStrategyInput): DebtStrategyResul
   return {
     meta: {
       debtServiceRatio: round4(debtServiceRatio),
-      totalMonthlyPaymentKrw: roundMoney(totalMonthlyPaymentKrw),
+      totalMonthlyPaymentKrw: roundKrw(totalMonthlyPaymentKrw),
     },
     summaries,
     ...(refinance.length > 0 ? { refinance } : {}),

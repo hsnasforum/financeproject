@@ -1,7 +1,7 @@
 import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
-  assertCsrf,
   assertLocalHost,
+  requireCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
@@ -12,6 +12,12 @@ import {
   loadAssumptionsSnapshotById,
   loadLatestAssumptionsSnapshot,
 } from "../../../../../lib/planning/server/assumptions/storage";
+import {
+  mergeAssumptionsWithProvenance,
+  toAssumptionsOverridesFromRecord,
+} from "../../../../../lib/planning/server/assumptions/overrides";
+import { loadAssumptionsOverrides } from "../../../../../lib/planning/server/assumptions/overridesStorage";
+import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
 import { mapSnapshotToAssumptionsV2, mapSnapshotToScenarioExtrasV2 } from "../../../../../lib/planning/server/assumptions/mapSnapshotToAssumptionsV2";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { DEFAULT_ASSUMPTIONS_V2 } from "../../../../../lib/planning/server/v2/defaults";
@@ -22,7 +28,7 @@ import {
 } from "../../../../../lib/planning/server/v2/assumptionsHealth";
 import { isAllocationPolicyId, type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { runScenarios } from "../../../../../lib/planning/server/v2/runScenarios";
-import { type AssumptionsV2, type RiskTolerance, toScenarioAssumptionsV2 } from "../../../../../lib/planning/server/v2/scenarios";
+import { type AssumptionsV2, type RiskTolerance, toScenarioAssumptionsV2, toSimulationAssumptionsV2 } from "../../../../../lib/planning/server/v2/scenarios";
 import { simulateMonthly } from "../../../../../lib/planning/server/v2/simulateMonthly";
 import { runMonteCarlo } from "../../../../../lib/planning/server/v2/monteCarlo";
 import { checkMonteCarloBudget } from "../../../../../lib/planning/server/v2/budget";
@@ -30,14 +36,25 @@ import { buildActionsFromPlan } from "../../../../../lib/planning/server/v2/acti
 import { matchCandidates } from "../../../../../lib/planning/server/v2/actions/matchFinlifeCandidates";
 import { computeDebtStrategy } from "../../../../../lib/planning/server/v2/debt/strategy";
 import { getProfile } from "../../../../../lib/planning/server/store/profileStore";
-import { createRun, listRuns } from "../../../../../lib/planning/server/store/runStore";
+import { createRun, getRun, listRuns } from "../../../../../lib/planning/server/store/runStore";
+import { ensureRunActionPlan, getRunActionProgress, summarizeRunActionProgress } from "../../../../../lib/planning/server/store/runActionStore";
+import { runStagePipeline } from "../../../../../lib/planning/v2/stagePipeline";
+import { buildResultDtoV1 } from "../../../../../lib/planning/v2/resultDto";
+import { preflightRun } from "../../../../../lib/planning/v2/preflight";
+import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
+import { loadCanonicalProfile } from "../../../../../lib/planning/v2/loadCanonicalProfile";
+import { buildRunReproducibilityMeta } from "../../../../../lib/planning/v2/reproducibility";
+import { applyScenario, validateScenario, type ScenarioMeta, type ScenarioPatch } from "../../../../../lib/planning/v2/scenario";
+import { DEFAULT_PLANNING_POLICY } from "../../../../../lib/planning/catalog/planningPolicy";
 import { PlanningV2ValidationError, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths } from "../../../../../lib/planning/server/v2/validate";
 import { type LiabilityV2, type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
+import { type PlanningRunRecord, type PlanningRunStageResult } from "../../../../../lib/planning/store/types";
 
 type RunsCreateBody = {
   profileId?: unknown;
   title?: unknown;
+  scenario?: unknown;
   input?: {
     horizonMonths?: unknown;
     policyId?: unknown;
@@ -67,10 +84,6 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withLocalReadGuard(request: Request) {
   try {
     assertLocalHost(request);
@@ -86,9 +99,8 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
-    if (hasCsrfCookie(request)) {
-      assertCsrf(request, body);
-    }
+    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
+    requireCsrf(request, { csrf: csrfToken }, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -129,6 +141,7 @@ function parseSnapshotId(value: unknown): string | undefined {
   }
   const trimmed = value.trim();
   if (!trimmed) return undefined;
+  if (trimmed.toLowerCase() === "latest") return undefined;
   return trimmed;
 }
 
@@ -191,10 +204,68 @@ function parseMonteCarloInput(value: unknown): { paths: number; seed: number } |
   };
 }
 
-function normalizeAprPct(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  if (Math.abs(value) <= 1) return value * 100;
-  return value;
+function parseScenarioMeta(value: unknown): ScenarioMeta | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    throw new PlanningV2ValidationError("Invalid scenario input", [
+      { path: "scenario", message: "must be an object" },
+    ]);
+  }
+
+  const name = asString(value.name);
+  const createdAtRaw = asString(value.createdAt);
+  const createdAt = createdAtRaw && Number.isFinite(Date.parse(createdAtRaw))
+    ? new Date(createdAtRaw).toISOString()
+    : new Date().toISOString();
+  const id = asString(value.id) || crypto.randomUUID();
+  const templateId = asString(value.templateId);
+  const baselineRunId = asString(value.baselineRunId);
+  const patchesRaw = value.patches;
+  if (!Array.isArray(patchesRaw) || patchesRaw.length < 1) {
+    throw new PlanningV2ValidationError("Invalid scenario input", [
+      { path: "scenario.patches", message: "must be a non-empty array" },
+    ]);
+  }
+
+  const patches: ScenarioPatch[] = patchesRaw.map((entry, index) => {
+    if (!isRecord(entry)) {
+      throw new PlanningV2ValidationError("Invalid scenario input", [
+        { path: `scenario.patches[${index}]`, message: "must be an object" },
+      ]);
+    }
+    const path = asString(entry.path);
+    const op = asString(entry.op);
+    const valueNumber = Number(entry.value);
+    if (!path) {
+      throw new PlanningV2ValidationError("Invalid scenario input", [
+        { path: `scenario.patches[${index}].path`, message: "must be a non-empty string" },
+      ]);
+    }
+    if (!(op === "set" || op === "add" || op === "multiply")) {
+      throw new PlanningV2ValidationError("Invalid scenario input", [
+        { path: `scenario.patches[${index}].op`, message: "must be one of set|add|multiply" },
+      ]);
+    }
+    if (!Number.isFinite(valueNumber)) {
+      throw new PlanningV2ValidationError("Invalid scenario input", [
+        { path: `scenario.patches[${index}].value`, message: "must be a finite number" },
+      ]);
+    }
+    return {
+      path,
+      op,
+      value: valueNumber,
+    };
+  });
+
+  return {
+    id,
+    name: name || "What-if scenario",
+    ...(templateId ? { templateId } : {}),
+    ...(baselineRunId ? { baselineRunId } : {}),
+    createdAt,
+    patches,
+  };
 }
 
 function parseDebtStrategyInput(
@@ -240,9 +311,20 @@ function parseDebtStrategyInput(
         ]);
       }
       const title = asString(entry.title);
+      let normalizedRate;
+      try {
+        normalizedRate = toEngineRateBoundary(entry.newAprPct, "newAprPct");
+      } catch {
+        throw new PlanningV2ValidationError("Invalid debtStrategy input", [
+          {
+            path: `input.debtStrategy.offers[${index}].newAprPct`,
+            message: "must be 0, legacy decimal(0<x<=1), or percent(1<x<=100)",
+          },
+        ]);
+      }
       return {
         liabilityId,
-        newAprPct: entry.newAprPct,
+        newAprPct: normalizedRate.pct,
         ...(entry.feeKrw !== undefined ? { feeKrw: Math.round(entry.feeKrw) } : {}),
         ...(title ? { title } : {}),
       };
@@ -294,6 +376,7 @@ function toLiabilitiesFromProfile(profile: { debts: Array<{
   name: string;
   balance: number;
   minimumPayment: number;
+  aprPct?: number;
   apr?: number;
   remainingMonths?: number;
   repaymentType?: "amortizing" | "interestOnly";
@@ -303,7 +386,7 @@ function toLiabilitiesFromProfile(profile: { debts: Array<{
     name: debt.name,
     type: debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing",
     principalKrw: Math.max(0, debt.balance),
-    aprPct: normalizeAprPct(debt.apr ?? 0),
+    aprPct: isFiniteNumber(debt.aprPct) ? debt.aprPct : decimalToAprPct(debt.apr ?? 0),
     remainingMonths: Math.max(1, debt.remainingMonths ?? fallbackMonths),
     minimumPaymentKrw: Math.max(0, debt.minimumPayment),
   }));
@@ -323,13 +406,6 @@ function toSimulationOverrides(overrides: Record<string, unknown>): Partial<type
   }
 
   return output;
-}
-
-function toScenarioExtras(overrides: Record<string, unknown>): Partial<Pick<AssumptionsV2, "cashReturnPct" | "withdrawalRatePct">> {
-  return {
-    ...(isFiniteNumber(overrides.cashReturnPct) ? { cashReturnPct: overrides.cashReturnPct } : {}),
-    ...(isFiniteNumber(overrides.withdrawalRatePct) ? { withdrawalRatePct: overrides.withdrawalRatePct } : {}),
-  };
 }
 
 function buildSnapshotMeta(snapshot: SnapshotShape, snapshotId?: string) {
@@ -411,6 +487,40 @@ function appendRunAudit(input: {
   }
 }
 
+function formatPreflightIssueLine(issue: {
+  code: string;
+  message: string;
+  fixHint?: string;
+}): string {
+  if (issue.fixHint && issue.fixHint.trim().length > 0) {
+    return `${issue.code}: ${issue.message} (${issue.fixHint})`;
+  }
+  return `${issue.code}: ${issue.message}`;
+}
+
+async function appendRunStageMetrics(input: {
+  requestId: string;
+  runId?: string;
+  profileId: string;
+  overallStatus: string;
+  stages: PlanningRunStageResult[];
+}) {
+  const tasks = input.stages.map((stage) => appendOpsMetricEvent({
+    type: "RUN_STAGE",
+    meta: {
+      requestId: input.requestId,
+      ...(input.runId ? { runId: input.runId } : {}),
+      profileId: input.profileId,
+      stageId: stage.id,
+      status: stage.status,
+      ...(typeof stage.durationMs === "number" ? { durationMs: stage.durationMs } : {}),
+      ...(stage.reason ? { reason: stage.reason } : {}),
+      overallStatus: input.overallStatus,
+    },
+  }));
+  await Promise.allSettled(tasks);
+}
+
 export async function GET(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -429,9 +539,19 @@ export async function GET(request: Request) {
       ...(limit !== null ? { limit: Number(limit) } : {}),
       ...(offset !== null ? { offset: Number(offset) } : {}),
     });
-    return jsonOk({ data: runs });
+    const progressSummaryByRunId: Record<string, ReturnType<typeof summarizeRunActionProgress>> = {};
+    for (const run of runs) {
+      try {
+        const progress = await getRunActionProgress(run.id);
+        if (!progress) continue;
+        progressSummaryByRunId[run.id] = summarizeRunActionProgress(progress);
+      } catch {
+        continue;
+      }
+    }
+    return jsonOk({ data: runs, meta: { actionProgressSummaryByRunId: progressSummaryByRunId } });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "실행 이력 조회에 실패했습니다.";
+    const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }
@@ -461,6 +581,7 @@ export async function POST(request: Request) {
   }
 
   const profileId = asString(body.profileId);
+  const runRequestId = crypto.randomUUID();
   const title = asString(body.title);
   const inputRow = body.input;
 
@@ -487,6 +608,7 @@ export async function POST(request: Request) {
   };
   let includeProducts: boolean;
   let monteCarloConfig: { paths: number; seed: number } | undefined;
+  let scenarioMeta: ScenarioMeta | undefined;
   try {
     horizonMonths = validateHorizonMonths(inputRow.horizonMonths);
     policyId = parsePolicyId(inputRow.policyId);
@@ -498,6 +620,7 @@ export async function POST(request: Request) {
     debtStrategyInput = parseDebtStrategyInput(inputRow.debtStrategy);
     includeProducts = parseIncludeProducts(inputRow.includeProducts);
     monteCarloConfig = parseMonteCarloInput(inputRow.monteCarlo);
+    scenarioMeta = parseScenarioMeta(body.scenario);
   } catch (error) {
     if (error instanceof PlanningV2ValidationError) {
       appendRunAudit({
@@ -550,6 +673,131 @@ export async function POST(request: Request) {
     return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
   }
 
+  if (scenarioMeta?.baselineRunId) {
+    const baselineRun = await getRun(scenarioMeta.baselineRunId);
+    if (!baselineRun) {
+      appendRunAudit({
+        event: "PLANNING_RUN_CREATE",
+        route: "/api/planning/v2/runs",
+        result: "ERROR",
+        recordId: profileId,
+        message: "scenario baseline run not found",
+      });
+      return jsonError("INPUT", "scenario baseline runId를 찾을 수 없습니다.", {
+        status: 400,
+        issues: [`scenario.baselineRunId: '${scenarioMeta.baselineRunId}' not found`],
+      });
+    }
+  }
+
+  let canonicalProfile = profileRecord.profile;
+  let profileNormalization = {
+    defaultsApplied: [],
+    fixesApplied: [],
+  } as ReturnType<typeof loadCanonicalProfile>["normalization"];
+  try {
+    const canonicalLoad = loadCanonicalProfile(profileRecord.profile, {
+      offers: debtStrategyInput.offers,
+    });
+    canonicalProfile = canonicalLoad.profile;
+    profileNormalization = canonicalLoad.normalization;
+  } catch (error) {
+    if (error instanceof PlanningV2ValidationError) {
+      appendRunAudit({
+        event: "PLANNING_RUN_CREATE",
+        route: "/api/planning/v2/runs",
+        result: "ERROR",
+        recordId: profileId,
+        message: "profile canonicalization failed",
+      });
+      return jsonError("INPUT", error.message, {
+        status: 400,
+        issues: error.issues.map((issue) => `${issue.path}: ${issue.message}`),
+      });
+    }
+    appendRunAudit({
+      event: "PLANNING_RUN_CREATE",
+      route: "/api/planning/v2/runs",
+      result: "ERROR",
+      recordId: profileId,
+      message: "profile canonicalization failed",
+    });
+    return jsonError("INTERNAL", "실행 저장 검증 중 오류가 발생했습니다.");
+  }
+
+  if (scenarioMeta) {
+    const scenarioIssues = validateScenario(canonicalProfile, scenarioMeta.patches);
+    if (scenarioIssues.length > 0) {
+      appendRunAudit({
+        event: "PLANNING_RUN_CREATE",
+        route: "/api/planning/v2/runs",
+        result: "ERROR",
+        recordId: profileId,
+        message: "scenario validation failed",
+      });
+      return jsonError("INPUT", "scenario patch 검증에 실패했습니다.", {
+        status: 400,
+        issues: scenarioIssues.map((issue) => `${issue.path}: ${issue.message}`),
+      });
+    }
+    try {
+      canonicalProfile = applyScenario(canonicalProfile, scenarioMeta.patches);
+    } catch (error) {
+      appendRunAudit({
+        event: "PLANNING_RUN_CREATE",
+        route: "/api/planning/v2/runs",
+        result: "ERROR",
+        recordId: profileId,
+        message: "scenario apply failed",
+      });
+      return jsonError("INPUT", error instanceof Error ? error.message : "scenario 적용에 실패했습니다.", {
+        status: 400,
+      });
+    }
+  }
+  const debtLiabilities = toLiabilitiesFromProfile(canonicalProfile, horizonMonths);
+
+  const preflightIssues = preflightRun({
+    profile: canonicalProfile as unknown as Record<string, unknown>,
+    selectedSnapshot: requestedSnapshotId
+      ? { mode: "history", id: requestedSnapshotId }
+      : { mode: "latest" },
+    debtOffers: debtStrategyInput.offers.map((offer) => ({
+      liabilityId: offer.liabilityId,
+      newAprPct: offer.newAprPct,
+      ...(typeof offer.feeKrw === "number" ? { feeKrw: offer.feeKrw } : {}),
+    })),
+    assumptionsOverride,
+    ...(monteCarloConfig
+      ? {
+        monteCarlo: {
+          enabled: true,
+          paths: monteCarloConfig.paths,
+          horizonMonths,
+        },
+      }
+      : {}),
+  });
+  const preflightBlockIssues = preflightIssues.filter((issue) => issue.severity === "block");
+  if (preflightBlockIssues.length > 0) {
+    appendRunAudit({
+      event: "PLANNING_RUN_CREATE",
+      route: "/api/planning/v2/runs",
+      result: "ERROR",
+      recordId: profileId,
+      message: `preflight blocked (${preflightBlockIssues.map((issue) => issue.code).join(", ")})`,
+    });
+    return jsonError("INPUT", "실행 저장 사전 점검에 실패했습니다.", {
+      status: 400,
+      issues: preflightBlockIssues.map((issue) => formatPreflightIssueLine(issue)),
+      meta: {
+        preflight: {
+          blocks: preflightBlockIssues,
+        },
+      },
+    });
+  }
+
   let snapshot: SnapshotShape = null;
   let snapshotId: string | undefined;
   try {
@@ -564,7 +812,10 @@ export async function POST(request: Request) {
           recordId: profileId,
           message: "snapshot not found",
         });
-        return jsonError("SNAPSHOT_NOT_FOUND", "Requested snapshotId not found", { status: 400 });
+        return jsonError("SNAPSHOT_NOT_FOUND", "snapshotId를 찾을 수 없습니다. latest 또는 /ops/assumptions 목록에서 선택하세요.", {
+          status: 400,
+          issues: [`input.snapshotId: '${requestedSnapshotId}' not found`],
+        });
       }
     } else {
       snapshot = await loadLatestAssumptionsSnapshot();
@@ -582,22 +833,50 @@ export async function POST(request: Request) {
     return jsonError("SNAPSHOT", message, { status: 500 });
   }
 
+  let storedAssumptionsOverrides = [] as Awaited<ReturnType<typeof loadAssumptionsOverrides>>;
+  try {
+    storedAssumptionsOverrides = await loadAssumptionsOverrides(profileRecord.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to load assumptions overrides";
+    appendRunAudit({
+      event: "PLANNING_RUN_CREATE",
+      route: "/api/planning/v2/runs",
+      result: "ERROR",
+      recordId: profileId,
+      message,
+    });
+    return jsonError("INTERNAL", "저장된 가정 오버라이드 로드에 실패했습니다.", { status: 500 });
+  }
+
   const mappedFromSnapshot = mapSnapshotToAssumptionsV2(snapshot);
   const mappedScenarioExtras = mapSnapshotToScenarioExtrasV2(snapshot);
-  const finalSimulationAssumptions = {
-    ...DEFAULT_ASSUMPTIONS_V2,
-    ...mappedFromSnapshot,
-    ...toSimulationOverrides(assumptionsOverride),
-  };
-  const overrideScenarioExtras = toScenarioExtras(assumptionsOverride);
-  const baseAssumptions = toScenarioAssumptionsV2(
-    finalSimulationAssumptions,
+  const simulationOverrides = toSimulationOverrides(assumptionsOverride);
+  const snapshotAssumptions = toScenarioAssumptionsV2(
     {
-      ...mappedScenarioExtras.extra,
-      ...overrideScenarioExtras,
+      ...DEFAULT_ASSUMPTIONS_V2,
+      ...mappedFromSnapshot,
     },
+    mappedScenarioExtras.extra,
   );
-  const riskTolerance = parseRiskTolerance(profileRecord.profile as unknown);
+  const requestAssumptionsOverrides = toAssumptionsOverridesFromRecord(assumptionsOverride, {
+    reasonPrefix: "run assumptionsOverride",
+  });
+  const {
+    effectiveAssumptions,
+    appliedOverrides,
+  } = mergeAssumptionsWithProvenance(
+    snapshotAssumptions,
+    [...storedAssumptionsOverrides, ...requestAssumptionsOverrides],
+  );
+  const baseAssumptions = {
+    ...effectiveAssumptions,
+    ...(simulationOverrides.debtRates ? { debtRates: simulationOverrides.debtRates } : {}),
+  };
+  const finalSimulationAssumptions = {
+    ...toSimulationAssumptionsV2(baseAssumptions),
+    ...(simulationOverrides.debtRates ? { debtRates: simulationOverrides.debtRates } : {}),
+  };
+  const riskTolerance = parseRiskTolerance(canonicalProfile as unknown);
   const snapshotMeta = buildSnapshotMeta(snapshot, snapshotId);
   const baseHealth = assessAssumptionsHealth({
     assumptions: baseAssumptions,
@@ -606,90 +885,223 @@ export async function POST(request: Request) {
   const riskWarnings = assessRiskAssumptionConsistency(riskTolerance, baseAssumptions);
   const health = combineAssumptionsHealth(baseHealth, [...riskWarnings, ...mappedScenarioExtras.warnings]);
 
-  if (monteCarloConfig) {
-    const budget = checkMonteCarloBudget({
+  const monteCarloBudget = monteCarloConfig
+    ? checkMonteCarloBudget({
       paths: monteCarloConfig.paths,
       horizonMonths,
+    })
+    : null;
+
+  let plan: SimulationResultV2 | null = null;
+  let scenariosResult: ReturnType<typeof runScenarios> | null = null;
+  let monteCarloResult: ReturnType<typeof runMonteCarlo> | null = null;
+  let actionsResult: Awaited<ReturnType<typeof matchCandidates>> | ReturnType<typeof buildActionsFromPlan> | null = null;
+  let debtStrategyResult: ReturnType<typeof computeDebtStrategy> | null = null;
+  let stages: PlanningRunStageResult[] = [];
+
+  try {
+    const pipeline = await runStagePipeline({
+      simulate: {
+        outputRefKey: "outputs.simulate",
+        run: () => {
+          plan = simulateMonthly(canonicalProfile, finalSimulationAssumptions, horizonMonths, { policyId });
+          return plan;
+        },
+      },
+      scenarios: {
+        enabled: runScenariosEnabled,
+        outputRefKey: "outputs.scenarios",
+        run: () => {
+          scenariosResult = runScenarios({
+            profile: canonicalProfile,
+            horizonMonths,
+            baseAssumptions,
+            riskTolerance,
+            policyId,
+          });
+          return scenariosResult;
+        },
+      },
+      monteCarlo: {
+        enabled: Boolean(monteCarloConfig),
+        ...(monteCarloConfig && monteCarloBudget && !monteCarloBudget.ok
+          ? {
+            preSkipped: {
+              reason: "BUDGET_EXCEEDED" as const,
+              message: monteCarloBudget.message,
+            },
+          }
+          : {}),
+        outputRefKey: "outputs.monteCarlo",
+        run: () => {
+          if (!monteCarloConfig) return null;
+          monteCarloResult = runMonteCarlo({
+            profile: canonicalProfile,
+            horizonMonths,
+            baseAssumptions,
+            policyId,
+            paths: monteCarloConfig.paths,
+            seed: monteCarloConfig.seed,
+            riskTolerance,
+          });
+          return monteCarloResult;
+        },
+      },
+      actions: {
+        enabled: getActionsEnabled,
+        outputRefKey: "outputs.actions",
+        run: async () => {
+          if (!plan) {
+            throw new Error("simulate result is not available");
+          }
+          const actionsBase = buildActionsFromPlan({
+            plan,
+            profile: canonicalProfile,
+            baseAssumptions,
+            snapshotMeta: {
+              asOf: snapshot?.asOf,
+              missing: !snapshot,
+            },
+            ...(monteCarloResult ? { monteCarlo: monteCarloResult } : {}),
+          });
+          actionsResult = includeProducts
+            ? await matchCandidates(actionsBase, {
+              includeProducts: true,
+              requestBaseUrl: new URL(request.url).origin,
+            })
+            : actionsBase;
+          return actionsResult;
+        },
+      },
+      debt: {
+        enabled: analyzeDebtEnabled,
+        outputRefKey: "outputs.debtStrategy",
+        run: () => {
+          debtStrategyResult = computeDebtStrategy({
+            liabilities: debtLiabilities,
+            monthlyIncomeKrw: Math.max(
+              0,
+              profileRecord.profile.cashflow?.monthlyIncomeKrw ?? profileRecord.profile.monthlyIncomeNet,
+            ),
+            offers: debtStrategyInput.offers,
+            options: debtStrategyInput.options,
+            horizonMonths,
+            nowMonthIndex: 0,
+          });
+          return debtStrategyResult;
+        },
+      },
     });
-    if (!budget.ok) {
+
+    stages = pipeline.stages;
+    if (!plan || pipeline.overallStatus === "FAILED") {
+      await appendRunStageMetrics({
+        requestId: runRequestId,
+        profileId: profileRecord.id,
+        overallStatus: pipeline.overallStatus,
+        stages,
+      });
       appendRunAudit({
         event: "PLANNING_RUN_CREATE",
         route: "/api/planning/v2/runs",
         result: "ERROR",
         recordId: profileRecord.id,
-        message: budget.message,
+        message: "simulate stage failed",
       });
-      return jsonError("BUDGET_EXCEEDED", budget.message, {
-        status: 400,
+      return jsonError("INTERNAL", "simulate 단계 실행에 실패했습니다.", {
+        status: 500,
         meta: {
-          budget: budget.data,
+          overallStatus: pipeline.overallStatus,
+          stages,
         },
       });
     }
-  }
 
-  try {
-    const plan = simulateMonthly(profileRecord.profile, finalSimulationAssumptions, horizonMonths, { policyId });
-    const scenarios = runScenariosEnabled
-      ? runScenarios({
-        profile: profileRecord.profile,
-        horizonMonths,
-        baseAssumptions,
-        riskTolerance,
-        policyId,
-      })
-      : null;
-    const monteCarlo = monteCarloConfig
-      ? runMonteCarlo({
-        profile: profileRecord.profile,
-        horizonMonths,
-        baseAssumptions,
-        policyId,
-        paths: monteCarloConfig.paths,
-        seed: monteCarloConfig.seed,
-        riskTolerance,
-      })
-      : null;
-
-    const actionsBase = getActionsEnabled
-      ? buildActionsFromPlan({
-        plan,
-        profile: profileRecord.profile,
-        baseAssumptions,
-        snapshotMeta: {
-          asOf: snapshot?.asOf,
-          missing: !snapshot,
+    const outputs = {
+      simulate: {
+        summary: summarizePlan(plan),
+        warnings: plan.warnings.map((warning) => warning.reasonCode),
+        goalsStatus: plan.goalStatus,
+        keyTimelinePoints: pickKeyTimelinePoints(plan.timeline),
+      },
+      ...(scenariosResult ? {
+        scenarios: {
+          table: [
+            {
+              id: "base",
+              title: "Base",
+              ...summarizeScenarioResult(scenariosResult.base),
+            },
+            ...scenariosResult.scenarios.map((entry) => ({
+              id: entry.spec.id,
+              title: entry.spec.title,
+              ...summarizeScenarioResult(entry.result),
+              diffVsBase: entry.diffVsBase.keyMetrics,
+            })),
+          ],
+          shortWhyByScenario: Object.fromEntries(
+            scenariosResult.scenarios.map((entry) => [entry.spec.id, entry.diffVsBase.shortWhy]),
+          ),
         },
-        ...(monteCarlo ? { monteCarlo } : {}),
-      })
-      : [];
+      } : {}),
+      ...(monteCarloResult ? {
+        monteCarlo: {
+          probabilities: monteCarloResult.probabilities,
+          percentiles: monteCarloResult.percentiles,
+          notes: monteCarloResult.notes,
+        },
+      } : {}),
+      ...(Array.isArray(actionsResult) ? {
+        actions: {
+          actions: actionsResult,
+        },
+      } : {}),
+      ...(debtStrategyResult ? {
+        debtStrategy: {
+          summary: {
+            debtServiceRatio: debtStrategyResult.meta.debtServiceRatio,
+            totalMonthlyPaymentKrw: debtStrategyResult.meta.totalMonthlyPaymentKrw,
+            warningsCount: debtStrategyResult.warnings.length,
+          },
+          warnings: debtStrategyResult.warnings.map((warning) => ({
+            code: warning.code,
+            message: warning.message,
+          })),
+          summaries: debtStrategyResult.summaries,
+          ...(debtStrategyResult.refinance ? { refinance: debtStrategyResult.refinance } : {}),
+          whatIf: debtStrategyResult.whatIf,
+        },
+      } : {}),
+    };
 
-    const actions = getActionsEnabled
-      ? (includeProducts
-        ? await matchCandidates(actionsBase, {
-          includeProducts: true,
-          requestBaseUrl: new URL(request.url).origin,
-        })
-        : actionsBase)
-      : [];
-
-    const debtStrategy = analyzeDebtEnabled
-      ? computeDebtStrategy({
-        liabilities: toLiabilitiesFromProfile(profileRecord.profile, horizonMonths),
-        monthlyIncomeKrw: Math.max(
-          0,
-          profileRecord.profile.cashflow?.monthlyIncomeKrw ?? profileRecord.profile.monthlyIncomeNet,
-        ),
-        offers: debtStrategyInput.offers,
-        options: debtStrategyInput.options,
-        horizonMonths,
-        nowMonthIndex: 0,
-      })
-      : null;
+    const resultDto = buildResultDtoV1({
+      generatedAt: new Date().toISOString(),
+      policyId,
+      meta: {
+        snapshot: snapshotMeta,
+        health: health.summary,
+      },
+      simulate: outputs.simulate,
+      scenarios: outputs.scenarios,
+      monteCarlo: outputs.monteCarlo,
+      actions: outputs.actions,
+      debt: outputs.debtStrategy,
+    });
+    const reproducibility = buildRunReproducibilityMeta({
+      profile: canonicalProfile,
+      assumptionsSnapshotId: snapshotId,
+      assumptionsSnapshot: snapshot,
+      effectiveAssumptions: baseAssumptions,
+      appliedOverrides,
+      policy: DEFAULT_PLANNING_POLICY,
+    });
 
     const created = await createRun({
       profileId: profileRecord.id,
       ...(title ? { title } : {}),
+      ...(scenarioMeta ? { scenario: scenarioMeta } : {}),
+      overallStatus: pipeline.overallStatus,
+      stages,
       input: {
         horizonMonths,
         policyId,
@@ -706,6 +1118,7 @@ export async function POST(request: Request) {
       },
       meta: {
         snapshot: snapshotMeta,
+        normalization: profileNormalization,
         health: {
           warningsCodes: health.summary.warningCodes,
           criticalCount: health.summary.criticalCount,
@@ -714,62 +1127,25 @@ export async function POST(request: Request) {
             : {}),
         },
       },
+      reproducibility,
       outputs: {
-        simulate: {
-          summary: summarizePlan(plan),
-          warnings: plan.warnings.map((warning) => warning.reasonCode),
-          goalsStatus: plan.goalStatus,
-          keyTimelinePoints: pickKeyTimelinePoints(plan.timeline),
-        },
-        ...(scenarios ? {
-          scenarios: {
-            table: [
-              {
-                id: "base",
-                title: "Base",
-                ...summarizeScenarioResult(scenarios.base),
-              },
-              ...scenarios.scenarios.map((entry) => ({
-                id: entry.spec.id,
-                title: entry.spec.title,
-                ...summarizeScenarioResult(entry.result),
-                diffVsBase: entry.diffVsBase.keyMetrics,
-              })),
-            ],
-            shortWhyByScenario: Object.fromEntries(
-              scenarios.scenarios.map((entry) => [entry.spec.id, entry.diffVsBase.shortWhy]),
-            ),
-          },
-        } : {}),
-        ...(monteCarlo ? {
-          monteCarlo: {
-            probabilities: monteCarlo.probabilities,
-            percentiles: monteCarlo.percentiles,
-            notes: monteCarlo.notes,
-          },
-        } : {}),
-        ...(getActionsEnabled ? {
-          actions: {
-          actions,
-          },
-        } : {}),
-        ...(debtStrategy ? {
-          debtStrategy: {
-            summary: {
-              debtServiceRatio: debtStrategy.meta.debtServiceRatio,
-              totalMonthlyPaymentKrw: debtStrategy.meta.totalMonthlyPaymentKrw,
-              warningsCount: debtStrategy.warnings.length,
-            },
-            warnings: debtStrategy.warnings.map((warning) => ({
-              code: warning.code,
-              message: warning.message,
-            })),
-            summaries: debtStrategy.summaries,
-            ...(debtStrategy.refinance ? { refinance: debtStrategy.refinance } : {}),
-            whatIf: debtStrategy.whatIf,
-          },
-        } : {}),
+        resultDto,
+        ...outputs,
       },
+    }, {
+      storeRawOutputs: asString(process.env.PLANNING_RUN_STORE_RAW_OUTPUTS).toLowerCase() === "true",
+    });
+    try {
+      await ensureRunActionPlan(created);
+    } catch (error) {
+      console.error("[planning] failed to initialize action plan", error);
+    }
+    await appendRunStageMetrics({
+      requestId: runRequestId,
+      runId: created.id,
+      profileId: profileRecord.id,
+      overallStatus: pipeline.overallStatus,
+      stages,
     });
 
     appendRunAudit({
@@ -784,12 +1160,23 @@ export async function POST(request: Request) {
       meta: {
         generatedAt: new Date().toISOString(),
         snapshot: snapshotMeta,
+        normalization: profileNormalization,
         health: health.summary,
+        overallStatus: pipeline.overallStatus,
+        stages,
       },
       data: created,
     }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "실행 이력 저장에 실패했습니다.";
+    const message = error instanceof Error ? error.message : "실행 기록 저장에 실패했습니다.";
+    if (stages.length > 0) {
+      await appendRunStageMetrics({
+        requestId: runRequestId,
+        profileId: profileRecord.id,
+        overallStatus: "FAILED",
+        stages,
+      });
+    }
     appendRunAudit({
       event: "PLANNING_RUN_CREATE",
       route: "/api/planning/v2/runs",
@@ -797,6 +1184,9 @@ export async function POST(request: Request) {
       recordId: profileRecord.id,
       message,
     });
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, {
+      status: 500,
+      ...(stages.length > 0 ? { meta: { stages } } : {}),
+    });
   }
 }

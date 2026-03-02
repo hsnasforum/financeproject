@@ -1,12 +1,9 @@
 import { normalizeAprPct, monthlyRateFromAprPct, simulateAmortizingPayoff, summarizeDebt } from "./calc";
 import { type LiabilityV2, type RefiAnalysis, type RefiOffer } from "./types";
-
-function roundMoney(value: number): number {
-  return Math.round(value);
-}
+import { roundKrw } from "../../../calc";
 
 export function analyzeRefinance(liability: LiabilityV2, offer: RefiOffer): RefiAnalysis {
-  const feeKrw = Math.max(0, Math.round(offer.feeKrw ?? 0));
+  const feeKrw = Math.max(0, roundKrw(offer.feeKrw ?? 0));
   const newAprPct = normalizeAprPct(offer.newAprPct);
   const summary = summarizeDebt(liability);
   const notes: string[] = [];
@@ -19,8 +16,8 @@ export function analyzeRefinance(liability: LiabilityV2, offer: RefiOffer): Refi
 
   if (liability.type === "interestOnly") {
     const monthlyRate = monthlyRateFromAprPct(newAprPct);
-    newMonthlyPaymentKrw = roundMoney(liability.principalKrw * monthlyRate);
-    newTotalInterestKrw = roundMoney(newMonthlyPaymentKrw * liability.remainingMonths);
+    newMonthlyPaymentKrw = roundKrw(liability.principalKrw * monthlyRate);
+    newTotalInterestKrw = roundKrw(newMonthlyPaymentKrw * liability.remainingMonths);
   } else {
     const payoff = simulateAmortizingPayoff(liability.principalKrw, newAprPct, liability.remainingMonths, 0);
     newMonthlyPaymentKrw = payoff.monthlyPaymentKrw;

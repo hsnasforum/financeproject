@@ -1,0 +1,5 @@
+{
+  "id": "v1_plain_storage",
+  "description": "Legacy plain JSON profile/run/assumptions storage",
+  "vaultPassphrase": ""
+}

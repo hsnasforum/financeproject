@@ -1,0 +1,12 @@
+{
+  "kind": "planning-v2-desktop",
+  "version": "1.0.1",
+  "builtAt": "2026-03-01T17:48:45.263Z",
+  "localOnlyDefault": true,
+  "runtimeMode": "next-prod-local-only",
+  "packagingOption": "C (node-based portable runtime)",
+  "localDataDir": "os-standard-appdata",
+  "runCommand": "./run.sh",
+  "installCommand": "./install.sh",
+  "note": "HOST=127.0.0.1 강제, standalone 우선, dataDir는 OS 표준 앱데이터 경로입니다."
+}

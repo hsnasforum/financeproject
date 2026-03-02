@@ -1,0 +1,15 @@
+{
+  "id": "golden-risk-negative-cashflow",
+  "title": "Golden RISK run",
+  "createdAt": "2026-03-01T00:00:00.000Z",
+  "profileId": "golden-profile-risk-negative-cashflow",
+  "overallStatus": "PARTIAL_SUCCESS",
+  "stages": {
+    "simulate": "SUCCESS",
+    "scenarios": "SUCCESS",
+    "monteCarlo": "SKIPPED",
+    "actions": "SUCCESS",
+    "debt": "SUCCESS"
+  },
+  "resultDtoFixture": "tests/planning-v2/report/fixtures/dto-risk.json"
+}

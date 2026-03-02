@@ -1,0 +1,147 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "bc59c223-4b7c-45ce-a3a2-56c3f65d3c69",
+      "profileId": "5162962c-2d5b-420b-899d-fef476e82e02",
+      "title": "Golden Replay golden-risk-goals-pressure",
+      "createdAt": "2026-03-01T19:28:16.529Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 1,
+      "criticalCount": 0
+    },
+    {
+      "id": "a5f24a8d-08c2-4ab1-91be-c4a26d113f7e",
+      "profileId": "15764b92-e560-4a53-8c09-a594693286de",
+      "title": "Golden Replay golden-caution-multi-debt-refi",
+      "createdAt": "2026-03-01T19:28:16.379Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "d82998aa-9ebc-4e47-820d-9374fd52c208",
+      "profileId": "3e4f3e55-f075-4a7d-8c3a-dd955ee1556d",
+      "title": "Golden Replay golden-risk-negative-cashflow",
+      "createdAt": "2026-03-01T19:28:16.206Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 6,
+      "criticalCount": 0
+    },
+    {
+      "id": "4152715d-d461-43e9-993f-562a69616907",
+      "profileId": "564b72ad-322a-41a9-83e5-32f11f164bae",
+      "title": "Golden Replay golden-caution-tight-cashflow",
+      "createdAt": "2026-03-01T19:28:15.962Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "1dde68de-5657-4b8c-b615-4f8f8c7a03bb",
+      "profileId": "08428f6f-88f9-49f1-b408-d4514aee95c0",
+      "title": "Golden Replay golden-good-basic",
+      "createdAt": "2026-03-01T19:28:15.084Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "f253d39a-93f4-41b7-b9fe-123f322155a6",
+      "profileId": "02b136f2-2e44-4390-863e-b601697a88e5",
+      "title": "Golden Replay golden-risk-goals-pressure",
+      "createdAt": "2026-03-01T19:27:09.239Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 1,
+      "criticalCount": 0
+    },
+    {
+      "id": "1af7e00a-cd71-4942-b92f-42e5062b8570",
+      "profileId": "df716e9b-bb87-40ad-a61f-ff945d2cb508",
+      "title": "Golden Replay golden-caution-multi-debt-refi",
+      "createdAt": "2026-03-01T19:27:09.085Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "621e0f27-9cd3-473d-a3f3-6e8c72652deb",
+      "profileId": "57ae0e93-cbbe-4e70-b9c7-fee6b76db400",
+      "title": "Golden Replay golden-risk-negative-cashflow",
+      "createdAt": "2026-03-01T19:27:08.906Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 6,
+      "criticalCount": 0
+    },
+    {
+      "id": "c9973b8e-e4d0-49d4-953c-85edd345ae85",
+      "profileId": "071b98fa-f5fa-4811-86c3-887d88a1bd9e",
+      "title": "Golden Replay golden-caution-tight-cashflow",
+      "createdAt": "2026-03-01T19:27:08.686Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "f67c9856-5cd0-4519-9781-4f4ab64a768e",
+      "profileId": "67150deb-7743-4181-8c69-7841d5b92fe9",
+      "title": "Golden Replay golden-good-basic",
+      "createdAt": "2026-03-01T19:27:07.852Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "fb673986-9e2c-4a6f-8dd7-cbf47e56eaf7",
+      "profileId": "default-profile",
+      "createdAt": "2026-03-01T17:17:46.759Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    },
+    {
+      "id": "80f11a3b-a71d-4570-9c9a-efb77d9c6706",
+      "profileId": "default-profile",
+      "createdAt": "2026-03-01T17:17:04.805Z",
+      "overallStatus": "SUCCESS",
+      "snapshot": {
+        "missing": true
+      },
+      "warningsCount": 0,
+      "criticalCount": 0
+    }
+  ]
+}
