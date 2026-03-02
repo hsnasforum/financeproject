@@ -21,8 +21,8 @@ function fmtPct(value: unknown): string | null {
 
 export function getSnapshotFreshness(staleDays?: number): SnapshotFreshness {
   if (typeof staleDays !== "number" || !Number.isFinite(staleDays) || staleDays < 0) return "ok";
-  if (staleDays > SNAPSHOT_STALE_RISK_DAYS) return "risk";
-  if (staleDays > SNAPSHOT_STALE_CAUTION_DAYS) return "caution";
+  if (staleDays >= SNAPSHOT_STALE_RISK_DAYS) return "risk";
+  if (staleDays >= SNAPSHOT_STALE_CAUTION_DAYS) return "caution";
   return "ok";
 }
 

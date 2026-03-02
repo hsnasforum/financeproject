@@ -3,6 +3,26 @@
   "title": "Golden GOOD run",
   "createdAt": "2026-03-01T00:00:00.000Z",
   "profileId": "golden-profile-good-basic",
+  "input": {
+    "horizonMonths": 120,
+    "runScenarios": true,
+    "getActions": true,
+    "analyzeDebt": true,
+    "includeProducts": false,
+    "monteCarlo": null
+  },
+  "meta": {
+    "snapshot": {
+      "id": "snapshot-golden-good",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-03-01T00:00:00.000Z",
+      "missing": false
+    },
+    "health": {
+      "warningsCodes": [],
+      "criticalCount": 0
+    }
+  },
   "overallStatus": "SUCCESS",
   "stages": {
     "simulate": "SUCCESS",
@@ -11,5 +31,15 @@
     "actions": "SUCCESS",
     "debt": "SUCCESS"
   },
+  "warnings": [
+    { "code": "SNAPSHOT_STALE", "source": "health" },
+    { "code": "SNAPSHOT_STALE", "source": "health" },
+    { "code": "ASSUMPTION_CHANGED", "source": "simulate" }
+  ],
+  "actions": [
+    { "code": "SET_ASSUMPTIONS_REVIEW", "severity": "info", "title": "분기별 가정 점검" },
+    { "code": "KEEP_EMERGENCY_BUFFER", "severity": "info", "title": "비상금 유지" },
+    { "code": "CHECK_GOAL_PROGRESS", "severity": "info", "title": "목표 달성 추적" }
+  ],
   "resultDtoFixture": "tests/planning-v2/report/fixtures/dto-ok.json"
 }

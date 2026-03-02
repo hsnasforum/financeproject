@@ -3,6 +3,26 @@
   "title": "Golden RISK run",
   "createdAt": "2026-03-01T00:00:00.000Z",
   "profileId": "golden-profile-risk-negative-cashflow",
+  "input": {
+    "horizonMonths": 120,
+    "runScenarios": true,
+    "getActions": true,
+    "analyzeDebt": true,
+    "includeProducts": false,
+    "monteCarlo": null
+  },
+  "meta": {
+    "snapshot": {
+      "id": "snapshot-golden-risk",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-03-01T00:00:00.000Z",
+      "missing": false
+    },
+    "health": {
+      "warningsCodes": ["NEGATIVE_CASHFLOW", "NEGATIVE_CASHFLOW", "INSOLVENT"],
+      "criticalCount": 1
+    }
+  },
   "overallStatus": "PARTIAL_SUCCESS",
   "stages": {
     "simulate": "SUCCESS",
@@ -11,5 +31,18 @@
     "actions": "SUCCESS",
     "debt": "SUCCESS"
   },
+  "warnings": [
+    { "code": "NEGATIVE_CASHFLOW", "source": "simulate" },
+    { "code": "NEGATIVE_CASHFLOW", "source": "simulate" },
+    { "code": "NEGATIVE_CASHFLOW", "source": "health" },
+    { "code": "INSOLVENT", "source": "health" }
+  ],
+  "actions": [
+    { "code": "FIX_NEGATIVE_CASHFLOW", "severity": "critical", "title": "현금흐름 적자 해소" },
+    { "code": "CUT_DISCRETIONARY", "severity": "warn", "title": "선택지출 감축" },
+    { "code": "STOP_EXTRA_DEBT_PAYMENTS", "severity": "warn", "title": "추가상환 일시 중단" },
+    { "code": "REFRESH_ASSUMPTIONS", "severity": "info", "title": "가정 갱신 후 재실행" },
+    { "code": "TRACK_WEEKLY_CASH", "severity": "info", "title": "주간 현금흐름 점검" }
+  ],
   "resultDtoFixture": "tests/planning-v2/report/fixtures/dto-risk.json"
 }

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { GithubEnv } from "../github/env";
+import { resolveOpsDataDir } from "../planning/storage/dataDir";
 
 export type AutoMergePolicy = {
   version: 1;
@@ -40,7 +41,6 @@ export type ValidateAutoMergePolicyResult = {
 };
 
 const POLICY_VERSION = 1 as const;
-const DEFAULT_POLICY_RELATIVE_PATH = ".data/ops/auto-merge-policy.json";
 const POLICY_TMP_SUFFIX = ".tmp";
 
 function asString(value: unknown): string {
@@ -93,8 +93,9 @@ export function defaultAutoMergePolicy(now = new Date()): AutoMergePolicy {
 export function resolveAutoMergePolicyPath(customPath?: string): string {
   const envPath = asString(process.env.AUTO_MERGE_POLICY_PATH);
   const fromInput = asString(customPath);
-  const target = fromInput || envPath || DEFAULT_POLICY_RELATIVE_PATH;
-  return path.resolve(process.cwd(), target);
+  const target = fromInput || envPath;
+  if (target) return path.resolve(process.cwd(), target);
+  return path.join(resolveOpsDataDir(), "auto-merge-policy.json");
 }
 
 export function validateAutoMergePolicy(input: unknown): ValidateAutoMergePolicyResult {

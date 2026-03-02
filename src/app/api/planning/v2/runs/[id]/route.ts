@@ -6,12 +6,25 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../../lib/dev/onlyDev";
-import { jsonError, jsonOk } from "../../../../../../lib/http/apiResponse";
+import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
-import { deleteRun, getRun } from "../../../../../../lib/planning/server/store/runStore";
+import {
+  ensureRunActionPlan,
+  getRunActionProgress,
+  summarizeRunActionProgress,
+  updateRunActionProgress,
+} from "../../../../../../lib/planning/server/store/runActionStore";
+import { deleteRun, getRun, updateRun } from "../../../../../../lib/planning/server/store/runStore";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
+};
+
+type RunActionPatchBody = {
+  csrf?: unknown;
+  actionKey?: unknown;
+  status?: unknown;
+  note?: unknown;
 };
 
 function withLocalReadGuard(request: Request) {
@@ -85,6 +98,10 @@ function appendTrashAudit(input: {
   }
 }
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export async function GET(request: Request, context: RouteContext) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -98,9 +115,91 @@ export async function GET(request: Request, context: RouteContext) {
     if (!run) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
-    return jsonOk({ data: run });
+    const plan = await ensureRunActionPlan(run);
+    const progress = await getRunActionProgress(run.id);
+    const runWithActionCenter = progress
+      ? {
+        ...run,
+        actionCenter: {
+          plan,
+          progress,
+        },
+      }
+      : run;
+    if (progress) {
+      await updateRun(run.id, {
+        actionCenter: {
+          plan,
+          progress,
+        },
+      });
+    }
+    return jsonOk({ data: runWithActionCenter });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
+    return jsonError("INTERNAL", message, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  const blocked = onlyDev();
+  if (blocked) return blocked;
+
+  let body: RunActionPatchBody | null = null;
+  try {
+    body = (await request.json()) as RunActionPatchBody;
+  } catch {
+    body = null;
+  }
+
+  const guardFailure = withLocalWriteGuard(request, body);
+  if (guardFailure) return guardFailure;
+
+  const actionKey = asString(body?.actionKey);
+  const status = asString(body?.status);
+  const note = body?.note === undefined ? undefined : asString(body.note);
+  if (!actionKey) {
+    return jsonError("INPUT", "actionKey가 필요합니다.", { status: 400 });
+  }
+  if (status && !(status === "todo" || status === "doing" || status === "done" || status === "snoozed")) {
+    return jsonError("INPUT", "status는 todo|doing|done|snoozed 중 하나여야 합니다.", { status: 400 });
+  }
+
+  const { id } = await context.params;
+  const run = await getRun(id);
+  if (!run) {
+    return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
+  }
+
+  try {
+    const plan = run.actionCenter?.plan ?? await ensureRunActionPlan(run);
+    const updatedProgress = await updateRunActionProgress(run.id, {
+      actionKey,
+      ...(status ? { status } : {}),
+      ...(note !== undefined ? { note } : {}),
+    });
+    await updateRun(run.id, {
+      actionCenter: {
+        plan,
+        progress: updatedProgress,
+      },
+    });
+    const summary = summarizeRunActionProgress(updatedProgress);
+    return jsonOk({
+      data: {
+        progress: updatedProgress,
+        completion: {
+          done: summary.done,
+          total: summary.total,
+          pct: summary.completionPct,
+        },
+      },
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "실행 기록 업데이트에 실패했습니다.";
+    if (message === "ACTION_KEY_REQUIRED" || message === "ACTION_KEY_NOT_FOUND" || message === "ACTION_STATUS_INVALID") {
+      return jsonError("INPUT", message, { status: 400 });
+    }
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }

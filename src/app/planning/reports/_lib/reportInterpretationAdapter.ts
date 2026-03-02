@@ -6,7 +6,10 @@ export function toInterpretationInputFromReportVM(vm: ReportVM): InterpretationI
     summary: vm.insight.summaryMetrics,
     aggregatedWarnings: vm.insight.aggregatedWarnings,
     goals: vm.insight.goals,
-    outcomes: vm.insight.outcomes,
+    outcomes: {
+      ...vm.insight.outcomes,
+      ...(vm.header.runId ? { runId: vm.header.runId } : {}),
+    },
     summaryEvidence: vm.insight.summaryEvidence,
   };
 }

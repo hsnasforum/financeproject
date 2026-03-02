@@ -183,7 +183,7 @@ export default function PlanningReportDetailClient({ id }: Props) {
   }, [id]);
 
   useEffect(() => {
-    setCompareMode(Boolean(run?.scenario));
+    setCompareMode(Boolean(run?.scenario || run?.input?.scenario));
   }, [run?.id]);
 
   useEffect(() => {
@@ -330,7 +330,7 @@ export default function PlanningReportDetailClient({ id }: Props) {
             ...(entry.overallStatus ? { overallStatus: entry.overallStatus } : {}),
           }));
         setBaselineOptions(options);
-        const scenarioBaseline = asString(run.scenario?.baselineRunId);
+        const scenarioBaseline = asString(run.scenario?.baselineRunId || run.input?.scenario?.baseRunId);
         setBaselineRunId((prev) => {
           if (prev && options.some((option) => option.id === prev)) return prev;
           if (scenarioBaseline && options.some((option) => option.id === scenarioBaseline)) return scenarioBaseline;
@@ -346,7 +346,7 @@ export default function PlanningReportDetailClient({ id }: Props) {
     return () => {
       active = false;
     };
-  }, [compareMode, run?.id, run?.profileId, run?.scenario?.baselineRunId]);
+  }, [compareMode, run?.id, run?.profileId, run?.scenario?.baselineRunId, run?.input?.scenario?.baseRunId]);
 
   useEffect(() => {
     let active = true;

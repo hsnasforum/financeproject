@@ -58,6 +58,10 @@ function makeTempFixture(): TempState {
 
   fs.mkdirSync(path.join(dir, ".data/planning/runs"), { recursive: true });
   fs.writeFileSync(path.join(dir, ".data/planning/runs/run-bad.json"), "{invalid", "utf-8");
+  writeJson(path.join(dir, ".data/planning/runs/index.json"), {
+    version: 1,
+    entries: [],
+  });
 
   writeJson(path.join(dir, ".data/planning/assumptions.latest.json"), {
     asOf: "2026-02-28",
@@ -96,6 +100,7 @@ describe("planning migration runner", () => {
     expect(plan.scanned).toBeGreaterThanOrEqual(5);
     expect(plan.summary.failedCount).toBeGreaterThanOrEqual(1);
     expect(plan.actions.some((row) => row.path.endsWith("run-bad.json") && row.errors.length > 0)).toBe(true);
+    expect(plan.actions.some((row) => row.path.endsWith("runs/index.json"))).toBe(false);
     expect(plan.actions.some((row) => row.path.endsWith("profile-1.json") && row.changed)).toBe(true);
     expect(plan.actions.some((row) => row.path.endsWith("assumptions.latest.json") && row.changed)).toBe(true);
 

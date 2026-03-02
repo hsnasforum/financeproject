@@ -91,12 +91,13 @@ export async function POST(request: Request) {
   const actionIdRaw = asString(body?.actionId);
   const definition = getOpsActionDefinition(actionIdRaw);
   if (!definition) {
-    return opsErrorResponse({
-      code: "VALIDATION",
-      message: "지원하지 않는 actionId 입니다.",
-      status: 400,
-      fixHref: "/ops",
-    });
+    return NextResponse.json({
+      ok: false,
+      error: {
+        code: "NOT_IMPLEMENTED",
+        message: "지원하지 않는 actionId 입니다.",
+      },
+    }, { status: 501 });
   }
 
   const actionId = definition.id as OpsActionId;
@@ -106,12 +107,13 @@ export async function POST(request: Request) {
   if (definition.requirePreview) {
     const ok = consumeOpsActionPreviewToken(previewToken, actionId, params);
     if (!ok) {
-      return opsErrorResponse({
-        code: "VALIDATION",
-        message: "미리보기(preview) 후 발급된 실행 토큰이 필요합니다.",
-        status: 400,
-        fixHref: "/ops",
-      });
+      return NextResponse.json({
+        ok: false,
+        error: {
+          code: "PREVIEW_REQUIRED",
+          message: "미리보기(preview) 후 발급된 실행 토큰이 필요합니다.",
+        },
+      }, { status: 409 });
     }
   }
 
@@ -143,6 +145,16 @@ export async function POST(request: Request) {
     await appendStorageTransactionStep(tx, "ACTION_EXECUTED", {
       ok: result.ok,
     });
+    if (!result.ok && result.errorCode === "NOT_IMPLEMENTED") {
+      await endStorageTransaction(tx, "ROLLBACK", result.message || "not implemented").catch(() => undefined);
+      return NextResponse.json({
+        ok: false,
+        error: {
+          code: "NOT_IMPLEMENTED",
+          message: result.message || "지원하지 않는 actionId 입니다.",
+        },
+      }, { status: 501 });
+    }
     const safeMessage = redactText(result.message || "").slice(0, 500);
 
     appendActionAudit(result.ok ? "SUCCESS" : "ERROR", {

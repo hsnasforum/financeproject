@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+import { BackupReminderBannerServer } from "@/components/BackupReminderBannerServer";
 import { VaultLockScreenClient } from "@/components/VaultLockScreenClient";
 import { OpsDashboardClient } from "@/components/OpsDashboardClient";
 import { shouldBlockOpsPageInCurrentRuntime } from "@/lib/ops/pageAccess";
@@ -18,5 +19,10 @@ export default async function OpsPage() {
   const cookieStore = await cookies();
   const csrf = cookieStore.get("dev_csrf")?.value ?? "";
 
-  return <OpsDashboardClient csrf={csrf} />;
+  return (
+    <>
+      <BackupReminderBannerServer scope="ops" />
+      <OpsDashboardClient csrf={csrf} />
+    </>
+  );
 }

@@ -39,12 +39,12 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
   const freshness = getSnapshotFreshness(selected?.staleDays);
   const selectedWarnings = selected?.warningsCount ?? 0;
   const latestMissing = !props.items.latest;
-  const staleBeyondThreshold = typeof selectedStaleDays === "number" && selectedStaleDays > SNAPSHOT_STALE_CAUTION_DAYS;
+  const staleBeyondThreshold = freshness !== "ok";
   const shouldSuggestSync = latestMissing || staleBeyondThreshold;
   const freshnessBadge = (() => {
     if (!selected) return "Unknown";
     if (typeof selectedStaleDays !== "number") return "Fresh";
-    return selectedStaleDays > SNAPSHOT_STALE_CAUTION_DAYS ? `Stale ${selectedStaleDays}d` : "Fresh";
+    return selectedStaleDays >= SNAPSHOT_STALE_CAUTION_DAYS ? `Stale ${selectedStaleDays}d` : "Fresh";
   })();
 
   const selectValue = props.value.mode === "latest" ? "latest" : `history:${props.value.id}`;
@@ -141,6 +141,12 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
           href="/ops/assumptions"
         >
           /ops/assumptions
+        </Link>
+        <Link
+          className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+          href="/ops/assumptions/history"
+        >
+          /ops/assumptions/history
         </Link>
       </div>
 

@@ -23,6 +23,10 @@ export type OpsPolicy = {
     maxPreviewIds: number;
   };
   metrics: {
+    runFailRateWarnPct: number;
+    runFailRateRiskPct: number;
+    simulateLatencyWarnMultiplier: number;
+    assumptionsRefreshConsecutiveFailRisk: number;
     failureRateWarnPct: number;
     latencyRegressionWarnMs: number;
     refreshFailureWarnCount: number;
@@ -61,6 +65,10 @@ export const DEFAULT_OPS_POLICY: OpsPolicy = {
     maxPreviewIds: 200,
   },
   metrics: {
+    runFailRateWarnPct: 20,
+    runFailRateRiskPct: 50,
+    simulateLatencyWarnMultiplier: 1.8,
+    assumptionsRefreshConsecutiveFailRisk: 3,
     failureRateWarnPct: 20,
     latencyRegressionWarnMs: 2_500,
     refreshFailureWarnCount: 3,
@@ -149,6 +157,28 @@ export function loadOpsPolicy(env: NodeJS.ProcessEnv = process.env): OpsPolicy {
     1,
     100,
   );
+  const runFailRateWarnPct = clampInt(
+    env.PLANNING_OPS_METRICS_RUN_FAIL_RATE_WARN_PCT,
+    defaults.metrics.runFailRateWarnPct,
+    1,
+    100,
+  );
+  const runFailRateRiskPct = clampInt(
+    env.PLANNING_OPS_METRICS_RUN_FAIL_RATE_RISK_PCT,
+    defaults.metrics.runFailRateRiskPct,
+    runFailRateWarnPct,
+    100,
+  );
+  const simulateLatencyWarnMultiplierRaw = Number(env.PLANNING_OPS_METRICS_SIMULATE_LATENCY_WARN_MULTIPLIER);
+  const simulateLatencyWarnMultiplier = Number.isFinite(simulateLatencyWarnMultiplierRaw)
+    ? Math.max(1, Math.min(10, simulateLatencyWarnMultiplierRaw))
+    : defaults.metrics.simulateLatencyWarnMultiplier;
+  const assumptionsRefreshConsecutiveFailRisk = clampInt(
+    env.PLANNING_OPS_METRICS_ASSUMPTIONS_REFRESH_CONSECUTIVE_FAIL_RISK,
+    defaults.metrics.assumptionsRefreshConsecutiveFailRisk,
+    1,
+    100,
+  );
   const latencyRegressionWarnMs = clampInt(
     env.PLANNING_OPS_METRICS_LATENCY_REGRESSION_WARN_MS,
     defaults.metrics.latencyRegressionWarnMs,
@@ -211,6 +241,10 @@ export function loadOpsPolicy(env: NodeJS.ProcessEnv = process.env): OpsPolicy {
       maxPreviewIds,
     },
     metrics: {
+      runFailRateWarnPct,
+      runFailRateRiskPct,
+      simulateLatencyWarnMultiplier,
+      assumptionsRefreshConsecutiveFailRisk,
       failureRateWarnPct,
       latencyRegressionWarnMs,
       refreshFailureWarnCount,

@@ -6,6 +6,7 @@ import { POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/rou
 import { POST as runPOST } from "../../src/app/api/planning/run/route";
 import { GET as runGET } from "../../src/app/api/planning/run/[id]/route";
 import { GET as runsGET } from "../../src/app/api/planning/runs/[id]/route";
+import { saveAssumptionsOverrides } from "../../src/lib/planning/assumptions/overridesStorage";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -83,24 +84,29 @@ describe("POST /api/planning/run + GET /api/planning/run[s]/:id", () => {
     const profilePayload = await profileRes.json() as { data?: { id?: string } };
     const profileId = String(profilePayload.data?.id ?? "");
     expect(profileId).toBeTruthy();
+    await saveAssumptionsOverrides([
+      {
+        key: "inflationPct",
+        value: 2.7,
+        reason: "ops override",
+        updatedAt: "2026-03-02T00:00:00.000Z",
+      },
+    ], profileId);
 
     const runRes = await runPOST(buildJsonRequest("POST", "/api/planning/run", {
       profileId,
       title: "one click",
-      scenario: {
-        id: "scenario-1",
-        name: "선택지출 -10%",
-        templateId: "REDUCE_DISCRETIONARY_10",
-        createdAt: "2026-03-01T00:00:00.000Z",
-        patches: [
-          { path: "/monthlyDiscretionaryExpenses", op: "multiply", value: 0.9 },
-        ],
-      },
       input: {
         horizonMonths: 120,
         runScenarios: true,
         getActions: true,
         analyzeDebt: true,
+        scenario: {
+          title: "선택지출 -10%",
+          patch: [
+            { op: "mul", field: "monthlyDiscretionaryExpenses", value: 0.9 },
+          ],
+        },
       },
     }));
     const runPayload = await runRes.json() as {
@@ -108,6 +114,12 @@ describe("POST /api/planning/run + GET /api/planning/run[s]/:id", () => {
       data?: {
         id?: string;
         schemaVersion?: number;
+        input?: {
+          scenario?: {
+            title?: string;
+            patch?: Array<{ op?: string; field?: string; value?: number }>;
+          };
+        };
         scenario?: {
           id?: string;
           name?: string;
@@ -120,6 +132,8 @@ describe("POST /api/planning/run + GET /api/planning/run[s]/:id", () => {
           engineVersion?: string;
           profileHash?: string;
           assumptionsSnapshotId?: string;
+          effectiveAssumptionsHash?: string;
+          appliedOverrides?: Array<{ key?: string; value?: number; updatedAt?: string }>;
           policy?: Record<string, unknown>;
         };
       };
@@ -129,14 +143,16 @@ describe("POST /api/planning/run + GET /api/planning/run[s]/:id", () => {
     expect(runPayload.ok).toBe(true);
     expect(runPayload.data?.id).toBeTruthy();
     expect(runPayload.data?.schemaVersion).toBe(2);
-    expect(runPayload.data?.scenario?.id).toBe("scenario-1");
-    expect(runPayload.data?.scenario?.name).toBe("선택지출 -10%");
-    expect(runPayload.data?.scenario?.patches?.[0]?.path).toBe("/monthlyDiscretionaryExpenses");
+    expect(runPayload.data?.input?.scenario?.title).toBe("선택지출 -10%");
+    expect(runPayload.data?.input?.scenario?.patch?.[0]?.op).toBe("mul");
+    expect(runPayload.data?.input?.scenario?.patch?.[0]?.field).toBe("monthlyDiscretionaryExpenses");
     expect(runPayload.data?.overallStatus).toBeTruthy();
     expect((runPayload.data?.stages ?? []).length).toBeGreaterThanOrEqual(5);
     expect(typeof runPayload.data?.reproducibility?.appVersion).toBe("string");
     expect(typeof runPayload.data?.reproducibility?.engineVersion).toBe("string");
     expect((runPayload.data?.reproducibility?.profileHash?.length ?? 0)).toBeGreaterThanOrEqual(32);
+    expect((runPayload.data?.reproducibility?.effectiveAssumptionsHash?.length ?? 0)).toBeGreaterThanOrEqual(32);
+    expect(runPayload.data?.reproducibility?.appliedOverrides?.some((entry) => entry.key === "inflationPct" && entry.value === 2.7)).toBe(true);
     expect(runPayload.data?.reproducibility?.policy).toBeTruthy();
 
     const runId = String(runPayload.data?.id ?? "");
@@ -149,6 +165,12 @@ describe("POST /api/planning/run + GET /api/planning/run[s]/:id", () => {
       data?: {
         id?: string;
         schemaVersion?: number;
+        input?: {
+          scenario?: {
+            title?: string;
+            patch?: Array<{ op?: string; field?: string; value?: number }>;
+          };
+        };
         scenario?: {
           id?: string;
           name?: string;
@@ -171,7 +193,8 @@ describe("POST /api/planning/run + GET /api/planning/run[s]/:id", () => {
     expect(readPayload.ok).toBe(true);
     expect(readPayload.data?.id).toBe(runId);
     expect(readPayload.data?.schemaVersion).toBe(2);
-    expect(readPayload.data?.scenario?.id).toBe("scenario-1");
+    expect(readPayload.data?.input?.scenario?.title).toBe("선택지출 -10%");
+    expect(readPayload.data?.input?.scenario?.patch?.[0]?.op).toBe("mul");
     expect((readPayload.data?.stages ?? []).length).toBeGreaterThanOrEqual(5);
     expect((readPayload.data?.reproducibility?.profileHash?.length ?? 0)).toBeGreaterThanOrEqual(32);
     expect(readPayload.data?.outputs?.resultDto).toBeDefined();

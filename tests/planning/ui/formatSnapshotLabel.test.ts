@@ -20,9 +20,9 @@ describe("formatSnapshotLabel", () => {
   });
 
   it("returns stale badge thresholds for 45/120 day boundaries", () => {
-    expect(getSnapshotFreshness(45)).toBe("ok");
-    expect(getSnapshotFreshness(46)).toBe("caution");
-    expect(getSnapshotFreshness(120)).toBe("caution");
-    expect(getSnapshotFreshness(121)).toBe("risk");
+    expect(getSnapshotFreshness(44)).toBe("ok");
+    expect(getSnapshotFreshness(45)).toBe("caution");
+    expect(getSnapshotFreshness(119)).toBe("caution");
+    expect(getSnapshotFreshness(120)).toBe("risk");
   });
 });

@@ -17,7 +17,8 @@ import {
   buildRecentSuccessfulRunDoctorCheck,
   buildScheduledRunFailureDoctorCheck,
 } from "../../../../lib/ops/doctorPolicyChecks";
-import { appendOpsMetricEvent, listOpsMetricEvents } from "../../../../lib/ops/metricsLog";
+import { readRecent as readOpsMetricEvents } from "../../../../lib/ops/metrics/metricsStore";
+import { appendOpsMetricEvent } from "../../../../lib/ops/metricsLog";
 import { loadOpsPolicy } from "../../../../lib/ops/opsPolicy";
 import { buildExternalDataQualityDoctorChecks, runExternalDataQualityChecks } from "../../../../lib/ops/dataQuality";
 import { loadLatestAssumptionsSnapshot } from "../../../../lib/planning/server/assumptions/storage";
@@ -86,12 +87,23 @@ async function checkRecentSuccessfulRun(): Promise<DoctorCheck> {
 async function checkMetricsHealth(): Promise<DoctorCheck[]> {
   const policy = loadOpsPolicy();
   try {
-    const events = await listOpsMetricEvents({ limit: 5_000 });
+    const events = (await readOpsMetricEvents({ limit: 5_000 })).map((event) => ({
+      type: event.type,
+      at: event.at,
+      meta: {
+        ...(event.status ? { status: event.status } : {}),
+        ...(typeof event.durationMs === "number" ? { durationMs: event.durationMs } : {}),
+        ...(event.stage ? { stage: event.stage } : {}),
+        ...(event.runId ? { runId: event.runId } : {}),
+        ...(event.errorCode ? { errorCode: event.errorCode } : {}),
+      },
+    }));
     const checks = buildMetricsDoctorChecks({
       events,
-      failureRateWarnPct: policy.metrics.failureRateWarnPct,
-      latencyRegressionWarnMs: policy.metrics.latencyRegressionWarnMs,
-      refreshFailureWarnCount: policy.metrics.refreshFailureWarnCount,
+      runFailRateWarnPct: policy.metrics.runFailRateWarnPct,
+      runFailRateRiskPct: policy.metrics.runFailRateRiskPct,
+      simulateLatencyWarnMultiplier: policy.metrics.simulateLatencyWarnMultiplier,
+      assumptionsRefreshConsecutiveFailRisk: policy.metrics.assumptionsRefreshConsecutiveFailRisk,
       shortWindowHours: policy.metrics.shortWindowHours,
       longWindowDays: policy.metrics.longWindowDays,
     });
@@ -334,10 +346,21 @@ export async function GET(request: Request) {
 
     const report = summarizeDoctorChecks(checks);
     const issues = sortDoctorIssues(buildDoctorIssues(report.checks, report.generatedAt));
+    const status = report.summary.fail > 0
+      ? "RISK"
+      : report.summary.warn > 0
+        ? "WARN"
+        : "OK";
     return NextResponse.json({
       ok: true,
-      schemaVersion: 1,
-      data: report,
+      schemaVersion: 2,
+      data: {
+        generatedAt: report.generatedAt,
+        summary: report.summary,
+        status,
+        issues,
+      },
+      report,
       checks: report.checks,
       issues,
       message: report.ok ? "OPS doctor PASS" : "OPS doctor FAIL/WARN",

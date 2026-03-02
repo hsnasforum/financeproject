@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/route";
 import { POST as runsPOST } from "../../src/app/api/planning/v2/runs/route";
+import { GET as runDetailGET, PATCH as runDetailPATCH } from "../../src/app/api/planning/v2/runs/[id]/route";
 import { GET as actionPlanGET } from "../../src/app/api/planning/runs/[id]/action-plan/route";
 import {
   GET as actionProgressGET,
@@ -194,5 +195,86 @@ describe("run action progress route", () => {
     expect(remotePatchRes.status).toBe(403);
     expect(remotePatchPayload.error?.code).toBe("LOCAL_ONLY");
   });
-});
 
+  it("updates action progress via PATCH /api/planning/v2/runs/[id] without csrf when cookie missing", async () => {
+    const profileRes = await profilesPOST(jsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "runs detail action-center profile",
+      profile: profileFixture(),
+    }));
+    const profilePayload = await profileRes.json() as { data?: { id?: string } };
+    const profileId = String(profilePayload.data?.id ?? "");
+    expect(profileId).toBeTruthy();
+
+    const runRes = await runsPOST(jsonRequest("POST", "/api/planning/v2/runs", {
+      profileId,
+      title: "runs detail action-center run",
+      input: {
+        horizonMonths: 12,
+        runScenarios: true,
+        getActions: true,
+        analyzeDebt: true,
+      },
+    }));
+    const runPayload = await runRes.json() as { data?: { id?: string } };
+    const runId = String(runPayload.data?.id ?? "");
+    expect(runId).toBeTruthy();
+
+    const readBeforeRes = await runDetailGET(getRequest(`/api/planning/v2/runs/${runId}`), {
+      params: Promise.resolve({ id: runId }),
+    });
+    const readBeforePayload = await readBeforeRes.json() as {
+      ok?: boolean;
+      data?: {
+        actionCenter?: {
+          plan?: { items?: Array<{ actionKey?: string }> };
+          progress?: { items?: Array<{ actionKey?: string; status?: string }> };
+        };
+      };
+    };
+    expect(readBeforeRes.status).toBe(200);
+    expect(readBeforePayload.ok).toBe(true);
+    const actionKey = String(readBeforePayload.data?.actionCenter?.plan?.items?.[0]?.actionKey ?? "");
+    expect(actionKey).toBeTruthy();
+
+    const patchRes = await runDetailPATCH(
+      jsonRequest("PATCH", `/api/planning/v2/runs/${runId}`, {
+        actionKey,
+        status: "done",
+        note: "상세 라우트에서 완료",
+      }),
+      { params: Promise.resolve({ id: runId }) },
+    );
+    const patchPayload = await patchRes.json() as {
+      ok?: boolean;
+      data?: {
+        progress?: { items?: Array<{ actionKey?: string; status?: string; note?: string; doneAt?: string }> };
+        completion?: { done?: number; total?: number; pct?: number };
+      };
+    };
+    expect(patchRes.status).toBe(200);
+    expect(patchPayload.ok).toBe(true);
+    const updated = patchPayload.data?.progress?.items?.find((item) => item.actionKey === actionKey);
+    expect(updated?.status).toBe("done");
+    expect(updated?.note).toBe("상세 라우트에서 완료");
+    expect(typeof updated?.doneAt).toBe("string");
+    expect((patchPayload.data?.completion?.pct ?? 0)).toBeGreaterThanOrEqual(0);
+
+    const readAfterRes = await runDetailGET(getRequest(`/api/planning/v2/runs/${runId}`), {
+      params: Promise.resolve({ id: runId }),
+    });
+    const readAfterPayload = await readAfterRes.json() as {
+      ok?: boolean;
+      data?: {
+        actionCenter?: {
+          progress?: { items?: Array<{ actionKey?: string; status?: string; note?: string; doneAt?: string }> };
+        };
+      };
+    };
+    expect(readAfterRes.status).toBe(200);
+    expect(readAfterPayload.ok).toBe(true);
+    const persisted = readAfterPayload.data?.actionCenter?.progress?.items?.find((item) => item.actionKey === actionKey);
+    expect(persisted?.status).toBe("done");
+    expect(persisted?.note).toBe("상세 라우트에서 완료");
+    expect(typeof persisted?.doneAt).toBe("string");
+  });
+});

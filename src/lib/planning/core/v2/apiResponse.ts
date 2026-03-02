@@ -1,4 +1,4 @@
-import { jsonError, jsonOk } from "../../../http/apiResponse";
+import { jsonError, jsonOk } from "../../api/response";
 import { type PlanningErrorCode, normalizePlanningErrorCode } from "./errors";
 import { ko } from "./messages.ko";
 

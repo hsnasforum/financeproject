@@ -3,7 +3,7 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
-import { jsonError } from "../../../../../../../lib/http/apiResponse";
+import { jsonError } from "../../../../../../../lib/planning/api/response";
 import { getReport } from "../../../../../../../lib/planning/server/reports/storage";
 
 type RouteContext = {

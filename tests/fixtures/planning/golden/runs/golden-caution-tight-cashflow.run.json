@@ -3,6 +3,26 @@
   "title": "Golden CAUTION run",
   "createdAt": "2026-03-01T00:00:00.000Z",
   "profileId": "golden-profile-caution-tight-cashflow",
+  "input": {
+    "horizonMonths": 120,
+    "runScenarios": true,
+    "getActions": true,
+    "analyzeDebt": true,
+    "includeProducts": false,
+    "monteCarlo": null
+  },
+  "meta": {
+    "snapshot": {
+      "id": "snapshot-golden-caution",
+      "asOf": "2026-02-28",
+      "fetchedAt": "2026-03-01T00:00:00.000Z",
+      "missing": false
+    },
+    "health": {
+      "warningsCodes": ["HIGH_DEBT_RATIO", "HIGH_DEBT_RATIO", "GOAL_MISSED"],
+      "criticalCount": 0
+    }
+  },
   "overallStatus": "PARTIAL_SUCCESS",
   "stages": {
     "simulate": "SUCCESS",
@@ -11,5 +31,17 @@
     "actions": "SUCCESS",
     "debt": "SUCCESS"
   },
+  "warnings": [
+    { "code": "HIGH_DEBT_RATIO", "source": "simulate" },
+    { "code": "HIGH_DEBT_RATIO", "source": "simulate" },
+    { "code": "GOAL_MISSED", "source": "simulate" },
+    { "code": "HIGH_DEBT_RATIO", "source": "health" }
+  ],
+  "actions": [
+    { "code": "REDUCE_DEBT_SERVICE", "severity": "warn", "title": "부채 상환 부담 완화" },
+    { "code": "REBALANCE_DISCRETIONARY", "severity": "warn", "title": "선택지출 재조정" },
+    { "code": "REFRESH_ASSUMPTIONS", "severity": "info", "title": "가정 스냅샷 갱신" },
+    { "code": "RERUN_PLAN", "severity": "info", "title": "재실행 후 비교" }
+  ],
   "resultDtoFixture": "tests/planning-v2/report/fixtures/dto-warn.json"
 }

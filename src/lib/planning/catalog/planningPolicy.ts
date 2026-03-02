@@ -27,8 +27,8 @@ export type PlanningInterpretationPolicy = {
 // v2 freeze defaults: update only with explicit release note and regression proof.
 export const DEFAULT_PLANNING_POLICY: PlanningInterpretationPolicy = {
   dsr: {
-    cautionPct: 40,
-    riskPct: 60,
+    cautionPct: 30,
+    riskPct: 50,
   },
   emergencyFundMonths: {
     caution: 3,
@@ -36,7 +36,7 @@ export const DEFAULT_PLANNING_POLICY: PlanningInterpretationPolicy = {
   },
   monthlySurplusKrw: {
     cautionMax: 0,
-    riskMax: -1,
+    riskMax: 0,
   },
   monteCarlo: {
     cautionDepletionPct: 10,

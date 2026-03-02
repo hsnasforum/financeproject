@@ -10,6 +10,11 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import {
+  AssumptionsOverrideEntrySchema,
+  normalizeAssumptionsOverrides,
+  type AssumptionsOverrideEntry,
+} from "@/lib/planning/assumptions/overrides";
+import {
   loadAssumptionsOverridesByProfile,
   loadAssumptionsOverrides,
   resetAssumptionsOverrides,
@@ -25,6 +30,11 @@ function asString(value: unknown): string {
 type OverridesMutationBody = {
   csrf?: unknown;
   items?: unknown;
+  item?: unknown;
+  key?: unknown;
+  value?: unknown;
+  reason?: unknown;
+  updatedAt?: unknown;
   profileId?: unknown;
 } | null;
 
@@ -94,6 +104,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  // Legacy alias: POST behaves the same as PUT (replace list).
+  return PUT(request);
+}
+
+export async function PUT(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
 
@@ -138,6 +153,86 @@ export async function POST(request: Request) {
     return opsErrorResponse({
       code: "VALIDATION",
       message: error instanceof Error ? error.message : "오버라이드 저장에 실패했습니다.",
+      status: 400,
+    });
+  }
+}
+
+function parsePatchItem(body: OverridesMutationBody): AssumptionsOverrideEntry | null {
+  if (!body) return null;
+  const fromItem = AssumptionsOverrideEntrySchema.safeParse(body.item);
+  if (fromItem.success) {
+    const [normalized] = normalizeAssumptionsOverrides([fromItem.data]);
+    return normalized ?? null;
+  }
+  const partial = AssumptionsOverrideEntrySchema.safeParse({
+    key: body.key,
+    value: body.value,
+    reason: body.reason,
+    updatedAt: body.updatedAt,
+  });
+  if (!partial.success) return null;
+  const [normalized] = normalizeAssumptionsOverrides([partial.data]);
+  return normalized ?? null;
+}
+
+export async function PATCH(request: Request) {
+  const blocked = onlyDev();
+  if (blocked) return blocked;
+
+  let body: OverridesMutationBody = null;
+  try {
+    body = (await request.json()) as OverridesMutationBody;
+  } catch {
+    body = null;
+  }
+
+  try {
+    assertLocalHost(request);
+    assertSameOrigin(request);
+    assertDevUnlocked(request);
+    requireCsrf(request, body);
+  } catch (error) {
+    const guard = toGuardErrorResponse(error);
+    if (!guard) {
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: "요청 검증 중 오류가 발생했습니다.",
+        status: 500,
+      });
+    }
+    return opsErrorResponse({
+      code: guard.code,
+      message: guard.message,
+      status: guard.status,
+    });
+  }
+
+  try {
+    const profileId = await resolveTargetProfileId(body?.profileId);
+    const patchItem = parsePatchItem(body);
+    if (!patchItem) {
+      return opsErrorResponse({
+        code: "VALIDATION",
+        message: "key/value(%) 기반 오버라이드 항목이 필요합니다.",
+        status: 400,
+      });
+    }
+    const currentItems = profileId
+      ? await loadAssumptionsOverridesByProfile(profileId)
+      : await loadAssumptionsOverrides();
+    const nextItems = normalizeAssumptionsOverrides([...currentItems, patchItem]);
+    const items = await saveAssumptionsOverrides(nextItems, profileId);
+    return NextResponse.json({
+      ok: true,
+      ...(profileId ? { profileId } : {}),
+      items,
+      message: "가정 오버라이드를 업데이트했습니다.",
+    });
+  } catch (error) {
+    return opsErrorResponse({
+      code: "VALIDATION",
+      message: error instanceof Error ? error.message : "오버라이드 업데이트에 실패했습니다.",
       status: 400,
     });
   }

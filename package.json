@@ -9,6 +9,7 @@
     "build": "next build --webpack",
     "build:turbopack": "next build",
     "start": "node scripts/next_prod_safe.mjs",
+    "start:local": "node scripts/start_local.mjs",
     "start:raw": "next start",
     "lint": "eslint",
     "typecheck": "pnpm exec tsc --noEmit",
@@ -85,6 +86,7 @@
     "sec:check": "node scripts/security_check.mjs",
     "planning:v2:guard": "node scripts/planning_v2_static_guard.mjs",
     "planning:v2:ssot:guard": "node scripts/planning_v2_ssot_guard.mjs",
+    "planning:ssot:check": "node scripts/planning_ssot_guard.mjs",
     "planning:v2:freeze:guard": "node scripts/planning_v2_freeze_guard.mjs",
     "planning:v2:scan:guards": "node scripts/planning_v2_route_guard_scan.mjs",
     "planning:v2:seed": "node --import tsx scripts/planning_v2_seed_demo.mjs",
@@ -120,7 +122,8 @@
     "planning:v2:report:samples": "node --import tsx scripts/planning_v2_report_samples.mjs",
     "planning:v2:regress": "node --import tsx scripts/planning_v2_regression.mjs",
     "planning:v2:regress:update": "node --import tsx scripts/planning_v2_regression.mjs --update",
-    "planning:v2:regress:report": "node --import tsx scripts/planning_v2_regression.mjs --report"
+    "planning:v2:regress:report": "node --import tsx scripts/planning_v2_regression.mjs --report",
+    "planning:v3:import:csv": "node --import tsx scripts/planning_v3_import_csv.mjs"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.4.0",

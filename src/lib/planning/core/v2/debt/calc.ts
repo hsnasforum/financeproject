@@ -3,9 +3,9 @@ import {
   amortizingMonthlyPayment as ssotAmortizingMonthlyPayment,
   monthlyRateFromAprPct as ssotMonthlyRateFromAprPct,
   normalizeAprPct as ssotNormalizeAprPct,
-  roundKrw,
   simulateAmortizingPayoff as ssotSimulateAmortizingPayoff,
-} from "../../../calc";
+} from "../../../calc/amortization";
+import { roundKrw } from "../../../calc/roundingPolicy";
 
 export function normalizeAprPct(aprInput: number): number {
   return ssotNormalizeAprPct(aprInput);

@@ -8,7 +8,11 @@ export type EvidenceItem = {
   id: string;
   title: string;
   formula: string;
-  inputs: Array<{ label: string; value: string }>;
+  inputs: Array<{
+    label: string;
+    value: string | number;
+    unitKind: "krw" | "pct" | "months";
+  }>;
   assumptions: string[];
   notes?: string[];
 };
@@ -79,12 +83,12 @@ export function buildEvidence(
       title: "월 잉여현금",
       formula: "incomeNet - essential - discretionary - totalDebtPayment",
       inputs: [
-        { label: "월 실수령", value: formatKrwWithUnit(monthlyIncomeKrw) },
-        { label: "필수지출", value: "N/A" },
-        { label: "선택지출", value: "N/A" },
-        { label: "월 총지출(필수+선택)", value: formatKrwWithUnit(monthlyExpensesKrw) },
-        { label: "월 부채상환", value: formatKrwWithUnit(monthlyDebtPaymentKrw) },
-        { label: "월 잉여현금", value: formatKrwWithUnit(summaryCards.monthlySurplusKrw) },
+        { label: "월 실수령", value: formatKrwWithUnit(monthlyIncomeKrw), unitKind: "krw" },
+        { label: "필수지출", value: "N/A", unitKind: "krw" },
+        { label: "선택지출", value: "N/A", unitKind: "krw" },
+        { label: "월 총지출(필수+선택)", value: formatKrwWithUnit(monthlyExpensesKrw), unitKind: "krw" },
+        { label: "월 부채상환", value: formatKrwWithUnit(monthlyDebtPaymentKrw), unitKind: "krw" },
+        { label: "월 잉여현금", value: formatKrwWithUnit(summaryCards.monthlySurplusKrw), unitKind: "krw" },
       ],
       assumptions: [
         "필수/선택지출이 분리 저장되지 않은 경우 월 총지출 입력값으로 대체 표시합니다.",
@@ -108,9 +112,9 @@ export function buildEvidence(
       title: "부채부담률(DSR)",
       formula: "(totalDebtPayment / incomeNet) * 100",
       inputs: [
-        { label: "월 부채상환", value: formatKrwWithUnit(dsrDebtPaymentKrw) },
-        { label: "월 실수령", value: formatKrwWithUnit(dsrIncomeKrw) },
-        { label: "DSR", value: formatPctWithUnit(summaryCards.dsrPct, 1) },
+        { label: "월 부채상환", value: formatKrwWithUnit(dsrDebtPaymentKrw), unitKind: "krw" },
+        { label: "월 실수령", value: formatKrwWithUnit(dsrIncomeKrw), unitKind: "krw" },
+        { label: "DSR", value: formatPctWithUnit(summaryCards.dsrPct, 1), unitKind: "pct" },
       ],
       assumptions: [
         "incomeNet(월 실수령)이 0 이하인 경우 DSR은 N/A 또는 해석 제한 대상으로 봅니다.",
@@ -141,12 +145,12 @@ export function buildEvidence(
       title: "비상금 커버",
       formula: "target=essential*emergencyMonthsPolicy; gap=max(0,target-cash); months=cash/essential",
       inputs: [
-        { label: "필수지출(월)", value: formatKrwWithUnit(emergencyEssentialKrw) },
-        { label: "현금성 자산", value: formatKrwWithUnit(emergencyCashKrw) },
-        { label: "정책 기준 개월", value: formatMonthsWithUnit(emergencyMonthsPolicy, 0) },
-        { label: "비상금 목표액", value: formatKrwWithUnit(emergencyTargetKrw) },
-        { label: "비상금 갭", value: formatKrwWithUnit(emergencyGapKrw) },
-        { label: "비상금 커버", value: formatMonthsWithUnit(summaryCards.emergencyFundMonths, 1) },
+        { label: "필수지출(월)", value: formatKrwWithUnit(emergencyEssentialKrw), unitKind: "krw" },
+        { label: "현금성 자산", value: formatKrwWithUnit(emergencyCashKrw), unitKind: "krw" },
+        { label: "정책 기준 개월", value: formatMonthsWithUnit(emergencyMonthsPolicy, 0), unitKind: "months" },
+        { label: "비상금 목표액", value: formatKrwWithUnit(emergencyTargetKrw), unitKind: "krw" },
+        { label: "비상금 갭", value: formatKrwWithUnit(emergencyGapKrw), unitKind: "krw" },
+        { label: "비상금 커버", value: formatMonthsWithUnit(summaryCards.emergencyFundMonths, 1), unitKind: "months" },
       ],
       assumptions: [
         `정책 기준은 planningPolicy.emergencyFundMonths.caution(${emergencyMonthsPolicy}개월)입니다.`,

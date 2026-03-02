@@ -688,5 +688,185 @@
     "stderrTail": "",
     "errorCode": null,
     "errorMessage": null
+  },
+  {
+    "id": "1772433751028-gk1ylcov",
+    "createdAt": "2026-03-02T06:42:31.028Z",
+    "fixId": "CHAIN:FULL_REPAIR",
+    "ok": true,
+    "tookMs": 10187,
+    "stdoutTail": "\n- fetched: 2\n- upserted: 2\n- touched: 2\n- created: 0\n- updated: 2\n- totalCount: 2\n- matchedHighConfidence: 0 (CLI stores raw; matching runs in app sync module)\n- pageCount: 1\n\n[seed:debug] done.\n[seed:debug] Open: /debug/unified?kind=deposit&includeSources=finlife,datago_kdb\n[seed:debug] Validate: q/qMode search, onlyNew/changedSince, single-source cursor Load more.\n[seed:debug] Policy: cursor is single-source only, multi-source uses limit + q.[DATA_DOCTOR]\n\n> finance@1.0.3 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.3 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=1\n\n> finance@1.0.3 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=8 fresh=4 stale=4 missing=0 invalid=0[DART_WATCH]\n\n> finance@1.0.3 dart:watch /home/xpdlqj/code/finance\n> node scripts/dart_disclosure_watch.mjs\n\n[dart:watch] watchlist=/home/xpdlqj/code/finance/config/dart-watchlist.json\n[dart:watch] rules=/home/xpdlqj/code/finance/config/dart-disclosure-rules.json\n[dart:watch] profile=/home/xpdlqj/code/finance/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1795 totalNew=1295 errors=0\n[dart:watch] delta new=0 updated=3 highMid=3\n[dart:watch] alerts filtered total=2 raw=3\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json",
+    "stderrTail": "[PRISMA_PUSH]\nLoaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma/schema.prisma.[SEED_DEBUG][DATA_DOCTOR][DART_WATCH]",
+    "errorCode": null,
+    "errorMessage": null,
+    "chainId": "FULL_REPAIR",
+    "steps": [
+      {
+        "fixId": "PRISMA_PUSH",
+        "ok": true,
+        "tookMs": 2186,
+        "stdoutTail": "Datasource \"db\": SQLite database \"dev.db\" at \"file:./dev.db\"\n\nThe database is already in sync with the Prisma schema.\n\n",
+        "stderrTail": "Loaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma/schema.prisma.\n",
+        "errorCode": null,
+        "errorMessage": null,
+        "analysis": {
+          "cause": "DB_NOT_READY",
+          "summary": "DB 준비 상태가 불완전합니다. 스키마/시드 적용이 필요합니다.",
+          "suggestedFixIds": [
+            "PRISMA_PUSH",
+            "PRISMA_DB_PUSH",
+            "SEED_DEBUG",
+            "DATA_DOCTOR"
+          ]
+        }
+      },
+      {
+        "fixId": "SEED_DEBUG",
+        "ok": true,
+        "tookMs": 1932,
+        "stdoutTail": "\n> finance@1.0.3 seed:debug /home/xpdlqj/code/finance\n> node scripts/seed_debug.mjs\n\n[seed:debug] FINLIFE replay\n\n> finance@1.0.3 finlife:sync /home/xpdlqj/code/finance\n> node scripts/finlife_sync.mjs --kind=deposit --fromFile=tests/fixtures/finlife_deposit.normalized.json\n\n[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }\n[finlife:sync] deposit done\n- replayFile: tests/fixtures/finlife_deposit.normalized.json\n- totalProducts: 2\n- totalOptions: 3\n- completionRate: 100.0%\n- truncatedByHardCap: false\n- db providersUpserted: 2\n- db productsUpserted: 2\n- db optionsWritten: 3\n- db skippedCrossKindDuplicates: 0\n- db replacedCrossKindDuplicates: 0\n[seed:debug] KDB replay\n\n> finance@1.0.3 datago:sync /home/xpdlqj/code/finance\n> node scripts/datago_sync.mjs --source=kdb --kind=deposit --fromFile=tests/fixtures/kdb-deposit.sample.xml\n\n[datago:sync] datago_kdb/deposit done\n- replayFile: tests/fixtures/kdb-deposit.sample.xml\n- fetched: 2\n- upserted: 2\n- touched: 2\n- created: 0\n- updated: 2\n- totalCount: 2\n- matchedHighConfidence: 0 (CLI stores raw; matching runs in app sync module)\n- pageCount: 1\n\n[seed:debug] done.\n[seed:debug] Open: /debug/unified?kind=deposit&includeSources=finlife,datago_kdb\n[seed:debug] Validate: q/qMode search, onlyNew/changedSince, single-source cursor Load more.\n[seed:debug] Policy: cursor is single-source only, multi-source uses limit + q.\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      },
+      {
+        "fixId": "DATA_DOCTOR",
+        "ok": true,
+        "tookMs": 2148,
+        "stdoutTail": "\n> finance@1.0.3 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.3 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=1\n\n> finance@1.0.3 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=8 fresh=4 stale=4 missing=0 invalid=0\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      },
+      {
+        "fixId": "DART_WATCH",
+        "ok": true,
+        "tookMs": 3921,
+        "stdoutTail": "\n> finance@1.0.3 dart:watch /home/xpdlqj/code/finance\n> node scripts/dart_disclosure_watch.mjs\n\n[dart:watch] watchlist=/home/xpdlqj/code/finance/config/dart-watchlist.json\n[dart:watch] rules=/home/xpdlqj/code/finance/config/dart-disclosure-rules.json\n[dart:watch] profile=/home/xpdlqj/code/finance/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1795 totalNew=1295 errors=0\n[dart:watch] delta new=0 updated=3 highMid=3\n[dart:watch] alerts filtered total=2 raw=3\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "id": "1772433759999-sx6gez7i",
+    "createdAt": "2026-03-02T06:42:39.999Z",
+    "fixId": "CHAIN:FULL_REPAIR",
+    "ok": true,
+    "tookMs": 8929,
+    "stdoutTail": "\n- fetched: 2\n- upserted: 2\n- touched: 2\n- created: 0\n- updated: 2\n- totalCount: 2\n- matchedHighConfidence: 0 (CLI stores raw; matching runs in app sync module)\n- pageCount: 1\n\n[seed:debug] done.\n[seed:debug] Open: /debug/unified?kind=deposit&includeSources=finlife,datago_kdb\n[seed:debug] Validate: q/qMode search, onlyNew/changedSince, single-source cursor Load more.\n[seed:debug] Policy: cursor is single-source only, multi-source uses limit + q.[DATA_DOCTOR]\n\n> finance@1.0.3 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.3 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=1\n\n> finance@1.0.3 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=8 fresh=4 stale=4 missing=0 invalid=0[DART_WATCH]\n\n> finance@1.0.3 dart:watch /home/xpdlqj/code/finance\n> node scripts/dart_disclosure_watch.mjs\n\n[dart:watch] watchlist=/home/xpdlqj/code/finance/config/dart-watchlist.json\n[dart:watch] rules=/home/xpdlqj/code/finance/config/dart-disclosure-rules.json\n[dart:watch] profile=/home/xpdlqj/code/finance/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1795 totalNew=1295 errors=0\n[dart:watch] delta new=0 updated=3 highMid=3\n[dart:watch] alerts filtered total=2 raw=3\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json",
+    "stderrTail": "[PRISMA_PUSH]\nLoaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma/schema.prisma.\n┌─────────────────────────────────────────────────────────┐\n│  Update available 7.4.0 -> 7.4.2                        │\n│  Run the following to update                            │\n│    npm i --save-dev prisma@latest                       │\n│    npm i @prisma/client@latest                          │\n└─────────────────────────────────────────────────────────┘[SEED_DEBUG][DATA_DOCTOR][DART_WATCH]",
+    "errorCode": null,
+    "errorMessage": null,
+    "chainId": "FULL_REPAIR",
+    "steps": [
+      {
+        "fixId": "PRISMA_PUSH",
+        "ok": true,
+        "tookMs": 1770,
+        "stdoutTail": "Datasource \"db\": SQLite database \"dev.db\" at \"file:./dev.db\"\n\nThe database is already in sync with the Prisma schema.\n\n",
+        "stderrTail": "Loaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma/schema.prisma.\n┌─────────────────────────────────────────────────────────┐\n│  Update available 7.4.0 -> 7.4.2                        │\n│  Run the following to update                            │\n│    npm i --save-dev prisma@latest                       │\n│    npm i @prisma/client@latest                          │\n└─────────────────────────────────────────────────────────┘\n",
+        "errorCode": null,
+        "errorMessage": null,
+        "analysis": {
+          "cause": "DB_NOT_READY",
+          "summary": "DB 준비 상태가 불완전합니다. 스키마/시드 적용이 필요합니다.",
+          "suggestedFixIds": [
+            "PRISMA_PUSH",
+            "PRISMA_DB_PUSH",
+            "SEED_DEBUG",
+            "DATA_DOCTOR"
+          ]
+        }
+      },
+      {
+        "fixId": "SEED_DEBUG",
+        "ok": true,
+        "tookMs": 1990,
+        "stdoutTail": "\n> finance@1.0.3 seed:debug /home/xpdlqj/code/finance\n> node scripts/seed_debug.mjs\n\n[seed:debug] FINLIFE replay\n\n> finance@1.0.3 finlife:sync /home/xpdlqj/code/finance\n> node scripts/finlife_sync.mjs --kind=deposit --fromFile=tests/fixtures/finlife_deposit.normalized.json\n\n[dotenv@17.3.1] injecting env (0) from .env.local -- tip: ⚙️  override existing env vars with { override: true }\n[finlife:sync] deposit done\n- replayFile: tests/fixtures/finlife_deposit.normalized.json\n- totalProducts: 2\n- totalOptions: 3\n- completionRate: 100.0%\n- truncatedByHardCap: false\n- db providersUpserted: 2\n- db productsUpserted: 2\n- db optionsWritten: 3\n- db skippedCrossKindDuplicates: 0\n- db replacedCrossKindDuplicates: 0\n[seed:debug] KDB replay\n\n> finance@1.0.3 datago:sync /home/xpdlqj/code/finance\n> node scripts/datago_sync.mjs --source=kdb --kind=deposit --fromFile=tests/fixtures/kdb-deposit.sample.xml\n\n[datago:sync] datago_kdb/deposit done\n- replayFile: tests/fixtures/kdb-deposit.sample.xml\n- fetched: 2\n- upserted: 2\n- touched: 2\n- created: 0\n- updated: 2\n- totalCount: 2\n- matchedHighConfidence: 0 (CLI stores raw; matching runs in app sync module)\n- pageCount: 1\n\n[seed:debug] done.\n[seed:debug] Open: /debug/unified?kind=deposit&includeSources=finlife,datago_kdb\n[seed:debug] Validate: q/qMode search, onlyNew/changedSince, single-source cursor Load more.\n[seed:debug] Policy: cursor is single-source only, multi-source uses limit + q.\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      },
+      {
+        "fixId": "DATA_DOCTOR",
+        "ok": true,
+        "tookMs": 1889,
+        "stdoutTail": "\n> finance@1.0.3 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.3 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=1\n\n> finance@1.0.3 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=8 fresh=4 stale=4 missing=0 invalid=0\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      },
+      {
+        "fixId": "DART_WATCH",
+        "ok": true,
+        "tookMs": 3280,
+        "stdoutTail": "\n> finance@1.0.3 dart:watch /home/xpdlqj/code/finance\n> node scripts/dart_disclosure_watch.mjs\n\n[dart:watch] watchlist=/home/xpdlqj/code/finance/config/dart-watchlist.json\n[dart:watch] rules=/home/xpdlqj/code/finance/config/dart-disclosure-rules.json\n[dart:watch] profile=/home/xpdlqj/code/finance/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1795 totalNew=1295 errors=0\n[dart:watch] delta new=0 updated=3 highMid=3\n[dart:watch] alerts filtered total=2 raw=3\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      }
+    ]
+  },
+  {
+    "id": "1772433990359-4qsqzbni",
+    "createdAt": "2026-03-02T06:46:30.359Z",
+    "fixId": "CHAIN:FULL_REPAIR",
+    "ok": true,
+    "tookMs": 8451,
+    "stdoutTail": "\n- fetched: 2\n- upserted: 2\n- touched: 2\n- created: 0\n- updated: 2\n- totalCount: 2\n- matchedHighConfidence: 0 (CLI stores raw; matching runs in app sync module)\n- pageCount: 1\n\n[seed:debug] done.\n[seed:debug] Open: /debug/unified?kind=deposit&includeSources=finlife,datago_kdb\n[seed:debug] Validate: q/qMode search, onlyNew/changedSince, single-source cursor Load more.\n[seed:debug] Policy: cursor is single-source only, multi-source uses limit + q.[DATA_DOCTOR]\n\n> finance@1.0.3 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.3 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=1\n\n> finance@1.0.3 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=8 fresh=4 stale=4 missing=0 invalid=0[DART_WATCH]\n\n> finance@1.0.3 dart:watch /home/xpdlqj/code/finance\n> node scripts/dart_disclosure_watch.mjs\n\n[dart:watch] watchlist=/home/xpdlqj/code/finance/config/dart-watchlist.json\n[dart:watch] rules=/home/xpdlqj/code/finance/config/dart-disclosure-rules.json\n[dart:watch] profile=/home/xpdlqj/code/finance/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1795 totalNew=1295 errors=0\n[dart:watch] delta new=0 updated=3 highMid=3\n[dart:watch] alerts filtered total=2 raw=3\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json",
+    "stderrTail": "[PRISMA_PUSH]\nLoaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma/schema.prisma.[SEED_DEBUG][DATA_DOCTOR][DART_WATCH]",
+    "errorCode": null,
+    "errorMessage": null,
+    "chainId": "FULL_REPAIR",
+    "steps": [
+      {
+        "fixId": "PRISMA_PUSH",
+        "ok": true,
+        "tookMs": 1654,
+        "stdoutTail": "Datasource \"db\": SQLite database \"dev.db\" at \"file:./dev.db\"\n\nThe database is already in sync with the Prisma schema.\n\n",
+        "stderrTail": "Loaded Prisma config from prisma.config.ts.\n\nPrisma schema loaded from prisma/schema.prisma.\n",
+        "errorCode": null,
+        "errorMessage": null,
+        "analysis": {
+          "cause": "DB_NOT_READY",
+          "summary": "DB 준비 상태가 불완전합니다. 스키마/시드 적용이 필요합니다.",
+          "suggestedFixIds": [
+            "PRISMA_PUSH",
+            "PRISMA_DB_PUSH",
+            "SEED_DEBUG",
+            "DATA_DOCTOR"
+          ]
+        }
+      },
+      {
+        "fixId": "SEED_DEBUG",
+        "ok": true,
+        "tookMs": 1782,
+        "stdoutTail": "\n> finance@1.0.3 seed:debug /home/xpdlqj/code/finance\n> node scripts/seed_debug.mjs\n\n[seed:debug] FINLIFE replay\n\n> finance@1.0.3 finlife:sync /home/xpdlqj/code/finance\n> node scripts/finlife_sync.mjs --kind=deposit --fromFile=tests/fixtures/finlife_deposit.normalized.json\n\n[dotenv@17.3.1] injecting env (0) from .env.local -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit\n[finlife:sync] deposit done\n- replayFile: tests/fixtures/finlife_deposit.normalized.json\n- totalProducts: 2\n- totalOptions: 3\n- completionRate: 100.0%\n- truncatedByHardCap: false\n- db providersUpserted: 2\n- db productsUpserted: 2\n- db optionsWritten: 3\n- db skippedCrossKindDuplicates: 0\n- db replacedCrossKindDuplicates: 0\n[seed:debug] KDB replay\n\n> finance@1.0.3 datago:sync /home/xpdlqj/code/finance\n> node scripts/datago_sync.mjs --source=kdb --kind=deposit --fromFile=tests/fixtures/kdb-deposit.sample.xml\n\n[datago:sync] datago_kdb/deposit done\n- replayFile: tests/fixtures/kdb-deposit.sample.xml\n- fetched: 2\n- upserted: 2\n- touched: 2\n- created: 0\n- updated: 2\n- totalCount: 2\n- matchedHighConfidence: 0 (CLI stores raw; matching runs in app sync module)\n- pageCount: 1\n\n[seed:debug] done.\n[seed:debug] Open: /debug/unified?kind=deposit&includeSources=finlife,datago_kdb\n[seed:debug] Validate: q/qMode search, onlyNew/changedSince, single-source cursor Load more.\n[seed:debug] Policy: cursor is single-source only, multi-source uses limit + q.\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      },
+      {
+        "fixId": "DATA_DOCTOR",
+        "ok": true,
+        "tookMs": 1900,
+        "stdoutTail": "\n> finance@1.0.3 data:doctor /home/xpdlqj/code/finance\n> pnpm schema:report && pnpm freshness:report\n\n\n> finance@1.0.3 schema:report /home/xpdlqj/code/finance\n> node scripts/schema_drift_report.mjs\n\n[schema:report] generated docs/schema-drift-report.md\n[schema:report] snapshots=10 breaking=0 nonBreaking=1\n\n> finance@1.0.3 freshness:report /home/xpdlqj/code/finance\n> node scripts/data_freshness_report.mjs\n\n[freshness:report] generated docs/data-freshness-report.md\n[freshness:report] total=8 fresh=4 stale=4 missing=0 invalid=0\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      },
+      {
+        "fixId": "DART_WATCH",
+        "ok": true,
+        "tookMs": 3115,
+        "stdoutTail": "\n> finance@1.0.3 dart:watch /home/xpdlqj/code/finance\n> node scripts/dart_disclosure_watch.mjs\n\n[dart:watch] watchlist=/home/xpdlqj/code/finance/config/dart-watchlist.json\n[dart:watch] rules=/home/xpdlqj/code/finance/config/dart-disclosure-rules.json\n[dart:watch] profile=/home/xpdlqj/code/finance/config/dart-alert-profile.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json)\n[dart:watch] preset=default rules=0\n[dart:watch] prefs=/home/xpdlqj/code/finance/config/dart-alert-preferences.json (loaded=/home/xpdlqj/code/finance/config/dart-alert-profile.json#default)\n[dart:watch] companies=1 totalItems=1795 totalNew=1295 errors=0\n[dart:watch] delta new=0 updated=3 highMid=3\n[dart:watch] alerts filtered total=2 raw=3\n[dart:watch] outputs:\n  - docs/dart-disclosure-digest.md\n  - docs/dart-disclosure-alerts.md\n  - docs/dart-daily-brief.md\n  - tmp/dart/disclosure_state.json\n  - tmp/dart/disclosure_digest.json\n  - tmp/dart/disclosure_alerts.json\n  - tmp/dart/daily_brief.json\n",
+        "stderrTail": "",
+        "errorCode": null,
+        "errorMessage": null
+      }
+    ]
   }
 ]

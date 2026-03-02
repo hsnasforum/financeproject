@@ -21,7 +21,7 @@ describe("runStagePipeline", () => {
       scenarios: { run: () => ({ ok: true }) },
       monteCarlo: { run: () => ({ ok: true }) },
       actions: { run: () => ({ ok: true }) },
-      debt: { run: () => ({ ok: true }) },
+      debtStrategy: { run: () => ({ ok: true }) },
       nowMs: now,
     });
 
@@ -39,7 +39,7 @@ describe("runStagePipeline", () => {
       status: "SKIPPED",
       reason: "PREREQ_FAILED",
     });
-    expect(result.stages.find((stage) => stage.id === "debt")).toMatchObject({
+    expect(result.stages.find((stage) => stage.id === "debtStrategy")).toMatchObject({
       status: "SKIPPED",
       reason: "PREREQ_FAILED",
     });
@@ -58,7 +58,7 @@ describe("runStagePipeline", () => {
         run: () => ({ probability: 0.5 }),
       },
       actions: { enabled: false, run: () => ({}) },
-      debt: { enabled: false, run: () => ({}) },
+      debtStrategy: { enabled: false, run: () => ({}) },
       nowMs: now,
     });
 
@@ -80,7 +80,7 @@ describe("runStagePipeline", () => {
       },
       monteCarlo: { enabled: false, run: () => ({}) },
       actions: { run: () => ({ actions: 3 }) },
-      debt: { run: () => ({ debt: 1 }) },
+      debtStrategy: { run: () => ({ debt: 1 }) },
       nowMs: now,
     });
 
@@ -90,7 +90,7 @@ describe("runStagePipeline", () => {
       reason: "STAGE_ERROR",
     });
     expect(result.stages.find((stage) => stage.id === "actions")?.status).toBe("SUCCESS");
-    expect(result.stages.find((stage) => stage.id === "debt")?.status).toBe("SUCCESS");
+    expect(result.stages.find((stage) => stage.id === "debtStrategy")?.status).toBe("SUCCESS");
   });
 
   it("computes non-negative durationMs for terminal stages", async () => {
@@ -100,7 +100,7 @@ describe("runStagePipeline", () => {
       scenarios: { enabled: false, run: () => ({}) },
       monteCarlo: { enabled: false, run: () => ({}) },
       actions: { enabled: false, run: () => ({}) },
-      debt: { enabled: false, run: () => ({}) },
+      debtStrategy: { enabled: false, run: () => ({}) },
       nowMs: now,
     });
 

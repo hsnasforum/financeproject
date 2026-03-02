@@ -1,38 +1,5 @@
 import { type DoctorCheck } from "./doctorChecks";
-import { type OpsActionId } from "./actions/types";
-
-export type DoctorIssueSeverity = "risk" | "warn" | "info";
-
-export type DoctorIssueFix =
-  | {
-      type: "none";
-      label: string;
-    }
-  | {
-      type: "link";
-      label: string;
-      href: string;
-    }
-  | {
-      type: "action";
-      label: string;
-      actionId: OpsActionId;
-      dangerous?: boolean;
-      confirmText?: string;
-    };
-
-export type DoctorIssue = {
-  id: string;
-  checkId: string;
-  title: string;
-  status: DoctorCheck["status"];
-  severity: DoctorIssueSeverity;
-  priority: number;
-  message: string;
-  updatedAt: string;
-  fix: DoctorIssueFix;
-  fixHref?: string;
-};
+import { type DoctorIssue, type DoctorIssueFix, type DoctorIssueSeverity } from "./doctor/types";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -50,29 +17,22 @@ export function toDoctorIssueSeverity(status: DoctorCheck["status"]): DoctorIssu
   return "info";
 }
 
-function toDefaultFix(check: DoctorCheck): DoctorIssueFix {
+function toDefaultFix(check: DoctorCheck): DoctorIssueFix | undefined {
   const href = asString(check.fixHref);
-  if (href) {
-    return {
-      type: "link",
-      label: "열기",
-      href,
-    };
-  }
+  if (!href) return undefined;
   return {
-    type: "none",
-    label: "조치 불필요",
+    label: "열기",
+    href,
   };
 }
 
-function inferFix(check: DoctorCheck): DoctorIssueFix {
+function inferFix(check: DoctorCheck): DoctorIssueFix | undefined {
   if (check.status === "PASS") {
     return toDefaultFix(check);
   }
 
-  if (check.id === "assumptions-latest" || check.id === "metrics-refresh-failures") {
+  if (check.id === "assumptions-latest" || check.id === "metrics-refresh-failures" || check.id === "ASSUMPTIONS_REFRESH_FAILING") {
     return {
-      type: "action",
       label: "가정 새로고침",
       actionId: "ASSUMPTIONS_REFRESH",
     };
@@ -80,9 +40,9 @@ function inferFix(check: DoctorCheck): DoctorIssueFix {
 
   if (check.id === "storage-consistency") {
     return {
-      type: "action",
       label: "인덱스 수리",
       actionId: "REPAIR_INDEX",
+      confirm: "RUN OPS_REPAIR_INDEX",
     };
   }
 
@@ -90,21 +50,19 @@ function inferFix(check: DoctorCheck): DoctorIssueFix {
     const href = asString(check.fixHref);
     if (href === "/ops/security") {
       return {
-        type: "link",
         label: "보안 설정",
         href,
       };
     }
     return {
-      type: "action",
       label: "마이그레이션 실행",
       actionId: "RUN_MIGRATIONS",
+      confirm: "RUN OPS_MIGRATIONS",
     };
   }
 
   if (check.id === "runs-recent-success") {
     return {
-      type: "link",
       label: "실행 기록 열기",
       href: "/planning/runs",
     };
@@ -113,31 +71,44 @@ function inferFix(check: DoctorCheck): DoctorIssueFix {
   return toDefaultFix(check);
 }
 
-export function buildDoctorIssues(checks: DoctorCheck[], updatedAt = new Date().toISOString()): DoctorIssue[] {
+function buildIssueId(check: DoctorCheck, index: number): string {
+  const base = check.id.trim();
+  if (!base) return `doctor-issue-${index + 1}`;
+  return `${base}-${index + 1}`;
+}
+
+function buildEvidence(check: DoctorCheck): string | undefined {
+  if (!check.details) return undefined;
+  const summary = asString((check.details as Record<string, unknown>).summary);
+  if (summary) return summary;
+  const code = asString((check.details as Record<string, unknown>).code);
+  if (code) return `code=${code}`;
+  return undefined;
+}
+
+export function buildDoctorIssues(checks: DoctorCheck[], _updatedAt = new Date().toISOString()): DoctorIssue[] {
   return checks.map((check, index) => {
     const severity = toDoctorIssueSeverity(check.status);
-    const basePriority = severityRank(severity) * 100;
+    const evidence = buildEvidence(check);
     const fix = inferFix(check);
-
-    return {
-      id: `${check.id}:${index}`,
-      checkId: check.id,
-      title: check.title,
-      status: check.status,
+    const issue: DoctorIssue = {
+      id: buildIssueId(check, index),
       severity,
-      priority: basePriority + index,
+      title: check.title,
       message: check.message,
-      updatedAt,
-      fix,
-      ...(asString(check.fixHref) ? { fixHref: asString(check.fixHref) } : {}),
+      ...(evidence ? { evidence } : {}),
+      ...(fix ? { fix } : {}),
     };
+    return issue;
   });
 }
 
 export function sortDoctorIssues(issues: DoctorIssue[]): DoctorIssue[] {
   return [...issues].sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    if (a.title !== b.title) return a.title.localeCompare(b.title);
+    const severityDiff = severityRank(a.severity) - severityRank(b.severity);
+    if (severityDiff !== 0) return severityDiff;
+    const titleDiff = a.title.localeCompare(b.title);
+    if (titleDiff !== 0) return titleDiff;
     return a.id.localeCompare(b.id);
   });
 }

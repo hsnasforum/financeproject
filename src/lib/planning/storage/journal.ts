@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteFile } from "./atomicWrite";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 
 export type StorageTxKind = "RUN_CREATE" | "RUN_INDEX_UPDATE" | "SNAPSHOT_WRITE" | "MIGRATION_APPLY" | "OPS_ACTION_RUN";
 export type StorageTxOutcome = "COMMIT" | "ROLLBACK" | "RECOVERED_COMMIT" | "RECOVERED_ROLLBACK";
@@ -50,7 +51,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function resolveJournalPath(): string {
   const override = asString(process.env.PLANNING_STORAGE_JOURNAL_PATH);
-  return path.resolve(process.cwd(), override || ".data/planning/storage/journal.ndjson");
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolvePlanningDataDir(), "storage", "journal.ndjson");
 }
 
 async function appendLine(filePath: string, line: string): Promise<void> {

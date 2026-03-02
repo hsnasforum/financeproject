@@ -102,6 +102,13 @@ body {
     border-radius: 0.5rem !important;
   }
 
+  .print-markdown {
+    max-height: none !important;
+    overflow: visible !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
   a {
     color: #000000 !important;
     text-decoration: none !important;

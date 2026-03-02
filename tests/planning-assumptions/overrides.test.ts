@@ -31,6 +31,10 @@ describe("assumptions overrides", () => {
     expect(mergedA).toEqual(mergedB);
     expect(mergedA.inflationPct).toBe(2.9);
     expect(mergedA.investReturnPct).toBe(5.4);
+    expect(snapshotAssumptions.inflationPct).toBe(2.1);
+    expect(snapshotAssumptions.investReturnPct).toBe(4.8);
+    expect(unordered[0]?.value).toBe(5.4);
+    expect(unordered[1]?.value).toBe(2.9);
   });
 
   it("normalizes legacy decimal override values from request record", () => {

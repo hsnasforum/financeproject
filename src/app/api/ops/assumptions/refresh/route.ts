@@ -9,7 +9,7 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
+import { appendEvent as appendOpsMetricEvent } from "../../../../../lib/ops/metrics/metricsStore";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { buildAssumptionsSnapshot } from "../../../../../lib/planning/assumptions/sync";
 import { redactText } from "../../../../../lib/planning/privacy/redact";
@@ -98,12 +98,8 @@ export async function POST(request: Request) {
     }).catch(() => undefined);
     await appendOpsMetricEvent({
       type: "ASSUMPTIONS_REFRESH",
-      meta: {
-        status: "SUCCESS",
-        latestId,
-        warningsCount,
-        durationMs: Math.max(0, Date.now() - startedAt),
-      },
+      status: "SUCCESS",
+      durationMs: Math.max(0, Date.now() - startedAt),
     }).catch(() => undefined);
 
     return NextResponse.json({
@@ -133,11 +129,9 @@ export async function POST(request: Request) {
     }).catch(() => undefined);
     await appendOpsMetricEvent({
       type: "ASSUMPTIONS_REFRESH",
-      meta: {
-        status: "FAILED",
-        code: "INTERNAL",
-        durationMs: Math.max(0, Date.now() - startedAt),
-      },
+      status: "FAILED",
+      errorCode: "INTERNAL",
+      durationMs: Math.max(0, Date.now() - startedAt),
     }).catch(() => undefined);
 
     return opsErrorResponse({

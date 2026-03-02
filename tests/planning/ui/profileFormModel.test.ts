@@ -3,9 +3,12 @@ import { PlanningV2ValidationError } from "../../../src/lib/planning/core/v2/typ
 import {
   createDefaultProfileFormModel,
   deriveSummary,
+  formToProfile,
   fromProfileJson,
   normalizeDraft,
   normalizeDraftWithDisclosure,
+  profileToForm,
+  safeParseProfileJson,
   toProfileJson,
   validateDebtOfferLiabilityIds,
   validateProfile,
@@ -55,6 +58,34 @@ describe("planning profileFormModel", () => {
     expect(profile.goals[0]?.name).toBe("Emergency Fund");
   });
 
+  it("supports profileToForm/formToProfile helper roundtrip", () => {
+    const profile = {
+      monthlyIncomeNet: 4_800_000,
+      monthlyEssentialExpenses: 1_700_000,
+      monthlyDiscretionaryExpenses: 900_000,
+      liquidAssets: 2_300_000,
+      investmentAssets: 5_500_000,
+      debts: [
+        {
+          id: "loan-helper-1",
+          name: "헬퍼 대출",
+          balance: 22_000_000,
+          minimumPayment: 320_000,
+          aprPct: 5.1,
+          remainingMonths: 84,
+          repaymentType: "amortizing",
+        },
+      ],
+      goals: [],
+    };
+
+    const form = profileToForm(profile, "헬퍼");
+    const roundtripProfile = formToProfile(form);
+    expect(roundtripProfile.monthlyIncomeNet).toBe(profile.monthlyIncomeNet);
+    expect(roundtripProfile.debts[0]?.id).toBe("loan-helper-1");
+    expect(roundtripProfile.debts[0]?.aprPct).toBeCloseTo(5.1, 6);
+  });
+
   it("maps minimumPayment <-> monthlyPayment on form boundary", () => {
     const form = fromProfileJson({
       monthlyIncomeNet: 4_000_000,
@@ -100,6 +131,120 @@ describe("planning profileFormModel", () => {
     });
 
     expect(form.debts[0]?.aprPct).toBeCloseTo(4.8, 6);
+  });
+
+  it("keeps percent apr (4.2) as 4.2 in form view", () => {
+    const form = fromProfileJson({
+      monthlyIncomeNet: 3_000_000,
+      monthlyEssentialExpenses: 1_000_000,
+      monthlyDiscretionaryExpenses: 500_000,
+      liquidAssets: 1_000_000,
+      investmentAssets: 0,
+      debts: [
+        {
+          id: "loan-percent",
+          name: "Loan",
+          balance: 10_000_000,
+          apr: 4.2,
+          minimumPayment: 200_000,
+          remainingMonths: 60,
+        },
+      ],
+      goals: [],
+    });
+
+    expect(form.debts[0]?.aprPct).toBeCloseTo(4.2, 6);
+  });
+
+  it("stores debt apr as percent when writing profile json", () => {
+    const form = createDefaultProfileFormModel();
+    form.debts = [
+      {
+        id: "loan-save-percent",
+        name: "저장 테스트",
+        balance: 30_000_000,
+        monthlyPayment: 450_000,
+        aprPct: 7.5,
+        remainingMonths: 96,
+        repaymentType: "amortizing",
+      },
+    ];
+
+    const profile = toProfileJson(form);
+    expect(profile.debts[0]?.aprPct).toBeCloseTo(7.5, 6);
+  });
+
+  it("safeParseProfileJson parses and normalizes legacy decimal aprPct", () => {
+    const result = safeParseProfileJson(JSON.stringify({
+      monthlyIncomeNet: 3_000_000,
+      monthlyEssentialExpenses: 1_000_000,
+      monthlyDiscretionaryExpenses: 500_000,
+      liquidAssets: 1_000_000,
+      investmentAssets: 0,
+      debts: [
+        {
+          id: "loan-safeparse-1",
+          name: "Loan",
+          balance: 10_000_000,
+          aprPct: 0.075,
+          minimumPayment: 200_000,
+          remainingMonths: 60,
+          repaymentType: "amortizing",
+        },
+      ],
+      goals: [],
+    }));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.profile.debts[0]?.aprPct).toBeCloseTo(7.5, 6);
+  });
+
+  it("safeParseProfileJson returns error on invalid json", () => {
+    const result = safeParseProfileJson("{invalid-json");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain("파싱 실패");
+  });
+
+  it("form edits round-trip through profile json parser with valid shape", () => {
+    const form = createDefaultProfileFormModel("라운드트립");
+    form.monthlyIncomeNet = 5_600_000;
+    form.monthlyEssentialExpenses = 2_100_000;
+    form.monthlyDiscretionaryExpenses = 900_000;
+    form.liquidAssets = 4_500_000;
+    form.investmentAssets = 8_000_000;
+    form.debts = [
+      {
+        id: "loan-rt-1",
+        name: "라운드트립 대출",
+        balance: 45_000_000,
+        monthlyPayment: 620_000,
+        aprPct: 5.2,
+        remainingMonths: 120,
+        repaymentType: "amortizing",
+      },
+    ];
+    form.goals = [
+      {
+        id: "goal-rt-1",
+        name: "라운드트립 목표",
+        targetAmount: 30_000_000,
+        currentAmount: 3_000_000,
+        targetMonth: 36,
+        priority: 4,
+        minimumMonthlyContribution: 250_000,
+      },
+    ];
+
+    const profile = toProfileJson(form);
+    const parsed = safeParseProfileJson(JSON.stringify(profile), "라운드트립");
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(Array.isArray(parsed.profile.debts)).toBe(true);
+    expect(Array.isArray(parsed.profile.goals)).toBe(true);
+    expect(parsed.profile.debts[0]?.id).toBe("loan-rt-1");
+    expect(parsed.profile.goals[0]?.id).toBe("goal-rt-1");
   });
 
   it("validates debt offer liability ids against profile debts", () => {

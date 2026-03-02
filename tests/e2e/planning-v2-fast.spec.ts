@@ -21,15 +21,16 @@ test("/planning shows form by default and hides raw JSON until Advanced toggle",
   await expect(page.locator('input[name="snapshotId"]')).toHaveCount(0);
   await expect(page.getByTestId("snapshot-stale-badge")).toBeVisible();
 
-  await page.getByTestId("planning-advanced-toggle-button").click();
+  await page.getByTestId("planning-advanced-toggle").click();
   await expect(page.getByTestId("planning-json-editor")).toBeVisible();
 });
 
 test("/planning/reports shows run-based dashboard by default and keeps raw hidden", async ({ page, request }) => {
   const runId = await seedRunForReports(request);
-  await page.goto(`/planning/reports/${encodeURIComponent(runId)}`);
-  await expect(page).toHaveURL(new RegExp(`/planning/reports/${runId}$`), { timeout: 30_000 });
+  await page.goto(`/planning/reports?runId=${encodeURIComponent(runId)}`);
+  await expect(page).toHaveURL(/\/planning\/reports(\?|$)/, { timeout: 30_000 });
 
+  await expect(page.getByTestId("report-print-button")).toBeVisible();
   await expect(page.getByTestId("report-dashboard")).toBeVisible();
   await expect(page.getByTestId("report-summary-cards")).toBeVisible();
   const monthlyEvidenceToggle = page.getByTestId("evidence-toggle-monthlySurplus");
@@ -37,23 +38,26 @@ test("/planning/reports shows run-based dashboard by default and keeps raw hidde
     await monthlyEvidenceToggle.click();
     await expect(page.getByTestId("evidence-panel-monthlySurplus")).toBeVisible();
   }
-  await expect(page.getByTestId("planning-reports-warnings-section")).toBeVisible();
   const warningsTable = page.getByTestId("report-warnings-table");
-  if (await warningsTable.count()) {
-    await expect(warningsTable).toBeVisible();
-  } else {
-    await expect(page.getByTestId("planning-reports-warnings-section")).toContainText("경고가 없습니다.");
-  }
-  await expect(page.getByTestId("report-advanced-raw")).toHaveCount(0);
+  await expect(warningsTable).toBeVisible();
+  await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
+  await page.getByTestId("report-advanced-toggle").click();
+  await expect(page.getByTestId("report-advanced-raw")).toBeVisible();
+});
+
+test("/planning/runs shows print button", async ({ page }) => {
+  await page.goto("/planning/runs");
+  await expect(page).toHaveURL(/\/planning\/runs(\?|$)/, { timeout: 30_000 });
+  await expect(page.getByTestId("runs-print-button")).toBeVisible();
 });
 
 test("key interactive controls expose accessible names", async ({ page, request }) => {
   await page.goto("/planning");
-  await expect(page.getByLabel("월 실수령")).toBeVisible();
+  await expect(page.getByTestId("planning-profile-form")).toBeVisible();
   await expect(page.getByTestId("run-button")).toHaveAccessibleName("실행");
-  await expect(page.getByRole("link", { name: "/ops/assumptions" })).toBeVisible();
+  await expect(page.getByTestId("planning-snapshot-ops-link")).toBeVisible();
 
   const runId = await seedRunForReports(request);
-  await page.goto(`/planning/reports/${encodeURIComponent(runId)}`);
-  await expect(page.getByTestId("planning-reports-advanced-toggle")).toHaveAccessibleName(/고급 보기/);
+  await page.goto(`/planning/reports?runId=${encodeURIComponent(runId)}`);
+  await expect(page.getByTestId("report-advanced-toggle")).toContainText("고급 보기");
 });

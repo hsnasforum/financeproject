@@ -13,6 +13,8 @@ import {
   normalizeProfileId,
   PLANNING_SELECTED_PROFILE_STORAGE_KEY,
 } from "@/lib/planning/profileScope";
+import { RUN_SECTION_IDS } from "@/lib/planning/navigation/sectionIds";
+import { parsePlanningV2Response } from "@/lib/planning/api/contracts";
 import {
   type PlanningProfileRecord,
   type PlanningRunActionPlan,
@@ -23,16 +25,6 @@ import {
 import { diffRuns } from "@/lib/planning/v2/diffRuns";
 import { summarizeRunDiff } from "@/lib/planning/v2/insights/whyChanged";
 import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "@/lib/planning/v2/resultDto";
-
-type ApiResponse<T> = {
-  ok?: boolean;
-  data?: T;
-  error?: {
-    code?: string;
-    message?: string;
-    issues?: string[];
-  };
-};
 
 type PlanningRunsClientProps = {
   pdfEnabled?: boolean;
@@ -47,6 +39,11 @@ type ActionProgressSummary = {
   todo: number;
   snoozed: number;
   completionPct: number;
+};
+
+type RunActionCenterPayload = {
+  plan: PlanningRunActionPlan;
+  progress: PlanningRunActionProgress;
 };
 
 function formatDateTime(value: string): string {
@@ -96,6 +93,14 @@ function buildRunPdfHref(runId: string): string {
   if (csrf) params.set("csrf", csrf);
   const query = params.toString();
   return `/api/planning/v2/runs/${encodeURIComponent(runId)}/report.pdf${query ? `?${query}` : ""}`;
+}
+
+function resolveActionCenterRelatedHref(rawHref: string | undefined, run: PlanningRunRecord | null): string | null {
+  const href = typeof rawHref === "string" ? rawHref.trim() : "";
+  if (!href) return null;
+  if (!href.startsWith("#")) return href;
+  if (!run) return null;
+  return appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(run.id)}${href}`, run.profileId);
 }
 
 function runFlags(run: PlanningRunRecord): {
@@ -167,8 +172,9 @@ export function PlanningRunsClient({
   async function loadProfiles(): Promise<void> {
     try {
       const res = await fetch("/api/planning/v2/profiles", { cache: "no-store" });
-      const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord[]> | null;
-      if (!payload?.ok || !Array.isArray(payload.data)) {
+      const rawPayload = await res.json().catch(() => null);
+      const payload = parsePlanningV2Response<PlanningProfileRecord[]>(rawPayload);
+      if (!payload.ok || !Array.isArray(payload.data)) {
         setProfiles([]);
         return;
       }
@@ -186,10 +192,12 @@ export function PlanningRunsClient({
       params.set("limit", "200");
 
       const res = await fetch(`/api/planning/v2/runs?${params.toString()}`, { cache: "no-store" });
-      const payload = (await res.json().catch(() => null)) as (ApiResponse<PlanningRunRecord[]> & {
-        meta?: { actionProgressSummaryByRunId?: Record<string, ActionProgressSummary> };
-      }) | null;
-      const runRows = payload?.ok && Array.isArray(payload.data) ? payload.data : null;
+      const rawPayload = await res.json().catch(() => null);
+      const payload = parsePlanningV2Response<PlanningRunRecord[]>(rawPayload);
+      const payloadMeta = payload.ok
+        ? ((payload.meta ?? {}) as { actionProgressSummaryByRunId?: Record<string, ActionProgressSummary> })
+        : {};
+      const runRows = payload.ok && Array.isArray(payload.data) ? payload.data : null;
       if (!runRows) {
         setRuns([]);
         setSelectedRunId("");
@@ -208,7 +216,7 @@ export function PlanningRunsClient({
         return runRows[0]?.id ?? "";
       });
       setCompareIds((prev) => prev.filter((id) => runRows.some((item) => item.id === id)).slice(0, 2));
-      const summaries = payload.meta?.actionProgressSummaryByRunId;
+      const summaries = payloadMeta.actionProgressSummaryByRunId;
       if (summaries && typeof summaries === "object") {
         setActionProgressSummaryByRun(summaries);
       } else {
@@ -233,12 +241,14 @@ export function PlanningRunsClient({
     const next: Record<string, ActionProgressSummary> = {};
     await Promise.all(runRows.map(async (run) => {
       try {
-        const response = await fetch(`/api/planning/runs/${encodeURIComponent(run.id)}/action-progress`, { cache: "no-store" });
-        const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunActionProgress> & {
-          meta?: { summary?: ActionProgressSummary };
-        };
-        if (!response.ok || !payload?.ok) return;
-        const summary = payload.meta?.summary;
+      const response = await fetch(`/api/planning/runs/${encodeURIComponent(run.id)}/action-progress`, { cache: "no-store" });
+        const rawPayload = await response.json().catch(() => null);
+        const payload = parsePlanningV2Response<PlanningRunActionProgress>(rawPayload);
+        const payloadMeta = payload.ok
+          ? ((payload.meta ?? {}) as { summary?: ActionProgressSummary })
+          : {};
+        if (!response.ok || !payload.ok) return;
+        const summary = payloadMeta.summary;
         if (!summary) return;
         next[run.id] = summary;
       } catch {
@@ -259,39 +269,42 @@ export function PlanningRunsClient({
     setActionCenterLoading(true);
     setActionCenterError("");
     try {
-      const [planResponse, progressResponse] = await Promise.all([
-        fetch(`/api/planning/runs/${encodeURIComponent(runId)}/action-plan`, { cache: "no-store" }),
-        fetch(`/api/planning/runs/${encodeURIComponent(runId)}/action-progress`, { cache: "no-store" }),
-      ]);
-      const [planPayload, progressPayload] = await Promise.all([
-        planResponse.json().catch(() => null) as Promise<ApiResponse<PlanningRunActionPlan> | null>,
-        progressResponse.json().catch(() => null) as Promise<(ApiResponse<PlanningRunActionProgress> & { meta?: { summary?: ActionProgressSummary } }) | null>,
-      ]);
-      if (!planResponse.ok || !planPayload?.ok || !planPayload.data) {
+      const response = await fetch(`/api/planning/runs/${encodeURIComponent(runId)}`, { cache: "no-store" });
+      const rawPayload = await response.json().catch(() => null);
+      const payload = parsePlanningV2Response<PlanningRunRecord>(rawPayload);
+      if (!response.ok || !payload.ok || !payload.data) {
         setSelectedActionPlan(null);
         setSelectedActionProgress(null);
         setActionNoteDrafts({});
-        setActionCenterError(planPayload?.error?.message ?? "Action plan을 불러오지 못했습니다.");
+        setActionCenterError(payload.error.message ?? "Action Center를 불러오지 못했습니다.");
         return;
       }
-      if (!progressResponse.ok || !progressPayload?.ok || !progressPayload.data) {
-        setSelectedActionPlan(planPayload.data);
+      const actionCenter = payload.data.actionCenter as RunActionCenterPayload | undefined;
+      if (!actionCenter?.plan || !actionCenter.progress) {
+        setSelectedActionPlan(null);
         setSelectedActionProgress(null);
         setActionNoteDrafts({});
-        setActionCenterError(progressPayload?.error?.message ?? "Action progress를 불러오지 못했습니다.");
+        setActionCenterError("Action Center 데이터를 찾을 수 없습니다.");
         return;
       }
-      setSelectedActionPlan(planPayload.data);
-      setSelectedActionProgress(progressPayload.data);
-      const draftByKey = Object.fromEntries(progressPayload.data.items.map((item) => [item.actionKey, item.note ?? ""]));
+      setSelectedActionPlan(actionCenter.plan);
+      setSelectedActionProgress(actionCenter.progress);
+      const draftByKey = Object.fromEntries(actionCenter.progress.items.map((item) => [item.actionKey, item.note ?? ""]));
       setActionNoteDrafts(draftByKey);
-      const summary = progressPayload.meta?.summary;
-      if (summary) {
-        setActionProgressSummaryByRun((prev) => ({
-          ...prev,
-          [runId]: summary,
-        }));
-      }
+      const summary = {
+        total: actionCenter.progress.items.length,
+        done: actionCenter.progress.items.filter((item) => item.status === "done").length,
+        doing: actionCenter.progress.items.filter((item) => item.status === "doing").length,
+        todo: actionCenter.progress.items.filter((item) => item.status === "todo").length,
+        snoozed: actionCenter.progress.items.filter((item) => item.status === "snoozed").length,
+        completionPct: actionCenter.progress.items.length > 0
+          ? Math.round((actionCenter.progress.items.filter((item) => item.status === "done").length / actionCenter.progress.items.length) * 100)
+          : 0,
+      };
+      setActionProgressSummaryByRun((prev) => ({
+        ...prev,
+        [runId]: summary,
+      }));
     } catch (error) {
       setSelectedActionPlan(null);
       setSelectedActionProgress(null);
@@ -309,7 +322,7 @@ export function PlanningRunsClient({
   ): Promise<void> {
     setUpdatingActionKey(actionKey);
     try {
-      const response = await fetch(`/api/planning/runs/${encodeURIComponent(runId)}/action-progress`, {
+      const response = await fetch(`/api/planning/v2/runs/${encodeURIComponent(runId)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(withDevCsrf({
@@ -318,26 +331,34 @@ export function PlanningRunsClient({
           ...(patch.note !== undefined ? { note: patch.note } : {}),
         })),
       });
-      const payload = (await response.json().catch(() => null)) as (ApiResponse<PlanningRunActionProgress> & {
-        meta?: { summary?: ActionProgressSummary };
-      }) | null;
-      if (!response.ok || !payload?.ok || !payload.data) {
-        window.alert(payload?.error?.message ?? "Action progress 업데이트에 실패했습니다.");
+      const rawPayload = await response.json().catch(() => null);
+      const payload = parsePlanningV2Response<{
+        progress?: PlanningRunActionProgress;
+        completion?: { done?: number; total?: number; pct?: number };
+      }>(rawPayload);
+      if (!response.ok || !payload.ok || !payload.data?.progress) {
+        window.alert(payload.error.message ?? "Action progress 업데이트에 실패했습니다.");
         return;
       }
-      setSelectedActionProgress(payload.data);
-      const updatedItem = payload.data.items.find((item) => item.actionKey === actionKey);
+      setSelectedActionProgress(payload.data.progress);
+      const updatedItem = payload.data.progress.items.find((item) => item.actionKey === actionKey);
       setActionNoteDrafts((prev) => ({
         ...prev,
         [actionKey]: updatedItem?.note ?? "",
       }));
-      const summary = payload.meta?.summary;
-      if (summary) {
-        setActionProgressSummaryByRun((prev) => ({
-          ...prev,
-          [runId]: summary,
-        }));
-      }
+      const completion = payload.data.completion;
+      const summary: ActionProgressSummary = {
+        total: Number(completion?.total ?? payload.data.progress.items.length),
+        done: Number(completion?.done ?? payload.data.progress.items.filter((item) => item.status === "done").length),
+        doing: payload.data.progress.items.filter((item) => item.status === "doing").length,
+        todo: payload.data.progress.items.filter((item) => item.status === "todo").length,
+        snoozed: payload.data.progress.items.filter((item) => item.status === "snoozed").length,
+        completionPct: Number(completion?.pct ?? 0),
+      };
+      setActionProgressSummaryByRun((prev) => ({
+        ...prev,
+        [runId]: summary,
+      }));
     } catch (error) {
       window.alert(error instanceof Error ? error.message : "Action progress 업데이트에 실패했습니다.");
     } finally {
@@ -412,9 +433,10 @@ export function PlanningRunsClient({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(withDevCsrf({ confirmText })),
       });
-      const payload = (await res.json().catch(() => null)) as ApiResponse<{ deleted?: boolean }> | null;
-      if (!res.ok || !payload?.ok) {
-        window.alert(payload?.error?.message ?? "실행 기록 삭제에 실패했습니다.");
+      const rawPayload = await res.json().catch(() => null);
+      const payload = parsePlanningV2Response<{ deleted?: boolean }>(rawPayload);
+      if (!res.ok || !payload.ok) {
+        window.alert(payload.error.message ?? "실행 기록 삭제에 실패했습니다.");
         return;
       }
 
@@ -439,9 +461,10 @@ export function PlanningRunsClient({
           confirmText: restoreText,
         })),
       });
-      const restorePayload = (await restoreRes.json().catch(() => null)) as ApiResponse<{ restored?: boolean }> | null;
-      if (!restoreRes.ok || !restorePayload?.ok) {
-        window.alert(restorePayload?.error?.message ?? "복구에 실패했습니다.");
+      const restoreRaw = await restoreRes.json().catch(() => null);
+      const restorePayload = parsePlanningV2Response<{ restored?: boolean }>(restoreRaw);
+      if (!restoreRes.ok || !restorePayload.ok) {
+        window.alert(restorePayload.error.message ?? "복구에 실패했습니다.");
         return;
       }
       await loadRuns(filterProfileId);
@@ -475,9 +498,10 @@ export function PlanningRunsClient({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(withDevCsrf({ runId, level })),
       });
-      const payload = (await res.json().catch(() => null)) as ApiResponse<{ id?: string }> | null;
-      if (!res.ok || !payload?.ok || !payload.data?.id) {
-        window.alert(payload?.error?.message ?? "공유 리포트 생성에 실패했습니다.");
+      const rawPayload = await res.json().catch(() => null);
+      const payload = parsePlanningV2Response<{ id?: string }>(rawPayload);
+      if (!res.ok || !payload.ok || !payload.data?.id) {
+        window.alert(payload.error.message ?? "공유 리포트 생성에 실패했습니다.");
         return;
       }
       setGeneratedShareReportByRun((prev) => ({
@@ -495,27 +519,40 @@ export function PlanningRunsClient({
     [selectedRun],
   );
   const selectedSummary = asRecord(selectedDto?.summary);
+  const handlePrint = (): void => {
+    if (typeof window === "undefined") return;
+    window.print();
+  };
 
   return (
-    <PageShell>
+    <PageShell className="report-root">
       <PageHeader
         title="실행 기록"
         description="저장된 실행 기록을 조회/비교/내보내기 할 수 있습니다."
         action={(
-          <div className="flex items-center gap-4 text-sm">
+          <div className="no-print flex items-center gap-4 text-sm">
+            <Button
+              data-testid="runs-print-button"
+              onClick={handlePrint}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              PDF 인쇄
+            </Button>
             <Link className="font-semibold text-emerald-700" href={appendProfileIdQuery("/planning", filterProfileId)}>플래닝</Link>
           </div>
         )}
       />
 
-      <Card className="mb-6 border border-amber-200 bg-amber-50">
+      <Card className="print-card mb-6 border border-amber-200 bg-amber-50">
         <p className="text-sm font-semibold text-amber-900">가정/확률 결과는 보장값이 아닙니다.</p>
         <p className="mt-1 text-xs text-amber-800">실행 기록 비교 시 snapshot/asOf, health 경고, override 차이를 함께 확인하세요.</p>
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-        <Card>
-          <div className="flex flex-wrap items-center gap-2">
+        <Card className="print-card">
+          <div className="no-print flex flex-wrap items-center gap-2">
             <label className="text-xs font-semibold text-slate-600">
               프로필 필터
               <select
@@ -536,7 +573,7 @@ export function PlanningRunsClient({
             <table className="min-w-full text-left text-xs text-slate-700" data-testid="planning-runs-table">
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="px-2 py-2">비교</th>
+                  <th className="no-print px-2 py-2">비교</th>
                   <th className="px-2 py-2">실행 기록</th>
                   <th className="px-2 py-2">생성시각</th>
                   <th className="px-2 py-2">snapshot</th>
@@ -544,7 +581,7 @@ export function PlanningRunsClient({
                   <th className="px-2 py-2">치명 경고</th>
                   <th className="px-2 py-2">완료율</th>
                   <th className="px-2 py-2">MC/A/D</th>
-                  <th className="px-2 py-2">동작</th>
+                  <th className="no-print px-2 py-2">동작</th>
                 </tr>
               </thead>
               <tbody>
@@ -554,13 +591,13 @@ export function PlanningRunsClient({
                   const checked = compareIds.includes(run.id);
                   const flags = runFlags(run);
                   const snapshotLabel = run.meta.snapshot?.id || run.meta.snapshot?.asOf || "latest/missing";
-                  const completion = actionProgressSummaryByRun[run.id]?.completionPct ?? 0;
+                  const completion = actionProgressSummaryByRun[run.id];
                   return (
                     <tr className="border-b border-slate-100" key={run.id}>
-                      <td className="px-2 py-2">
+                      <td className="no-print px-2 py-2">
                         <input checked={checked} onChange={() => toggleCompare(run.id)} type="checkbox" />
                       </td>
-                      <td className="px-2 py-2">
+                      <td className="no-print px-2 py-2">
                         <button
                           className="font-semibold text-emerald-700"
                           onClick={() => setSelectedRunId(run.id)}
@@ -574,7 +611,9 @@ export function PlanningRunsClient({
                       <td className="px-2 py-2">{formatNumber(flags.warningsCount)}</td>
                       <td className="px-2 py-2">{formatNumber(flags.criticalHealthCount)}</td>
                       <td className="px-2 py-2" data-testid={`run-action-completion-${run.id}`}>
-                        <span data-testid="run-action-completion">{completion}%</span>
+                        <span data-testid="run-action-completion">
+                          {completion ? `${completion.done}/${completion.total} (${completion.completionPct}%)` : "0/0 (0%)"}
+                        </span>
                       </td>
                       <td className="px-2 py-2">{flags.hasMonteCarlo ? "M" : "-"}/{flags.hasActions ? "A" : "-"}/{flags.hasDebt ? "D" : "-"}</td>
                       <td className="px-2 py-2">
@@ -640,7 +679,7 @@ export function PlanningRunsClient({
         </Card>
 
         <div className="space-y-6">
-          <Card>
+          <Card className="print-card">
             <h2 className="text-base font-bold text-slate-900">실행 기록 상세</h2>
             {!selectedRun ? <p className="mt-2 text-xs text-slate-500">선택된 실행 기록이 없습니다.</p> : null}
             {selectedRun ? (
@@ -655,7 +694,7 @@ export function PlanningRunsClient({
                 <p>경고 수: {formatNumber(selectedSummary.totalWarnings)}</p>
                 <p>Action 완료율: {actionProgressSummaryByRun[selectedRun.id]?.completionPct ?? 0}%</p>
 
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="no-print mt-2 flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => void copyRunJsonAction(selectedRun)}>JSON 복사</Button>
                   <Button size="sm" variant="outline" onClick={() => void generateShareReportAction(selectedRun.id)}>공유 리포트 생성</Button>
                   <a
@@ -706,7 +745,7 @@ export function PlanningRunsClient({
             ) : null}
           </Card>
 
-          <Card data-testid="run-action-center">
+          <Card className="print-card" data-testid="run-action-center" id={RUN_SECTION_IDS.actionCenter}>
             <h2 className="text-base font-bold text-slate-900">Action Center</h2>
             <p className="mt-1 text-xs text-slate-500">운영 체크리스트 상태(todo/doing/done/snoozed)와 메모를 run 단위로 저장합니다.</p>
             {!selectedRun ? (
@@ -724,7 +763,7 @@ export function PlanningRunsClient({
                   {" · "}
                   항목: <span className="font-semibold">{selectedActionProgress.items.length}</span>
                 </p>
-                <div className="h-2 w-full rounded-full bg-slate-200" data-testid="run-action-progress-bar">
+                <div className="h-2 w-full rounded-full bg-slate-200" data-testid="run-action-progress">
                   <div
                     className="h-2 rounded-full bg-emerald-500 transition-all"
                     data-testid="run-action-progress-fill"
@@ -736,8 +775,9 @@ export function PlanningRunsClient({
                     const progress = selectedActionProgress.items.find((row) => row.actionKey === item.actionKey);
                     const status = progress?.status ?? "todo";
                     const noteValue = actionNoteDrafts[item.actionKey] ?? "";
+                    const relatedHref = resolveActionCenterRelatedHref(item.href, selectedRun);
                     return (
-                      <div className="rounded-lg border border-slate-200 p-3" key={item.actionKey}>
+                      <div className="rounded-lg border border-slate-200 p-3" data-testid={`run-action-item-${item.actionKey}`} key={item.actionKey}>
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-sm font-semibold text-slate-900">{item.title}</p>
                           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${actionStatusBadgeClass(status)}`}>
@@ -755,7 +795,7 @@ export function PlanningRunsClient({
                         <div className="mt-2 grid gap-2 sm:grid-cols-[180px_1fr_auto]">
                           <select
                             aria-label={`${item.title} 상태`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className="no-print h-9 rounded-lg border border-slate-300 px-2 text-xs"
                             data-testid={`run-action-status-${item.actionKey}`}
                             value={status}
                             onChange={(event) => {
@@ -771,7 +811,7 @@ export function PlanningRunsClient({
                           </select>
                           <input
                             aria-label={`${item.title} 메모`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className="no-print h-9 rounded-lg border border-slate-300 px-2 text-xs"
                             data-testid={`run-action-note-${item.actionKey}`}
                             placeholder="메모"
                             value={noteValue}
@@ -785,6 +825,7 @@ export function PlanningRunsClient({
                           />
                           <Button
                             aria-label={`${item.title} 메모 저장`}
+                            className="no-print"
                             data-testid={`run-action-save-${item.actionKey}`}
                             disabled={updatingActionKey === item.actionKey}
                             onClick={() => {
@@ -798,9 +839,11 @@ export function PlanningRunsClient({
                             저장
                           </Button>
                         </div>
-                        {item.href ? (
+                        {relatedHref ? (
                           <p className="mt-2 text-[11px] text-slate-600">
-                            <Link className="underline" href={item.href}>{item.href}</Link>
+                            <Link className="underline" href={relatedHref}>
+                              관련 섹션 보기
+                            </Link>
                           </p>
                         ) : null}
                       </div>
@@ -811,7 +854,7 @@ export function PlanningRunsClient({
             )}
           </Card>
 
-          <Card>
+          <Card className="print-card">
             <h2 className="text-base font-bold text-slate-900">실행 비교</h2>
             <p className="mt-1 text-xs text-slate-500">실행 기록 2개를 선택하면 base(첫 선택) 대비 변화를 표시합니다.</p>
 

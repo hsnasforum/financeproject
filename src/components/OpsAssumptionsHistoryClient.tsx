@@ -161,6 +161,15 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
     }
   }, [hasCsrf, props.csrf]);
 
+  const selectHistoryRow = useCallback((id: string) => {
+    if (!id) return;
+    if (id === selectedId) {
+      void loadDetail(id);
+      return;
+    }
+    setSelectedId(id);
+  }, [loadDetail, selectedId]);
+
   const setLatest = useCallback(async () => {
     if (!hasCsrf || !selectedId) return;
     setSettingLatest(true);
@@ -292,7 +301,7 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
                   <td className="px-2 py-2">{formatPct(row.korea.newDepositAvgPct ?? row.korea.cd91Pct)}</td>
                   <td className="px-2 py-2">{row.warningsCount}</td>
                   <td className="px-2 py-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setSelectedId(row.id)}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => selectHistoryRow(row.id)}>
                       View
                     </Button>
                   </td>

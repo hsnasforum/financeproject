@@ -5,9 +5,9 @@ describe("buildInterpretationVM", () => {
   it("classifies representative verdicts", () => {
     const risk = buildInterpretationVM({
       summary: {
-        monthlySurplusKrw: -120_000,
-        emergencyFundMonths: 0.8,
-        dsrPct: 62,
+        monthlySurplusKrw: -100_000,
+        emergencyFundMonths: 0.5,
+        dsrPct: 20,
       },
       aggregatedWarnings: [],
       goals: [],
@@ -16,8 +16,8 @@ describe("buildInterpretationVM", () => {
 
     const caution = buildInterpretationVM({
       summary: {
-        monthlySurplusKrw: 80_000,
-        emergencyFundMonths: 2.2,
+        monthlySurplusKrw: 120_000,
+        emergencyFundMonths: 2,
         dsrPct: 45,
       },
       aggregatedWarnings: [],
@@ -27,9 +27,9 @@ describe("buildInterpretationVM", () => {
 
     const good = buildInterpretationVM({
       summary: {
-        monthlySurplusKrw: 550_000,
-        emergencyFundMonths: 5.1,
-        dsrPct: 21,
+        monthlySurplusKrw: 300_000,
+        emergencyFundMonths: 4,
+        dsrPct: 20,
       },
       aggregatedWarnings: [],
       goals: [],
@@ -97,7 +97,25 @@ describe("buildInterpretationVM", () => {
 
     const compareAction = vm.nextActions.find((action) => action.id === "OPEN_CANDIDATE_COMPARISON");
     expect(compareAction).toBeTruthy();
-    expect(compareAction?.href).toBe("/planning/reports#candidate-comparison-section");
+    expect(compareAction?.href).toBe("#candidates");
+  });
+
+  it("adds action center link when runId exists", () => {
+    const vm = buildInterpretationVM({
+      summary: {
+        monthlySurplusKrw: 220_000,
+        emergencyFundMonths: 2.4,
+        dsrPct: 28,
+      },
+      aggregatedWarnings: [],
+      goals: [],
+      outcomes: {
+        runId: "run-123",
+      },
+    });
+
+    const actionCenter = vm.nextActions.find((action) => action.id === "MANAGE_ACTION_CENTER");
+    expect(actionCenter?.href).toBe("/planning/runs?runId=run-123#action-center");
   });
 
   it("includes diagnostic evidence detail when summary evidence is provided", () => {

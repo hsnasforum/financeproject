@@ -8,7 +8,7 @@ type PreviewTokenEntry = {
   expiresAtMs: number;
 };
 
-const TOKEN_TTL_MS = 10 * 60 * 1000;
+const TOKEN_TTL_MS = 5 * 60 * 1000;
 const PREVIEW_TOKENS = new Map<string, PreviewTokenEntry>();
 
 function nowMs(): number {
@@ -69,3 +69,5 @@ export function consumeOpsActionPreviewToken(token: string, actionId: OpsActionI
 export function clearOpsActionPreviewTokensForTests(): void {
   PREVIEW_TOKENS.clear();
 }
+
+export const __PREVIEW_TOKEN_TTL_MS_FOR_TESTS = TOKEN_TTL_MS;

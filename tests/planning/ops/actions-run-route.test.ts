@@ -100,9 +100,25 @@ describe.sequential("ops actions run route", () => {
       }),
     }));
 
-    const payload = await response.json() as { error?: { message?: string } };
-    expect(response.status).toBe(400);
+    const payload = await response.json() as { error?: { code?: string; message?: string } };
+    expect(response.status).toBe(409);
+    expect(payload.error?.code).toBe("PREVIEW_REQUIRED");
     expect(payload.error?.message).toContain("미리보기");
+  });
+
+  it("rejects unknown actionId with NOT_IMPLEMENTED", async () => {
+    const response = await actionRunPOST(new Request(`${LOCAL_ORIGIN}/api/ops/actions/run`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        actionId: "UNKNOWN_ACTION",
+      }),
+    }));
+
+    const payload = await response.json() as { error?: { code?: string } };
+    expect(response.status).toBe(501);
+    expect(payload.error?.code).toBe("NOT_IMPLEMENTED");
   });
 
   it("preview returns redacted metadata and run logs audit/metrics/action-log", async () => {

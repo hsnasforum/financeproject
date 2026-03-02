@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { ASSUMPTIONS_HISTORY_DIR, ASSUMPTIONS_PATH, loadAssumptionsSnapshotById, loadLatestAssumptionsSnapshot, saveLatestAssumptionsSnapshot } from "../../planning/assumptions/storage";
+import { loadAssumptionsSnapshotById, loadLatestAssumptionsSnapshot, saveLatestAssumptionsSnapshot } from "../../planning/assumptions/storage";
 import { saveAssumptionsOverrides } from "../../planning/assumptions/overridesStorage";
 import {
   DEFAULT_VAULT_KDF_PARAMS,
@@ -32,6 +32,7 @@ import { loadCanonicalRun } from "../../planning/v2/loadCanonicalRun";
 import { loadCanonicalProfile } from "../../planning/v2/loadCanonicalProfile";
 import { PROFILE_SCHEMA_VERSION, RUN_SCHEMA_VERSION, ASSUMPTIONS_SCHEMA_VERSION } from "../../planning/v2/schemaVersion";
 import { type ProfileNormalizationDisclosure } from "../../planning/v2/normalizationDisclosure";
+import { resolveOpsDataDir, resolvePlanningDataDir } from "../../planning/storage/dataDir";
 import { decodeZip, encodeZip, type ZipFileEntry } from "./zipCodec";
 
 const VAULT_KIND = "planning-data-vault";
@@ -44,8 +45,8 @@ const RUN_DIR = "runs";
 const ASSUMPTIONS_DIR = "assumptions";
 const POLICIES_DIR = "policies";
 const PROFILE_OVERRIDES_FILE = "assumptions-overrides.json";
-const OPS_AUTO_MERGE_POLICY_FILE = ".data/ops/auto-merge-policy.json";
-const BACKUP_SYNC_STATE_PATH = ".data/ops/backup/sync-state.json";
+const OPS_AUTO_MERGE_POLICY_FILE = "auto-merge-policy.json";
+const BACKUP_SYNC_STATE_PATH = "backup/sync-state.json";
 const KNOWN_BLOB_NAMES = ["simulate", "scenarios", "monteCarlo", "actions", "debtStrategy"] as const;
 const BACKUP_SYNC_STATE_VERSION = 1 as const;
 
@@ -205,12 +206,14 @@ function hashSha256(input: Buffer): string {
 
 function resolveAssumptionsPath(): string {
   const override = asString(process.env.PLANNING_ASSUMPTIONS_PATH);
-  return path.resolve(process.cwd(), override || ASSUMPTIONS_PATH);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolvePlanningDataDir(), "assumptions.latest.json");
 }
 
 function resolveAssumptionsHistoryDir(): string {
   const override = asString(process.env.PLANNING_ASSUMPTIONS_HISTORY_DIR);
-  return path.resolve(process.cwd(), override || ASSUMPTIONS_HISTORY_DIR);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolvePlanningDataDir(), "assumptions", "history");
 }
 
 function normalizeSnapshotId(input: string): string {
@@ -223,7 +226,8 @@ function normalizeSnapshotId(input: string): string {
 
 function resolveBackupSyncStatePath(): string {
   const override = asString(process.env.PLANNING_BACKUP_SYNC_STATE_PATH);
-  return path.resolve(process.cwd(), override || BACKUP_SYNC_STATE_PATH);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolveOpsDataDir(), BACKUP_SYNC_STATE_PATH);
 }
 
 function asIsoOrUndefined(value: unknown): string | undefined {
@@ -743,6 +747,7 @@ function parseActionProgress(raw: unknown, runId: string): PlanningRunActionProg
         actionKey,
         status,
         ...(asString(row.note) ? { note: asString(row.note) } : {}),
+        ...(toIso(row.doneAt, "") ? { doneAt: toIso(row.doneAt, "") } : {}),
         updatedAt: itemUpdatedAt,
       };
     })
@@ -777,7 +782,7 @@ async function clearAssumptions(): Promise<void> {
 }
 
 async function clearPolicies(): Promise<void> {
-  await fs.unlink(path.join(process.cwd(), OPS_AUTO_MERGE_POLICY_FILE)).catch(() => undefined);
+  await fs.unlink(path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE)).catch(() => undefined);
 }
 
 function toManifestWithoutFiles(
@@ -923,7 +928,7 @@ export async function buildPlanningDataVaultZip(options?: {
     }
   }
 
-  const policyPath = path.join(process.cwd(), OPS_AUTO_MERGE_POLICY_FILE);
+  const policyPath = path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE);
   const policyMtimeMs = await readFileMtimeMs(policyPath);
   const policyBytes = await readFileIfExists(policyPath);
   if (policyBytes && (mode === "full" || deltaCutoffMs < 1 || policyMtimeMs > deltaCutoffMs)) {
@@ -1345,7 +1350,7 @@ export async function restorePlanningDataVaultZip(
   if (policyBytes) {
     try {
       const payload = JSON.parse(policyBytes.toString("utf-8")) as unknown;
-      await writeJsonAtomic(path.join(process.cwd(), OPS_AUTO_MERGE_POLICY_FILE), payload);
+      await writeJsonAtomic(path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE), payload);
       imported.policies += 1;
     } catch (error) {
       issues.push({

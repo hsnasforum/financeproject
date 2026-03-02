@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteJson } from "../storage/atomicWrite";
 import { type PlanningCacheEntry, type PlanningCacheKind, type PlanningCacheUsageStats } from "./types";
 
@@ -10,7 +11,7 @@ const CACHE_ENTRY_VERSION = 1 as const;
 function resolveCacheDir(): string {
   const envPath = (process.env.PLANNING_CACHE_DIR ?? "").trim();
   if (envPath) return path.resolve(process.cwd(), envPath);
-  return path.resolve(process.cwd(), CACHE_DIR);
+  return path.join(resolvePlanningDataDir(), "cache");
 }
 
 function nowIso(): string {

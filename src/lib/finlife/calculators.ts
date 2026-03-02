@@ -1,4 +1,4 @@
-import { estimateDepositInterest, estimateSavingInterest } from "../planning/calc";
+import { estimateDepositInterest, estimateSavingInterest } from "../planning/calc/interest";
 
 type CommonInput = {
   months: number;

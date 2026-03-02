@@ -15,6 +15,7 @@ import {
 import { getRun } from "./runStore";
 import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../v2/resultDto";
 import { buildInterpretationVM } from "../v2/insights/interpretationVm";
+import { resolveInterpretationActionHref } from "../v2/insights/actionLinks";
 import { type GoalRow } from "../v2/report/mapGoals";
 import { type ActionItemV2 } from "../v2/actions/types";
 
@@ -57,8 +58,10 @@ export function createRunActionKey(input: {
   href?: string;
   index: number;
 }): string {
+  const sourceId = asString(input.sourceActionId).toUpperCase();
+  if (sourceId) return sourceId;
   const payload = [
-    asString(input.sourceActionId).toUpperCase(),
+    sourceId,
     normalizeWhitespace(asString(input.title)).toLowerCase(),
     normalizeWhitespace(asString(input.href)).toLowerCase(),
     String(Math.max(0, Math.trunc(input.index))),
@@ -153,6 +156,7 @@ function parseActionProgress(payload: unknown, runId: string): PlanningRunAction
       actionKey,
       status,
       ...(asString(item.note) ? { note: asString(item.note) } : {}),
+      ...(asString(item.doneAt) ? { doneAt: asString(item.doneAt) } : {}),
       updatedAt: itemUpdatedAt,
     } satisfies PlanningRunActionProgressItem;
   }).filter((entry): entry is PlanningRunActionProgressItem => entry !== null);
@@ -179,7 +183,57 @@ function goalsFromResultDto(run: PlanningRunRecord): GoalRow[] {
   }));
 }
 
+function getActionItemsFromRun(run: PlanningRunRecord): ActionItemV2[] {
+  const runActions = Array.isArray(run.outputs.actions?.actions)
+    ? run.outputs.actions.actions
+    : [];
+  if (runActions.length > 0) return runActions;
+  const dto = isResultDtoV1(run.outputs.resultDto)
+    ? run.outputs.resultDto
+    : buildResultDtoV1FromRunRecord(run);
+  return dto.actions.items;
+}
+
+export function buildRunActionPlanItemsFromActionItems(actions: ActionItemV2[]): PlanningRunActionPlanItem[] {
+  const usedKeys = new Set<string>();
+  return actions.map((action, index) => {
+    const baseKey = createRunActionKey({
+      sourceActionId: action.code,
+      title: action.title,
+      index,
+    });
+    let actionKey = baseKey;
+    if (usedKeys.has(actionKey)) {
+      let seq = 2;
+      while (usedKeys.has(`${baseKey}_${seq}`)) {
+        seq += 1;
+      }
+      actionKey = `${baseKey}_${seq}`;
+    }
+    usedKeys.add(actionKey);
+    const relatedHref = resolveInterpretationActionHref(action.code);
+    return {
+      actionKey,
+      sourceActionId: action.code,
+      title: asString(action.title) || `액션 ${index + 1}`,
+      description: asString(action.summary) || "세부 실행 단계 확인",
+      steps: action.steps.map((step) => asString(step)).filter((step) => step.length > 0).slice(0, 5),
+      ...(relatedHref ? { href: relatedHref } : {}),
+    } satisfies PlanningRunActionPlanItem;
+  });
+}
+
 function buildActionPlanFromRun(run: PlanningRunRecord): PlanningRunActionPlan {
+  const runActions = getActionItemsFromRun(run);
+  if (runActions.length > 0) {
+    return {
+      version: 1,
+      runId: run.id,
+      generatedAt: nowIso(),
+      items: buildRunActionPlanItemsFromActionItems(runActions),
+    };
+  }
+
   const dto = isResultDtoV1(run.outputs.resultDto)
     ? run.outputs.resultDto
     : buildResultDtoV1FromRunRecord(run);
@@ -210,23 +264,27 @@ function buildActionPlanFromRun(run: PlanningRunRecord): PlanningRunActionPlan {
           ? { retirementDepletionBeforeEnd: dto.monteCarlo.probabilities.retirementDepletionBeforeEnd }
           : {}),
       },
+      runId: run.id,
     },
   });
 
   const generatedAt = nowIso();
-  const items = interpretation.nextActions.map((action, index) => ({
+  const items = interpretation.nextActions.map((action, index) => {
+    const sourceActionId = asString(action.id);
+    return {
     actionKey: createRunActionKey({
-      sourceActionId: action.id,
+      sourceActionId,
       title: action.title,
       href: action.href,
       index,
     }),
-    ...(asString(action.id) ? { sourceActionId: asString(action.id) } : {}),
+    ...(sourceActionId ? { sourceActionId } : {}),
     title: asString(action.title) || `액션 ${index + 1}`,
     description: asString(action.description) || "세부 실행 단계 확인",
     steps: action.steps.map((step) => asString(step)).filter((step) => step.length > 0).slice(0, 5),
     ...(asString(action.href) ? { href: asString(action.href) } : {}),
-  }));
+    };
+  });
 
   return {
     version: 1,
@@ -309,6 +367,7 @@ function mergeProgressWithPlan(
         actionKey: item.actionKey,
         status: existing.status,
         ...(asString(existing.note) ? { note: asString(existing.note) } : {}),
+        ...(asString(existing.doneAt) ? { doneAt: asString(existing.doneAt) } : {}),
         updatedAt: existing.updatedAt,
       };
     }),
@@ -363,15 +422,20 @@ export async function updateRunActionProgress(
   }
   const current = progress.items[index];
   const note = input.note === undefined ? current.note : asString(input.note);
+  const nextStatus = input.status ?? current.status;
   const updatedAt = nowIso();
   const nextItem: PlanningRunActionProgressItem = {
     ...current,
-    ...(input.status ? { status: input.status } : {}),
+    status: nextStatus,
     ...(note ? { note } : {}),
+    ...(nextStatus === "done" ? { doneAt: current.doneAt ?? updatedAt } : {}),
     updatedAt,
   };
   if (!note) {
     delete (nextItem as { note?: string }).note;
+  }
+  if (nextStatus !== "done") {
+    delete (nextItem as { doneAt?: string }).doneAt;
   }
   const next: PlanningRunActionProgress = {
     ...progress,

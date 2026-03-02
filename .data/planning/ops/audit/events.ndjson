@@ -1,0 +1,11 @@
+{"eventType":"OPS_BACKUP_EXPORT_SUCCESS","at":"2026-03-02T07:34:05.159Z","actor":"local","meta":{"fileName":"planning-data-vault-20260302_073404.enc.json","mode":"full","gzipRequested":true,"rawSizeBytes":12588770,"encryptedSizeBytes":16785442}}
+{"eventType":"OPS_BACKUP_EXPORT_SUCCESS","at":"2026-03-02T07:34:07.603Z","actor":"local","meta":{"fileName":"planning-data-vault-20260302_073406.enc.json","mode":"full","gzipRequested":false,"rawSizeBytes":10491690,"encryptedSizeBytes":13989334}}
+{"eventType":"OPS_BACKUP_PREVIEW_SUCCESS","at":"2026-03-02T07:34:07.983Z","actor":"local","meta":{"fileName":"large.enc.json","fileSize":13989334,"warningCount":0}}
+{"eventType":"OPS_BACKUP_PREVIEW_ERROR","at":"2026-03-02T07:34:08.242Z","actor":"local","meta":{"fileName":"broken.enc.json","fileSize":9,"code":"BACKUP_INVALID","status":400}}
+{"eventType":"OPS_BACKUP_EXPORT_ERROR","at":"2026-03-02T07:34:08.717Z","actor":"local","meta":{"code":"LOCKED","status":423}}
+{"eventType":"OPS_BACKUP_RESTORE_SUCCESS","at":"2026-03-02T07:34:09.169Z","actor":"local","meta":{"fileName":"restore.enc.json","fileSize":2438,"mode":"merge","issues":1,"warnings":0}}
+{"eventType":"OPS_BACKUP_RESTORE_SUCCESS","at":"2026-03-02T07:34:09.648Z","actor":"local","meta":{"fileName":"restore.enc.json","fileSize":2362,"mode":"merge","issues":0,"warnings":0}}
+{"eventType":"OPS_BACKUP_EXPORT_SUCCESS","at":"2026-03-02T07:34:10.021Z","actor":"local","meta":{"fileName":"planning-data-vault-20260302_073409.enc.json","mode":"full","gzipRequested":false,"rawSizeBytes":4186,"encryptedSizeBytes":5998}}
+{"eventType":"OPS_BACKUP_EXPORT_SUCCESS","at":"2026-03-02T07:34:10.320Z","actor":"local","meta":{"fileName":"planning-data-vault-delta-20260302_073410.enc.json","mode":"delta","gzipRequested":false,"rawSizeBytes":2512,"encryptedSizeBytes":3766}}
+{"eventType":"OPS_BACKUP_RESTORE_SUCCESS","at":"2026-03-02T07:34:11.051Z","actor":"local","meta":{"fileName":"delta.enc.json","fileSize":4054,"mode":"merge","issues":0,"warnings":2}}
+{"eventType":"OPS_BACKUP_RESTORE_SUCCESS","at":"2026-03-02T07:34:11.620Z","actor":"local","meta":{"fileName":"partitioned.enc.json","fileSize":5050,"mode":"merge","issues":0,"warnings":0}}

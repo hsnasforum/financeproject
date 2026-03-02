@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { calcDeposit, calcSaving } from "@/lib/finlife/calculators";
+import { calcDeposit, calcSaving } from "@/lib/planning/calc";
 import { FINLIFE_FIELD_CONFIG } from "@/lib/finlife/fieldConfig";
 import { buildConsumerNotes, formatGlossaryValue, getKindSummary } from "@/lib/finlife/glossary";
 import { presentBySpecs, presentOptionFallback } from "@/lib/finlife/present";

@@ -10,7 +10,7 @@ export const PLANNING_STAGE_ORDER: PlanningRunStageId[] = [
   "scenarios",
   "monteCarlo",
   "actions",
-  "debt",
+  "debtStrategy",
 ];
 
 export type StageRunner<T = unknown> = {
@@ -28,7 +28,8 @@ export type StagePipelineInput = {
   scenarios: StageRunner;
   monteCarlo: StageRunner;
   actions: StageRunner;
-  debt: StageRunner;
+  debtStrategy: StageRunner;
+  debt?: StageRunner;
   nowMs?: () => number;
 };
 
@@ -63,6 +64,13 @@ function computeOverallStatus(stages: PlanningRunStageResult[]): PlanningRunOver
   });
   if (hasPipelineIssue) return "PARTIAL_SUCCESS";
   return "SUCCESS";
+}
+
+function compactErrorSummary(error: unknown, fallback: string): string {
+  const raw = error instanceof Error ? error.message : fallback;
+  const singleLine = String(raw ?? fallback).replace(/\s+/g, " ").trim();
+  if (!singleLine) return fallback;
+  return singleLine.slice(0, 180);
 }
 
 function stageById(stages: PlanningRunStageResult[], id: PlanningRunStageId): PlanningRunStageResult {
@@ -130,7 +138,7 @@ function initialStages(now: () => number): PlanningRunStageResult[] {
 }
 
 async function runOptionalStage(
-  id: Exclude<PlanningRunStageId, "simulate">,
+  id: "scenarios" | "monteCarlo" | "actions" | "debtStrategy",
   runner: StageRunner,
   stages: PlanningRunStageResult[],
   outputs: Partial<Record<PlanningRunStageId, unknown>>,
@@ -164,7 +172,7 @@ async function runOptionalStage(
   } catch (error) {
     markStage(stages, id, "FAILED", now(), {
       reason: "STAGE_ERROR",
-      errorSummary: error instanceof Error ? error.message : `${id} 단계 실행 실패`,
+      errorSummary: compactErrorSummary(error, `${id} 단계 실행 실패`),
     });
   }
 }
@@ -187,7 +195,7 @@ export async function runStagePipeline(input: StagePipelineInput): Promise<Stage
   } catch (error) {
     markStage(stages, "simulate", "FAILED", now(), {
       reason: "STAGE_ERROR",
-      errorSummary: error instanceof Error ? error.message : "simulate 단계 실행 실패",
+      errorSummary: compactErrorSummary(error, "simulate 단계 실행 실패"),
     });
     skipRemainingAfter(stages, "simulate", now);
     return {
@@ -200,7 +208,7 @@ export async function runStagePipeline(input: StagePipelineInput): Promise<Stage
   await runOptionalStage("scenarios", input.scenarios, stages, outputs, now);
   await runOptionalStage("monteCarlo", input.monteCarlo, stages, outputs, now);
   await runOptionalStage("actions", input.actions, stages, outputs, now);
-  await runOptionalStage("debt", input.debt, stages, outputs, now);
+  await runOptionalStage("debtStrategy", input.debtStrategy ?? input.debt ?? { enabled: false, run: () => null }, stages, outputs, now);
 
   return {
     overallStatus: computeOverallStatus(stages),

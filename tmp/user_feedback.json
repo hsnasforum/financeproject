@@ -343,5 +343,97 @@
     "dueDate": null,
     "tasks": [],
     "fingerprint": "OPS:CHAIN:FULL_REPAIR:UNKNOWN"
+  },
+  {
+    "id": "d0a09c2c-105e-45ac-84dd-33a4f25c7b4c",
+    "createdAt": "2026-03-02T02:08:12.947Z",
+    "category": "bug",
+    "message": "[OPS][FULL_REPAIR] 실패: UNKNOWN",
+    "traceId": null,
+    "userAgent": "ops-auto-ticket",
+    "url": "/api/dev/doctor/fix",
+    "appVersion": null,
+    "status": "DONE",
+    "tags": [
+      "ops",
+      "auto",
+      "fix",
+      "FULL_REPAIR",
+      "UNKNOWN"
+    ],
+    "note": "[AUTO][OPS] 2026-03-02T02:08:12.942Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T02:08:13.694Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS][RECOVERED] 2026-03-02T02:08:13.079Z\n- type: CHAIN\n- id: FULL_REPAIR\n- summary: 체인 실행이 성공적으로 완료되었습니다.\n- tookMs: 28\n- historyId: 1772417293077-yo6ekv2u\n\n[AUTO][OPS] 2026-03-02T02:16:13.001Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T02:22:58.519Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T02:29:58.199Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T02:37:30.461Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T02:44:06.944Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T03:05:56.121Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed",
+    "priority": "P0",
+    "dueDate": null,
+    "tasks": [],
+    "fingerprint": "OPS:CHAIN:FULL_REPAIR:UNKNOWN"
+  },
+  {
+    "id": "ac6b3964-a9ee-49ca-97e6-55b2a02c6f6f",
+    "createdAt": "2026-03-02T03:26:47.158Z",
+    "category": "bug",
+    "message": "[OPS][FULL_REPAIR] 실패: UNKNOWN",
+    "traceId": null,
+    "userAgent": "ops-auto-ticket",
+    "url": "/api/dev/doctor/fix",
+    "appVersion": null,
+    "status": "DONE",
+    "tags": [
+      "ops",
+      "auto",
+      "fix",
+      "FULL_REPAIR",
+      "UNKNOWN"
+    ],
+    "note": "[AUTO][OPS] 2026-03-02T03:26:47.156Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS][RECOVERED] 2026-03-02T03:26:49.226Z\n- type: CHAIN\n- id: FULL_REPAIR\n- summary: 체인 실행이 성공적으로 완료되었습니다.\n- tookMs: 28\n- historyId: 1772422009225-ft090i3k\n\n[AUTO][OPS] 2026-03-02T03:47:43.473Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T03:57:21.639Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS] 2026-03-02T04:00:41.038Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed",
+    "priority": "P0",
+    "dueDate": null,
+    "tasks": [],
+    "fingerprint": "OPS:CHAIN:FULL_REPAIR:UNKNOWN"
+  },
+  {
+    "id": "1a75640d-8370-4a35-bc11-6b47472d5720",
+    "createdAt": "2026-03-02T04:27:06.982Z",
+    "category": "bug",
+    "message": "[OPS][FULL_REPAIR] 실패: UNKNOWN",
+    "traceId": null,
+    "userAgent": "ops-auto-ticket",
+    "url": "/api/dev/doctor/fix",
+    "appVersion": null,
+    "status": "DONE",
+    "tags": [
+      "ops",
+      "auto",
+      "fix",
+      "FULL_REPAIR",
+      "UNKNOWN"
+    ],
+    "note": "[AUTO][OPS] 2026-03-02T04:27:06.980Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS][RECOVERED] 2026-03-02T06:42:31.032Z\n- type: CHAIN\n- id: FULL_REPAIR\n- summary: 체인 실행이 성공적으로 완료되었습니다.\n- tookMs: 10187\n- historyId: 1772433751028-gk1ylcov",
+    "priority": "P0",
+    "dueDate": null,
+    "tasks": [],
+    "fingerprint": "OPS:CHAIN:FULL_REPAIR:UNKNOWN"
+  },
+  {
+    "id": "a158ca68-e42b-4f23-9cc1-af6032e740e2",
+    "createdAt": "2026-03-02T06:44:36.868Z",
+    "category": "bug",
+    "message": "[OPS][FULL_REPAIR] 실패: UNKNOWN",
+    "traceId": null,
+    "userAgent": "ops-auto-ticket",
+    "url": "/api/dev/doctor/fix",
+    "appVersion": null,
+    "status": "DONE",
+    "tags": [
+      "ops",
+      "auto",
+      "fix",
+      "FULL_REPAIR",
+      "UNKNOWN"
+    ],
+    "note": "[AUTO][OPS] 2026-03-02T06:44:36.866Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed\n\n[AUTO][OPS][RECOVERED] 2026-03-02T06:46:30.361Z\n- type: CHAIN\n- id: FULL_REPAIR\n- summary: 체인 실행이 성공적으로 완료되었습니다.\n- tookMs: 8451\n- historyId: 1772433990359-4qsqzbni\n\n[AUTO][OPS] 2026-03-02T07:34:10.753Z\n- type: CHAIN\n- id: FULL_REPAIR\n- cause: UNKNOWN\n- summary: 실패 로그에서 명확한 원인을 분류하지 못했습니다. 로그를 확인해 수동 조치가 필요합니다.\n- tookMs: 33\n- suggestedFixIds: SEED_DEBUG\n- stdoutTail:\n[PRISMA_PUSH]\nstep1 ok[SEED_DEBUG]\n- stderrTail:\n[PRISMA_PUSH][SEED_DEBUG]\ndb failed",
+    "priority": "P0",
+    "dueDate": null,
+    "tasks": [],
+    "fingerprint": "OPS:CHAIN:FULL_REPAIR:UNKNOWN"
   }
 ]

@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteFile, atomicWriteJson } from "../storage/atomicWrite";
 import { getProfile } from "../store/profileStore";
 import { getRun } from "../store/runStore";
@@ -61,7 +62,8 @@ function sanitizeShareId(id: unknown): string {
 
 function resolveShareDir(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_SHARE_DIR);
-  return path.resolve(cwd, override || SHARE_REPORTS_DIR);
+  if (override) return path.resolve(cwd, override);
+  return path.join(resolvePlanningDataDir({ cwd }), "share");
 }
 
 function mdPathById(id: string): string {

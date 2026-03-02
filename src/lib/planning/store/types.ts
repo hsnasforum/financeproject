@@ -5,6 +5,7 @@ import { type ResultDtoV1 } from "../v2/resultDto";
 import { type AssumptionsV2 } from "../v2/scenarios";
 import { type ProfileV2 } from "../v2/types";
 import { type ScenarioMeta } from "../v2/scenario";
+import { type ScenarioPatch } from "../v2/profilePatch";
 import { type PlanningInterpretationPolicy } from "../catalog/planningPolicy";
 import { type AssumptionsOverrideEntry } from "../assumptions/overrides";
 import { type ProfileNormalizationDisclosure } from "../v2/normalizationDisclosure";
@@ -12,7 +13,13 @@ import { type ProfileNormalizationDisclosure } from "../v2/normalizationDisclosu
 export type PlanningRunOverallStatus = "RUNNING" | "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
 export type PlanningRunActionStatus = "todo" | "doing" | "done" | "snoozed";
 
-export type PlanningRunStageId = "simulate" | "scenarios" | "monteCarlo" | "actions" | "debt";
+export type PlanningRunStageId =
+  | "simulate"
+  | "scenarios"
+  | "monteCarlo"
+  | "actions"
+  | "debtStrategy"
+  | "debt"; // legacy
 
 export type PlanningRunStageStatus = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED" | "SKIPPED";
 
@@ -71,6 +78,7 @@ export type PlanningRunActionProgressItem = {
   actionKey: string;
   status: PlanningRunActionStatus;
   note?: string;
+  doneAt?: string;
   updatedAt: string;
 };
 
@@ -128,6 +136,11 @@ export type PlanningRunRecord = {
     };
     includeProducts?: boolean;
     monteCarlo?: { paths?: number; seed?: number };
+    scenario?: {
+      title?: string;
+      baseRunId?: string;
+      patch: ScenarioPatch[];
+    };
   };
   meta: {
     snapshot?: {
@@ -154,6 +167,10 @@ export type PlanningRunRecord = {
     effectiveAssumptionsHash?: string;
     appliedOverrides?: AssumptionsOverrideEntry[];
     policy: PlanningInterpretationPolicy;
+  };
+  actionCenter?: {
+    plan: PlanningRunActionPlan;
+    progress: PlanningRunActionProgress;
   };
   outputs: {
     resultDto?: ResultDtoV1;

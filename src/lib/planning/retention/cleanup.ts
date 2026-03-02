@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { resolveRunsDir } from "../store/paths";
 import {
   listPlanningTrash,
@@ -68,10 +69,7 @@ type RunMeta = {
   createdMs: number;
 };
 
-const CACHE_DIR = ".data/planning/cache";
 const CACHE_USAGE_STATS_FILE = "_usage.stats.json";
-const OPS_REPORTS_DIR = ".data/planning/ops/reports";
-const ASSUMPTIONS_HISTORY_DIR = ".data/planning/assumptions/history";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -120,17 +118,20 @@ function relativePath(baseDir: string, absPath: string): string {
 
 function resolveCacheDir(baseDir: string): string {
   const override = asString(process.env.PLANNING_CACHE_DIR);
-  return path.resolve(baseDir, override || CACHE_DIR);
+  if (override) return path.resolve(baseDir, override);
+  return path.join(resolvePlanningDataDir({ cwd: baseDir }), "cache");
 }
 
 function resolveOpsReportsDir(baseDir: string): string {
   const override = asString(process.env.PLANNING_OPS_REPORTS_DIR);
-  return path.resolve(baseDir, override || OPS_REPORTS_DIR);
+  if (override) return path.resolve(baseDir, override);
+  return path.join(resolvePlanningDataDir({ cwd: baseDir }), "ops", "reports");
 }
 
 function resolveAssumptionsHistoryDir(baseDir: string): string {
   const override = asString(process.env.PLANNING_ASSUMPTIONS_HISTORY_DIR);
-  return path.resolve(baseDir, override || ASSUMPTIONS_HISTORY_DIR);
+  if (override) return path.resolve(baseDir, override);
+  return path.join(resolvePlanningDataDir({ cwd: baseDir }), "assumptions", "history");
 }
 
 async function walkFiles(dirPath: string, baseDir: string): Promise<FileRow[]> {

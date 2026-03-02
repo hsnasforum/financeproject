@@ -12,6 +12,7 @@ import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
 import { buildSupportBundle } from "../../../../../lib/ops/supportBundle";
+import { getAppInfo } from "../../../../../lib/planning/server/runtime/appInfo";
 import { GET as doctorGET } from "../../doctor/route";
 
 function asString(value: unknown): string {
@@ -32,14 +33,6 @@ function appendSupportAudit(result: "SUCCESS" | "ERROR", detail: Record<string, 
   } catch (error) {
     console.error("[audit] failed to append support bundle export log", error);
   }
-}
-
-function readVersions(): { appVersion: string; engineVersion: string } {
-  const appVersion = asString(process.env.PLANNING_APP_VERSION)
-    || asString(process.env.npm_package_version)
-    || "0.1.0";
-  const engineVersion = asString(process.env.PLANNING_ENGINE_VERSION) || "planning-v2";
-  return { appVersion, engineVersion };
 }
 
 function guardRequest(request: Request, csrf: string): NextResponse | null {
@@ -106,11 +99,10 @@ export async function GET(request: Request) {
 
   try {
     const doctorPayload = await loadDoctorPayload(request, csrf);
-    const versions = readVersions();
+    const appInfo = await getAppInfo();
     const bundle = await buildSupportBundle({
       doctorPayload,
-      appVersion: versions.appVersion,
-      engineVersion: versions.engineVersion,
+      appInfo,
     });
 
     appendSupportAudit("SUCCESS", {

@@ -1,4 +1,4 @@
-export type StepId = "simulate" | "scenarios" | "monteCarlo" | "actions" | "debt";
+export type StepId = "simulate" | "scenarios" | "monteCarlo" | "actions" | "debtStrategy";
 
 export type StepState = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED" | "SKIPPED";
 
@@ -16,7 +16,7 @@ export type RunPipelineResult = {
   scenarios?: Record<string, unknown>;
   monteCarlo?: Record<string, unknown>;
   actions?: Record<string, unknown>;
-  debt?: Record<string, unknown>;
+  debtStrategy?: Record<string, unknown>;
   stepStatuses: StepStatus[];
 };
 
@@ -81,7 +81,7 @@ export class RunPipelineFatalError extends Error {
   }
 }
 
-const STEP_ORDER: StepId[] = ["simulate", "scenarios", "monteCarlo", "actions", "debt"];
+const STEP_ORDER: StepId[] = ["simulate", "scenarios", "monteCarlo", "actions", "debtStrategy"];
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -301,10 +301,10 @@ export async function executeRunPipeline(args: ExecuteRunPipelineArgs): Promise<
   }
 
   if (!args.toggles.debt) {
-    updateStatus("debt", "SKIPPED", "옵션 비활성");
+    updateStatus("debtStrategy", "SKIPPED", "옵션 비활성");
   } else {
-    result.debt = await runOptionalStep(
-      "debt",
+    result.debtStrategy = await runOptionalStep(
+      "debtStrategy",
       "/api/planning/v2/debt-strategy",
       {
         profile: args.profile,

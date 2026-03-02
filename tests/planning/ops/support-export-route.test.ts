@@ -111,18 +111,22 @@ describe.sequential("ops support export route", () => {
 
     expect(entries.has("manifest.json")).toBe(true);
     expect(entries.has("doctor.json")).toBe(true);
-    expect(entries.has("migrationState.json")).toBe(true);
+    expect(entries.has("app.json")).toBe(true);
+    expect(entries.has("migration_state.json")).toBe(true);
     expect(entries.has("policy.json")).toBe(true);
     expect(entries.has("audit_summary.json")).toBe(true);
     expect(entries.has("metrics_summary.json")).toBe(true);
+    expect(entries.has("metrics_recent.json")).toBe(true);
 
     const merged = Buffer.concat([...entries.values()]).toString("utf-8");
     const leakPatterns = [
       /incomeNet/i,
       /"debts"\s*:/i,
+      /liabilities/i,
       /secret\s*[:=]/i,
       /token\s*[:=]/i,
       /process\.env/i,
+      /BEGIN PRIVATE KEY/i,
       /ECOS_API_KEY=/i,
       /GITHUB_TOKEN=/i,
       /Bearer\s+/i,
