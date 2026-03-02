@@ -1,25 +1,29 @@
-export type AccountTransactionSource = "csv";
-
 export type AccountTransaction = {
   id: string;
-  postedAt: string;
-  amountKrw: number;
-  description: string;
-  category?: string;
-  source: AccountTransactionSource;
+  date: `${number}-${number}-${number}`;
+  amount: number;
+  desc?: string;
+  source: "csv";
+  meta?: {
+    rowIndex: number;
+  };
 };
 
 export type MonthlyCashflow = {
-  month: `${number}-${number}`;
-  inflowKrw: number;
-  outflowKrw: number;
-  netKrw: number;
+  ym: `${number}-${number}`;
+  income: number;
+  expense: number;
+  net: number;
+  txCount: number;
 };
 
-export type ProfileDraftPatch = {
-  monthlyIncomeNet?: number;
-  monthlyEssentialExpenses?: number;
-  monthlyDiscretionaryExpenses?: number;
-  assumptions?: string[];
-  notes?: string[];
+export type ProfileV2DraftPatch = {
+  monthlyIncomeNet: number;
+  monthlyEssentialExpenses: number;
+  monthlyDiscretionaryExpenses: number;
+  assumptions: string[];
+  monthsConsidered: number;
 };
+
+// Backward-compatible alias used by existing v3 wrappers/tests.
+export type ProfileDraftPatch = ProfileV2DraftPatch;
