@@ -96,8 +96,8 @@ async function createLargeRunFixture(id: string, sizeBytes: number): Promise<voi
         summary: {
           note: payload,
         },
-      } as any,
-    } as any,
+      },
+    } as unknown as Parameters<typeof createRun>[0]["outputs"],
   }, { enforceRetention: false, storeRawOutputs: true });
 }
 

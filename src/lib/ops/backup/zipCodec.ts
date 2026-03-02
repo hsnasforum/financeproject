@@ -1,7 +1,44 @@
 import { createRequire } from "node:module";
 
 const requireModule = createRequire(import.meta.url);
-const yauzl = requireModule("yauzl") as any;
+
+type YauzlEntry = {
+  fileName?: string;
+  uncompressedSize: number;
+};
+
+type YauzlReadStream = NodeJS.ReadableStream & {
+  destroy: (error?: Error) => void;
+  on: {
+    (event: "data", handler: (chunk: Buffer | Uint8Array | string) => void): void;
+    (event: "error", handler: (error: unknown) => void): void;
+    (event: "end", handler: () => void): void;
+  };
+};
+
+type YauzlZipFile = {
+  readEntry: () => void;
+  close: () => void;
+  on: {
+    (event: "error", handler: (error: unknown) => void): void;
+    (event: "entry", handler: (entry: YauzlEntry) => void): void;
+    (event: "end", handler: () => void): void;
+  };
+  openReadStream: (
+    entry: YauzlEntry,
+    callback: (error: unknown, stream: YauzlReadStream | null | undefined) => void,
+  ) => void;
+};
+
+type YauzlModule = {
+  fromBuffer: (
+    input: Buffer,
+    options: { lazyEntries: boolean; decodeStrings: boolean },
+    callback: (error: unknown, zipfile: YauzlZipFile | null | undefined) => void,
+  ) => void;
+};
+
+const yauzl = requireModule("yauzl") as YauzlModule;
 
 export type ZipFileEntry = {
   path: string;
@@ -159,9 +196,10 @@ export async function decodeZip(
   const source = Buffer.isBuffer(input) ? input : Buffer.from(input);
 
   return new Promise<Map<string, Buffer>>((resolve, reject) => {
-    yauzl.fromBuffer(source, { lazyEntries: true, decodeStrings: true }, (openErr: unknown, zipfile: any) => {
+    yauzl.fromBuffer(source, { lazyEntries: true, decodeStrings: true }, (openErr, zipfile) => {
       if (openErr || !zipfile) {
-        reject(new Error(`INVALID_ZIP:${openErr?.message ?? "open failed"}`));
+        const message = openErr instanceof Error ? openErr.message : "open failed";
+        reject(new Error(`INVALID_ZIP:${message}`));
         return;
       }
 
@@ -181,7 +219,7 @@ export async function decodeZip(
         fail(new Error(`INVALID_ZIP:${message}`));
       });
 
-      zipfile.on("entry", (entry: any) => {
+      zipfile.on("entry", (entry) => {
         if (finished) return;
 
         const fileName = String(entry.fileName ?? "").trim().replaceAll("\\", "/");
@@ -210,7 +248,7 @@ export async function decodeZip(
           return;
         }
 
-        zipfile.openReadStream(entry, (streamErr: unknown, stream: any) => {
+        zipfile.openReadStream(entry, (streamErr, stream) => {
           if (streamErr || !stream) {
             fail(new Error(`INVALID_ZIP_ENTRY:${fileName}`));
             return;
@@ -218,14 +256,17 @@ export async function decodeZip(
           const chunks: Buffer[] = [];
           let entryBytes = 0;
 
-          stream.on("data", (chunk: Buffer) => {
-            entryBytes += chunk.length;
-            totalBytes += chunk.length;
+          stream.on("data", (chunk: Buffer | Uint8Array | string) => {
+            const bytes = Buffer.isBuffer(chunk)
+              ? chunk
+              : (typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
+            entryBytes += bytes.length;
+            totalBytes += bytes.length;
             if (entryBytes > maxEntryBytes || totalBytes > maxTotalBytes) {
               stream.destroy(new Error("ZIP_SIZE_LIMIT_EXCEEDED"));
               return;
             }
-            chunks.push(Buffer.from(chunk));
+            chunks.push(bytes);
           });
           stream.on("error", (error: unknown) => {
             const message = error instanceof Error ? error.message : "read_stream_error";
