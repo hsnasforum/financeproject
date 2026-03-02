@@ -2,7 +2,7 @@
 
 ## 전체 요약
 
-- Generated at: 2026-03-02T06:46:27.744Z
+- Generated at: 2026-03-02T13:43:13.296Z
 - Watchlist path: /home/xpdlqj/code/finance/config/dart-watchlist.json
 - Rules path: /home/xpdlqj/code/finance/config/dart-disclosure-rules.json
 - Date range: 20260131 ~ 20260302
@@ -25,7 +25,7 @@
 ## 기업별 5줄 요약
 
 ### 삼성전자 (00126380)
-- checkedAt: 2026-03-02T06:46:27.744Z
+- checkedAt: 2026-03-02T13:43:13.296Z
 - total/new: 1795/1295
 - [MID 68] 기재정정 임원 주요주주특정증권등소유상황보고서 (8건)
 - [MID 60] 임원 주요주주특정증권등소유상황보고서 (8건)
@@ -36,7 +36,7 @@
 ## 전체 목록
 
 ### 삼성전자 (00126380)
-- checkedAt: 2026-03-02T06:46:27.744Z
+- checkedAt: 2026-03-02T13:43:13.296Z
 - total: 1795
 - new: 1295
 - [MID 68] 기재정정 임원 주요주주특정증권등소유상황보고서 (8건, 지배구조/임원)

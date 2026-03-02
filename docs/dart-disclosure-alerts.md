@@ -2,8 +2,8 @@
 
 ## 요약
 
-- Generated at: 2026-03-02T06:46:27.744Z
-- Previous digest generatedAt: 2026-03-02T06:42:37.246Z
+- Generated at: 2026-03-02T13:43:13.296Z
+- Previous digest generatedAt: 2026-03-02T06:46:27.744Z
 - Watchlist path: /home/xpdlqj/code/finance/config/dart-watchlist.json
 - Rules path: /home/xpdlqj/code/finance/config/dart-disclosure-rules.json
 - Profile path: /home/xpdlqj/code/finance/config/dart-alert-profile.json
