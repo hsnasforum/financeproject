@@ -82,7 +82,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
     if (!targetId) return;
     const target = document.getElementById(targetId);
     if (!target) {
-      window.location.hash = href;
+      window.history.replaceState(null, "", href);
       return;
     }
     target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -145,7 +145,11 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                       className="font-semibold underline"
                       data-action-id={action.id}
                       data-testid={`interpretation-action-link-${index}`}
-                      onClick={() => handleHashAction(action.href)}
+                      onClick={() => {
+                        if (isHashHref(action.href)) {
+                          handleHashAction(action.href);
+                        }
+                      }}
                       type="button"
                     >
                       관련 섹션 보기

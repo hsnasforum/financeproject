@@ -334,7 +334,7 @@ export function normalizeProfileInput(input: unknown): NormalizeResult {
       : {}),
   };
 
-  let profile = canonicalCandidate;
+  const profile = canonicalCandidate;
   let ok = true;
   try {
     validateProfileV2(canonicalCandidate);
