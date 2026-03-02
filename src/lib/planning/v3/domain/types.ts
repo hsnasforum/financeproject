@@ -20,5 +20,6 @@ export type ProfileDraftPatch = {
   monthlyIncomeNet?: number;
   monthlyEssentialExpenses?: number;
   monthlyDiscretionaryExpenses?: number;
+  assumptions?: string[];
   notes?: string[];
 };
