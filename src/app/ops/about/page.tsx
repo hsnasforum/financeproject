@@ -1,50 +1,27 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { BackupReminderBanner } from "@/components/BackupReminderBanner";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { shouldBlockOpsPageInCurrentRuntime } from "@/lib/ops/pageAccess";
+import { inspectPlanningMigrations } from "@/lib/planning/migrations/manager";
+import { isMigrationRequired } from "@/lib/planning/migrations/requirement";
+import { getAppInfo } from "@/lib/planning/server/runtime/appInfo";
 import { getVaultStatus } from "@/lib/planning/security/vaultState";
-import { resolveDataDir } from "@/lib/planning/storage/dataDir";
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-async function readPackageVersion(): Promise<string> {
-  const fromEnv = asString(process.env.APP_VERSION)
-    || asString(process.env.NEXT_PUBLIC_APP_VERSION)
-    || asString(process.env.npm_package_version);
-  if (fromEnv) return fromEnv;
-
-  try {
-    const packageJsonPath = path.resolve(process.cwd(), "package.json");
-    const raw = JSON.parse(await fs.readFile(packageJsonPath, "utf-8")) as Record<string, unknown>;
-    const fromFile = asString(raw.version);
-    return fromFile || "unknown";
-  } catch {
-    return "unknown";
-  }
-}
-
-function engineVersion(): string {
-  return asString(process.env.PLANNING_ENGINE_VERSION) || "planning-v2";
-}
 
 export default async function OpsAboutPage() {
   if (shouldBlockOpsPageInCurrentRuntime()) {
     notFound();
   }
 
-  const [appVersion, vaultStatus] = await Promise.all([
-    readPackageVersion(),
+  const [appInfo, vaultStatus, migration] = await Promise.all([
+    getAppInfo(),
     getVaultStatus(),
+    inspectPlanningMigrations(),
   ]);
-
-  const dataDir = resolveDataDir();
+  const migrationRequired = isMigrationRequired(migration);
 
   return (
     <PageShell>
@@ -59,23 +36,31 @@ export default async function OpsAboutPage() {
             <Link href="/ops/doctor">
               <Button type="button" size="sm" variant="outline">Doctor 열기</Button>
             </Link>
+            <Link href="/ops/metrics">
+              <Button type="button" size="sm" variant="outline">Metrics 열기</Button>
+            </Link>
           </div>
         )}
       />
 
-      <Card className="mb-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        업데이트 전 백업 권장.{" "}
-        <Link className="font-semibold underline" href="/ops/backup">
-          /ops/backup
-        </Link>
-      </Card>
+      <BackupReminderBanner scope="ops" appVersion={appInfo.appVersion} />
+
+      {migrationRequired ? (
+        <Card className="mb-4 border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+          마이그레이션 점검이 필요합니다.{" "}
+          <Link className="font-semibold underline" href="/ops/doctor?state=MIGRATION_REQUIRED">
+            /ops/doctor
+          </Link>
+        </Card>
+      ) : null}
 
       <Card className="p-4">
         <h2 className="text-base font-black text-slate-900">Runtime Info</h2>
         <div className="mt-3 grid gap-2 text-sm">
-          <p>appVersion: <span className="font-semibold">{appVersion}</span></p>
-          <p>engineVersion: <span className="font-semibold">{engineVersion()}</span></p>
-          <p>dataDir: <span className="font-semibold">{dataDir}</span></p>
+          <p>appVersion: <span className="font-semibold">{appInfo.appVersion}</span></p>
+          <p>engineVersion: <span className="font-semibold">{appInfo.engineVersion}</span></p>
+          <p>dataDir: <span className="font-semibold">{appInfo.dataDir}</span></p>
+          <p>hostPolicy: <span className="font-semibold">{appInfo.hostPolicy}</span></p>
           <p>vault configured: <span className="font-semibold">{vaultStatus.configured ? "true" : "false"}</span></p>
           <p>vault unlocked: <span className="font-semibold">{vaultStatus.unlocked ? "true" : "false"}</span></p>
           <p>vault autoLockMinutes: <span className="font-semibold">{vaultStatus.autoLockMinutes}</span></p>
@@ -85,4 +70,3 @@ export default async function OpsAboutPage() {
     </PageShell>
   );
 }
-

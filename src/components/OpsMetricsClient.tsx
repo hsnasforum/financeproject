@@ -13,6 +13,7 @@ import { resolveClientApiError } from "@/lib/http/clientApiError";
 
 type MetricType =
   | "RUN_STAGE"
+  | "RUN_PIPELINE"
   | "SCHEDULED_TASK"
   | "ASSUMPTIONS_REFRESH"
   | "BACKUP_EXPORT"
@@ -24,33 +25,55 @@ type MetricType =
 type MetricsRow = {
   type: MetricType;
   at: string;
-  meta?: Record<string, unknown>;
+  status?: string;
+  runId?: string;
+  stage?: string;
+  durationMs?: number;
+  errorCode?: string;
 };
 
-type MetricsWindowSummary = {
+type MetricsSummary = {
+  rangeHours: number;
   total: number;
-  failed: number;
-  failureRatePct: number;
-  durationAvgMs?: number;
-  durationP95Ms?: number;
-  assumptionsRefreshFailures: number;
+  runPipeline: {
+    successRatePct: number;
+    total: number;
+    failed: number;
+  };
+  simulate: {
+    avgDurationMs?: number;
+  };
+  assumptionsRefresh: {
+    lastStatus?: string;
+    failed: number;
+    consecutiveFailures: number;
+  };
+  backup: {
+    success: number;
+    failed: number;
+  };
 };
 
-type MetricsPayload = {
+type EventsPayload = {
   ok?: boolean;
   data?: MetricsRow[];
-  summary?: {
-    last24h?: MetricsWindowSummary;
-    last7d?: MetricsWindowSummary;
-  };
   meta?: {
     types?: string[];
   };
   error?: { code?: string; message?: string; fixHref?: string };
 };
 
+type SummaryPayload = {
+  ok?: boolean;
+  data?: {
+    last24h?: MetricsSummary;
+    last7d?: MetricsSummary;
+  };
+  error?: { code?: string; message?: string; fixHref?: string };
+};
+
 type OpsMetricsClientProps = {
-  csrf: string;
+  csrf?: string;
 };
 
 function asString(value: unknown): string {
@@ -63,75 +86,65 @@ function formatDateTime(value: string): string {
   return new Date(ts).toLocaleString("ko-KR", { hour12: false });
 }
 
-function shortMeta(value: unknown): string {
-  if (!value) return "-";
-  try {
-    const text = JSON.stringify(value);
-    if (!text) return "-";
-    return text.length > 100 ? `${text.slice(0, 100)}...` : text;
-  } catch {
-    return "-";
-  }
-}
-
 function formatMs(value: unknown): string {
   const ms = Number(value);
   if (!Number.isFinite(ms) || ms < 0) return "-";
   return `${ms.toFixed(1)}ms`;
 }
 
-function summaryCard(label: string, summary?: MetricsWindowSummary): Array<{ key: string; value: string }> {
-  return [
-    { key: `${label} total`, value: String(summary?.total ?? 0) },
-    { key: `${label} fail`, value: String(summary?.failed ?? 0) },
-    { key: `${label} fail rate`, value: `${Number(summary?.failureRatePct ?? 0).toFixed(1)}%` },
-    { key: `${label} avg`, value: typeof summary?.durationAvgMs === "number" ? formatMs(summary.durationAvgMs) : "-" },
-    { key: `${label} p95`, value: typeof summary?.durationP95Ms === "number" ? formatMs(summary.durationP95Ms) : "-" },
-    { key: `${label} refresh fail`, value: String(summary?.assumptionsRefreshFailures ?? 0) },
-  ];
+function shortMeta(row: MetricsRow): string {
+  const parts = [
+    row.status ? `status=${row.status}` : "",
+    row.stage ? `stage=${row.stage}` : "",
+    row.runId ? `run=${row.runId}` : "",
+    typeof row.durationMs === "number" ? `dur=${formatMs(row.durationMs)}` : "",
+    row.errorCode ? `code=${row.errorCode}` : "",
+  ].filter((item) => item.length > 0);
+  return parts.length > 0 ? parts.join(" · ") : "-";
 }
 
-export function OpsMetricsClient({ csrf }: OpsMetricsClientProps) {
+export function OpsMetricsClient(_props: OpsMetricsClientProps) {
   const [rows, setRows] = useState<MetricsRow[]>([]);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [eventType, setEventType] = useState("");
-  const [summary24h, setSummary24h] = useState<MetricsWindowSummary | undefined>(undefined);
-  const [summary7d, setSummary7d] = useState<MetricsWindowSummary | undefined>(undefined);
+  const [summary24h, setSummary24h] = useState<MetricsSummary | undefined>(undefined);
+  const [summary7d, setSummary7d] = useState<MetricsSummary | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const hasCsrf = asString(csrf).length > 0;
 
   const loadMetrics = useCallback(async () => {
-    if (!hasCsrf) {
-      setRows([]);
-      setError("Dev unlock/CSRF가 없어 metrics를 조회할 수 없습니다.");
-      return;
-    }
-
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      params.set("csrf", csrf);
-      params.set("limit", "200");
-      if (asString(eventType)) {
-        params.set("type", eventType);
-      }
+      const eventsParams = new URLSearchParams();
+      eventsParams.set("limit", "200");
+      if (asString(eventType)) eventsParams.set("type", eventType);
 
-      const response = await fetch(`/api/ops/metrics?${params.toString()}`, { cache: "no-store" });
-      const payload = (await response.json().catch(() => null)) as MetricsPayload | null;
-      if (!response.ok || !payload?.ok || !Array.isArray(payload.data)) {
-        const apiError = resolveClientApiError(payload, "metrics를 불러오지 못했습니다.");
+      const [eventsRes, summaryRes] = await Promise.all([
+        fetch(`/api/ops/metrics/events?${eventsParams.toString()}`, { cache: "no-store" }),
+        fetch("/api/ops/metrics/summary?range=24h", { cache: "no-store" }),
+      ]);
+
+      const eventsPayload = (await eventsRes.json().catch(() => null)) as EventsPayload | null;
+      const summaryPayload = (await summaryRes.json().catch(() => null)) as SummaryPayload | null;
+
+      if (!eventsRes.ok || !eventsPayload?.ok || !Array.isArray(eventsPayload.data)) {
+        const apiError = resolveClientApiError(eventsPayload, "metrics 이벤트를 불러오지 못했습니다.");
         throw new Error(apiError.message);
       }
 
-      setRows(payload.data);
-      setSummary24h(payload.summary?.last24h);
-      setSummary7d(payload.summary?.last7d);
-      const nextTypes = Array.isArray(payload.meta?.types)
-        ? payload.meta?.types.map((row) => asString(row)).filter((row) => row.length > 0)
+      if (!summaryRes.ok || !summaryPayload?.ok || !summaryPayload.data) {
+        const apiError = resolveClientApiError(summaryPayload, "metrics 요약을 불러오지 못했습니다.");
+        throw new Error(apiError.message);
+      }
+
+      setRows(eventsPayload.data);
+      const nextTypes = Array.isArray(eventsPayload.meta?.types)
+        ? eventsPayload.meta?.types.map((row) => asString(row)).filter((row) => row.length > 0)
         : [];
       setEventTypes(nextTypes);
+      setSummary24h(summaryPayload.data.last24h);
+      setSummary7d(summaryPayload.data.last7d);
     } catch (loadError) {
       setRows([]);
       setEventTypes([]);
@@ -141,27 +154,49 @@ export function OpsMetricsClient({ csrf }: OpsMetricsClientProps) {
     } finally {
       setLoading(false);
     }
-  }, [csrf, eventType, hasCsrf]);
+  }, [eventType]);
 
   useEffect(() => {
     void loadMetrics();
   }, [loadMetrics]);
 
-  const cards = useMemo(() => {
-    return {
-      short: summaryCard("24h", summary24h),
-      long: summaryCard("7d", summary7d),
-    };
+  const summaryCards = useMemo(() => {
+    const refreshStatus = summary24h?.assumptionsRefresh.lastStatus ?? "-";
+    const backupSummary = `${summary24h?.backup.success ?? 0}/${summary24h?.backup.failed ?? 0}`;
+
+    return [
+      {
+        title: "Run success rate (24h)",
+        value: `${Number(summary24h?.runPipeline.successRatePct ?? 0).toFixed(1)}%`,
+        hint: `성공 ${summary24h?.runPipeline.total ? (summary24h.runPipeline.total - summary24h.runPipeline.failed) : 0}/${summary24h?.runPipeline.total ?? 0}`,
+      },
+      {
+        title: "Avg simulate duration (24h)",
+        value: typeof summary24h?.simulate.avgDurationMs === "number" ? formatMs(summary24h.simulate.avgDurationMs) : "-",
+        hint: `7d avg 참고: ${typeof summary7d?.simulate.avgDurationMs === "number" ? formatMs(summary7d.simulate.avgDurationMs) : "-"}`,
+      },
+      {
+        title: "Assumptions refresh (last)",
+        value: refreshStatus,
+        hint: `연속 실패 ${summary24h?.assumptionsRefresh.consecutiveFailures ?? 0}회`,
+      },
+      {
+        title: "Backup success/fail (24h)",
+        value: backupSummary,
+        hint: "성공/실패 건수",
+      },
+    ];
   }, [summary24h, summary7d]);
 
   return (
     <PageShell>
+      <div data-testid="ops-metrics">
       <PageHeader
         title="Ops Metrics"
         description="로컬 운영 메트릭 추이 (최근 이벤트 + 24h/7d 요약)"
         action={(
           <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => void loadMetrics()} disabled={loading || !hasCsrf}>
+            <Button type="button" size="sm" variant="outline" onClick={() => void loadMetrics()} disabled={loading}>
               {loading ? "새로고침 중..." : "새로고침"}
             </Button>
             <Link href="/ops/doctor">
@@ -174,35 +209,14 @@ export function OpsMetricsClient({ csrf }: OpsMetricsClientProps) {
         )}
       />
 
-      {!hasCsrf ? (
-        <Card className="mb-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Dev unlock/CSRF가 없어 metrics를 조회할 수 없습니다.
-        </Card>
-      ) : null}
-
-      <div className="mb-4 grid gap-3 md:grid-cols-2">
-        <Card className="p-4">
-          <h2 className="text-sm font-black text-slate-900">최근 24시간</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            {cards.short.map((item) => (
-              <div key={item.key} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">
-                <div className="text-slate-600">{item.key}</div>
-                <div className="font-semibold text-slate-900">{item.value}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="p-4">
-          <h2 className="text-sm font-black text-slate-900">최근 7일</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            {cards.long.map((item) => (
-              <div key={item.key} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">
-                <div className="text-slate-600">{item.key}</div>
-                <div className="font-semibold text-slate-900">{item.value}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
+      <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-testid="metrics-summary">
+        {summaryCards.map((card) => (
+          <Card className="p-4" key={card.title}>
+            <p className="text-xs font-semibold text-slate-500">{card.title}</p>
+            <p className="mt-1 text-lg font-black text-slate-900">{card.value}</p>
+            <p className="mt-1 text-[11px] text-slate-600">{card.hint}</p>
+          </Card>
+        ))}
       </div>
 
       <Card className="mb-4 p-4">
@@ -236,7 +250,7 @@ export function OpsMetricsClient({ csrf }: OpsMetricsClientProps) {
       ) : null}
 
       {rows.length > 0 ? (
-        <Card className="overflow-x-auto p-0">
+        <Card className="overflow-x-auto p-0" data-testid="metrics-events">
           <table className="min-w-full border-collapse text-left text-xs">
             <thead className="bg-slate-100 text-slate-600">
               <tr>
@@ -248,31 +262,20 @@ export function OpsMetricsClient({ csrf }: OpsMetricsClientProps) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => {
-                const status = asString(row.meta?.status);
-                return (
-                  <tr key={`${row.at}-${row.type}-${index}`} className="border-t border-slate-200 align-top">
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatDateTime(row.at)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-900">{row.type}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-700">{status || "-"}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatMs(row.meta?.durationMs)}</td>
-                    <td className="max-w-[520px] px-3 py-2 text-slate-700">
-                      {row.meta ? (
-                        <details>
-                          <summary className="cursor-pointer">{shortMeta(row.meta)}</summary>
-                          <pre className="mt-1 overflow-auto rounded border border-slate-200 bg-white p-2 text-[11px] text-slate-700">
-                            {JSON.stringify(row.meta, null, 2)}
-                          </pre>
-                        </details>
-                      ) : "-"}
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map((row, index) => (
+                <tr key={`${row.at}-${row.type}-${index}`} className="border-t border-slate-200 align-top">
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatDateTime(row.at)}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-900">{row.type}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.status ?? "-"}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatMs(row.durationMs)}</td>
+                  <td className="max-w-[520px] px-3 py-2 text-slate-700">{shortMeta(row)}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </Card>
       ) : null}
+      </div>
     </PageShell>
   );
 }

@@ -1,8 +1,13 @@
-import { amortizingMonthlyPayment, normalizeAprPct } from "../../../lib/planning/core/v2/debt/calc";
+import { amortizingMonthlyPayment, normalizeAprPct } from "../../../lib/planning/calc";
 import { loadCanonicalProfile } from "../../../lib/planning/v2/loadCanonicalProfile";
 import { normalizeProfileInput } from "../../../lib/planning/v2/profileNormalize";
 import { type ProfileCashflowV2, type ProfileDefaultsAppliedV2, type ProfileV2 } from "../../../lib/planning/v2/types";
 import { type ProfileNormalizationDisclosure } from "../../../lib/planning/v2/normalizationDisclosure";
+import {
+  normalizeProfileWithReport,
+  type NormalizationReport,
+} from "../../../lib/planning/v2/normalizationReport";
+import { type AllocationPolicyId } from "../../../lib/planning/v2/policy/types";
 
 export type ProfileFormDebt = {
   id: string;
@@ -97,7 +102,20 @@ export type CanonicalProfile = {
 export type CanonicalProfileWithDisclosure = {
   profile: CanonicalProfile;
   normalization: ProfileNormalizationDisclosure;
+  report: NormalizationReport;
 };
+
+export type SafeParseProfileJsonResult =
+  | {
+    ok: true;
+    profile: CanonicalProfile;
+    normalization: ProfileNormalizationDisclosure;
+    report: NormalizationReport;
+  }
+  | {
+    ok: false;
+    error: string;
+  };
 
 export type ProfileValidationIssue = {
   path: string;
@@ -366,7 +384,11 @@ export function normalizeDraft(draft: FormDraft | unknown, name = "기본 프로
   return normalizeDraftWithDisclosure(draft, name).profile;
 }
 
-export function normalizeDraftWithDisclosure(draft: FormDraft | unknown, _name = "기본 프로필"): CanonicalProfileWithDisclosure {
+export function normalizeDraftWithDisclosure(
+  draft: FormDraft | unknown,
+  _name = "기본 프로필",
+  policyId: AllocationPolicyId = "balanced",
+): CanonicalProfileWithDisclosure {
   const row = asRecord(draft);
   const debts = Array.isArray(row.debts)
     ? row.debts.map((entry) => {
@@ -384,9 +406,11 @@ export function normalizeDraftWithDisclosure(draft: FormDraft | unknown, _name =
     ...(debts ? { debts } : {}),
   };
   const canonical = loadCanonicalProfile(normalizedInput);
+  const report = normalizeProfileWithReport(normalizedInput, policyId).report;
   return {
     profile: canonical.profile as CanonicalProfile,
     normalization: canonical.normalization,
+    report,
   };
 }
 
@@ -484,6 +508,60 @@ export function toProfileJson(form: ProfileFormModel): ProfileV2 {
     ...(form.defaultsApplied ? { defaultsApplied: form.defaultsApplied } : {}),
   };
   return loadCanonicalProfile(canonicalInput).profile;
+}
+
+export function profileToForm(profile: ProfileV2 | CanonicalProfile | unknown, name = "기본 프로필"): ProfileFormModel {
+  return fromProfileJson(profile, name);
+}
+
+export function formToProfile(form: ProfileFormModel): ProfileV2 {
+  return toProfileJson(form);
+}
+
+export function safeParseProfileJson(
+  profileJsonText: string,
+  name = "기본 프로필",
+): SafeParseProfileJsonResult {
+  const raw = profileJsonText.trim();
+  if (!raw) {
+    return {
+      ok: false,
+      error: "프로필 JSON이 비어 있습니다.",
+    };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {
+      ok: false,
+      error: "프로필 JSON 파싱 실패: 형식을 확인하세요.",
+    };
+  }
+
+  try {
+  const canonical = normalizeDraftWithDisclosure(parsed as FormDraft, name);
+    const validation = validateProfile(canonical.profile);
+    const profileErrors = validation.issues.filter((issue) => issue.severity === "error");
+    if (profileErrors.length > 0) {
+      const lines = profileErrors.slice(0, 5).map((issue) => `${issue.path}: ${issue.message}`);
+      return {
+        ok: false,
+        error: `프로필 JSON 검증 실패\n- ${lines.join("\n- ")}`,
+      };
+    }
+    return {
+      ok: true,
+      profile: canonical.profile,
+      normalization: canonical.normalization,
+      report: canonical.report,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "프로필 JSON 처리 중 오류가 발생했습니다.",
+    };
+  }
 }
 
 export function validateProfileForm(form: ProfileFormModel): ProfileFormValidation {

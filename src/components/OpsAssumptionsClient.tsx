@@ -232,7 +232,7 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
     setOverridesError("");
     try {
       const response = await fetch("/api/ops/assumptions/overrides", {
-        method: "POST",
+        method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           csrf: props.csrf,
@@ -265,8 +265,8 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
     setOverridesSaving(true);
     setOverridesError("");
     try {
-      const response = await fetch("/api/ops/assumptions/overrides", {
-        method: "DELETE",
+      const response = await fetch("/api/ops/assumptions/overrides/reset", {
+        method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           csrf: props.csrf,

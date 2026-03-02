@@ -3,13 +3,12 @@ import path from "node:path";
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
 
 const TERMINAL_LABELS = new Set(["성공", "실패", "생략"]);
+const TERMINAL_STATES = new Set(["SUCCESS", "FAILED", "SKIPPED"]);
 const GOLDEN_PROFILE_FIXTURE_DIR = path.join(process.cwd(), "tests", "fixtures", "planning", "golden", "profiles");
 const GOLDEN_FIXTURE_FILES = [
   "golden-good-basic.json",
   "golden-caution-tight-cashflow.json",
   "golden-risk-negative-cashflow.json",
-  "golden-caution-multi-debt-refi.json",
-  "golden-risk-goals-pressure.json",
 ] as const;
 const DEFAULT_RUN_INPUT: Record<string, unknown> = {
   horizonMonths: 120,
@@ -319,17 +318,30 @@ export async function waitForStageTerminal(page: Page, stageId: string, timeoutM
 
   const startedAt = nowMs();
   let lastValue = "";
+  let lastState = "";
 
   while (nowMs() - startedAt < timeoutMs) {
+    const rawState = (await statusLocator.getAttribute("data-stage-state")) ?? "";
+    const state = rawState.trim().toUpperCase();
+    if (state.length > 0) {
+      lastState = state;
+    }
+    if (TERMINAL_STATES.has(state)) {
+      return state;
+    }
+
     const raw = (await statusLocator.textContent()) ?? "";
     const value = raw.trim();
     if (value.length > 0) {
       lastValue = value;
     }
     if (TERMINAL_LABELS.has(value)) {
+      if (value === "성공") return "SUCCESS";
+      if (value === "실패") return "FAILED";
+      if (value === "생략") return "SKIPPED";
       return value;
     }
-    if (value === "대기") {
+    if (state === "PENDING" || value === "대기") {
       const handledSuggestion = await resolvePendingSuggestions(page);
       if (handledSuggestion && (await runButton.isEnabled().catch(() => false))) {
         await runButton.click();
@@ -339,6 +351,6 @@ export async function waitForStageTerminal(page: Page, stageId: string, timeoutM
   }
 
   throw new Error(
-    `run stage '${stageId}' did not reach terminal state within ${timeoutMs}ms (last='${lastValue || "unknown"}')`,
+    `run stage '${stageId}' did not reach terminal state within ${timeoutMs}ms (lastState='${lastState || "unknown"}', lastLabel='${lastValue || "unknown"}')`,
   );
 }

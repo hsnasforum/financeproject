@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "schemaVersion": 2,
+  "id": "e2af342c-d38a-4c85-87de-ec5abbeaefc0",
+  "name": "PW Seed 1772419759214",
+  "profile": {
+    "monthlyIncomeNet": 4800000,
+    "monthlyEssentialExpenses": 1750000,
+    "monthlyDiscretionaryExpenses": 850000,
+    "liquidAssets": 2400000,
+    "investmentAssets": 7100000,
+    "debts": [
+      {
+        "id": "demo-loan-1",
+        "name": "Seed Loan",
+        "balance": 18000000,
+        "minimumPayment": 420000,
+        "aprPct": 6.2,
+        "remainingMonths": 84,
+        "repaymentType": "amortizing"
+      }
+    ],
+    "goals": [
+      {
+        "id": "goal-emergency",
+        "name": "Emergency Fund",
+        "targetAmount": 12000000,
+        "targetMonth": 12,
+        "priority": 5
+      }
+    ]
+  },
+  "createdAt": "2026-03-02T02:49:19.258Z",
+  "updatedAt": "2026-03-02T02:49:19.258Z"
+}

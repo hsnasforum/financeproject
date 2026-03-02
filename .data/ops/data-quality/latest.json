@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-03-01T18:13:03.735Z",
+  "checkedAt": "2026-03-02T06:25:35.291Z",
   "overallStatus": "WARN",
   "summary": {
     "pass": 2,
@@ -10,30 +10,36 @@
     {
       "datasetId": "finlife:deposit",
       "label": "Finlife Deposit",
-      "checkedAt": "2026-03-01T18:13:03.735Z",
+      "checkedAt": "2026-03-02T06:25:35.291Z",
       "status": "PASS",
-      "staleDays": 0,
+      "staleDays": 1,
       "generatedAt": "2026-03-01T03:54:00.437Z",
       "totals": {
         "rows": 146,
+        "valid": 146,
+        "invalidSchema": 0,
         "missingRequired": 0,
         "duplicates": 0,
-        "rateAnomalies": 0
+        "rateAnomalies": 0,
+        "termAnomalies": 0
       },
       "issues": []
     },
     {
       "datasetId": "finlife:saving",
       "label": "Finlife Saving",
-      "checkedAt": "2026-03-01T18:13:03.735Z",
+      "checkedAt": "2026-03-02T06:25:35.291Z",
       "status": "WARN",
-      "staleDays": 0,
+      "staleDays": 1,
       "generatedAt": "2026-03-01T03:54:02.199Z",
       "totals": {
         "rows": 177,
+        "valid": 159,
+        "invalidSchema": 0,
         "missingRequired": 0,
         "duplicates": 18,
-        "rateAnomalies": 0
+        "rateAnomalies": 0,
+        "termAnomalies": 0
       },
       "issues": [
         {
@@ -44,27 +50,32 @@
             {
               "providerName": "우리은행",
               "productName": "우리SUPER주거래적금",
-              "termMonths": 12
+              "termMonths": 12,
+              "baseRatePct": 2.15
             },
             {
               "providerName": "우리은행",
               "productName": "우리SUPER주거래적금",
-              "termMonths": 24
+              "termMonths": 24,
+              "baseRatePct": 2.15
             },
             {
               "providerName": "우리은행",
               "productName": "우리SUPER주거래적금",
-              "termMonths": 36
+              "termMonths": 36,
+              "baseRatePct": 2.15
             },
             {
               "providerName": "우리은행",
               "productName": "WON적금",
-              "termMonths": 12
+              "termMonths": 12,
+              "baseRatePct": 2.95
             },
             {
               "providerName": "한국스탠다드차타드은행",
               "productName": "퍼스트가계적금",
-              "termMonths": 36
+              "termMonths": 36,
+              "baseRatePct": 2.65
             }
           ]
         }
@@ -73,15 +84,18 @@
     {
       "datasetId": "dart:corp-index",
       "label": "DART Company Index",
-      "checkedAt": "2026-03-01T18:13:03.735Z",
+      "checkedAt": "2026-03-02T06:25:35.291Z",
       "status": "PASS",
-      "staleDays": 2,
+      "staleDays": 3,
       "generatedAt": "2026-02-27T01:57:11.000Z",
       "totals": {
         "rows": 115338,
+        "valid": 115338,
+        "invalidSchema": 0,
         "missingRequired": 0,
         "duplicates": 0,
-        "rateAnomalies": 0
+        "rateAnomalies": 0,
+        "termAnomalies": 0
       },
       "issues": []
     }

@@ -1,71 +1,69 @@
 # Contributing: Planning SSOT Rules
 
-Planning v2/v3 변경 시 아래 SSOT(single source of truth) 규칙을 따릅니다.
+Planning 변경은 아래 SSOT(single source of truth) 규칙을 따릅니다.
 
-## 1) Warning/Action 추가 방법
+## 1) SSOT Modules
 
-### Warning 코드 추가
-1. 엔진/파이프라인에서 warning code를 emit 합니다.
-2. 카탈로그에 매핑을 추가합니다.
-   - `src/lib/planning/catalog/warningCatalog.ts`
-   - `PLANNING_EMITTED_WARNING_CODES` 배열 포함
-3. 사용자 문구/설명은 카탈로그/템플릿만 사용합니다.
-   - `src/lib/planning/catalog/copyTemplates.ts`
-4. UI/리포트에서 warning code -> 문구 변환은 카탈로그 resolver만 사용합니다.
-   - `resolveWarningCatalog`, `warningFallbackMessage`
+- `src/lib/planning/calc/**`
+  - 모든 금융 계산식(이자/상환/DSR/반올림/세율 가정)
+  - `roundingPolicy`, `taxPolicy` 포함
+- `src/lib/planning/catalog/**`
+  - 경고/액션/정책/문구(catalog + copy)
+  - UI/리포트는 카탈로그 결과만 소비
+- Evidence(설명 가능성)
+  - 사용자에게 노출되는 새 지표는 Evidence(공식+입력+가정)를 반드시 제공
+  - raw JSON dump로 대체 금지
 
-### Action 추가
-1. 액션 id/code를 정의합니다.
-2. 카탈로그에 title/description/steps/href를 추가합니다.
-   - `src/lib/planning/catalog/actionCatalog.ts`
-3. warning -> suggestedActionId 연결이 필요하면 warning catalog에서 연결합니다.
-4. “단정 추천” 문구는 금지하고 비교/행동 단계만 제공합니다.
+## 2) When You Add X, You Must Also Add Y
 
-## 2) Metric + Evidence 추가 방법
+### A. New warning code
+1. warning emit 추가
+2. `catalog/warningCatalog` 매핑 추가
+3. 연관 `actionId`가 있으면 `catalog/actionCatalog` 매핑 추가
+4. 테스트 추가
+   - 경고 코드 매핑 테스트
+   - unknown fallback 테스트(필요 시)
 
-### 원칙
-- 계산 로직은 `src/lib/planning/calc/*` 에만 둡니다.
-- 리포트/해석/UI는 calc 결과를 소비만 합니다.
-- metric에는 evidence를 함께 제공합니다.
+### B. New user-facing metric
+1. 계산식은 `calc/**`에 추가/수정
+2. Evidence builder에 항목 추가(공식/입력/가정)
+3. UI drilldown(근거 패널) 연결
+4. 테스트 추가
+   - evidence 존재
+   - 단위/포맷 검증
 
-### 절차
-1. 계산/반올림/세율 규칙을 SSOT에 추가
-   - `src/lib/planning/calc/` (`interest.ts`, `amortization.ts`, `roundingPolicy.ts`, `taxPolicy.ts`)
-2. evidence builder 추가
-   - `src/lib/planning/calc/evidence.ts`
-3. VM 계층에서 evidence 연결
-   - `src/app/planning/reports/_lib/reportViewModel.ts`
-   - `src/lib/planning/v2/insights/interpretationVm.ts`
-4. UI는 evidence 객체를 렌더링만 수행 (공식/입력/가정 표시)
+### C. Calc change
+1. `calc/**`만 수정
+2. 레퍼런스 테스트(고정 fixture/snapshot) 갱신
+3. 영향받는 VM/UI 테스트 확인
 
-## 3) Required tests/gates
+## 3) Required Gates
 
-기본:
 - `pnpm test`
 - `pnpm planning:v2:complete`
-- `pnpm planning:v2:compat`
+- `pnpm planning:ssot:check`
 
-SSOT 규칙:
-- `pnpm planning:v2:ssot:guard`
+권장:
 
-권장(변경 영향 시):
-- 리포트: `pnpm planning:v2:report:test`
-- 해석 가이드: `pnpm planning:v2:guide:test`
-- 회귀: `pnpm planning:v2:regress`
+- `pnpm planning:v2:regress`
+- `pnpm planning:v2:report:test`
+- `pnpm planning:v2:guide:test`
 
-## 4) 금지 규칙 (lint-like guard 대상)
+## 4) Guard Policy (Best Effort)
 
-- 카탈로그 외부에서 warning 문구 하드코딩 금지
-  - 예: `"경고가 감지되었습니다."`, `"알 수 없는 경고(...)"`
-- calc SSOT 외부에서 핵심 계산식 중복 구현 금지
-  - 월잉여/DSR/비상금개월/이자추정식
-- warning source(`warningGlossary.ko`, `warningsCatalog.ko`) 직접 참조 금지
-  - catalog/core 계층만 허용
+`scripts/planning_ssot_guard.mjs`는 다음 우회 패턴을 탐지합니다.
 
-## 5) 체크리스트 (PR 전)
+1. `core/v2/debt/calc` 직접 import (calc 외부)
+2. `lib/finlife/calculators` 직접 import (calc 외부)
+3. `src/lib/planning/**`에서 `Math.round`/`Math.floor` 직접 사용 (calc 외부)
 
-- [ ] warning/action/policy/copy 변경이 SSOT 파일에만 반영됨
-- [ ] metric 변경 시 evidence와 함께 제공됨
-- [ ] `pnpm planning:v2:ssot:guard` 통과
-- [ ] required gates(`test`, `complete`, `compat`) 통과 로그 확보
+허용 예외:
 
+- `src/lib/planning/calc/**`
+
+## 5) PR Checklist
+
+- [ ] SSOT 위치 규칙을 지켰는가?
+- [ ] 새 warning/metric/calc 변경에 대응하는 테스트를 추가했는가?
+- [ ] `pnpm planning:ssot:check` 실행 결과를 확인했는가?
+- [ ] `pnpm test` + `pnpm planning:v2:complete` 결과를 확인했는가?

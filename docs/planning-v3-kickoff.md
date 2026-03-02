@@ -60,3 +60,13 @@
 ## 라벨 정책
 - v2: `v2-bug`, `v2-improve`
 - v3: `v3-epic`, `v3-feature`, `v3-research`
+
+## V3-001 범위 (CSV Import Scaffold)
+- 포함:
+  - `src/lib/planning/v3/domain|providers|service` 기본 구조 구체화
+  - CSV 거래내역 로딩 및 월별 현금흐름 집계
+  - Profile v2 입력 초안용 patch draft 생성(저장 아님)
+- 제외:
+  - v2 저장소 자동 반영
+  - 은행 API/마이데이터 연동
+  - 추천/최적 상품 단정

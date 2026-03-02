@@ -1,0 +1,81 @@
+{
+  "summary": {
+    "debtServiceRatio": 0.2047,
+    "totalMonthlyPaymentKrw": 798219,
+    "warningsCount": 0
+  },
+  "warnings": [],
+  "summaries": [
+    {
+      "liabilityId": "risk-loan-1",
+      "name": "High APR Loan",
+      "type": "amortizing",
+      "principalKrw": 28000000,
+      "aprPct": 15.9,
+      "remainingMonths": 60,
+      "monthlyPaymentKrw": 679419,
+      "monthlyInterestKrw": 371000,
+      "totalInterestRemainingKrw": 12765126,
+      "payoffMonthIndex": 60
+    },
+    {
+      "liabilityId": "risk-loan-2",
+      "name": "Card Revolver",
+      "type": "interestOnly",
+      "principalKrw": 7200000,
+      "aprPct": 19.8,
+      "remainingMonths": 48,
+      "monthlyPaymentKrw": 118800,
+      "monthlyInterestKrw": 118800,
+      "totalInterestRemainingKrw": 5702400,
+      "payoffMonthIndex": 48
+    }
+  ],
+  "whatIf": {
+    "termExtensions": [
+      {
+        "liabilityId": "risk-loan-1",
+        "newTermMonths": 120,
+        "newMonthlyPaymentKrw": 467293,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      }
+    ],
+    "termReductions": [
+      {
+        "liabilityId": "risk-loan-1",
+        "newTermMonths": 12,
+        "newMonthlyPaymentKrw": 2539139,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "risk-loan-1",
+        "newTermMonths": 24,
+        "newMonthlyPaymentKrw": 1369630,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "risk-loan-1",
+        "newTermMonths": 36,
+        "newMonthlyPaymentKrw": 983015,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "risk-loan-2",
+        "newTermMonths": 48,
+        "newMonthlyPaymentKrw": 218332,
+        "notes": [
+          "Converts interest-only repayment to amortizing repayment over the same remaining term."
+        ]
+      }
+    ],
+    "extraPayments": []
+  }
+}

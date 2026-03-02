@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../planning/server/runtime/dataDir";
 
 const MAX_AUDIT_ITEMS = 500;
-const DEFAULT_AUDIT_PATH = path.join(process.cwd(), "tmp", "audit_log.json");
 const MAX_EVENT_LENGTH = 64;
 const MAX_ROUTE_LENGTH = 200;
 const MAX_SUMMARY_LENGTH = 500;
@@ -27,7 +27,7 @@ export type AuditLogInput = {
 function resolveAuditPath(): string {
   const envPath = (process.env.AUDIT_LOG_PATH ?? "").trim();
   if (envPath) return path.resolve(envPath);
-  return DEFAULT_AUDIT_PATH;
+  return path.join(resolvePlanningDataDir(), "ops", "audit", "legacy-audit-log.json");
 }
 
 function normalizeShortText(value: unknown, maxLength: number): string {

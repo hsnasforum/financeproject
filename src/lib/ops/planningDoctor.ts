@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../planning/storage/dataDir";
 
 export type PlanningIntegrityReport = {
   ok: boolean;
@@ -19,11 +20,11 @@ type CheckPlanningIntegrityOptions = {
   baseDir?: string;
 };
 
-const REQUIRED_FILES = [".data/planning/assumptions.latest.json"] as const;
-const OPTIONAL_FILES = [".data/planning/eval/latest.json"] as const;
+const REQUIRED_FILES = ["assumptions.latest.json"] as const;
+const OPTIONAL_FILES = ["eval/latest.json"] as const;
 const OPTIONAL_DIRS = [
-  ".data/planning/cache",
-  ".data/planning/eval/history",
+  "cache",
+  "eval/history",
 ] as const;
 
 function normalizePath(value: string): string {
@@ -90,6 +91,7 @@ async function scanJsonDir(baseDir: string, relativeDir: string): Promise<{
 
 export async function checkPlanningIntegrity(options: CheckPlanningIntegrityOptions = {}): Promise<PlanningIntegrityReport> {
   const baseDir = path.resolve(options.baseDir ?? process.cwd());
+  const planningRoot = resolvePlanningDataDir({ cwd: baseDir });
   const strict = options.strict === true;
   const missing: string[] = [];
   const invalidJson: string[] = [];
@@ -97,63 +99,66 @@ export async function checkPlanningIntegrity(options: CheckPlanningIntegrityOpti
   const notes: string[] = [];
 
   for (const relativePath of REQUIRED_FILES) {
-    const absolutePath = path.resolve(baseDir, relativePath);
+    const absolutePath = path.join(planningRoot, relativePath);
+    const reportPath = toRelative(baseDir, absolutePath);
     const stat = await pathStat(absolutePath);
     if (!stat || !stat.isFile()) {
-      missing.push(relativePath);
-      notes.push(`${relativePath}: 파일이 없습니다.`);
+      missing.push(reportPath);
+      notes.push(`${reportPath}: 파일이 없습니다.`);
       continue;
     }
     const parsed = await parseJsonFile(absolutePath);
     if (!parsed.ok) {
-      invalidJson.push(`${relativePath} (${parsed.reason})`);
+      invalidJson.push(`${reportPath} (${parsed.reason})`);
     }
   }
 
-  const assumptionsHistory = await scanJsonDir(baseDir, ".data/planning/assumptions/history");
+  const assumptionsHistory = await scanJsonDir(baseDir, toRelative(baseDir, path.join(planningRoot, "assumptions/history")));
   if (!assumptionsHistory.exists) {
-    missing.push(".data/planning/assumptions/history");
+    missing.push(toRelative(baseDir, path.join(planningRoot, "assumptions/history")));
     notes.push("assumptions history 디렉토리가 없습니다. (초기 상태일 수 있음)");
   }
   invalidJson.push(...assumptionsHistory.invalidJson);
 
-  const profiles = await scanJsonDir(baseDir, ".data/planning/profiles");
+  const profiles = await scanJsonDir(baseDir, toRelative(baseDir, path.join(planningRoot, "profiles")));
   if (!profiles.exists) {
-    missing.push(".data/planning/profiles");
+    missing.push(toRelative(baseDir, path.join(planningRoot, "profiles")));
     notes.push("profiles 디렉토리가 없습니다. (신규 사용자일 수 있음)");
   }
   invalidJson.push(...profiles.invalidJson);
 
-  const runs = await scanJsonDir(baseDir, ".data/planning/runs");
+  const runs = await scanJsonDir(baseDir, toRelative(baseDir, path.join(planningRoot, "runs")));
   if (!runs.exists) {
-    missing.push(".data/planning/runs");
+    missing.push(toRelative(baseDir, path.join(planningRoot, "runs")));
     notes.push("runs 디렉토리가 없습니다. (아직 실행 기록이 없을 수 있음)");
   }
   invalidJson.push(...runs.invalidJson);
 
   for (const relativePath of OPTIONAL_FILES) {
-    const absolutePath = path.resolve(baseDir, relativePath);
+    const absolutePath = path.join(planningRoot, relativePath);
+    const reportPath = toRelative(baseDir, absolutePath);
     const stat = await pathStat(absolutePath);
     if (!stat || !stat.isFile()) {
-      optionalMissing.push(relativePath);
+      optionalMissing.push(reportPath);
       continue;
     }
     const parsed = await parseJsonFile(absolutePath);
     if (!parsed.ok) {
-      invalidJson.push(`${relativePath} (${parsed.reason})`);
+      invalidJson.push(`${reportPath} (${parsed.reason})`);
     }
   }
 
   for (const relativeDir of OPTIONAL_DIRS) {
-    const scanned = await scanJsonDir(baseDir, relativeDir);
+    const reportPath = toRelative(baseDir, path.join(planningRoot, relativeDir));
+    const scanned = await scanJsonDir(baseDir, reportPath);
     if (!scanned.exists) {
-      optionalMissing.push(relativeDir);
+      optionalMissing.push(reportPath);
       continue;
     }
     invalidJson.push(...scanned.invalidJson);
   }
 
-  if (!strict && missing.includes(".data/planning/assumptions.latest.json")) {
+  if (!strict && missing.includes(toRelative(baseDir, path.join(planningRoot, "assumptions.latest.json")))) {
     notes.push("assumptions.latest.json 없음: 스냅샷 미동기화 상태일 수 있습니다.");
   }
 

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteFile, atomicWriteJson } from "../storage/atomicWrite";
-import { type PlanningRunRecord } from "../store/types";
 import { getRun } from "../store/runStore";
 import {
   deleteFileFromTrash,
@@ -68,7 +68,8 @@ function sanitizeReportId(id: unknown): string {
 
 function resolveReportsDir(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_REPORTS_DIR);
-  return path.resolve(cwd, override || REPORTS_DIR);
+  if (override) return path.resolve(cwd, override);
+  return path.join(resolvePlanningDataDir({ cwd }), "reports");
 }
 
 function mdPathById(id: string): string {

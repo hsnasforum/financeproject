@@ -29,9 +29,16 @@ function formatNumber(value: number): string {
   return new Intl.NumberFormat("ko-KR").format(Math.round(value));
 }
 
+function formatGroupedIntegerInput(value: unknown): string {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  return new Intl.NumberFormat("ko-KR").format(Math.round(numeric));
+}
+
 function toNumber(value: string): number | undefined {
-  if (!value.trim()) return undefined;
-  const parsed = Number(value);
+  const normalized = value.replaceAll(",", "").trim();
+  if (!normalized) return undefined;
+  const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return undefined;
   return parsed;
 }
@@ -147,8 +154,9 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
             월 실수령(원)
             <input
               className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-              type="number"
-              value={draft.monthlyIncomeNet ?? ""}
+              inputMode="numeric"
+              type="text"
+              value={formatGroupedIntegerInput(draft.monthlyIncomeNet)}
               onChange={(event) => updateDraft("monthlyIncomeNet", toNumber(event.target.value))}
             />
           </label>
@@ -156,8 +164,9 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
             필수지출(원)
             <input
               className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-              type="number"
-              value={draft.monthlyEssentialExpenses ?? ""}
+              inputMode="numeric"
+              type="text"
+              value={formatGroupedIntegerInput(draft.monthlyEssentialExpenses)}
               onChange={(event) => updateDraft("monthlyEssentialExpenses", toNumber(event.target.value))}
             />
           </label>
@@ -165,8 +174,9 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
             선택지출(원)
             <input
               className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-              type="number"
-              value={draft.monthlyDiscretionaryExpenses ?? ""}
+              inputMode="numeric"
+              type="text"
+              value={formatGroupedIntegerInput(draft.monthlyDiscretionaryExpenses)}
               onChange={(event) => updateDraft("monthlyDiscretionaryExpenses", toNumber(event.target.value))}
             />
           </label>
@@ -174,8 +184,9 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
             현금성 자산(원)
             <input
               className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-              type="number"
-              value={draft.liquidAssets ?? ""}
+              inputMode="numeric"
+              type="text"
+              value={formatGroupedIntegerInput(draft.liquidAssets)}
               onChange={(event) => updateDraft("liquidAssets", toNumber(event.target.value))}
             />
           </label>
@@ -183,8 +194,9 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
             투자자산(원)
             <input
               className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-              type="number"
-              value={draft.investmentAssets ?? ""}
+              inputMode="numeric"
+              type="text"
+              value={formatGroupedIntegerInput(draft.investmentAssets)}
               onChange={(event) => updateDraft("investmentAssets", toNumber(event.target.value))}
             />
           </label>
@@ -217,8 +229,9 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
                 <input
                   className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
                   placeholder="잔액(원)"
-                  type="number"
-                  value={debt.balance ?? ""}
+                  inputMode="numeric"
+                  type="text"
+                  value={formatGroupedIntegerInput(debt.balance)}
                   onChange={(event) => upsertDebt(index, { balance: toNumber(event.target.value) })}
                 />
                 <input
@@ -231,8 +244,9 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
                 <input
                   className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
                   placeholder="월상환(원)"
-                  type="number"
-                  value={debt.monthlyPayment ?? ""}
+                  inputMode="numeric"
+                  type="text"
+                  value={formatGroupedIntegerInput(debt.monthlyPayment)}
                   onChange={(event) => upsertDebt(index, { monthlyPayment: toNumber(event.target.value) })}
                 />
                 <Button onClick={() => removeDebt(index)} size="sm" variant="ghost">삭제</Button>
@@ -262,15 +276,17 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
                 <input
                   className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
                   placeholder="목표액(원)"
-                  type="number"
-                  value={goal.targetAmount ?? ""}
+                  inputMode="numeric"
+                  type="text"
+                  value={formatGroupedIntegerInput(goal.targetAmount)}
                   onChange={(event) => upsertGoal(index, { targetAmount: toNumber(event.target.value) })}
                 />
                 <input
                   className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
                   placeholder="현재액(원)"
-                  type="number"
-                  value={goal.currentAmount ?? ""}
+                  inputMode="numeric"
+                  type="text"
+                  value={formatGroupedIntegerInput(goal.currentAmount)}
                   onChange={(event) => upsertGoal(index, { currentAmount: toNumber(event.target.value) })}
                 />
                 <input

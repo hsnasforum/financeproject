@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import PlanningReportsDashboardClient from "@/components/PlanningReportsDashboardClient";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
@@ -31,7 +31,7 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
   const effectiveProfileId = requestedProfileId || defaultProfileId || "";
   const runs = await listRuns({
     ...(effectiveProfileId ? { profileId: effectiveProfileId } : {}),
-    limit: 20,
+    limit: 50,
   });
   if (runs.length < 1) {
     const planningHref = appendProfileIdQuery("/planning", effectiveProfileId);
@@ -52,9 +52,14 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
   }
 
   const requestedRunId = asString(searchParams?.runId);
-  const selectedRunId = runs.some((run) => run.id === requestedRunId)
+  const initialRunId = runs.some((run) => run.id === requestedRunId)
     ? requestedRunId
     : runs[0].id;
 
-  redirect(appendProfileIdQuery(`/planning/reports/${encodeURIComponent(selectedRunId)}`, effectiveProfileId));
+  return (
+    <PlanningReportsDashboardClient
+      initialProfileId={effectiveProfileId}
+      initialRunId={initialRunId}
+    />
+  );
 }

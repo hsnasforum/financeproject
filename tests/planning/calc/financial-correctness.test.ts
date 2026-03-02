@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   amortizingMonthlyPayment,
   buildAmortizationSchedule,
+  calcDeposit,
+  calcSaving,
   computeDsrPct,
   computeEmergencyFundMonths,
   computeMonthlySurplusKrw,
@@ -13,7 +15,6 @@ import {
   roundPercent,
   simulateAmortizingPayoff,
 } from "../../../src/lib/planning/calc";
-import { calcDeposit, calcSaving } from "../../../src/lib/finlife/calculators";
 
 type AmortizationFixture = {
   input: {

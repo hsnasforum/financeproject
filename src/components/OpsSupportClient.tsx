@@ -85,6 +85,7 @@ export function OpsSupportClient({ csrf }: OpsSupportClientProps) {
           </p>
           <div className="mt-4">
             <Button
+              data-testid="support-bundle-export"
               disabled={exporting || !csrf}
               onClick={() => {
                 void handleExport();

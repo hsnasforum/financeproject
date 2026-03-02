@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "runId": "4eb19a1c-c615-439e-813c-672750dc950f",
+  "generatedAt": "2026-03-02T02:51:11.044Z",
+  "items": [
+    {
+      "actionKey": "act_eb4ba8ddfefe43b2",
+      "sourceActionId": "BUILD_EMERGENCY_FUND",
+      "title": "비상금 완충 구간 확보",
+      "description": "유동성 완충이 부족해 자산 인출 또는 차입으로 이어질 가능성이 있습니다. 비상금 목표를 먼저 채우세요.",
+      "steps": [
+        "비상금 목표(기본 6개월 생활비) 달성 전까지 자동이체를 우선 배정합니다.",
+        "중도 인출 비용/제약이 작은 후보를 우선 비교합니다.",
+        "비상금 달성 전에는 고위험 자산 비중 확대를 보류합니다."
+      ]
+    },
+    {
+      "actionKey": "act_d08332bd52220422",
+      "sourceActionId": "SET_ASSUMPTIONS_REVIEW",
+      "title": "가정값 정기 점검",
+      "description": "저장된 최신 가정 스냅샷이 없어 기본값으로 계산했습니다. 가정 동기화를 권장합니다.",
+      "steps": [
+        "스냅샷 기준일(asOf)과 현재 시장 조건의 차이를 확인합니다.",
+        "가정 변경 전/후 시나리오 결과를 비교합니다.",
+        "분기별로 위험성향 및 목표 우선순위를 재확인합니다."
+      ],
+      "href": "/ops/assumptions"
+    }
+  ]
+}

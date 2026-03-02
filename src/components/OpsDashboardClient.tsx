@@ -9,12 +9,12 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
-import { type DoctorIssue } from "@/lib/ops/doctorIssues";
+import { type DoctorIssue } from "@/lib/ops/doctor/types";
 import { type OpsActionId } from "@/lib/ops/actions/types";
 
 type DoctorReport = {
-  ok: boolean;
   generatedAt: string;
+  status: "OK" | "WARN" | "RISK";
   summary: {
     pass: number;
     warn: number;
@@ -24,8 +24,17 @@ type DoctorReport = {
 
 type DoctorPayload = {
   ok?: boolean;
-  data?: DoctorReport;
-  issues?: DoctorIssue[];
+  data?: {
+    generatedAt?: string;
+    summary?: {
+      pass?: number;
+      warn?: number;
+      fail?: number;
+    };
+    status?: string;
+    issues?: DoctorIssue[];
+  };
+  issues?: DoctorIssue[]; // backward compatibility
   error?: { message?: string };
 };
 
@@ -70,6 +79,7 @@ type ActionPreviewData = {
   summary?: {
     text?: string;
     counts?: Record<string, number>;
+    sampleIds?: string[];
     ids?: string[];
     truncated?: boolean;
   };
@@ -133,6 +143,21 @@ function severityText(severity: DoctorIssue["severity"]): string {
   return "INFO";
 }
 
+function toSafeDomId(raw: string): string {
+  const normalized = raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  return normalized || "unknown";
+}
+
+function normalizeDoctorStatus(raw: string, fail: number, warn: number): "OK" | "WARN" | "RISK" {
+  const normalized = raw.trim().toUpperCase();
+  if (normalized === "RISK") return "RISK";
+  if (normalized === "WARN") return "WARN";
+  if (normalized === "OK") return "OK";
+  if (fail > 0) return "RISK";
+  if (warn > 0) return "WARN";
+  return "OK";
+}
+
 const QUICK_ACTIONS: QuickAction[] = [
   { id: "ASSUMPTIONS_REFRESH", label: "가정 새로고침" },
   { id: "REPAIR_INDEX", label: "인덱스 수리" },
@@ -176,8 +201,21 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
         throw new Error(doctor?.error?.message ?? "doctor 결과를 불러오지 못했습니다.");
       }
 
-      setReport(doctor.data);
-      setIssues(Array.isArray(doctor.issues) ? doctor.issues : []);
+      const reportData = doctor.data;
+      const pass = Number(reportData.summary?.pass ?? 0);
+      const warn = Number(reportData.summary?.warn ?? 0);
+      const fail = Number(reportData.summary?.fail ?? 0);
+      const status = normalizeDoctorStatus(asString(reportData.status), fail, warn);
+      setReport({
+        generatedAt: asString(reportData.generatedAt) || new Date().toISOString(),
+        status,
+        summary: {
+          pass: Number.isFinite(pass) ? Math.max(0, Math.trunc(pass)) : 0,
+          warn: Number.isFinite(warn) ? Math.max(0, Math.trunc(warn)) : 0,
+          fail: Number.isFinite(fail) ? Math.max(0, Math.trunc(fail)) : 0,
+        },
+      });
+      setIssues(Array.isArray(reportData.issues) ? reportData.issues : (Array.isArray(doctor.issues) ? doctor.issues : []));
       setAuditRows(Array.isArray(audit?.data) ? audit?.data.slice(0, 12) : []);
       setMetricRows(Array.isArray(metrics?.data) ? metrics?.data.slice(0, 12) : []);
     } catch (loadError) {
@@ -304,13 +342,14 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
 
   const summaryLabel = useMemo(() => {
     if (!report) return "UNKNOWN";
-    if (report.summary.fail > 0) return "FAIL";
-    if (report.summary.warn > 0) return "WARN";
-    return "PASS";
+    if (report.status === "RISK") return "RISK";
+    if (report.status === "WARN") return "WARN";
+    return "OK";
   }, [report]);
 
   return (
     <PageShell>
+      <div data-testid="ops-home">
       <PageHeader
         title="Ops Dashboard"
         description="Doctor SSOT 기반 운영 이슈와 즉시 조치 액션을 한 곳에서 관리합니다."
@@ -354,7 +393,7 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
         <Card className="mb-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-base font-black text-slate-900">운영 상태 요약</h2>
-            <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-bold ${statusBadgeClass(report.ok, report.summary.warn)}`}>
+            <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-bold ${statusBadgeClass(report.summary.fail < 1, report.summary.warn)}`} data-testid="ops-status-badge">
               {summaryLabel}
             </span>
           </div>
@@ -370,22 +409,22 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
       {issues.length < 1 && !loading ? (
         <EmptyState
           className="mb-4"
-          icon="check"
+          icon="default"
           title="표시할 운영 이슈가 없습니다"
           description="doctor 결과가 없거나 모든 항목이 정상입니다."
         />
       ) : null}
 
       {issues.length > 0 ? (
-        <Card className="mb-4 p-4">
+        <Card className="mb-4 p-4" data-testid="ops-issues">
           <h2 className="text-base font-black text-slate-900">우선순위 이슈 큐</h2>
           <div className="mt-3 space-y-2">
             {issues.map((issue) => (
-              <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid={`ops-issue-${toSafeDomId(issue.id)}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{issue.title}</p>
-                    <p className="text-xs text-slate-600">{issue.checkId}</p>
+                    <p className="text-xs text-slate-600">{issue.id}</p>
                   </div>
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${issueBadgeClass(issue.severity)}`}>
                     {severityText(issue.severity)}
@@ -393,19 +432,20 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
                 </div>
                 <p className="mt-2 text-sm text-slate-700">{issue.message}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {issue.fix.type === "link" ? (
+                  {issue.fix?.href ? (
                     <Link href={issue.fix.href}>
-                      <Button type="button" size="sm" variant="outline">{issue.fix.label}</Button>
+                      <Button type="button" size="sm" variant="outline" data-testid={`ops-fix-${toSafeDomId(issue.id)}`}>{issue.fix.label}</Button>
                     </Link>
                   ) : null}
-                  {issue.fix.type === "action" ? (
+                  {issue.fix?.actionId ? (
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
+                      data-testid={`ops-fix-${toSafeDomId(issue.id)}`}
                       disabled={actionRunning.length > 0}
                       onClick={() => {
-                        void startActionWithPreview(issue.fix.actionId, issue.fix.label);
+                        void startActionWithPreview(issue.fix.actionId as OpsActionId, issue.fix?.label ?? "Fix");
                       }}
                     >
                       {actionRunning === issue.fix.actionId ? "실행 중..." : issue.fix.label}
@@ -471,7 +511,13 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
       </div>
 
       {confirmModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="ops-danger-title">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ops-danger-title"
+          data-testid="ops-preview-modal"
+        >
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
             <h3 id="ops-danger-title" className="text-base font-black text-slate-900">{confirmModal.title}</h3>
             <p className="mt-2 text-sm text-slate-700">{confirmModal.description}</p>
@@ -484,6 +530,9 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
                 ) : null}
                 {Array.isArray(confirmModal.summary.ids) && confirmModal.summary.ids.length > 0 ? (
                   <p className="mt-1">ids: {confirmModal.summary.ids.join(", ")}{confirmModal.summary.truncated ? " ..." : ""}</p>
+                ) : null}
+                {!Array.isArray(confirmModal.summary.ids) && Array.isArray((confirmModal.summary as { sampleIds?: string[] }).sampleIds) && (confirmModal.summary as { sampleIds?: string[] }).sampleIds!.length > 0 ? (
+                  <p className="mt-1">ids: {(confirmModal.summary as { sampleIds?: string[] }).sampleIds!.join(", ")}{confirmModal.summary.truncated ? " ..." : ""}</p>
                 ) : null}
               </div>
             ) : null}
@@ -499,11 +548,12 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
               </>
             ) : null}
             <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => setConfirmModal(null)}>취소</Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setConfirmModal(null)} data-testid="ops-preview-cancel">취소</Button>
               <Button
                 type="button"
                 size="sm"
                 variant="primary"
+                data-testid="ops-preview-confirm"
                 onClick={() => {
                   void executeModal();
                 }}
@@ -515,6 +565,7 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
           </div>
         </div>
       ) : null}
+      </div>
     </PageShell>
   );
 }

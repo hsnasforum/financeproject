@@ -87,18 +87,20 @@ describe("GET /api/planning/v2/snapshots", () => {
     const response = await GET(request("/api/planning/v2/snapshots?limit=20"));
     const payload = await response.json() as {
       ok?: boolean;
-      latestId?: string | null;
-      latestLabel?: string;
-      items?: Array<{ id?: string; createdAt?: string; staleDays?: number; label?: string }>;
+      data?: {
+        latestId?: string | null;
+        latestLabel?: string;
+        items?: Array<{ id?: string; createdAt?: string; staleDays?: number; label?: string }>;
+      };
     };
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(payload.latestId).toBe(newId);
-    expect(payload.latestLabel).toContain("LATEST");
-    expect(payload.items?.map((item) => item.id)).toEqual([newId, oldId]);
-    expect((payload.items ?? []).every((item) => typeof item.staleDays === "number" && item.staleDays >= 0)).toBe(true);
-    expect(payload.items?.[0]?.createdAt).toBe("2026-03-01T09:00:00.000Z");
-    expect(payload.items?.[0]?.label).toContain(newId);
+    expect(payload.data?.latestId).toBe(newId);
+    expect(payload.data?.latestLabel).toContain("LATEST");
+    expect(payload.data?.items?.map((item) => item.id)).toEqual([newId, oldId]);
+    expect((payload.data?.items ?? []).every((item) => typeof item.staleDays === "number" && item.staleDays >= 0)).toBe(true);
+    expect(payload.data?.items?.[0]?.createdAt).toBe("2026-03-01T09:00:00.000Z");
+    expect(payload.data?.items?.[0]?.label).toContain(newId);
   });
 });

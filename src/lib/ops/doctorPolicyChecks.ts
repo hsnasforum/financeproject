@@ -215,9 +215,14 @@ export function buildRecentSuccessfulRunDoctorCheck(input: {
 
 export function buildMetricsDoctorChecks(input: {
   events: DoctorMetricLike[];
-  failureRateWarnPct: number;
-  latencyRegressionWarnMs: number;
-  refreshFailureWarnCount: number;
+  runFailRateWarnPct?: number;
+  runFailRateRiskPct?: number;
+  simulateLatencyWarnMultiplier?: number;
+  assumptionsRefreshConsecutiveFailRisk?: number;
+  // Legacy optional thresholds for backward compatibility.
+  failureRateWarnPct?: number;
+  latencyRegressionWarnMs?: number;
+  refreshFailureWarnCount?: number;
   shortWindowHours: number;
   longWindowDays: number;
   now?: Date;
@@ -227,68 +232,111 @@ export function buildMetricsDoctorChecks(input: {
   const shortFromMs = nowMs - input.shortWindowHours * 60 * 60 * 1000;
   const longFromMs = nowMs - input.longWindowDays * 24 * 60 * 60 * 1000;
 
+  const runWarnPct = typeof input.runFailRateWarnPct === "number"
+    ? input.runFailRateWarnPct
+    : (input.failureRateWarnPct ?? 20);
+  const runRiskPct = typeof input.runFailRateRiskPct === "number"
+    ? input.runFailRateRiskPct
+    : Math.max(runWarnPct, 50);
+  const latencyWarnMultiplier = typeof input.simulateLatencyWarnMultiplier === "number"
+    ? input.simulateLatencyWarnMultiplier
+    : 1.8;
+  const refreshRisk = typeof input.assumptionsRefreshConsecutiveFailRisk === "number"
+    ? input.assumptionsRefreshConsecutiveFailRisk
+    : Math.max(1, input.refreshFailureWarnCount ?? 3);
+
   const shortRows = input.events.filter((row) => inWindow(row, shortFromMs, nowMs));
   const longRows = input.events.filter((row) => inWindow(row, longFromMs, nowMs));
-  const shortFailures = shortRows.filter((row) => isFailureMetricEvent(row)).length;
-  const shortFailureRatePct = shortRows.length > 0 ? (shortFailures / shortRows.length) * 100 : 0;
 
-  const shortAvg = averageDuration(shortRows);
-  const longAvg = averageDuration(longRows);
-  const latencyDelta = typeof shortAvg === "number" && typeof longAvg === "number"
-    ? shortAvg - longAvg
-    : undefined;
-  const refreshFailures = shortRows.filter((row) => isAssumptionsRefreshFailure(row)).length;
+  const shortRunRowsRaw = shortRows.filter((row) => asString(row.type).toUpperCase() === "RUN_PIPELINE");
+  const shortRunRows = shortRunRowsRaw.length > 0
+    ? shortRunRowsRaw
+    : shortRows.filter((row) => asString(row.type).toUpperCase() === "RUN_STAGE" && asString(isRecord(row.meta) ? (row.meta.stage ?? row.meta.stageId) : "").toLowerCase() === "simulate");
+  const shortRunFailures = shortRunRows.filter((row) => isFailureMetricEvent(row)).length;
+  const shortRunFailureRatePct = shortRunRows.length > 0 ? (shortRunFailures / shortRunRows.length) * 100 : 0;
 
-  const failureRateCheck: DoctorCheck = {
-    id: "metrics-failure-rate",
-    title: "Metrics failure rate",
-    status: shortRows.length > 0 && shortFailureRatePct >= input.failureRateWarnPct ? "WARN" : "PASS",
-    message: shortRows.length > 0
-      ? `최근 ${input.shortWindowHours}시간 실패율 ${shortFailureRatePct.toFixed(1)}% (${shortFailures}/${shortRows.length})`
-      : `최근 ${input.shortWindowHours}시간 metrics 이벤트가 없습니다.`,
-    fixHref: "/ops/metrics",
+  const runFailureStatus: DoctorCheck["status"] = shortRunRows.length < 1
+    ? "PASS"
+    : shortRunFailureRatePct >= runRiskPct
+      ? "FAIL"
+      : shortRunFailureRatePct >= runWarnPct
+        ? "WARN"
+        : "PASS";
+  const runFailureCheck: DoctorCheck = {
+    id: "RUN_FAIL_RATE_HIGH",
+    title: "Run failure rate",
+    status: runFailureStatus,
+    message: shortRunRows.length > 0
+      ? `최근 ${input.shortWindowHours}시간 run 실패율 ${shortRunFailureRatePct.toFixed(1)}% (${shortRunFailures}/${shortRunRows.length})`
+      : `최근 ${input.shortWindowHours}시간 run 이벤트가 없습니다.`,
+    fixHref: "/planning",
     details: {
       windowHours: input.shortWindowHours,
-      total: shortRows.length,
-      failed: shortFailures,
-      failureRatePct: Number(shortFailureRatePct.toFixed(2)),
-      warnThresholdPct: input.failureRateWarnPct,
+      total: shortRunRows.length,
+      failed: shortRunFailures,
+      failureRatePct: Number(shortRunFailureRatePct.toFixed(2)),
+      warnThresholdPct: runWarnPct,
+      riskThresholdPct: runRiskPct,
     },
   };
 
-  const latencyStatus = typeof latencyDelta === "number" && latencyDelta >= input.latencyRegressionWarnMs ? "WARN" : "PASS";
+  const shortSimRows = shortRows.filter((row) => asString(row.type).toUpperCase() === "RUN_STAGE" && asString(isRecord(row.meta) ? (row.meta.stage ?? row.meta.stageId) : "").toLowerCase() === "simulate");
+  const longSimRows = longRows.filter((row) => asString(row.type).toUpperCase() === "RUN_STAGE" && asString(isRecord(row.meta) ? (row.meta.stage ?? row.meta.stageId) : "").toLowerCase() === "simulate");
+  const shortSimAvg = averageDuration(shortSimRows);
+  const longSimAvg = averageDuration(longSimRows);
+  const latencyRatio = typeof shortSimAvg === "number" && typeof longSimAvg === "number" && longSimAvg > 0
+    ? shortSimAvg / longSimAvg
+    : undefined;
+  const latencyStatus: DoctorCheck["status"] = typeof latencyRatio === "number" && latencyRatio >= latencyWarnMultiplier ? "WARN" : "PASS";
   const latencyCheck: DoctorCheck = {
-    id: "metrics-latency-regression",
-    title: "Metrics latency regression",
+    id: "SIMULATE_LATENCY_REGRESSION",
+    title: "Simulate latency regression",
     status: latencyStatus,
-    message: typeof latencyDelta === "number"
-      ? `최근 ${input.shortWindowHours}시간 평균 지연 ${shortAvg?.toFixed(1)}ms / ${input.longWindowDays}일 평균 ${longAvg?.toFixed(1)}ms`
-      : "지연 회귀 판단에 필요한 duration 데이터가 부족합니다.",
+    message: typeof latencyRatio === "number"
+      ? `최근 ${input.shortWindowHours}시간 simulate 평균 ${shortSimAvg?.toFixed(1)}ms / ${input.longWindowDays}일 평균 ${longSimAvg?.toFixed(1)}ms`
+      : "simulate 지연 회귀를 판단할 데이터가 부족합니다.",
     fixHref: "/ops/metrics",
     details: {
       shortWindowHours: input.shortWindowHours,
       longWindowDays: input.longWindowDays,
-      shortAvgMs: typeof shortAvg === "number" ? Number(shortAvg.toFixed(2)) : null,
-      longAvgMs: typeof longAvg === "number" ? Number(longAvg.toFixed(2)) : null,
-      deltaMs: typeof latencyDelta === "number" ? Number(latencyDelta.toFixed(2)) : null,
-      warnThresholdMs: input.latencyRegressionWarnMs,
+      shortAvgMs: typeof shortSimAvg === "number" ? Number(shortSimAvg.toFixed(2)) : null,
+      longAvgMs: typeof longSimAvg === "number" ? Number(longSimAvg.toFixed(2)) : null,
+      ratio: typeof latencyRatio === "number" ? Number(latencyRatio.toFixed(3)) : null,
+      warnThresholdMultiplier: latencyWarnMultiplier,
     },
   };
 
+  const refreshRows = shortRows
+    .filter((row) => asString(row.type).toUpperCase() === "ASSUMPTIONS_REFRESH")
+    .sort((a, b) => Date.parse(asString(b.at)) - Date.parse(asString(a.at)));
+  let consecutiveFailures = 0;
+  for (const row of refreshRows) {
+    if (isFailureMetricEvent(row)) {
+      consecutiveFailures += 1;
+      continue;
+    }
+    break;
+  }
+  const refreshStatus: DoctorCheck["status"] = consecutiveFailures >= refreshRisk
+    ? "FAIL"
+    : consecutiveFailures > 0
+      ? "WARN"
+      : "PASS";
   const refreshFailureCheck: DoctorCheck = {
-    id: "metrics-refresh-failures",
+    id: "ASSUMPTIONS_REFRESH_FAILING",
     title: "Assumptions refresh failures",
-    status: refreshFailures >= input.refreshFailureWarnCount ? "WARN" : "PASS",
-    message: `최근 ${input.shortWindowHours}시간 refresh 실패 ${refreshFailures}건`,
+    status: refreshStatus,
+    message: `최근 ${input.shortWindowHours}시간 refresh 연속 실패 ${consecutiveFailures}건`,
     fixHref: "/ops/assumptions",
     details: {
       windowHours: input.shortWindowHours,
-      refreshFailures,
-      warnThreshold: input.refreshFailureWarnCount,
+      consecutiveFailures,
+      riskThreshold: refreshRisk,
+      totalRefreshEvents: refreshRows.length,
     },
   };
 
-  return [failureRateCheck, latencyCheck, refreshFailureCheck];
+  return [runFailureCheck, latencyCheck, refreshFailureCheck];
 }
 
 export function buildScheduledRunFailureDoctorCheck(input: {

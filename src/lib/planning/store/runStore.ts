@@ -656,7 +656,7 @@ function stageIdToBlobName(id: PlanningRunStageId): RunBlobName | null {
   if (id === "scenarios") return "scenarios";
   if (id === "monteCarlo") return "monteCarlo";
   if (id === "actions") return "actions";
-  if (id === "debt") return "debtStrategy";
+  if (id === "debt" || id === "debtStrategy") return "debtStrategy";
   return null;
 }
 
@@ -883,6 +883,48 @@ export async function getRun(id: string): Promise<PlanningRunRecord | null> {
   const indexRows = await readRunIndex();
   const hintedProfileId = indexRows.find((row) => row.id === safeId)?.profileId;
   return readRunMeta(safeId, hintedProfileId);
+}
+
+export type UpdateRunPatch = Partial<Pick<
+  PlanningRunRecord,
+  "title" | "scenario" | "overallStatus" | "stages" | "input" | "meta" | "outputs" | "reproducibility" | "actionCenter"
+>>;
+
+function mergeRunPatch(current: PlanningRunRecord, patch: UpdateRunPatch): PlanningRunRecord {
+  return {
+    ...current,
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.scenario !== undefined ? { scenario: patch.scenario } : {}),
+    ...(patch.overallStatus !== undefined ? { overallStatus: patch.overallStatus } : {}),
+    ...(patch.stages !== undefined ? { stages: patch.stages } : {}),
+    ...(patch.input ? { input: { ...current.input, ...patch.input } } : {}),
+    ...(patch.meta ? { meta: { ...current.meta, ...patch.meta } } : {}),
+    ...(patch.outputs ? { outputs: { ...current.outputs, ...patch.outputs } } : {}),
+    ...(patch.reproducibility !== undefined ? { reproducibility: patch.reproducibility } : {}),
+    ...(patch.actionCenter !== undefined ? { actionCenter: patch.actionCenter } : {}),
+  };
+}
+
+export async function updateRun(id: string, patch: UpdateRunPatch): Promise<PlanningRunRecord | null> {
+  assertServerOnly();
+  await ensureStartupMigrations();
+  const safeId = sanitizeRecordId(id);
+  const current = await getRun(safeId);
+  if (!current) return null;
+
+  const next = toMetaRecord({
+    ...mergeRunPatch(current, patch),
+    schemaVersion: RUN_SCHEMA_VERSION,
+    id: current.id,
+    profileId: current.profileId,
+    createdAt: current.createdAt,
+    version: 1,
+  });
+  const metaPath = resolveProfileRunMetaPath(current.profileId, current.id);
+  await fs.mkdir(resolveProfileRunDir(current.profileId, current.id), { recursive: true });
+  await writeJsonAtomic(metaPath, await toStoredPayload(next));
+  await upsertRunIndexEntry(toRunIndexEntry(next));
+  return next;
 }
 
 export async function getRunBlob(id: string, name: string): Promise<unknown | null> {

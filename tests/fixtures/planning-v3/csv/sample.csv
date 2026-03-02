@@ -1,0 +1,7 @@
+date,amount,description,type,category
+2026-01-01,"3,000,000",Salary,credit,income
+2026.01.03,"-850,000",Rent,debit,housing
+2026/01/15,"-350,000",Card,debit,living
+2026-02-01,"3,100,000",Salary,credit,income
+2026/02/07,"-900,000",Rent,debit,housing
+2026.02.20,"-450,000",Card,debit,living

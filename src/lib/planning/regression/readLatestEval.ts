@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../storage/dataDir";
 
 export const PLANNING_EVAL_LATEST_PATH = ".data/planning/eval/latest.json";
 
@@ -45,7 +46,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function resolveLatestEvalPath(): string {
   const override = (process.env.PLANNING_EVAL_REPORT_PATH ?? "").trim();
-  return path.resolve(process.cwd(), override || PLANNING_EVAL_LATEST_PATH);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolvePlanningDataDir(), "eval", "latest.json");
 }
 
 function toReport(raw: unknown): PlanningEvalReport | null {

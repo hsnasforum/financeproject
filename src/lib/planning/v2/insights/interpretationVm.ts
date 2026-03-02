@@ -2,6 +2,7 @@ import { type ActionCode, type ActionItemV2 } from "../actions/types";
 import { type GoalRow } from "../report/mapGoals";
 import { type CalcEvidence } from "../../calc";
 import { buildEvidence, type EvidenceItem } from "./evidence";
+import { resolveInterpretationActionHref } from "./actionLinks";
 import {
   DEFAULT_PLANNING_POLICY,
   formatKrwUnit,
@@ -46,6 +47,7 @@ export type InterpretationInput = {
     monteCarlo?: {
       retirementDepletionBeforeEnd?: number;
     };
+    runId?: string;
   };
   summaryEvidence?: {
     monthlySurplusKrw?: CalcEvidence;
@@ -92,8 +94,20 @@ type DiagnosticCandidate = InterpretationVM["diagnostics"][number] & {
   rank: number;
 };
 
+const DIAGNOSTIC_PRIORITY: Record<string, number> = {
+  "monthly-surplus": 0,
+  dsr: 1,
+  "emergency-fund": 2,
+  snapshot: 3,
+  goals: 4,
+};
+
 function asFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function toPct(value: unknown): number | undefined {
@@ -206,6 +220,7 @@ export function buildInterpretationVM(
   const staleDays = asFiniteNumber(input.outcomes?.snapshotMeta?.staleDays);
   const snapshotMissing = input.outcomes?.snapshotMeta?.missing === true;
   const depletionPct = toPct(input.outcomes?.monteCarlo?.retirementDepletionBeforeEnd);
+  const runId = asString(input.outcomes?.runId);
 
   const goalsAchieved = parseGoalsAchievedText(input.summary.goalsAchievedText);
   const goalsMissed = input.goals.length > 0
@@ -386,20 +401,30 @@ export function buildInterpretationVM(
 
   diagnostics.sort((a, b) => {
     if (b.rank !== a.rank) return b.rank - a.rank;
+    const priorityA = DIAGNOSTIC_PRIORITY[a.id] ?? 99;
+    const priorityB = DIAGNOSTIC_PRIORITY[b.id] ?? 99;
+    if (priorityA !== priorityB) return priorityA - priorityB;
     return a.id.localeCompare(b.id);
   });
 
-  const hasEvidence = diagnostics.length > 0 || warningCount > 0 || input.goals.length > 0;
-  const hasRisk = diagnostics.some((diag) => diag.severity === "risk");
-  const hasCaution = diagnostics.some((diag) => diag.severity === "caution");
+  const hasKeyMetrics = typeof monthlySurplusKrw === "number"
+    && typeof emergencyFundMonths === "number"
+    && typeof dsrPct === "number";
 
-  const verdict: InterpretationVerdict = !hasEvidence
+  const verdict: InterpretationVerdict = !hasKeyMetrics
     ? "UNKNOWN"
-    : hasRisk
+    : ((monthlySurplusKrw < policy.monthlySurplusKrw.riskMax && emergencyFundMonths < policy.emergencyFundMonths.risk)
+      || dsrPct >= policy.dsr.riskPct)
       ? "RISK"
-      : hasCaution
+      : (emergencyFundMonths < policy.emergencyFundMonths.caution
+        || (dsrPct >= policy.dsr.cautionPct && dsrPct < policy.dsr.riskPct)
+        || monthlySurplusKrw < policy.monthlySurplusKrw.riskMax)
         ? "CAUTION"
-        : "GOOD";
+        : (monthlySurplusKrw >= policy.monthlySurplusKrw.riskMax
+          && emergencyFundMonths >= policy.emergencyFundMonths.caution
+          && dsrPct < policy.dsr.cautionPct)
+          ? "GOOD"
+          : "UNKNOWN";
 
   const warnings = warningsSorted.slice(0, 10).map((warning) => {
     const catalog = resolveWarningCatalog(warning.code);
@@ -420,6 +445,11 @@ export function buildInterpretationVM(
   });
 
   const nextActionMap = new Map<string, InterpretationVM["nextActions"][number]>();
+  const resolveHref = (actionId: string, fallbackHref?: string): string | undefined => {
+    const resolved = resolveInterpretationActionHref(actionId, { ...(runId ? { runId } : {}) });
+    if (resolved) return resolved;
+    return fallbackHref;
+  };
 
   for (const action of sanitizeActionsTop(input.outcomes?.actionsTop)) {
     const catalog = resolveActionCatalog(action.id);
@@ -428,7 +458,7 @@ export function buildInterpretationVM(
       title: action.title,
       description: action.summary,
       steps: action.steps.length > 0 ? action.steps : catalog.steps,
-      ...(catalog.href ? { href: catalog.href } : {}),
+      ...(resolveHref(action.id, catalog.href) ? { href: resolveHref(action.id, catalog.href) } : {}),
     });
   }
 
@@ -443,7 +473,7 @@ export function buildInterpretationVM(
       title: catalog.title,
       description: catalog.description,
       steps: catalog.steps,
-      ...(catalog.href ? { href: catalog.href } : {}),
+      ...(resolveHref(catalog.code, catalog.href) ? { href: resolveHref(catalog.code, catalog.href) } : {}),
     });
   }
 
@@ -455,7 +485,7 @@ export function buildInterpretationVM(
         title: catalog.title,
         description: catalog.description,
         steps: catalog.steps,
-        ...(catalog.href ? { href: catalog.href } : {}),
+        ...(resolveHref(catalog.code, catalog.href) ? { href: resolveHref(catalog.code, catalog.href) } : {}),
       });
     }
   }
@@ -475,7 +505,20 @@ export function buildInterpretationVM(
         title: catalog.title,
         description: catalog.description,
         steps: catalog.steps,
-        ...(catalog.href ? { href: catalog.href } : {}),
+        ...(resolveHref(catalog.code, catalog.href) ? { href: resolveHref(catalog.code, catalog.href) } : {}),
+      });
+    }
+  }
+
+  if (runId && !nextActionMap.has("MANAGE_ACTION_CENTER")) {
+    const catalog = resolveActionCatalogById("MANAGE_ACTION_CENTER");
+    if (catalog) {
+      nextActionMap.set("MANAGE_ACTION_CENTER", {
+        id: catalog.code,
+        title: catalog.title,
+        description: catalog.description,
+        steps: catalog.steps,
+        ...(resolveHref(catalog.code, catalog.href) ? { href: resolveHref(catalog.code, catalog.href) } : {}),
       });
     }
   }
@@ -488,7 +531,7 @@ export function buildInterpretationVM(
         title: fallback.title,
         description: fallback.description,
         steps: fallback.steps,
-        ...(fallback.href ? { href: fallback.href } : {}),
+        ...(resolveHref(fallback.code, fallback.href) ? { href: resolveHref(fallback.code, fallback.href) } : {}),
       });
     }
   }
@@ -500,7 +543,7 @@ export function buildInterpretationVM(
       title: fallback.title,
       description: fallback.description,
       steps: fallback.steps,
-      ...(fallback.href ? { href: fallback.href } : {}),
+      ...(resolveHref(fallback.code, fallback.href) ? { href: resolveHref(fallback.code, fallback.href) } : {}),
     });
   }
 

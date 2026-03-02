@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteJson } from "../storage/atomicWrite";
 import {
   DEFAULT_PLANNING_USER_ID,
@@ -40,7 +41,8 @@ function assertServerOnly(): void {
 
 function resolveUsersIndexPath(cwd = process.cwd()): string {
   const override = (process.env.PLANNING_USERS_INDEX_PATH ?? "").trim();
-  return path.resolve(cwd, override || LOCAL_PLANNING_USERS_INDEX_PATH);
+  if (override) return path.resolve(cwd, override);
+  return path.join(resolvePlanningDataDir({ cwd }), "users", "index.json");
 }
 
 function toBase64(value: Buffer): string {

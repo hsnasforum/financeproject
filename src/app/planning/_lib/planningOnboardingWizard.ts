@@ -1,4 +1,4 @@
-import { amortizingMonthlyPayment, normalizeAprPct } from "../../../lib/planning/core/v2/debt/calc";
+import { amortizingMonthlyPayment, normalizeAprPct } from "../../../lib/planning/calc";
 import { loadCanonicalProfile } from "../../../lib/planning/v2/loadCanonicalProfile";
 import { PROFILE_SCHEMA_VERSION } from "../../../lib/planning/v2/schemaVersion";
 import { type ProfileV2 } from "../../../lib/planning/v2/types";

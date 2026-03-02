@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { getVaultStatus } from "../security/vaultState";
 import { atomicWriteJson } from "../storage/atomicWrite";
 import {
@@ -85,28 +86,28 @@ function resolveMigrationStatePath(baseDir?: string): string {
   const root = resolveBaseDir(baseDir);
   const override = asString(process.env.PLANNING_MIGRATION_STATE_PATH);
   if (override) return path.resolve(root, override);
-  return path.resolve(root, ".data/planning/migrations/migrationState.json");
+  return path.join(resolvePlanningDataDir({ cwd: root }), "migrations", "migrationState.json");
 }
 
 function resolveMigrationSnapshotRoot(baseDir?: string): string {
   const root = resolveBaseDir(baseDir);
   const override = asString(process.env.PLANNING_MIGRATION_SNAPSHOT_DIR);
   if (override) return path.resolve(root, override);
-  return path.resolve(root, ".data/planning/migrations/snapshots");
+  return path.join(resolvePlanningDataDir({ cwd: root }), "migrations", "snapshots");
 }
 
 function resolveVaultConfigPath(baseDir?: string): string {
   const root = resolveBaseDir(baseDir);
   const override = asString(process.env.PLANNING_VAULT_CONFIG_PATH);
   if (override) return path.resolve(root, override);
-  return path.resolve(root, ".data/planning/security/vault.json");
+  return path.join(resolvePlanningDataDir({ cwd: root }), "security", "vault.json");
 }
 
 function resolveLegacyVaultConfigPath(baseDir?: string): string {
   const root = resolveBaseDir(baseDir);
   const override = asString(process.env.PLANNING_VAULT_CONFIG_PATH);
   if (override) return path.resolve(root, override);
-  return path.resolve(root, ".data/planning/security/vault.config.json");
+  return path.join(resolvePlanningDataDir({ cwd: root }), "security", "vault.config.json");
 }
 
 function createInitialState(nowIso = new Date().toISOString()): PlanningMigrationState {

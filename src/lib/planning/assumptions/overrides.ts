@@ -1,4 +1,5 @@
 import { type AssumptionsV2 } from "../v2/scenarios";
+import { z } from "zod";
 
 export const ASSUMPTIONS_OVERRIDE_KEYS = [
   "inflationPct",
@@ -8,6 +9,20 @@ export const ASSUMPTIONS_OVERRIDE_KEYS = [
 ] as const;
 
 export type AssumptionsOverrideKey = typeof ASSUMPTIONS_OVERRIDE_KEYS[number];
+
+export const AssumptionsOverrideKeySchema = z.enum(ASSUMPTIONS_OVERRIDE_KEYS);
+export const AssumptionsOverrideValueSchema = z.union([
+  z.number().finite(),
+  z.string(),
+  z.boolean(),
+]);
+export const AssumptionsOverrideEntrySchema = z.object({
+  key: AssumptionsOverrideKeySchema,
+  value: AssumptionsOverrideValueSchema,
+  reason: z.string().optional().default(""),
+  updatedAt: z.string().optional(),
+});
+export const AssumptionsOverrideListSchema = z.array(AssumptionsOverrideEntrySchema);
 
 export type AssumptionsOverrideEntry = {
   key: AssumptionsOverrideKey;
@@ -52,17 +67,17 @@ function normalizeEntry(
   value: unknown,
   fallbackIso: string,
 ): AssumptionsOverrideEntry | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  const key = asString(row.key);
+  const parsed = AssumptionsOverrideEntrySchema.safeParse(value);
+  if (!parsed.success) return null;
+  const key = asString(parsed.data.key);
   if (!isOverrideKey(key)) return null;
-  const numericValue = normalizePctValue(row.value);
+  const numericValue = normalizePctValue(parsed.data.value);
   if (!isFiniteNumber(numericValue)) return null;
   return {
     key,
     value: numericValue,
-    reason: asString(row.reason),
-    updatedAt: normalizeIso(row.updatedAt, fallbackIso),
+    reason: asString(parsed.data.reason),
+    updatedAt: normalizeIso(parsed.data.updatedAt, fallbackIso),
   };
 }
 

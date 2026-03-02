@@ -1,0 +1,375 @@
+[
+  {
+    "id": "a9bcfdab-1d21-4fc6-9c51-52999c8ffecb",
+    "createdAt": "2026-03-02T07:34:05.064Z",
+    "event": "PLANNING_PROFILE_CREATE",
+    "route": "/api/planning/v2/profiles",
+    "summary": "PLANNING_PROFILE_CREATE SUCCESS: planning profile created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "944f73ff-e1e8-4308-a7be-12294438c688",
+      "message": "planning profile created"
+    }
+  },
+  {
+    "id": "44da6829-58b4-41f9-888b-b4852bffbbfa",
+    "createdAt": "2026-03-02T07:34:05.132Z",
+    "event": "OPS_SUPPORT_BUNDLE_EXPORT",
+    "route": "/api/ops/support/export.zip",
+    "summary": "OPS_SUPPORT_BUNDLE_EXPORT SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "planning-support-bundle-20260302T073405Z.zip",
+      "sizeBytes": 6765,
+      "counts": {
+        "doctorChecks": 0,
+        "migrationItems": 2,
+        "auditEvents": 1,
+        "metricEvents": 1
+      }
+    }
+  },
+  {
+    "id": "b584059e-b414-494c-b4e6-880138ec8c7a",
+    "createdAt": "2026-03-02T07:34:05.158Z",
+    "event": "OPS_BACKUP_EXPORT",
+    "route": "/api/ops/backup/export",
+    "summary": "OPS_BACKUP_EXPORT SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "planning-data-vault-20260302_073404.enc.json",
+      "mode": "full",
+      "gzipRequested": true,
+      "rawSizeBytes": 12588770,
+      "encryptedSizeBytes": 16785442,
+      "counts": {
+        "profiles": 1,
+        "runs": 2,
+        "runBlobs": 1,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 1,
+        "policies": 0
+      }
+    }
+  },
+  {
+    "id": "b0529c0c-83cc-4fbd-bab5-10dcbe9a5b03",
+    "createdAt": "2026-03-02T07:34:05.365Z",
+    "event": "PLANNING_RUN_CREATE",
+    "route": "/api/planning/v2/runs",
+    "summary": "PLANNING_RUN_CREATE SUCCESS: planning run created",
+    "details": {
+      "result": "SUCCESS",
+      "recordId": "e8ad0df4-f574-4279-b6a9-8a9ac232388d",
+      "message": "planning run created"
+    }
+  },
+  {
+    "id": "221dfce0-8851-4ab8-8f15-cb3eebbae061",
+    "createdAt": "2026-03-02T07:34:07.602Z",
+    "event": "OPS_BACKUP_EXPORT",
+    "route": "/api/ops/backup/export",
+    "summary": "OPS_BACKUP_EXPORT SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "planning-data-vault-20260302_073406.enc.json",
+      "mode": "full",
+      "gzipRequested": false,
+      "rawSizeBytes": 10491690,
+      "encryptedSizeBytes": 13989334,
+      "counts": {
+        "profiles": 1,
+        "runs": 2,
+        "runBlobs": 1,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 1,
+        "policies": 0
+      }
+    }
+  },
+  {
+    "id": "df1699c0-b23e-4d1e-9b27-dfaa972e3280",
+    "createdAt": "2026-03-02T07:34:07.773Z",
+    "event": "PLANNING_MONTE_CARLO_BUDGET",
+    "route": "/api/planning/v2/monte-carlo",
+    "summary": "PLANNING_MONTE_CARLO_BUDGET REJECTED: 요청 계산량이 예산을 초과했습니다. paths*horizon=9,000,000 > 8,000,000",
+    "details": {
+      "result": "REJECTED",
+      "code": "BUDGET_EXCEEDED",
+      "paths": 15000,
+      "horizonMonths": 600,
+      "workUnits": 9000000,
+      "maxWorkUnits": 8000000
+    }
+  },
+  {
+    "id": "e4d5ef6e-1f4f-4302-b2bd-d02ad0ea022c",
+    "createdAt": "2026-03-02T07:34:07.982Z",
+    "event": "OPS_BACKUP_PREVIEW",
+    "route": "/api/ops/backup/preview",
+    "summary": "OPS_BACKUP_PREVIEW SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "large.enc.json",
+      "fileSize": 13989334,
+      "counts": {
+        "totalFiles": 8,
+        "totalBytes": 10490522,
+        "profiles": 1,
+        "runs": 2,
+        "runBlobs": 1,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 1,
+        "policies": 0
+      },
+      "warningCount": 0
+    }
+  },
+  {
+    "id": "bf5d6b92-8014-426e-b3f9-41a8a2ef283d",
+    "createdAt": "2026-03-02T07:34:08.240Z",
+    "event": "OPS_BACKUP_PREVIEW",
+    "route": "/api/ops/backup/preview",
+    "summary": "OPS_BACKUP_PREVIEW ERROR",
+    "details": {
+      "result": "ERROR",
+      "fileName": "broken.enc.json",
+      "fileSize": 9,
+      "message": "ENCRYPTED_PACKAGE_INVALID_JSON",
+      "code": "BACKUP_INVALID"
+    }
+  },
+  {
+    "id": "106dda01-be6f-4eee-a08c-6ba25db824db",
+    "createdAt": "2026-03-02T07:34:08.716Z",
+    "event": "OPS_BACKUP_EXPORT",
+    "route": "/api/ops/backup/export",
+    "summary": "OPS_BACKUP_EXPORT ERROR",
+    "details": {
+      "result": "ERROR",
+      "message": "Vault 잠금 해제 후 다시 시도해 주세요.",
+      "code": "LOCKED"
+    }
+  },
+  {
+    "id": "17407951-70a1-4df5-8a1a-8cb24b1bb855",
+    "createdAt": "2026-03-02T07:34:09.168Z",
+    "event": "OPS_BACKUP_RESTORE",
+    "route": "/api/ops/backup/restore",
+    "summary": "OPS_BACKUP_RESTORE SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "restore.enc.json",
+      "fileSize": 2438,
+      "mode": "merge",
+      "imported": {
+        "profiles": 1,
+        "runs": 0,
+        "runBlobs": 0,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 0,
+        "latestSnapshot": false,
+        "policies": 0
+      },
+      "issues": 1,
+      "warnings": 0
+    }
+  },
+  {
+    "id": "91163eda-c7e5-4ccc-bd7f-03745d0a4da2",
+    "createdAt": "2026-03-02T07:34:09.496Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_CONFIRM",
+    "details": {
+      "ok": false,
+      "code": "INVALID_CONFIRM"
+    }
+  },
+  {
+    "id": "be379e48-7a61-45da-8b61-236dcb01d99a",
+    "createdAt": "2026-03-02T07:34:09.509Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 실패: INVALID_TARGETS",
+    "details": {
+      "ok": false,
+      "code": "INVALID_TARGETS"
+    }
+  },
+  {
+    "id": "8e0722ba-8768-48d3-97e3-c13d10e26c62",
+    "createdAt": "2026-03-02T07:34:09.522Z",
+    "event": "RECOVERY_RESET",
+    "route": "/api/dev/recovery/reset",
+    "summary": "리커버리 reset 완료",
+    "details": {
+      "ok": true,
+      "targets": [
+        "feedback",
+        "refresh"
+      ],
+      "removedCount": 2,
+      "recreatedCount": 2,
+      "removed": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ],
+      "recreated": [
+        "tmp/user_feedback.json",
+        "tmp/daily_refresh_result.json"
+      ]
+    }
+  },
+  {
+    "id": "678ec7b2-9d58-446c-8e37-f1557ec896cd",
+    "createdAt": "2026-03-02T07:34:09.646Z",
+    "event": "OPS_BACKUP_RESTORE",
+    "route": "/api/ops/backup/restore",
+    "summary": "OPS_BACKUP_RESTORE SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "restore.enc.json",
+      "fileSize": 2362,
+      "mode": "merge",
+      "imported": {
+        "profiles": 1,
+        "runs": 0,
+        "runBlobs": 0,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 0,
+        "latestSnapshot": false,
+        "policies": 0
+      },
+      "issues": 0,
+      "warnings": 0
+    }
+  },
+  {
+    "id": "d6a2ca79-d5ae-4bcf-962d-aff31019bcc5",
+    "createdAt": "2026-03-02T07:34:10.018Z",
+    "event": "OPS_BACKUP_EXPORT",
+    "route": "/api/ops/backup/export",
+    "summary": "OPS_BACKUP_EXPORT SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "planning-data-vault-20260302_073409.enc.json",
+      "mode": "full",
+      "gzipRequested": false,
+      "rawSizeBytes": 4186,
+      "encryptedSizeBytes": 5998,
+      "counts": {
+        "profiles": 1,
+        "runs": 1,
+        "runBlobs": 0,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 1,
+        "policies": 0
+      }
+    }
+  },
+  {
+    "id": "a22fceda-8fca-4145-a259-6336535b2ea6",
+    "createdAt": "2026-03-02T07:34:10.319Z",
+    "event": "OPS_BACKUP_EXPORT",
+    "route": "/api/ops/backup/export",
+    "summary": "OPS_BACKUP_EXPORT SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "planning-data-vault-delta-20260302_073410.enc.json",
+      "mode": "delta",
+      "gzipRequested": false,
+      "rawSizeBytes": 2512,
+      "encryptedSizeBytes": 3766,
+      "counts": {
+        "profiles": 0,
+        "runs": 1,
+        "runBlobs": 0,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 0,
+        "policies": 0
+      }
+    }
+  },
+  {
+    "id": "04ab4103-f937-447e-a0f6-27597e3a931d",
+    "createdAt": "2026-03-02T07:34:10.391Z",
+    "event": "OPS_ACTION_RUN",
+    "route": "/api/ops/actions/run",
+    "summary": "OPS_ACTION_RUN SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "actionId": "RUNS_CLEANUP",
+      "dangerous": true,
+      "message": "실행 기록 0건 정리 완료",
+      "durationMs": 9
+    }
+  },
+  {
+    "id": "169e0a6b-4097-4953-80c0-f70ed6f2a15e",
+    "createdAt": "2026-03-02T07:34:11.050Z",
+    "event": "OPS_BACKUP_RESTORE",
+    "route": "/api/ops/backup/restore",
+    "summary": "OPS_BACKUP_RESTORE SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "delta.enc.json",
+      "fileSize": 4054,
+      "mode": "merge",
+      "imported": {
+        "profiles": 0,
+        "runs": 1,
+        "runBlobs": 0,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 0,
+        "latestSnapshot": false,
+        "policies": 0
+      },
+      "issues": 0,
+      "warnings": 2
+    }
+  },
+  {
+    "id": "e6d7ab18-bc9d-4c21-82dd-ba3f241cf114",
+    "createdAt": "2026-03-02T07:34:11.166Z",
+    "event": "DEV_UNLOCK",
+    "route": "/api/dev/unlock",
+    "summary": "Dev unlock 성공",
+    "details": {
+      "ok": true
+    }
+  },
+  {
+    "id": "1249104a-c5db-41d0-b973-d9d229e4319d",
+    "createdAt": "2026-03-02T07:34:11.615Z",
+    "event": "OPS_BACKUP_RESTORE",
+    "route": "/api/ops/backup/restore",
+    "summary": "OPS_BACKUP_RESTORE SUCCESS",
+    "details": {
+      "result": "SUCCESS",
+      "fileName": "partitioned.enc.json",
+      "fileSize": 5050,
+      "mode": "merge",
+      "imported": {
+        "profiles": 2,
+        "runs": 2,
+        "runBlobs": 0,
+        "actionPlans": 0,
+        "actionProgress": 0,
+        "assumptionsHistory": 0,
+        "latestSnapshot": false,
+        "policies": 0
+      },
+      "issues": 0,
+      "warnings": 0
+    }
+  }
+]

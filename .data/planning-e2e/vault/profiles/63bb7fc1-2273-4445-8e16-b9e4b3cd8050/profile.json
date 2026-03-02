@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "schemaVersion": 2,
+  "id": "63bb7fc1-2273-4445-8e16-b9e4b3cd8050",
+  "name": "샘플 프로필 (가상)",
+  "profile": {
+    "monthlyIncomeNet": 4600000,
+    "monthlyEssentialExpenses": 1850000,
+    "monthlyDiscretionaryExpenses": 900000,
+    "liquidAssets": 8200000,
+    "investmentAssets": 12500000,
+    "debts": [
+      {
+        "id": "demo-loan-1",
+        "name": "주택담보대출",
+        "balance": 180000000,
+        "minimumPayment": 850000,
+        "aprPct": 4.2,
+        "remainingMonths": 240,
+        "repaymentType": "amortizing"
+      }
+    ],
+    "goals": [
+      {
+        "id": "emergency-6m",
+        "name": "Emergency Fund",
+        "targetAmount": 18000000,
+        "currentAmount": 8200000,
+        "targetMonth": 24,
+        "priority": 1,
+        "minimumMonthlyContribution": 250000
+      },
+      {
+        "id": "education-fund",
+        "name": "교육비 목돈",
+        "targetAmount": 30000000,
+        "currentAmount": 3000000,
+        "targetMonth": 84,
+        "priority": 2,
+        "minimumMonthlyContribution": 220000
+      },
+      {
+        "id": "goal-retirement",
+        "name": "은퇴 목표",
+        "targetAmount": 300000000,
+        "currentAmount": 12500000,
+        "targetMonth": 360,
+        "priority": 3,
+        "minimumMonthlyContribution": 0
+      }
+    ],
+    "cashflow": {
+      "phases": [
+        {
+          "id": "work",
+          "title": "재직",
+          "range": {
+            "startMonth": 0,
+            "endMonth": 251
+          },
+          "monthlyIncomeKrw": 4600000,
+          "monthlyFixedExpensesKrw": 1850000,
+          "monthlyVariableExpensesKrw": 900000
+        },
+        {
+          "id": "retired",
+          "title": "은퇴 이후",
+          "range": {
+            "startMonth": 252,
+            "endMonth": 359
+          },
+          "monthlyIncomeKrw": 0,
+          "monthlyFixedExpensesKrw": 1500000,
+          "monthlyVariableExpensesKrw": 600000
+        }
+      ],
+      "pensions": [
+        {
+          "id": "national-pension",
+          "title": "국민연금 수령",
+          "range": {
+            "startMonth": 252,
+            "endMonth": 359
+          },
+          "monthlyPayoutKrw": 950000
+        }
+      ],
+      "contributions": [
+        {
+          "id": "monthly-invest",
+          "title": "월 적립식 투자",
+          "range": {
+            "startMonth": 0,
+            "endMonth": 251
+          },
+          "from": "cash",
+          "to": "investments",
+          "monthlyAmountKrw": 300000
+        }
+      ],
+      "rules": {
+        "phaseOverlapPolicy": "sum"
+      }
+    }
+  },
+  "createdAt": "2026-03-02T02:51:18.349Z",
+  "updatedAt": "2026-03-02T02:51:18.349Z"
+}

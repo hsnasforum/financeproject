@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiResponseSchema, parsePlanningV2Response } from "../../src/lib/planning/api/contracts";
 
 const {
   loadLatestAssumptionsSnapshotMock,
@@ -54,15 +55,16 @@ describe("planning v2 api response format", () => {
 
   it("returns standard error body shape", async () => {
     const response = await POST(request({ profile: {}, horizonMonths: 12 }));
-    const payload = await response.json() as {
-      ok?: boolean;
-      error?: { code?: string; message?: string };
-    };
+    const payload = await response.json();
+    const schema = ApiResponseSchema.safeParse(payload);
 
     expect(response.status).toBe(400);
+    expect(schema.success).toBe(true);
     expect(payload.ok).toBe(false);
-    expect(typeof payload.error?.code).toBe("string");
-    expect(typeof payload.error?.message).toBe("string");
+    if (payload.ok === false) {
+      expect(typeof payload.error?.code).toBe("string");
+      expect(typeof payload.error?.message).toBe("string");
+    }
   });
 
   it("returns standard success body shape with meta.snapshot", async () => {
@@ -70,21 +72,23 @@ describe("planning v2 api response format", () => {
       profile: baseProfile(),
       horizonMonths: 12,
     }));
-    const payload = await response.json() as {
-      ok?: boolean;
-      meta?: {
-        generatedAt?: string;
-        snapshot?: {
-          missing?: boolean;
-        };
-      };
-      data?: Record<string, unknown>;
-    };
+    const payload = await response.json();
+    const schema = ApiResponseSchema.safeParse(payload);
 
     expect(response.status).toBe(200);
+    expect(schema.success).toBe(true);
     expect(payload.ok).toBe(true);
     expect(typeof payload.meta?.generatedAt).toBe("string");
     expect(payload.meta?.snapshot?.missing).toBe(true);
     expect(payload.data).toBeTruthy();
+  });
+
+  it("returns FORMAT typed error when payload shape is malformed", () => {
+    const malformedPayload = { ok: true, meta: { generatedAt: "2026-01-01T00:00:00.000Z" } };
+    const parsed = parsePlanningV2Response(malformedPayload);
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.error.code).toBe("FORMAT");
+    }
   });
 });

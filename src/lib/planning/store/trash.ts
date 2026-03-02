@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 
 export type PlanningTrashKind = "profiles" | "runs" | "reports";
 
@@ -58,7 +59,8 @@ function sanitizeId(id: unknown): string {
 
 function resolveTrashRoot(baseDir = process.cwd()): string {
   const override = asString(process.env.PLANNING_TRASH_DIR);
-  return path.resolve(baseDir, override || TRASH_DIR);
+  if (override) return path.resolve(baseDir, override);
+  return path.join(resolvePlanningDataDir({ cwd: baseDir }), "trash");
 }
 
 export function resolveTrashKindDir(

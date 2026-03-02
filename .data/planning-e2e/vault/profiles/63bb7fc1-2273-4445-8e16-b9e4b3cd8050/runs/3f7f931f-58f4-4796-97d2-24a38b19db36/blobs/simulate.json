@@ -1,0 +1,149 @@
+{
+  "summary": {
+    "startNetWorthKrw": -136167261.72,
+    "endNetWorthKrw": -215220173.8,
+    "netWorthDeltaKrw": -79052912.08000001,
+    "worstCashMonthIndex": 0,
+    "worstCashKrw": 0,
+    "goalsAchievedCount": 0,
+    "goalsMissedCount": 3,
+    "warningsCount": 5
+  },
+  "warnings": [
+    "NEGATIVE_CASHFLOW",
+    "HIGH_DEBT_RATIO",
+    "DEBT_NEGATIVE_AMORTIZATION",
+    "GOAL_MISSED",
+    "GOAL_MISSED"
+  ],
+  "goalsStatus": [
+    {
+      "goalId": "emergency-6m",
+      "name": "Emergency Fund",
+      "targetAmount": 18000000,
+      "currentAmount": 8200000,
+      "progressPct": 45.56,
+      "achieved": false,
+      "achievedMonth": null,
+      "targetMonth": 24,
+      "onTrack": false,
+      "shortfall": 9800000
+    },
+    {
+      "goalId": "education-fund",
+      "name": "교육비 목돈",
+      "targetAmount": 30000000,
+      "currentAmount": 3000000,
+      "progressPct": 10,
+      "achieved": false,
+      "achievedMonth": null,
+      "targetMonth": 84,
+      "onTrack": false,
+      "shortfall": 27000000
+    },
+    {
+      "goalId": "goal-retirement",
+      "name": "은퇴 목표",
+      "targetAmount": 300000000,
+      "currentAmount": 12500000,
+      "progressPct": 4.17,
+      "achieved": false,
+      "achievedMonth": null,
+      "targetMonth": 360,
+      "onTrack": false,
+      "shortfall": 287500000
+    }
+  ],
+  "keyTimelinePoints": [
+    {
+      "monthIndex": 0,
+      "row": {
+        "month": 1,
+        "income": 0,
+        "pensionIncome": 0,
+        "expenses": 0,
+        "operatingCashflow": -850000,
+        "debtPayment": 8200000,
+        "debtInterest": 618188.27,
+        "debtPrincipalPaid": 7581811.73,
+        "contributionToInvest": 0,
+        "contributionToPension": 0,
+        "goalContribution": 0,
+        "investmentReturn": 50926.55,
+        "liquidAssets": 0,
+        "investmentAssets": 12550926.55,
+        "pensionAssets": 0,
+        "goalFundAssets": 23700000,
+        "totalDebt": 172418188.27,
+        "netWorth": -136167261.72,
+        "netWorthDelta": -567261.72,
+        "debtServiceRatio": 1,
+        "goalProgress": {
+          "emergency-6m": 45.56,
+          "education-fund": 10,
+          "goal-retirement": 4.17
+        }
+      }
+    },
+    {
+      "monthIndex": 12,
+      "row": {
+        "month": 13,
+        "income": 0,
+        "pensionIncome": 0,
+        "expenses": 0,
+        "operatingCashflow": -850000,
+        "debtPayment": 0,
+        "debtInterest": 614907.91,
+        "debtPrincipalPaid": 0,
+        "contributionToInvest": 0,
+        "contributionToPension": 0,
+        "goalContribution": 0,
+        "investmentReturn": 53472.87,
+        "liquidAssets": 0,
+        "investmentAssets": 13178472.87,
+        "pensionAssets": 0,
+        "goalFundAssets": 23700000,
+        "totalDebt": 179659752.18,
+        "netWorth": -142781279.3,
+        "netWorthDelta": -561435.03,
+        "debtServiceRatio": 1,
+        "goalProgress": {
+          "emergency-6m": 45.56,
+          "education-fund": 10,
+          "goal-retirement": 4.17
+        }
+      }
+    },
+    {
+      "monthIndex": 24,
+      "row": {
+        "month": 25,
+        "income": 0,
+        "pensionIncome": 0,
+        "expenses": 0,
+        "operatingCashflow": -850000,
+        "debtPayment": 0,
+        "debtInterest": 640734.04,
+        "debtPrincipalPaid": 0,
+        "contributionToInvest": 0,
+        "contributionToPension": 0,
+        "goalContribution": 0,
+        "investmentReturn": 56146.52,
+        "liquidAssets": 0,
+        "investmentAssets": 13837396.52,
+        "pensionAssets": 0,
+        "goalFundAssets": 23700000,
+        "totalDebt": 187205461.77,
+        "netWorth": -149668065.25,
+        "netWorthDelta": -584587.52,
+        "debtServiceRatio": 1,
+        "goalProgress": {
+          "emergency-6m": 45.56,
+          "education-fund": 10,
+          "goal-retirement": 4.17
+        }
+      }
+    }
+  ]
+}

@@ -193,7 +193,7 @@ describe("planning runPipeline", () => {
     expect(lastStatuses.find((step) => step.id === "scenarios")?.state).toBe("PENDING");
     expect(lastStatuses.find((step) => step.id === "monteCarlo")?.state).toBe("PENDING");
     expect(lastStatuses.find((step) => step.id === "actions")?.state).toBe("PENDING");
-    expect(lastStatuses.find((step) => step.id === "debt")?.state).toBe("PENDING");
+    expect(lastStatuses.find((step) => step.id === "debtStrategy")?.state).toBe("PENDING");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

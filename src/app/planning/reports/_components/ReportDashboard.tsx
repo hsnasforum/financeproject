@@ -105,7 +105,7 @@ export default function ReportDashboard({ vm }: Props) {
         </Card>
       )}
 
-      <Card className="space-y-2 p-5">
+      <Card className="space-y-2 p-5" data-testid="assumptions-overrides-panel">
         <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">
             적용된 가정 오버라이드 ({appliedOverrides.length})
@@ -113,7 +113,7 @@ export default function ReportDashboard({ vm }: Props) {
           {appliedOverrides.length > 0 ? (
             <ul className="mt-2 space-y-1 text-xs text-slate-700">
               {appliedOverrides.map((override) => (
-                <li key={`${override.key}:${override.updatedAt}`}>
+                <li data-testid="assumptions-overrides-item" key={`${override.key}:${override.updatedAt}`}>
                   <span className="font-semibold">{override.key}</span>
                   {" = "}
                   {override.value}

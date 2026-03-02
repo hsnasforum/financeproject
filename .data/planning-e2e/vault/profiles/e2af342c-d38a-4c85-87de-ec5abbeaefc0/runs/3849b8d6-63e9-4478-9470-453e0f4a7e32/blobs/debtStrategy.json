@@ -1,0 +1,69 @@
+{
+  "summary": {
+    "debtServiceRatio": 0.0551,
+    "totalMonthlyPaymentKrw": 264683,
+    "warningsCount": 0
+  },
+  "warnings": [],
+  "summaries": [
+    {
+      "liabilityId": "demo-loan-1",
+      "name": "Seed Loan",
+      "type": "amortizing",
+      "principalKrw": 18000000,
+      "aprPct": 6.2,
+      "remainingMonths": 84,
+      "monthlyPaymentKrw": 264683,
+      "monthlyInterestKrw": 93000,
+      "totalInterestRemainingKrw": 4233390,
+      "payoffMonthIndex": 85
+    }
+  ],
+  "whatIf": {
+    "termExtensions": [
+      {
+        "liabilityId": "demo-loan-1",
+        "newTermMonths": 120,
+        "newMonthlyPaymentKrw": 201650,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      }
+    ],
+    "termReductions": [
+      {
+        "liabilityId": "demo-loan-1",
+        "newTermMonths": 12,
+        "newMonthlyPaymentKrw": 1550851,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "demo-loan-1",
+        "newTermMonths": 24,
+        "newMonthlyPaymentKrw": 799394,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "demo-loan-1",
+        "newTermMonths": 36,
+        "newMonthlyPaymentKrw": 549228,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "demo-loan-1",
+        "newTermMonths": 60,
+        "newMonthlyPaymentKrw": 349667,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      }
+    ],
+    "extraPayments": []
+  }
+}

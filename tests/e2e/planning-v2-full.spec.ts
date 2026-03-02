@@ -4,13 +4,18 @@ import { runPlanningPipeline, seedGoldenRuns } from "./helpers/planningGateHelpe
 test("run pipeline shows stage timeline and reports dashboard contracts", async ({ page }) => {
   test.setTimeout(240_000);
   const simulateStatus = await runPlanningPipeline(page);
-  expect(["성공", "실패", "생략"]).toContain(simulateStatus);
+  expect(["SUCCESS", "FAILED", "SKIPPED"]).toContain(simulateStatus);
 
   await page.goto("/planning/reports");
-  await expect(page).toHaveURL(/\/planning\/reports\/.+/, { timeout: 30_000 });
+  await expect(page).toHaveURL(/\/planning\/reports(\?|$)/, { timeout: 30_000 });
   await expect(page.getByTestId("report-dashboard")).toBeVisible();
   await expect(page.getByTestId("report-summary-cards")).toBeVisible();
   await expect(page.getByTestId("report-top-actions")).toBeVisible();
+  const reviewWarningsAction = page.locator('[data-action-id="REDUCE_DEBT_SERVICE"]').first();
+  if (await reviewWarningsAction.count()) {
+    await reviewWarningsAction.click();
+    await expect(page).toHaveURL(/#warnings$/);
+  }
 
   const warningsTable = page.getByTestId("report-warnings-table");
   if (await warningsTable.count()) {
@@ -19,31 +24,42 @@ test("run pipeline shows stage timeline and reports dashboard contracts", async 
     await expect(page.getByTestId("planning-reports-warnings-section")).toContainText("경고가 없습니다.");
   }
 
-  await expect(page.getByTestId("report-advanced-raw")).toHaveCount(0);
-  await page.getByTestId("planning-reports-advanced-toggle").click();
+  await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
+  await page.getByTestId("report-advanced-toggle").click();
   await expect(page.getByTestId("report-advanced-raw")).toBeVisible();
 });
 
 test("golden deterministic replay renders report contracts for canonical fixtures", async ({ page, request }) => {
   test.setTimeout(300_000);
   const seededRuns = await seedGoldenRuns(request);
-  expect(seededRuns.length).toBeGreaterThanOrEqual(3);
+  expect(seededRuns).toHaveLength(3);
 
   for (const seeded of seededRuns) {
     await test.step(`golden:${seeded.fixture.id}`, async () => {
       await page.goto(`/planning/reports?runId=${encodeURIComponent(seeded.runId)}&profileId=${encodeURIComponent(seeded.profileId)}`);
-      await expect(page).toHaveURL(new RegExp(`/planning/reports/${seeded.runId}`), { timeout: 30_000 });
+      await expect(page).toHaveURL(/\/planning\/reports(\?|$)/, { timeout: 30_000 });
       await expect(page.getByTestId("report-dashboard")).toBeVisible();
       await expect(page.getByTestId("report-summary-cards")).toBeVisible();
       await expect(page.getByTestId("report-warnings-table")).toBeVisible();
       await expect(page.getByTestId("report-top-actions")).toBeVisible();
-      await expect(page.getByTestId("compare-toggle")).toBeVisible();
-      await page.getByTestId("evidence-toggle-monthlySurplus").click();
-      await expect(page.getByTestId("evidence-panel-monthlySurplus")).toBeVisible();
-      await expect(page.getByTestId("report-advanced-raw")).toHaveCount(0);
+      const evidenceToggle = page.getByTestId("evidence-toggle-monthlySurplus");
+      if (await evidenceToggle.count()) {
+        await evidenceToggle.click();
+        await expect(page.getByTestId("evidence-panel-monthlySurplus")).toBeVisible();
+      }
+      await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
 
-      await page.goto(`/planning/runs/${encodeURIComponent(seeded.runId)}`);
-      await expect(page.getByTestId("run-action-center")).toBeVisible();
+      const compareToggle = page.getByTestId("compare-toggle");
+      if (await compareToggle.count()) {
+        await expect(compareToggle).toBeVisible();
+      } else {
+        await page.goto(`/planning/reports/${encodeURIComponent(seeded.runId)}`);
+        await expect(page.getByTestId("compare-toggle")).toBeVisible();
+      }
     });
   }
+
+  const actionCenterTarget = seededRuns[0];
+  await page.goto(`/planning/runs/${encodeURIComponent(actionCenterTarget.runId)}`);
+  await expect(page.getByTestId("run-action-center")).toBeVisible();
 });

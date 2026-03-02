@@ -1,0 +1,68 @@
+{
+  "summary": {
+    "debtServiceRatio": 0.0588,
+    "totalMonthlyPaymentKrw": 382037,
+    "warningsCount": 0
+  },
+  "warnings": [],
+  "summaries": [
+    {
+      "liabilityId": "good-home-loan",
+      "name": "Home Loan",
+      "type": "amortizing",
+      "principalKrw": 52000000,
+      "aprPct": 3.9,
+      "remainingMonths": 180,
+      "monthlyPaymentKrw": 382037,
+      "monthlyInterestKrw": 169000,
+      "totalInterestRemainingKrw": 16766675,
+      "payoffMonthIndex": 180
+    }
+  ],
+  "whatIf": {
+    "termExtensions": [],
+    "termReductions": [
+      {
+        "liabilityId": "good-home-loan",
+        "newTermMonths": 12,
+        "newMonthlyPaymentKrw": 4425420,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "good-home-loan",
+        "newTermMonths": 24,
+        "newMonthlyPaymentKrw": 2255782,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "good-home-loan",
+        "newTermMonths": 36,
+        "newMonthlyPaymentKrw": 1532935,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "good-home-loan",
+        "newTermMonths": 60,
+        "newMonthlyPaymentKrw": 955314,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      },
+      {
+        "liabilityId": "good-home-loan",
+        "newTermMonths": 120,
+        "newMonthlyPaymentKrw": 524007,
+        "notes": [
+          "Assumes same principal and APR; only term changed."
+        ]
+      }
+    ],
+    "extraPayments": []
+  }
+}

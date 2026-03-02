@@ -84,6 +84,7 @@ async function previewCleanupAction(params: OpsActionParams): Promise<OpsActionP
         kept: plan.kept,
         toDelete: plan.remove.length,
       },
+      sampleIds: ids.slice(0, PREVIEW_ID_LIMIT),
       ids: ids.slice(0, PREVIEW_ID_LIMIT),
       truncated: ids.length > PREVIEW_ID_LIMIT,
     },
@@ -104,6 +105,7 @@ async function previewRepairIndexAction(): Promise<OpsActionPreviewResult> {
         fail: report.summary.fail,
         warn: report.summary.warn,
       },
+      sampleIds: ids.slice(0, PREVIEW_ID_LIMIT),
       ids: ids.slice(0, PREVIEW_ID_LIMIT),
       truncated: ids.length > PREVIEW_ID_LIMIT,
     },
@@ -125,8 +127,40 @@ async function previewRunMigrationsAction(): Promise<OpsActionPreviewResult> {
         deferred: report.summary.deferred,
         failed: report.summary.failed,
       },
+      sampleIds: ids.slice(0, PREVIEW_ID_LIMIT),
       ids: ids.slice(0, PREVIEW_ID_LIMIT),
       truncated: ids.length > PREVIEW_ID_LIMIT,
+    },
+  };
+}
+
+async function previewDeleteRunAction(params: OpsActionParams): Promise<OpsActionPreviewResult> {
+  const runId = toSafeId(params.runId);
+  if (!runId) {
+    return {
+      ok: true,
+      summary: {
+        text: "삭제할 runId가 필요합니다.",
+        counts: {
+          candidates: 0,
+        },
+        sampleIds: [],
+        ids: [],
+      },
+    };
+  }
+  const indexRows = await listRunIndexEntries({ limit: 50_000, offset: 0 });
+  const exists = indexRows.some((row) => row.id === runId);
+  return {
+    ok: true,
+    summary: {
+      text: exists ? "선택한 실행 기록 1건을 삭제합니다." : "선택한 runId를 찾지 못했습니다. 삭제 시도는 계속할 수 있습니다.",
+      counts: {
+        candidates: exists ? 1 : 0,
+      },
+      sampleIds: [runId],
+      ids: [runId],
+      truncated: false,
     },
   };
 }
@@ -226,6 +260,27 @@ async function runMigrationsAction(): Promise<OpsActionRunResult> {
   };
 }
 
+async function runDeleteRunAction(params: OpsActionParams): Promise<OpsActionRunResult> {
+  const runId = toSafeId(params.runId);
+  if (!runId) {
+    return {
+      ok: false,
+      message: "runId가 필요합니다.",
+      errorCode: "VALIDATION",
+    };
+  }
+  const deleted = await deleteRun(runId);
+  return {
+    ok: deleted,
+    message: deleted ? `실행 기록 삭제 완료 (${runId})` : `실행 기록을 찾지 못했습니다 (${runId})`,
+    data: {
+      runId,
+      deleted,
+    },
+    ...(deleted ? {} : { errorCode: "NOT_FOUND" }),
+  };
+}
+
 const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
   ASSUMPTIONS_REFRESH: {
     id: "ASSUMPTIONS_REFRESH",
@@ -256,6 +311,14 @@ const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
     requirePreview: true,
     confirmText: "RUN OPS_MIGRATIONS",
   },
+  DELETE_RUN: {
+    id: "DELETE_RUN",
+    title: "실행 기록 삭제",
+    description: "선택한 runId 실행 기록을 삭제합니다.",
+    dangerous: true,
+    requirePreview: true,
+    confirmText: "RUN OPS_DELETE_RUN",
+  },
 };
 
 export const OPS_ACTION_REGISTRY: Record<OpsActionId, OpsActionDefinition> = ACTION_DEFINITIONS;
@@ -281,9 +344,11 @@ export function validateOpsActionParams(actionId: OpsActionId, params: unknown):
     };
   }
 
-  if (actionId === "REPAIR_INDEX" || actionId === "RUN_MIGRATIONS") {
+  if (actionId === "REPAIR_INDEX" || actionId === "RUN_MIGRATIONS" || actionId === "DELETE_RUN") {
     const confirmText = asString(row.confirmText);
+    const runId = asString(row.runId);
     return {
+      ...(runId ? { runId } : {}),
       ...(confirmText ? { confirmText } : {}),
     };
   }
@@ -296,6 +361,7 @@ export async function previewOpsAction(actionId: OpsActionId, params: OpsActionP
   if (actionId === "RUNS_CLEANUP") return previewCleanupAction(params);
   if (actionId === "REPAIR_INDEX") return previewRepairIndexAction();
   if (actionId === "RUN_MIGRATIONS") return previewRunMigrationsAction();
+  if (actionId === "DELETE_RUN") return previewDeleteRunAction(params);
 
   return {
     ok: true,
@@ -310,9 +376,11 @@ export async function runOpsAction(actionId: OpsActionId, params: OpsActionParam
   if (actionId === "RUNS_CLEANUP") return runCleanupAction(params);
   if (actionId === "REPAIR_INDEX") return runRepairIndexAction();
   if (actionId === "RUN_MIGRATIONS") return runMigrationsAction();
+  if (actionId === "DELETE_RUN") return runDeleteRunAction(params);
 
   return {
     ok: false,
     message: "지원하지 않는 actionId 입니다.",
+    errorCode: "NOT_IMPLEMENTED",
   };
 }

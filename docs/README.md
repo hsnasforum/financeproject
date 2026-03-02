@@ -20,6 +20,9 @@
 - [planning-v2-quickstart.md](./planning-v2-quickstart.md)
 - [planning-v2-setup-playbook.md](./planning-v2-setup-playbook.md)
 - [planning-v2-desktop-local.md](./planning-v2-desktop-local.md)
+- [runtime.md](./runtime.md)
+- [windows.md](./windows.md)
+- [update.md](./update.md)
 - [planning-v2-user.md](./planning-v2-user.md)
 - [planning-v2-ops.md](./planning-v2-ops.md)
 - Ops about: `/ops/about`
@@ -43,6 +46,7 @@
 - [planning-v2-onepage.md](./planning-v2-onepage.md)
 - [planning-v3-migration.md](./planning-v3-migration.md)
 - [planning-v3-kickoff.md](./planning-v3-kickoff.md)
+- [release.md](./release.md)
 - Final report: `docs/releases/planning-v2-final-report-{version}.md`
 - Release ops checklist: `../RELEASE_CHECKLIST.md`
 

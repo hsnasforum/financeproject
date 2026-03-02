@@ -42,9 +42,15 @@ type Props = {
 };
 
 function asFiniteNumber(value: unknown, fallback: number): number {
-  const parsed = Number(value);
+  const normalized = typeof value === "string" ? value.replace(/,/g, "").trim() : value;
+  const parsed = Number(normalized);
   if (!Number.isFinite(parsed)) return fallback;
   return parsed;
+}
+
+function formatGroupedIntegerInput(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 0 }).format(Math.max(0, Math.trunc(value)));
 }
 
 function formatDateTime(value: string): string {
@@ -110,7 +116,7 @@ export default function CandidateComparisonSection({ runId }: Props) {
           throw new Error(body?.error?.message ?? "후보 비교 데이터를 불러오지 못했습니다.");
         }
         setPayload(body.data);
-        setAmountKrw(String(body.data.defaults.amountKrw));
+        setAmountKrw(formatGroupedIntegerInput(body.data.defaults.amountKrw));
         setTaxRatePct(String(body.data.defaults.taxRatePct));
       } catch (loadError) {
         if (!active) return;
@@ -202,7 +208,14 @@ export default function CandidateComparisonSection({ runId }: Props) {
             </label>
             <label className="text-xs font-semibold text-slate-600">
               비교 금액(KRW)
-              <input className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm" type="number" min={100000} value={amountKrw} onChange={(event) => setAmountKrw(event.target.value)} />
+              <input
+                className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                inputMode="numeric"
+                min={100000}
+                type="text"
+                value={amountKrw}
+                onChange={(event) => setAmountKrw(formatGroupedIntegerInput(asFiniteNumber(event.target.value, 0)))}
+              />
             </label>
             <label className="text-xs font-semibold text-slate-600">
               세율(%)

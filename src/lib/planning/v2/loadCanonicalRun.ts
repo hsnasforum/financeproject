@@ -19,6 +19,27 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeStageId(value: unknown): string {
+  const id = asString(value);
+  if (id === "debt") return "debtStrategy";
+  return id;
+}
+
+function normalizeStages(value: unknown): PlanningRunRecord["stages"] {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map((entry) => {
+      const row = asRecord(entry);
+      const id = normalizeStageId(row.id);
+      if (!id) return null;
+      return {
+        ...(row as PlanningRunRecord["stages"][number]),
+        id: id as PlanningRunRecord["stages"][number]["id"],
+      };
+    })
+    .filter((entry): entry is PlanningRunRecord["stages"][number] => entry !== null);
+}
+
 function readSchemaVersion(value: Record<string, unknown>): number {
   const raw = Math.trunc(Number(value.schemaVersion));
   if (!Number.isFinite(raw)) return 0;
@@ -75,7 +96,7 @@ export function migrateRun(raw: unknown): PlanningRunRecord {
     input: asRecord(raw.input) as PlanningRunRecord["input"],
     meta: asRecord(raw.meta) as PlanningRunRecord["meta"],
     outputs: asRecord(raw.outputs) as PlanningRunRecord["outputs"],
-    ...(Array.isArray(raw.stages) ? { stages: raw.stages as PlanningRunRecord["stages"] } : {}),
+    ...(Array.isArray(raw.stages) ? { stages: normalizeStages(raw.stages) } : {}),
     ...(typeof raw.overallStatus === "string" ? { overallStatus: raw.overallStatus as PlanningRunRecord["overallStatus"] } : {}),
     ...(isRecord(raw.reproducibility) ? { reproducibility: raw.reproducibility as PlanningRunRecord["reproducibility"] } : {}),
   };

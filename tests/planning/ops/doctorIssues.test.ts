@@ -13,7 +13,7 @@ describe("doctorIssues", () => {
 
     const issues = sortDoctorIssues(buildDoctorIssues(checks, "2026-03-02T00:00:00.000Z"));
 
-    expect(issues.map((row) => row.checkId)).toEqual(["c", "b", "d", "a"]);
+    expect(issues.map((row) => row.title)).toEqual(["C", "B", "D", "A"]);
     expect(issues[0]?.severity).toBe("risk");
     expect(issues[1]?.severity).toBe("warn");
     expect(issues[3]?.severity).toBe("info");

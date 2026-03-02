@@ -6,7 +6,10 @@ import { loadOpsPolicy } from "./opsPolicy";
 import { listOpsAuditEvents } from "./securityAuditLog";
 import { redactText } from "../planning/privacy/redact";
 import { DEFAULT_PLANNING_POLICY } from "../planning/catalog/planningPolicy";
+import { DEFAULT_INTEREST_TAX_POLICY } from "../planning/calc/taxPolicy";
+import { ROUNDING_POLICY } from "../planning/calc/roundingPolicy";
 import { getPlanningMigrationStatePath, inspectPlanningMigrations } from "../planning/migrations/manager";
+import type { PlanningAppInfo } from "../planning/server/runtime/appInfo";
 
 type DoctorPayloadLike = {
   ok?: unknown;
@@ -17,8 +20,7 @@ type DoctorPayloadLike = {
 
 type SupportBundleBuildInput = {
   doctorPayload: unknown;
-  appVersion: string;
-  engineVersion: string;
+  appInfo: PlanningAppInfo;
   now?: Date;
 };
 
@@ -76,6 +78,12 @@ function toIso(value: unknown, fallback = new Date().toISOString()): string {
   const parsed = Date.parse(raw);
   if (!raw || !Number.isFinite(parsed)) return fallback;
   return new Date(parsed).toISOString();
+}
+
+function truncateIdentifier(value: unknown, length = 8): string | undefined {
+  const raw = asString(value);
+  if (!raw) return undefined;
+  return raw.slice(0, Math.max(1, length));
 }
 
 function sanitizeForBundle(value: unknown, keyHint = "", depth = 0): unknown {
@@ -332,6 +340,38 @@ function summarizeMetricEvents(events: Array<{ type: string; at: string; meta?: 
   };
 }
 
+function buildMetricsRecent(events: Array<{ type: string; at: string; meta?: Record<string, unknown> }>): Array<{
+  type: string;
+  at: string;
+  status?: string;
+  stage?: string;
+  durationMs?: number;
+  errorCode?: string;
+  runIdPrefix?: string;
+  profileIdPrefix?: string;
+}> {
+  return events.slice(0, 200).map((event) => {
+    const meta = asRecord(event.meta);
+    const stage = asString(meta.stage || meta.stageId);
+    const durationMs = asNumber(meta.durationMs);
+    const status = asString(meta.status);
+    const errorCode = asString(meta.code || meta.errorCode);
+    const runIdPrefix = truncateIdentifier(meta.runId);
+    const profileIdPrefix = truncateIdentifier(meta.profileId);
+
+    return {
+      type: asString(event.type) || "UNKNOWN",
+      at: toIso(event.at),
+      ...(status ? { status } : {}),
+      ...(stage ? { stage } : {}),
+      ...(typeof durationMs === "number" ? { durationMs: Math.max(0, Math.trunc(durationMs)) } : {}),
+      ...(errorCode ? { errorCode } : {}),
+      ...(runIdPrefix ? { runIdPrefix } : {}),
+      ...(profileIdPrefix ? { profileIdPrefix } : {}),
+    };
+  });
+}
+
 export async function buildSupportBundle(input: SupportBundleBuildInput): Promise<SupportBundleOutput> {
   const now = input.now ?? new Date();
   const createdAt = now.toISOString();
@@ -350,25 +390,34 @@ export async function buildSupportBundle(input: SupportBundleBuildInput): Promis
     summary: summarizeOpsMetricEvents(metricEvents),
     ...summarizeMetricEvents(metricEvents),
   };
+  const metricsRecent = buildMetricsRecent(metricEvents);
 
   const policySnapshot = {
     opsPolicy: loadOpsPolicy(),
     planningPolicy: DEFAULT_PLANNING_POLICY,
+    calcPolicy: {
+      tax: DEFAULT_INTEREST_TAX_POLICY,
+      rounding: ROUNDING_POLICY,
+    },
   };
+
+  const includes = [
+    "doctor.json",
+    "app.json",
+    "policy.json",
+    "metrics_summary.json",
+    "metrics_recent.json",
+  ];
+  if (audit.total > 0) includes.push("audit_summary.json");
+  if (migrationState.stateExists) includes.push("migration_state.json");
 
   const manifest: SupportBundleOutput["manifest"] = {
     kind: "planning-support-bundle",
     formatVersion: 1,
     createdAt,
-    appVersion: input.appVersion,
-    engineVersion: input.engineVersion,
-    includes: [
-      "doctor.json",
-      "migrationState.json",
-      "policy.json",
-      "audit_summary.json",
-      "metrics_summary.json",
-    ],
+    appVersion: input.appInfo.appVersion,
+    engineVersion: input.appInfo.engineVersion,
+    includes,
     excludes: [
       "profiles/*",
       "runs/*",
@@ -391,7 +440,36 @@ export async function buildSupportBundle(input: SupportBundleBuildInput): Promis
       source: "api/ops/doctor",
       report: doctor,
     },
-    "migrationState.json": {
+    "app.json": {
+      createdAt,
+      appVersion: input.appInfo.appVersion,
+      engineVersion: input.appInfo.engineVersion,
+      dataDir: input.appInfo.dataDir,
+      hostPolicy: input.appInfo.hostPolicy,
+    },
+    "policy.json": {
+      createdAt,
+      ...policySnapshot,
+    },
+    "metrics_summary.json": {
+      createdAt,
+      ...metrics,
+    },
+    "metrics_recent.json": {
+      createdAt,
+      events: metricsRecent,
+    },
+  };
+
+  if (audit.total > 0) {
+    payloads["audit_summary.json"] = {
+      createdAt,
+      ...audit,
+    };
+  }
+
+  if (migrationState.stateExists) {
+    payloads["migration_state.json"] = {
       createdAt,
       inspect: {
         generatedAt: migrationInspect.generatedAt,
@@ -407,20 +485,8 @@ export async function buildSupportBundle(input: SupportBundleBuildInput): Promis
         })),
       },
       state: migrationState,
-    },
-    "policy.json": {
-      createdAt,
-      ...policySnapshot,
-    },
-    "audit_summary.json": {
-      createdAt,
-      ...audit,
-    },
-    "metrics_summary.json": {
-      createdAt,
-      ...metrics,
-    },
-  };
+    };
+  }
 
   const zipEntries: ZipFileEntry[] = Object.entries(payloads).map(([entryPath, value]) => {
     const sanitized = sanitizeForBundle(value);

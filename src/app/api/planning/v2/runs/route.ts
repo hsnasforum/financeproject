@@ -6,7 +6,7 @@ import {
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
-import { jsonError, jsonOk } from "../../../../../lib/http/apiResponse";
+import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import {
   findAssumptionsSnapshotId,
   loadAssumptionsSnapshotById,
@@ -16,8 +16,8 @@ import {
   mergeAssumptionsWithProvenance,
   toAssumptionsOverridesFromRecord,
 } from "../../../../../lib/planning/server/assumptions/overrides";
-import { loadAssumptionsOverrides } from "../../../../../lib/planning/server/assumptions/overridesStorage";
-import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
+import { loadAssumptionsOverridesByProfile } from "../../../../../lib/planning/server/assumptions/overridesStorage";
+import { appendEvent as appendOpsMetricEvent } from "../../../../../lib/ops/metrics/metricsStore";
 import { mapSnapshotToAssumptionsV2, mapSnapshotToScenarioExtrasV2 } from "../../../../../lib/planning/server/assumptions/mapSnapshotToAssumptionsV2";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { DEFAULT_ASSUMPTIONS_V2 } from "../../../../../lib/planning/server/v2/defaults";
@@ -44,7 +44,8 @@ import { preflightRun } from "../../../../../lib/planning/v2/preflight";
 import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
 import { loadCanonicalProfile } from "../../../../../lib/planning/v2/loadCanonicalProfile";
 import { buildRunReproducibilityMeta } from "../../../../../lib/planning/v2/reproducibility";
-import { applyScenario, validateScenario, type ScenarioMeta, type ScenarioPatch } from "../../../../../lib/planning/v2/scenario";
+import { applyProfilePatch, type ScenarioPatch } from "../../../../../lib/planning/v2/profilePatch";
+import { applyScenario, validateScenario, type ScenarioMeta, type ScenarioPatch as LegacyScenarioPatch } from "../../../../../lib/planning/v2/scenario";
 import { DEFAULT_PLANNING_POLICY } from "../../../../../lib/planning/catalog/planningPolicy";
 import { PlanningV2ValidationError, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths } from "../../../../../lib/planning/server/v2/validate";
@@ -66,9 +67,12 @@ type RunsCreateBody = {
     debtStrategy?: unknown;
     includeProducts?: unknown;
     monteCarlo?: unknown;
+    scenario?: unknown;
   } | null;
   csrf?: unknown;
 } | null;
+
+type RunInputScenario = NonNullable<PlanningRunRecord["input"]["scenario"]>;
 
 type SnapshotShape = Awaited<ReturnType<typeof loadLatestAssumptionsSnapshot>>;
 
@@ -227,7 +231,7 @@ function parseScenarioMeta(value: unknown): ScenarioMeta | undefined {
     ]);
   }
 
-  const patches: ScenarioPatch[] = patchesRaw.map((entry, index) => {
+  const patches: LegacyScenarioPatch[] = patchesRaw.map((entry, index) => {
     if (!isRecord(entry)) {
       throw new PlanningV2ValidationError("Invalid scenario input", [
         { path: `scenario.patches[${index}]`, message: "must be an object" },
@@ -265,6 +269,153 @@ function parseScenarioMeta(value: unknown): ScenarioMeta | undefined {
     ...(baselineRunId ? { baselineRunId } : {}),
     createdAt,
     patches,
+  };
+}
+
+function parseScenarioPatchInput(value: unknown, pathPrefix: string): ScenarioPatch {
+  if (!isRecord(value)) {
+    throw new PlanningV2ValidationError("Invalid scenario input", [
+      { path: pathPrefix, message: "must be an object" },
+    ]);
+  }
+  const opRaw = asString(value.op);
+  const valueNumber = Number(value.value);
+  if (!Number.isFinite(valueNumber)) {
+    throw new PlanningV2ValidationError("Invalid scenario input", [
+      { path: `${pathPrefix}.value`, message: "must be a finite number" },
+    ]);
+  }
+
+  if (opRaw === "mul" || opRaw === "set") {
+    const field = asString(value.field);
+    if (
+      field !== "monthlyIncomeNet"
+      && field !== "monthlyEssentialExpenses"
+      && field !== "monthlyDiscretionaryExpenses"
+    ) {
+      throw new PlanningV2ValidationError("Invalid scenario input", [
+        {
+          path: `${pathPrefix}.field`,
+          message: "must be one of monthlyIncomeNet|monthlyEssentialExpenses|monthlyDiscretionaryExpenses",
+        },
+      ]);
+    }
+    return {
+      op: opRaw,
+      field: field as "monthlyIncomeNet" | "monthlyEssentialExpenses" | "monthlyDiscretionaryExpenses",
+      value: valueNumber,
+    };
+  }
+
+  if (opRaw === "debt.mulMinimumPayment" || opRaw === "debt.setMinimumPayment") {
+    const debtId = asString(value.debtId);
+    if (!debtId) {
+      throw new PlanningV2ValidationError("Invalid scenario input", [
+        { path: `${pathPrefix}.debtId`, message: "must be a non-empty string" },
+      ]);
+    }
+    return {
+      op: opRaw,
+      debtId,
+      value: valueNumber,
+    };
+  }
+
+  throw new PlanningV2ValidationError("Invalid scenario input", [
+    {
+      path: `${pathPrefix}.op`,
+      message: "must be one of mul|set|debt.mulMinimumPayment|debt.setMinimumPayment",
+    },
+  ]);
+}
+
+function parseRunInputScenario(value: unknown): RunInputScenario | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (!isRecord(value)) {
+    throw new PlanningV2ValidationError("Invalid scenario input", [
+      { path: "input.scenario", message: "must be an object" },
+    ]);
+  }
+  const title = asString(value.title);
+  const baseRunId = asString(value.baseRunId);
+  const patchRaw = value.patch;
+  if (!Array.isArray(patchRaw) || patchRaw.length < 1) {
+    throw new PlanningV2ValidationError("Invalid scenario input", [
+      { path: "input.scenario.patch", message: "must be a non-empty array" },
+    ]);
+  }
+  const patch = patchRaw.map((entry, index) => parseScenarioPatchInput(entry, `input.scenario.patch[${index}]`));
+  return {
+    ...(title ? { title } : {}),
+    ...(baseRunId ? { baseRunId } : {}),
+    patch,
+  };
+}
+
+function scenarioPatchToLegacyPatch(
+  patch: ScenarioPatch,
+): { path: string; op: "set" | "multiply"; value: number } {
+  if (patch.op === "set") {
+    return { path: `/${patch.field}`, op: "set", value: patch.value };
+  }
+  if (patch.op === "mul") {
+    return { path: `/${patch.field}`, op: "multiply", value: patch.value };
+  }
+  if (patch.op === "debt.setMinimumPayment") {
+    return { path: `/debts/${patch.debtId}/minimumPayment`, op: "set", value: patch.value };
+  }
+  return { path: `/debts/${patch.debtId}/minimumPayment`, op: "multiply", value: patch.value };
+}
+
+function toLegacyScenarioMetaFromInput(inputScenario: RunInputScenario): ScenarioMeta {
+  return {
+    id: crypto.randomUUID(),
+    name: inputScenario.title || "What-if scenario",
+    ...(inputScenario.baseRunId ? { baselineRunId: inputScenario.baseRunId } : {}),
+    createdAt: new Date().toISOString(),
+    patches: inputScenario.patch.map((patch) => scenarioPatchToLegacyPatch(patch)),
+  };
+}
+
+function legacyPatchToInputPatch(
+  patch: { path: string; op: "set" | "add" | "multiply"; value: number },
+): ScenarioPatch | null {
+  const normalizedPath = asString(patch.path);
+  if (patch.op === "add") return null;
+  if (
+    normalizedPath === "/monthlyIncomeNet"
+    || normalizedPath === "/monthlyEssentialExpenses"
+    || normalizedPath === "/monthlyDiscretionaryExpenses"
+  ) {
+    return {
+      op: patch.op === "set" ? "set" : "mul",
+      field: normalizedPath.slice(1) as "monthlyIncomeNet" | "monthlyEssentialExpenses" | "monthlyDiscretionaryExpenses",
+      value: patch.value,
+    };
+  }
+  const debtMatch = /^\/debts\/([^/]+)\/minimumPayment$/.exec(normalizedPath);
+  if (debtMatch) {
+    return {
+      op: patch.op === "set" ? "debt.setMinimumPayment" : "debt.mulMinimumPayment",
+      debtId: debtMatch[1],
+      value: patch.value,
+    };
+  }
+  return null;
+}
+
+function legacyScenarioToInputScenario(legacy: ScenarioMeta): RunInputScenario | undefined {
+  const patch: ScenarioPatch[] = [];
+  for (const entry of legacy.patches) {
+    const converted = legacyPatchToInputPatch(entry);
+    if (!converted) return undefined;
+    patch.push(converted);
+  }
+  if (patch.length < 1) return undefined;
+  return {
+    ...(legacy.name ? { title: legacy.name } : {}),
+    ...(legacy.baselineRunId ? { baseRunId: legacy.baselineRunId } : {}),
+    patch,
   };
 }
 
@@ -504,19 +655,21 @@ async function appendRunStageMetrics(input: {
   profileId: string;
   overallStatus: string;
   stages: PlanningRunStageResult[];
+  totalDurationMs?: number;
 }) {
   const tasks = input.stages.map((stage) => appendOpsMetricEvent({
     type: "RUN_STAGE",
-    meta: {
-      requestId: input.requestId,
-      ...(input.runId ? { runId: input.runId } : {}),
-      profileId: input.profileId,
-      stageId: stage.id,
-      status: stage.status,
-      ...(typeof stage.durationMs === "number" ? { durationMs: stage.durationMs } : {}),
-      ...(stage.reason ? { reason: stage.reason } : {}),
-      overallStatus: input.overallStatus,
-    },
+    status: stage.status,
+    ...(input.runId ? { runId: input.runId } : {}),
+    stage: stage.id,
+    ...(typeof stage.durationMs === "number" ? { durationMs: stage.durationMs } : {}),
+    ...(stage.reason ? { errorCode: stage.reason } : {}),
+  }));
+  tasks.push(appendOpsMetricEvent({
+    type: "RUN_PIPELINE",
+    status: input.overallStatus,
+    ...(input.runId ? { runId: input.runId } : {}),
+    ...(typeof input.totalDurationMs === "number" ? { durationMs: input.totalDurationMs } : {}),
   }));
   await Promise.allSettled(tasks);
 }
@@ -608,6 +761,7 @@ export async function POST(request: Request) {
   };
   let includeProducts: boolean;
   let monteCarloConfig: { paths: number; seed: number } | undefined;
+  let scenarioInput: RunInputScenario | undefined;
   let scenarioMeta: ScenarioMeta | undefined;
   try {
     horizonMonths = validateHorizonMonths(inputRow.horizonMonths);
@@ -620,6 +774,7 @@ export async function POST(request: Request) {
     debtStrategyInput = parseDebtStrategyInput(inputRow.debtStrategy);
     includeProducts = parseIncludeProducts(inputRow.includeProducts);
     monteCarloConfig = parseMonteCarloInput(inputRow.monteCarlo);
+    scenarioInput = parseRunInputScenario(inputRow.scenario);
     scenarioMeta = parseScenarioMeta(body.scenario);
   } catch (error) {
     if (error instanceof PlanningV2ValidationError) {
@@ -673,8 +828,9 @@ export async function POST(request: Request) {
     return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
   }
 
-  if (scenarioMeta?.baselineRunId) {
-    const baselineRun = await getRun(scenarioMeta.baselineRunId);
+  const scenarioBaselineRunId = scenarioInput?.baseRunId || scenarioMeta?.baselineRunId;
+  if (scenarioBaselineRunId) {
+    const baselineRun = await getRun(scenarioBaselineRunId);
     if (!baselineRun) {
       appendRunAudit({
         event: "PLANNING_RUN_CREATE",
@@ -685,9 +841,13 @@ export async function POST(request: Request) {
       });
       return jsonError("INPUT", "scenario baseline runId를 찾을 수 없습니다.", {
         status: 400,
-        issues: [`scenario.baselineRunId: '${scenarioMeta.baselineRunId}' not found`],
+        issues: [`input.scenario.baseRunId: '${scenarioBaselineRunId}' not found`],
       });
     }
+  }
+
+  if (!scenarioInput && scenarioMeta) {
+    scenarioInput = legacyScenarioToInputScenario(scenarioMeta);
   }
 
   let canonicalProfile = profileRecord.profile;
@@ -725,7 +885,28 @@ export async function POST(request: Request) {
     return jsonError("INTERNAL", "실행 저장 검증 중 오류가 발생했습니다.");
   }
 
-  if (scenarioMeta) {
+  if (scenarioInput) {
+    try {
+      canonicalProfile = applyProfilePatch(canonicalProfile, scenarioInput.patch);
+    } catch (error) {
+      appendRunAudit({
+        event: "PLANNING_RUN_CREATE",
+        route: "/api/planning/v2/runs",
+        result: "ERROR",
+        recordId: profileId,
+        message: "scenario apply failed",
+      });
+      if (error instanceof PlanningV2ValidationError) {
+        return jsonError("INPUT", "scenario patch 검증에 실패했습니다.", {
+          status: 400,
+          issues: error.issues.map((issue) => `${issue.path}: ${issue.message}`),
+        });
+      }
+      return jsonError("INPUT", error instanceof Error ? error.message : "scenario 적용에 실패했습니다.", {
+        status: 400,
+      });
+    }
+  } else if (scenarioMeta) {
     const scenarioIssues = validateScenario(canonicalProfile, scenarioMeta.patches);
     if (scenarioIssues.length > 0) {
       appendRunAudit({
@@ -833,9 +1014,9 @@ export async function POST(request: Request) {
     return jsonError("SNAPSHOT", message, { status: 500 });
   }
 
-  let storedAssumptionsOverrides = [] as Awaited<ReturnType<typeof loadAssumptionsOverrides>>;
+  let storedAssumptionsOverrides = [] as Awaited<ReturnType<typeof loadAssumptionsOverridesByProfile>>;
   try {
-    storedAssumptionsOverrides = await loadAssumptionsOverrides(profileRecord.id);
+    storedAssumptionsOverrides = await loadAssumptionsOverridesByProfile(profileRecord.id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load assumptions overrides";
     appendRunAudit({
@@ -973,7 +1154,7 @@ export async function POST(request: Request) {
           return actionsResult;
         },
       },
-      debt: {
+      debtStrategy: {
         enabled: analyzeDebtEnabled,
         outputRefKey: "outputs.debtStrategy",
         run: () => {
@@ -981,7 +1162,7 @@ export async function POST(request: Request) {
             liabilities: debtLiabilities,
             monthlyIncomeKrw: Math.max(
               0,
-              profileRecord.profile.cashflow?.monthlyIncomeKrw ?? profileRecord.profile.monthlyIncomeNet,
+              canonicalProfile.cashflow?.monthlyIncomeKrw ?? canonicalProfile.monthlyIncomeNet,
             ),
             offers: debtStrategyInput.offers,
             options: debtStrategyInput.options,
@@ -1000,6 +1181,7 @@ export async function POST(request: Request) {
         profileId: profileRecord.id,
         overallStatus: pipeline.overallStatus,
         stages,
+        totalDurationMs: stages.reduce((sum, stage) => sum + (typeof stage.durationMs === "number" ? stage.durationMs : 0), 0),
       });
       appendRunAudit({
         event: "PLANNING_RUN_CREATE",
@@ -1095,11 +1277,12 @@ export async function POST(request: Request) {
       appliedOverrides,
       policy: DEFAULT_PLANNING_POLICY,
     });
+    const scenarioMetaForRecord = scenarioMeta ?? (scenarioInput ? toLegacyScenarioMetaFromInput(scenarioInput) : undefined);
 
     const created = await createRun({
       profileId: profileRecord.id,
       ...(title ? { title } : {}),
-      ...(scenarioMeta ? { scenario: scenarioMeta } : {}),
+      ...(scenarioMetaForRecord ? { scenario: scenarioMetaForRecord } : {}),
       overallStatus: pipeline.overallStatus,
       stages,
       input: {
@@ -1115,6 +1298,7 @@ export async function POST(request: Request) {
           : {}),
         ...(includeProducts ? { includeProducts: true } : {}),
         ...(monteCarloConfig ? { monteCarlo: monteCarloConfig } : {}),
+        ...(scenarioInput ? { scenario: scenarioInput } : {}),
       },
       meta: {
         snapshot: snapshotMeta,
@@ -1146,6 +1330,7 @@ export async function POST(request: Request) {
       profileId: profileRecord.id,
       overallStatus: pipeline.overallStatus,
       stages,
+      totalDurationMs: stages.reduce((sum, stage) => sum + (typeof stage.durationMs === "number" ? stage.durationMs : 0), 0),
     });
 
     appendRunAudit({
@@ -1175,6 +1360,7 @@ export async function POST(request: Request) {
         profileId: profileRecord.id,
         overallStatus: "FAILED",
         stages,
+        totalDurationMs: stages.reduce((sum, stage) => sum + (typeof stage.durationMs === "number" ? stage.durationMs : 0), 0),
       });
     }
     appendRunAudit({

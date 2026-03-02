@@ -6,23 +6,23 @@ import { loadFinlifeSnapshot, type FinlifeSnapshot, type FinlifeSnapshotKind } f
 import { loadCorpIndex, type CorpCodeIndexV1 } from "../publicApis/dart/corpIndex";
 import { redactText } from "../planning/privacy/redact";
 import { atomicWriteJson } from "../planning/storage/atomicWrite";
+import { resolveOpsDataDir } from "../planning/storage/dataDir";
+import {
+  checkFinlifeQuality,
+  normalizeFinlifeSnapshotToCandidates,
+  type CandidateQualityReasonCode,
+} from "../planning/candidates/quality";
 
 export type DataQualityStatus = "PASS" | "WARN" | "FAIL";
 
 export type DataQualityIssueCode =
   | "DATASET_MISSING"
+  | "INVALID_SCHEMA"
   | "MISSING_REQUIRED"
   | "DUPLICATE_KEY"
   | "RATE_ANOMALY"
+  | "TERM_ANOMALY"
   | "STALE_TIMESTAMP";
-
-export type FinlifeNormalizedRow = {
-  providerName: string;
-  productName: string;
-  termMonths: number | null;
-  baseRatePct: number | null;
-  bonusRatePct: number | null;
-};
 
 export type DartCorpNormalizedRow = {
   corpCode: string;
@@ -46,9 +46,12 @@ export type DatasetQualityReport = {
   generatedAt?: string;
   totals: {
     rows: number;
+    valid: number;
+    invalidSchema: number;
     missingRequired: number;
     duplicates: number;
     rateAnomalies: number;
+    termAnomalies: number;
   };
   issues: DataQualityIssue[];
 };
@@ -70,7 +73,7 @@ type EvaluateOptions = {
   sampleLimit?: number;
 };
 
-const DATA_QUALITY_REPORT_PATH = path.resolve(process.cwd(), ".data/ops/data-quality/latest.json");
+const DATA_QUALITY_REPORT_PATH = path.join(resolveOpsDataDir(), "data-quality", "latest.json");
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -82,22 +85,6 @@ function toDateIso(value: unknown): string | undefined {
   const parsed = Date.parse(raw);
   if (!Number.isFinite(parsed)) return undefined;
   return new Date(parsed).toISOString();
-}
-
-function toFiniteNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return Number.NaN;
-  return parsed;
-}
-
-function toTermMonths(value: unknown): number | null {
-  const raw = asString(value);
-  if (!raw) return null;
-  const digits = raw.match(/\d+/g)?.join("") ?? "";
-  const parsed = Number(digits);
-  if (!Number.isFinite(parsed) || parsed < 1) return null;
-  return Math.trunc(parsed);
 }
 
 function pushSample(target: Array<Record<string, unknown>>, sample: Record<string, unknown>, limit: number): void {
@@ -152,36 +139,6 @@ function computeStatus(input: {
   return "PASS";
 }
 
-function normalizeFinlifeRows(snapshot: FinlifeSnapshot | null): FinlifeNormalizedRow[] {
-  if (!snapshot) return [];
-  const rows: FinlifeNormalizedRow[] = [];
-  for (const product of snapshot.items) {
-    const providerName = asString(product.kor_co_nm);
-    const productName = asString(product.fin_prdt_nm);
-    if (!Array.isArray(product.options) || product.options.length < 1) {
-      rows.push({
-        providerName,
-        productName,
-        termMonths: null,
-        baseRatePct: null,
-        bonusRatePct: null,
-      });
-      continue;
-    }
-
-    for (const option of product.options) {
-      rows.push({
-        providerName,
-        productName,
-        termMonths: toTermMonths(option.save_trm),
-        baseRatePct: toFiniteNumber(option.intr_rate),
-        bonusRatePct: toFiniteNumber(option.intr_rate2),
-      });
-    }
-  }
-  return rows;
-}
-
 function normalizeDartCorpRows(index: CorpCodeIndexV1 | null): DartCorpNormalizedRow[] {
   if (!index) return [];
   return index.items.map((item) => ({
@@ -198,56 +155,29 @@ export function evaluateFinlifeSnapshotQuality(
 ): DatasetQualityReport {
   const now = options.now ?? new Date();
   const sampleLimit = Math.max(1, options.sampleLimit ?? 5);
-  const rows = normalizeFinlifeRows(snapshot);
+  const candidates = normalizeFinlifeSnapshotToCandidates(snapshot);
+  const kind = datasetId === "finlife:deposit" ? "deposit" : "saving";
+  const quality = checkFinlifeQuality(kind, candidates, { sampleLimit, duplicateWarnThreshold: 5 });
   const generatedAt = toDateIso(snapshot?.meta?.generatedAt);
   const staleDays = computeStaleDays(generatedAt, now);
 
-  let missingRequired = 0;
-  let duplicates = 0;
-  let rateAnomalies = 0;
+  const missingRequired = quality.samples.filter((sample) => sample.reasonCodes.includes("MISSING_REQUIRED")).length;
+  const duplicates = quality.counts.duplicates;
+  const rateAnomalies = quality.counts.rateAnomalies;
+  const termAnomalies = quality.counts.termAnomalies;
+  const invalidSchema = quality.counts.invalidSchema;
 
-  const missingSamples: Array<Record<string, unknown>> = [];
-  const duplicateSamples: Array<Record<string, unknown>> = [];
-  const rateSamples: Array<Record<string, unknown>> = [];
-  const seen = new Map<string, number>();
-
-  for (const row of rows) {
-    if (!row.providerName || !row.productName || row.termMonths === null) {
-      missingRequired += 1;
-      pushSample(missingSamples, row, sampleLimit);
-    }
-
-    if (row.providerName && row.productName && row.termMonths !== null) {
-      const key = `${row.providerName}|${row.productName}|${row.termMonths}`;
-      const count = (seen.get(key) ?? 0) + 1;
-      seen.set(key, count);
-      if (count > 1) {
-        duplicates += 1;
-        pushSample(duplicateSamples, {
-          providerName: row.providerName,
-          productName: row.productName,
-          termMonths: row.termMonths,
-        }, sampleLimit);
-      }
-    }
-
-    const rates: Array<{ key: "baseRatePct" | "bonusRatePct"; value: number | null }> = [
-      { key: "baseRatePct", value: row.baseRatePct },
-      { key: "bonusRatePct", value: row.bonusRatePct },
-    ];
-    for (const rate of rates) {
-      if (rate.value === null) continue;
-      if (!Number.isFinite(rate.value) || rate.value < 0 || rate.value > 100) {
-        rateAnomalies += 1;
-        pushSample(rateSamples, {
-          providerName: row.providerName,
-          productName: row.productName,
-          termMonths: row.termMonths,
-          [rate.key]: String(rate.value),
-        }, sampleLimit);
-      }
-    }
-  }
+  const toIssueSamples = (reasonCode: CandidateQualityReasonCode): Array<Record<string, unknown>> => {
+    return quality.samples
+      .filter((sample) => sample.reasonCodes.includes(reasonCode))
+      .slice(0, sampleLimit)
+      .map((sample) => ({
+        providerName: sample.providerName,
+        productName: sample.productName,
+        termMonths: sample.termMonths,
+        baseRatePct: sample.baseRatePct,
+      }));
+  };
 
   const staleIssueSamples: Array<Record<string, unknown>> = [];
   if (typeof staleDays === "number" && staleDays > options.staleWarnDays) {
@@ -266,9 +196,11 @@ export function evaluateFinlifeSnapshotQuality(
 
   const issues = [
     makeIssue("DATASET_MISSING", datasetMissing ? 1 : 0, "snapshot 파일이 없어 품질 검사를 수행할 수 없습니다.", missingDatasetSamples),
-    makeIssue("MISSING_REQUIRED", missingRequired, "필수 필드(provider/product/term) 누락이 있습니다.", missingSamples),
-    makeIssue("DUPLICATE_KEY", duplicates, "동일 provider+product+term 중복이 있습니다.", duplicateSamples),
-    makeIssue("RATE_ANOMALY", rateAnomalies, "금리 값이 음수/100초과/비정상입니다.", rateSamples),
+    makeIssue("INVALID_SCHEMA", invalidSchema, "CandidateVM 스키마 검증에 실패한 항목이 있습니다.", toIssueSamples("SCHEMA_INVALID")),
+    makeIssue("MISSING_REQUIRED", missingRequired, "필수 필드(providerName/productName) 누락이 있습니다.", toIssueSamples("MISSING_REQUIRED")),
+    makeIssue("DUPLICATE_KEY", duplicates, "동일 provider+product+term 중복이 있습니다.", toIssueSamples("DUPLICATE_KEY")),
+    makeIssue("RATE_ANOMALY", rateAnomalies, "금리 값이 NaN/음수/100초과입니다.", toIssueSamples("RATE_ANOMALY")),
+    makeIssue("TERM_ANOMALY", termAnomalies, "기간(termMonths)이 0 이하 또는 비정상입니다.", toIssueSamples("TERM_ANOMALY")),
     makeIssue(
       "STALE_TIMESTAMP",
       typeof staleDays === "number" && staleDays > options.staleWarnDays ? 1 : 0,
@@ -277,14 +209,13 @@ export function evaluateFinlifeSnapshotQuality(
     ),
   ].filter((issue): issue is DataQualityIssue => issue !== null);
 
-  const status = computeStatus({
-    datasetMissing,
-    missingRequired,
-    duplicates,
-    rateAnomalies,
-    staleDays,
-    staleWarnDays: options.staleWarnDays,
-  });
+  const status = (() => {
+    if (datasetMissing) return "WARN" as const;
+    if (quality.status === "RISK") return "FAIL" as const;
+    if (quality.status === "WARN") return "WARN" as const;
+    if (typeof staleDays === "number" && staleDays > options.staleWarnDays) return "WARN" as const;
+    return "PASS" as const;
+  })();
 
   return {
     datasetId,
@@ -294,10 +225,13 @@ export function evaluateFinlifeSnapshotQuality(
     ...(typeof staleDays === "number" ? { staleDays } : {}),
     ...(generatedAt ? { generatedAt } : {}),
     totals: {
-      rows: rows.length,
+      rows: quality.counts.total,
+      valid: quality.counts.valid,
+      invalidSchema: quality.counts.invalidSchema,
       missingRequired,
       duplicates,
       rateAnomalies,
+      termAnomalies: quality.counts.termAnomalies,
     },
     issues,
   };
@@ -384,9 +318,12 @@ export function evaluateDartCorpIndexQuality(
     ...(generatedAt ? { generatedAt } : {}),
     totals: {
       rows: rows.length,
+      valid: Math.max(0, rows.length - missingRequired),
+      invalidSchema: 0,
       missingRequired,
       duplicates,
       rateAnomalies: 0,
+      termAnomalies: 0,
     },
     issues,
   };
@@ -458,17 +395,20 @@ export async function readLatestExternalDataQualityReport(): Promise<ExternalDat
 
 export function buildExternalDataQualityDoctorChecks(report: ExternalDataQualityReport): DoctorCheck[] {
   return report.datasets.map((dataset) => {
-    const issueSummary = dataset.issues.map((issue) => `${issue.code}:${issue.count}`).join(", ");
-    const baseMessage = issueSummary
-      ? `${dataset.label} quality ${dataset.status} (${issueSummary})`
-      : `${dataset.label} quality ${dataset.status}`;
+    const summaryMessage = `total ${dataset.totals.rows}, valid ${dataset.totals.valid}, invalidSchema ${dataset.totals.invalidSchema}, duplicates ${dataset.totals.duplicates}, rateAnomalies ${dataset.totals.rateAnomalies}`;
+    const baseMessage = `${dataset.label} quality ${dataset.status} · ${summaryMessage}`;
 
     const fixHref = dataset.datasetId.startsWith("finlife")
       ? "/ops/planning"
       : "/ops";
+    const checkId = dataset.datasetId === "finlife:deposit"
+      ? "FINLIFE_DEPOSIT_QUALITY"
+      : dataset.datasetId === "finlife:saving"
+        ? "FINLIFE_SAVING_QUALITY"
+        : "DART_CORP_INDEX_QUALITY";
 
     return {
-      id: `data-quality-${dataset.datasetId}`,
+      id: checkId,
       title: `Data Quality · ${dataset.label}`,
       status: dataset.status,
       message: baseMessage,

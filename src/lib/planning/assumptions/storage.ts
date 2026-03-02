@@ -127,12 +127,27 @@ async function readSnapshotFile(filePath: string): Promise<AssumptionsSnapshot |
   }
 }
 
+async function restoreLatestFromHistoryBestEffort(): Promise<AssumptionsSnapshot | null> {
+  const refs = await listAssumptionsHistory(1);
+  if (refs.length < 1) return null;
+  const latestHistory = await loadAssumptionsSnapshotById(refs[0]?.id ?? "");
+  if (!latestHistory) return null;
+  try {
+    await saveLatestAssumptionsSnapshot(latestHistory);
+  } catch {
+    // Keep returning recovered snapshot even if pointer rewrite fails.
+  }
+  return latestHistory;
+}
+
 export async function loadLatestAssumptionsSnapshot(): Promise<AssumptionsSnapshot | null> {
   assertServerOnly();
 
   try {
     const filePath = resolveAssumptionsPath();
-    return await readSnapshotFile(filePath);
+    const latest = await readSnapshotFile(filePath);
+    if (latest) return latest;
+    return await restoreLatestFromHistoryBestEffort();
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError?.code !== "ENOENT") {
@@ -141,7 +156,7 @@ export async function loadLatestAssumptionsSnapshot(): Promise<AssumptionsSnapsh
         message: nodeError?.message,
       });
     }
-    return null;
+    return restoreLatestFromHistoryBestEffort();
   }
 }
 

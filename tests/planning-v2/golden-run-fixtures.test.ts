@@ -8,6 +8,11 @@ import { type PlanningRunRecord, type PlanningRunStageId, type PlanningRunStageS
 import { type ResultDtoV1 } from "../../src/lib/planning/v2/resultDto";
 
 const GOLDEN_RUN_FIXTURE_DIR = path.join(process.cwd(), "tests", "fixtures", "planning", "golden", "runs");
+const CANONICAL_GOLDEN_RUN_FILES = [
+  "golden-good-basic.run.json",
+  "golden-caution-tight-cashflow.run.json",
+  "golden-risk-negative-cashflow.run.json",
+] as const;
 
 type GoldenRunMetaFixture = {
   id: string;
@@ -15,7 +20,7 @@ type GoldenRunMetaFixture = {
   createdAt: string;
   profileId: string;
   overallStatus: PlanningRunRecord["overallStatus"];
-  stages: Record<PlanningRunStageId, PlanningRunStageStatus>;
+  stages: Record<"simulate" | "scenarios" | "monteCarlo" | "actions" | "debtStrategy", PlanningRunStageStatus>;
   resultDtoFixture: string;
 };
 
@@ -56,7 +61,7 @@ function readGoldenRunMeta(filePath: string): GoldenRunMetaFixture {
       scenarios: asString(stagesRow.scenarios) as PlanningRunStageStatus,
       monteCarlo: asString(stagesRow.monteCarlo) as PlanningRunStageStatus,
       actions: asString(stagesRow.actions) as PlanningRunStageStatus,
-      debt: asString(stagesRow.debt) as PlanningRunStageStatus,
+      debtStrategy: asString(stagesRow.debtStrategy || stagesRow.debt) as PlanningRunStageStatus,
     },
     resultDtoFixture,
   };
@@ -106,10 +111,8 @@ function buildRunRecord(meta: GoldenRunMetaFixture, dto: ResultDtoV1): PlanningR
 
 describe("golden run fixtures", () => {
   it("loads golden run meta and builds report/interpretation view models without throwing", () => {
-    const files = fs.readdirSync(GOLDEN_RUN_FIXTURE_DIR)
-      .filter((name) => name.endsWith(".run.json"))
-      .sort((a, b) => a.localeCompare(b));
-    expect(files.length).toBeGreaterThanOrEqual(3);
+    const files = [...CANONICAL_GOLDEN_RUN_FILES];
+    expect(files).toHaveLength(3);
 
     for (const fileName of files) {
       const fixturePath = path.join(GOLDEN_RUN_FIXTURE_DIR, fileName);

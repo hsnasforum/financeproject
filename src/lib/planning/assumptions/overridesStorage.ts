@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
+import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteJson } from "../storage/atomicWrite";
 import { resolveProfilePartitionDir, sanitizeRecordId } from "../store/paths";
 import {
@@ -38,7 +39,8 @@ function normalizeIso(value: unknown): string {
 
 function resolveLegacyOverridesPath(): string {
   const override = asString(process.env.PLANNING_ASSUMPTIONS_OVERRIDES_PATH);
-  return path.resolve(process.cwd(), override || ASSUMPTIONS_OVERRIDES_PATH);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(resolvePlanningDataDir(), "assumptions", "overrides.json");
 }
 
 function resolveScopedOverridesPath(profileId?: string): string {

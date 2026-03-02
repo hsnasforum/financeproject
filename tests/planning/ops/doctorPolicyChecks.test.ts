@@ -63,47 +63,68 @@ describe("doctorPolicyChecks", () => {
     expect(check.message).toContain("최근 성공 run이 없습니다");
   });
 
-  it("triggers metrics warnings when failure and refresh-failure thresholds are exceeded", () => {
+  it("triggers doctor escalations when failure rate/latency/refresh failures exceed thresholds", () => {
     const checks = buildMetricsDoctorChecks({
       events: [
         {
-          type: "ASSUMPTIONS_REFRESH",
+          type: "RUN_PIPELINE",
           at: "2026-03-02T09:00:00.000Z",
-          meta: { status: "FAILED", durationMs: 900 },
+          meta: { status: "FAILED", durationMs: 900, runId: "run-a" },
         },
         {
-          type: "ASSUMPTIONS_REFRESH",
+          type: "RUN_PIPELINE",
           at: "2026-03-02T08:00:00.000Z",
-          meta: { status: "FAILED", durationMs: 880 },
+          meta: { status: "FAILED", durationMs: 880, runId: "run-b" },
+        },
+        {
+          type: "RUN_PIPELINE",
+          at: "2026-03-02T07:00:00.000Z",
+          meta: { status: "SUCCESS", durationMs: 700, runId: "run-c" },
         },
         {
           type: "RUN_STAGE",
-          at: "2026-03-02T07:00:00.000Z",
-          meta: { status: "FAILED", durationMs: 1400 },
+          at: "2026-03-02T06:30:00.000Z",
+          meta: { stage: "simulate", status: "SUCCESS", durationMs: 2400 },
         },
         {
           type: "RUN_STAGE",
           at: "2026-03-02T06:00:00.000Z",
-          meta: { status: "SUCCESS", durationMs: 1200 },
+          meta: { stage: "simulate", status: "SUCCESS", durationMs: 2600 },
         },
         {
           type: "RUN_STAGE",
           at: "2026-03-01T05:00:00.000Z",
-          meta: { status: "SUCCESS", durationMs: 100 },
+          meta: { stage: "simulate", status: "SUCCESS", durationMs: 900 },
+        },
+        {
+          type: "ASSUMPTIONS_REFRESH",
+          at: "2026-03-02T09:10:00.000Z",
+          meta: { status: "FAILED", durationMs: 100 },
+        },
+        {
+          type: "ASSUMPTIONS_REFRESH",
+          at: "2026-03-02T08:10:00.000Z",
+          meta: { status: "FAILED", durationMs: 100 },
+        },
+        {
+          type: "ASSUMPTIONS_REFRESH",
+          at: "2026-03-02T07:10:00.000Z",
+          meta: { status: "FAILED", durationMs: 100 },
         },
       ],
-      failureRateWarnPct: 40,
-      latencyRegressionWarnMs: 100,
-      refreshFailureWarnCount: 2,
+      runFailRateWarnPct: 40,
+      runFailRateRiskPct: 60,
+      simulateLatencyWarnMultiplier: 1.2,
+      assumptionsRefreshConsecutiveFailRisk: 3,
       shortWindowHours: 24,
       longWindowDays: 7,
       now: new Date("2026-03-02T10:00:00.000Z"),
     });
 
     expect(checks).toHaveLength(3);
-    expect(checks.find((row) => row.id === "metrics-failure-rate")?.status).toBe("WARN");
-    expect(checks.find((row) => row.id === "metrics-latency-regression")?.status).toBe("WARN");
-    expect(checks.find((row) => row.id === "metrics-refresh-failures")?.status).toBe("WARN");
+    expect(checks.find((row) => row.id === "RUN_FAIL_RATE_HIGH")?.status).toBe("FAIL");
+    expect(checks.find((row) => row.id === "SIMULATE_LATENCY_REGRESSION")?.status).toBe("WARN");
+    expect(checks.find((row) => row.id === "ASSUMPTIONS_REFRESH_FAILING")?.status).toBe("FAIL");
   });
 
   it("warns when scheduled monthly run fails repeatedly within window", () => {

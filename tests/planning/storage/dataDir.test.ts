@@ -17,28 +17,30 @@ describe("planning dataDir resolver", () => {
   });
 
   it("uses repo-local .data in dev mode", () => {
-    delete process.env.PLANNING_PACKAGED_MODE;
-    delete process.env.PLANNING_RUNTIME_MODE;
+    process.env.NODE_ENV = "development";
     delete process.env.PLANNING_DATA_DIR;
     const cwd = "/tmp/planning-dev";
     const resolved = resolveDataDir({ cwd });
     expect(resolved).toBe(path.resolve(cwd, ".data"));
-    expect(resolvePlanningDataDir({ cwd })).toBe(path.join(resolved, "planning"));
-    expect(resolveOpsDataDir({ cwd })).toBe(path.join(resolved, "ops"));
+    expect(resolvePlanningDataDir({ cwd })).toBe(path.resolve(cwd, ".data", "planning"));
+    expect(resolveOpsDataDir({ cwd })).toBe(path.resolve(cwd, ".data", "planning", "ops"));
   });
 
-  it("uses LOCALAPPDATA in packaged windows mode", () => {
+  it("uses LOCALAPPDATA in production windows mode", () => {
     const cwd = "/tmp/planning-dev";
-    process.env.PLANNING_PACKAGED_MODE = "1";
+    process.env.NODE_ENV = "production";
     process.env.LOCALAPPDATA = "C:\\Users\\tester\\AppData\\Local";
     process.env.PLANNING_APP_NAME = "Planning V2";
     const resolved = resolveDataDir({ cwd, platform: "win32" });
-    expect(resolved).toBe(path.resolve("C:\\Users\\tester\\AppData\\Local", "Planning V2"));
+    const planningDir = path.resolve("C:\\Users\\tester\\AppData\\Local", "Planning V2", "vault");
+    expect(resolvePlanningDataDir({ cwd, platform: "win32" })).toBe(planningDir);
+    expect(resolved).toBe(path.dirname(planningDir));
   });
 
   it("supports explicit PLANNING_DATA_DIR override", () => {
     process.env.PLANNING_DATA_DIR = path.join(os.tmpdir(), "planning-data");
-    const resolved = resolveDataDir({ cwd: "/tmp/any" });
-    expect(resolved).toBe(path.resolve(process.env.PLANNING_DATA_DIR));
+    const planningDir = resolvePlanningDataDir({ cwd: "/tmp/any" });
+    expect(planningDir).toBe(path.resolve(process.env.PLANNING_DATA_DIR));
+    expect(resolveDataDir({ cwd: "/tmp/any" })).toBe(path.dirname(planningDir));
   });
 });

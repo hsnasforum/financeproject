@@ -77,6 +77,7 @@ type DebtSummaryRow = {
 
 type PlanningReportsClientProps = {
   initialSelectedId?: string;
+  embedded?: boolean;
 };
 
 const ACTION_SEVERITY_ORDER: Record<ActionRow["severity"], number> = {
@@ -613,25 +614,17 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
     () => aggregatedWarnings.filter((warning) => warning.severity === "critical").length,
     [aggregatedWarnings],
   );
+  const handlePrint = (): void => {
+    if (typeof window === "undefined") return;
+    window.print();
+  };
 
-  return (
-    <PageShell>
-      <PageHeader
-        title="플래닝 리포트"
-        description="run 기반 리포트 대시보드 조회/다운로드/삭제"
-        action={(
-          <div className="flex items-center gap-4 text-sm">
-            <Link className="font-semibold text-emerald-700" href="/planning/trash">휴지통</Link>
-            <Link className="font-semibold text-emerald-700" href="/planning/runs">실행 기록으로</Link>
-          </div>
-        )}
-      />
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_1.6fr]">
-        <Card>
+  const content = (
+    <div className="report-root grid gap-6 xl:grid-cols-[1fr_1.6fr]">
+        <Card className="print-card">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">리포트 목록</h2>
-            <Button disabled={loadingList} onClick={() => void loadReports()} size="sm" variant="ghost">새로고침</Button>
+            <Button className="no-print" disabled={loadingList} onClick={() => void loadReports()} size="sm" variant="ghost">새로고침</Button>
           </div>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-left text-xs text-slate-700">
@@ -661,7 +654,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                     <td className="px-2 py-2">{report.runId ?? "-"}</td>
                     <td className="px-2 py-2">
                       <button
-                        className="font-semibold text-rose-700"
+                        className="no-print font-semibold text-rose-700"
                         onClick={() => void deleteReportAction(report.id)}
                         type="button"
                       >
@@ -675,7 +668,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
           </div>
         </Card>
 
-        <Card>
+        <Card className="print-card">
           <h2 className="text-base font-bold text-slate-900">리포트 대시보드</h2>
           {!selected ? (
             <p className="mt-3 text-xs text-slate-500">리포트를 선택하세요.</p>
@@ -688,7 +681,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                 {selected.runId ? (<><span>·</span><span>runId: {selected.runId}</span></>) : null}
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="no-print flex flex-wrap gap-2">
                 <a
                   className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                   href={`/api/planning/v2/reports/${encodeURIComponent(selected.id)}/download`}
@@ -808,7 +801,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                             : `추가 ${actionRows.length - visibleActionRows.length}개 액션이 생략되었습니다.`}
                         </span>
                         <button
-                          className="font-semibold text-emerald-700"
+                          className="no-print font-semibold text-emerald-700"
                           onClick={() => setShowAllActions((prev) => !prev)}
                           type="button"
                         >
@@ -947,13 +940,13 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                 </>
               )}
 
-              <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <details className="no-print rounded-xl border border-slate-200 bg-slate-50 p-3">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-700">고급 보기 (원본 JSON/Markdown)</summary>
                 <div className="mt-3 space-y-3">
                   <AdvancedJsonPanel sections={detailJsonSections} title="원본 JSON 보기" />
                   <details className="rounded-xl border border-slate-200 bg-white p-3">
                     <summary className="cursor-pointer text-xs font-semibold text-slate-700">원본 Markdown 보기</summary>
-                    <pre className="mt-3 max-h-[50vh] overflow-auto rounded-xl bg-slate-950 p-3 text-xs leading-relaxed text-slate-100">
+                    <pre className="print-markdown mt-3 max-h-[50vh] overflow-auto whitespace-pre-wrap break-words rounded-xl bg-slate-950 p-3 text-xs leading-relaxed text-slate-100 print:max-h-none print:overflow-visible">
                       {selected.markdown}
                     </pre>
                   </details>
@@ -963,6 +956,34 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
           )}
         </Card>
       </div>
+  );
+
+  if (props.embedded) {
+    return content;
+  }
+
+  return (
+    <PageShell className="report-root">
+      <PageHeader
+        title="플래닝 리포트"
+        description="run 기반 리포트 대시보드 조회/다운로드/삭제"
+        action={(
+          <div className="no-print flex items-center gap-4 text-sm">
+            <Button
+              data-testid="report-print-button"
+              onClick={handlePrint}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              PDF 인쇄
+            </Button>
+            <Link className="font-semibold text-emerald-700" href="/planning/trash">휴지통</Link>
+            <Link className="font-semibold text-emerald-700" href="/planning/runs">실행 기록으로</Link>
+          </div>
+        )}
+      />
+      {content}
     </PageShell>
   );
 }

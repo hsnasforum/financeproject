@@ -4,7 +4,7 @@ import { ASSUMPTIONS_HISTORY_DIR, ASSUMPTIONS_PATH } from "../assumptions/storag
 import { encryptPlanningJson, isPlanningEncryptedEnvelope } from "../crypto/encrypt";
 import { atomicWriteJson } from "../storage/atomicWrite";
 import { getPlanningUserDir, sanitizePlanningUserId } from "../store/namespace";
-import { PROFILES_DIR, RUNS_DIR } from "../store/paths.ts";
+import { PROFILES_DIR, RUNS_DIR, RUNS_INDEX_FILE } from "../store/paths.ts";
 import { migrateAnyFile, type MigrationFileKind } from "./index.ts";
 
 export type MigrationTarget = "profiles" | "runs" | "snapshots" | "all";
@@ -89,6 +89,14 @@ async function listJsonFiles(dirPath: string): Promise<string[]> {
     .map((entry) => path.join(dirPath, entry.name));
 }
 
+function isLegacyRunRecordPath(filePath: string): boolean {
+  const fileName = path.basename(filePath).toLowerCase();
+  // runs/index.json is an index artifact, not a legacy run record.
+  if (fileName === RUNS_INDEX_FILE.toLowerCase()) return false;
+  if (fileName === "index.json") return false;
+  return fileName.endsWith(".json");
+}
+
 function mapActionKind(kind: MigrationFileKind): MigrationActionKind {
   if (kind === "profile") return "PROFILE";
   if (kind === "run") return "RUN";
@@ -123,7 +131,7 @@ export async function planMigrations(
     ? await listJsonFiles(path.resolve(baseDir, PROFILES_DIR))
     : [];
   const runFiles = target === "all" || target === "runs"
-    ? await listJsonFiles(path.resolve(baseDir, RUNS_DIR))
+    ? (await listJsonFiles(path.resolve(baseDir, RUNS_DIR))).filter(isLegacyRunRecordPath)
     : [];
   const snapshotFiles = target === "all" || target === "snapshots"
     ? [
@@ -140,6 +148,9 @@ export async function planMigrations(
 
   for (const job of jobs) {
     const relativePath = toRelativePath(baseDir, job.filePath);
+    if (job.kind === "run" && path.basename(relativePath).toLowerCase() === "index.json") {
+      continue;
+    }
     const loaded = await readJsonFile(job.filePath);
     if (!loaded.ok) {
       actions.push({
@@ -240,6 +251,7 @@ export async function planNamespaceMigration(
 
   const legacyProfiles = await listJsonFiles(path.resolve(baseDir, PROFILES_DIR));
   const legacyRuns = await listJsonFiles(path.resolve(baseDir, RUNS_DIR));
+  const legacyRunRecords = legacyRuns.filter(isLegacyRunRecordPath);
   const targetRoot = getPlanningUserDir(userId, baseDir);
 
   const actions: NamespaceAction[] = [];
@@ -270,7 +282,7 @@ export async function planNamespaceMigration(
     });
   }
 
-  for (const filePath of legacyRuns) {
+  for (const filePath of legacyRunRecords) {
     const fileName = path.basename(filePath);
     const targetPath = path.join(targetRoot, "runs", fileName);
     let movable = true;
