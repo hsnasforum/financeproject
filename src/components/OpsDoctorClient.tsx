@@ -33,7 +33,26 @@ type DoctorReport = {
 
 type DoctorPayload = {
   ok?: boolean;
-  data?: DoctorReport;
+  data?: {
+    generatedAt?: string;
+    summary?: {
+      pass?: number;
+      warn?: number;
+      fail?: number;
+    };
+    checks?: DoctorCheck[];
+    issues?: Array<{
+      id?: string;
+      severity?: "risk" | "warn" | "info";
+      title?: string;
+      message?: string;
+      fix?: {
+        href?: string;
+      };
+    }>;
+  };
+  report?: DoctorReport;
+  checks?: DoctorCheck[];
   message?: string;
   error?: { code?: string; message?: string; fixHref?: string };
   meta?: {
@@ -82,6 +101,54 @@ function statusTone(status: DoctorCheck["status"]): string {
   return "border-rose-200 bg-rose-50 text-rose-900";
 }
 
+function toStatusFromSeverity(severity: "risk" | "warn" | "info" | undefined): DoctorCheck["status"] {
+  if (severity === "risk") return "FAIL";
+  if (severity === "warn") return "WARN";
+  return "PASS";
+}
+
+function normalizeDoctorReport(payload: DoctorPayload | null): DoctorReport | null {
+  if (!payload?.ok) return null;
+
+  if (payload.data?.checks && payload.data.summary && payload.data.generatedAt) {
+    return {
+      ok: (payload.data.summary.fail ?? 0) < 1,
+      generatedAt: payload.data.generatedAt,
+      checks: payload.data.checks,
+      summary: {
+        pass: payload.data.summary.pass ?? 0,
+        warn: payload.data.summary.warn ?? 0,
+        fail: payload.data.summary.fail ?? 0,
+      },
+    };
+  }
+
+  if (payload.report?.checks && payload.report.summary && payload.report.generatedAt) {
+    return payload.report;
+  }
+
+  if (payload.data?.issues && payload.data.generatedAt) {
+    const checks = payload.data.issues.map((issue, index): DoctorCheck => ({
+      id: asString(issue.id) || `issue-${index + 1}`,
+      title: asString(issue.title) || "Doctor issue",
+      status: toStatusFromSeverity(issue.severity),
+      message: asString(issue.message) || "상세 메시지가 없습니다.",
+      ...(asString(issue.fix?.href) ? { fixHref: asString(issue.fix?.href) } : {}),
+    }));
+    const pass = checks.filter((check) => check.status === "PASS").length;
+    const warn = checks.filter((check) => check.status === "WARN").length;
+    const fail = checks.filter((check) => check.status === "FAIL").length;
+    return {
+      ok: fail < 1,
+      generatedAt: payload.data.generatedAt,
+      checks,
+      summary: { pass, warn, fail },
+    };
+  }
+
+  return null;
+}
+
 export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
   const [report, setReport] = useState<DoctorReport | null>(null);
   const [recovery, setRecovery] = useState<DoctorRecoverySummary>(null);
@@ -106,11 +173,12 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
       params.set("csrf", csrf);
       const response = await fetch(`/api/ops/doctor?${params.toString()}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as DoctorPayload | null;
-      if (!response.ok || !payload?.ok || !payload.data) {
+      const normalized = normalizeDoctorReport(payload);
+      if (!response.ok || !normalized) {
         const apiError = resolveClientApiError(payload, "doctor 실행에 실패했습니다.");
         throw new Error(apiError.message);
       }
-      setReport(payload.data);
+      setReport(normalized);
       setRecovery(payload.meta?.recovery ?? null);
     } catch (doctorError) {
       setError(doctorError instanceof Error ? doctorError.message : "doctor 실행에 실패했습니다.");
@@ -296,7 +364,7 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
       ) : null}
 
       <div className="space-y-3">
-        {report?.checks.map((check) => (
+        {(report?.checks ?? []).map((check) => (
           <Card className={`p-4 border ${statusTone(check.status)}`} key={check.id}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-black">{check.title}</h3>

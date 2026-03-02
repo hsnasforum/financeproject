@@ -17,116 +17,154 @@ export type ParseCsvTransactionsOptions = {
 export type CsvParseErrorCode = "MISSING_COLUMN" | "INVALID_DATE" | "INVALID_AMOUNT";
 
 export type CsvParseError = {
-  row: number;
+  rowIndex: number;
   code: CsvParseErrorCode;
-  field: "date" | "amount" | "description";
-  message: string;
+  path: string;
 };
 
 export type ParseCsvTransactionsResult = {
   transactions: AccountTransaction[];
-  errors: CsvParseError[];
   stats: {
-    totalRows: number;
-    parsedRows: number;
-    skippedRows: number;
+    rows: number;
+    parsed: number;
+    skipped: number;
   };
+  errors: CsvParseError[];
 };
 
-const DEFAULT_MAPPING = {
-  dateColumn: "date",
-  amountColumn: "amount",
-  descColumn: "description",
-  typeColumn: "type",
-  categoryColumn: "category",
-} satisfies Required<NonNullable<ParseCsvTransactionsOptions["mapping"]>>;
+const HEADER_ALIASES = {
+  date: ["date", "날짜", "일자", "거래일", "거래일자"],
+  amount: ["amount", "금액", "거래금액", "입출금액"],
+  description: ["description", "desc", "적요", "내용", "메모", "거래내용"],
+  type: ["type", "구분", "거래구분"],
+  category: ["category", "카테고리"],
+} as const;
 
-function splitCsvRows(text: string, delimiter: string): string[][] {
+const DEFAULT_COLUMN_CANDIDATES = {
+  date: ["date"],
+  amount: ["amount"],
+  description: ["description"],
+} as const;
+
+const ALIAS_TO_CANONICAL = (() => {
+  const map = new Map<string, string>();
+  for (const [canonical, aliases] of Object.entries(HEADER_ALIASES)) {
+    map.set(normalizeHeaderKey(canonical), canonical);
+    for (const alias of aliases) {
+      map.set(normalizeHeaderKey(alias), canonical);
+    }
+  }
+  return map;
+})();
+
+function normalizeHeaderKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s_-]/g, "");
+}
+
+function splitCsv(text: string, delimiter: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
-  let inQuotes = false;
+  let quoted = false;
 
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
-
-    if (ch === '"') {
-      if (inQuotes && text[i + 1] === '"') {
-        cell += '"';
+    if (ch === "\"") {
+      if (quoted && text[i + 1] === "\"") {
+        cell += "\"";
         i += 1;
       } else {
-        inQuotes = !inQuotes;
+        quoted = !quoted;
       }
       continue;
     }
-
-    if (!inQuotes && ch === delimiter) {
+    if (!quoted && ch === delimiter) {
       row.push(cell);
       cell = "";
       continue;
     }
-
-    if (!inQuotes && (ch === "\n" || ch === "\r")) {
+    if (!quoted && (ch === "\n" || ch === "\r")) {
       if (ch === "\r" && text[i + 1] === "\n") i += 1;
       row.push(cell);
-      if (row.some((value) => value.trim().length > 0)) {
-        rows.push(row.map((value) => value.trim()));
+      if (row.some((entry) => entry.trim().length > 0)) {
+        rows.push(row.map((entry) => entry.trim()));
       }
       row = [];
       cell = "";
       continue;
     }
-
     cell += ch;
   }
 
   row.push(cell);
-  if (row.some((value) => value.trim().length > 0)) {
-    rows.push(row.map((value) => value.trim()));
+  if (row.some((entry) => entry.trim().length > 0)) {
+    rows.push(row.map((entry) => entry.trim()));
   }
-
   return rows;
 }
 
-function buildHeaderMap(header: string[]): Map<string, number> {
-  const map = new Map<string, number>();
-  header.forEach((value, index) => {
-    const key = value.trim().toLowerCase();
-    if (!key || map.has(key)) return;
-    map.set(key, index);
+function buildHeaderMap(row: string[]): Map<string, number> {
+  const out = new Map<string, number>();
+  row.forEach((value, index) => {
+    const key = normalizeHeaderKey(value);
+    if (!key || out.has(key)) return;
+    out.set(key, index);
+    const canonicalKey = ALIAS_TO_CANONICAL.get(key);
+    if (canonicalKey && !out.has(canonicalKey)) {
+      out.set(canonicalKey, index);
+    }
   });
-  return map;
+  return out;
 }
 
-function resolveColumnIndex(
-  ref: CsvColumnRef,
+function resolveRefIndex(
+  ref: CsvColumnRef | undefined,
   headerMap: Map<string, number> | null,
   rowLength: number,
 ): number | null {
   if (typeof ref === "number") {
     return Number.isInteger(ref) && ref >= 0 && ref < rowLength ? ref : null;
   }
-
-  const key = ref.trim().toLowerCase();
-  if (!key) return null;
-
-  if (headerMap) {
-    const headerIndex = headerMap.get(key);
-    if (typeof headerIndex === "number") return headerIndex;
+  if (typeof ref === "string") {
+    const key = normalizeHeaderKey(ref);
+    if (!key) return null;
+    if (headerMap && headerMap.has(key)) return headerMap.get(key) ?? null;
+    const asNumber = Number(key);
+    if (Number.isInteger(asNumber) && asNumber >= 0 && asNumber < rowLength) return asNumber;
   }
-
-  const asIndex = Number(key);
-  if (Number.isInteger(asIndex) && asIndex >= 0 && asIndex < rowLength) {
-    return asIndex;
-  }
-
   return null;
 }
 
-function parseDateToIsoDay(input: string): string | null {
-  const text = input.trim();
-  if (!text) return null;
+function pickHeaderColumn(
+  headerMap: Map<string, number> | null,
+  candidates: string[],
+): number | null {
+  if (!headerMap) return null;
+  for (const candidate of candidates) {
+    const idx = headerMap.get(candidate.toLowerCase());
+    if (typeof idx === "number") return idx;
+  }
+  return null;
+}
 
+function buildStableTransactionId(
+  date: string,
+  amount: number,
+  desc: string | undefined,
+  rowIndex: number,
+): string {
+  const seed = `${date}|${amount}|${desc ?? ""}|${rowIndex}`;
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return `csv-${(hash >>> 0).toString(16).padStart(8, "0")}-${rowIndex}`;
+}
+
+function toIsoDate(raw: string): `${number}-${number}-${number}` | null {
+  const text = raw.trim();
+  if (!text) return null;
   const normalized = text.replace(/[./]/g, "-");
   const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (!match) return null;
@@ -134,10 +172,7 @@ function parseDateToIsoDay(input: string): string | null {
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
-    return null;
-  }
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
 
   const dt = new Date(Date.UTC(year, month - 1, day));
   if (
@@ -148,54 +183,26 @@ function parseDateToIsoDay(input: string): string | null {
     return null;
   }
 
-  return dt.toISOString();
+  const yyyy = String(year).padStart(4, "0");
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}` as `${number}-${number}-${number}`;
 }
 
-function parseAmountKrw(input: string): number | null {
-  const raw = input.trim();
-  if (!raw) return null;
+function toAmount(raw: string): number | null {
+  const text = raw.trim();
+  if (!text) return null;
 
-  const wrappedNegative = /^\(.*\)$/.test(raw);
-  const cleaned = raw
+  const negativeParen = /^\(.*\)$/.test(text);
+  const cleaned = text
     .replace(/[₩$¥원\s]/g, "")
     .replace(/,/g, "")
     .replace(/^\(|\)$/g, "");
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed)) return null;
 
-  const numeric = Number(cleaned);
-  if (!Number.isFinite(numeric)) return null;
-
-  const signed = wrappedNegative ? -Math.abs(numeric) : numeric;
-  const value = Math.round(signed);
-  return Object.is(value, -0) ? 0 : value;
-}
-
-function resolveDirection(typeValue: string): 1 | -1 | null {
-  const text = typeValue.trim().toLowerCase();
-  if (!text) return null;
-
-  if (["credit", "inflow", "income", "deposit", "입금", "수입"].includes(text)) return 1;
-  if (["debit", "outflow", "expense", "withdrawal", "출금", "지출"].includes(text)) return -1;
-
-  return null;
-}
-
-function hashString(value: string): string {
-  let hash = 5381;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) + hash) ^ value.charCodeAt(i);
-  }
-  return Math.abs(hash >>> 0).toString(16).padStart(8, "0");
-}
-
-function buildTransactionId(
-  rowNumber: number,
-  postedAt: string,
-  amountKrw: number,
-  description: string,
-  category: string | undefined,
-): string {
-  const payload = `${rowNumber}|${postedAt}|${amountKrw}|${description}|${category ?? ""}`;
-  return `csv-${hashString(payload)}`;
+  const signed = negativeParen ? -Math.abs(parsed) : parsed;
+  return Math.round(signed);
 }
 
 export function parseCsvTransactions(
@@ -204,94 +211,74 @@ export function parseCsvTransactions(
 ): ParseCsvTransactionsResult {
   const delimiter = options.delimiter ?? ",";
   const hasHeader = options.hasHeader !== false;
-  const mapping = {
-    ...DEFAULT_MAPPING,
-    ...(options.mapping ?? {}),
-  };
+  const rows = splitCsv(csvText, delimiter);
 
-  const rows = splitCsvRows(csvText, delimiter);
   if (rows.length === 0) {
     return {
       transactions: [],
+      stats: { rows: 0, parsed: 0, skipped: 0 },
       errors: [],
-      stats: {
-        totalRows: 0,
-        parsedRows: 0,
-        skippedRows: 0,
-      },
     };
   }
 
-  let startIndex = 0;
-  let headerMap: Map<string, number> | null = null;
-
-  if (hasHeader) {
-    headerMap = buildHeaderMap(rows[0]);
-    startIndex = 1;
-  }
+  const headerMap = hasHeader ? buildHeaderMap(rows[0]) : null;
+  const startRow = hasHeader ? 1 : 0;
+  const mapping = options.mapping ?? {};
 
   const transactions: AccountTransaction[] = [];
   const errors: CsvParseError[] = [];
 
-  for (let i = startIndex; i < rows.length; i += 1) {
+  for (let i = startRow; i < rows.length; i += 1) {
     const row = rows[i];
-    const rowNumber = i + 1;
+    const rowIndex = i;
 
-    const dateIndex = resolveColumnIndex(mapping.dateColumn, headerMap, row.length);
-    const amountIndex = resolveColumnIndex(mapping.amountColumn, headerMap, row.length);
-    const descIndex = resolveColumnIndex(mapping.descColumn, headerMap, row.length);
-    const typeIndex = resolveColumnIndex(mapping.typeColumn, headerMap, row.length);
-    const categoryIndex = resolveColumnIndex(mapping.categoryColumn, headerMap, row.length);
+    const dateIndex = resolveRefIndex(mapping.dateColumn, headerMap, row.length)
+      ?? pickHeaderColumn(headerMap, [...DEFAULT_COLUMN_CANDIDATES.date])
+      ?? (!hasHeader && row.length > 0 ? 0 : null);
+    const amountIndex = resolveRefIndex(mapping.amountColumn, headerMap, row.length)
+      ?? pickHeaderColumn(headerMap, [...DEFAULT_COLUMN_CANDIDATES.amount])
+      ?? (!hasHeader && row.length > 1 ? 1 : null);
+    const descIndex = resolveRefIndex(mapping.descColumn, headerMap, row.length)
+      ?? pickHeaderColumn(headerMap, [...DEFAULT_COLUMN_CANDIDATES.description])
+      ?? (!hasHeader && row.length > 2 ? 2 : null);
 
     if (dateIndex === null) {
-      errors.push({ row: rowNumber, code: "MISSING_COLUMN", field: "date", message: "date column not found" });
+      errors.push({ rowIndex, code: "MISSING_COLUMN", path: "date" });
       continue;
     }
-
     if (amountIndex === null) {
-      errors.push({ row: rowNumber, code: "MISSING_COLUMN", field: "amount", message: "amount column not found" });
+      errors.push({ rowIndex, code: "MISSING_COLUMN", path: "amount" });
       continue;
     }
 
-    const dateValue = (row[dateIndex] ?? "").trim();
-    const amountValue = (row[amountIndex] ?? "").trim();
-    const description = descIndex === null ? "" : (row[descIndex] ?? "").trim();
-    const typeValue = typeIndex === null ? "" : (row[typeIndex] ?? "").trim();
-    const categoryValue = categoryIndex === null ? "" : (row[categoryIndex] ?? "").trim();
-
-    const postedAt = parseDateToIsoDay(dateValue);
-    if (!postedAt) {
-      errors.push({ row: rowNumber, code: "INVALID_DATE", field: "date", message: "invalid date format" });
+    const date = toIsoDate(row[dateIndex] ?? "");
+    if (!date) {
+      errors.push({ rowIndex, code: "INVALID_DATE", path: "date" });
       continue;
     }
 
-    const amountKrwRaw = parseAmountKrw(amountValue);
-    if (amountKrwRaw === null) {
-      errors.push({ row: rowNumber, code: "INVALID_AMOUNT", field: "amount", message: "invalid amount format" });
+    const amount = toAmount(row[amountIndex] ?? "");
+    if (amount === null) {
+      errors.push({ rowIndex, code: "INVALID_AMOUNT", path: "amount" });
       continue;
     }
 
-    const direction = resolveDirection(typeValue);
-    const amountKrw = direction === null ? amountKrwRaw : Math.abs(amountKrwRaw) * direction;
-
+    const desc = descIndex !== null ? (row[descIndex] ?? "").trim() || undefined : undefined;
     transactions.push({
-      id: buildTransactionId(rowNumber, postedAt, amountKrw, description, categoryValue || undefined),
-      postedAt,
-      amountKrw,
-      description,
-      category: categoryValue || undefined,
+      id: buildStableTransactionId(date, amount, desc, rowIndex),
+      date,
+      amount,
+      ...(desc ? { desc } : {}),
       source: "csv",
+      meta: { rowIndex },
     });
   }
 
-  const totalRows = rows.length - startIndex;
-  return {
-    transactions,
-    errors,
-    stats: {
-      totalRows,
-      parsedRows: transactions.length,
-      skippedRows: Math.max(0, totalRows - transactions.length),
-    },
+  const stats = {
+    rows: Math.max(0, rows.length - startRow),
+    parsed: transactions.length,
+    skipped: errors.length,
   };
+
+  return { transactions, stats, errors };
 }

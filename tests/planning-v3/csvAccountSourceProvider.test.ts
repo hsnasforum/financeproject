@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  AccountSourceValidationError,
+} from "../../src/lib/planning/v3/providers/accountSourceProvider";
 import { CsvAccountSourceProvider } from "../../src/lib/planning/v3/providers/csvAccountSourceProvider";
 
 function loadFixture(name: string): string {
@@ -8,7 +11,7 @@ function loadFixture(name: string): string {
 }
 
 describe("CsvAccountSourceProvider", () => {
-  it("parses dates and amounts deterministically", async () => {
+  it("returns parsed transactions from csv provider ssot", async () => {
     const provider = new CsvAccountSourceProvider();
     const transactions = await provider.loadTransactions({
       csvText: loadFixture("sample.csv"),
@@ -16,40 +19,58 @@ describe("CsvAccountSourceProvider", () => {
         dateColumn: "date",
         amountColumn: "amount",
         descColumn: "description",
-        typeColumn: "type",
-        categoryColumn: "category",
       },
       hasHeader: true,
     });
 
     expect(transactions).toHaveLength(6);
-    expect(transactions[0].postedAt).toBe("2026-01-01T00:00:00.000Z");
-    expect(transactions[0].amountKrw).toBe(3_000_000);
-    expect(transactions[1].postedAt).toBe("2026-01-03T00:00:00.000Z");
-    expect(transactions[1].amountKrw).toBe(-850_000);
-    expect(transactions[2].postedAt).toBe("2026-01-15T00:00:00.000Z");
-    expect(transactions[2].amountKrw).toBe(-350_000);
+    expect(transactions[0]).toMatchObject({
+      date: "2026-01-01",
+      amount: 3_000_000,
+      desc: "Salary",
+      source: "csv",
+      meta: { rowIndex: 1 },
+    });
+    expect(transactions[0]?.id).toMatch(/^csv-/);
   });
 
-  it("uses type column to normalize sign", async () => {
+  it("throws sanitized validation issues without raw cell values", async () => {
     const provider = new CsvAccountSourceProvider();
     const csvText = [
-      "date,amount,description,type",
-      "2026-01-01,1000,Salary,credit",
-      "2026-01-02,1000,Rent,debit",
+      "date,amount,description",
+      "2026/15/01,1000,InvalidDate",
+      "2026-01-02,abc123,InvalidAmount",
     ].join("\n");
-    const transactions = await provider.loadTransactions({
+
+    await expect(provider.loadTransactions({
       csvText,
       mapping: {
         dateColumn: "date",
         amountColumn: "amount",
         descColumn: "description",
-        typeColumn: "type",
       },
       hasHeader: true,
-    });
+    })).rejects.toThrow(AccountSourceValidationError);
 
-    expect(transactions[0].amountKrw).toBe(1_000);
-    expect(transactions[1].amountKrw).toBe(-1_000);
+    try {
+      await provider.loadTransactions({
+        csvText,
+        mapping: {
+          dateColumn: "date",
+          amountColumn: "amount",
+          descColumn: "description",
+        },
+        hasHeader: true,
+      });
+    } catch (error) {
+      const issue = error as AccountSourceValidationError;
+      expect(issue.issues).toEqual([
+        { path: "rows[1].date", code: "INVALID_DATE", message: "invalid date format" },
+        { path: "rows[2].amount", code: "INVALID_AMOUNT", message: "invalid amount format" },
+      ]);
+      const serialized = JSON.stringify(issue.issues);
+      expect(serialized.includes("2026/15/01")).toBe(false);
+      expect(serialized.includes("abc123")).toBe(false);
+    }
   });
 });

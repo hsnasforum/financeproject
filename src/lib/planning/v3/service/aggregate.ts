@@ -1,47 +1,46 @@
 import { type AccountTransaction, type MonthlyCashflow } from "../domain/types";
 
-function toMonthKey(isoDate: string): `${number}-${number}` | null {
-  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})/);
+function monthOf(date: string): `${number}-${number}` | null {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
   return `${match[1]}-${match[2]}` as `${number}-${number}`;
 }
 
-function compareTransactions(a: AccountTransaction, b: AccountTransaction): number {
-  const monthA = toMonthKey(a.postedAt) ?? "9999-99";
-  const monthB = toMonthKey(b.postedAt) ?? "9999-99";
-  if (monthA !== monthB) return monthA.localeCompare(monthB);
-
-  if (a.postedAt !== b.postedAt) return a.postedAt.localeCompare(b.postedAt);
-  return a.id.localeCompare(b.id);
+function compareTx(a: AccountTransaction, b: AccountTransaction): number {
+  const ymA = monthOf(a.date) ?? "9999-99";
+  const ymB = monthOf(b.date) ?? "9999-99";
+  if (ymA !== ymB) return ymA.localeCompare(ymB);
+  if (a.date !== b.date) return a.date.localeCompare(b.date);
+  const rowA = a.meta?.rowIndex ?? Number.MAX_SAFE_INTEGER;
+  const rowB = b.meta?.rowIndex ?? Number.MAX_SAFE_INTEGER;
+  return rowA - rowB;
 }
 
 export function aggregateMonthlyCashflow(transactions: AccountTransaction[]): MonthlyCashflow[] {
-  const sorted = [...transactions].sort(compareTransactions);
-  const monthly = new Map<string, { inflowKrw: number; outflowKrw: number }>();
+  const sorted = [...transactions].sort(compareTx);
+  const grouped = new Map<string, { income: number; expense: number; txCount: number }>();
 
   for (const tx of sorted) {
-    const month = toMonthKey(tx.postedAt);
-    if (!month) continue;
+    const ym = monthOf(tx.date);
+    if (!ym) continue;
 
-    const row = monthly.get(month) ?? { inflowKrw: 0, outflowKrw: 0 };
-    if (tx.amountKrw >= 0) {
-      row.inflowKrw += tx.amountKrw;
+    const prev = grouped.get(ym) ?? { income: 0, expense: 0, txCount: 0 };
+    if (tx.amount >= 0) {
+      prev.income += tx.amount;
     } else {
-      row.outflowKrw += Math.abs(tx.amountKrw);
+      prev.expense += Math.abs(tx.amount);
     }
-    monthly.set(month, row);
+    prev.txCount += 1;
+    grouped.set(ym, prev);
   }
 
-  return [...monthly.entries()]
+  return [...grouped.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, values]) => {
-      const inflowKrw = Math.round(values.inflowKrw);
-      const outflowKrw = Math.round(values.outflowKrw);
-      return {
-        month: month as `${number}-${number}`,
-        inflowKrw,
-        outflowKrw,
-        netKrw: inflowKrw - outflowKrw,
-      };
-    });
+    .map(([ym, row]) => ({
+      ym: ym as `${number}-${number}`,
+      income: Math.round(row.income),
+      expense: Math.round(row.expense),
+      net: Math.round(row.income - row.expense),
+      txCount: row.txCount,
+    }));
 }
