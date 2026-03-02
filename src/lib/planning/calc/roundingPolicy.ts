@@ -20,10 +20,10 @@ export function roundToDigits(value: number, digits: number): number {
   return Math.round((value + Number.EPSILON) * factor) / factor;
 }
 
-export function roundPercent(value: number, digits = ROUNDING_POLICY.percentDigits): number {
+export function roundPercent(value: number, digits: number = ROUNDING_POLICY.percentDigits): number {
   return roundToDigits(value, digits);
 }
 
-export function roundMonths(value: number, digits = ROUNDING_POLICY.monthsDigits): number {
+export function roundMonths(value: number, digits: number = ROUNDING_POLICY.monthsDigits): number {
   return roundToDigits(value, digits);
 }

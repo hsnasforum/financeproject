@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import {
   ASSUMPTIONS_HISTORY_DIR,
@@ -84,7 +85,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 async function listJsonFiles(dirPath: string): Promise<string[]> {
-  let entries: Awaited<ReturnType<typeof fs.readdir>>;
+  let entries: Dirent[];
   try {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {

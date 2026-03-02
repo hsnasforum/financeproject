@@ -154,16 +154,20 @@ function toNormalizedState(raw: unknown): PlanningMigrationState {
   }
 
   const lastAttemptRaw = isRecord(raw.lastAttempt) ? raw.lastAttempt : null;
-  const lastAttempt = lastAttemptRaw && asString(lastAttemptRaw.at)
-    ? {
-      at: asString(lastAttemptRaw.at),
-      trigger: asString(lastAttemptRaw.trigger) === "ops" ? "ops" : "startup",
-      result: asString(lastAttemptRaw.result) === "failed"
+  const lastAttempt: PlanningMigrationState["lastAttempt"] = lastAttemptRaw && asString(lastAttemptRaw.at)
+    ? (() => {
+      const trigger: "startup" | "ops" = asString(lastAttemptRaw.trigger) === "ops" ? "ops" : "startup";
+      const result: "ok" | "partial" | "failed" = asString(lastAttemptRaw.result) === "failed"
         ? "failed"
         : asString(lastAttemptRaw.result) === "partial"
           ? "partial"
-          : "ok",
-    }
+          : "ok";
+      return {
+        at: asString(lastAttemptRaw.at),
+        trigger,
+        result,
+      };
+    })()
     : undefined;
 
   return {

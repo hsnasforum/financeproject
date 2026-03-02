@@ -164,7 +164,7 @@ export function applyProfilePatch(profile: ProfileV2, patch: ScenarioPatch[]): P
   const next = cloneProfile(profile);
   rows.forEach((entry, index) => {
     validatePatchShape(entry, index);
-    if (entry.op === "mul" || entry.op === "set") {
+    if ("field" in entry) {
       applyRootPatch(next, entry, index);
       return;
     }
@@ -172,4 +172,3 @@ export function applyProfilePatch(profile: ProfileV2, patch: ScenarioPatch[]): P
   });
   return next;
 }
-

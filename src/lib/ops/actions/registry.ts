@@ -240,10 +240,10 @@ async function runRepairIndexAction(): Promise<OpsActionRunResult> {
   const result = await repairRunIndexConsistency();
   return {
     ok: true,
-    message: `runs index 수리 완료 (entries=${result.entries}, updated=${result.updated})`,
+    message: `runs index 수리 완료 (entries=${result.entries})`,
     data: {
       entries: result.entries,
-      updated: result.updated,
+      indexPath: result.indexPath,
     },
   };
 }

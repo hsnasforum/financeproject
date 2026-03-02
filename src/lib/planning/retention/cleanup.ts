@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { type Dirent } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { resolveRunsDir } from "../store/paths";
@@ -137,7 +138,7 @@ function resolveAssumptionsHistoryDir(baseDir: string): string {
 async function walkFiles(dirPath: string, baseDir: string): Promise<FileRow[]> {
   const out: FileRow[] = [];
   async function visit(current: string): Promise<void> {
-    let entries: Awaited<ReturnType<typeof fs.readdir>>;
+    let entries: Dirent[];
     try {
       entries = await fs.readdir(current, { withFileTypes: true });
     } catch (error) {

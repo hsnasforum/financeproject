@@ -18,7 +18,13 @@ import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { formatKrw, formatPct } from "@/lib/planning/i18n/format";
 import { buildConfirmString } from "@/lib/ops/confirm";
 import { LIMITS } from "@/lib/planning/v2/limits";
-import { mapGoalStatus, pickKeyTimelinePoints, resolveResultBadge, aggregateWarnings as aggregateGuideWarnings } from "@/lib/planning/v2/resultGuide";
+import {
+  mapGoalStatus,
+  pickKeyTimelinePoints,
+  resolveResultBadge,
+  aggregateWarnings as aggregateGuideWarnings,
+  type AggregatedWarningRow,
+} from "@/lib/planning/v2/resultGuide";
 import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "@/lib/planning/v2/resultDto";
 import { type PlanningRunRecord } from "@/lib/planning/store/types";
 
@@ -506,7 +512,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
     () => parseSimulateWarnings(selectedRun),
     [selectedRun],
   );
-  const aggregatedWarnings = useMemo(
+  const aggregatedWarnings = useMemo<AggregatedWarningRow[]>(
     () => selectedDto
       ? selectedDto.warnings.aggregated.map((warning) => ({
         code: warning.code,
@@ -515,7 +521,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
         ...(typeof warning.firstMonth === "number" ? { firstMonth: warning.firstMonth } : {}),
         ...(typeof warning.lastMonth === "number" ? { lastMonth: warning.lastMonth } : {}),
         sampleMessage: asString(warning.sampleMessage) || `${warning.code} 경고가 감지되었습니다.`,
-      }))
+      } satisfies AggregatedWarningRow))
       : aggregateGuideWarnings(simulateWarningsRaw),
     [selectedDto, simulateWarningsRaw],
   );

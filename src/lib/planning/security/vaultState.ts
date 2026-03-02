@@ -480,7 +480,7 @@ export async function changeVaultPassphrase(input: {
   }
 
   const policy = policyFromConfig(runtime.config);
-  let masterKey = runtime.unlockedMasterKey ? Buffer.from(runtime.unlockedMasterKey) : null;
+  let masterKey: Buffer<ArrayBufferLike> | null = runtime.unlockedMasterKey ? Buffer.from(runtime.unlockedMasterKey) : null;
 
   if (!masterKey) {
     const oldPassphrase = asString(input.oldPassphrase);

@@ -7,6 +7,7 @@ import { jsonError } from "../../../../../../../lib/planning/api/response";
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
 import { renderHtmlReport } from "../../../../../../../lib/planning/v2/report/htmlReport";
 import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
+import { type ResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -40,18 +41,20 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const outputs = run.outputs && typeof run.outputs === "object" ? run.outputs : {};
-    const resultDto = isResultDtoV1((outputs as Record<string, unknown>).resultDto)
-      ? (outputs as Record<string, unknown>).resultDto
+    const rawResultDto = (outputs as Record<string, unknown>).resultDto;
+    const resultDto: ResultDtoV1 = isResultDtoV1(rawResultDto)
+      ? rawResultDto
       : buildResultDtoV1FromRunRecord(run);
 
     const compareToRunId = (url.searchParams.get("compareTo") ?? "").trim();
-    let compareTo: { dto: typeof resultDto; label?: string } | undefined;
+    let compareTo: { dto: ResultDtoV1; label?: string } | undefined;
     if (compareToRunId && compareToRunId !== run.id) {
       const compareRun = await getRun(compareToRunId);
       if (compareRun) {
         const compareOutputs = compareRun.outputs && typeof compareRun.outputs === "object" ? compareRun.outputs : {};
-        const compareDto = isResultDtoV1((compareOutputs as Record<string, unknown>).resultDto)
-          ? (compareOutputs as Record<string, unknown>).resultDto
+        const rawCompareDto = (compareOutputs as Record<string, unknown>).resultDto;
+        const compareDto: ResultDtoV1 = isResultDtoV1(rawCompareDto)
+          ? rawCompareDto
           : buildResultDtoV1FromRunRecord(compareRun);
         compareTo = {
           dto: compareDto,

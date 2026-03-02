@@ -2,8 +2,14 @@ import path from "node:path";
 import { defineConfig } from "@playwright/test";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3100;
-const externalBaseUrl = (process.env.E2E_BASE_URL || process.env.PLANNING_BASE_URL || "").trim().replace(/\/+$/, "");
-const baseURL = externalBaseUrl || `http://localhost:${PORT}`;
+const configuredBaseUrl = (
+  process.env.BASE_URL
+  || process.env.E2E_BASE_URL
+  || process.env.PLANNING_BASE_URL
+  || ""
+).trim().replace(/\/+$/, "");
+const externalBaseUrl = (process.env.E2E_EXTERNAL_BASE_URL || "").trim().replace(/\/+$/, "");
+const baseURL = configuredBaseUrl || `http://127.0.0.1:${PORT}`;
 const headlessFlag = (process.env.PW_HEADLESS || "").trim().toLowerCase();
 const resolvedHeadless = headlessFlag
   ? !(headlessFlag === "0" || headlessFlag === "false" || headlessFlag === "no")

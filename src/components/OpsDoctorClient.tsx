@@ -179,7 +179,7 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
         throw new Error(apiError.message);
       }
       setReport(normalized);
-      setRecovery(payload.meta?.recovery ?? null);
+      setRecovery(payload?.meta?.recovery ?? null);
     } catch (doctorError) {
       setError(doctorError instanceof Error ? doctorError.message : "doctor 실행에 실패했습니다.");
       setReport(null);

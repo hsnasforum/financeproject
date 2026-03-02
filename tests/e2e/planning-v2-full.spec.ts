@@ -1,12 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { runPlanningPipeline, seedGoldenRuns } from "./helpers/planningGateHelpers";
+import { runPlanningPipeline, seedGoldenRuns, seedRunForReports } from "./helpers/planningGateHelpers";
 
-test("run pipeline shows stage timeline and reports dashboard contracts", async ({ page }) => {
+test("run pipeline shows stage timeline and reports dashboard contracts", async ({ page, request }) => {
   test.setTimeout(240_000);
   const simulateStatus = await runPlanningPipeline(page);
   expect(["SUCCESS", "FAILED", "SKIPPED"]).toContain(simulateStatus);
+  const seeded = await seedRunForReports(request);
 
-  await page.goto("/planning/reports");
+  await page.goto(
+    `/planning/reports?runId=${encodeURIComponent(seeded.runId)}&profileId=${encodeURIComponent(seeded.profileId)}`,
+  );
   await expect(page).toHaveURL(/\/planning\/reports(\?|$)/, { timeout: 30_000 });
   await expect(page.getByTestId("report-dashboard")).toBeVisible();
   await expect(page.getByTestId("report-summary-cards")).toBeVisible();

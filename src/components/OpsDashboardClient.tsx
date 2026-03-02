@@ -419,8 +419,12 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
         <Card className="mb-4 p-4" data-testid="ops-issues">
           <h2 className="text-base font-black text-slate-900">우선순위 이슈 큐</h2>
           <div className="mt-3 space-y-2">
-            {issues.map((issue) => (
-              <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid={`ops-issue-${toSafeDomId(issue.id)}`}>
+            {issues.map((issue) => {
+              const fixHref = issue.fix?.href;
+              const fixActionId = issue.fix?.actionId as OpsActionId | undefined;
+              const fixLabel = issue.fix?.label ?? "Fix";
+              return (
+                <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid={`ops-issue-${toSafeDomId(issue.id)}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold text-slate-900">{issue.title}</p>
@@ -432,12 +436,12 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
                 </div>
                 <p className="mt-2 text-sm text-slate-700">{issue.message}</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {issue.fix?.href ? (
-                    <Link href={issue.fix.href}>
-                      <Button type="button" size="sm" variant="outline" data-testid={`ops-fix-${toSafeDomId(issue.id)}`}>{issue.fix.label}</Button>
+                  {fixHref ? (
+                    <Link href={fixHref}>
+                      <Button type="button" size="sm" variant="outline" data-testid={`ops-fix-${toSafeDomId(issue.id)}`}>{fixLabel}</Button>
                     </Link>
                   ) : null}
-                  {issue.fix?.actionId ? (
+                  {fixActionId ? (
                     <Button
                       type="button"
                       size="sm"
@@ -445,15 +449,16 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
                       data-testid={`ops-fix-${toSafeDomId(issue.id)}`}
                       disabled={actionRunning.length > 0}
                       onClick={() => {
-                        void startActionWithPreview(issue.fix.actionId as OpsActionId, issue.fix?.label ?? "Fix");
+                        void startActionWithPreview(fixActionId, fixLabel);
                       }}
                     >
-                      {actionRunning === issue.fix.actionId ? "실행 중..." : issue.fix.label}
+                      {actionRunning === fixActionId ? "실행 중..." : fixLabel}
                     </Button>
                   ) : null}
                 </div>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </Card>
       ) : null}

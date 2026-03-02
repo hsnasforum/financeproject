@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import { BackupReminderBannerServer } from "@/components/BackupReminderBannerServer";
+import { BackupReminderBannerServer } from "@/app/_components/BackupReminderBannerServer";
 import { VaultLockScreenClient } from "@/components/VaultLockScreenClient";
 import { OpsDashboardClient } from "@/components/OpsDashboardClient";
 import { shouldBlockOpsPageInCurrentRuntime } from "@/lib/ops/pageAccess";
