@@ -1,6 +1,13 @@
 # Release Notes
 
 ## Latest
+### 2026-03-02 (v1.0.3)
+### 변경 요약
+- Planning v2 릴리즈 문서를 `docs/releases/planning-v2-1.0.3.md`로 추가했습니다.
+- README 상단 버전을 `v1.0.3`으로 갱신했습니다.
+- 패키지 버전을 `1.0.3`으로 상향했습니다.
+
+## Previous
 ### 2026-02-26 (v1.0 RC Lock: P45~P50)
 ### 변경 요약
 - P45: `daily_refresh_result.json` reader/API + 대시보드 카드로 마지막 자동 갱신 상태 노출.
@@ -68,7 +75,6 @@
 - Day2 플래너 액션 딥링크
   - `src/lib/planner/types.ts`
   - `src/lib/planner/compute.ts`
-  - `src/app/planner/page.tsx`
   - `tests/planner-compute.test.ts`
 - Day3 추천 저장+비교(diff) 및 상세 연결
   - `src/app/recommend/page.tsx`
@@ -92,7 +98,7 @@
 
 ### 작업 요약 (5줄)
 - 정합성: 실제 라우트 기준으로 `current-screens`를 갱신하고 `/products/pension` 카탈로그를 반영했습니다.
-- 딥링크: `/planner` 우선순위 액션에서 추천/대출 페이지로 즉시 이동하는 CTA를 `links[]`로 표준화했습니다.
+- 딥링크: `/planning` 우선순위 액션에서 추천/대출 페이지로 즉시 이동하는 CTA를 `links[]`로 표준화했습니다.
 - 저장+diff: `/recommend` 결과를 로컬 저장하고 직전 실행 대비 순위/금리/기간 변화를 카드에서 비교 표시하도록 고정했습니다.
 - 에러표준: 환율/GOV24/FINLIFE 실패 응답을 `{ ok:false, error:{ code, message, debug? } }`로 통일했습니다.
 - 오프라인 QA: `offline:doctor`와 Day6 문서로 스냅샷/DB/REPLAY 준비상태를 빠르게 재현·진단 가능하게 했습니다.
