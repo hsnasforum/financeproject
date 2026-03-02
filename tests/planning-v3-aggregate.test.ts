@@ -15,8 +15,9 @@ describe("aggregateMonthlyCashflow", () => {
     const result = aggregateMonthlyCashflow(reversed);
 
     expect(result).toEqual([
-      { ym: "2026-01", income: 3_000_000, expense: 1_200_000, net: 1_800_000, txCount: 3 },
-      { ym: "2026-02", income: 3_100_000, expense: 1_350_000, net: 1_750_000, txCount: 3 },
+      { ym: "2026-01", incomeKrw: 3_000_000, expenseKrw: -1_200_000, netKrw: 1_800_000, txCount: 3 },
+      { ym: "2026-02", incomeKrw: 3_101_234, expenseKrw: -900_000, netKrw: 2_201_234, txCount: 3 },
+      { ym: "2026-03", incomeKrw: 4_250_000, expenseKrw: -1_050_000, netKrw: 3_200_000, txCount: 3 },
     ]);
   });
 });

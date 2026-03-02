@@ -10,10 +10,10 @@ import { parseCsvTransactions } from "./csv/csvProvider";
 function toValidationIssue(error: {
   rowIndex: number;
   code: string;
-  path: string;
+  path: string[];
 }): AccountSourceValidationIssue {
   const row = Math.max(error.rowIndex, 0);
-  const path = `rows[${row}].${error.path}`;
+  const path = `rows[${row}].${error.path.join(".")}`;
   const message = error.code === "MISSING_COLUMN"
     ? "required column is missing"
     : error.code === "INVALID_DATE"

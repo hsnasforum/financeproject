@@ -1,29 +1,31 @@
 import { type MonthlyCashflow, type ProfileV2DraftPatch } from "../domain/types";
 
-function median(values: number[]): number {
+function medianRounded(values: number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid];
-  return (sorted[mid - 1] + sorted[mid]) / 2;
+  if (sorted.length % 2 === 1) return Math.round(sorted[mid]);
+  return Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
-export function buildProfileDraftPatchFromCashflow(cashflows: MonthlyCashflow[]): ProfileV2DraftPatch {
-  const monthsConsidered = cashflows.length;
-  const incomeMedian = Math.round(median(cashflows.map((cf) => cf.income)));
-  const expenseMedian = Math.round(median(cashflows.map((cf) => cf.expense)));
+export function buildProfileV2DraftPatch(cashflows: MonthlyCashflow[]): ProfileV2DraftPatch {
+  const netIncomeMedian = medianRounded(cashflows.map((cf) => cf.netKrw));
+  const expenseMedian = medianRounded(cashflows.map((cf) => Math.abs(cf.expenseKrw)));
   const monthlyEssentialExpenses = Math.max(0, Math.round(expenseMedian * 0.7));
   const monthlyDiscretionaryExpenses = Math.max(0, expenseMedian - monthlyEssentialExpenses);
 
   return {
-    monthlyIncomeNet: Math.max(0, incomeMedian),
+    monthlyIncomeNet: netIncomeMedian,
     monthlyEssentialExpenses,
     monthlyDiscretionaryExpenses,
     assumptions: [
-      "월 수입/지출은 월별 중앙값(median) 기준 추정치입니다.",
-      "월 지출은 필수 70% / 재량 30% 고정 분할 가정을 사용합니다.",
-      "초안은 저장/실행 전 검토용입니다.",
+      "monthlyIncomeNet uses median monthly net (assumption)",
+      "expense split 70/30 (assumption)",
     ],
-    monthsConsidered,
+    monthsConsidered: cashflows.length,
   };
+}
+
+export function buildProfileDraftPatchFromCashflow(cashflows: MonthlyCashflow[]): ProfileV2DraftPatch {
+  return buildProfileV2DraftPatch(cashflows);
 }
