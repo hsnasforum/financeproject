@@ -1,4 +1,6 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import path from "node:path";
 
 const checks = [
   {
@@ -25,7 +27,111 @@ const checks = [
   },
 ];
 
+const REPO_ROOT = process.cwd();
+const RIPGREP_AVAILABLE = spawnSync("rg", ["--version"], {
+  stdio: "pipe",
+  encoding: "utf8",
+}).status === 0;
+
+function normalizeRelative(filePath) {
+  return path.relative(REPO_ROOT, filePath).split(path.sep).join("/");
+}
+
+function isCodeFile(filePath) {
+  return /\.(tsx?|jsx?|mjs|cjs)$/.test(filePath);
+}
+
+function walkFiles(targetPath, output) {
+  const stat = statSync(targetPath);
+  if (stat.isFile()) {
+    output.push(targetPath);
+    return;
+  }
+  const entries = readdirSync(targetPath, { withFileTypes: true });
+  for (const entry of entries) {
+    const nextPath = path.join(targetPath, entry.name);
+    if (entry.isDirectory()) {
+      walkFiles(nextPath, output);
+    } else if (entry.isFile()) {
+      output.push(nextPath);
+    }
+  }
+}
+
+function collectFilesFromTargets(targets, excludeTests = false) {
+  const files = [];
+  for (const target of targets) {
+    const absolute = path.resolve(REPO_ROOT, target);
+    try {
+      walkFiles(absolute, files);
+    } catch {
+      return { ok: false, error: `missing target path: ${target}`, files: [] };
+    }
+  }
+  const filtered = files
+    .map((filePath) => normalizeRelative(filePath))
+    .filter((filePath) => isCodeFile(filePath))
+    .filter((filePath) => (excludeTests ? !/\.test\./.test(filePath) : true));
+  return { ok: true, files: Array.from(new Set(filtered)) };
+}
+
+function findMatches(patternSource, files) {
+  const pattern = new RegExp(patternSource);
+  const matches = [];
+  for (const filePath of files) {
+    const absolute = path.resolve(REPO_ROOT, filePath);
+    const content = readFileSync(absolute, "utf8");
+    const lines = content.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!pattern.test(line)) continue;
+      matches.push(`${filePath}:${index + 1}:${line.trim()}`);
+    }
+  }
+  return matches;
+}
+
+function parseRipgrepArgs(args) {
+  let pattern = "";
+  let excludeTests = false;
+  const targets = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === "-n" || token === "-l") continue;
+    if (token === "--glob") {
+      const globValue = args[index + 1] ?? "";
+      if (globValue === "!**/*.test.*") {
+        excludeTests = true;
+      }
+      index += 1;
+      continue;
+    }
+    if (pattern.length === 0) {
+      pattern = token;
+      continue;
+    }
+    if (!token.startsWith("-")) {
+      targets.push(token);
+    }
+  }
+  return { pattern, targets, excludeTests };
+}
+
 function listClientComponentFiles() {
+  if (!RIPGREP_AVAILABLE) {
+    const collected = collectFilesFromTargets(["src"], true);
+    if (!collected.ok) {
+      throw new Error(`failed to discover client files: ${collected.error}`);
+    }
+    const clientDirective = /^\s*["']use client["'];?\s*$/;
+    const clientFiles = collected.files.filter((filePath) => {
+      const absolute = path.resolve(REPO_ROOT, filePath);
+      const content = readFileSync(absolute, "utf8");
+      return content.split(/\r?\n/).some((line) => clientDirective.test(line));
+    });
+    return clientFiles;
+  }
+
   const result = spawnSync(
     "rg",
     [
@@ -48,6 +154,25 @@ function listClientComponentFiles() {
 }
 
 function runCheck(check) {
+  if (!RIPGREP_AVAILABLE && check.cmd === "rg") {
+    const parsed = parseRipgrepArgs(check.args);
+    if (!parsed.pattern) {
+      return { ok: false, output: `${check.name}: missing pattern` };
+    }
+    const collected = collectFilesFromTargets(parsed.targets, parsed.excludeTests);
+    if (!collected.ok) {
+      return { ok: false, output: `${check.name}: ${collected.error}` };
+    }
+    const matches = findMatches(parsed.pattern, collected.files);
+    if (matches.length > 0) {
+      return {
+        ok: false,
+        output: matches.join("\n"),
+      };
+    }
+    return { ok: true, output: "" };
+  }
+
   const result = spawnSync(check.cmd, check.args, {
     stdio: "pipe",
     encoding: "utf8",
