@@ -13,6 +13,16 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function normalizeRate(value: number): number {
+  return Math.round((value + Number.EPSILON) * 1_000_000_000_000) / 1_000_000_000_000;
+}
+
+function roundDebtRates(rates: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(
+    Object.entries(rates).map(([key, value]) => [key, normalizeRate(value)]),
+  );
+}
+
 function makeScenario(seed: number): Scenario {
   const profile: ProfileV2 = {
     monthlyIncomeNet: 2_300_000 + seed * 65_000,
@@ -104,7 +114,7 @@ function summarizeScenario(seed: number) {
     assumptionsUsed: {
       annualInflationRate: round2(result.assumptionsUsed.annualInflationRate),
       annualExpectedReturnRate: round2(result.assumptionsUsed.annualExpectedReturnRate),
-      annualDebtRates: result.assumptionsUsed.annualDebtRates,
+      annualDebtRates: roundDebtRates(result.assumptionsUsed.annualDebtRates),
     },
     finalRow: {
       month: last.month,

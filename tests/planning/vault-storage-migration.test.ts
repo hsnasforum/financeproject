@@ -68,7 +68,11 @@ describe("vault storage migration", () => {
     const profiles = await listProfiles();
     expect(profiles.some((row) => row.id === "legacy-profile")).toBe(true);
 
-    const rewrittenRaw = await fs.promises.readFile(filePath, "utf-8");
+    const rewrittenPath = path.join(root, "vault", "profiles", "legacy-profile", "profile.json");
+    expect(fs.existsSync(filePath)).toBe(false);
+    expect(fs.existsSync(rewrittenPath)).toBe(true);
+
+    const rewrittenRaw = await fs.promises.readFile(rewrittenPath, "utf-8");
     const rewrittenJson = JSON.parse(rewrittenRaw) as unknown;
     expect(isVaultEncryptedEnvelope(rewrittenJson)).toBe(true);
   });
