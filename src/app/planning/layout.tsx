@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { BackupReminderBannerServer } from "@/components/BackupReminderBannerServer";
+import { BackupReminderBannerServer } from "@/app/_components/BackupReminderBannerServer";
 import { VaultLockScreenClient } from "@/components/VaultLockScreenClient";
 import { inspectPlanningMigrations } from "@/lib/planning/migrations/manager";
 import { isMigrationRequired } from "@/lib/planning/migrations/requirement";
