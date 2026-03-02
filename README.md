@@ -1,4 +1,4 @@
-# Finance Project (v1.0.0)
+# Finance Project (v1.0.3)
 
 개인 재무설계, 금융상품 추천, 공공데이터 연동, DART 공시 모니터링을 통합한 Next.js 기반 서비스입니다.
 
@@ -16,18 +16,28 @@ pnpm planning:v2:complete
 
 Planning v2 문서:
 
+- `CONTRIBUTING_PLANNING.md`
 - `docs/planning-v2-onepage.md`
+- `docs/planning-v2-freeze.md`
 - `docs/planning-v2-quickstart.md`
 - `docs/planning-v2-user.md`
 - `docs/planning-v2-ops.md`
+- `docs/planning-v2-scheduler.md`
+- `docs/planning-v2-maintenance.md`
+- `docs/planning-v2-bug-report-template.md`
 - `docs/planning-v2-release-checklist.md`
 - `docs/releases/planning-v2-final-report-{version}.md`
+
+Planning v2 Freeze 원칙:
+- v2는 동결 상태이며 신규 기능 추가 없이 bugfix/안정화만 수행합니다.
+- v2 코어 변경 시 `pnpm planning:v2:complete` + `pnpm planning:v2:regress`를 필수로 실행합니다.
+- 신규 기능은 v3 범위에서만 진행합니다 (`docs/planning-v3-migration.md` 참고).
 
 ## 핵심 진입 경로
 
 - 메인 진입: `/dashboard`
 - 핵심 기능:
-  - `/planner`
+  - `/planning`
   - `/recommend`
   - `/public/dart`
   - `/settings/data-sources`
@@ -76,11 +86,19 @@ pnpm e2e
 ## CI/자동화
 
 - CI 게이트: `.github/workflows/ci.yml`
-  - `pnpm verify`
+  - `pnpm test`
+  - `pnpm planning:v2:complete`
+  - `pnpm planning:v2:compat`
   - `pnpm build`
 - E2E 스모크/플로우: `.github/workflows/e2e-smoke.yml`
 - Daily refresh: `.github/workflows/daily-refresh.yml`
 - Tag release: `.github/workflows/release.yml` (`v*` 태그 푸시 시 GitHub Release 생성)
+
+### Release Ops
+
+- 체크리스트: `RELEASE_CHECKLIST.md`
+- 준비: `pnpm release:prepare -- --version=x.y.z`
+- 검증: `pnpm release:verify`
 
 ## 운영 보안
 

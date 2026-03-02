@@ -1,4 +1,37 @@
-# Planning v2 Changelog (P97-0 ~ P97-26)
+# Planning v2 Changelog (P97-0 ~ P97-99)
+
+## 2026-03-02 Release Prep (v1.0.3)
+
+- 릴리즈 준비: 버전 갱신 및 스크립트 버전 파라미터 동기화.
+- CI required gates 기준 고정: `pnpm test` + `pnpm planning:v2:complete` + `pnpm planning:v2:compat`.
+- 본 섹션의 세부 변경사항/릴리즈 요약은 배포 직전에 보강합니다.
+## 2026-03-02 Baseline Release (v1.0.2)
+
+- P97-131: Compatibility CI
+  - legacy storage/backups fixture(`v1_plain_storage`, `v2_encrypted_storage`, `backup_v1.zip`) 추가
+  - compat runner(`planning:v2:compat`)로 migration->gate 경로 검증
+  - CI required gate에 compat 단계 추가
+- P97-132: Baseline release 정리
+  - 버전 상향(`1.0.2`) 및 릴리즈 노트 추가
+  - planningPolicy/opsPolicy 기본값 동결 문서를 최신 기본값으로 갱신
+  - required CI gate를 `pnpm test` + `pnpm planning:v2:complete` + `pnpm planning:v2:compat`로 고정
+  - migration note(APR legacy 정규화, liabilityId strict validation) 재확인
+
+## 2026-03-01 Release Checkpoint (v1.0.1)
+
+- P97-97: UX/A11y polish
+  - 공통 상태 컴포넌트(`LoadingState`, `ErrorState`, `EmptyState`)를 `/planning`, `/planning/reports`, `/ops` 흐름에 적용
+  - `ko-KR` 기반 숫자 포맷 일관화(KRW, %, 개월)
+  - 핵심 버튼/토글/행동 요소에 접근성 라벨(aria) 보강
+- P97-98: Golden fixtures + deterministic replay
+  - GOOD/CAUTION/RISK 포함 canonical fixture 5종 추가
+  - Monte Carlo 랜덤성 제거(골든 런은 MC 비활성)로 회귀 안정화
+  - Playwright full suite에 golden run report contract 검증 추가
+- P97-99: v2 release checkpoint
+  - 버전 상향(`1.0.1`) 및 릴리즈 노트 추가
+  - planningPolicy/opsPolicy 기본값 동결 문서화
+  - CI required gate를 `pnpm test` + `pnpm planning:v2:complete`로 명시
+  - 업그레이드 노트(APR legacy 정규화, liabilityId strict validation) 고정
 
 1. P97-0: Profile v2, deterministic monthly engine, warning/explainability, 기본 테스트 세트 구축.
 2. P97-1~2: assumptions snapshot fetch/sync/storage + OPS 동기화 + audit/backup 연동.
