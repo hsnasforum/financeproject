@@ -48,9 +48,9 @@ function requestImportCsv(csvText: string): Request {
       referer: `${LOCAL_ORIGIN}/planning/v3/import`,
       cookie: `dev_csrf=${CSRF}`,
       "x-csrf-token": CSRF,
-      "content-type": "text/csv",
+      "content-type": "application/json",
     },
-    body: csvText,
+    body: JSON.stringify({ csvText }),
   });
 }
 
@@ -71,7 +71,7 @@ describe("planning v3 drafts route", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("supports create/list and import route returns draftId with stored file", async () => {
+  it("supports create/list and import route returns draft-only payload", async () => {
     const created = await POST(requestPost("/api/planning/v3/drafts", {
       csrf: CSRF,
       source: { kind: "csv", filename: "sample.csv" },
@@ -110,14 +110,14 @@ describe("planning v3 drafts route", () => {
     expect(imported.status).toBe(200);
     const importedPayload = await imported.json() as {
       ok?: boolean;
-      data?: { draftId?: string; draftSummary?: { rows?: number; columns?: number } };
-      draftId?: string;
+      data?: {
+        draftPatch?: Record<string, unknown>;
+        monthlyCashflow?: unknown[];
+        meta?: { rows?: number; months?: number };
+      };
     };
     expect(importedPayload.ok).toBe(true);
-    const draftId = String(importedPayload.data?.draftId ?? importedPayload.draftId ?? "");
-    expect(draftId.length).toBeGreaterThan(0);
-
-    const draftPath = path.join(root, ".data", "planning_v3_drafts", `${draftId}.json`);
-    expect(fs.existsSync(draftPath)).toBe(true);
+    expect(Array.isArray(importedPayload.data?.monthlyCashflow)).toBe(true);
+    expect(typeof importedPayload.data?.draftPatch).toBe("object");
   });
 });
