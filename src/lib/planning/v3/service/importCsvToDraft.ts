@@ -2,7 +2,13 @@ import { type ParseCsvTransactionsOptions } from "../providers/csv/csvProvider";
 import { importCsvToDraft as importCsvPipeline } from "./importCsvDraft";
 
 export type ImportCsvToDraftResult = {
-  cashflow: ReturnType<typeof importCsvPipeline>["cashflows"];
+  cashflow: Array<{
+    ym: string;
+    incomeKrw: number;
+    expenseKrw: number;
+    netKrw: number;
+    txCount: number;
+  }>;
   draftPatch: {
     monthlyIncomeNet: number;
     monthlyEssentialExpenses: number;
@@ -57,7 +63,13 @@ export function importCsvToDraft(
   }
 
   return {
-    cashflow: imported.cashflows,
+    cashflow: imported.cashflows.map((row) => ({
+      ym: row.ym,
+      incomeKrw: row.incomeKrw,
+      expenseKrw: row.expenseKrw,
+      netKrw: row.netKrw,
+      txCount: row.txCount,
+    })),
     draftPatch: {
       monthlyIncomeNet: imported.draft.monthlyIncomeNet,
       monthlyEssentialExpenses: imported.draft.monthlyEssentialExpenses,
