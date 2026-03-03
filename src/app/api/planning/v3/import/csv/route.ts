@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   assertCsrf,
@@ -11,20 +10,23 @@ import {
   CsvImportInputError,
   importCsvToDraft,
 } from "../../../../../../lib/planning/v3/service/importCsvToDraft";
-import { createDraft } from "../../../../../../lib/planning/v3/drafts/draftStore";
 import { parseCsvText } from "../../../../../../lib/planning/v3/providers/csv/csvParse";
 
+export const runtime = "nodejs";
+
 const MAX_CSV_BYTES = 1024 * 1024;
-const ALLOWED_CONTENT_TYPES = new Set(["text/csv", "text/plain"]);
+const MAX_REQUEST_BYTES = MAX_CSV_BYTES + 16 * 1024;
+const ALLOWED_CONTENT_TYPES = new Set(["text/csv", "text/plain", "application/json"]);
 
 type ImportSuccessPayload = { ok: true } & ReturnType<typeof importCsvToDraft> & {
-  draftId?: string;
   draftSummary: {
     rows: number;
     columns: number;
   };
   data: {
-    draftId?: string;
+    monthlyCashflow: ReturnType<typeof importCsvToDraft>["cashflow"];
+    draftPatch: ReturnType<typeof importCsvToDraft>["draftPatch"];
+    meta: ReturnType<typeof importCsvToDraft>["meta"];
     draftSummary: {
       rows: number;
       columns: number;
@@ -77,14 +79,6 @@ function parseContentLength(value: string | null): number | null {
   return Math.floor(parsed);
 }
 
-function buildDeterministicDraftId(input: unknown): string {
-  const hash = createHash("sha256")
-    .update(JSON.stringify(input), "utf-8")
-    .digest("hex")
-    .slice(0, 24);
-  return `d_${hash}`;
-}
-
 function pickCsrfToken(request: Request): string {
   const headerToken = request.headers.get("x-csrf-token");
   if (headerToken && headerToken.trim()) return headerToken.trim();
@@ -92,11 +86,19 @@ function pickCsrfToken(request: Request): string {
   return (url.searchParams.get("csrf") ?? "").trim();
 }
 
-function shouldPersistDraft(url: string): boolean {
-  const value = new URL(url).searchParams.get("persist");
-  if (!value) return true;
-  const normalized = value.trim().toLowerCase();
-  return !(normalized === "0" || normalized === "false" || normalized === "no");
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseCsvFromJson(rawBody: string): string {
+  try {
+    const parsed = JSON.parse(rawBody) as unknown;
+    if (!isRecord(parsed)) return "";
+    const csvText = parsed.csvText;
+    return typeof csvText === "string" ? csvText : "";
+  } catch {
+    return "";
+  }
 }
 
 function guardRequest(request: Request): NextResponse<ImportErrorPayload> | null {
@@ -124,19 +126,29 @@ export async function POST(request: Request) {
 
   const contentType = normalizeContentType(request.headers.get("content-type"));
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    return jsonErr(415, "UNSUPPORTED_MEDIA_TYPE", "text/csv 또는 text/plain 형식만 허용됩니다.");
+    return jsonErr(415, "UNSUPPORTED_MEDIA_TYPE", "application/json, text/csv 또는 text/plain 형식만 허용됩니다.");
   }
 
   const contentLength = parseContentLength(request.headers.get("content-length"));
-  if (contentLength !== null && contentLength > MAX_CSV_BYTES) {
+  if (contentLength !== null && contentLength > MAX_REQUEST_BYTES) {
+    return jsonErr(413, "PAYLOAD_TOO_LARGE", "요청 본문이 최대 크기를 초과했습니다.");
+  }
+
+  const rawBody = await request.text();
+  const bodyBytes = parseCsvBytes(rawBody);
+  if (bodyBytes > MAX_REQUEST_BYTES) {
+    return jsonErr(413, "PAYLOAD_TOO_LARGE", "요청 본문이 최대 크기를 초과했습니다.");
+  }
+
+  const csvText = contentType === "application/json"
+    ? parseCsvFromJson(rawBody)
+    : rawBody;
+
+  const csvBytes = parseCsvBytes(csvText);
+  if (csvBytes > MAX_CSV_BYTES) {
     return jsonErr(413, "PAYLOAD_TOO_LARGE", "CSV 본문이 최대 크기(1MB)를 초과했습니다.");
   }
 
-  const csvText = await request.text();
-  const bodyBytes = parseCsvBytes(csvText);
-  if (bodyBytes > MAX_CSV_BYTES) {
-    return jsonErr(413, "PAYLOAD_TOO_LARGE", "CSV 본문이 최대 크기(1MB)를 초과했습니다.");
-  }
   if (!csvText.trim()) {
     return jsonErr(400, "INPUT", "CSV 본문이 비어 있습니다.");
   }
@@ -145,50 +157,20 @@ export async function POST(request: Request) {
     const imported = importCsvToDraft(csvText);
     const parsedHeader = parseCsvText(csvText, { hasHeader: true });
     const columns = Array.isArray(parsedHeader.header) ? parsedHeader.header.length : 0;
-    const persist = shouldPersistDraft(request.url);
-    const deterministicDraftId = buildDeterministicDraftId({
-      cashflow: imported.cashflow,
-      draftPatch: imported.draftPatch,
-      meta: imported.meta,
-      columns,
-    });
 
     const draftSummary = {
       rows: imported.meta.rows,
       columns,
     };
 
-    if (!persist) {
-      return jsonOk({
-        ok: true,
-        ...imported,
-        draftSummary,
-        data: {
-          draftSummary,
-        },
-      });
-    }
-
-    const saved = await createDraft({
-      id: deterministicDraftId,
-      source: { kind: "csv" },
-      payload: {
-        cashflow: imported.cashflow,
-        draftPatch: imported.draftPatch,
-      },
-      meta: {
-        rows: imported.meta.rows,
-        columns,
-      },
-    });
-
     return jsonOk({
       ok: true,
       ...imported,
-      draftId: saved.id,
       draftSummary,
       data: {
-        draftId: saved.id,
+        monthlyCashflow: imported.cashflow,
+        draftPatch: imported.draftPatch,
+        meta: imported.meta,
         draftSummary,
       },
     });
