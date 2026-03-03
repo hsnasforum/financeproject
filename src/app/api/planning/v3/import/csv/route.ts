@@ -181,14 +181,18 @@ export async function POST(request: Request) {
         columns,
       },
     });
+    const draftId = (saved.id ?? "").trim();
+    if (!draftId) {
+      return jsonErr(500, "INTERNAL", "초안 저장 결과를 확인하지 못했습니다.");
+    }
 
     return jsonOk({
       ok: true,
       ...imported,
-      draftId: saved.id,
+      draftId,
       draftSummary,
       data: {
-        draftId: saved.id,
+        draftId,
         draftSummary,
       },
     });

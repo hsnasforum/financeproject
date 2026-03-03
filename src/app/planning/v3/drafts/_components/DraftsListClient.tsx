@@ -7,11 +7,9 @@ import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
 import {
-  fetchCsvDraftPreview,
+  createDraftFromCsvUpload,
   fetchDraftList,
-  saveCsvDraftPreview,
   type DraftUploadListItem,
-  type DraftUploadPreview,
 } from "./draftsUploadFlow";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -35,21 +33,16 @@ function formatKrw(value: number | undefined): string {
   return `${Math.round(value).toLocaleString("ko-KR")}원`;
 }
 
-function pickPatchNumber(value: unknown): number {
-  return Math.round(Number(value) || 0);
-}
-
 export function DraftsListClient() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<DraftUploadListItem[]>([]);
   const [message, setMessage] = useState("");
   const [deletingId, setDeletingId] = useState("");
 
-  const [file, setFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [preview, setPreview] = useState<DraftUploadPreview | null>(null);
-  const [selectedDraftId, setSelectedDraftId] = useState("");
+  const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   const csrfToken = useMemo(() => readDevCsrfToken(), []);
 
@@ -72,39 +65,20 @@ export function DraftsListClient() {
     void loadDrafts();
   }, [loadDrafts]);
 
-  async function handleImportPreview() {
-    if (!file || importing) return;
-    setImporting(true);
-    setMessage("");
+  async function handleCreateFromCsv() {
+    if (!uploadFile || uploading) return;
+
+    setUploading(true);
+    setUploadError("");
 
     try {
-      const csvText = await file.text();
-      const result = await fetchCsvDraftPreview(csvText, fetch, csrfToken);
-      setPreview(result);
-      setSelectedDraftId("");
-      setMessage("미리보기를 생성했습니다. 저장을 누르면 로컬 Draft로 보관됩니다.");
+      const csvText = await uploadFile.text();
+      const created = await createDraftFromCsvUpload(csvText, fetch, csrfToken);
+      window.location.assign(`/planning/v3/drafts/${encodeURIComponent(created.draftId)}`);
     } catch (error) {
-      setPreview(null);
-      setMessage(error instanceof Error ? error.message : "CSV 미리보기를 만들지 못했습니다.");
+      setUploadError(error instanceof Error ? error.message : "초안 생성에 실패했습니다.");
     } finally {
-      setImporting(false);
-    }
-  }
-
-  async function handleSavePreview() {
-    if (!preview || saving) return;
-    setSaving(true);
-    setMessage("");
-
-    try {
-      const saved = await saveCsvDraftPreview(preview, { filename: file?.name }, fetch, csrfToken);
-      setSelectedDraftId(saved.id);
-      await loadDrafts();
-      setMessage(`초안을 저장했습니다: ${saved.id}`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "초안 저장에 실패했습니다.");
-    } finally {
-      setSaving(false);
+      setUploading(false);
     }
   }
 
@@ -141,72 +115,21 @@ export function DraftsListClient() {
       <div className="space-y-5">
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 Drafts</h1>
-          <p className="text-sm text-slate-600">CSV 업로드 후 draft 미리보기를 확인하고, 저장 버튼으로 로컬에 보관합니다.</p>
-
-          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-sm font-semibold text-slate-800">CSV 업로드</p>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                accept=".csv,text/csv,text/plain"
-                className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm sm:w-96"
-                data-testid="v3-csv-upload-input"
-                onChange={(event) => {
-                  const picked = event.target.files?.[0] ?? null;
-                  setFile(picked);
-                }}
-                type="file"
-              />
-              <Button
-                data-testid="v3-csv-upload-preview"
-                disabled={!file || importing}
-                onClick={() => {
-                  void handleImportPreview();
-                }}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {importing ? "미리보기 생성 중..." : "미리보기"}
-              </Button>
-              <Button
-                data-testid="v3-csv-upload-save"
-                disabled={!preview || saving}
-                onClick={() => {
-                  void handleSavePreview();
-                }}
-                size="sm"
-                type="button"
-              >
-                {saving ? "저장 중..." : "저장"}
-              </Button>
-            </div>
-
-            {preview ? (
-              <div className="rounded-md border border-emerald-200 bg-white p-2 text-xs text-slate-700" data-testid="v3-csv-draft-preview">
-                <p>rows: {preview.draftSummary.rows.toLocaleString("ko-KR")}</p>
-                <p>columns: {preview.draftSummary.columns.toLocaleString("ko-KR")}</p>
-                <p>months: {preview.meta.months.toLocaleString("ko-KR")}</p>
-                <p>income: {formatKrw(pickPatchNumber(preview.draftPatch.monthlyIncomeNet))}</p>
-                <p>
-                  expense: {formatKrw(
-                    pickPatchNumber(preview.draftPatch.monthlyEssentialExpenses)
-                    + pickPatchNumber(preview.draftPatch.monthlyDiscretionaryExpenses),
-                  )}
-                </p>
-              </div>
-            ) : null}
-
-            {selectedDraftId ? (
-              <Link
-                className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                href={`/planning/v3/drafts/${encodeURIComponent(selectedDraftId)}`}
-              >
-                새로 저장한 Draft 열기
-              </Link>
-            ) : null}
-          </div>
+          <p className="text-sm text-slate-600">CSV 업로드로 초안을 생성하고 로컬 Draft Center에서 관리합니다.</p>
 
           <div className="flex items-center gap-2">
+            <Button
+              data-testid="v3-draft-upload-toggle"
+              onClick={() => {
+                setShowUploadPanel((prev) => !prev);
+                setUploadError("");
+              }}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              CSV로 초안 만들기
+            </Button>
             <Button
               onClick={() => {
                 void loadDrafts();
@@ -221,6 +144,43 @@ export function DraftsListClient() {
               Profile 초안 생성
             </Link>
           </div>
+
+          {showUploadPanel ? (
+            <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label className="text-sm font-semibold text-slate-800" htmlFor="v3-draft-upload-input-field">
+                CSV 파일
+              </label>
+              <input
+                accept=".csv,text/csv,text/plain"
+                className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm sm:w-96"
+                data-testid="v3-draft-upload-input"
+                id="v3-draft-upload-input-field"
+                onChange={(event) => {
+                  const picked = event.target.files?.[0] ?? null;
+                  setUploadFile(picked);
+                  setUploadError("");
+                }}
+                type="file"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  data-testid="v3-draft-upload-submit"
+                  disabled={!uploadFile || uploading}
+                  onClick={() => {
+                    void handleCreateFromCsv();
+                  }}
+                  size="sm"
+                  type="button"
+                >
+                  {uploading ? "생성 중..." : "업로드 후 초안 생성"}
+                </Button>
+              </div>
+              {uploadError ? (
+                <p className="text-sm font-semibold text-rose-700" data-testid="v3-draft-upload-error">{uploadError}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
 
@@ -244,11 +204,7 @@ export function DraftsListClient() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((row) => (
-                    <tr
-                      className={selectedDraftId === row.id ? "bg-emerald-50" : undefined}
-                      data-testid={`v3-draft-row-${row.id}`}
-                      key={row.id}
-                    >
+                    <tr data-testid={`v3-draft-row-${row.id}`} key={row.id}>
                       <td className="px-3 py-2 font-mono text-xs text-slate-800">{formatDateTime(row.createdAt)}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{asNumber(row.source.months) ?? "-"}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{asNumber(row.source.rows) ?? "-"}</td>
