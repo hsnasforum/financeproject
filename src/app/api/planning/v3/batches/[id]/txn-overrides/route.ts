@@ -14,7 +14,7 @@ import {
 } from "@/lib/planning/v3/store/txnOverridesStore";
 
 type RouteContext = {
-  params: Promise<{ batchId: string }>;
+  params: Promise<{ id: string }>;
 };
 
 type PostBody = {
@@ -89,10 +89,10 @@ export async function GET(request: Request, context: RouteContext) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
-  const { batchId } = await context.params;
+  const { id } = await context.params;
 
   try {
-    const items = await getOverrides(batchId);
+    const items = await getOverrides(id);
     return NextResponse.json({ ok: true, data: items });
   } catch (error) {
     if (error instanceof TxnOverridesStoreInputError) {
@@ -133,7 +133,7 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const { batchId } = await context.params;
+  const { id } = await context.params;
   const txnId = asString(body.txnId);
   const mappedKind = mapKind(body.kind);
   const categoryId = asString(body.categoryId);
@@ -155,12 +155,12 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     if (mappedKind === "auto" && !categoryId) {
-      await deleteOverride({ batchId, txnId });
+      await deleteOverride({ batchId: id, txnId });
       return NextResponse.json({ ok: true, data: { deleted: true } });
     }
 
     const override = await upsertOverride({
-      batchId,
+      batchId: id,
       txnId,
       ...(mappedKind && mappedKind !== "auto" ? { kind: mappedKind } : {}),
       ...(categoryId ? { categoryId } : {}),

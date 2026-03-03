@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   GET as getBatchOverrides,
   POST as postBatchOverride,
-} from "../src/app/api/planning/v3/batches/[batchId]/txn-overrides/route";
+} from "../src/app/api/planning/v3/batches/[id]/txn-overrides/route";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -14,9 +14,9 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const LOCAL_HOST = "localhost:4901";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 
-function context(batchId = "batch-a"): { params: Promise<{ batchId: string }> } {
+function context(batchId = "batch-a"): { params: Promise<{ id: string }> } {
   return {
-    params: Promise.resolve({ batchId }),
+    params: Promise.resolve({ id: batchId }),
   };
 }
 
