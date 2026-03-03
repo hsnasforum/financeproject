@@ -38,6 +38,16 @@ type ImportResult = {
     months: number;
   };
   draftPatch: Record<string, unknown>;
+  warnings: string[];
+  stats?: {
+    transactions: number;
+    accounts: number;
+    period?: {
+      fromYm?: string;
+      toYm?: string;
+      months: number;
+    };
+  };
   mappingUsed?: CsvColumnMapping | null;
 };
 
@@ -272,7 +282,6 @@ export function ImportCsvClient() {
   const [accountLoading, setAccountLoading] = useState(true);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [saveDraftLoading, setSaveDraftLoading] = useState(false);
-  const [savedDraftId, setSavedDraftId] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [directImportLoading, setDirectImportLoading] = useState(false);
   const [directImportError, setDirectImportError] = useState("");
@@ -453,7 +462,6 @@ export function ImportCsvClient() {
     setApiError(null);
     setSavedBatch(null);
     setResult(null);
-    setSavedDraftId("");
   }
 
   async function handleDirectBatchImport() {
@@ -501,7 +509,6 @@ export function ImportCsvClient() {
     setApiError(null);
     setSavedBatch(null);
     setResult(null);
-    setSavedDraftId("");
 
     try {
       const response = await fetch("/api/planning/v3/import/csv", {
@@ -513,6 +520,7 @@ export function ImportCsvClient() {
         body: JSON.stringify(withDevCsrf({
           csvText,
           mapping: mappingPayload,
+          persist: false,
         })),
       });
 
@@ -540,6 +548,22 @@ export function ImportCsvClient() {
           months: asNumber(payload.meta.months),
         },
         draftPatch: payload.draftPatch,
+        warnings: Array.isArray(payload.warnings)
+          ? payload.warnings.map((entry) => asString(entry)).filter((entry) => entry.length > 0)
+          : [],
+        stats: isRecord(payload.stats)
+          ? {
+              transactions: asNumber(payload.stats.transactions),
+              accounts: asNumber(payload.stats.accounts),
+              period: isRecord(payload.stats.period)
+                ? {
+                    fromYm: asString(payload.stats.period.fromYm) || undefined,
+                    toYm: asString(payload.stats.period.toYm) || undefined,
+                    months: asNumber(payload.stats.period.months),
+                  }
+                : undefined,
+            }
+          : undefined,
         mappingUsed: isRecord(payload.mappingUsed) ? payload.mappingUsed as CsvColumnMapping : null,
       });
     } catch {
@@ -600,36 +624,37 @@ export function ImportCsvClient() {
   }
 
   async function handleSaveDraft() {
-    if (!result) return;
+    if (!canRunImport) return;
 
     setSaveDraftLoading(true);
     setApiError(null);
 
     try {
-      const response = await fetch("/api/planning/v3/drafts", {
+      const response = await fetch("/api/planning/v3/import/csv?persist=1", {
         method: "POST",
         credentials: "same-origin",
         headers: {
           "content-type": "application/json",
         },
         body: JSON.stringify(withDevCsrf({
-          source: {
-            kind: "csv",
-            rows: result.meta.rows,
-            months: result.meta.months,
-          },
-          cashflow: result.cashflow,
-          draftPatch: result.draftPatch,
+          csvText,
+          mapping: mappingPayload,
+          persist: true,
         })),
       });
 
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !isRecord(payload) || payload.ok !== true || !asString(payload.id)) {
-        setApiError({ message: "초안 저장에 실패했습니다.", details: [] });
+      if (!response.ok || !isRecord(payload) || payload.ok !== true) {
+        setApiError(extractApiError(payload));
         return;
       }
 
-      setSavedDraftId(asString(payload.id));
+      const draftId = asString(payload.draftId) || asString(isRecord(payload.data) ? payload.data.draftId : "");
+      if (!draftId) {
+        setApiError({ message: "초안 식별자를 확인하지 못했습니다.", details: [] });
+        return;
+      }
+      window.location.assign(`/planning/v3/drafts/${encodeURIComponent(draftId)}?created=1`);
     } catch {
       setApiError({ message: "초안 저장에 실패했습니다.", details: [] });
     } finally {
@@ -643,6 +668,14 @@ export function ImportCsvClient() {
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 CSV Import</h1>
           <p className="text-sm text-slate-600">CSV 헤더 추천 매핑 + 파싱 미리보기 진단으로 안전하게 초안을 생성합니다.</p>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            <p className="font-semibold">업로드 전 안내</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-xs">
+              <li>샘플 CSV: <Link className="font-semibold text-emerald-700 underline underline-offset-2" href="/planning-v3/sample.csv">다운로드</Link></li>
+              <li>지원 포맷: `YYYY-MM-DD`/`YYYY/MM/DD`/`YYYY.MM.DD`/`YYYYMMDD`, 금액(`1,234`, `₩1,234`, `(1,234)`)</li>
+              <li>파일이 깨져 보이면 인코딩(UTF-8/EUC-KR)과 구분자(쉼표/탭/세미콜론)를 확인해 주세요.</li>
+            </ul>
+          </div>
 
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700" htmlFor="v3-import-file">CSV 파일</label>
@@ -691,7 +724,6 @@ export function ImportCsvClient() {
                 setApiError(null);
                 setSavedBatch(null);
                 setResult(null);
-                setSavedDraftId("");
               }}
               placeholder="date,amount,description\n2026-01-01,1000,sample"
               value={csvText}
@@ -877,16 +909,16 @@ export function ImportCsvClient() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              data-testid="v3-mapping-apply"
-              disabled={!canRunImport || submitting}
-              onClick={() => {
-                void handleImport();
-              }}
-              type="button"
-              variant="primary"
-            >
-              {submitting ? "가져오는 중..." : "가져오기 실행"}
-            </Button>
+                data-testid="v3-mapping-apply"
+                disabled={!canRunImport || submitting}
+                onClick={() => {
+                  void handleImport();
+                }}
+                type="button"
+                variant="primary"
+              >
+                {submitting ? "미리보기 생성 중..." : "미리보기(임시)"}
+              </Button>
             <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/drafts">
               초안 목록
             </Link>
@@ -1031,12 +1063,26 @@ export function ImportCsvClient() {
         {result ? (
           <>
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">Import 결과</h2>
+              <h2 className="text-sm font-bold text-slate-900">미리보기 결과(임시)</h2>
               <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
                 <div><dt className="font-semibold">rows</dt><dd>{result.meta.rows.toLocaleString("ko-KR")}</dd></div>
                 <div><dt className="font-semibold">months</dt><dd>{result.meta.months.toLocaleString("ko-KR")}</dd></div>
                 <div><dt className="font-semibold">mapping</dt><dd>{result.mappingUsed ? "custom" : "auto/alias"}</dd></div>
               </dl>
+              {result.stats ? (
+                <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
+                  <div><dt className="font-semibold">거래 수</dt><dd>{result.stats.transactions.toLocaleString("ko-KR")}</dd></div>
+                  <div><dt className="font-semibold">계좌 수</dt><dd>{result.stats.accounts.toLocaleString("ko-KR")}</dd></div>
+                  <div><dt className="font-semibold">기간</dt><dd>{result.stats.period?.fromYm && result.stats.period?.toYm ? `${result.stats.period.fromYm} ~ ${result.stats.period.toYm}` : "-"}</dd></div>
+                </dl>
+              ) : null}
+              {result.warnings.length > 0 ? (
+                <ul className="list-disc space-y-1 pl-5 text-xs text-amber-700">
+                  {result.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   data-testid="v3-save-draft"
@@ -1048,16 +1094,8 @@ export function ImportCsvClient() {
                   type="button"
                   variant="outline"
                 >
-                  {saveDraftLoading ? "저장 중..." : "초안 저장"}
+                  {saveDraftLoading ? "저장 중..." : "저장(영구)·Draft 생성"}
                 </Button>
-                {savedDraftId ? (
-                  <Link
-                    className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                    href="/planning/v3/drafts"
-                  >
-                    초안 목록 보기
-                  </Link>
-                ) : null}
               </div>
             </Card>
 

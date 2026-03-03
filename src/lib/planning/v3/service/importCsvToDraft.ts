@@ -57,6 +57,20 @@ function uniqueFields(errors: Array<{ path?: string[] }>): string[] {
   return [...out].sort((a, b) => a.localeCompare(b));
 }
 
+function sampleParseErrors(
+  errors: Array<{ rowIndex: number; code: string; path?: string[] }>,
+): Array<{ row: number; code: string; field?: string }> {
+  return errors
+    .slice(0, 5)
+    .map((row) => ({
+      row: Number.isFinite(row.rowIndex) ? Math.max(0, Math.floor(row.rowIndex)) : 0,
+      code: row.code,
+      ...(Array.isArray(row.path) && typeof row.path[0] === "string" && row.path[0].trim()
+        ? { field: row.path[0].trim() }
+        : {}),
+    }));
+}
+
 export function importCsvToDraft(
   csvText: string,
   options: ParseCsvTransactionsOptions = {},
@@ -66,6 +80,7 @@ export function importCsvToDraft(
   if (imported.parsed.errors.length > 0) {
     const parseErrorSummary = summarizeParseErrors(imported.parsed.errors);
     const fields = uniqueFields(imported.parsed.errors);
+    const parseErrorRows = sampleParseErrors(imported.parsed.errors);
 
     let message = "일부 CSV 행을 해석하지 못했습니다.";
     if (hasErrorCode(parseErrorSummary, "MISSING_COLUMN")) {
@@ -83,6 +98,7 @@ export function importCsvToDraft(
       skippedRows: imported.parsed.stats.skipped,
       parseErrorSummary,
       ...(fields.length > 0 ? { fields } : {}),
+      ...(parseErrorRows.length > 0 ? { parseErrorRows } : {}),
     });
   }
 
