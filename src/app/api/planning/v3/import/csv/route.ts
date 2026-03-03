@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   assertCsrf,
@@ -10,11 +11,26 @@ import {
   CsvImportInputError,
   importCsvToDraft,
 } from "../../../../../../lib/planning/v3/service/importCsvToDraft";
+import { createDraft } from "../../../../../../lib/planning/v3/drafts/draftStore";
+import { parseCsvText } from "../../../../../../lib/planning/v3/providers/csv/csvParse";
 
 const MAX_CSV_BYTES = 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = new Set(["text/csv", "text/plain"]);
 
-type ImportSuccessPayload = { ok: true } & ReturnType<typeof importCsvToDraft>;
+type ImportSuccessPayload = { ok: true } & ReturnType<typeof importCsvToDraft> & {
+  draftId?: string;
+  draftSummary: {
+    rows: number;
+    columns: number;
+  };
+  data: {
+    draftId?: string;
+    draftSummary: {
+      rows: number;
+      columns: number;
+    };
+  };
+};
 
 type ImportErrorPayload = {
   ok: false;
@@ -61,11 +77,26 @@ function parseContentLength(value: string | null): number | null {
   return Math.floor(parsed);
 }
 
+function buildDeterministicDraftId(input: unknown): string {
+  const hash = createHash("sha256")
+    .update(JSON.stringify(input), "utf-8")
+    .digest("hex")
+    .slice(0, 24);
+  return `d_${hash}`;
+}
+
 function pickCsrfToken(request: Request): string {
   const headerToken = request.headers.get("x-csrf-token");
   if (headerToken && headerToken.trim()) return headerToken.trim();
   const url = new URL(request.url);
   return (url.searchParams.get("csrf") ?? "").trim();
+}
+
+function shouldPersistDraft(url: string): boolean {
+  const value = new URL(url).searchParams.get("persist");
+  if (!value) return true;
+  const normalized = value.trim().toLowerCase();
+  return !(normalized === "0" || normalized === "false" || normalized === "no");
 }
 
 function guardRequest(request: Request): NextResponse<ImportErrorPayload> | null {
@@ -112,9 +143,54 @@ export async function POST(request: Request) {
 
   try {
     const imported = importCsvToDraft(csvText);
+    const parsedHeader = parseCsvText(csvText, { hasHeader: true });
+    const columns = Array.isArray(parsedHeader.header) ? parsedHeader.header.length : 0;
+    const persist = shouldPersistDraft(request.url);
+    const deterministicDraftId = buildDeterministicDraftId({
+      cashflow: imported.cashflow,
+      draftPatch: imported.draftPatch,
+      meta: imported.meta,
+      columns,
+    });
+
+    const draftSummary = {
+      rows: imported.meta.rows,
+      columns,
+    };
+
+    if (!persist) {
+      return jsonOk({
+        ok: true,
+        ...imported,
+        draftSummary,
+        data: {
+          draftSummary,
+        },
+      });
+    }
+
+    const saved = await createDraft({
+      id: deterministicDraftId,
+      source: { kind: "csv" },
+      payload: {
+        cashflow: imported.cashflow,
+        draftPatch: imported.draftPatch,
+      },
+      meta: {
+        rows: imported.meta.rows,
+        columns,
+      },
+    });
+
     return jsonOk({
       ok: true,
       ...imported,
+      draftId: saved.id,
+      draftSummary,
+      data: {
+        draftId: saved.id,
+        draftSummary,
+      },
     });
   } catch (error) {
     if (error instanceof CsvImportInputError) {
