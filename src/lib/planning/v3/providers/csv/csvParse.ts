@@ -8,6 +8,78 @@ export type ParseCsvTextOptions = {
   hasHeader?: boolean;
 };
 
+export function stripUtf8Bom(text: string): string {
+  return text.startsWith("\uFEFF") ? text.slice(1) : text;
+}
+
+export function normalizeNewlines(text: string): string {
+  return text.replace(/\r\n?/g, "\n");
+}
+
+export function detectEncodingIssue(text: string): boolean {
+  return text.includes("\uFFFD");
+}
+
+function countDelimiter(line: string, delimiter: string): number {
+  let count = 0;
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === "\"") {
+      if (quoted && line[i + 1] === "\"") {
+        i += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (!quoted && ch === delimiter) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function detectCsvDelimiter(text: string): "," | "\t" | ";" {
+  const normalized = normalizeNewlines(stripUtf8Bom(text));
+  const sample = normalized
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+    .slice(0, 10);
+
+  if (sample.length < 1) return ",";
+
+  const candidates: Array<"," | "\t" | ";"> = [",", "\t", ";"];
+  let best: {
+    delimiter: "," | "\t" | ";";
+    score: number;
+    mean: number;
+  } = {
+    delimiter: ",",
+    score: Number.NEGATIVE_INFINITY,
+    mean: 0,
+  };
+
+  for (const delimiter of candidates) {
+    const counts = sample.map((line) => countDelimiter(line, delimiter));
+    const maxCount = Math.max(...counts);
+    if (maxCount <= 0) continue;
+    const mean = counts.reduce((sum, n) => sum + n, 0) / counts.length;
+    const variance = counts.reduce((sum, n) => sum + ((n - mean) ** 2), 0) / counts.length;
+    const score = mean - variance;
+
+    if (
+      score > best.score
+      || (score === best.score && mean > best.mean)
+    ) {
+      best = { delimiter, score, mean };
+    }
+  }
+
+  return best.score === Number.NEGATIVE_INFINITY ? "," : best.delimiter;
+}
+
 function splitCsv(text: string, delimiter: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -56,9 +128,10 @@ function splitCsv(text: string, delimiter: string): string[][] {
 }
 
 export function parseCsvText(text: string, options: ParseCsvTextOptions = {}): ParseCsvTextResult {
-  const delimiter = options.delimiter ?? ",";
+  const normalizedText = normalizeNewlines(stripUtf8Bom(text));
+  const delimiter = options.delimiter ?? detectCsvDelimiter(normalizedText);
   const hasHeader = options.hasHeader !== false;
-  const allRows = splitCsv(text, delimiter);
+  const allRows = splitCsv(normalizedText, delimiter);
 
   if (allRows.length === 0) {
     return { header: null, rows: [] };
