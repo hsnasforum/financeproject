@@ -39,8 +39,11 @@ function requestPost(pathname: string, body: unknown): Request {
   });
 }
 
-function requestImportCsv(csvText: string): Request {
-  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/import/csv`, {
+function requestImportCsv(csvText: string, persist?: string): Request {
+  const params = new URLSearchParams();
+  if (persist) params.set("persist", persist);
+  const query = params.toString();
+  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/import/csv${query ? `?${query}` : ""}`, {
     method: "POST",
     headers: {
       host: LOCAL_HOST,
@@ -71,7 +74,7 @@ describe("planning v3 drafts route", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("supports create/list and import route returns draftId with stored file", async () => {
+  it("supports create/list and import route never persists drafts from import endpoint", async () => {
     const created = await POST(requestPost("/api/planning/v3/drafts", {
       csrf: CSRF,
       source: { kind: "csv", filename: "sample.csv" },
@@ -102,11 +105,15 @@ describe("planning v3 drafts route", () => {
     expect(listedPayload.ok).toBe(true);
     expect(Array.isArray(listedPayload.drafts)).toBe(true);
     expect(listedPayload.drafts?.some((row) => row.id === createdId)).toBe(true);
+    const draftsDir = path.join(root, ".data", "planning_v3_drafts");
+    const beforeImportFiles = fs.existsSync(draftsDir)
+      ? fs.readdirSync(draftsDir).filter((name) => name.endsWith(".json")).sort()
+      : [];
 
     const imported = await importCsvPOST(requestImportCsv([
       "date,amount,description",
       "2026-01-01,1000,salary",
-    ].join("\n")));
+    ].join("\n"), "1"));
     expect(imported.status).toBe(200);
     const importedPayload = await imported.json() as {
       ok?: boolean;
@@ -114,10 +121,33 @@ describe("planning v3 drafts route", () => {
       draftId?: string;
     };
     expect(importedPayload.ok).toBe(true);
-    const draftId = String(importedPayload.data?.draftId ?? importedPayload.draftId ?? "");
-    expect(draftId.length).toBeGreaterThan(0);
+    expect(importedPayload.draftId).toBeUndefined();
+    expect(importedPayload.data?.draftId).toBeUndefined();
+    const afterImportFiles = fs.existsSync(draftsDir)
+      ? fs.readdirSync(draftsDir).filter((name) => name.endsWith(".json")).sort()
+      : [];
+    expect(afterImportFiles).toEqual(beforeImportFiles);
+  });
 
-    const draftPath = path.join(root, ".data", "planning_v3_drafts", `${draftId}.json`);
-    expect(fs.existsSync(draftPath)).toBe(true);
+  it("does not persist or return draftId when persist=false", async () => {
+    const imported = await importCsvPOST(requestImportCsv([
+      "date,amount,description",
+      "2026-01-01,1000,groceries",
+    ].join("\n"), "false"));
+
+    expect(imported.status).toBe(200);
+    const importedPayload = await imported.json() as {
+      ok?: boolean;
+      draftId?: string;
+      data?: { draftId?: string; draftSummary?: { rows?: number; columns?: number } };
+      draftSummary?: { rows?: number; columns?: number };
+    };
+    expect(importedPayload.ok).toBe(true);
+    expect(importedPayload.draftId).toBeUndefined();
+    expect(importedPayload.data?.draftId).toBeUndefined();
+    expect(importedPayload.data?.draftSummary).toEqual(importedPayload.draftSummary);
+
+    const draftsDir = path.join(root, ".data", "planning_v3_drafts");
+    expect(fs.existsSync(draftsDir)).toBe(false);
   });
 });
