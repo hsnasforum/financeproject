@@ -115,7 +115,7 @@ export async function GET(request: Request, context: RouteContext) {
         { status: 404 },
       );
     }
-    const summary = summarizeDraft(draft.payload.cashflow);
+    const summary = summarizeDraft(draft.monthlyCashflow);
     const payload = {
       ok: true,
       draft: {
@@ -124,15 +124,14 @@ export async function GET(request: Request, context: RouteContext) {
         source: {
           kind: "csv" as const,
           ...(draft.source.filename ? { filename: draft.source.filename } : {}),
-          rows: draft.meta.rows,
-          columns: draft.meta.columns,
-          months: draft.payload.cashflow.length,
+          rows: draft.meta.rowsParsed,
+          columns: draft.meta.columnsCount,
+          months: draft.monthlyCashflow.length,
         },
         summary,
-        cashflow: draft.payload.cashflow,
-        draftPatch: draft.payload.draftPatch,
+        cashflow: draft.monthlyCashflow,
+        draftPatch: draft.draftPatch,
       },
-      data: draft,
     };
     assertNoForbiddenDraftKeys(payload);
     return NextResponse.json(payload, { status: 200 });

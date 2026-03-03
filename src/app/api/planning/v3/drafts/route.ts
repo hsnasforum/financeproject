@@ -128,16 +128,16 @@ export async function GET(request: Request) {
       ok: true,
       drafts: rows.map((row) => {
         const draft = detailById.get(row.id);
-        const summary = summarizeDraft(draft?.payload.cashflow ?? []);
+        const summary = summarizeDraft(draft?.monthlyCashflow ?? []);
         return {
           id: row.id,
           createdAt: row.createdAt,
           source: {
             kind: "csv" as const,
             ...(row.source.filename ? { filename: row.source.filename } : {}),
-            rows: row.meta.rows,
-            columns: row.meta.columns,
-            months: draft?.payload.cashflow.length ?? 0,
+            rows: row.meta.rowsParsed,
+            columns: row.meta.columnsCount,
+            months: draft?.monthlyCashflow.length ?? 0,
           },
           summary,
           meta: row.meta,

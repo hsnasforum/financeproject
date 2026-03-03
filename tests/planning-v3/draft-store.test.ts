@@ -45,8 +45,25 @@ describe("planning v3 draft store", () => {
     const injected = {
       source: { kind: "csv", filename: "sample.csv" },
       payload: {
-        cashflow: [],
-        draftPatch: {},
+        cashflow: [
+          {
+            ym: "2026-02",
+            incomeKrw: 1_000_000,
+            expenseKrw: -400_000,
+            netKrw: 600_000,
+            txCount: 2,
+            narrative: marker,
+          },
+        ],
+        draftPatch: {
+          monthlyIncomeNet: 0,
+          monthlyEssentialExpenses: 0,
+          monthlyDiscretionaryExpenses: 0,
+          includeTransfers: true,
+          splitMode: "fixed",
+          note: marker,
+          narrative: marker,
+        },
         rawLine: marker,
         originalCsv: marker,
       },
@@ -61,11 +78,36 @@ describe("planning v3 draft store", () => {
     const found = await getDraft(created.id);
     expect(found).not.toBeNull();
     expect(found?.id).toBe(created.id);
-    expect(found?.meta).toEqual({ rows: 3, columns: 4 });
+    expect(found?.meta).toEqual({ rowsParsed: 3, columnsCount: 4, warningsCount: 0 });
 
     const draftPath = path.join(root, ".data", "planning_v3_drafts", `${createdUnsafe.id}.json`);
     const fileText = fs.readFileSync(draftPath, "utf-8");
     expect(fileText.includes(marker)).toBe(false);
+    const storedJson = JSON.parse(fileText) as Record<string, unknown>;
+    expect(Object.keys(storedJson).sort()).toEqual([
+      "createdAt",
+      "draftPatch",
+      "id",
+      "meta",
+      "monthlyCashflow",
+      "source",
+    ]);
+    expect(Object.keys((storedJson.meta as Record<string, unknown>) ?? {}).sort()).toEqual([
+      "columnsCount",
+      "rowsParsed",
+      "warningsCount",
+    ]);
+    const storedUnsafe = await getDraft(createdUnsafe.id);
+    expect(storedUnsafe).not.toBeNull();
+    expect(Object.keys(storedUnsafe?.draftPatch ?? {}).sort()).toEqual([
+      "includeTransfers",
+      "monthlyDiscretionaryExpenses",
+      "monthlyEssentialExpenses",
+      "monthlyIncomeNet",
+      "splitMode",
+    ]);
+    expect(storedUnsafe?.draftPatch.includeTransfers).toBe(true);
+    expect(storedUnsafe?.draftPatch.splitMode).toBe("fixed");
 
     const deleted = await deleteDraft(created.id);
     expect(deleted).toBe(true);
