@@ -66,15 +66,64 @@ type DetailResponse = {
 };
 
 type TransactionKind = "income" | "expense" | "transfer";
-type TransactionCategory = "fixed" | "variable" | "saving" | "invest" | "unknown";
+type CategoryId =
+  | "income"
+  | "transfer"
+  | "fixed"
+  | "variable"
+  | "debt"
+  | "tax"
+  | "insurance"
+  | "housing"
+  | "food"
+  | "transport"
+  | "shopping"
+  | "health"
+  | "education"
+  | "etc"
+  | "unknown";
+type TransactionCategory = CategoryId | "saving" | "invest";
 
 type TransactionRow = {
+  batchId?: string;
   txnId: string;
+  accountId?: string;
   date: string;
   amountKrw: number;
   description?: string;
   kind: TransactionKind;
   category: TransactionCategory;
+  categoryId?: CategoryId;
+  categorySource?: "override" | "rule" | "default" | "transfer";
+  transferGroupId?: string;
+  transferConfidence?: "high" | "medium" | "low";
+};
+
+type BreakdownRow = {
+  ym: string;
+  incomeKrw: number;
+  expenseKrw: number;
+  transferKrw: number;
+  byCategory: Record<string, number>;
+};
+
+type CategorizedResponse = {
+  ok: true;
+  meta: Record<string, unknown>;
+  data: Array<{
+    batchId: string;
+    txnId: string;
+    accountId: string;
+    date: string;
+    amountKrw: number;
+    kind: TransactionKind;
+    description?: string;
+    transferGroupId?: string;
+    transferConfidence?: "high" | "medium" | "low";
+    categoryId: CategoryId;
+    categorySource: "override" | "rule" | "default" | "transfer";
+  }>;
+  breakdown: BreakdownRow[];
 };
 
 type EvidenceRow = {
@@ -173,7 +222,14 @@ function isTransactionRow(value: unknown): value is TransactionRow {
   const kind = asString(value.kind);
   const category = asString(value.category);
   if (!["income", "expense", "transfer"].includes(kind)) return false;
-  if (!["fixed", "variable", "saving", "invest", "unknown"].includes(category)) return false;
+  if (!["fixed", "variable", "saving", "invest", "unknown", "housing", "food", "transport", "shopping", "health", "education", "insurance", "tax", "debt", "etc", "income", "transfer"].includes(category)) return false;
+  return true;
+}
+
+function isCategorizedResponse(payload: unknown): payload is CategorizedResponse {
+  if (!isRecord(payload) || payload.ok !== true || !isRecord(payload.meta) || !Array.isArray(payload.data) || !Array.isArray(payload.breakdown)) {
+    return false;
+  }
   return true;
 }
 
@@ -225,6 +281,26 @@ function formatEvidenceInputs(inputs: Record<string, number | string>): string {
   if (entries.length < 1) return "-";
   return entries.map(([key, value]) => `${key}=${String(value)}`).join(", ");
 }
+
+const CATEGORY_OPTIONS: TransactionCategory[] = [
+  "income",
+  "transfer",
+  "fixed",
+  "variable",
+  "debt",
+  "tax",
+  "insurance",
+  "housing",
+  "food",
+  "transport",
+  "shopping",
+  "health",
+  "education",
+  "etc",
+  "unknown",
+  "saving",
+  "invest",
+];
 
 function buildSplitQuery(
   splitMode: DraftSplitMode,
@@ -327,8 +403,13 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
   const [draftMessage, setDraftMessage] = useState("");
   const [txnKindDrafts, setTxnKindDrafts] = useState<Record<string, TransactionKind>>({});
   const [txnCategoryDrafts, setTxnCategoryDrafts] = useState<Record<string, TransactionCategory>>({});
+  const [txnAccountDrafts, setTxnAccountDrafts] = useState<Record<string, string>>({});
   const [txnOverrideSavingId, setTxnOverrideSavingId] = useState("");
+  const [txnTransferSavingId, setTxnTransferSavingId] = useState("");
+  const [txnAccountSavingId, setTxnAccountSavingId] = useState("");
   const [txnOverrideMessage, setTxnOverrideMessage] = useState("");
+  const [breakdownRows, setBreakdownRows] = useState<BreakdownRow[]>([]);
+  const [categorizedLoading, setCategorizedLoading] = useState(false);
 
   const batchMonthRange = useMemo(() => {
     const months = (detail?.monthsSummary ?? [])
@@ -371,6 +452,26 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
     return { income, expense, transferIn, transferOut };
   }, [cashflow?.monthly]);
 
+  const transferOverview = useMemo(() => {
+    const rows = detail?.transactions ?? [];
+    let transferCount = 0;
+    let unassignedCount = 0;
+    let expenseInclTransfer = 0;
+    let expenseExclTransfer = 0;
+    for (const row of rows) {
+      const isTransfer = row.kind === "transfer" || asString(row.transferGroupId).length > 0;
+      const accountId = asString(row.accountId) || "unassigned";
+      if (accountId === "unassigned") unassignedCount += 1;
+      if (isTransfer) transferCount += 1;
+      if (row.amountKrw < 0) {
+        const magnitude = Math.abs(row.amountKrw);
+        expenseInclTransfer += magnitude;
+        if (!isTransfer) expenseExclTransfer += magnitude;
+      }
+    }
+    return { transferCount, unassignedCount, expenseInclTransfer, expenseExclTransfer };
+  }, [detail?.transactions]);
+
   useEffect(() => {
     let disposed = false;
 
@@ -397,11 +498,13 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
           const normalizedTransactions = Array.isArray(payload.transactions)
             ? payload.transactions.filter(isTransactionRow).map((row) => ({
               txnId: asString(row.txnId).toLowerCase(),
+              accountId: asString(row.accountId) || "unassigned",
               date: asString(row.date),
               amountKrw: asNumber(row.amountKrw),
               ...(asString(row.description) ? { description: asString(row.description) } : {}),
               kind: asString(row.kind) as TransactionKind,
               category: asString(row.category) as TransactionCategory,
+              ...(asString(row.transferGroupId) ? { transferGroupId: asString(row.transferGroupId) } : {}),
             }))
             : [];
           setDetail({
@@ -414,6 +517,9 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
           setTxnCategoryDrafts(Object.fromEntries(
             normalizedTransactions.map((row) => [row.txnId, row.category]),
           ) as Record<string, TransactionCategory>);
+          setTxnAccountDrafts(Object.fromEntries(
+            normalizedTransactions.map((row) => [row.txnId, asString(row.accountId) || "unassigned"]),
+          ));
           setSelectedAccountId(asString(payload.batch.accountId));
         }
       } catch {
@@ -432,6 +538,76 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
       disposed = true;
     };
   }, [id]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    async function loadCategorized() {
+      setCategorizedLoading(true);
+      try {
+        const response = await fetch(`/api/planning/v3/transactions/batches/${encodeURIComponent(id)}/categorized${buildCsrfQuery()}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !isCategorizedResponse(payload)) {
+          if (!disposed) {
+            setBreakdownRows([]);
+          }
+          return;
+        }
+
+        if (!disposed) {
+          const normalizedTransactions: TransactionRow[] = payload.data.map((row) => ({
+            batchId: asString(row.batchId),
+            txnId: asString(row.txnId).toLowerCase(),
+            accountId: asString(row.accountId) || "unassigned",
+            date: asString(row.date),
+            amountKrw: asNumber(row.amountKrw),
+            ...(asString(row.description) ? { description: asString(row.description) } : {}),
+            kind: row.kind,
+            category: row.categoryId,
+            categoryId: row.categoryId,
+            categorySource: row.categorySource,
+            ...(asString(row.transferGroupId) ? { transferGroupId: asString(row.transferGroupId) } : {}),
+            ...(row.transferConfidence ? { transferConfidence: row.transferConfidence } : {}),
+          }));
+          setDetail((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              transactions: normalizedTransactions,
+            };
+          });
+          setTxnCategoryDrafts(Object.fromEntries(
+            normalizedTransactions.map((row) => [row.txnId, row.category]),
+          ) as Record<string, TransactionCategory>);
+          setTxnAccountDrafts(Object.fromEntries(
+            normalizedTransactions.map((row) => [row.txnId, asString(row.accountId) || "unassigned"]),
+          ));
+          setBreakdownRows(payload.breakdown.map((row) => ({
+            ym: asString(row.ym),
+            incomeKrw: asNumber(row.incomeKrw),
+            expenseKrw: asNumber(row.expenseKrw),
+            transferKrw: asNumber(row.transferKrw),
+            byCategory: isRecord(row.byCategory) ? Object.fromEntries(
+              Object.entries(row.byCategory).map(([key, value]) => [key, asNumber(value)]),
+            ) : {},
+          })));
+        }
+      } catch {
+        if (!disposed) setBreakdownRows([]);
+      } finally {
+        if (!disposed) setCategorizedLoading(false);
+      }
+    }
+
+    void loadCategorized();
+
+    return () => {
+      disposed = true;
+    };
+  }, [id, cashflowNonce]);
 
   useEffect(() => {
     let disposed = false;
@@ -660,10 +836,14 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
 
   async function saveTxnOverride(txnId: string) {
     if (txnOverrideSavingId) return;
-    const kind = txnKindDrafts[txnId];
     const category = txnCategoryDrafts[txnId];
-    if (!kind || !category) {
+    if (!category) {
       setTxnOverrideMessage("거래 분류값을 확인해 주세요.");
+      return;
+    }
+    const batchId = asString(detail?.batch.id || id);
+    if (!batchId) {
+      setTxnOverrideMessage("batchId를 확인할 수 없습니다.");
       return;
     }
 
@@ -677,9 +857,9 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
           "content-type": "application/json",
         },
         body: JSON.stringify(withDevCsrf({
+          batchId,
           txnId,
-          kind,
-          category,
+          categoryId: category,
         })),
       });
       const payload = await response.json().catch(() => null);
@@ -688,35 +868,109 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
         return;
       }
 
-      const savedKind = asString(payload.override.kind);
-      const savedCategory = asString(payload.override.category);
-      if (!["income", "expense", "transfer"].includes(savedKind) || !["fixed", "variable", "saving", "invest", "unknown"].includes(savedCategory)) {
+      const savedCategory = asString(payload.override.categoryId || payload.override.category);
+      if (!CATEGORY_OPTIONS.includes(savedCategory as TransactionCategory)) {
         setTxnOverrideMessage("거래 오버라이드 저장에 실패했습니다.");
         return;
       }
 
       setDetail((prev) => {
         if (!prev) return prev;
-        const rows = (prev.transactions ?? []).map((row) => (
-          row.txnId === txnId
-            ? {
-              ...row,
-              kind: savedKind as TransactionKind,
-              category: savedCategory as TransactionCategory,
-            }
-            : row
-        ));
+        const rows: TransactionRow[] = (prev.transactions ?? []).map((row): TransactionRow => {
+          if (row.txnId !== txnId) return row;
+          return {
+            ...row,
+            category: savedCategory as TransactionCategory,
+            categoryId: savedCategory as CategoryId,
+            categorySource: "override" as const,
+          };
+        });
         return {
           ...prev,
           transactions: rows,
         };
       });
       setCashflowNonce((value) => value + 1);
-      setTxnOverrideMessage("거래 분류 오버라이드를 저장했습니다.");
+      setTxnOverrideMessage("거래 카테고리 오버라이드를 저장했습니다.");
     } catch {
       setTxnOverrideMessage("거래 오버라이드 저장에 실패했습니다.");
     } finally {
       setTxnOverrideSavingId("");
+    }
+  }
+
+  async function saveTxnAccountOverride(txnId: string) {
+    if (txnAccountSavingId) return;
+    const batchId = asString(detail?.batch.id || id);
+    const accountId = asString(txnAccountDrafts[txnId]) || "unassigned";
+    if (!batchId) {
+      setTxnOverrideMessage("batchId를 확인할 수 없습니다.");
+      return;
+    }
+
+    setTxnAccountSavingId(txnId);
+    setTxnOverrideMessage("");
+    try {
+      const response = await fetch("/api/planning/v3/transactions/account-overrides", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(withDevCsrf({
+          batchId,
+          txnId,
+          accountId,
+        })),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !isRecord(payload) || payload.ok !== true || !isRecord(payload.override)) {
+        setTxnOverrideMessage("거래 계좌 매핑 저장에 실패했습니다.");
+        return;
+      }
+      setCashflowNonce((value) => value + 1);
+      setTxnOverrideMessage("거래 계좌 매핑을 저장했습니다.");
+    } catch {
+      setTxnOverrideMessage("거래 계좌 매핑 저장에 실패했습니다.");
+    } finally {
+      setTxnAccountSavingId("");
+    }
+  }
+
+  async function saveTxnTransferOverride(txnId: string, nextTransfer: boolean) {
+    if (txnTransferSavingId) return;
+    const batchId = asString(detail?.batch.id || id);
+    if (!batchId) {
+      setTxnOverrideMessage("batchId를 확인할 수 없습니다.");
+      return;
+    }
+
+    setTxnTransferSavingId(txnId);
+    setTxnOverrideMessage("");
+    try {
+      const response = await fetch("/api/planning/v3/transactions/transfer-overrides", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(withDevCsrf({
+          batchId,
+          txnId,
+          ...(nextTransfer ? { forceTransfer: true } : { forceNonTransfer: true }),
+        })),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !isRecord(payload) || payload.ok !== true || !isRecord(payload.override)) {
+        setTxnOverrideMessage("이체 판정 저장에 실패했습니다.");
+        return;
+      }
+      setCashflowNonce((value) => value + 1);
+      setTxnOverrideMessage("이체 판정을 저장했습니다.");
+    } catch {
+      setTxnOverrideMessage("이체 판정 저장에 실패했습니다.");
+    } finally {
+      setTxnTransferSavingId("");
     }
   }
 
@@ -732,6 +986,9 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             </Link>
             <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/accounts">
               계좌 관리
+            </Link>
+            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/categories/rules">
+              카테고리 룰
             </Link>
             <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/import">
               CSV Import
@@ -861,6 +1118,16 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
               </div>
             </Card>
 
+            <Card className="space-y-2" data-testid="v3-transfer-summary">
+              <h2 className="text-sm font-bold text-slate-900">이체/계좌 매핑 요약</h2>
+              <p className="text-sm text-slate-700">
+                transfers {transferOverview.transferCount.toLocaleString("ko-KR")}건 / unassigned {transferOverview.unassignedCount.toLocaleString("ko-KR")}건
+              </p>
+              <p className="text-xs text-slate-600">
+                expense(transfer 포함) {formatKrw(transferOverview.expenseInclTransfer)} / expense(transfer 제외) {formatKrw(transferOverview.expenseExclTransfer)}
+              </p>
+            </Card>
+
             <Card className="space-y-3">
               <h2 className="text-sm font-bold text-slate-900">거래 목록 (수동 분류 정정)</h2>
               <p className="text-xs text-slate-600">
@@ -874,6 +1141,8 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                       <th className="px-3 py-2 text-left">date</th>
                       <th className="px-3 py-2 text-right">amount</th>
                       <th className="px-3 py-2 text-left">desc</th>
+                      <th className="px-3 py-2 text-left">account</th>
+                      <th className="px-3 py-2 text-left">transfer</th>
                       <th className="px-3 py-2 text-left">kind</th>
                       <th className="px-3 py-2 text-left">category</th>
                       <th className="px-3 py-2 text-left">action</th>
@@ -885,6 +1154,52 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                         <td className="px-3 py-2 text-slate-800">{row.date}</td>
                         <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.amountKrw)}</td>
                         <td className="px-3 py-2 text-slate-700">{asString(row.description) || "-"}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                              data-testid={`v3-txn-account-${row.txnId}`}
+                              onChange={(event) => {
+                                const next = event.currentTarget.value;
+                                setTxnAccountDrafts((prev) => ({ ...prev, [row.txnId]: next }));
+                              }}
+                              value={txnAccountDrafts[row.txnId] ?? (asString(row.accountId) || "unassigned")}
+                            >
+                              <option value="unassigned">unassigned</option>
+                              {accounts.map((account) => (
+                                <option key={`${row.txnId}-account-${account.id}`} value={account.id}>{account.name}</option>
+                              ))}
+                            </select>
+                            <Button
+                              disabled={Boolean(txnAccountSavingId && txnAccountSavingId !== row.txnId)}
+                              onClick={() => {
+                                void saveTxnAccountOverride(row.txnId);
+                              }}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              {txnAccountSavingId === row.txnId ? "저장 중..." : "저장"}
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Button
+                            data-testid={`v3-txn-transfer-${row.txnId}`}
+                            disabled={Boolean(txnTransferSavingId && txnTransferSavingId !== row.txnId)}
+                            onClick={() => {
+                              const isTransfer = row.kind === "transfer" || asString(row.transferGroupId).length > 0;
+                              void saveTxnTransferOverride(row.txnId, !isTransfer);
+                            }}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            {txnTransferSavingId === row.txnId
+                              ? "저장 중..."
+                              : (row.kind === "transfer" || asString(row.transferGroupId).length > 0 ? "이체" : "일반")}
+                          </Button>
+                        </td>
                         <td className="px-3 py-2">
                           <select
                             className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
@@ -910,11 +1225,9 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                             }}
                             value={txnCategoryDrafts[row.txnId] ?? row.category}
                           >
-                            <option value="fixed">fixed</option>
-                            <option value="variable">variable</option>
-                            <option value="saving">saving</option>
-                            <option value="invest">invest</option>
-                            <option value="unknown">unknown</option>
+                            {CATEGORY_OPTIONS.map((option) => (
+                              <option key={`${row.txnId}-${option}`} value={option}>{option}</option>
+                            ))}
                           </select>
                         </td>
                         <td className="px-3 py-2">
@@ -934,7 +1247,47 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                       </tr>
                     )) : (
                       <tr>
-                        <td className="px-3 py-2 text-slate-500" colSpan={6}>거래 목록이 없습니다.</td>
+                        <td className="px-3 py-2 text-slate-500" colSpan={8}>거래 목록이 없습니다.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card className="space-y-3">
+              <h2 className="text-sm font-bold text-slate-900">카테고리 Breakdown (월별)</h2>
+              <p className="text-xs text-slate-600">카테고리 집계는 룰 기반 분류 + 거래별 오버라이드 결과를 반영합니다.</p>
+              {categorizedLoading ? <p className="text-sm text-slate-600">집계 갱신 중...</p> : null}
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-breakdown-table">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2 text-left">ym</th>
+                      <th className="px-3 py-2 text-right">income</th>
+                      <th className="px-3 py-2 text-right">expense</th>
+                      <th className="px-3 py-2 text-right">transfer</th>
+                      <th className="px-3 py-2 text-right">fixed</th>
+                      <th className="px-3 py-2 text-right">variable</th>
+                      <th className="px-3 py-2 text-right">housing</th>
+                      <th className="px-3 py-2 text-right">food</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {breakdownRows.length > 0 ? breakdownRows.map((row) => (
+                      <tr key={`breakdown-${row.ym}`}>
+                        <td className="px-3 py-2 font-semibold text-slate-900">{row.ym}</td>
+                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.incomeKrw)}</td>
+                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.expenseKrw)}</td>
+                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.transferKrw)}</td>
+                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.byCategory.fixed))}</td>
+                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.byCategory.variable))}</td>
+                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.byCategory.housing))}</td>
+                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.byCategory.food))}</td>
+                      </tr>
+                    )) : (
+                      <tr>
+                        <td className="px-3 py-2 text-slate-500" colSpan={8}>카테고리 breakdown 데이터가 없습니다.</td>
                       </tr>
                     )}
                   </tbody>

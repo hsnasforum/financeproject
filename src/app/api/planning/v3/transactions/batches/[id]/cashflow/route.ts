@@ -7,11 +7,15 @@ import {
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
+import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
 import {
   buildDraftPatchFromCashflow,
   type BuildDraftPatchFromCashflowOptions,
 } from "@/lib/planning/v3/service/buildDraftPatchFromCashflow";
+import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
 import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
+import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
+import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
 import { listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
 
 type RouteContext = {
@@ -120,8 +124,19 @@ export async function GET(request: Request, context: RouteContext) {
       );
     }
 
-    const overridesByTxnId = await listOverrides();
-    const monthly = aggregateMonthlyCashflow(loaded.transactions, {
+    const [overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
+      listOverrides(),
+      getAccountMappingOverrides(id).catch(() => ({})),
+      getTransferOverrides(id).catch(() => ({})),
+    ]);
+    const mapped = applyAccountMappingOverrides(loaded.transactions, accountOverrides);
+    const transferDetected = detectTransfers({
+      batchId: id,
+      transactions: mapped,
+      overridesByTxnId: transferOverrides,
+    });
+
+    const monthly = aggregateMonthlyCashflow(transferDetected.transactions, {
       includeTransfers,
       overridesByTxnId,
     });

@@ -1,0 +1,89 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`planning v3 profile draft store > createDraftFromBatch stores generated draft payload and round-trips 1`] = `
+{
+  "assumptions": [
+    "income median is computed from recent 3 month(s), transfer excluded",
+    "fixed expense uses category ids: fixed, housing, insurance, tax, debt",
+    "variable expense = total expense - fixed expense",
+    "debt expense is reported separately from category 'debt'",
+  ],
+  "draftPatch": {
+    "assumptions": [
+      "income median is computed from recent 3 month(s), transfer excluded",
+      "fixed expense uses category ids: fixed, housing, insurance, tax, debt",
+      "variable expense = total expense - fixed expense",
+      "debt expense is reported separately from category 'debt'",
+    ],
+    "monthlyDiscretionaryExpenses": 0,
+    "monthlyEssentialExpenses": 1100000,
+    "monthlyIncomeNet": 3100000,
+    "monthsConsidered": 3,
+  },
+  "evidence": {
+    "byCategoryStats": [
+      {
+        "categoryId": "income",
+        "totalKrw": 9300000,
+      },
+      {
+        "categoryId": "fixed",
+        "totalKrw": 3300000,
+      },
+    ],
+    "medians": {
+      "debtExpenseKrw": 0,
+      "expenseKrw": 1100000,
+      "fixedExpenseKrw": 1100000,
+      "incomeKrw": 3100000,
+      "variableExpenseKrw": 0,
+    },
+    "monthsUsed": [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+    ],
+    "ruleCoverage": {
+      "default": 3,
+      "override": 0,
+      "rule": 3,
+      "total": 6,
+      "transfer": 0,
+    },
+    "ymStats": [
+      {
+        "debtExpenseKrw": 0,
+        "expenseKrw": 1200000,
+        "fixedExpenseKrw": 1200000,
+        "incomeKrw": 3000000,
+        "transferKrw": 0,
+        "variableExpenseKrw": 0,
+        "ym": "2026-01",
+      },
+      {
+        "debtExpenseKrw": 0,
+        "expenseKrw": 1100000,
+        "fixedExpenseKrw": 1100000,
+        "incomeKrw": 3200000,
+        "transferKrw": 0,
+        "variableExpenseKrw": 0,
+        "ym": "2026-02",
+      },
+      {
+        "debtExpenseKrw": 0,
+        "expenseKrw": 1000000,
+        "fixedExpenseKrw": 1000000,
+        "incomeKrw": 3100000,
+        "transferKrw": 0,
+        "variableExpenseKrw": 0,
+        "ym": "2026-03",
+      },
+    ],
+  },
+  "stats": {
+    "months": 3,
+    "transfersExcluded": true,
+    "unassignedCount": 0,
+  },
+}
+`;
