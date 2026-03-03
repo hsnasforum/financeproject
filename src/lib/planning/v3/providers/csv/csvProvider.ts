@@ -45,8 +45,8 @@ export type ParseCsvTransactionsResult = {
 };
 
 const HEADER_ALIASES = {
-  date: ["date", "날짜", "일자", "거래일", "거래일자", "승인일", "승인일자"],
-  amount: ["amount", "금액", "거래금액", "입출금액"],
+  date: ["date", "날짜", "거래일", "일자", "거래일자", "승인일", "승인일자"],
+  amount: ["amount", "금액", "거래금액", "입출금액", "거래 금액"],
   inflow: ["inflow", "deposit", "credit", "입금", "입금액", "수입"],
   outflow: ["outflow", "withdraw", "debit", "출금", "출금액", "지출"],
   description: ["description", "desc", "적요", "내용", "메모", "거래내용", "내역"],
@@ -54,7 +54,7 @@ const HEADER_ALIASES = {
 } as const;
 
 function normalizeHeaderKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, "");
+  return value.trim().toLowerCase().replace(/[_\s]+/g, " ");
 }
 
 const ALIAS_TO_CANONICAL = (() => {
@@ -159,12 +159,14 @@ export function normalizeAmount(raw: string): number | null {
   const text = raw.trim();
   if (!text) return null;
 
-  const negativeByParen = /^\(.*\)$/.test(text);
-  const cleaned = text
+  const compact = text.replace(/\s+/g, "");
+  const negativeByParen = /^\(.*\)$/.test(compact);
+  const negativeByTrailing = /-$/.test(compact);
+  const cleaned = compact
     .replace(/^\(|\)$/g, "")
+    .replace(/-$/g, "")
     .replace(/[₩$¥€£]/g, "")
     .replace(/원/g, "")
-    .replace(/\s+/g, "")
     .replace(/,/g, "");
 
   if (!cleaned) return null;
@@ -173,7 +175,7 @@ export function normalizeAmount(raw: string): number | null {
   const parsed = Number.parseFloat(cleaned);
   if (!Number.isFinite(parsed)) return null;
 
-  const signed = negativeByParen ? -Math.abs(parsed) : parsed;
+  const signed = (negativeByParen || negativeByTrailing) ? -Math.abs(parsed) : parsed;
   return Math.round(signed);
 }
 
