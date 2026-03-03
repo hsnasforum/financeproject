@@ -21,6 +21,7 @@ import { readRecent as readOpsMetricEvents } from "../../../../lib/ops/metrics/m
 import { appendOpsMetricEvent } from "../../../../lib/ops/metricsLog";
 import { loadOpsPolicy } from "../../../../lib/ops/opsPolicy";
 import { buildExternalDataQualityDoctorChecks, runExternalDataQualityChecks } from "../../../../lib/ops/dataQuality";
+import { checkPlanningV3TransactionStore } from "../../../../lib/ops/doctorChecks/planningV3Transactions";
 import { loadLatestAssumptionsSnapshot } from "../../../../lib/planning/server/assumptions/storage";
 import { listProfiles } from "../../../../lib/planning/server/store/profileStore";
 import { createRun, getRun, hardDeleteRun, listRuns } from "../../../../lib/planning/server/store/runStore";
@@ -332,12 +333,14 @@ export async function GET(request: Request) {
     const recovery = await recoverPlanningStorageTransactions();
     const metricChecks = await checkMetricsHealth();
     const dataQualityChecks = await checkExternalDataQuality();
+    const planningV3TxChecks = await checkPlanningV3TransactionStore();
     const checks: DoctorCheck[] = [
       await checkMigrations(),
       await checkAssumptions(),
       await checkRecentSuccessfulRun(),
       ...metricChecks,
       ...dataQualityChecks,
+      ...planningV3TxChecks,
       await checkProfileValidation(),
       await checkRunStore(),
       await checkStorageConsistency(),

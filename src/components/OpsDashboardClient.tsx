@@ -143,6 +143,11 @@ function severityText(severity: DoctorIssue["severity"]): string {
   return "INFO";
 }
 
+function planningV3BadgeClass(status: "OK" | "WARN"): string {
+  if (status === "WARN") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+}
+
 function toSafeDomId(raw: string): string {
   const normalized = raw.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
   return normalized || "unknown";
@@ -347,6 +352,13 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
     return "OK";
   }, [report]);
 
+  const planningV3Status = useMemo<"OK" | "WARN">(() => {
+    if (!report) return "WARN";
+    const related = issues.filter((issue) => issue.id.startsWith("planning-v3/"));
+    const hasWarn = related.some((issue) => issue.severity === "warn" || issue.severity === "risk");
+    return hasWarn ? "WARN" : "OK";
+  }, [issues, report]);
+
   return (
     <PageShell>
       <div data-testid="ops-home">
@@ -405,6 +417,24 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
           </div>
         </Card>
       ) : null}
+
+      <Card className="mb-4 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-black text-slate-900">Planning V3</h2>
+          <span
+            className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-bold ${planningV3BadgeClass(planningV3Status)}`}
+            data-testid="ops-v3-txstore-status"
+          >
+            V3 Transaction Store: {planningV3Status}
+          </span>
+        </div>
+        <div className="mt-3 text-sm text-slate-700">
+          <p>트랜잭션 저장소/배치 정합성은 OPS doctor 결과를 기준으로 표시됩니다.</p>
+          <Link className="mt-2 inline-flex font-semibold underline" href="/ops/doctor" data-testid="ops-v3-txstore-doctor-link">
+            doctor 상세 보기
+          </Link>
+        </div>
+      </Card>
 
       {issues.length < 1 && !loading ? (
         <EmptyState
