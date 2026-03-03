@@ -10,7 +10,7 @@ function loadFixture(name: string): string {
 }
 
 describe("planning v3 profile patch draft", () => {
-  it("builds deterministic patch with median and 70/30 split", () => {
+  it("builds deterministic patch with category-based split", () => {
     const parsed = parseCsvTransactions(loadFixture("sample.csv"));
     const monthly = aggregateMonthlyCashflow(parsed.transactions);
 
@@ -19,12 +19,12 @@ describe("planning v3 profile patch draft", () => {
 
     expect(first).toEqual(second);
     expect(first).toEqual({
-      monthlyIncomeNet: 2_201_234,
-      monthlyEssentialExpenses: 735_000,
-      monthlyDiscretionaryExpenses: 315_000,
+      monthlyIncomeNet: 3_101_234,
+      monthlyEssentialExpenses: 850_000,
+      monthlyDiscretionaryExpenses: 350_000,
       assumptions: [
-        "monthlyIncomeNet uses median monthly net (assumption)",
-        "expense split 70/30 (assumption)",
+        "monthlyIncomeNet uses median recent inflow (assumption)",
+        "split mode byCategory (rule-based categorization)",
       ],
       monthsConsidered: 3,
     });

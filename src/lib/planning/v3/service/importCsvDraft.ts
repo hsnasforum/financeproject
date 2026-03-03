@@ -6,6 +6,11 @@ import {
 import { aggregateMonthlyCashflow } from "./aggregate";
 import { buildProfileDraftPatchFromCashflow } from "./draftPatch";
 import { type MonthlyCashflow, type ProfileDraftPatch } from "../domain/types";
+import { type BuildDraftPatchFromCashflowOptions } from "./buildDraftPatchFromCashflow";
+
+export type ImportCsvToDraftOptions = ParseCsvTransactionsOptions & {
+  split?: BuildDraftPatchFromCashflowOptions;
+};
 
 export type ImportCsvToDraftResult = {
   parsed: ParseCsvTransactionsResult;
@@ -15,10 +20,10 @@ export type ImportCsvToDraftResult = {
 
 export function importCsvToDraft(
   csvText: string,
-  options: ParseCsvTransactionsOptions = {},
+  options: ImportCsvToDraftOptions = {},
 ): ImportCsvToDraftResult {
   const parsed = parseCsvTransactions(csvText, options);
   const cashflows = aggregateMonthlyCashflow(parsed.transactions);
-  const draft = buildProfileDraftPatchFromCashflow(cashflows);
+  const draft = buildProfileDraftPatchFromCashflow(cashflows, options.split);
   return { parsed, cashflows, draft };
 }

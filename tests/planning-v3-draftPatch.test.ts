@@ -10,12 +10,12 @@ describe("buildProfileDraftPatchFromCashflow", () => {
     ]);
 
     expect(draft).toEqual({
-      monthlyIncomeNet: 2_201_234,
-      monthlyEssentialExpenses: 735_000,
-      monthlyDiscretionaryExpenses: 315_000,
+      monthlyIncomeNet: 3_101_234,
+      monthlyEssentialExpenses: 0,
+      monthlyDiscretionaryExpenses: 1_050_000,
       assumptions: [
-        "monthlyIncomeNet uses median monthly net (assumption)",
-        "expense split 70/30 (assumption)",
+        "monthlyIncomeNet uses median recent inflow (assumption)",
+        "split mode byCategory (rule-based categorization)",
       ],
       monthsConsidered: 3,
     });
