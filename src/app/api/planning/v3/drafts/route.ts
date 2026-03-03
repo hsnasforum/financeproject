@@ -110,6 +110,15 @@ function summarizeDraft(cashflow: Array<{ incomeKrw: number; expenseKrw: number;
   };
 }
 
+function parseListLimit(url: string): number {
+  const raw = Number(new URL(url).searchParams.get("limit") ?? "50");
+  if (!Number.isFinite(raw)) return 50;
+  const normalized = Math.floor(raw);
+  if (normalized < 1) return 1;
+  if (normalized > 200) return 200;
+  return normalized;
+}
+
 export async function GET(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -118,7 +127,8 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
 
   try {
-    const rows = await listDrafts();
+    const limit = parseListLimit(request.url);
+    const rows = (await listDrafts()).slice(0, limit);
     const details = await Promise.all(rows.map(async (row) => ({
       id: row.id,
       draft: await getDraft(row.id),

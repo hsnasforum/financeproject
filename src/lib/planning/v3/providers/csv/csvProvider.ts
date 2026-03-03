@@ -86,6 +86,40 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function normalizeLooseCell(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+function isIgnorableRow(row: string[]): boolean {
+  const nonEmpty = row
+    .map((cell) => cell.trim())
+    .filter((cell) => cell.length > 0);
+  if (nonEmpty.length < 1) return true;
+
+  const first = nonEmpty[0] ?? "";
+  if (first.startsWith("#") || first.startsWith("//") || first.startsWith(";")) {
+    return true;
+  }
+
+  const SUMMARY_TOKENS = new Set([
+    "합계",
+    "총계",
+    "소계",
+    "total",
+    "subtotal",
+    "sum",
+  ]);
+
+  return nonEmpty.some((cell) => {
+    const normalized = normalizeLooseCell(cell);
+    if (!normalized) return false;
+    if (SUMMARY_TOKENS.has(normalized)) return true;
+    if (normalized.startsWith("합계:") || normalized.startsWith("총계:")) return true;
+    if (normalized.startsWith("total:") || normalized.startsWith("subtotal:")) return true;
+    return false;
+  });
+}
+
 function resolveRefIndex(
   ref: CsvColumnRef | undefined,
   headerMap: Map<string, number> | null,
@@ -320,6 +354,7 @@ export function parseCsvTransactions(
 
   const transactions: AccountTransaction[] = [];
   const errors: ParseCsvError[] = [];
+  let ignoredRows = 0;
 
   for (let i = 0; i < parsed.rows.length; i += 1) {
     const row = parsed.rows[i] ?? [];
@@ -356,6 +391,10 @@ export function parseCsvTransactions(
 
     const date = parseDateBestEffort(row[dateIndex] ?? "");
     if (!date) {
+      if (isIgnorableRow(row)) {
+        ignoredRows += 1;
+        continue;
+      }
       errors.push({ rowIndex, code: "INVALID_DATE", path: ["date"] });
       continue;
     }
@@ -417,7 +456,7 @@ export function parseCsvTransactions(
     stats: {
       rows: parsed.rows.length,
       parsed: transactions.length,
-      skipped: errors.length,
+      skipped: Math.max(0, parsed.rows.length - transactions.length),
     },
     errors,
   };

@@ -1,27 +1,3 @@
-export type DraftUploadPreview = {
-  cashflow: Array<{
-    ym: string;
-    incomeKrw: number;
-    expenseKrw: number;
-    netKrw: number;
-    txCount: number;
-  }>;
-  draftPatch: Record<string, unknown>;
-  meta: {
-    rows: number;
-    months: number;
-  };
-  draftSummary: {
-    rows: number;
-    columns: number;
-  };
-};
-
-export type DraftUploadSavedMeta = {
-  id: string;
-  createdAt: string;
-};
-
 export type DraftUploadListItem = {
   id: string;
   createdAt: string;
@@ -37,23 +13,17 @@ export type DraftUploadListItem = {
   };
 };
 
-type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
-type ImportDraftResponse = {
-  ok: true;
-  cashflow: DraftUploadPreview["cashflow"];
-  draftPatch: DraftUploadPreview["draftPatch"];
-  meta: DraftUploadPreview["meta"];
-  draftSummary: DraftUploadPreview["draftSummary"];
+export type DraftUploadCreateResult = {
+  draftId: string;
 };
 
-type SaveDraftResponse = {
+type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+type ImportCreateResponse = {
   ok: true;
-  id?: string;
-  createdAt?: string;
+  draftId?: unknown;
   data?: {
-    id?: string;
-    createdAt?: string;
+    draftId?: unknown;
   };
 };
 
@@ -70,43 +40,9 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function asNumber(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function buildQuery(csrfToken?: string): string {
   if (!csrfToken) return "";
   return `?csrf=${encodeURIComponent(csrfToken)}`;
-}
-
-function buildImportPreviewPath(csrfToken?: string): string {
-  const params = new URLSearchParams();
-  params.set("persist", "0");
-  if (csrfToken) params.set("csrf", csrfToken);
-  return `/api/planning/v3/import/csv?${params.toString()}`;
-}
-
-function toResponseMessage(payload: unknown, fallback: string): string {
-  if (isRecord(payload) && isRecord(payload.error)) {
-    const message = asString(payload.error.message);
-    if (message) return message;
-  }
-  return fallback;
-}
-
-function isImportDraftResponse(payload: unknown): payload is ImportDraftResponse {
-  if (!isRecord(payload) || payload.ok !== true) return false;
-  if (!Array.isArray(payload.cashflow) || !isRecord(payload.draftPatch) || !isRecord(payload.meta)) return false;
-  if (!isRecord(payload.draftSummary)) return false;
-  return true;
-}
-
-function isSaveDraftResponse(payload: unknown): payload is SaveDraftResponse {
-  if (!isRecord(payload) || payload.ok !== true) return false;
-  const id = asString(payload.id) || asString(isRecord(payload.data) ? payload.data.id : "");
-  const createdAt = asString(payload.createdAt) || asString(isRecord(payload.data) ? payload.data.createdAt : "");
-  return id.length > 0 && createdAt.length > 0;
 }
 
 function isDraftListItem(payload: unknown): payload is DraftUploadListItem {
@@ -121,12 +57,50 @@ function isListDraftResponse(payload: unknown): payload is ListDraftResponse {
   return payload.drafts.every(isDraftListItem);
 }
 
-export async function fetchCsvDraftPreview(
+function isImportCreateResponse(payload: unknown): payload is ImportCreateResponse {
+  if (!isRecord(payload) || payload.ok !== true) return false;
+  return true;
+}
+
+function extractErrorCode(payload: unknown): string {
+  if (!isRecord(payload) || !isRecord(payload.error)) return "";
+  return asString(payload.error.code).toUpperCase();
+}
+
+function extractErrorDetailCodes(payload: unknown): string[] {
+  if (!isRecord(payload) || !isRecord(payload.error) || !Array.isArray(payload.error.details)) return [];
+  return payload.error.details
+    .map((detail) => (isRecord(detail) ? asString(detail.code).toUpperCase() : ""))
+    .filter((detail) => detail.length > 0);
+}
+
+function toUploadErrorMessage(status: number, code: string, detailCodes: string[]): string {
+  if (detailCodes.includes("MISSING_COLUMN")) {
+    return "CSV 헤더에서 필수 컬럼(date/amount)을 찾지 못했습니다. 헤더 이름을 확인해 주세요.";
+  }
+  if (detailCodes.includes("INVALID_AMOUNT")) {
+    return "금액 형식을 해석하지 못했습니다. 숫자/통화 표기를 확인해 주세요.";
+  }
+  if (detailCodes.includes("INVALID_DATE")) {
+    return "날짜 형식을 해석하지 못했습니다. YYYY-MM-DD 형식으로 확인해 주세요.";
+  }
+  if (status === 400 || code === "INPUT") return "CSV 형식 또는 값에 문제가 있습니다. 파일 내용을 확인해 주세요.";
+  if (status === 413 || code === "PAYLOAD_TOO_LARGE") return "파일 크기 제한(1MB)을 초과했습니다.";
+  if (status === 415 || code === "UNSUPPORTED_MEDIA_TYPE") return "CSV 텍스트 형식만 지원합니다.";
+  if (status === 403 || code === "CSRF_MISMATCH") return "보안 검증에 실패했습니다. 새로고침 후 다시 시도해 주세요.";
+  return "초안 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+}
+
+export async function createDraftFromCsvUpload(
   csvText: string,
   fetchImpl: FetchLike,
   csrfToken?: string,
-): Promise<DraftUploadPreview> {
-  const response = await fetchImpl(buildImportPreviewPath(csrfToken), {
+): Promise<DraftUploadCreateResult> {
+  if (!csvText.trim()) {
+    throw new Error("CSV 파일이 비어 있습니다.");
+  }
+
+  const response = await fetchImpl(`/api/planning/v3/import/csv${buildQuery(csrfToken)}`, {
     method: "POST",
     credentials: "same-origin",
     headers: {
@@ -135,64 +109,26 @@ export async function fetchCsvDraftPreview(
     },
     body: csvText,
   });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok || !isImportDraftResponse(payload)) {
-    throw new Error(toResponseMessage(payload, "CSV 업로드에 실패했습니다."));
-  }
-  return {
-    cashflow: payload.cashflow.map((row) => ({
-      ym: asString(isRecord(row) ? row.ym : ""),
-      incomeKrw: asNumber(isRecord(row) ? row.incomeKrw : 0),
-      expenseKrw: asNumber(isRecord(row) ? row.expenseKrw : 0),
-      netKrw: asNumber(isRecord(row) ? row.netKrw : 0),
-      txCount: asNumber(isRecord(row) ? row.txCount : 0),
-    })),
-    draftPatch: payload.draftPatch,
-    meta: {
-      rows: asNumber(payload.meta.rows),
-      months: asNumber(payload.meta.months),
-    },
-    draftSummary: {
-      rows: asNumber(payload.draftSummary.rows),
-      columns: asNumber(payload.draftSummary.columns),
-    },
-  };
-}
-
-export async function saveCsvDraftPreview(
-  preview: DraftUploadPreview,
-  source: { filename?: string },
-  fetchImpl: FetchLike,
-  csrfToken?: string,
-): Promise<DraftUploadSavedMeta> {
-  const response = await fetchImpl("/api/planning/v3/drafts", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: {
-      "content-type": "application/json",
-      ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
-    },
-    body: JSON.stringify({
-      ...(csrfToken ? { csrf: csrfToken } : {}),
-      source: {
-        kind: "csv",
-        ...(source.filename ? { filename: source.filename } : {}),
-      },
-      payload: {
-        cashflow: preview.cashflow,
-        draftPatch: preview.draftPatch,
-      },
-      meta: preview.draftSummary,
-    }),
-  });
 
   const payload = await response.json().catch(() => null);
-  if (!response.ok || !isSaveDraftResponse(payload)) {
-    throw new Error(toResponseMessage(payload, "드래프트 저장에 실패했습니다."));
+  if (!response.ok) {
+    throw new Error(toUploadErrorMessage(
+      response.status,
+      extractErrorCode(payload),
+      extractErrorDetailCodes(payload),
+    ));
   }
-  const id = asString(payload.id) || asString(isRecord(payload.data) ? payload.data.id : "");
-  const createdAt = asString(payload.createdAt) || asString(isRecord(payload.data) ? payload.data.createdAt : "");
-  return { id, createdAt };
+
+  if (!isImportCreateResponse(payload)) {
+    throw new Error("초안 생성 응답 형식을 확인할 수 없습니다.");
+  }
+
+  const draftId = asString(payload.draftId) || asString(isRecord(payload.data) ? payload.data.draftId : "");
+  if (!draftId) {
+    throw new Error("초안 생성 응답 형식을 확인할 수 없습니다.");
+  }
+
+  return { draftId };
 }
 
 export async function fetchDraftList(
@@ -205,7 +141,7 @@ export async function fetchDraftList(
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !isListDraftResponse(payload)) {
-    throw new Error(toResponseMessage(payload, "초안 목록을 불러오지 못했습니다."));
+    throw new Error("초안 목록을 불러오지 못했습니다.");
   }
   return payload.drafts;
 }
