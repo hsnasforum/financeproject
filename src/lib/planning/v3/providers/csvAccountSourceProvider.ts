@@ -36,7 +36,10 @@ export class CsvAccountSourceProvider implements AccountSourceProvider<CsvAccoun
       mapping: {
         dateColumn: input.mapping.dateColumn,
         amountColumn: input.mapping.amountColumn,
+        inflowColumn: input.mapping.inflowColumn,
+        outflowColumn: input.mapping.outflowColumn,
         descColumn: input.mapping.descColumn,
+        delimiter: input.mapping.delimiter,
       },
     });
 

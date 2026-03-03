@@ -6,10 +6,14 @@ export type CsvAccountSourceInput = {
   csvText: string;
   mapping: {
     dateColumn: CsvColumnRef;
-    amountColumn: CsvColumnRef;
-    descColumn: CsvColumnRef;
+    amountColumn?: CsvColumnRef;
+    inflowColumn?: CsvColumnRef;
+    outflowColumn?: CsvColumnRef;
+    descColumn?: CsvColumnRef;
     typeColumn?: CsvColumnRef;
     categoryColumn?: CsvColumnRef;
+    delimiter?: "," | "\t" | ";";
+    encoding?: "utf-8" | "euc-kr";
   };
   delimiter?: string;
   hasHeader?: boolean;

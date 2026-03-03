@@ -7,3 +7,6 @@ export {
   type ParseCsvTransactionsResult,
 } from "./csv/csvProvider";
 export * from "./csv/csvParse";
+export * from "./csv/detectDialect";
+export * from "./csv/infer";
+export * from "./csv/types";
