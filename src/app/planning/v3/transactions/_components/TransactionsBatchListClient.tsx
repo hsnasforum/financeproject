@@ -396,6 +396,9 @@ export function TransactionsBatchListClient() {
                 최근 배치로 이동
               </Link>
             ) : null}
+            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/batches">
+              Batch Center
+            </Link>
             <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/import">
               CSV Import
             </Link>

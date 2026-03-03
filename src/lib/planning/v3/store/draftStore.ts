@@ -10,6 +10,12 @@ import {
   type V3DraftSource,
   type V3DraftSummary,
 } from "../domain/draft";
+import { type DraftProfileRecord } from "../domain/draftTypes";
+import {
+  GenerateDraftPatchFromBatchError,
+  generateDraftPatchFromBatch,
+} from "../service/generateDraftPatchFromBatch";
+import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "../service/forbiddenDraftKeys";
 
 type CreateDraftInput = Omit<V3DraftRecord, "id" | "createdAt" | "summary"> & {
   summary?: V3DraftSummary;
@@ -249,3 +255,149 @@ export async function deleteDraft(id: string): Promise<boolean> {
   return deleted;
 }
 
+function normalizeProfileStats(value: unknown): DraftProfileRecord["stats"] | undefined {
+  if (!isRecord(value)) return undefined;
+  const months = Number(value.months);
+  if (!Number.isFinite(months) || months < 0) return undefined;
+  const normalizedMonths = Math.trunc(months);
+  const transfersExcluded = value.transfersExcluded === true ? true : undefined;
+  const unassignedCount = Number(value.unassignedCount);
+  return {
+    months: normalizedMonths,
+    ...(transfersExcluded ? { transfersExcluded } : {}),
+    ...(Number.isFinite(unassignedCount) && unassignedCount >= 0 ? { unassignedCount: Math.trunc(unassignedCount) } : {}),
+  };
+}
+
+function normalizeProfileDraftRecord(value: unknown): DraftProfileRecord | null {
+  if (!isRecord(value)) return null;
+  try {
+    const id = sanitizeRecordId(value.id);
+    const batchId = sanitizeRecordId(value.batchId);
+    const createdAt = normalizeCreatedAt(value.createdAt);
+    if (!isRecord(value.draftPatch) || !isRecord(value.evidence) || !Array.isArray(value.assumptions)) {
+      return null;
+    }
+
+    const assumptions = value.assumptions
+      .map((entry) => asString(entry))
+      .filter((entry) => entry.length > 0)
+      .slice(0, 50);
+
+    const record: DraftProfileRecord = {
+      id,
+      batchId,
+      createdAt,
+      draftPatch: value.draftPatch as DraftProfileRecord["draftPatch"],
+      evidence: value.evidence as DraftProfileRecord["evidence"],
+      assumptions,
+      ...(normalizeProfileStats(value.stats) ? { stats: normalizeProfileStats(value.stats) } : {}),
+    };
+    assertNoForbiddenDraftKeys(record);
+    return record;
+  } catch (error) {
+    if (error instanceof ForbiddenDraftKeyError) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+async function readProfileDraftFromPath(filePath: string): Promise<DraftProfileRecord | null> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(filePath, "utf-8")) as unknown;
+    return normalizeProfileDraftRecord(parsed);
+  } catch (error) {
+    if (error instanceof ForbiddenDraftKeyError) {
+      throw error;
+    }
+    return null;
+  }
+}
+
+function sortProfileDrafts(rows: DraftProfileRecord[]): DraftProfileRecord[] {
+  return [...rows].sort((left, right) => {
+    const leftTs = Date.parse(left.createdAt);
+    const rightTs = Date.parse(right.createdAt);
+    if (Number.isFinite(leftTs) && Number.isFinite(rightTs) && leftTs !== rightTs) {
+      return rightTs - leftTs;
+    }
+    return right.id.localeCompare(left.id);
+  });
+}
+
+function toOrderedProfileDraftRecord(record: DraftProfileRecord): DraftProfileRecord {
+  return {
+    id: record.id,
+    batchId: record.batchId,
+    createdAt: record.createdAt,
+    draftPatch: record.draftPatch,
+    evidence: record.evidence,
+    assumptions: record.assumptions,
+    ...(record.stats ? { stats: record.stats } : {}),
+  };
+}
+
+export async function createDraftFromBatch(batchId: string): Promise<DraftProfileRecord> {
+  assertServerOnly();
+  const safeBatchId = sanitizeRecordId(batchId);
+
+  const built = await generateDraftPatchFromBatch({ batchId: safeBatchId });
+  const record: DraftProfileRecord = {
+    id: sanitizeRecordId(randomUUID()),
+    batchId: safeBatchId,
+    createdAt: new Date().toISOString(),
+    draftPatch: built.draftPatch,
+    evidence: built.evidence,
+    assumptions: built.assumptions,
+    stats: {
+      months: built.stats.months,
+      transfersExcluded: built.stats.transfersExcluded,
+      ...(Number.isFinite(built.stats.unassignedCount) ? { unassignedCount: built.stats.unassignedCount } : {}),
+    },
+  };
+
+  assertNoForbiddenDraftKeys(record);
+  await atomicWriteJson(resolveDraftPath(record.id), toOrderedProfileDraftRecord(record));
+  return record;
+}
+
+export async function listProfileDrafts(): Promise<DraftProfileRecord[]> {
+  assertServerOnly();
+  const files = await listDraftFiles();
+  const rows = (await Promise.all(files.map((filePath) => readProfileDraftFromPath(filePath))))
+    .filter((row): row is DraftProfileRecord => row !== null);
+  return sortProfileDrafts(rows);
+}
+
+export async function getProfileDraft(id: string): Promise<DraftProfileRecord | null> {
+  assertServerOnly();
+  const safeId = sanitizeRecordId(id);
+  const primary = await readProfileDraftFromPath(resolveDraftPath(safeId));
+  if (primary) return primary;
+  return readProfileDraftFromPath(path.join(resolveLegacyDraftsDir(), `${safeId}.json`));
+}
+
+export async function deleteProfileDraft(id: string): Promise<{ deleted: boolean }> {
+  assertServerOnly();
+  const safeId = sanitizeRecordId(id);
+  const targets = [
+    resolveDraftPath(safeId),
+    path.join(resolveLegacyDraftsDir(), `${safeId}.json`),
+  ];
+
+  let deleted = false;
+  for (const target of targets) {
+    try {
+      await fs.unlink(target);
+      deleted = true;
+    } catch {
+      continue;
+    }
+  }
+  return { deleted };
+}
+
+export function isGenerateDraftInputError(error: unknown): error is GenerateDraftPatchFromBatchError {
+  return error instanceof GenerateDraftPatchFromBatchError;
+}

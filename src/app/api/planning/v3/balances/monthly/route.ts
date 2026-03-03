@@ -7,12 +7,16 @@ import {
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { type StoredTransaction } from "@/lib/planning/v3/domain/transactions";
+import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
 import { computeMonthlyBalances } from "@/lib/planning/v3/service/computeMonthlyBalances";
+import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
 import { buildTxnId, normalizeDescriptionForTxnId } from "@/lib/planning/v3/service/txnId";
 import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
+import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
 import { listAccounts } from "@/lib/planning/v3/store/accountsStore";
 import { getOpeningBalances } from "@/lib/planning/v3/store/openingBalancesStore";
 import { getBatchTransactions } from "@/lib/planning/v3/store/batchesStore";
+import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
 import { listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
 
 function asString(value: unknown): string {
@@ -81,12 +85,22 @@ export async function GET(request: Request) {
   const includeTransfers = asBoolean(url.searchParams.get("includeTransfers"));
 
   try {
-    const [storedByBatch, legacyByBatch, openingBalances, overridesByTxnId, accounts] = await Promise.all([
+    const [
+      storedByBatch,
+      legacyByBatch,
+      openingBalances,
+      overridesByTxnId,
+      accounts,
+      accountOverrides,
+      transferOverrides,
+    ] = await Promise.all([
       getBatchTransactions(batchId),
       readBatchTransactions(batchId),
       getOpeningBalances(),
       listOverrides(),
       listAccounts(),
+      getAccountMappingOverrides(batchId).catch(() => ({})),
+      getTransferOverrides(batchId).catch(() => ({})),
     ]);
 
     const transactions = storedByBatch.length > 0
@@ -111,8 +125,19 @@ export async function GET(request: Request) {
       }
     }
 
+    const mapped = applyAccountMappingOverrides(transactions, accountOverrides);
+    const transferDetected = detectTransfers({
+      batchId,
+      transactions: mapped,
+      overridesByTxnId: transferOverrides,
+    });
+
     const computed = computeMonthlyBalances({
-      transactions,
+      transactions: transferDetected.transactions.map((row) => ({
+        ...row,
+        txnId: asString(row.txnId).toLowerCase(),
+        batchId,
+      })),
       openingBalancesByAccount: openingByAccount,
       includeTransfers,
       overridesByTxnId,

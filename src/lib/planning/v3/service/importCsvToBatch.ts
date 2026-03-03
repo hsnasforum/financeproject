@@ -13,6 +13,7 @@ type Primitive = string | number | boolean | null;
 export type ImportCsvToBatchInput = {
   csvText: string;
   mapping?: Partial<CsvColumnMapping>;
+  sanitizeTextFields?: boolean;
   options?: {
     accountId?: string;
     accountName?: string;
@@ -194,17 +195,31 @@ export async function importCsvToBatch(input: ImportCsvToBatchInput): Promise<Im
   const dedupedMap = new Map<string, StoredTransaction>();
 
   for (const tx of parsed.transactions) {
+    const rawDescription = asString(tx.description) || undefined;
     const txnId = buildDeterministicTxnId({
       batchId,
       dateIso: tx.date,
       amountKrw: tx.amountKrw,
-      ...(asString(tx.description) ? { description: asString(tx.description) } : {}),
+      ...(rawDescription ? { description: rawDescription } : {}),
       ...(asString(tx.accountId) ? { accountId: asString(tx.accountId) } : {}),
     });
     if (dedupedMap.has(txnId)) continue;
 
+    const description = input.sanitizeTextFields === true ? undefined : rawDescription;
+
     dedupedMap.set(txnId, {
-      ...tx,
+      date: tx.date,
+      amountKrw: tx.amountKrw,
+      source: tx.source,
+      ...(asString(tx.accountId) ? { accountId: asString(tx.accountId) } : {}),
+      ...(tx.kind ? { kind: tx.kind } : {}),
+      ...(tx.transfer ? { transfer: tx.transfer } : {}),
+      ...(tx.category ? { category: tx.category } : {}),
+      ...(tx.categoryId ? { categoryId: tx.categoryId } : {}),
+      ...(tx.classificationReason ? { classificationReason: tx.classificationReason } : {}),
+      ...(tx.matchedRuleId ? { matchedRuleId: tx.matchedRuleId } : {}),
+      ...(tx.meta ? { meta: tx.meta } : {}),
+      ...(description ? { description } : {}),
       txnId,
       batchId,
     });
