@@ -19,6 +19,7 @@ export * from "./draftFromCashflow";
 export * from "./importCsvToBatch";
 export * from "./generateDraftPatchFromBatch";
 export * from "./preflightDraftPatch";
+export * from "./applyDraftPatchToProfile";
 export * from "./getBatchSummary";
 export { detectTransfers as detectTransfersV3 } from "./detectTransfers";
 export { categorizeTransactions as categorizeTransactionsWithRules } from "./categorizeTransactions";

@@ -107,6 +107,13 @@ type PreflightResponse = {
   data: PreflightResult;
 };
 
+type ApplyProfileResponse = {
+  ok: true;
+  data: {
+    profileId: string;
+  };
+};
+
 type Props = {
   id: string;
   initialDraft?: DraftDetail | null;
@@ -169,6 +176,11 @@ function isPreflightResponse(value: unknown): value is PreflightResponse {
   return Array.isArray(value.data.changes) && isRecord(value.data.summary);
 }
 
+function isApplyProfileResponse(value: unknown): value is ApplyProfileResponse {
+  if (!isRecord(value) || value.ok !== true || !isRecord(value.data)) return false;
+  return asString(value.data.profileId).length > 0;
+}
+
 export function ProfileDraftDetailClient({
   id,
   initialDraft = null,
@@ -184,6 +196,8 @@ export function ProfileDraftDetailClient({
   const [copyMessage, setCopyMessage] = useState("");
   const [preflightRunning, setPreflightRunning] = useState(false);
   const [preflight, setPreflight] = useState<PreflightResult | null>(initialPreflight);
+  const [applyRunning, setApplyRunning] = useState(false);
+  const [applyResult, setApplyResult] = useState("");
 
   const loadDetail = useCallback(async () => {
     if (disableAutoLoad) return;
@@ -212,6 +226,7 @@ export function ProfileDraftDetailClient({
 
       setDraft(detailJson.data);
       setPreflight(null);
+      setApplyResult("");
 
       if (profilesResponse.ok && isProfilesResponse(profilesJson)) {
         setProfiles(profilesJson.data);
@@ -296,6 +311,44 @@ export function ProfileDraftDetailClient({
       setMessage("프리플라이트 실행에 실패했습니다.");
     } finally {
       setPreflightRunning(false);
+    }
+  }
+
+  async function applyProfileDraft() {
+    if (!draft || applyRunning) return;
+    setApplyRunning(true);
+    setApplyResult("");
+    setMessage("");
+
+    try {
+      const csrf = readDevCsrfToken();
+      const response = await fetch(`/api/planning/v3/profile/drafts/${encodeURIComponent(id)}/apply`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          ...(selectedProfileId ? { profileId: selectedProfileId } : {}),
+          ...(csrf ? { csrf } : {}),
+        }),
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !isApplyProfileResponse(json)) {
+        const serverMessage = isRecord(json) && isRecord(json.error)
+          ? asString(json.error.message)
+          : "";
+        setApplyResult(serverMessage || "프로필 생성에 실패했습니다.");
+        return;
+      }
+
+      const newProfileId = json.data.profileId;
+      setApplyResult("프로필 생성이 완료되어 planning 화면으로 이동합니다.");
+      window.location.href = `/planning?profileId=${encodeURIComponent(newProfileId)}`;
+    } catch {
+      setApplyResult("프로필 생성에 실패했습니다.");
+    } finally {
+      setApplyRunning(false);
     }
   }
 
@@ -403,7 +456,25 @@ export function ProfileDraftDetailClient({
                 >
                   {preflightRunning ? "프리플라이트 실행 중..." : "프리플라이트 실행"}
                 </Button>
+                <Button
+                  data-testid="v3-draft-apply-profile"
+                  disabled={applyRunning || (preflight?.errors.length ?? 0) > 0}
+                  onClick={() => {
+                    void applyProfileDraft();
+                  }}
+                  type="button"
+                >
+                  {applyRunning ? "프로필 생성 중..." : "프로필 생성(초안 적용)"}
+                </Button>
               </div>
+              {applyResult ? (
+                <p
+                  className={`text-sm font-semibold ${applyResult.includes("실패") ? "text-rose-700" : "text-emerald-700"}`}
+                  data-testid="v3-draft-apply-result"
+                >
+                  {applyResult}
+                </p>
+              ) : null}
             </Card>
 
             <Card data-testid="v3-preflight-summary">
