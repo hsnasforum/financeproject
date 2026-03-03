@@ -26,9 +26,71 @@ describe("buildCashflowFromTransactions (compat wrapper)", () => {
 
     const cashflow = buildCashflowFromTransactions(transactions);
     expect(cashflow).toEqual([
-      { ym: "2026-01", incomeKrw: 3_000_000, expenseKrw: -1_200_000, netKrw: 1_800_000, txCount: 3 },
-      { ym: "2026-02", incomeKrw: 3_101_234, expenseKrw: -900_000, netKrw: 2_201_234, txCount: 3 },
-      { ym: "2026-03", incomeKrw: 4_250_000, expenseKrw: -1_050_000, netKrw: 3_200_000, txCount: 3 },
+      {
+        month: "2026-01",
+        inflowKrw: 3_000_000,
+        outflowKrw: 1_200_000,
+        fixedOutflowKrw: 850_000,
+        variableOutflowKrw: 350_000,
+        transferNetKrw: 0,
+        ym: "2026-01",
+        incomeKrw: 3_000_000,
+        expenseKrw: -1_200_000,
+        totals: {
+          incomeKrw: 3_000_000,
+          expenseKrw: -1_200_000,
+          transferInKrw: 0,
+          transferOutKrw: 0,
+          netKrw: 1_800_000,
+        },
+        netKrw: 1_800_000,
+        txCount: 3,
+        daysCovered: 16,
+        notes: ["unknown treated as variable"],
+      },
+      {
+        month: "2026-02",
+        inflowKrw: 3_101_234,
+        outflowKrw: 900_000,
+        fixedOutflowKrw: 900_000,
+        variableOutflowKrw: 0,
+        transferNetKrw: 0,
+        ym: "2026-02",
+        incomeKrw: 3_101_234,
+        expenseKrw: -900_000,
+        totals: {
+          incomeKrw: 3_101_234,
+          expenseKrw: -900_000,
+          transferInKrw: 0,
+          transferOutKrw: 0,
+          netKrw: 2_201_234,
+        },
+        netKrw: 2_201_234,
+        txCount: 3,
+        daysCovered: 18,
+      },
+      {
+        month: "2026-03",
+        inflowKrw: 4_250_000,
+        outflowKrw: 1_050_000,
+        fixedOutflowKrw: 0,
+        variableOutflowKrw: 1_050_000,
+        transferNetKrw: 0,
+        ym: "2026-03",
+        incomeKrw: 4_250_000,
+        expenseKrw: -1_050_000,
+        totals: {
+          incomeKrw: 4_250_000,
+          expenseKrw: -1_050_000,
+          transferInKrw: 0,
+          transferOutKrw: 0,
+          netKrw: 3_200_000,
+        },
+        netKrw: 3_200_000,
+        txCount: 3,
+        daysCovered: 21,
+        notes: ["unknown treated as variable"],
+      },
     ]);
   });
 
@@ -39,9 +101,9 @@ describe("buildCashflowFromTransactions (compat wrapper)", () => {
       { ym: "2026-03", incomeKrw: 4_250_000, expenseKrw: -1_050_000, netKrw: 3_200_000, txCount: 3 },
     ]);
 
-    expect(draft.monthlyIncomeNet).toBe(2_201_234);
-    expect(draft.monthlyEssentialExpenses).toBe(735_000);
-    expect(draft.monthlyDiscretionaryExpenses).toBe(315_000);
+    expect(draft.monthlyIncomeNet).toBe(3_101_234);
+    expect(draft.monthlyEssentialExpenses).toBe(0);
+    expect(draft.monthlyDiscretionaryExpenses).toBe(1_050_000);
     expect(draft.monthsConsidered).toBe(3);
   });
 
@@ -52,8 +114,8 @@ describe("buildCashflowFromTransactions (compat wrapper)", () => {
       monthlyEssentialExpenses: 0,
       monthlyDiscretionaryExpenses: 0,
       assumptions: [
-        "monthlyIncomeNet uses median monthly net (assumption)",
-        "expense split 70/30 (assumption)",
+        "monthlyIncomeNet uses median recent inflow (assumption)",
+        "split mode byCategory (rule-based categorization)",
       ],
       monthsConsidered: 0,
     });
