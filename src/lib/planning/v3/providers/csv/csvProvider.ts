@@ -160,7 +160,7 @@ export function normalizeAmount(raw: string): number | null {
   if (!text) return null;
 
   const negativeByParen = /^\(.*\)$/.test(text);
-  let cleaned = text
+  const cleaned = text
     .replace(/^\(|\)$/g, "")
     .replace(/[₩$¥€£]/g, "")
     .replace(/원/g, "")
