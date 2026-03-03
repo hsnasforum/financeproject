@@ -67,7 +67,23 @@ function extractErrorCode(payload: unknown): string {
   return asString(payload.error.code).toUpperCase();
 }
 
-function toUploadErrorMessage(status: number, code: string): string {
+function extractErrorDetailCodes(payload: unknown): string[] {
+  if (!isRecord(payload) || !isRecord(payload.error) || !Array.isArray(payload.error.details)) return [];
+  return payload.error.details
+    .map((detail) => (isRecord(detail) ? asString(detail.code).toUpperCase() : ""))
+    .filter((detail) => detail.length > 0);
+}
+
+function toUploadErrorMessage(status: number, code: string, detailCodes: string[]): string {
+  if (detailCodes.includes("MISSING_COLUMN")) {
+    return "CSV 헤더에서 필수 컬럼(date/amount)을 찾지 못했습니다. 헤더 이름을 확인해 주세요.";
+  }
+  if (detailCodes.includes("INVALID_AMOUNT")) {
+    return "금액 형식을 해석하지 못했습니다. 숫자/통화 표기를 확인해 주세요.";
+  }
+  if (detailCodes.includes("INVALID_DATE")) {
+    return "날짜 형식을 해석하지 못했습니다. YYYY-MM-DD 형식으로 확인해 주세요.";
+  }
   if (status === 400 || code === "INPUT") return "CSV 형식 또는 값에 문제가 있습니다. 파일 내용을 확인해 주세요.";
   if (status === 413 || code === "PAYLOAD_TOO_LARGE") return "파일 크기 제한(1MB)을 초과했습니다.";
   if (status === 415 || code === "UNSUPPORTED_MEDIA_TYPE") return "CSV 텍스트 형식만 지원합니다.";
@@ -96,7 +112,11 @@ export async function createDraftFromCsvUpload(
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(toUploadErrorMessage(response.status, extractErrorCode(payload)));
+    throw new Error(toUploadErrorMessage(
+      response.status,
+      extractErrorCode(payload),
+      extractErrorDetailCodes(payload),
+    ));
   }
 
   if (!isImportCreateResponse(payload)) {

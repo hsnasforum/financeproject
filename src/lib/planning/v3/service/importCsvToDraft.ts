@@ -41,6 +41,22 @@ function summarizeParseErrors(errors: Array<{ code: string }>): Array<{ code: st
     .map(([code, count]) => ({ code, count }));
 }
 
+function hasErrorCode(
+  summary: Array<{ code: string; count: number }>,
+  code: string,
+): boolean {
+  return summary.some((row) => row.code === code);
+}
+
+function uniqueFields(errors: Array<{ path?: string[] }>): string[] {
+  const out = new Set<string>();
+  for (const row of errors) {
+    const field = Array.isArray(row.path) ? String(row.path[0] ?? "").trim() : "";
+    if (field) out.add(field);
+  }
+  return [...out].sort((a, b) => a.localeCompare(b));
+}
+
 export function importCsvToDraft(
   csvText: string,
   options: ParseCsvTransactionsOptions = {},
@@ -48,15 +64,30 @@ export function importCsvToDraft(
   const imported = importCsvPipeline(csvText, options);
 
   if (imported.parsed.errors.length > 0) {
-    throw new CsvImportInputError("일부 CSV 행을 해석하지 못했습니다.", {
+    const parseErrorSummary = summarizeParseErrors(imported.parsed.errors);
+    const fields = uniqueFields(imported.parsed.errors);
+
+    let message = "일부 CSV 행을 해석하지 못했습니다.";
+    if (hasErrorCode(parseErrorSummary, "MISSING_COLUMN")) {
+      message = "CSV 헤더에서 필수 컬럼(date/amount)을 찾지 못했습니다.";
+    } else if (hasErrorCode(parseErrorSummary, "INVALID_AMOUNT")) {
+      message = "금액 형식을 해석하지 못했습니다.";
+    } else if (hasErrorCode(parseErrorSummary, "INVALID_DATE")) {
+      message = "날짜 형식을 해석하지 못했습니다.";
+    } else if (hasErrorCode(parseErrorSummary, "CSV_ENCODING")) {
+      message = "CSV 인코딩을 확인해 주세요.";
+    }
+
+    throw new CsvImportInputError(message, {
       rows: imported.parsed.stats.rows,
       skippedRows: imported.parsed.stats.skipped,
-      parseErrorSummary: summarizeParseErrors(imported.parsed.errors),
+      parseErrorSummary,
+      ...(fields.length > 0 ? { fields } : {}),
     });
   }
 
   if (imported.cashflows.length < 1) {
-    throw new CsvImportInputError("유효한 거래 행이 없습니다.", {
+    throw new CsvImportInputError("유효한 거래 행이 없습니다. CSV 헤더/필수 컬럼을 확인해 주세요.", {
       rows: imported.parsed.stats.rows,
       skippedRows: imported.parsed.stats.skipped,
     });

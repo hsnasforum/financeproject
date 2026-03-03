@@ -66,7 +66,12 @@ export function DraftsListClient() {
   }, [loadDrafts]);
 
   async function handleCreateFromCsv() {
-    if (!uploadFile || uploading) return;
+    if (!uploadFile || uploading) {
+      if (!uploadFile) {
+        setUploadError("CSV 파일을 먼저 선택해 주세요.");
+      }
+      return;
+    }
 
     setUploading(true);
     setUploadError("");
@@ -74,7 +79,7 @@ export function DraftsListClient() {
     try {
       const csvText = await uploadFile.text();
       const created = await createDraftFromCsvUpload(csvText, fetch, csrfToken);
-      window.location.assign(`/planning/v3/drafts/${encodeURIComponent(created.draftId)}`);
+      window.location.assign(`/planning/v3/drafts/${encodeURIComponent(created.draftId)}?created=1`);
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "초안 생성에 실패했습니다.");
     } finally {
@@ -176,7 +181,10 @@ export function DraftsListClient() {
                 </Button>
               </div>
               {uploadError ? (
-                <p className="text-sm font-semibold text-rose-700" data-testid="v3-draft-upload-error">{uploadError}</p>
+                <div className="rounded-md border border-rose-200 bg-rose-50 p-3" data-testid="v3-draft-upload-error">
+                  <p className="text-sm font-semibold text-rose-700">원인: {uploadError}</p>
+                  <p className="mt-1 text-xs text-rose-700">조치: CSV 헤더(`date`, `amount`)와 금액/날짜 형식을 확인한 뒤 다시 시도해 주세요.</p>
+                </div>
               ) : null}
             </div>
           ) : null}

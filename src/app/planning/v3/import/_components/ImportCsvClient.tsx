@@ -153,8 +153,13 @@ function extractApiError(payload: unknown): ApiError {
     return { message: "요청 처리에 실패했습니다.", details: [] };
   }
 
-  const details = Array.isArray(payload.details)
-    ? payload.details.map((entry) => {
+  const detailsFromPayload = Array.isArray(payload.details) ? payload.details : [];
+  const detailsFromError = isRecord(payload.error) && Array.isArray(payload.error.details)
+    ? payload.error.details
+    : [];
+
+  const details = [...detailsFromPayload, ...detailsFromError]
+    .map((entry) => {
       if (!isRecord(entry)) return "";
       const field = asString(entry.field);
       const message = asString(entry.message);
@@ -164,8 +169,8 @@ function extractApiError(payload: unknown): ApiError {
       if (message) return message;
       if (code) return code;
       return "";
-    }).filter((entry) => entry.length > 0)
-    : [];
+    })
+    .filter((entry) => entry.length > 0);
 
   const errorMessage = isRecord(payload.error) ? asString(payload.error.message) : "";
   return {
@@ -1010,8 +1015,9 @@ export function ImportCsvClient() {
         </Card>
 
         {apiError ? (
-          <Card>
-            <p className="text-sm font-semibold text-rose-700">{apiError.message}</p>
+          <Card data-testid="v3-import-error">
+            <p className="text-sm font-semibold text-rose-700">원인: {apiError.message}</p>
+            <p className="mt-1 text-xs text-rose-700">조치: CSV 헤더/컬럼 매핑과 금액/날짜 형식을 확인하고 다시 시도해 주세요.</p>
             {apiError.details.length > 0 ? (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-rose-700">
                 {apiError.details.map((detail) => (

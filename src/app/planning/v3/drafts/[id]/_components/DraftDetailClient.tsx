@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -188,6 +190,7 @@ function renderEvidenceInputs(inputs: Record<string, number | string>): string {
 }
 
 export function DraftDetailClient({ id }: { id: string }) {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [draft, setDraft] = useState<DraftDetail | null>(null);
@@ -214,6 +217,7 @@ export function DraftDetailClient({ id }: { id: string }) {
   const patchExpense = patchEssential + patchDiscretionary;
   const patchSurplus = patchIncome - patchExpense;
   const dsrEstimate = estimateDsrPct(mergedProfile);
+  const createdFlag = searchParams.get("created") === "1";
 
   useEffect(() => {
     let disposed = false;
@@ -342,6 +346,9 @@ export function DraftDetailClient({ id }: { id: string }) {
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 Draft Review</h1>
           <div className="text-sm text-slate-600">id: <span className="font-mono">{id}</span></div>
+          {createdFlag ? (
+            <Badge data-testid="v3-draft-created-badge" variant="success">Draft created</Badge>
+          ) : null}
           <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/drafts">
             목록으로 돌아가기
           </Link>
