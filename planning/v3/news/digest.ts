@@ -20,6 +20,7 @@ import { WATCHLIST_BY_TOPIC } from "./digest/templates";
 import { type DigestDay } from "./digest/contracts";
 import { buildDigestDay } from "./digest/buildDigest";
 import { assertNoRecommendationText } from "./guard/noRecommendationText";
+import { resolveEvidenceSeriesIds } from "./evidenceGraph/ssot";
 
 type WatchMetrics = {
   spec: DigestWatchSpec;
@@ -59,6 +60,21 @@ function dedupeSpecs(values: DigestWatchSpec[]): DigestWatchSpec[] {
     out.push(normalized);
   }
   return out;
+}
+
+function buildSeriesSpecLookup(): Map<string, DigestWatchSpec> {
+  const lookup = new Map<string, DigestWatchSpec>();
+  for (const specs of Object.values(WATCHLIST_BY_TOPIC)) {
+    for (const spec of specs) {
+      const seriesId = normalizeSeriesId(spec.seriesId);
+      if (!seriesId || lookup.has(seriesId)) continue;
+      lookup.set(seriesId, {
+        ...spec,
+        seriesId,
+      });
+    }
+  }
+  return lookup;
 }
 
 function parseDayToken(day: string): number {
@@ -114,8 +130,20 @@ function buildWatchlistSpecs(topResult: SelectTopResult, burstTopics: TopicDaily
     ...topResult.topTopics.map((row) => canonicalizeTopicId(row.topicId)),
     ...burstTopics.map((row) => canonicalizeTopicId(row.topicId)),
   ]);
+  const entities = dedupeStrings(topResult.topItems.flatMap((row) => row.entities ?? []));
+  const eventTypes = dedupeStrings(topResult.topItems.flatMap((row) => row.eventTypes ?? []));
+  const evidenceSeriesIds = resolveEvidenceSeriesIds({
+    topics,
+    entities,
+    eventTypes,
+    maxSeriesIds: 10,
+  });
 
-  const specs = topics.flatMap((topicId) => WATCHLIST_BY_TOPIC[topicId] ?? []);
+  const lookup = buildSeriesSpecLookup();
+  const specs = evidenceSeriesIds
+    .map((seriesId) => lookup.get(normalizeSeriesId(seriesId)))
+    .filter((row): row is DigestWatchSpec => Boolean(row));
+
   return dedupeSpecs(specs.length > 0 ? specs : WATCHLIST_BY_TOPIC.general).slice(0, 6);
 }
 

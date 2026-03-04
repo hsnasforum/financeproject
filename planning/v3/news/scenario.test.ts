@@ -111,7 +111,9 @@ describe("planning v3 news scenario engine", () => {
       expect(card.linkedTopics.length).toBeLessThanOrEqual(3);
       expect(card.triggers.length).toBeGreaterThan(0);
       expect(card.triggers.every((trigger) => ["high", "med", "low"].includes(trigger.condition))).toBe(true);
-      expect(card.indicators).toEqual(card.linkedTopics);
+      expect(card.indicators.length).toBeGreaterThan(0);
+      expect(card.indicators).toContain("kr_base_rate");
+      expect(card.indicators.some((seriesId) => seriesId === "kr_usdkrw" || seriesId === "kr_cpi")).toBe(true);
     }
   });
 });

@@ -11,6 +11,7 @@ import {
   type TriggerCondition,
 } from "./contracts";
 import { TOPIC_SCENARIO_TEMPLATE_MAP } from "./templates";
+import { resolveEvidenceSeriesIds } from "../evidenceGraph/ssot";
 
 type BuildScenariosInput = {
   digest: DigestDay;
@@ -169,7 +170,10 @@ function buildCard(input: {
   const observation = `${template.observation[modeKey]} 연결 토픽: ${linkedLabel}.`;
   const invalidation = template.invalidation[modeKey].slice(0, 2);
   const options = template.options[modeKey].slice(0, 3);
-  const indicators = input.linkedTopics;
+  const indicators = resolveEvidenceSeriesIds({
+    topics: input.linkedTopics,
+    maxSeriesIds: 6,
+  });
   const triggers = buildTriggers(input.primary, input.name);
 
   assertNoRecommendationText([
