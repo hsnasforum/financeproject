@@ -193,8 +193,11 @@ export type DailyDigest = z.infer<typeof DailyDigestSchema>;
 export const ScenarioNameSchema = z.enum(["Base", "Bull", "Bear"]);
 export type ScenarioName = z.infer<typeof ScenarioNameSchema>;
 
-export const ScenarioTriggerViewSchema = z.enum(["pctChange", "zscore", "regime"]);
-export type ScenarioTriggerView = z.infer<typeof ScenarioTriggerViewSchema>;
+export const ScenarioTriggerMetricSchema = z.enum(["pctChange", "zscore", "regime"]);
+export type ScenarioTriggerMetric = z.infer<typeof ScenarioTriggerMetricSchema>;
+
+export const ScenarioTriggerConditionSchema = z.enum(["up", "down", "high", "low", "flat", "unknown"]);
+export type ScenarioTriggerCondition = z.infer<typeof ScenarioTriggerConditionSchema>;
 
 export const ScenarioTriggerOpSchema = z.enum(["gt", "gte", "lt", "lte", "eq", "neq"]);
 export type ScenarioTriggerOp = z.infer<typeof ScenarioTriggerOpSchema>;
@@ -206,9 +209,12 @@ export const ScenarioTriggerRuleSchema = z.object({
   id: z.string().trim().min(1),
   label: z.string().trim().min(1),
   seriesId: z.string().trim().min(1),
-  view: ScenarioTriggerViewSchema,
   window: z.number().int().positive(),
-  op: ScenarioTriggerOpSchema,
+  metric: ScenarioTriggerMetricSchema.optional(),
+  condition: ScenarioTriggerConditionSchema.optional(),
+  // legacy fields: supported for compatibility via evaluator conversion.
+  view: ScenarioTriggerMetricSchema.optional(),
+  op: ScenarioTriggerOpSchema.optional(),
   threshold: z.number().finite().optional(),
   regimeValue: ScenarioRegimeValueSchema.optional(),
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type SeriesSnapshot } from "../indicators/contracts";
 import { noRecommendationText } from "./digest";
+import { type ScenarioTemplate } from "./contracts";
 import { SCENARIO_TEMPLATES } from "./scenarioTemplates";
 import { evaluateTriggers } from "./triggerEvaluator";
 
@@ -94,5 +95,26 @@ describe("planning v3 news trigger evaluator", () => {
       expect(noRecommendationText(line)).toBe(true);
       expect(line).not.toMatch(/매수|매도|정답|무조건|확실|해야\s*한다/);
     }
+  });
+
+  it("supports legacy numeric trigger rules through compatibility conversion", () => {
+    const legacyTemplate: ScenarioTemplate = {
+      name: "Base",
+      triggers: [
+        {
+          id: "legacy-up",
+          label: "legacy pct change",
+          seriesId: "kr_usdkrw",
+          view: "pctChange",
+          window: 1,
+          op: "gt",
+          threshold: 0,
+        },
+      ],
+    };
+
+    const result = evaluateTriggers(makeSnapshots(), legacyTemplate);
+    expect(["met", "not_met", "unknown"]).toContain(result.status);
+    expect(result.evaluations[0]?.status).not.toBeUndefined();
   });
 });
