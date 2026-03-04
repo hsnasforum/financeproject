@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type SeriesSnapshot } from "../indicators/contracts";
-import { type TopicDailyStat } from "./contracts";
+import { type ScenarioTemplate, type TopicDailyStat } from "./contracts";
 import { buildDigestFromInputs, noRecommendationText } from "./digest";
 import { FIXTURE_ITEMS, FIXTURE_NOW_ISO } from "./fixtures/sample-items";
 import { buildScenarios } from "./scenario";
@@ -119,12 +119,11 @@ describe("planning v3 news scenario", () => {
       expect(["met", "not_met", "unknown"]).toContain(card.triggerStatus);
       expect(card.triggerRationale.length).toBeGreaterThan(0);
       expect(card.triggerEvaluations.length).toBeGreaterThan(0);
-      expect(card.assumptions.length).toBeGreaterThan(0);
-      expect(card.triggers.length).toBeGreaterThan(0);
+      expect(card.observation.length).toBeGreaterThan(0);
+      expect(card.interpretations.length).toBeGreaterThan(0);
       expect(card.invalidation.length).toBeGreaterThan(0);
       expect(card.indicators.length).toBeGreaterThan(0);
-      expect(card.impactPath.length).toBeGreaterThan(0);
-      expect(card.linkedTopics.length).toBeGreaterThan(0);
+      expect(card.options.length).toBeGreaterThan(0);
     }
   });
 
@@ -136,15 +135,72 @@ describe("planning v3 news scenario", () => {
     const lines = result.cards.flatMap((card) => [
       card.triggerRationale,
       ...card.triggerEvaluations.map((row) => row.rationale),
-      ...card.assumptions,
-      ...card.triggers,
+      card.observation,
+      ...card.interpretations,
       ...card.invalidation,
-      ...card.impactPath,
+      ...card.options,
     ]);
 
     for (const line of lines) {
       expect(noRecommendationText(line)).toBe(true);
       expect(line).not.toMatch(/매수|매도|정답|무조건|확실|해야\s*한다/);
     }
+  });
+
+  it("rejects banned recommendation phrases in scenario output", () => {
+    const digest = makeFixtureDigest();
+    const trends = makeFixtureTrends();
+    const templates: ScenarioTemplate[] = [
+      {
+        name: "Base",
+        triggers: [
+          {
+            id: "bad-label",
+            label: "매수 신호 확인",
+            seriesId: "kr_base_rate",
+            view: "pctChange",
+            window: 2,
+            op: "gte",
+            threshold: 0,
+          },
+        ],
+      },
+      {
+        name: "Bull",
+        triggers: [
+          {
+            id: "bull-safe",
+            label: "안전 라벨",
+            seriesId: "kr_cpi",
+            view: "zscore",
+            window: 3,
+            op: "lte",
+            threshold: 1,
+          },
+        ],
+      },
+      {
+        name: "Bear",
+        triggers: [
+          {
+            id: "bear-safe",
+            label: "안전 라벨",
+            seriesId: "kr_usdkrw",
+            view: "regime",
+            window: 3,
+            op: "eq",
+            regimeValue: "up",
+          },
+        ],
+      },
+    ];
+
+    expect(() => buildScenarios({
+      digest,
+      trends,
+      seriesSnapshots: makeFixtureSeriesSnapshots(),
+      templates,
+      generatedAt: FIXTURE_NOW_ISO,
+    })).toThrow(/recommendation_language_detected/);
   });
 });

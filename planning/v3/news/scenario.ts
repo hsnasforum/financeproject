@@ -20,6 +20,12 @@ type BuildScenariosInput = {
   templates?: ScenarioTemplate[];
 };
 
+type ScenarioContext = {
+  topTopic: string;
+  burstTopic: string;
+  indicators: string[];
+};
+
 function dedupe(values: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -38,24 +44,6 @@ function assertConditionalStrings(values: string[]): void {
       throw new Error("recommendation_language_detected");
     }
   }
-}
-
-function pickLinkedTopics(digest: DailyDigest, trends: TopicDailyStat[]): string[] {
-  const rankedTrendTopics = [...trends]
-    .sort((a, b) => {
-      if (a.burstZ !== b.burstZ) return b.burstZ - a.burstZ;
-      if (a.count !== b.count) return b.count - a.count;
-      return a.topicId.localeCompare(b.topicId);
-    })
-    .map((row) => row.topicLabel);
-
-  const merged = dedupe([
-    ...digest.topTopics.map((topic) => topic.topicLabel),
-    ...digest.burstTopics.map((topic) => topic.topicLabel),
-    ...rankedTrendTopics,
-  ]);
-
-  return merged.slice(0, 4).length > 0 ? merged.slice(0, 4) : ["일반"];
 }
 
 function pickIndicators(digest: DailyDigest): string[] {
@@ -80,141 +68,76 @@ function firstBurstTopicLabel(digest: DailyDigest, trends: TopicDailyStat[]): st
   return fromTrend ?? "핵심 토픽";
 }
 
-function buildImpactPath(topTopic: string): string[] {
-  return [
-    `${topTopic} 뉴스 흐름 변화 가능성`,
-    "금리/환율/원자재 지표 반응 가능성",
-    "주요 자산군 변동성 재평가 가능성",
-  ];
-}
-
-function buildScenarioCard(args: {
-  name: ScenarioName;
-  topTopic: string;
-  burstTopic: string;
-  linkedTopics: string[];
-  indicators: string[];
-  triggerStatus: ScenarioCard["triggerStatus"];
-  triggerRationale: string;
-  triggerEvaluations: ScenarioCard["triggerEvaluations"];
-}): ScenarioCard {
-  if (args.name === "Base") {
-    const card = {
-      name: "Base" as const,
-      triggerStatus: args.triggerStatus,
-      triggerRationale: args.triggerRationale,
-      triggerEvaluations: args.triggerEvaluations,
-      assumptions: [
-        `${args.topTopic} 중심의 보도 비중이 단기적으로 유지될 가능성이 있습니다.`,
-        `${args.burstTopic} 관련 급증 흐름이 완만하게 이어질 수 있습니다.`,
+function buildScenarioContent(name: ScenarioName, context: ScenarioContext): Pick<ScenarioCard, "observation" | "interpretations" | "indicators" | "options" | "invalidation"> {
+  if (name === "Base") {
+    return {
+      observation: `관찰: ${context.topTopic} 중심 보도가 이어지며 ${context.burstTopic} 관련 민감도가 유지되는 흐름입니다.`,
+      interpretations: [
+        `가능한 해석: ${context.topTopic} 이슈가 단기 노이즈보다 중기 변수로 해석될 가능성이 있습니다.`,
+        `가능한 해석: ${context.burstTopic} 기사량이 완만히 유지되면 변동성은 제한적 범위에서 순환할 수 있습니다.`,
       ],
-      triggers: [
-        `${args.topTopic} 관련 기사 건수가 현재 범위에서 유지되는 경우`,
-        "주요 거시지표가 기존 추세를 크게 벗어나지 않는 경우",
+      indicators: context.indicators,
+      options: [
+        "옵션(방어): 현금흐름 완충 구간과 변동성 노출 구간을 함께 점검하는 체크리스트를 유지합니다.",
+        "옵션(균형): 핵심 지표 변화와 뉴스 확산 속도를 같은 주기로 비교 점검합니다.",
+        "옵션(공격): 이벤트 발생 시나리오별 민감도만 사전 점검하고 실행은 보류 상태로 둡니다.",
       ],
       invalidation: [
-        "단일 이슈로 보도가 급격히 쏠리는 경우",
-        "핵심 지표의 급반전으로 현재 관찰이 약화되는 경우",
+        `${context.topTopic} 관련 기사 편중이 급격히 약화되면 현재 관찰의 설명력이 낮아집니다.`,
+        "핵심 지표가 동시 역방향으로 전환되면 본 시나리오를 재평가합니다.",
       ],
-      indicators: args.indicators,
-      impactPath: buildImpactPath(args.topTopic),
-      linkedTopics: args.linkedTopics,
     };
-
-    assertConditionalStrings([
-      card.triggerRationale,
-      ...card.triggerEvaluations.map((row) => row.rationale),
-      ...card.assumptions,
-      ...card.triggers,
-      ...card.invalidation,
-      ...card.impactPath,
-    ]);
-    return card;
   }
 
-  if (args.name === "Bull") {
-    const card = {
-      name: "Bull" as const,
-      triggerStatus: args.triggerStatus,
-      triggerRationale: args.triggerRationale,
-      triggerEvaluations: args.triggerEvaluations,
-      assumptions: [
-        `${args.burstTopic} 관련 보도 확산이 추가로 강화될 가능성이 있습니다.`,
-        "상향 서프라이즈 지표가 겹치면 위험선호 회복이 나타날 수 있습니다.",
+  if (name === "Bull") {
+    return {
+      observation: `관찰: ${context.burstTopic} 신호가 개선 방향으로 축적될 경우 상방 해석이 강화될 수 있습니다.`,
+      interpretations: [
+        `가능한 해석: 지표 완화와 긍정 헤드라인 동시 관찰 시 위험선호 회복 구간이 열릴 수 있습니다.`,
+        `가능한 해석: 단일 재료보다 복수 재료의 동조 여부가 상방 해석의 지속성을 좌우할 수 있습니다.`,
       ],
-      triggers: [
-        `${args.burstTopic} 버스트 등급이 상 수준으로 재확인되는 경우`,
-        "복수 소스에서 유사한 긍정 신호가 동시 관찰되는 경우",
+      indicators: context.indicators,
+      options: [
+        "옵션(방어): 반대 시그널이 동반되는지 먼저 점검하는 보수적 체크리스트를 유지합니다.",
+        "옵션(균형): 상방/중립 시나리오 전환 조건을 동일 기준으로 비교 점검합니다.",
+        "옵션(공격): 개선 신호가 연속 확인되는 구간만 별도 모니터링 목록으로 관리합니다.",
       ],
       invalidation: [
-        "정책 불투명성 재확대로 심리 개선이 둔화되는 경우",
-        "시장 변동성 지표가 재상승해 관찰 경로가 약해지는 경우",
+        "변동성 지표 재상승과 정책 불투명성 확대가 동반되면 상방 시나리오를 약화합니다.",
+        "주요 지표의 개선 흐름이 단절되면 상방 해석을 중립으로 되돌립니다.",
       ],
-      indicators: args.indicators,
-      impactPath: [
-        `${args.burstTopic} 기대 강화 가능성`,
-        "금리 안정 또는 하락 기대 형성 가능성",
-        "주식/위험자산 심리 회복 가능성",
-      ],
-      linkedTopics: args.linkedTopics,
     };
-
-    assertConditionalStrings([
-      card.triggerRationale,
-      ...card.triggerEvaluations.map((row) => row.rationale),
-      ...card.assumptions,
-      ...card.triggers,
-      ...card.invalidation,
-      ...card.impactPath,
-    ]);
-    return card;
   }
 
-  const card = {
-    name: "Bear" as const,
-    triggerStatus: args.triggerStatus,
-    triggerRationale: args.triggerRationale,
-    triggerEvaluations: args.triggerEvaluations,
-    assumptions: [
-      `${args.topTopic} 이슈가 부정적 헤드라인으로 재해석될 가능성이 있습니다.`,
-      "거시 변수 변동폭 확대로 보수적 해석이 확대될 수 있습니다.",
+  return {
+    observation: `관찰: ${context.topTopic} 관련 리스크 재부각 시 하방 민감도가 커질 수 있는 구간입니다.`,
+    interpretations: [
+      `가능한 해석: 환율·원자재·금리 중 복수 축이 동시 악화되면 보수적 해석이 우세해질 수 있습니다.`,
+      `가능한 해석: 뉴스 확산 속도가 지표 악화 속도와 결합되면 변동 구간이 확대될 수 있습니다.`,
     ],
-    triggers: [
-      `${args.topTopic} 관련 부정 기사 비중이 연속 증가하는 경우`,
-      "환율/유가/금리 중 두 개 이상이 동시 악화 신호를 보이는 경우",
+    indicators: context.indicators,
+    options: [
+      "옵션(방어): 하방 이벤트 발생 시 확인할 우선 지표 순서를 체크리스트로 고정합니다.",
+      "옵션(균형): 완화 신호 출현 시 중립 시나리오 복귀 조건을 함께 점검합니다.",
+      "옵션(공격): 리스크 완화 전환 신호가 누적되는지 관찰 목록으로 분리 관리합니다.",
     ],
     invalidation: [
-      "핵심 리스크 지표가 빠르게 안정되며 긴장도가 낮아지는 경우",
-      "정책 완화 신호가 확인되어 하방 서사가 약화되는 경우",
+      "핵심 리스크 지표가 안정 구간으로 복귀하면 하방 시나리오 가정을 약화합니다.",
+      "정책 완화 신호와 지표 안정이 동시 확인되면 본 시나리오를 재설정합니다.",
     ],
-    indicators: args.indicators,
-    impactPath: [
-      `${args.topTopic} 우려 재확대 가능성`,
-      "금리 및 환율의 상방 압력 재부각 가능성",
-      "위험자산 변동성 확대 가능성",
-    ],
-    linkedTopics: args.linkedTopics,
   };
-
-  assertConditionalStrings([
-    card.triggerRationale,
-    ...card.triggerEvaluations.map((row) => row.rationale),
-    ...card.assumptions,
-    ...card.triggers,
-    ...card.invalidation,
-    ...card.impactPath,
-  ]);
-  return card;
 }
 
 export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
   const generatedAt = input.generatedAt ?? input.digest.generatedAt;
   const seriesSnapshots = input.seriesSnapshots ?? [];
   const templateMap = new Map((input.templates ?? SCENARIO_TEMPLATES).map((row) => [row.name, row]));
-  const topTopic = input.digest.topTopics[0]?.topicLabel ?? "핵심 토픽";
-  const burstTopic = firstBurstTopicLabel(input.digest, input.trends);
-  const linkedTopics = pickLinkedTopics(input.digest, input.trends);
-  const indicators = pickIndicators(input.digest);
+
+  const context: ScenarioContext = {
+    topTopic: input.digest.topTopics[0]?.topicLabel ?? "핵심 토픽",
+    burstTopic: firstBurstTopicLabel(input.digest, input.trends),
+    indicators: pickIndicators(input.digest),
+  };
 
   const scenarioNames: ScenarioName[] = ["Base", "Bull", "Bear"];
   const cards: ScenarioCard[] = scenarioNames.map((name) => {
@@ -224,19 +147,34 @@ export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
       : {
         status: "unknown" as const,
         rationale: `${name} 트리거 템플릿이 없어 평가를 보류합니다.`,
-        evaluations: [{ ruleId: `${name.toLowerCase()}-missing-template`, label: "템플릿 누락", status: "unknown" as const, rationale: `${name} 템플릿 누락으로 평가 보류.` }],
+        evaluations: [{
+          ruleId: `${name.toLowerCase()}-missing-template`,
+          label: "템플릿 누락",
+          status: "unknown" as const,
+          rationale: `${name} 템플릿 누락으로 평가 보류.`,
+        }],
       };
 
-    return buildScenarioCard({
+    const content = buildScenarioContent(name, context);
+    const card: ScenarioCard = {
       name,
-      topTopic,
-      burstTopic,
-      linkedTopics,
-      indicators,
       triggerStatus: evaluation.status,
       triggerRationale: evaluation.rationale,
       triggerEvaluations: evaluation.evaluations,
-    });
+      ...content,
+    };
+
+    assertConditionalStrings([
+      card.triggerRationale,
+      ...card.triggerEvaluations.map((row) => row.rationale),
+      card.observation,
+      ...card.interpretations,
+      ...card.options,
+      ...card.invalidation,
+      ...card.indicators,
+    ]);
+
+    return card;
   });
 
   return ScenarioPackSchema.parse({

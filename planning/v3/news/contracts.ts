@@ -237,12 +237,11 @@ export const ScenarioCardSchema = z.object({
   triggerStatus: ScenarioTriggerStatusSchema,
   triggerRationale: z.string().trim().min(1),
   triggerEvaluations: z.array(TriggerEvaluationSchema).min(1),
-  assumptions: z.array(z.string().trim().min(1)).min(1),
-  triggers: z.array(z.string().trim().min(1)).min(1),
+  observation: z.string().trim().min(1),
+  interpretations: z.array(z.string().trim().min(1)).min(1),
   invalidation: z.array(z.string().trim().min(1)).min(1),
   indicators: z.array(z.string().trim().min(1)).min(1),
-  impactPath: z.array(z.string().trim().min(1)).min(1),
-  linkedTopics: z.array(z.string().trim().min(1)).min(1),
+  options: z.array(z.string().trim().min(1)).min(1),
 });
 
 export type ScenarioCard = z.infer<typeof ScenarioCardSchema>;
