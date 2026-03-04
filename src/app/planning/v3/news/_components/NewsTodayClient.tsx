@@ -45,6 +45,31 @@ type TodayResponse = {
   error?: { message?: string };
 };
 
+type WatchSparkline = {
+  points?: number[];
+  trend?: "up" | "down" | "flat" | "unknown";
+  lastValue?: number | null;
+} | null;
+
+type DigestWatchlistRow = {
+  label?: string;
+  seriesId?: string;
+  view?: "last" | "pctChange" | "zscore";
+  window?: number;
+  status?: "ok" | "unknown";
+  grade?: "상" | "중" | "하" | "unknown";
+  valueSummary?: string;
+  asOf?: string | null;
+  sparkline?: WatchSparkline;
+};
+
+type DigestResponse = {
+  ok?: boolean;
+  data?: {
+    watchlist?: DigestWatchlistRow[];
+  } | null;
+};
+
 type ExposureResponse = {
   ok?: boolean;
   profile?: ExposureProfile | null;
@@ -62,6 +87,19 @@ type RefreshResponse = {
     lastRefreshedAt?: string | null;
   };
   error?: { message?: string };
+};
+
+type WatchlistRow = {
+  label: string;
+  seriesId: string;
+  view: "last" | "pctChange" | "zscore";
+  window: number;
+  status: "ok" | "unknown";
+  grade: "상" | "중" | "하" | "unknown";
+  asOf: string | null;
+  sparklinePoints: number[];
+  sparklineTrend: "up" | "down" | "flat" | "unknown";
+  sparklineLastValue: number | null;
 };
 
 type RecoveryAction = "rebuild_caches" | "recompute_trends";
@@ -146,12 +184,82 @@ function unknownImpactResult(): ImpactResult {
   };
 }
 
+function normalizeWatchGrade(value: unknown): "상" | "중" | "하" | "unknown" {
+  const normalized = asString(value);
+  if (normalized === "상" || normalized === "중" || normalized === "하") return normalized;
+  return "unknown";
+}
+
+function normalizeWatchTrend(value: unknown): "up" | "down" | "flat" | "unknown" {
+  const normalized = asString(value);
+  if (normalized === "up" || normalized === "down" || normalized === "flat") return normalized;
+  return "unknown";
+}
+
+function normalizeWatchView(value: unknown): "last" | "pctChange" | "zscore" {
+  const normalized = asString(value);
+  if (normalized === "pctChange" || normalized === "zscore") return normalized;
+  return "last";
+}
+
+function normalizeWatchStatus(value: unknown): "ok" | "unknown" {
+  return asString(value) === "ok" ? "ok" : "unknown";
+}
+
+function gradeToneClass(value: "상" | "중" | "하" | "unknown"): string {
+  if (value === "상") return "text-rose-700";
+  if (value === "중") return "text-amber-700";
+  if (value === "하") return "text-emerald-700";
+  return "text-slate-500";
+}
+
+function trendArrow(value: "up" | "down" | "flat" | "unknown"): string {
+  if (value === "up") return "▲";
+  if (value === "down") return "▼";
+  if (value === "flat") return "■";
+  return "·";
+}
+
+function formatLastValue(value: number | null): string {
+  if (!Number.isFinite(value ?? NaN)) return "-";
+  return (Math.round((value ?? 0) * 100) / 100).toLocaleString("ko-KR");
+}
+
+function Sparkline({ points }: { points: number[] }) {
+  if (points.length < 2) {
+    return <div className="h-8 rounded bg-slate-100" aria-hidden="true" />;
+  }
+
+  const width = 96;
+  const height = 28;
+  const step = width / Math.max(1, points.length - 1);
+  const coords = points.map((point, index) => {
+    const x = Math.round(step * index);
+    const y = Math.round(height - (Math.max(0, Math.min(100, point)) / 100) * height);
+    return `${x},${y}`;
+  }).join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-8 w-full" role="img" aria-label="지표 미니 추이">
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        className="text-slate-500"
+        points={coords}
+      />
+    </svg>
+  );
+}
+
 export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [notice, setNotice] = useState("");
   const [data, setData] = useState<TodayResponse["data"]>(null);
+  const [watchlistRows, setWatchlistRows] = useState<WatchlistRow[]>([]);
+  const [watchAdvanced, setWatchAdvanced] = useState(false);
   const [profile, setProfile] = useState<ExposureProfile | null>(null);
   const [advancedImpact, setAdvancedImpact] = useState<Record<string, boolean>>({});
   const [recovering, setRecovering] = useState(false);
@@ -161,13 +269,18 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
     setLoading(true);
     setErrorMessage("");
     try {
-      const [todayResponse, exposureResponse] = await Promise.all([
+      const [todayResponse, exposureResponse, digestResponse] = await Promise.all([
         fetch("/api/planning/v3/news/today", {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
         }),
         fetch("/api/planning/v3/exposure/profile", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+        fetch("/api/planning/v3/news/digest", {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
@@ -186,9 +299,38 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
       } else {
         setProfile(null);
       }
+
+      const digestPayload = (await digestResponse.json().catch(() => null)) as DigestResponse | null;
+      if (digestResponse.ok && digestPayload?.ok === true) {
+        const rows: WatchlistRow[] = (digestPayload.data?.watchlist ?? [])
+          .map((row) => {
+            const label = asString(row.label);
+            if (!label) return null;
+            const points = Array.isArray(row.sparkline?.points)
+              ? row.sparkline.points.filter((point) => Number.isFinite(point)).map((point) => Math.max(0, Math.min(100, Math.round(point))))
+              : [];
+            return {
+              label,
+              seriesId: asString(row.seriesId),
+              view: normalizeWatchView(row.view),
+              window: Math.max(1, Math.round(Number(row.window) || 1)),
+              status: normalizeWatchStatus(row.status),
+              grade: normalizeWatchGrade(row.grade),
+              asOf: asString(row.asOf) || null,
+              sparklinePoints: points,
+              sparklineTrend: normalizeWatchTrend(row.sparkline?.trend),
+              sparklineLastValue: Number.isFinite(row.sparkline?.lastValue ?? NaN) ? Number(row.sparkline?.lastValue) : null,
+            };
+          })
+          .filter((row): row is NonNullable<typeof row> => Boolean(row));
+        setWatchlistRows(rows);
+      } else {
+        setWatchlistRows([]);
+      }
     } catch (error) {
       setData(null);
       setProfile(null);
+      setWatchlistRows([]);
       setErrorMessage(error instanceof Error ? error.message : "오늘 뉴스 요약을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -401,8 +543,39 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
         </Card>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Watchlist</h2>
-          {!data?.digest?.watchlist?.length ? (
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-bold text-slate-900">Watchlist</h2>
+            <button
+              type="button"
+              onClick={() => setWatchAdvanced((prev) => !prev)}
+              className="text-[11px] font-semibold text-emerald-700 underline underline-offset-2"
+            >
+              {watchAdvanced ? "고급 닫기" : "고급 보기"}
+            </button>
+          </div>
+
+          {watchlistRows.length > 0 ? (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {watchlistRows.map((row) => (
+                <li key={`${row.seriesId}-${row.label}`} className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-800">{row.label}</p>
+                    <p className={`text-xs font-bold ${gradeToneClass(row.grade)}`}>
+                      {row.grade} {trendArrow(row.sparklineTrend)}
+                    </p>
+                  </div>
+                  <div className="mt-1">
+                    <Sparkline points={row.sparklinePoints} />
+                  </div>
+                  {watchAdvanced ? (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      최근값 {formatLastValue(row.sparklineLastValue)} · 기준일 {row.asOf ?? "-"}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : !data?.digest?.watchlist?.length ? (
             <p className="text-sm text-slate-600">체크 변수 없음</p>
           ) : (
             <ul className="grid gap-2 sm:grid-cols-2">
