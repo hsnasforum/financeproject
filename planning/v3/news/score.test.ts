@@ -10,8 +10,8 @@ describe("planning v3 news score", () => {
 
     expect(first).toStrictEqual(second);
     expect(first.map((item) => item.id)).toEqual([
-      "i-rates-1",
       "i-fx-1",
+      "i-rates-1",
       "i-rates-2",
       "i-policy-1",
       "i-old-1",

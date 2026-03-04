@@ -1,5 +1,6 @@
 import { TopicDailyStatSchema, type BurstGrade, type NewsItem, type TopicDailyStat } from "./contracts";
 import { scoreItems } from "./score";
+import { canonicalizeTopicId } from "./taxonomy";
 
 type TopicCountRow = {
   topicId: string;
@@ -83,9 +84,9 @@ export function aggregateDailyTopicCounts(items: NewsItem[], dateKst: string, no
     const day = toKstDayKey(item.publishedAt ?? item.fetchedAt);
     if (day !== dateKst) continue;
 
-    const key = item.primaryTopicId;
+    const key = canonicalizeTopicId(item.primaryTopicId);
     const prev = topicMap.get(key) ?? {
-      topicId: item.primaryTopicId,
+      topicId: key,
       topicLabel: item.primaryTopicLabel,
       count: 0,
     };
@@ -105,11 +106,12 @@ export function aggregateDailyTopicCounts(items: NewsItem[], dateKst: string, no
 export function buildTopicDailyStats(input: BuildTopicDailyStatsInput): TopicDailyStat[] {
   return [...input.topicCounts]
     .map((row) => {
-      const history = input.historyCountsByTopic[row.topicId] ?? [];
+      const canonicalTopicId = canonicalizeTopicId(row.topicId);
+      const history = input.historyCountsByTopic[canonicalTopicId] ?? input.historyCountsByTopic[row.topicId] ?? [];
       const burst = computeBurstMetrics(row.count, history);
       return TopicDailyStatSchema.parse({
         dateKst: input.dateKst,
-        topicId: row.topicId,
+        topicId: canonicalTopicId,
         topicLabel: row.topicLabel,
         count: row.count,
         baselineMean: burst.baselineMean,
@@ -137,14 +139,15 @@ export function buildRollingDailyStats(args: {
 
   const historyCountsByTopic: Record<string, number[]> = {};
   for (const row of topicCounts) {
+    const canonicalTopicId = canonicalizeTopicId(row.topicId);
     const counts: number[] = [];
     for (let offset = baselineDays; offset >= 1; offset -= 1) {
       const day = shiftKstDay(args.dateKst, -offset);
       const historyRows = args.historyStatsByDay[day] ?? [];
-      const matched = historyRows.find((entry) => entry.topicId === row.topicId);
+      const matched = historyRows.find((entry) => canonicalizeTopicId(entry.topicId) === canonicalTopicId);
       counts.push(matched?.count ?? 0);
     }
-    historyCountsByTopic[row.topicId] = counts;
+    historyCountsByTopic[canonicalTopicId] = counts;
   }
 
   return buildTopicDailyStats({
