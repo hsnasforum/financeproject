@@ -105,17 +105,32 @@ function assertNoRecommendationText(text: string): void {
   }
 }
 
+function isBurstLow(value: string | undefined): boolean {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized === "low" || normalized === "하";
+}
+
+function burstWeight(value: string | undefined): number {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "high" || normalized === "상") return 4;
+  if (normalized === "med" || normalized === "중") return 3;
+  if (normalized === "low" || normalized === "하") return 2;
+  return 1;
+}
+
 function collectBurstTopics(dateRange: DateRange, readStats: (day: string) => TopicDailyStat[]): TopicDailyStat[] {
   const burst: TopicDailyStat[] = [];
   for (let cursor = dateRange.fromKst; parseDayToken(cursor) <= parseDayToken(dateRange.toKst); cursor = shiftKstDay(cursor, 1)) {
     const rows = readStats(cursor)
-      .filter((row) => row.burstGrade !== "하")
+      .filter((row) => !isBurstLow(row.burstGrade))
       .map((row) => ({ ...row }));
     burst.push(...rows);
   }
 
   return burst
     .sort((a, b) => {
+      const gradeDiff = burstWeight(b.burstGrade) - burstWeight(a.burstGrade);
+      if (gradeDiff !== 0) return gradeDiff;
       if (a.burstZ !== b.burstZ) return b.burstZ - a.burstZ;
       if (a.count !== b.count) return b.count - a.count;
       return a.topicId.localeCompare(b.topicId);

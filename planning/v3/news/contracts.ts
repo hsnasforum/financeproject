@@ -171,7 +171,7 @@ export const SelectTopResultSchema = z.object({
 
 export type SelectTopResult = z.infer<typeof SelectTopResultSchema>;
 
-export const BurstGradeSchema = z.enum(["상", "중", "하"]);
+export const BurstGradeSchema = z.enum(["High", "Med", "Low", "Unknown", "상", "중", "하"]);
 export type BurstGrade = z.infer<typeof BurstGradeSchema>;
 
 export const TopicDailyStatSchema = z.object({
@@ -179,9 +179,11 @@ export const TopicDailyStatSchema = z.object({
   topicId: z.string().trim().min(1),
   topicLabel: z.string().trim().min(1),
   count: z.number().int().nonnegative(),
-  baselineMean: z.number().finite(),
-  baselineStddev: z.number().finite(),
-  burstZ: z.number().finite(),
+  scoreSum: z.number().finite().default(0),
+  sourceDiversity: z.number().finite().min(0).max(1).default(0),
+  baselineMean: z.number().finite().default(0),
+  baselineStddev: z.number().finite().default(0),
+  burstZ: z.number().finite().default(0),
   burstGrade: BurstGradeSchema,
 });
 

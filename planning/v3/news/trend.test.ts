@@ -8,12 +8,12 @@ describe("planning v3 news trend", () => {
     const medium = computeBurstMetrics(3, [2, 2, 2, 2, 2, 2, 2]);
     const low = computeBurstMetrics(2, [2, 2, 2, 2, 2, 2, 2]);
 
-    expect(high.burstGrade).toBe("상");
-    expect(medium.burstGrade).toBe("중");
-    expect(low.burstGrade).toBe("하");
-    expect(computeBurstGrade(2.0)).toBe("상");
-    expect(computeBurstGrade(1.0)).toBe("중");
-    expect(computeBurstGrade(0.99)).toBe("하");
+    expect(high.burstGrade).toBe("High");
+    expect(medium.burstGrade).toBe("Med");
+    expect(low.burstGrade).toBe("Low");
+    expect(computeBurstGrade(18, [2, 3, 2, 3, 2, 3, 2])).toBe("High");
+    expect(computeBurstGrade(7, [5, 5, 5, 5, 5, 5, 5])).toBe("Med");
+    expect(computeBurstGrade(5, [5, 5, 5, 5, 5, 5, 5])).toBe("Low");
   });
 
   it("aggregates daily topic counts and assigns deterministic burst", () => {
@@ -35,8 +35,10 @@ describe("planning v3 news trend", () => {
     const fx = stats.find((row) => row.topicId === "fx");
 
     expect(rates?.count).toBe(2);
-    expect(rates?.burstGrade).toBe("중");
+    expect((rates?.scoreSum ?? 0) > 0).toBe(true);
+    expect((rates?.sourceDiversity ?? 0) > 0).toBe(true);
+    expect(rates?.burstGrade).toBe("High");
     expect(fx?.count).toBe(1);
-    expect(fx?.burstGrade).toBe("하");
+    expect(fx?.burstGrade).toBe("Low");
   });
 });
