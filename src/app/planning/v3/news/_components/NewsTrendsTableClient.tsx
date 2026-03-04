@@ -16,6 +16,12 @@ type TrendsResponse = {
       count?: number;
       burstGrade?: string;
       sourceDiversity?: number;
+      series?: Array<{
+        date?: string;
+        count?: number;
+        burstGrade?: string;
+        hasBurstMarker?: boolean;
+      }>;
     }>;
   } | null;
   error?: { message?: string };
@@ -29,6 +35,24 @@ function formatPercent(value: unknown): string {
   const number = Number(value);
   if (!Number.isFinite(number)) return "-";
   return `${(number * 100).toFixed(1)}%`;
+}
+
+function maxSeriesValue(series: Array<{ count?: number }> | undefined): number {
+  const values = (series ?? []).map((row) => Number(row.count ?? 0)).filter((row) => Number.isFinite(row));
+  return Math.max(1, ...values, 1);
+}
+
+function buildPolylinePoints(series: Array<{ count?: number }> | undefined): string {
+  const rows = series ?? [];
+  if (rows.length < 1) return "";
+  const maxValue = maxSeriesValue(rows);
+  const width = 240;
+  const height = 56;
+  return rows.map((row, index) => {
+    const x = rows.length === 1 ? 0 : Math.round((index / (rows.length - 1)) * width);
+    const y = Math.round(height - ((Number(row.count ?? 0) / maxValue) * height));
+    return `${x},${Math.max(0, Math.min(height, y))}`;
+  }).join(" ");
 }
 
 export function NewsTrendsTableClient() {
@@ -110,6 +134,7 @@ export function NewsTrendsTableClient() {
                     <th className="px-2 py-2">기사 수</th>
                     <th className="px-2 py-2">버스트 등급</th>
                     <th className="px-2 py-2">출처 다양성</th>
+                    <th className="px-2 py-2">추이(버스트 마커)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -119,6 +144,39 @@ export function NewsTrendsTableClient() {
                       <td className="px-2 py-2">{Number(row.count ?? 0).toLocaleString("ko-KR")}</td>
                       <td className="px-2 py-2">{asString(row.burstGrade) || "Unknown"}</td>
                       <td className="px-2 py-2">{formatPercent(row.sourceDiversity)}</td>
+                      <td className="px-2 py-2">
+                        {!row.series?.length ? (
+                          <span className="text-xs text-slate-500">-</span>
+                        ) : (
+                          <svg viewBox="0 0 240 56" className="h-14 w-60">
+                            <polyline
+                              points={buildPolylinePoints(row.series)}
+                              fill="none"
+                              stroke="#10b981"
+                              strokeWidth="2"
+                              strokeLinejoin="round"
+                              strokeLinecap="round"
+                            />
+                            {(row.series ?? []).map((point, pointIndex, arr) => {
+                              if (point.hasBurstMarker !== true) return null;
+                              const maxValue = maxSeriesValue(arr);
+                              const x = arr.length === 1 ? 0 : Math.round((pointIndex / (arr.length - 1)) * 240);
+                              const y = Math.round(56 - ((Number(point.count ?? 0) / maxValue) * 56));
+                              return (
+                                <circle
+                                  key={`${asString(point.date)}-${pointIndex}`}
+                                  cx={x}
+                                  cy={Math.max(0, Math.min(56, y))}
+                                  r="3"
+                                  fill="#f59e0b"
+                                  stroke="#fff"
+                                  strokeWidth="1"
+                                />
+                              );
+                            })}
+                          </svg>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
