@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T00:00:00.000Z",
+  "rules": [
+    {
+      "id": "topic_burst_high",
+      "name": "토픽 급증(상)",
+      "enabled": true,
+      "level": "high",
+      "kind": "topic_burst",
+      "topicId": "*",
+      "minBurstLevel": "상",
+      "minTodayCount": 2
+    },
+    {
+      "id": "topic_burst_mid",
+      "name": "토픽 급증(중 이상)",
+      "enabled": true,
+      "level": "medium",
+      "kind": "topic_burst",
+      "topicId": "*",
+      "minBurstLevel": "중",
+      "minTodayCount": 3
+    },
+    {
+      "id": "indicator_fx_zscore_high",
+      "name": "환율 긴장 z-score",
+      "enabled": true,
+      "level": "high",
+      "kind": "indicator",
+      "seriesId": "kr_usdkrw",
+      "metric": "zscore",
+      "window": 20,
+      "condition": "high",
+      "threshold": 2,
+      "targetType": "topic",
+      "targetId": "fx"
+    },
+    {
+      "id": "indicator_cpi_regime_up",
+      "name": "미국 물가 상승 레짐",
+      "enabled": true,
+      "level": "medium",
+      "kind": "indicator",
+      "seriesId": "us_cpi",
+      "metric": "regime",
+      "window": 6,
+      "condition": "up",
+      "targetType": "scenario",
+      "targetId": "Bear"
+    }
+  ]
+}
