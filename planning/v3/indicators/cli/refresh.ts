@@ -10,7 +10,8 @@ import {
 import { getConnector } from "../connectors/registry";
 import { normalizeConnectorError, shouldRetryConnectorError, toRefreshError } from "../connectors/errors";
 import type { ConnectorSeriesResult, SeriesConnector } from "../connectors/types";
-import { INDICATOR_SERIES_SPECS, INDICATOR_SOURCES } from "../specs";
+import { INDICATOR_SOURCES } from "../specs";
+import { loadEffectiveSeriesSpecs } from "../specOverrides";
 import { appendSeriesObservations, readState, writeSeriesMeta, writeState } from "../store";
 import { sanitizeV3LogMessage } from "../../security/whitelist";
 
@@ -93,7 +94,7 @@ export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions 
   const retryPolicy = resolveRetryPolicy(options.retry);
   const sources = (options.sources ?? INDICATOR_SOURCES).filter((source) => source.enabled);
   const sourceMap = new Map(sources.map((source) => [source.id, source]));
-  const specs = (options.specs ?? INDICATOR_SERIES_SPECS).filter((spec) => spec.enabled !== false);
+  const specs = (options.specs ?? loadEffectiveSeriesSpecs(options.rootDir)).filter((spec) => spec.enabled !== false);
 
   const state = readState(options.rootDir);
   const nextState = {

@@ -91,6 +91,19 @@ export const NewsSourceOverrideSchema = z.object({
 
 export type NewsSourceOverride = z.infer<typeof NewsSourceOverrideSchema>;
 
+export const NewsCustomSourceSchema = z.object({
+  id: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+  feedUrl: z.string().trim().url(),
+  homepageUrl: z.string().trim().url().optional(),
+  country: z.string().trim().min(2).max(3).default("ZZ"),
+  language: z.string().trim().min(2).max(5).default("und"),
+  weight: z.number().finite().default(1),
+  enabled: z.boolean().default(true),
+});
+
+export type NewsCustomSource = z.infer<typeof NewsCustomSourceSchema>;
+
 export const NewsTopicOverrideSchema = z.object({
   id: z.string().trim().min(1),
   keywords: z.array(z.string().trim().min(1)).optional(),
@@ -103,6 +116,7 @@ export const NewsSettingsSchema = z.object({
   updatedAt: z.string().datetime().optional(),
   sources: z.array(NewsSourceOverrideSchema).default([]),
   topics: z.array(NewsTopicOverrideSchema).default([]),
+  customSources: z.array(NewsCustomSourceSchema).default([]),
 });
 
 export type NewsSettings = z.infer<typeof NewsSettingsSchema>;

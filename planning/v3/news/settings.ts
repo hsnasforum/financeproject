@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  NewsCustomSourceSchema,
   NewsSettingsSchema,
   NewsSourceSchema,
   NewsTopicSchema,
@@ -17,6 +18,7 @@ const DEFAULT_SETTINGS: NewsSettings = {
   updatedAt: undefined,
   sources: [],
   topics: [],
+  customSources: [],
 };
 
 const DEFAULT_NEWS_ROOT = path.join(process.cwd(), ".data", "news");
@@ -69,7 +71,7 @@ export function mergeSourcesWithOverrides(
   settings: NewsSettings = DEFAULT_SETTINGS,
 ): NewsSource[] {
   const byId = new Map(settings.sources.map((row) => [row.id, row]));
-  return defaults.map((source) => {
+  const mergedDefaults = defaults.map((source) => {
     const override = byId.get(source.id);
     return NewsSourceSchema.parse({
       ...source,
@@ -77,6 +79,30 @@ export function mergeSourcesWithOverrides(
       weight: Number.isFinite(override?.weight) ? Number(override?.weight) : source.weight,
     });
   });
+
+  const existingIds = new Set(mergedDefaults.map((row) => row.id));
+  const existingUrls = new Set(mergedDefaults.map((row) => row.feedUrl));
+  const customMerged: NewsSource[] = [];
+  for (const row of settings.customSources ?? []) {
+    const custom = NewsCustomSourceSchema.parse(row);
+    if (existingIds.has(custom.id)) continue;
+    if (existingUrls.has(custom.feedUrl)) continue;
+    const override = byId.get(custom.id);
+    customMerged.push(NewsSourceSchema.parse({
+      id: custom.id,
+      name: custom.name,
+      feedUrl: custom.feedUrl,
+      homepageUrl: custom.homepageUrl,
+      country: custom.country,
+      language: custom.language,
+      weight: Number.isFinite(override?.weight) ? Number(override?.weight) : custom.weight,
+      enabled: typeof override?.enabled === "boolean" ? override.enabled : custom.enabled,
+    }));
+    existingIds.add(custom.id);
+    existingUrls.add(custom.feedUrl);
+  }
+
+  return [...mergedDefaults, ...customMerged];
 }
 
 export function mergeTopicsWithOverrides(
