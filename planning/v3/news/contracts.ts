@@ -191,8 +191,52 @@ export type DailyDigest = z.infer<typeof DailyDigestSchema>;
 export const ScenarioNameSchema = z.enum(["Base", "Bull", "Bear"]);
 export type ScenarioName = z.infer<typeof ScenarioNameSchema>;
 
+export const ScenarioTriggerViewSchema = z.enum(["pctChange", "zscore", "regime"]);
+export type ScenarioTriggerView = z.infer<typeof ScenarioTriggerViewSchema>;
+
+export const ScenarioTriggerOpSchema = z.enum(["gt", "gte", "lt", "lte", "eq", "neq"]);
+export type ScenarioTriggerOp = z.infer<typeof ScenarioTriggerOpSchema>;
+
+export const ScenarioRegimeValueSchema = z.enum(["up", "flat", "down", "unknown"]);
+export type ScenarioRegimeValue = z.infer<typeof ScenarioRegimeValueSchema>;
+
+export const ScenarioTriggerRuleSchema = z.object({
+  id: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  seriesId: z.string().trim().min(1),
+  view: ScenarioTriggerViewSchema,
+  window: z.number().int().positive(),
+  op: ScenarioTriggerOpSchema,
+  threshold: z.number().finite().optional(),
+  regimeValue: ScenarioRegimeValueSchema.optional(),
+});
+
+export type ScenarioTriggerRule = z.infer<typeof ScenarioTriggerRuleSchema>;
+
+export const ScenarioTemplateSchema = z.object({
+  name: ScenarioNameSchema,
+  triggers: z.array(ScenarioTriggerRuleSchema).min(1),
+});
+
+export type ScenarioTemplate = z.infer<typeof ScenarioTemplateSchema>;
+
+export const ScenarioTriggerStatusSchema = z.enum(["met", "not_met", "unknown"]);
+export type ScenarioTriggerStatus = z.infer<typeof ScenarioTriggerStatusSchema>;
+
+export const TriggerEvaluationSchema = z.object({
+  ruleId: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  status: ScenarioTriggerStatusSchema,
+  rationale: z.string().trim().min(1),
+});
+
+export type TriggerEvaluation = z.infer<typeof TriggerEvaluationSchema>;
+
 export const ScenarioCardSchema = z.object({
   name: ScenarioNameSchema,
+  triggerStatus: ScenarioTriggerStatusSchema,
+  triggerRationale: z.string().trim().min(1),
+  triggerEvaluations: z.array(TriggerEvaluationSchema).min(1),
   assumptions: z.array(z.string().trim().min(1)).min(1),
   triggers: z.array(z.string().trim().min(1)).min(1),
   invalidation: z.array(z.string().trim().min(1)).min(1),
