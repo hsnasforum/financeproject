@@ -53,7 +53,7 @@ function pickLinkedTopics(digest: DailyDigest, trends: TopicDailyStat[]): string
 }
 
 function pickIndicators(digest: DailyDigest): string[] {
-  const indicators = dedupe(digest.watchlist).slice(0, 5);
+  const indicators = dedupe(digest.watchlist.map((row) => row.label)).slice(0, 5);
   if (indicators.length > 0) {
     return indicators;
   }
