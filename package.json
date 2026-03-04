@@ -92,6 +92,7 @@
     "v3:support-bundle": "node --import tsx planning/v3/ops/supportBundle.ts",
     "v3:restore": "node --import tsx planning/v3/ops/restore.ts",
     "v3:migrate": "node --import tsx planning/v3/ops/migrate.ts",
+    "v3:report:weekly": "node --import tsx planning/v3/report/weeklyHtml.ts",
     "sec:check": "node scripts/security_check.mjs",
     "planning:v2:guard": "node scripts/planning_v2_static_guard.mjs",
     "planning:v2:ssot:guard": "node scripts/planning_v2_ssot_guard.mjs",
