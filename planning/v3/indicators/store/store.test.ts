@@ -17,7 +17,7 @@ describe("planning v3 indicators store", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-v3-ind-store-"));
     roots.push(root);
 
-    const first = appendSeriesObservations("kr_base_rate", [
+    const first = appendSeriesObservations("KR_BOK_BASE_RATE", [
       { date: "2026-01", value: 3.25 },
       { date: "2026-02", value: 3.25 },
     ], root);
