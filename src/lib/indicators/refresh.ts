@@ -6,6 +6,7 @@ import {
   parseIndicatorsRefreshResult,
 } from "./contracts";
 import { fetchEcosSeries } from "./connectors/ecos";
+import { fetchFredSeries } from "./connectors/fred";
 import { fetchKosisSeries } from "./connectors/kosis";
 import { readIndicatorsState, writeIndicatorsState } from "./state";
 import { appendSeriesObservations, resolveIndicatorsRoot } from "./store";
@@ -131,6 +132,14 @@ const DEFAULT_CONNECTORS: Partial<Record<IndicatorSource["type"], IndicatorConne
   kosis: {
     fetchSeries: async (input) => fetchKosisSeries({
       externalId: input.spec.externalId,
+      fetchImpl: input.fetchImpl,
+    }),
+  },
+  fred: {
+    fetchSeries: async (input) => fetchFredSeries({
+      externalId: input.spec.externalId,
+      start: input.previousState?.cursor,
+      end: input.now.toISOString().slice(0, 10),
       fetchImpl: input.fetchImpl,
     }),
   },

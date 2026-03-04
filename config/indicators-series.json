@@ -31,6 +31,16 @@
       "units": "bil_krw",
       "transform": "pct_change",
       "notes": "평잔 기준"
+    },
+    {
+      "id": "us_cpi",
+      "sourceId": "fred",
+      "externalId": "CPIAUCSL",
+      "name": "미국 CPI",
+      "frequency": "M",
+      "units": "index",
+      "transform": "pct_change",
+      "notes": "FRED CPIAUCSL"
     }
   ]
 }
