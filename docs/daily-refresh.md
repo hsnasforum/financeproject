@@ -8,8 +8,10 @@ pnpm daily:refresh
 
 - 기본 순서:
   - `pnpm warm:if-stale` (스크립트가 있으면 실행)
+  - `pnpm news:refresh`
   - `pnpm dart:watch`
   - `pnpm data:doctor` (기본 실행, `--skip-doctor`로 생략 가능)
+  - `pnpm cleanup` (스크립트가 있으면 실행, non-strict에서 비차단)
 - 옵션:
   - `pnpm daily:refresh -- --strict`: 단계 실패 시 즉시 실패(exit 1)
   - `pnpm daily:refresh -- --skip-doctor`: `data:doctor` 생략

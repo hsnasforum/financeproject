@@ -1,4 +1,4 @@
-import { type RawFeedEntry } from "./types";
+import { type RawFeedEntry } from "./types.ts";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

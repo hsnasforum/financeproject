@@ -8,11 +8,17 @@
 ## 1) 기술 스택/실행 규칙
 - Next.js(App Router) + TypeScript, 패키지 매니저는 pnpm.
 - 개발 실행은 `pnpm dev`만 사용합니다(프로젝트의 안전한 host/port 선택 래퍼 포함).
-- 기본 검증 루틴(변경 후 반드시):
+- 기본 검증 루틴(PR 올리기 전 반드시):
   - `pnpm lint`
   - `pnpm test`
   - `pnpm build`
   - E2E가 영향 받으면: `pnpm e2e:rc` (필요 시)
+
+  - 작업 중(로컬 WIP) 최소 검증(속도 우선, 다만 “깨질 축”은 막기):
+  - 순수 로직/타입/테스트 변경: `pnpm test`
+  - Next route/page/build 관련 변경(특히 src/app/**): `pnpm build`
+  - React 훅/린트 규칙 영향: `pnpm lint`
+  - e2e 셀렉터/플로우 영향: `pnpm e2e:rc`
 
 ## 2) 화면/경로(링크 깨짐 방지)
 - “실존 경로 목록”은 `docs/current-screens.md`가 소스 오브 트루스입니다.
@@ -20,6 +26,7 @@
 - `/api/dev/*` 및 Dev/Debug 화면은 production에서 기본 차단(404) 전제로 작업합니다.
 
 ## 3) 외부 API/보안(절대 규칙)
+- 로컬 전용(local-only) 전제: 127.0.0.1 바인딩 + same-origin + CSRF 가드 유지, 외부 텔레메트리/트래킹 금지.
 - 모든 외부 API 호출은 서버 Route Handler(`src/app/api/**/route.ts`)에서만 수행합니다.
 - API 키/토큰은 서버 env(`.env.local`)에서만 사용합니다.
 - 금지:
@@ -66,6 +73,15 @@
 - “완료 판정”을 스크립트 기반으로 남기고, 리포트는 사람이 읽는 형태(요약→근거→다음 액션)로 유지합니다.
 - 범위 밖 변경은 커밋/PR을 분리합니다.
 
+## 8.5) Planning v3 (현재 진행)
+- v3 개발 경로: `src/lib/planning/v3/**`, `src/app/api/planning/v3/**` (v2 코어 수정은 PR 분리)
+- v3는 “draft only” 원칙:
+- 자동 저장/자동 실행/기존 v2 store 자동 수정 금지 (이번 단계는 “초안 생성/반환”까지만)
+- CSV/거래내역은 민감 데이터일 수 있음:
+- 원문 CSV/원문 거래내역을 로그/metrics/support bundle/응답에 그대로 출력 금지
+- 결정성(determinism):
+- 파싱/집계/초안 생성은 vitest로 결정적으로 고정(시간/랜덤/환경 의존 제거)
+
 ## 9) 작업 방식(리뷰 가능 산출물)
 - 변경 전:
   1) 바꿀 파일 목록
@@ -75,6 +91,11 @@
   - 무엇이 바뀌었는지(핵심 5줄 이내)
   - 재현/검증 방법
   - 남은 리스크/엣지케이스
+
+## 9.5) PR/CI 운영(최소)
+- “머지”는 필수 체크가 전부 green + PR이 목표 범위를 만족할 때만.
+- 작업 중인 PR은 Draft로 두고, 의미 있는 단위(리뷰 가능한 상태)에서만 Ready로 전환.
+- e2e 안정성을 위해 UI 셀렉터는 가능하면 `data-testid` 기반으로 유지/추가(문구/레이아웃 변화에 덜 깨지게).
 
 ## 10) 빠른 점검(키 노출/직접 호출 방지)
 - 키/토큰 노출 점검(예시): `rg -n "FINLIFE_API_KEY|NEXT_PUBLIC_.*FINLIFE|crtfc_key|serviceKey" src`

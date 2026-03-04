@@ -37,6 +37,11 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
+function formatPercent(value: number): string {
+  if (!Number.isFinite(value)) return "-";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
 export function NewsTrendsClient() {
   const [windowDays, setWindowDays] = useState<7 | 30>(7);
   const [loading, setLoading] = useState(true);
@@ -87,6 +92,12 @@ export function NewsTrendsClient() {
               <Link href="/planning/v3/news" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
                 Digest로
               </Link>
+              <Link href="/planning/v3/news/explore" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+                탐색
+              </Link>
+              <Link href="/planning/v3/news/alerts" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+                알림함
+              </Link>
               <Link href="/planning/v3/news/settings" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
                 설정
               </Link>
@@ -122,7 +133,8 @@ export function NewsTrendsClient() {
                 <li key={row.topicId} className="rounded-lg border border-slate-200 p-3">
                   <p className="text-sm font-semibold text-slate-900">{row.topicLabel} ({row.burstLevel})</p>
                   <p className="text-xs text-slate-600">
-                    today={row.todayCount}, delta={row.delta}, ratio={row.ratio}, z={row.burstZ}
+                    당일 기사 수 {row.todayCount.toLocaleString("ko-KR")}건 · 전일 대비 {row.delta.toLocaleString("ko-KR")}건 ·
+                    증가 배율 {row.ratio.toFixed(2)}배 · 급증 지수 {row.burstZ.toFixed(2)}
                   </p>
                 </li>
               ))}
@@ -141,7 +153,8 @@ export function NewsTrendsClient() {
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-900">{topic.topicLabel}</p>
                     <p className="text-xs text-slate-600">
-                      count={topic.todayCount}, diversity={topic.sourceDiversity}, topShare={topic.topSourceShare}
+                      당일 기사 수 {topic.todayCount.toLocaleString("ko-KR")}건 · 출처 다양도 {formatPercent(topic.sourceDiversity)} ·
+                      상위 출처 점유율 {formatPercent(topic.topSourceShare)}
                     </p>
                   </div>
                   <div className="space-y-1">

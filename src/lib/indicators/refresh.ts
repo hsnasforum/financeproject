@@ -4,12 +4,12 @@ import {
   parseIndicatorSeriesFile,
   parseIndicatorSourcesFile,
   parseIndicatorsRefreshResult,
-} from "./contracts";
-import { fetchEcosSeries } from "./connectors/ecos";
-import { fetchFredSeries } from "./connectors/fred";
-import { fetchKosisSeries } from "./connectors/kosis";
-import { readIndicatorsState, writeIndicatorsState } from "./state";
-import { appendSeriesObservations, resolveIndicatorsRoot } from "./store";
+} from "./contracts.ts";
+import { fetchEcosSeries } from "./connectors/ecos.ts";
+import { fetchFredSeries } from "./connectors/fred.ts";
+import { fetchKosisSeries } from "./connectors/kosis.ts";
+import { readIndicatorsState, writeIndicatorsState } from "./state.ts";
+import { appendSeriesObservations, resolveIndicatorsRoot } from "./store.ts";
 import {
   type IndicatorConnector,
   type IndicatorSeriesFile,
@@ -19,7 +19,7 @@ import {
   type IndicatorSourcesFile,
   type Observation,
   type SeriesSpec,
-} from "./types";
+} from "./types.ts";
 
 const SOURCES_CONFIG_RELATIVE = path.join("config", "indicators-sources.json");
 const SERIES_CONFIG_RELATIVE = path.join("config", "indicators-series.json");

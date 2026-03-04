@@ -1,5 +1,5 @@
-import { fetchExternal } from "../http/fetchExternal";
-import { type NewsFeedConfig } from "./types";
+import { fetchExternal } from "../http/fetchExternal.ts";
+import { type NewsFeedConfig } from "./types.ts";
 
 export type FeedFetchResult = {
   ok: boolean;

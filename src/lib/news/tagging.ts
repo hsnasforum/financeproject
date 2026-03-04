@@ -1,11 +1,11 @@
-import { tokenizeText } from "./dedupe";
+import { tokenizeText } from "./dedupe.ts";
 import {
   type NewsItem,
   type NewsTopicDefinition,
   type NewsTopicDictionary,
   type NewsTopicTag,
   type TaggedNewsItem,
-} from "./types";
+} from "./types.ts";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

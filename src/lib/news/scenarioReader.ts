@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import { resolveNewsScenarioJsonPath } from "./storageSqlite";
-import { type NewsScenarioPack } from "./types";
+import { resolveNewsScenarioJsonPath } from "./storageSqlite.ts";
+import { type NewsScenarioPack } from "./types.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

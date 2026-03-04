@@ -64,9 +64,63 @@ function levelBadgeClass(level: AlertLevel): string {
 }
 
 function levelLabel(level: AlertLevel): string {
-  if (level === "high") return "HIGH";
-  if (level === "medium") return "MID";
-  return "LOW";
+  if (level === "high") return "상";
+  if (level === "medium") return "중";
+  return "하";
+}
+
+function ruleKindLabel(value: AlertEvent["ruleKind"]): string {
+  if (value === "topic_burst") return "토픽 급증";
+  return "지표 변화";
+}
+
+function sourceLabel(value: AlertEvent["source"]): string {
+  if (value === "news:refresh") return "뉴스 갱신";
+  return "지표 갱신";
+}
+
+function targetTypeLabel(value: AlertEvent["targetType"]): string {
+  if (value === "topic") return "토픽";
+  if (value === "item") return "기사";
+  if (value === "scenario") return "시나리오";
+  return "지표";
+}
+
+function formatAlertSummary(value: string): string {
+  const text = asString(value);
+  if (!text) return "-";
+
+  const topicMatch = text.match(/today\s*=\s*([^,\s]+)\s*,\s*delta\s*=\s*([^,\s]+)\s*,\s*ratio\s*=\s*([^,\s]+)\s*,\s*z\s*=\s*([^,\s]+)/i);
+  if (topicMatch) {
+    const today = topicMatch[1];
+    const delta = topicMatch[2];
+    const ratio = topicMatch[3];
+    const z = topicMatch[4];
+    return `당일 기사 수 ${today}건 · 전일 대비 ${delta}건 · 증가 배율 ${ratio}배 · 급증 지수 ${z}`;
+  }
+
+  const indicatorMatch = text.match(/^(.+?)\s*,\s*condition\s*=\s*([^,\s]+)\s*,\s*asOf\s*=\s*(.+)$/i);
+  if (indicatorMatch) {
+    const metric = indicatorMatch[1]?.trim() ?? "";
+    const conditionRaw = indicatorMatch[2]?.trim().toLowerCase() ?? "";
+    const condition = conditionRaw === "up"
+      ? "상승"
+      : conditionRaw === "down"
+        ? "하락"
+        : conditionRaw === "high"
+          ? "고점권"
+          : conditionRaw === "low"
+            ? "저점권"
+            : conditionRaw === "flat"
+              ? "횡보"
+              : conditionRaw === "unknown"
+                ? "데이터 부족"
+                : conditionRaw;
+    const asOf = indicatorMatch[3]?.trim() ?? "-";
+    return `${metric} · 조건 ${condition} 충족 · 기준일 ${asOf}`;
+  }
+
+  return text;
 }
 
 function isInternalLink(link: string): boolean {
@@ -115,12 +169,12 @@ export function NewsAlertsClient() {
         <Card className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h1 className="text-xl font-black text-slate-900">Planning v3 News Alerts</h1>
+              <h1 className="text-xl font-black text-slate-900">Planning v3 뉴스 알림함</h1>
               <p className="text-sm text-slate-600">토픽 급증 + 지표 변화 감지 로컬 알림함</p>
             </div>
             <div className="flex items-center gap-2">
               <Link href="/planning/v3/news" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
-                Digest
+                다이제스트
               </Link>
               <Link href="/planning/v3/news/trends" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
                 트렌드
@@ -166,12 +220,12 @@ export function NewsAlertsClient() {
                           <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${levelBadgeClass(event.level)}`}>
                             {levelLabel(event.level)}
                           </span>
-                          <span className="text-xs text-slate-500">{event.ruleKind} · {event.source}</span>
+                          <span className="text-xs text-slate-500">{ruleKindLabel(event.ruleKind)} · {sourceLabel(event.source)}</span>
                           <span className="text-xs text-slate-500">{formatDateTime(event.createdAt)}</span>
                         </div>
                         <p className="mt-1 text-sm font-semibold text-slate-900">{event.title}</p>
-                        <p className="mt-1 text-xs text-slate-600">{event.summary}</p>
-                        <p className="mt-1 text-[11px] text-slate-500">target: {event.targetType} / {event.targetId}</p>
+                        <p className="mt-1 text-xs text-slate-600">{formatAlertSummary(event.summary)}</p>
+                        <p className="mt-1 text-[11px] text-slate-500">대상: {targetTypeLabel(event.targetType)} / {event.targetId}</p>
                         {event.link ? (
                           isInternalLink(event.link) ? (
                             <Link href={event.link} className="mt-1 inline-block text-xs font-semibold text-emerald-700 underline underline-offset-2">

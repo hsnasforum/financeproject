@@ -183,6 +183,7 @@ export type RisingTopic = {
 };
 
 export type BurstLevel = "상" | "중" | "하";
+export type ConsensusGrade = "high" | "med" | "low";
 
 export type TopicDailyStat = {
   date: string;
@@ -217,6 +218,7 @@ export type TopicTrend = {
   lowHistory: boolean;
   sourceDiversity: number;
   topSourceShare: number;
+  consensusGrade: ConsensusGrade;
   scoreSum: number;
   series: TopicTrendSeriesPoint[];
 };
@@ -245,8 +247,33 @@ export type DigestTopItem = {
   score: number;
   publishedAt: string;
   sourceName: string;
+  rationale?: string;
+  scoreParts?: NewsScoreParts;
   // Advanced view only.
   snippet?: string;
+};
+
+export type NewsSearchIndexItem = {
+  id: string;
+  title: string;
+  url: string;
+  publishedAt: string;
+  sourceId: string;
+  sourceName: string;
+  topicId: string;
+  topicLabel: string;
+  topics: string[];
+  entities: string[];
+  score: number;
+  rationale: string;
+  scoreParts: NewsScoreParts;
+};
+
+export type NewsSearchIndex = {
+  generatedAt: string;
+  timezone: "Asia/Seoul";
+  itemCount: number;
+  items: NewsSearchIndexItem[];
 };
 
 export type DigestTopTopic = {
@@ -269,6 +296,9 @@ export type DigestWatchItem = {
   status: DigestWatchStatus;
   valueSummary: string;
   asOf?: string | null;
+  unknownReasonCode?: "missing" | "disabled" | "no_data" | "insufficient_data" | "invalid_series_id" | "unknown";
+  unknownReasonLabel?: string;
+  resolveHref?: string | null;
 };
 
 export type ScenarioCard = {
@@ -280,6 +310,8 @@ export type ScenarioCard = {
   interpretations?: string[];
   confirmIndicators?: string[];
   options?: string[];
+  uncertaintyLabel?: string;
+  consensusGrade?: ConsensusGrade;
   assumptions: string[];
   trigger: string[];
   invalidation: string[];
@@ -324,6 +356,57 @@ export type MacroSnapshot = {
   };
 };
 
+export type ExposureRateType = "fixed" | "variable" | "mixed" | "none";
+
+export type ExposureHorizon = "short" | "medium" | "long" | "none";
+
+export type ExposureLevel = "low" | "medium" | "high";
+
+export type IncomeStabilityLevel = "stable" | "moderate" | "fragile";
+
+export type ExposureProfile = {
+  updatedAt?: string;
+  debt?: {
+    hasDebt?: boolean;
+    rateType?: ExposureRateType;
+    repricingHorizon?: ExposureHorizon;
+  };
+  inflation?: {
+    essentialExpenseShare?: ExposureLevel;
+    rentOrMortgageShare?: ExposureLevel;
+    energyShare?: ExposureLevel;
+  };
+  fx?: {
+    foreignConsumption?: ExposureLevel;
+    foreignIncome?: ExposureLevel;
+  };
+  income?: {
+    incomeStability?: IncomeStabilityLevel;
+  };
+  liquidity?: {
+    monthsOfCashBuffer?: ExposureLevel;
+  };
+};
+
+export type ImpactGrade = "High" | "Med" | "Low" | "Unknown";
+
+export type ScenarioImpact = {
+  cashflowRisk: ImpactGrade;
+  debtServiceRisk: ImpactGrade;
+  inflationPressureRisk: ImpactGrade;
+  fxPressureRisk: ImpactGrade;
+  incomeRisk: ImpactGrade;
+  bufferAdequacy: ImpactGrade;
+  rationale: string[];
+  watch: string[];
+};
+
+export type StressRunResult = {
+  pressureAreas: string[];
+  resilienceNotes: string[];
+  monitoringCadence: string[];
+};
+
 export type NewsScenario = {
   name: "Base" | "Bull" | "Bear";
   confidence: "상" | "중" | "하";
@@ -333,6 +416,8 @@ export type NewsScenario = {
   interpretations: string[];
   confirmIndicators: string[];
   options: string[];
+  uncertaintyLabel?: string;
+  consensusGrade?: ConsensusGrade;
   assumptions: string[];
   trigger: string[];
   triggerDetails?: Array<{
@@ -346,6 +431,9 @@ export type NewsScenario = {
   impact: string;
   monitoringOptions: string[];
   rationale: string[];
+  linkedTopics?: string[];
+  personalImpact?: ScenarioImpact;
+  stress?: StressRunResult;
 };
 
 export type NewsScenarioPack = {

@@ -1,22 +1,24 @@
-import { type SeriesSnapshot } from "../indicators/types";
+import { type SeriesSnapshot } from "../indicators/types.ts";
 import {
   evaluateScenarioTriggers,
   extractSeriesIdsFromRules,
   type ScenarioTriggerRule,
-} from "./triggerEngine";
+} from "./triggerEngine.ts";
 import {
   assertNoRecommendationLines,
   assertNoRecommendationText,
   sanitizeNoRecommendationText,
-} from "./noRecommendation";
+} from "./noRecommendation.ts";
 import {
   type MacroSnapshot,
+  type ConsensusGrade,
   type NewsCluster,
   type NewsScenario,
   type NewsScenarioPack,
   type RisingTopic,
   type ScenarioCard,
-} from "./types";
+  type TopicTrend,
+} from "./types.ts";
 
 type TriggerTemplateSource = Partial<Record<"Base" | "Bull" | "Bear", Array<{ label?: string; expression?: string }>>>;
 
@@ -38,6 +40,42 @@ function topTopicLabel(risingTopics: RisingTopic[], clusters: NewsCluster[]): st
   const fromCluster = clusters[0]?.topicLabel;
   if (fromCluster) return fromCluster;
   return "핵심 토픽";
+}
+
+function chooseConsensusGrade(input: {
+  linkedTopicIds: string[];
+  topicTrends?: TopicTrend[];
+}): ConsensusGrade {
+  const rows = (input.topicTrends ?? []).filter((row) => input.linkedTopicIds.includes(asString(row.topicId)));
+  if (rows.length < 1) return "low";
+  const counts = { high: 0, med: 0, low: 0 };
+  for (const row of rows) {
+    if (row.consensusGrade === "high") counts.high += 1;
+    else if (row.consensusGrade === "med") counts.med += 1;
+    else counts.low += 1;
+  }
+  if (counts.low >= counts.high && counts.low >= counts.med) return "low";
+  if (counts.high > counts.med) return "high";
+  return "med";
+}
+
+function uncertaintyLabelFromConsensus(grade: ConsensusGrade): string {
+  if (grade === "high") {
+    return "불확실성 낮음 (근거: 다수 소스에서 유사 방향 신호 관측)";
+  }
+  if (grade === "med") {
+    return "불확실성 중간 (근거: 소스 신호가 부분적으로만 일치)";
+  }
+  return "불확실성 높음 (근거: 소스 다양성/컨센서스가 낮음)";
+}
+
+function seriesLabelFromId(seriesId: string): string {
+  const normalized = asString(seriesId).toLowerCase();
+  if (normalized === "kr_usdkrw") return "원/달러 환율";
+  if (normalized === "kr_base_rate") return "기준금리";
+  if (normalized === "kr_m2") return "M2 통화량";
+  if (normalized === "us_cpi") return "미국 CPI";
+  return seriesId;
 }
 
 function macroLine(snapshot: MacroSnapshot): string {
@@ -144,6 +182,7 @@ function ensureTemplateFields(scenario: NewsScenario): NewsScenario {
 function assertScenarioNoRecommendation(scenario: NewsScenario): void {
   assertNoRecommendationText(scenario.observation, `${scenario.name}.observation`);
   assertNoRecommendationText(scenario.triggerSummary, `${scenario.name}.triggerSummary`);
+  assertNoRecommendationText(scenario.uncertaintyLabel ?? "", `${scenario.name}.uncertaintyLabel`);
   assertNoRecommendationText(scenario.impact, `${scenario.name}.impact`);
   assertNoRecommendationLines(scenario.interpretations, `${scenario.name}.interpretations`);
   assertNoRecommendationLines(scenario.options, `${scenario.name}.options`);
@@ -162,6 +201,8 @@ function buildScenario(input: {
   assumptions: string[];
   invalidation: string[];
   rationale: string[];
+  consensusGrade: ConsensusGrade;
+  uncertaintyLabel: string;
   templates?: TriggerTemplateSource;
   indicatorSnapshots: SeriesSnapshot[];
 }): NewsScenario {
@@ -190,6 +231,8 @@ function buildScenario(input: {
           : "데이터 부족 구간은 해석을 보수적으로 유지하는 편이 안전합니다.",
     ]),
     confirmIndicators,
+    uncertaintyLabel: sanitizeLine(input.uncertaintyLabel),
+    consensusGrade: input.consensusGrade,
     options: takeResponseOptions(input.topic),
     assumptions: sanitizeLines([
       ...input.assumptions,
@@ -219,11 +262,21 @@ export function buildNewsScenarios(input: {
   generatedAt: string;
   risingTopics: RisingTopic[];
   topClusters: NewsCluster[];
+  topicTrends?: TopicTrend[];
   macroSnapshot: MacroSnapshot;
   indicatorSnapshots?: SeriesSnapshot[];
   triggerTemplates?: TriggerTemplateSource;
 }): NewsScenarioPack {
   const topic = topTopicLabel(input.risingTopics, input.topClusters);
+  const linkedTopicIds = [...new Set([
+    ...input.topClusters.map((cluster) => asString(cluster.topicId)),
+    ...input.risingTopics.map((topicRow) => asString(topicRow.topicId)),
+  ].filter(Boolean))].slice(0, 5);
+  const consensusGrade = chooseConsensusGrade({
+    linkedTopicIds,
+    topicTrends: input.topicTrends,
+  });
+  const uncertaintyLabel = uncertaintyLabelFromConsensus(consensusGrade);
   const snapshots = input.indicatorSnapshots ?? [];
 
   const scenarios: NewsScenario[] = [
@@ -243,6 +296,8 @@ export function buildNewsScenarios(input: {
         "최근 기사량/클러스터 분포가 단일 극단으로 치우치지 않았습니다.",
         "거시 지표가 혼조일 때는 관찰 중심 대응이 유효합니다.",
       ],
+      consensusGrade,
+      uncertaintyLabel,
       templates: input.triggerTemplates,
       indicatorSnapshots: snapshots,
     }),
@@ -262,6 +317,8 @@ export function buildNewsScenarios(input: {
         "상위 클러스터의 긍정 키워드 비중이 높아질 경우 확률 상향 검토가 가능합니다.",
         "단, 거시 지표 역행 시나리오가 존재해 신뢰도는 낮게 둡니다.",
       ],
+      consensusGrade,
+      uncertaintyLabel,
       templates: input.triggerTemplates,
       indicatorSnapshots: snapshots,
     }),
@@ -281,6 +338,8 @@ export function buildNewsScenarios(input: {
         "부정 클러스터가 상위권을 차지하면 하방 시나리오 관찰 우선순위를 높입니다.",
         "수치 확률 대신 근거 기반 등급(상/중/하)만 제공합니다.",
       ],
+      consensusGrade,
+      uncertaintyLabel,
       templates: input.triggerTemplates,
       indicatorSnapshots: snapshots,
     }),
@@ -306,6 +365,8 @@ export function toScenarioCards(pack: NewsScenarioPack): ScenarioCard[] {
     observation: row.observation,
     interpretations: row.interpretations,
     confirmIndicators: row.confirmIndicators,
+    uncertaintyLabel: row.uncertaintyLabel,
+    consensusGrade: row.consensusGrade,
     options: row.options,
     assumptions: row.assumptions,
     trigger: row.trigger,
@@ -320,34 +381,35 @@ export function toNewsScenarioMarkdown(pack: NewsScenarioPack): string {
   const lines: string[] = [];
   lines.push("# News Scenario Pack");
   lines.push("");
-  lines.push(`- Generated at: ${pack.generatedAt}`);
-  lines.push(`- Macro asOf: ${pack.input.macroSnapshot.asOf} (${pack.input.macroSnapshot.source})`);
+  lines.push(`- 생성 시각: ${pack.generatedAt}`);
+  lines.push(`- 거시 기준 시각: ${pack.input.macroSnapshot.asOf} (${pack.input.macroSnapshot.source})`);
   lines.push("");
 
   for (const scenario of pack.scenarios) {
     lines.push(`## ${scenario.name} (확률: ${scenario.confidence})`);
-    lines.push(`- Trigger status: ${scenario.triggerStatus}`);
-    lines.push(`- Trigger summary: ${scenario.triggerSummary}`);
+    lines.push(`- 트리거 상태: ${scenario.triggerStatus}`);
+    lines.push(`- 트리거 요약: ${scenario.triggerSummary}`);
+    lines.push(`- 불확실성: ${scenario.uncertaintyLabel ?? "-"}`);
     lines.push("### 관찰");
     lines.push(`- ${scenario.observation}`);
     lines.push("### 가능한 해석");
     for (const row of scenario.interpretations) lines.push(`- ${row}`);
-    lines.push("### 확인할 지표(seriesId)");
+    lines.push("### 확인할 지표");
     if (scenario.confirmIndicators.length < 1) lines.push("- 없음");
-    for (const row of scenario.confirmIndicators) lines.push(`- ${row}`);
+    for (const row of scenario.confirmIndicators) lines.push(`- ${seriesLabelFromId(row)} (${row})`);
     lines.push("### 옵션");
     for (const row of scenario.options) lines.push(`- ${row}`);
     lines.push("### 무효화 조건");
     for (const row of scenario.invalidation) lines.push(`- ${row}`);
-    lines.push("### Assumptions");
+    lines.push("### 가정");
     for (const row of scenario.assumptions) lines.push(`- ${row}`);
-    lines.push("### Trigger");
+    lines.push("### 트리거");
     for (const row of scenario.trigger) lines.push(`- ${row}`);
-    lines.push("### Leading indicators");
+    lines.push("### 선행 지표");
     for (const row of scenario.leadingIndicators) lines.push(`- ${row}`);
-    lines.push("### Impact path");
+    lines.push("### 영향 경로");
     lines.push(`- ${scenario.impact}`);
-    lines.push("### Monitoring options");
+    lines.push("### 모니터링 옵션");
     for (const row of scenario.monitoringOptions) lines.push(`- ${row}`);
     lines.push("### 근거");
     for (const row of scenario.rationale) lines.push(`- ${row}`);

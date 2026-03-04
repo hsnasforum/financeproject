@@ -7,6 +7,7 @@ import { type DigestDay, type DigestWatchItem } from "@/lib/news/types";
 import { computeTopicContradictions } from "../../../../../../../planning/v3/news/contradiction";
 import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
 import { normalizeSeriesId } from "../../../../../../../planning/v3/indicators/aliases";
+import { loadEffectiveSeriesSpecs } from "../../../../../../../planning/v3/indicators/specOverrides";
 import { readSeriesObservations } from "../../../../../../../planning/v3/indicators/store";
 
 function asString(value: unknown): string {
@@ -41,11 +42,129 @@ type WatchSparkline = {
 type RouteWatchItem = DigestWatchItem & {
   grade: "상" | "중" | "하" | "unknown";
   sparkline: WatchSparkline | null;
+  unknownReasonCode?: "missing" | "disabled" | "no_data" | "insufficient_data" | "invalid_series_id" | "unknown";
+  unknownReasonLabel?: string;
+  resolveHref?: string | null;
 };
 
 type RouteDigest = Omit<DigestDay, "watchlist"> & {
   watchlist: RouteWatchItem[];
 };
+
+const INDICATOR_CATALOG_HREF = "/planning/v3/news/settings#indicator-series-specs";
+
+type SeriesSpecStatus = {
+  enabled: boolean;
+};
+
+function buildSeriesSpecStatusMap(): Map<string, SeriesSpecStatus> {
+  try {
+    const specs = loadEffectiveSeriesSpecs();
+    const out = new Map<string, SeriesSpecStatus>();
+    for (const spec of specs) {
+      const id = normalizeSeriesId(asString(spec.id));
+      if (!id) continue;
+      out.set(id, { enabled: spec.enabled !== false });
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+function hasEnoughForPctChange(values: Array<{ value: number }>, window: number): boolean {
+  const baseIndex = values.length - 1 - window;
+  const base = values[baseIndex];
+  if (!base) return false;
+  if (!Number.isFinite(base.value)) return false;
+  return base.value !== 0;
+}
+
+function hasEnoughForZscore(values: Array<{ value: number }>, window: number): boolean {
+  if (values.length < 2) return false;
+  const start = Math.max(0, values.length - Math.max(2, window));
+  const sliced = values.slice(start).map((row) => row.value).filter((row) => Number.isFinite(row));
+  if (sliced.length < 2) return false;
+  const mean = sliced.reduce((acc, row) => acc + row, 0) / sliced.length;
+  const variance = sliced.reduce((acc, row) => {
+    const diff = row - mean;
+    return acc + diff * diff;
+  }, 0) / sliced.length;
+  return Number.isFinite(variance) && variance > 0;
+}
+
+function inferUnknownReason(input: {
+  status: "ok" | "unknown";
+  seriesId: string;
+  view: "last" | "pctChange" | "zscore";
+  window: number;
+  seriesSpecs: Map<string, SeriesSpecStatus>;
+  observations: Array<{ date: string; value: number }>;
+}): Pick<RouteWatchItem, "unknownReasonCode" | "unknownReasonLabel" | "resolveHref"> {
+  const normalizedSeriesId = normalizeSeriesId(asString(input.seriesId));
+  if (!normalizedSeriesId) {
+    return {
+      unknownReasonCode: "invalid_series_id",
+      unknownReasonLabel: "지표 시리즈 ID가 비어 있습니다.",
+      resolveHref: INDICATOR_CATALOG_HREF,
+    };
+  }
+
+  if (input.status === "ok") {
+    return {
+      unknownReasonCode: undefined,
+      unknownReasonLabel: undefined,
+      resolveHref: null,
+    };
+  }
+
+  const spec = input.seriesSpecs.get(normalizedSeriesId);
+  if (!spec) {
+    return {
+      unknownReasonCode: "missing",
+      unknownReasonLabel: "지표 시리즈가 카탈로그에 등록되어 있지 않습니다.",
+      resolveHref: INDICATOR_CATALOG_HREF,
+    };
+  }
+
+  if (!spec.enabled) {
+    return {
+      unknownReasonCode: "disabled",
+      unknownReasonLabel: "지표 시리즈가 비활성화되어 있습니다.",
+      resolveHref: INDICATOR_CATALOG_HREF,
+    };
+  }
+
+  if (input.observations.length < 1) {
+    return {
+      unknownReasonCode: "no_data",
+      unknownReasonLabel: "지표 관측치가 아직 없습니다. 수동 갱신 후 다시 확인해 주세요.",
+      resolveHref: "/planning/v3/news",
+    };
+  }
+
+  if (input.view === "pctChange" && !hasEnoughForPctChange(input.observations, input.window)) {
+    return {
+      unknownReasonCode: "insufficient_data",
+      unknownReasonLabel: "변화율 계산에 필요한 관측치가 부족합니다.",
+      resolveHref: "/planning/v3/news",
+    };
+  }
+
+  if (input.view === "zscore" && !hasEnoughForZscore(input.observations, input.window)) {
+    return {
+      unknownReasonCode: "insufficient_data",
+      unknownReasonLabel: "z-score 계산에 필요한 관측치가 부족합니다.",
+      resolveHref: "/planning/v3/news",
+    };
+  }
+
+  return {
+    unknownReasonCode: "unknown",
+    unknownReasonLabel: "unknown 원인을 판별하지 못했습니다.",
+    resolveHref: "/planning/v3/news",
+  };
+}
 
 function buildSparkline(seriesId: string, window: number): WatchSparkline | null {
   const normalizedSeriesId = normalizeSeriesId(seriesId);
@@ -94,7 +213,9 @@ function inferGrade(valueSummary: string, status: "ok" | "unknown"): "상" | "�
 
 function sanitizeDigest(input: DigestDay | null): RouteDigest | null {
   if (!input) return null;
+  const seriesSpecs = buildSeriesSpecStatusMap();
   const sparklineBySeries = new Map<string, WatchSparkline | null>();
+  const observationsBySeries = new Map<string, Array<{ date: string; value: number }>>();
   const watchlist = (input.watchlist ?? [])
     .map((row) => {
       if (typeof row === "string") {
@@ -110,31 +231,57 @@ function sanitizeDigest(input: DigestDay | null): RouteDigest | null {
           valueSummary: "데이터 부족",
           asOf: null,
           sparkline: null,
+          unknownReasonCode: "invalid_series_id",
+          unknownReasonLabel: "체크 변수에 seriesId가 없어 지표 조회를 수행할 수 없습니다.",
+          resolveHref: INDICATOR_CATALOG_HREF,
         } satisfies RouteWatchItem;
       }
       const normalizedSeriesId = normalizeSeriesId(asString(row.seriesId));
+      const normalizedWindow = Math.max(1, Math.round(Number(row.window) || 1));
       const sparklineCacheKey = `${normalizedSeriesId}:${Math.max(1, Math.round(Number(row.window) || 1))}`;
       const sparkline = sparklineBySeries.has(sparklineCacheKey)
         ? sparklineBySeries.get(sparklineCacheKey) ?? null
         : (() => {
           const built = normalizedSeriesId
-            ? buildSparkline(normalizedSeriesId, Math.max(1, Math.round(Number(row.window) || 1)))
+            ? buildSparkline(normalizedSeriesId, normalizedWindow)
             : null;
           sparklineBySeries.set(sparklineCacheKey, built);
           return built;
         })();
+      const observations = normalizedSeriesId
+        ? (observationsBySeries.has(normalizedSeriesId)
+          ? (observationsBySeries.get(normalizedSeriesId) ?? [])
+          : (() => {
+            const loaded = readSeriesObservations(normalizedSeriesId)
+              .slice()
+              .sort((a, b) => a.date.localeCompare(b.date));
+            observationsBySeries.set(normalizedSeriesId, loaded);
+            return loaded;
+          })())
+        : [];
       const status = row.status === "ok" ? "ok" : "unknown";
       const valueSummary = asString(row.valueSummary) || "데이터 부족";
+      const unknownReason = inferUnknownReason({
+        status,
+        seriesId: normalizedSeriesId,
+        view: row.view === "pctChange" || row.view === "zscore" ? row.view : "last",
+        window: normalizedWindow,
+        seriesSpecs,
+        observations,
+      });
       return {
         label: asString(row.label),
         seriesId: normalizedSeriesId,
         view: row.view === "pctChange" || row.view === "zscore" ? row.view : "last",
-        window: Math.max(1, Math.round(Number(row.window) || 1)),
+        window: normalizedWindow,
         status,
         grade: inferGrade(valueSummary, status),
         valueSummary,
         asOf: asString(row.asOf) || null,
         sparkline,
+        unknownReasonCode: unknownReason.unknownReasonCode,
+        unknownReasonLabel: unknownReason.unknownReasonLabel,
+        resolveHref: unknownReason.resolveHref,
       } satisfies RouteWatchItem;
     })
     .filter((row) => Boolean(row?.label)) as RouteWatchItem[];
@@ -220,6 +367,9 @@ const DigestRouteSchema = z.object({
       grade: z.enum(["상", "중", "하", "unknown"]),
       valueSummary: z.string().trim().min(1),
       asOf: z.string().nullable().optional(),
+      unknownReasonCode: z.enum(["missing", "disabled", "no_data", "insufficient_data", "invalid_series_id", "unknown"]).optional(),
+      unknownReasonLabel: z.string().trim().min(1).optional(),
+      resolveHref: z.string().trim().min(1).nullable().optional(),
       sparkline: z.object({
         points: z.array(z.number().int().min(0).max(100)).max(16),
         trend: z.enum(["up", "down", "flat", "unknown"]),

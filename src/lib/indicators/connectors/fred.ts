@@ -1,5 +1,5 @@
-import { ObservationSchema } from "../contracts";
-import { type ConnectorFetchResult, type Observation } from "../types";
+import { ObservationSchema } from "../contracts.ts";
+import { type ConnectorFetchResult, type Observation } from "../types.ts";
 
 const FRED_BASE_URL = "https://api.stlouisfed.org/fred/series/observations";
 

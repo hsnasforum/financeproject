@@ -90,6 +90,14 @@ type DailyRefreshData = {
   steps: DailyRefreshStep[];
 };
 
+type NewsBriefData = {
+  generatedAt: string;
+  stats?: {
+    totalItems?: number;
+    totalClusters?: number;
+  };
+};
+
 type DailyRefreshStatusApiPayload = {
   ok?: boolean;
   data?: DailyRefreshData | null;
@@ -217,6 +225,11 @@ export function DashboardClient() {
     data: null,
     error: null,
   });
+  const [newsBrief, setNewsBrief] = useState<{ loading: boolean; data: NewsBriefData | null; error: string | null }>({
+    loading: true,
+    data: null,
+    error: null,
+  });
   const [unlockToken, setUnlockToken] = useState("");
   const [unlock, setUnlock] = useState<{ loading: boolean; unlocked: boolean; csrf: string | null; error: string | null }>({
     loading: false,
@@ -320,6 +333,17 @@ export function DashboardClient() {
     }
   }, []);
 
+  const loadNewsBrief = useCallback(async () => {
+    setNewsBrief((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await fetch("/api/dev/news/brief", { cache: "no-store" });
+      const payload = await response.json();
+      setNewsBrief({ loading: false, data: payload.data ?? null, error: null });
+    } catch {
+      setNewsBrief({ loading: false, data: null, error: "뉴스 브리프를 불러오지 못했습니다." });
+    }
+  }, []);
+
   const loadFeedback = useCallback(async () => {
     setFeedback((prev) => ({ ...prev, loading: true, error: null }));
     try {
@@ -345,12 +369,13 @@ export function DashboardClient() {
     const timer = window.setTimeout(() => {
       void loadBrief();
       void loadDailyRefresh();
+      void loadNewsBrief();
       void loadFeedback();
     }, 0);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [loadBrief, loadDailyRefresh, loadFeedback]);
+  }, [loadBrief, loadDailyRefresh, loadFeedback, loadNewsBrief]);
 
   useEffect(() => {
     async function loadHealth() {
@@ -593,7 +618,7 @@ export function DashboardClient() {
       <section className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
         <StatCard label="가용 자산 (최근 설계)" value={plannerAssets} />
         <StatCard label="최고 추천 금리" value={recommendRate} />
-        <StatCard label="데이터 기준일" value={brief.data?.generatedAt ? new Date(brief.data.generatedAt).toLocaleDateString() : "-"} />
+        <StatCard label="뉴스 마지막 갱신" value={formatDateTime(newsBrief.data?.generatedAt ?? null)} />
         <StatCard 
           label="파이프라인 건강도" 
           value={dataSourceSummary.total > 0 ? `${Math.round((dataSourceSummary.configured / dataSourceSummary.total) * 100)}%` : "0%"} 

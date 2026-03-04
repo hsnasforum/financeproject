@@ -26,6 +26,10 @@ describe("runScript whitelist", () => {
       command: "pnpm",
       args: ["dart:watch"],
     });
+    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["news:refresh"] })).toEqual({
+      command: "pnpm",
+      args: ["news:refresh"],
+    });
     expect(sanitizeRunScriptInput({ command: "pnpm", args: ["data:doctor"] })).toEqual({
       command: "pnpm",
       args: ["data:doctor"],

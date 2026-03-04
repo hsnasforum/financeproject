@@ -71,6 +71,7 @@ function trend(topicId: string, label: string): TopicTrend {
     lowHistory: false,
     sourceDiversity: 0.6,
     topSourceShare: 0.4,
+    consensusGrade: "high",
     scoreSum: 15,
     series: [
       { date: "2026-03-03", count: 2, scoreSum: 4 },
@@ -104,6 +105,7 @@ describe("news summary and scenario", () => {
       generatedAt: "2026-03-04T00:00:00.000Z",
       risingTopics: brief.risingTopics,
       topClusters: brief.topToday,
+      topicTrends: [trend("rates", "금리")],
       macroSnapshot: {
         asOf: "2026-03-04",
         source: "test",
@@ -124,6 +126,8 @@ describe("news summary and scenario", () => {
 
     expect(pack.scenarios).toHaveLength(3);
     expect(pack.scenarios.map((row) => row.confidence)).toEqual(["중", "하", "하"]);
+    expect(pack.scenarios.every((row) => row.consensusGrade === "high")).toBe(true);
+    expect(pack.scenarios.every((row) => (row.uncertaintyLabel ?? "").includes("불확실성 낮음"))).toBe(true);
     expect(pack.scenarios.every((row) => !row.confidence.includes("%"))).toBe(true);
     expect(pack.scenarios.every((row) => row.observation.length > 0)).toBe(true);
     expect(pack.scenarios.every((row) => row.interpretations.length >= 2)).toBe(true);

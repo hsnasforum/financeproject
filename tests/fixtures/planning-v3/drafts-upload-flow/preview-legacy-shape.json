@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "cashflow": [
+    {
+      "ym": "2026-01",
+      "incomeKrw": 3000000,
+      "expenseKrw": -1000000,
+      "netKrw": 2000000,
+      "txCount": 2
+    }
+  ],
+  "draftPatch": {
+    "monthlyIncomeNet": 3000000,
+    "monthlyEssentialExpenses": 1000000,
+    "monthlyDiscretionaryExpenses": 300000
+  },
+  "meta": {
+    "rows": 2,
+    "months": 1
+  },
+  "draftSummary": {
+    "rows": 2,
+    "columns": 3
+  }
+}

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { parseIndicatorSeriesFile } from "./contracts";
-import { type SeriesSnapshot } from "./types";
-import { readSeriesObservations, resolveIndicatorsRoot } from "./store";
+import { parseIndicatorSeriesFile } from "./contracts.ts";
+import { type SeriesSnapshot } from "./types.ts";
+import { readSeriesObservations, resolveIndicatorsRoot } from "./store.ts";
 
 export type IndicatorView = "last" | "pctChange" | "zscore";
 
@@ -113,7 +113,7 @@ export function queryIndicatorSeries(input: {
       view,
       window,
       status: "ok",
-      valueSummary: `${round2(latest.value)} (${latest.date})`,
+      valueSummary: `${round2(latest.value)} (기준일 ${latest.date})`,
       asOf: latest.date,
     };
   }
@@ -130,7 +130,7 @@ export function queryIndicatorSeries(input: {
       view,
       window,
       status: "ok",
-      valueSummary: `${formatSigned(change)}% (${window}p, ${latest.date})`,
+      valueSummary: `${formatSigned(change)}% (최근 ${window}구간, 기준일 ${latest.date})`,
       asOf: latest.date,
     };
   }
@@ -146,7 +146,7 @@ export function queryIndicatorSeries(input: {
     view,
     window,
     status: "ok",
-    valueSummary: `${formatSigned(score)}σ (${grade}, ${latest.date})`,
+    valueSummary: `${formatSigned(score)}σ (등급 ${grade}, 기준일 ${latest.date})`,
     asOf: latest.date,
   };
 }

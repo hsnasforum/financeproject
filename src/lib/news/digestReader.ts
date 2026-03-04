@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import { resolveNewsDigestDayJsonPath } from "./storageSqlite";
-import { type DigestDay } from "./types";
+import { resolveNewsDigestDayJsonPath } from "./storageSqlite.ts";
+import { type DigestDay } from "./types.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

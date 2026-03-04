@@ -20,6 +20,13 @@ export const ARTIFACT_WHITELIST = {
   rules_suggest_json: "tmp/dart/rules_suggestions.json",
   rules_patch_json: "tmp/dart/rules_patch.json",
   rules_pr_patch: "tmp/dart/rules_pr.patch",
+  news_brief_json: ".data/news/news_brief.latest.json",
+  news_brief_md: ".data/news/news_brief.latest.md",
+  news_scenarios_json: ".data/news/news_scenarios.latest.json",
+  news_scenarios_md: ".data/news/news_scenarios.latest.md",
+  news_topic_trends_json: ".data/news/topic_trends.latest.json",
+  news_digest_day_json: ".data/news/digest_day.latest.json",
+  news_digest_day_md: ".data/news/digest_day.latest.md",
 } as const;
 
 export type ArtifactName = keyof typeof ARTIFACT_WHITELIST;

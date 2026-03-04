@@ -1,4 +1,4 @@
-import { type SeriesSnapshot } from "../indicators/types";
+import { type SeriesSnapshot } from "../indicators/types.ts";
 
 export type TriggerStatus = "met" | "not_met" | "unknown";
 
@@ -41,6 +41,33 @@ function formatSigned(value: number): string {
   const rounded = round2(value);
   if (rounded > 0) return `+${rounded}`;
   return String(rounded);
+}
+
+function metricLabel(metric: ParsedRule["metric"]): string {
+  if (metric === "pctChange") return "변화율";
+  return "표준점수";
+}
+
+function metricUnit(metric: ParsedRule["metric"]): string {
+  if (metric === "pctChange") return "%";
+  return "σ";
+}
+
+function seriesLabel(seriesId: string): string {
+  const normalized = asString(seriesId).toLowerCase();
+  if (normalized === "kr_usdkrw") return "원/달러 환율";
+  if (normalized === "kr_base_rate") return "기준금리";
+  if (normalized === "kr_m2") return "M2 통화량";
+  if (normalized === "us_cpi") return "미국 CPI";
+  return seriesId;
+}
+
+function normalizeTriggerLabel(value: string): string {
+  const label = asString(value) || "트리거";
+  return label
+    .replace(/z-score/gi, "표준점수")
+    .replace(/zscore/gi, "표준점수")
+    .replace(/pctchange/gi, "변화율");
 }
 
 function thresholdTokenToNumber(token: string): number | null {
@@ -137,7 +164,7 @@ export function evaluateTriggerRule(input: {
   rule: ScenarioTriggerRule;
   snapshotsBySeriesId: Map<string, SeriesSnapshot>;
 }): ScenarioTriggerEval {
-  const label = asString(input.rule.label) || "trigger";
+  const label = normalizeTriggerLabel(asString(input.rule.label) || "트리거");
   const expression = asString(input.rule.expression);
   const parsed = parseRule(expression);
   if (!parsed) {
@@ -160,7 +187,7 @@ export function evaluateTriggerRule(input: {
       label,
       expression,
       status: "unknown",
-      summary: `${label}: 데이터 부족(${parsed.seriesId})`,
+      summary: `${label}: ${seriesLabel(parsed.seriesId)} 데이터 부족`,
     };
   }
 
@@ -169,7 +196,7 @@ export function evaluateTriggerRule(input: {
     label,
     expression,
     status: met ? "met" : "not_met",
-    summary: `${label}: ${parsed.metric}(${parsed.seriesId},${parsed.window})=${formatSigned(metricValue)} ${met ? "충족" : "미충족"}`,
+    summary: `${label}: ${seriesLabel(parsed.seriesId)} ${metricLabel(parsed.metric)} ${formatSigned(metricValue)}${metricUnit(parsed.metric)} (최근 ${parsed.window}구간) ${met ? "충족" : "미충족"}`,
   };
 }
 

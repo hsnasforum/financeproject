@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import { resolveNewsBriefJsonPath } from "./storageSqlite";
-import { type NewsBrief } from "./types";
+import { resolveNewsBriefJsonPath } from "./storageSqlite.ts";
+import { type NewsBrief } from "./types.ts";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
