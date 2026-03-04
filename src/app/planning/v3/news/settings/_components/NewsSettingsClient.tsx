@@ -102,10 +102,32 @@ type IndicatorSeriesSpec = {
   enabled?: boolean;
 };
 
+type IndicatorCategory =
+  | "rates"
+  | "inflation"
+  | "fx"
+  | "growth"
+  | "labor"
+  | "credit"
+  | "commodities"
+  | "fiscal"
+  | "liquidity"
+  | "general";
+
+type IndicatorCatalogRow = IndicatorSeriesSpec & {
+  annotation: {
+    seriesId: string;
+    category: IndicatorCategory;
+    label: string;
+  };
+  displayLabel: string;
+};
+
 type IndicatorSpecsGetResponse = {
   ok?: boolean;
   data?: {
     specs?: IndicatorSeriesSpec[];
+    catalog?: IndicatorCatalogRow[];
   } | null;
   error?: { message?: string };
 };
@@ -204,6 +226,23 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
+function formatIndicatorCategory(value: IndicatorCategory | string | undefined): string {
+  const normalized = asString(value).toLowerCase();
+  const map: Record<string, string> = {
+    rates: "금리",
+    inflation: "물가",
+    fx: "환율",
+    growth: "성장",
+    labor: "고용",
+    credit: "신용",
+    commodities: "원자재",
+    fiscal: "재정",
+    liquidity: "유동성",
+    general: "일반",
+  };
+  return map[normalized] ?? "일반";
+}
+
 function parseKeywords(text: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -296,12 +335,20 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
   const [specsJson, setSpecsJson] = useState("[]");
   const [specsIoLoading, setSpecsIoLoading] = useState(false);
   const [specsIoSummary, setSpecsIoSummary] = useState("");
+  const [indicatorCatalog, setIndicatorCatalog] = useState<IndicatorCatalogRow[]>([]);
+
+  const applyIndicatorSpecsResponse = useCallback((payload: IndicatorSpecsGetResponse | null | undefined) => {
+    const specs = payload?.data?.specs ?? [];
+    const catalog = payload?.data?.catalog ?? [];
+    setSpecsJson(`${JSON.stringify(specs, null, 2)}\n`);
+    setIndicatorCatalog([...catalog].sort((a, b) => asString(a.id).localeCompare(asString(b.id))));
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
     try {
-      const [settingsResponse, exposureResponse] = await Promise.all([
+      const [settingsResponse, exposureResponse, specsResponse] = await Promise.all([
         fetch("/api/planning/v3/news/settings", {
           method: "GET",
           cache: "no-store",
@@ -318,14 +365,28 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
             "x-requested-with": "XMLHttpRequest",
           },
         }),
+        fetch("/api/planning/v3/indicators/specs", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: {
+            "x-requested-with": "XMLHttpRequest",
+          },
+        }),
       ]);
       const settingsPayload = (await settingsResponse.json().catch(() => null)) as GetSettingsResponse | null;
       const exposurePayload = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
+      const specsPayload = (await specsResponse.json().catch(() => null)) as IndicatorSpecsGetResponse | null;
       if (!settingsResponse.ok || settingsPayload?.ok !== true || !settingsPayload.data) {
         throw new Error(settingsPayload?.error?.message ?? `HTTP ${settingsResponse.status}`);
       }
       if (!exposureResponse.ok || exposurePayload?.ok !== true) {
         throw new Error(exposurePayload?.error?.message ?? `HTTP ${exposureResponse.status}`);
+      }
+      if (specsResponse.ok && specsPayload?.ok === true) {
+        applyIndicatorSpecsResponse(specsPayload);
+      } else {
+        setIndicatorCatalog([]);
       }
 
       const loadedSources = settingsPayload.data.sources ?? [];
@@ -360,10 +421,11 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
       setTopicDrafts({});
       setExposureDraft(emptyExposureDraft());
       setInitialExposureDraft(emptyExposureDraft());
+      setIndicatorCatalog([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyIndicatorSpecsResponse]);
 
   useEffect(() => {
     void load();
@@ -583,8 +645,8 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
       if (!response.ok || result?.ok !== true) {
         throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
       }
+      applyIndicatorSpecsResponse(result);
       const specs = result.data?.specs ?? [];
-      setSpecsJson(`${JSON.stringify(specs, null, 2)}\n`);
       setSpecsIoSummary(`내보내기 완료: ${specs.length}개 series spec`);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "series spec 내보내기에 실패했습니다.");
@@ -620,6 +682,9 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
       setSpecsIoSummary(
         `${mode === "apply" ? "적용" : "Dry-run"}: 입력 ${preview.totalInput ?? 0}, 유효 ${preview.validRows ?? 0}, 신규 ${preview.createCount ?? 0}, 갱신 ${preview.updateCount ?? 0}, 중복 ${preview.duplicateCount ?? 0}, 이슈 ${preview.issueCount ?? 0}`,
       );
+      if (mode === "apply") {
+        await load();
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "series spec import 처리에 실패했습니다.");
     } finally {
@@ -737,7 +802,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
           {sourcesIoSummary ? <p className="text-xs font-semibold text-emerald-700">{sourcesIoSummary}</p> : null}
         </Card>
 
-        <Card className="space-y-3">
+        <Card id="indicator-series-specs" className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">Indicator SeriesSpec Import / Export</h2>
           <p className="text-xs text-slate-500">series spec만 import/export 하며 키/토큰은 포함되지 않습니다. import는 strict validation + dry-run을 먼저 수행하세요.</p>
           <div className="flex flex-wrap items-center gap-2">
@@ -774,6 +839,39 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
             placeholder="SeriesSpec JSON 배열"
           />
           {specsIoSummary ? <p className="text-xs font-semibold text-emerald-700">{specsIoSummary}</p> : null}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-slate-700">Indicator Catalog ({indicatorCatalog.length})</p>
+            {indicatorCatalog.length < 1 ? (
+              <p className="text-xs text-slate-500">카탈로그 데이터가 없습니다.</p>
+            ) : (
+              <div className="max-h-72 overflow-auto rounded border border-slate-200">
+                <table className="min-w-full text-left text-xs">
+                  <thead className="sticky top-0 bg-slate-100 text-slate-700">
+                    <tr>
+                      <th className="px-2 py-1">Series ID</th>
+                      <th className="px-2 py-1">표시 라벨</th>
+                      <th className="px-2 py-1">카테고리</th>
+                      <th className="px-2 py-1">소스</th>
+                      <th className="px-2 py-1">주기</th>
+                      <th className="px-2 py-1">사용</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {indicatorCatalog.map((row) => (
+                      <tr key={`catalog-${row.id}`} className="border-t border-slate-200 text-slate-700">
+                        <td className="px-2 py-1 font-mono">{row.id}</td>
+                        <td className="px-2 py-1">{asString(row.displayLabel) || asString(row.annotation?.label) || asString(row.name)}</td>
+                        <td className="px-2 py-1">{formatIndicatorCategory(row.annotation?.category)}</td>
+                        <td className="px-2 py-1">{asString(row.sourceId)}</td>
+                        <td className="px-2 py-1">{asString(row.frequency)}</td>
+                        <td className="px-2 py-1">{row.enabled === false ? "비활성" : "활성"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </Card>
 
         <Card className="space-y-3">

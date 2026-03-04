@@ -9,6 +9,10 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { SeriesSpecSchema } from "../../../../../../../planning/v3/indicators/contracts";
 import {
+  IndicatorCatalogRowSchema,
+  buildIndicatorCatalogRows,
+} from "../../../../../../../planning/v3/indicators/annotations";
+import {
   IndicatorSpecsImportApplyResultSchema,
   IndicatorSpecsImportPreviewSchema,
   applyImportSeriesSpecs,
@@ -21,6 +25,7 @@ const SpecsGetResponseSchema = z.object({
   ok: z.literal(true),
   data: z.object({
     specs: z.array(SeriesSpecSchema),
+    catalog: z.array(IndicatorCatalogRowSchema),
   }),
 });
 
@@ -65,9 +70,10 @@ export async function GET(request: Request) {
   }
 
   const specs = exportSeriesSpecList();
+  const catalog = buildIndicatorCatalogRows(specs);
   const payload = parseWithV3Whitelist(SpecsGetResponseSchema, {
     ok: true,
-    data: { specs },
+    data: { specs, catalog },
   }, { scope: "response", context: "api.v3.indicators.specs.get" });
   return NextResponse.json(payload);
 }
