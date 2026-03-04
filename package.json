@@ -88,6 +88,7 @@
     "planning:v2:doctor": "node --import tsx scripts/planning_v2_doctor.mjs",
     "v3:doctor": "node --import tsx planning/v3/ops/doctor.ts",
     "v3:trim": "node --import tsx planning/v3/ops/trim.ts",
+    "v3:export": "node --import tsx planning/v3/ops/export.ts",
     "sec:check": "node scripts/security_check.mjs",
     "planning:v2:guard": "node scripts/planning_v2_static_guard.mjs",
     "planning:v2:ssot:guard": "node scripts/planning_v2_ssot_guard.mjs",
