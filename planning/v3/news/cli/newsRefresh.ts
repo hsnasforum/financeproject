@@ -1,11 +1,29 @@
-import { IngestResultSchema, type IngestResult, type NewsSource, type RuntimeState } from "../contracts";
+import { IngestResultSchema, type IngestResult, type NewsSource, type RuntimeState, type TopicDailyStat } from "../contracts";
 import { fetchFeed } from "../ingest/fetchFeed";
 import { normalizeEntry } from "../ingest/normalizeEntry";
 import { parseFeed } from "../ingest/parseFeed";
 import { buildDigest } from "../digest";
+import { buildDigestDay } from "../digest/buildDigest";
 import { loadEffectiveNewsConfig } from "../settings";
 import { NEWS_SOURCES } from "../sources";
-import { hasItem, readAllItems, readDailyStats, readState, upsertItems, writeDailyStats, writeDigest, writeState } from "../store";
+import { buildScenarios } from "../scenario";
+import { selectTopFromStore } from "../selectTop";
+import { type TopicDailyStat as ScenarioTrendStat } from "../trend/contracts";
+import {
+  hasItem,
+  readAllItems,
+  readDailyStats,
+  readDailyStatsLastNDays,
+  readState,
+  type TrendCacheTopic,
+  upsertItems,
+  writeDailyStats,
+  writeDigest,
+  writeScenariosCache,
+  writeState,
+  writeTodayCache,
+  writeTrendsCache,
+} from "../store";
 import { buildRollingDailyStats, shiftKstDay, toKstDayKey } from "../trend";
 
 type RunNewsRefreshOptions = {
@@ -24,6 +42,76 @@ function sleep(ms: number): Promise<void> {
 function nowIso(now?: Date): string {
   const date = now ?? new Date();
   return date.toISOString();
+}
+
+function burstWeight(value: string): number {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "high" || normalized === "상") return 4;
+  if (normalized === "med" || normalized === "중") return 3;
+  if (normalized === "low" || normalized === "하") return 2;
+  return 1;
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function aggregateTrendRows(input: {
+  todayRows: TopicDailyStat[];
+  windowRows: TopicDailyStat[];
+}): TrendCacheTopic[] {
+  const map = new Map<string, {
+    topicId: string;
+    topicLabel: string;
+    count: number;
+    diversitySum: number;
+    diversityDays: number;
+    burstGrade: string;
+  }>();
+
+  const todayByTopic = new Map(input.todayRows.map((row) => [row.topicId, row] as const));
+
+  for (const row of input.windowRows) {
+    const prev = map.get(row.topicId) ?? {
+      topicId: row.topicId,
+      topicLabel: row.topicLabel,
+      count: 0,
+      diversitySum: 0,
+      diversityDays: 0,
+      burstGrade: "Unknown",
+    };
+    prev.count += row.count;
+    prev.diversitySum += row.sourceDiversity;
+    prev.diversityDays += 1;
+    map.set(row.topicId, prev);
+  }
+
+  const out: TrendCacheTopic[] = [...map.values()].map((row) => {
+    const today = todayByTopic.get(row.topicId);
+    return {
+      topicId: row.topicId,
+      topicLabel: row.topicLabel,
+      count: row.count,
+      burstGrade: today?.burstGrade ?? row.burstGrade,
+      sourceDiversity: row.diversityDays > 0 ? round3(row.diversitySum / row.diversityDays) : 0,
+    };
+  });
+
+  return out.sort((a, b) => {
+    const gradeDiff = burstWeight(b.burstGrade) - burstWeight(a.burstGrade);
+    if (gradeDiff !== 0) return gradeDiff;
+    if (a.count !== b.count) return b.count - a.count;
+    if (a.sourceDiversity !== b.sourceDiversity) return b.sourceDiversity - a.sourceDiversity;
+    return a.topicId.localeCompare(b.topicId);
+  });
+}
+
+function normalizeBurstGradeForScenario(value: string): ScenarioTrendStat["burstGrade"] {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "high" || normalized === "상") return "High";
+  if (normalized === "med" || normalized === "중") return "Med";
+  if (normalized === "low" || normalized === "하") return "Low";
+  return "Unknown";
 }
 
 export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promise<IngestResult> {
@@ -135,6 +223,63 @@ export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promi
     { rootDir, now: options.now ?? new Date(), topN: 10, topM: 5 },
   );
   writeDigest(digest, rootDir);
+
+  const topResult = selectTopFromStore({
+    rootDir,
+    now: options.now ?? new Date(),
+    windowHours: 72,
+    topN: 10,
+    topM: 5,
+    sourceWeights,
+    topics: options.sources ? undefined : effective.topics,
+  });
+  const digestDay = buildDigestDay({
+    date: todayKst,
+    topResult,
+    burstTopics: dailyStats,
+  });
+  const scenarios = buildScenarios({
+    digest: digestDay,
+    trends: dailyStats.map((row) => ({
+      dateKst: row.dateKst,
+      topicId: row.topicId,
+      topicLabel: row.topicLabel,
+      count: row.count,
+      scoreSum: row.scoreSum,
+      sourceDiversity: row.sourceDiversity,
+      burstGrade: normalizeBurstGradeForScenario(row.burstGrade),
+    })),
+    generatedAt: fetchedAt,
+  });
+
+  writeTodayCache({
+    generatedAt: fetchedAt,
+    date: todayKst,
+    lastRefreshedAt: fetchedAt,
+    digest: digestDay,
+    scenarios,
+  }, rootDir);
+
+  writeScenariosCache({
+    generatedAt: fetchedAt,
+    lastRefreshedAt: fetchedAt,
+    scenarios,
+  }, rootDir);
+
+  const trends7Rows = readDailyStatsLastNDays({ toDateKst: todayKst, days: 7, rootDir });
+  const trends30Rows = readDailyStatsLastNDays({ toDateKst: todayKst, days: 30, rootDir });
+  writeTrendsCache({
+    generatedAt: fetchedAt,
+    date: todayKst,
+    windowDays: 7,
+    topics: aggregateTrendRows({ todayRows: dailyStats, windowRows: trends7Rows }),
+  }, rootDir);
+  writeTrendsCache({
+    generatedAt: fetchedAt,
+    date: todayKst,
+    windowDays: 30,
+    topics: aggregateTrendRows({ todayRows: dailyStats, windowRows: trends30Rows }),
+  }, rootDir);
 
   return IngestResultSchema.parse({
     sourcesProcessed,
