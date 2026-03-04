@@ -3,7 +3,8 @@ import { fetchFeed } from "../ingest/fetchFeed";
 import { normalizeEntry } from "../ingest/normalizeEntry";
 import { parseFeed } from "../ingest/parseFeed";
 import { NEWS_SOURCES } from "../sources";
-import { hasItem, readState, upsertItems, writeState } from "../store";
+import { hasItem, readAllItems, readDailyStats, readState, upsertItems, writeDailyStats, writeState } from "../store";
+import { buildRollingDailyStats, shiftKstDay, toKstDayKey } from "../trend";
 
 type RunNewsRefreshOptions = {
   rootDir?: string;
@@ -101,6 +102,23 @@ export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promi
   itemsDeduped += persisted.itemsDeduped;
   nextState.lastRunAt = fetchedAt;
   writeState(nextState, rootDir);
+
+  const allItems = readAllItems(rootDir);
+  const todayKst = toKstDayKey(options.now ?? new Date());
+  const historyStatsByDay: Record<string, ReturnType<typeof readDailyStats>> = {};
+  for (let offset = 1; offset <= 7; offset += 1) {
+    const day = shiftKstDay(todayKst, -offset);
+    historyStatsByDay[day] = readDailyStats(day, rootDir);
+  }
+
+  const dailyStats = buildRollingDailyStats({
+    items: allItems,
+    dateKst: todayKst,
+    historyStatsByDay,
+    baselineDays: 7,
+    now: options.now ?? new Date(),
+  });
+  writeDailyStats(todayKst, dailyStats, rootDir);
 
   return IngestResultSchema.parse({
     sourcesProcessed,

@@ -132,6 +132,22 @@ export const SelectTopResultSchema = z.object({
 
 export type SelectTopResult = z.infer<typeof SelectTopResultSchema>;
 
+export const BurstGradeSchema = z.enum(["상", "중", "하"]);
+export type BurstGrade = z.infer<typeof BurstGradeSchema>;
+
+export const TopicDailyStatSchema = z.object({
+  dateKst: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  topicId: z.string().trim().min(1),
+  topicLabel: z.string().trim().min(1),
+  count: z.number().int().nonnegative(),
+  baselineMean: z.number().finite(),
+  baselineStddev: z.number().finite(),
+  burstZ: z.number().finite(),
+  burstGrade: BurstGradeSchema,
+});
+
+export type TopicDailyStat = z.infer<typeof TopicDailyStatSchema>;
+
 export function parseNewsSource(value: unknown): NewsSource {
   return NewsSourceSchema.parse(value);
 }
@@ -146,4 +162,8 @@ export function parseRuntimeState(value: unknown): RuntimeState {
 
 export function parseScoredNewsItem(value: unknown): ScoredNewsItem {
   return ScoredNewsItemSchema.parse(value);
+}
+
+export function parseTopicDailyStat(value: unknown): TopicDailyStat {
+  return TopicDailyStatSchema.parse(value);
 }
