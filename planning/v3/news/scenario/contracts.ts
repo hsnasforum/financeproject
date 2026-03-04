@@ -25,6 +25,10 @@ export const ScenarioCardSchema = z.object({
   indicators: z.array(z.string().trim().min(1)).min(1),
   options: z.array(z.string().trim().min(1)).min(1),
   linkedTopics: z.array(z.string().trim().min(1)).min(1).max(3),
+  changeAttribution: z.object({
+    title: z.literal("가능한 요인"),
+    drivers: z.array(z.string().trim().min(1)).min(1).max(4),
+  }).optional(),
   quality: z.object({
     dedupeLevel: z.enum(["high", "med", "low"]),
     contradictionLevel: z.enum(["high", "med", "low"]),
