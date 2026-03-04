@@ -2,12 +2,14 @@ import {
   SelectTopResultSchema,
   TopTopicSchema,
   type NewsItem,
+  type NewsTopic,
   type ScoredNewsItem,
   type SelectTopResult,
   type TopTopic,
 } from "./contracts";
 import { clusterItems } from "./cluster";
 import { scoreItems } from "./score";
+import { loadEffectiveNewsConfig } from "./settings";
 import { readAllItems } from "./store";
 import { canonicalizeTopicId } from "./taxonomy";
 
@@ -17,6 +19,8 @@ type SelectTopOptions = {
   windowHours?: number;
   topN?: number;
   topM?: number;
+  sourceWeights?: Record<string, number>;
+  topics?: NewsTopic[];
 };
 
 function clampInteger(value: number | undefined, min: number, max: number, fallback: number): number {
@@ -118,7 +122,11 @@ export function selectTopFromItems(items: NewsItem[], options: SelectTopOptions 
     .filter((item) => inWindow(item, nowMs, windowHours))
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  const scored = applySourceDiversityPenalty(scoreItems(candidates, { now }));
+  const scored = applySourceDiversityPenalty(scoreItems(candidates, {
+    now,
+    sourceWeights: options.sourceWeights,
+    topics: options.topics,
+  }));
   const clusters = clusterItems(scored);
   const representatives = clusters.map((cluster) => cluster.representative);
 
@@ -131,6 +139,11 @@ export function selectTopFromItems(items: NewsItem[], options: SelectTopOptions 
 }
 
 export function selectTopFromStore(options: SelectTopOptions = {}): SelectTopResult {
+  const effective = loadEffectiveNewsConfig(options.rootDir);
   const items = readAllItems(options.rootDir);
-  return selectTopFromItems(items, options);
+  return selectTopFromItems(items, {
+    ...options,
+    sourceWeights: options.sourceWeights ?? Object.fromEntries(effective.sources.map((row) => [row.id, row.weight])),
+    topics: options.topics ?? effective.topics,
+  });
 }

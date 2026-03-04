@@ -17,12 +17,14 @@ vi.mock("../src/lib/dev/runScript", async () => {
 import { GET as digestGET } from "../src/app/api/planning/v3/news/digest/route";
 import { POST as refreshPOST } from "../src/app/api/planning/v3/news/refresh/route";
 import { GET as scenariosGET } from "../src/app/api/planning/v3/news/scenarios/route";
+import { GET as settingsGET, POST as settingsPOST } from "../src/app/api/planning/v3/news/settings/route";
 import { GET as trendsGET } from "../src/app/api/planning/v3/news/trends/route";
 import {
   resolveNewsDigestDayJsonPath,
   resolveNewsScenarioJsonPath,
   resolveNewsTrendsJsonPath,
 } from "../src/lib/news/storageSqlite";
+import { resolveNewsSettingsPath } from "../planning/v3/news/settings";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -33,6 +35,7 @@ const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const DIGEST_PATH = resolveNewsDigestDayJsonPath();
 const TRENDS_PATH = resolveNewsTrendsJsonPath();
 const SCENARIOS_PATH = resolveNewsScenarioJsonPath();
+const SETTINGS_PATH = resolveNewsSettingsPath();
 
 function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = false): Request {
   const origin = `http://${host}`;
@@ -55,6 +58,23 @@ function requestPost(body: unknown, withAuth = true): Request {
     headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
   }
   return new Request(`${LOCAL_ORIGIN}/api/planning/v3/news/refresh`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+}
+
+function requestSettingsPost(body: unknown, withAuth = true): Request {
+  const headers = new Headers({
+    host: LOCAL_HOST,
+    origin: LOCAL_ORIGIN,
+    referer: `${LOCAL_ORIGIN}/planning/v3/news/settings`,
+    "content-type": "application/json",
+  });
+  if (withAuth) {
+    headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
+  }
+  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/news/settings`, {
     method: "POST",
     headers,
     body: JSON.stringify(body),
@@ -199,6 +219,58 @@ describe("planning v3 news api", () => {
     const parsed = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as {
       scripts?: Record<string, string>;
     };
-    expect(parsed.scripts?.["news:refresh"]).toBe("node scripts/news_refresh.mjs");
+    const script = parsed.scripts?.["news:refresh"] ?? "";
+    expect(script).toContain("scripts/news_refresh.mjs");
+  });
+
+  it("GET settings blocks when same-origin headers are missing", async () => {
+    const response = await settingsGET(requestGet("/api/planning/v3/news/settings"));
+    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
+    expect(response.status).toBe(403);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
+  });
+
+  it("GET settings returns defaults/effective config on local same-origin request", async () => {
+    const backup = backupAndRemove(SETTINGS_PATH);
+    try {
+      const response = await settingsGET(requestGet("/api/planning/v3/news/settings", LOCAL_HOST, true));
+      const payload = await response.json() as {
+        ok?: boolean;
+        data?: {
+          sources?: Array<{ id?: string }>;
+          topics?: Array<{ id?: string }>;
+        };
+      };
+      expect(response.status).toBe(200);
+      expect(payload.ok).toBe(true);
+      expect((payload.data?.sources ?? []).length).toBeGreaterThan(0);
+      expect((payload.data?.topics ?? []).length).toBeGreaterThan(0);
+    } finally {
+      restoreFile(SETTINGS_PATH, backup);
+    }
+  });
+
+  it("POST settings writes local override file with csrf guard", async () => {
+    const backup = backupAndRemove(SETTINGS_PATH);
+    try {
+      const denied = await settingsPOST(requestSettingsPost({
+        csrf: "csrf-token",
+        sources: [{ id: "bok_press_all", enabled: false, weight: 0.9 }],
+      }, false));
+      expect(denied.status).toBe(403);
+
+      const allowed = await settingsPOST(requestSettingsPost({
+        csrf: "csrf-token",
+        sources: [{ id: "bok_press_all", enabled: false, weight: 0.9 }],
+        topics: [{ id: "rates", keywords: ["기준금리", "테스트"] }],
+      }));
+      const payload = await allowed.json() as { ok?: boolean };
+      expect(allowed.status).toBe(200);
+      expect(payload.ok).toBe(true);
+      expect(fs.existsSync(SETTINGS_PATH)).toBe(true);
+    } finally {
+      restoreFile(SETTINGS_PATH, backup);
+    }
   });
 });

@@ -145,6 +145,9 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
               <Link href="/planning/v3/news/trends" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
                 트렌드 보기
               </Link>
+              <Link href="/planning/v3/news/settings" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+                설정
+              </Link>
               <button
                 type="button"
                 disabled={refreshing}

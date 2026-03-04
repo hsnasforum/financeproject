@@ -87,6 +87,9 @@ export function NewsTrendsClient() {
               <Link href="/planning/v3/news" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
                 Digest로
               </Link>
+              <Link href="/planning/v3/news/settings" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+                설정
+              </Link>
               <button
                 type="button"
                 onClick={() => setWindowDays(7)}

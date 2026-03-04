@@ -3,6 +3,7 @@ import { fetchFeed } from "../ingest/fetchFeed";
 import { normalizeEntry } from "../ingest/normalizeEntry";
 import { parseFeed } from "../ingest/parseFeed";
 import { buildDigest } from "../digest";
+import { loadEffectiveNewsConfig } from "../settings";
 import { NEWS_SOURCES } from "../sources";
 import { hasItem, readAllItems, readDailyStats, readState, upsertItems, writeDailyStats, writeDigest, writeState } from "../store";
 import { buildRollingDailyStats, shiftKstDay, toKstDayKey } from "../trend";
@@ -26,8 +27,14 @@ function nowIso(now?: Date): string {
 }
 
 export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promise<IngestResult> {
-  const sources = (options.sources ?? NEWS_SOURCES).filter((source) => source.enabled);
   const rootDir = options.rootDir;
+  const effective = options.sources
+    ? { sources: options.sources, topics: [] }
+    : loadEffectiveNewsConfig(rootDir);
+  const sources = (options.sources ?? effective.sources ?? NEWS_SOURCES).filter((source) => source.enabled);
+  const sourceWeights = Object.fromEntries(
+    (options.sources ?? effective.sources ?? NEWS_SOURCES).map((row) => [row.id, row.weight]),
+  );
   const throttleMs = Math.max(0, Math.round(options.throttleMs ?? 250));
 
   const currentState = readState(rootDir);
@@ -118,6 +125,8 @@ export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promi
     historyStatsByDay,
     baselineDays: 7,
     now: options.now ?? new Date(),
+    sourceWeights,
+    topics: options.sources ? undefined : effective.topics,
   });
   writeDailyStats(todayKst, dailyStats, rootDir);
 
