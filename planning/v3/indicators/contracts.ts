@@ -79,11 +79,12 @@ export type IndicatorsState = z.infer<typeof IndicatorsStateSchema>;
 export const RefreshErrorSchema = z.object({
   sourceId: z.string().trim().min(1),
   seriesId: z.string().trim().min(1).optional(),
-  code: z.string().trim().min(1),
+  code: z.enum(["INPUT", "FETCH", "PARSE", "LIMIT", "INTERNAL"]),
   message: z.string().trim().min(1),
 });
 
 export type RefreshError = z.infer<typeof RefreshErrorSchema>;
+export type ConnectorErrorCode = RefreshError["code"];
 
 export const RefreshResultSchema = z.object({
   sourcesProcessed: z.number().int().nonnegative(),

@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { ObservationSchema, SeriesSnapshotSchema, type Observation, type SeriesSnapshot, type SeriesSpec } from "../contracts";
+import { ObservationSchema, type Observation, type SeriesSpec } from "../contracts";
+import { ConnectorError } from "./errors";
+import type { FetchSeriesOptions, SeriesConnector } from "./types";
 
 const PREFIX = "fixture://";
 
@@ -16,25 +18,45 @@ function resolveFixturePath(name: string): string {
   return path.join(thisDir, "..", "fixtures", "series", `${name}.json`);
 }
 
-export async function fetchFixtureSeries(spec: SeriesSpec, asOf = new Date()): Promise<SeriesSnapshot> {
+export async function fetchFixtureSeries(spec: SeriesSpec, _options: FetchSeriesOptions): Promise<{
+  observations: Observation[];
+  meta: {
+    sourceId: string;
+    externalId: string;
+    frequency: SeriesSpec["frequency"];
+    units?: string;
+    transform?: SeriesSpec["transform"];
+    notes?: string;
+  };
+}> {
   const fixtureName = fixtureNameFromExternalId(spec.externalId);
   if (!fixtureName) {
-    throw new Error(`fixture_external_id_invalid:${spec.externalId}`);
+    throw new ConnectorError("INPUT", `fixture_external_id_invalid:${spec.externalId}`);
   }
 
   const filePath = resolveFixturePath(fixtureName);
   if (!fs.existsSync(filePath)) {
-    throw new Error(`fixture_not_found:${fixtureName}`);
+    throw new ConnectorError("FETCH", `fixture_not_found:${fixtureName}`);
   }
 
-  const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as { observations?: unknown[] };
+  let parsed: { observations?: unknown[] };
+  try {
+    parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as { observations?: unknown[] };
+  } catch (error) {
+    throw new ConnectorError("PARSE", error instanceof Error ? error.message : "fixture_json_parse_failed");
+  }
+
   const observations: Observation[] = Array.isArray(parsed.observations)
-    ? parsed.observations.map((row) => ObservationSchema.parse(row))
+    ? parsed.observations.map((row) => {
+      try {
+        return ObservationSchema.parse(row);
+      } catch {
+        throw new ConnectorError("PARSE", "fixture_observation_parse_failed");
+      }
+    })
     : [];
 
-  return SeriesSnapshotSchema.parse({
-    seriesId: spec.id,
-    asOf: asOf.toISOString(),
+  return {
     observations,
     meta: {
       sourceId: spec.sourceId,
@@ -44,5 +66,10 @@ export async function fetchFixtureSeries(spec: SeriesSpec, asOf = new Date()): P
       transform: spec.transform,
       notes: spec.notes,
     },
-  });
+  };
 }
+
+export const fixtureConnector: SeriesConnector = {
+  sourceType: "fixture",
+  fetchSeries: fetchFixtureSeries,
+};
