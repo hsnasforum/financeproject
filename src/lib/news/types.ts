@@ -257,6 +257,20 @@ export type DigestTopTopic = {
   burstLevel: BurstLevel;
 };
 
+export type DigestWatchView = "last" | "pctChange" | "zscore";
+
+export type DigestWatchStatus = "ok" | "unknown";
+
+export type DigestWatchItem = {
+  label: string;
+  seriesId: string;
+  view: DigestWatchView;
+  window: number;
+  status: DigestWatchStatus;
+  valueSummary: string;
+  asOf?: string | null;
+};
+
 export type ScenarioCard = {
   name: "Base" | "Bull" | "Bear";
   confidence: "상" | "중" | "하";
@@ -274,7 +288,7 @@ export type DigestDay = {
   topItems: DigestTopItem[];
   topTopics: DigestTopTopic[];
   burstTopics: DigestTopTopic[];
-  watchlist: string[];
+  watchlist: DigestWatchItem[];
   scenarioCards: ScenarioCard[];
   summary: NewsRuleSummary;
 };

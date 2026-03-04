@@ -188,7 +188,12 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
               <p className="mb-2 text-xs font-bold text-slate-700">체크 변수</p>
               {digest?.watchlist?.length ? (
                 <ul className="space-y-1 text-xs text-slate-700">
-                  {digest.watchlist.map((row) => <li key={row}>- {row}</li>)}
+                  {digest.watchlist.map((row) => (
+                    <li key={`${row.seriesId}-${row.label}-${row.view}`}>
+                      - {row.label}: {row.valueSummary}
+                      {row.status === "unknown" ? " (unknown)" : ""}
+                    </li>
+                  ))}
                 </ul>
               ) : (
                 <p className="text-xs text-slate-500">없음</p>
