@@ -1,7 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
 import {
-  NewsItemSchema,
   SelectTopResultSchema,
   TopTopicSchema,
   type NewsItem,
@@ -10,7 +7,7 @@ import {
 } from "./contracts";
 import { clusterItems } from "./cluster";
 import { scoreItems } from "./score";
-import { resolveItemsDir } from "./store";
+import { readAllItems } from "./store";
 
 type SelectTopOptions = {
   rootDir?: string;
@@ -38,27 +35,6 @@ function inWindow(item: NewsItem, nowMs: number, windowHours: number): boolean {
   if (ts <= 0) return false;
   const ageHours = (nowMs - ts) / (1000 * 60 * 60);
   return ageHours >= 0 && ageHours <= windowHours;
-}
-
-function readStoredItems(rootDir?: string): NewsItem[] {
-  const itemsDir = resolveItemsDir(rootDir);
-  if (!fs.existsSync(itemsDir)) return [];
-
-  const files = fs.readdirSync(itemsDir)
-    .filter((name) => name.endsWith(".json"))
-    .sort((a, b) => a.localeCompare(b));
-
-  const out: NewsItem[] = [];
-  for (const name of files) {
-    const filePath = path.join(itemsDir, name);
-    try {
-      const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
-      out.push(NewsItemSchema.parse(parsed));
-    } catch {
-      // Keep deterministic behavior: skip broken entries quietly.
-    }
-  }
-  return out;
 }
 
 function aggregateTopTopics(items: ReturnType<typeof scoreItems>, topM: number): TopTopic[] {
@@ -116,6 +92,6 @@ export function selectTopFromItems(items: NewsItem[], options: SelectTopOptions 
 }
 
 export function selectTopFromStore(options: SelectTopOptions = {}): SelectTopResult {
-  const items = readStoredItems(options.rootDir);
+  const items = readAllItems(options.rootDir);
   return selectTopFromItems(items, options);
 }

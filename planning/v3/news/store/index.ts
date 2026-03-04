@@ -3,8 +3,10 @@ import path from "node:path";
 import {
   NewsItemSchema,
   RuntimeStateSchema,
+  TopicDailyStatSchema,
   type NewsItem,
   type RuntimeState,
+  type TopicDailyStat,
 } from "../contracts";
 
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "news");
@@ -26,8 +28,17 @@ export function resolveStatePath(rootDir = DEFAULT_ROOT): string {
   return path.join(resolveNewsRoot(rootDir), "state.json");
 }
 
+export function resolveDailyDir(rootDir = DEFAULT_ROOT): string {
+  return path.join(resolveNewsRoot(rootDir), "daily");
+}
+
+export function resolveDailyStatsPath(dateKst: string, rootDir = DEFAULT_ROOT): string {
+  return path.join(resolveDailyDir(rootDir), `${dateKst}.json`);
+}
+
 function ensureStoreDirs(rootDir = DEFAULT_ROOT): void {
   fs.mkdirSync(resolveItemsDir(rootDir), { recursive: true });
+  fs.mkdirSync(resolveDailyDir(rootDir), { recursive: true });
 }
 
 function resolveItemPath(id: string, rootDir = DEFAULT_ROOT): string {
@@ -87,4 +98,44 @@ export function upsertItems(items: NewsItem[], rootDir = DEFAULT_ROOT): { itemsN
   }
 
   return { itemsNew, itemsDeduped };
+}
+
+export function readAllItems(rootDir = DEFAULT_ROOT): NewsItem[] {
+  const itemsDir = resolveItemsDir(rootDir);
+  if (!fs.existsSync(itemsDir)) return [];
+
+  const files = fs.readdirSync(itemsDir)
+    .filter((name) => name.endsWith(".json"))
+    .sort((a, b) => a.localeCompare(b));
+
+  const out: NewsItem[] = [];
+  for (const name of files) {
+    const filePath = path.join(itemsDir, name);
+    try {
+      const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+      out.push(NewsItemSchema.parse(parsed));
+    } catch {
+      // Skip broken rows silently for deterministic, non-blocking reads.
+    }
+  }
+  return out;
+}
+
+export function writeDailyStats(dateKst: string, stats: TopicDailyStat[], rootDir = DEFAULT_ROOT): void {
+  ensureStoreDirs(rootDir);
+  const validated = stats.map((row) => TopicDailyStatSchema.parse(row));
+  const filePath = resolveDailyStatsPath(dateKst, rootDir);
+  fs.writeFileSync(filePath, `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
+}
+
+export function readDailyStats(dateKst: string, rootDir = DEFAULT_ROOT): TopicDailyStat[] {
+  const filePath = resolveDailyStatsPath(dateKst, rootDir);
+  if (!fs.existsSync(filePath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((row) => TopicDailyStatSchema.parse(row));
+  } catch {
+    return [];
+  }
 }
