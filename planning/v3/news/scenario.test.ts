@@ -115,6 +115,11 @@ describe("planning v3 news scenario engine", () => {
       expect(card.indicators.length).toBeGreaterThan(0);
       expect(card.indicators).toContain("kr_base_rate");
       expect(card.indicators.some((seriesId) => seriesId === "kr_usdkrw" || seriesId === "kr_cpi")).toBe(true);
+      if (card.quality) {
+        for (const label of card.quality.uncertaintyLabels) {
+          expect(noRecommendationText(label)).toBe(true);
+        }
+      }
     }
   });
 
@@ -139,5 +144,52 @@ describe("planning v3 news scenario engine", () => {
     });
 
     expect(result.cards[0]?.observation).toContain("사용자 오버라이드 시나리오 템플릿");
+  });
+
+  it("adds uncertainty labels when evidence is duplicated and contradictory", () => {
+    const result = buildScenarios({
+      digest: {
+        ...makeDigest(),
+        evidence: [
+          {
+            title: "기준금리 인상 압력 확대",
+            url: "https://example.com/dup-1",
+            sourceId: "bok_press_all",
+            publishedAt: "2026-03-04T08:00:00.000Z",
+            topics: ["rates"],
+          },
+          {
+            title: "기준금리 인상 압력 확대",
+            url: "https://example.com/dup-2",
+            sourceId: "bok_mpc_decisions",
+            publishedAt: "2026-03-04T08:30:00.000Z",
+            topics: ["rates"],
+          },
+          {
+            title: "기준금리 인하 가능성 부각",
+            url: "https://example.com/opp-1",
+            sourceId: "kosis_monthly_trend",
+            publishedAt: "2026-03-04T09:00:00.000Z",
+            topics: ["rates"],
+          },
+          {
+            title: "완화 전환 기대 확대",
+            url: "https://example.com/opp-2",
+            sourceId: "kostat_press",
+            publishedAt: "2026-03-04T09:30:00.000Z",
+            topics: ["rates"],
+          },
+        ],
+      },
+      trends: makeTrends(),
+      generatedAt: "2026-03-04T12:00:00.000Z",
+    });
+
+    for (const card of result.cards) {
+      expect(card.quality?.uncertaintyLabels.length ?? 0).toBeGreaterThan(0);
+      for (const label of card.quality?.uncertaintyLabels ?? []) {
+        expect(noRecommendationText(label)).toBe(true);
+      }
+    }
   });
 });
