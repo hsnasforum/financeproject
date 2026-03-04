@@ -35,11 +35,22 @@ describe("planning v3 indicators connector registry", () => {
     expect(connector.sourceType).toBe("ecos");
   });
 
-  it("throws INPUT when connector is not configured", () => {
-    expect(() => getConnector({
-      id: "kosis_main",
+  it("returns kosis connector for kosis source", () => {
+    const connector = getConnector({
+      id: "kosis_kr",
       name: "KOSIS",
       type: "kosis",
+      enabled: true,
+    });
+
+    expect(connector.sourceType).toBe("kosis");
+  });
+
+  it("throws INPUT when connector is not configured", () => {
+    expect(() => getConnector({
+      id: "unknown",
+      name: "Unknown",
+      type: "unknown" as unknown as "kosis",
       enabled: true,
     })).toThrow(/connector_not_configured/);
   });
