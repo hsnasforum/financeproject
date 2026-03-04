@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { noRecommendationText } from "./guard/noRecommendationText";
 import { buildScenarios } from "./scenario";
+import { TOPIC_SCENARIO_TEMPLATES } from "./scenario/templates";
 
 function makeDigest() {
   return {
@@ -115,5 +116,28 @@ describe("planning v3 news scenario engine", () => {
       expect(card.indicators).toContain("kr_base_rate");
       expect(card.indicators.some((seriesId) => seriesId === "kr_usdkrw" || seriesId === "kr_cpi")).toBe(true);
     }
+  });
+
+  it("uses injected scenario library templates when provided", () => {
+    const customTemplates = TOPIC_SCENARIO_TEMPLATES.map((row) => (
+      row.topicId === "rates"
+        ? {
+            ...row,
+            observation: {
+              ...row.observation,
+              base: "관찰: 사용자 오버라이드 시나리오 템플릿이 적용되는 조건입니다.",
+            },
+          }
+        : row
+    ));
+
+    const result = buildScenarios({
+      digest: makeDigest(),
+      trends: makeTrends(),
+      generatedAt: "2026-03-04T12:00:00.000Z",
+      libraryTemplates: customTemplates,
+    });
+
+    expect(result.cards[0]?.observation).toContain("사용자 오버라이드 시나리오 템플릿");
   });
 });

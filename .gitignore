@@ -74,6 +74,7 @@ public/providers/*
 .data/news/
 .data/indicators/
 .data/alerts/
+.data/scenarios/
 .data/exposure/
 .data/journal/
 .data/planning/

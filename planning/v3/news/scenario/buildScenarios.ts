@@ -3,20 +3,23 @@ import { assertNoRecommendationText } from "../guard/noRecommendationText";
 import { type TopicDailyStat } from "../trend/contracts";
 import {
   ScenarioPackSchema,
+  TopicScenarioTemplateSchema,
   TriggerConditionSchema,
   type ScenarioCard,
   type ScenarioName,
   type ScenarioPack,
+  type TopicScenarioTemplate,
   type Trigger,
   type TriggerCondition,
 } from "./contracts";
-import { TOPIC_SCENARIO_TEMPLATE_MAP } from "./templates";
+import { TOPIC_SCENARIO_TEMPLATE_MAP, TOPIC_SCENARIO_TEMPLATES } from "./templates";
 import { resolveEvidenceSeriesIds } from "../evidenceGraph/ssot";
 
 type BuildScenariosInput = {
   digest: DigestDay;
   trends: TopicDailyStat[];
   generatedAt?: string;
+  libraryTemplates?: TopicScenarioTemplate[];
 };
 
 type TopicScore = {
@@ -157,12 +160,11 @@ function buildCard(input: {
   linkedTopics: string[];
   primary: TopicScore;
   topicLabelById: Record<string, string>;
+  templateByTopicId: Map<string, TopicScenarioTemplate>;
+  fallbackTemplate: TopicScenarioTemplate;
 }): ScenarioCard {
-  const template = TOPIC_SCENARIO_TEMPLATE_MAP.get(input.primary.topicId)
-    ?? TOPIC_SCENARIO_TEMPLATE_MAP.get("general");
-  if (!template) {
-    throw new Error("missing_scenario_template");
-  }
+  const template = input.templateByTopicId.get(input.primary.topicId)
+    ?? input.fallbackTemplate;
 
   const modeKey = input.name === "Base" ? "base" : input.name === "Bull" ? "bull" : "bear";
   const linkedLabel = input.linkedTopics.map((topicId) => input.topicLabelById[topicId] ?? topicId).join("·");
@@ -196,6 +198,19 @@ function buildCard(input: {
 }
 
 export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
+  const libraryTemplates = Array.isArray(input.libraryTemplates)
+    ? input.libraryTemplates.map((row) => TopicScenarioTemplateSchema.parse(row))
+    : TOPIC_SCENARIO_TEMPLATES;
+  const templateByTopicId = new Map(
+    libraryTemplates.map((row) => [row.topicId, row] as const),
+  );
+  const fallbackTemplate = templateByTopicId.get("general")
+    ?? TOPIC_SCENARIO_TEMPLATE_MAP.get("general")
+    ?? TOPIC_SCENARIO_TEMPLATES[0];
+  if (!fallbackTemplate) {
+    throw new Error("missing_scenario_template");
+  }
+
   const ranked = computeTopicScores(input.digest, input.trends);
   const fallback: TopicScore = {
     topicId: "general",
@@ -220,7 +235,14 @@ export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
   }
 
   const cards: ScenarioCard[] = (["Base", "Bull", "Bear"] as const)
-    .map((name) => buildCard({ name, linkedTopics, primary, topicLabelById }));
+    .map((name) => buildCard({
+      name,
+      linkedTopics,
+      primary,
+      topicLabelById,
+      templateByTopicId,
+      fallbackTemplate,
+    }));
 
   const generatedAt = input.generatedAt ?? `${input.digest.date}T00:00:00.000Z`;
 
