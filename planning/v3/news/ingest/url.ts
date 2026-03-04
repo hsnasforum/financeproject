@@ -43,16 +43,37 @@ export function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
-export function buildItemId(input: { sourceId: string; guid?: string; canonicalUrl?: string }): string {
+function normalizeDateBucket(value: string | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return "unknown";
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) return "unknown";
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function normalizeTitle(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+export function buildItemId(input: {
+  sourceId: string;
+  guid?: string;
+  canonicalUrl?: string;
+  title?: string;
+  publishedAt?: string;
+}): string {
+  const sourceId = input.sourceId.trim().toLowerCase();
   const guid = (input.guid ?? "").trim();
   if (guid) {
-    return sha256(`guid:${input.sourceId}:${guid.toLowerCase()}`);
+    return sha256(`guid:${sourceId}:${guid.toLowerCase()}`);
   }
 
   const canonicalUrl = (input.canonicalUrl ?? "").trim();
   if (canonicalUrl) {
-    return sha256(`url:${canonicalUrl.toLowerCase()}`);
+    return sha256(`url:${sourceId}:${canonicalUrl.toLowerCase()}`);
   }
 
-  return sha256(`fallback:${input.sourceId}`);
+  const title = normalizeTitle(input.title);
+  const publishedDate = normalizeDateBucket(input.publishedAt);
+  return sha256(`fallback:${sourceId}:${title}:${publishedDate}`);
 }
