@@ -5,6 +5,9 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { computeImpact } from "../../../../../../planning/v3/financeNews/impactModel";
+import { type ImpactResult, type ScenarioForImpact } from "../../../../../../planning/v3/financeNews/contracts";
+import { type ExposureProfile } from "../../../../../../planning/v3/exposure/contracts";
 
 type NewsTodayClientProps = {
   csrf?: string;
@@ -42,6 +45,12 @@ type TodayResponse = {
   error?: { message?: string };
 };
 
+type ExposureResponse = {
+  ok?: boolean;
+  profile?: ExposureProfile | null;
+  error?: { message?: string };
+};
+
 type RefreshResponse = {
   ok?: boolean;
   data?: {
@@ -73,29 +82,84 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
+function normalizeScenarioName(value: unknown): ScenarioForImpact["name"] {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === "bull") return "Bull";
+  if (normalized === "bear") return "Bear";
+  return "Base";
+}
+
+function inferTriggerStatus(card: {
+  triggers?: Array<{ condition?: string }>;
+}): ScenarioForImpact["triggerStatus"] {
+  const conditions = (card.triggers ?? []).map((row) => asString(row.condition).toLowerCase()).filter(Boolean);
+  if (conditions.length < 1) return "unknown";
+  if (conditions.some((row) => row === "high" || row === "med")) return "met";
+  if (conditions.every((row) => row === "low")) return "not_met";
+  return "unknown";
+}
+
+function gradeLabel(value: ImpactResult["cashflowRisk"]): string {
+  if (value === "High") return "상";
+  if (value === "Med") return "중";
+  if (value === "Low") return "하";
+  return "Unknown";
+}
+
+function unknownImpactResult(): ImpactResult {
+  return {
+    cashflowRisk: "Unknown",
+    debtServiceRisk: "Unknown",
+    inflationPressureRisk: "Unknown",
+    fxPressureRisk: "Unknown",
+    incomeRisk: "Unknown",
+    bufferAdequacy: "Unknown",
+    rationale: ["입력 데이터가 부족해 개인 영향은 unknown으로 유지됩니다."],
+    watch: [],
+  };
+}
+
 export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [notice, setNotice] = useState("");
   const [data, setData] = useState<TodayResponse["data"]>(null);
+  const [profile, setProfile] = useState<ExposureProfile | null>(null);
+  const [advancedImpact, setAdvancedImpact] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     setErrorMessage("");
     try {
-      const response = await fetch("/api/planning/v3/news/today", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as TodayResponse | null;
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
+      const [todayResponse, exposureResponse] = await Promise.all([
+        fetch("/api/planning/v3/news/today", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+        fetch("/api/planning/v3/exposure/profile", {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+        }),
+      ]);
+
+      const todayPayload = (await todayResponse.json().catch(() => null)) as TodayResponse | null;
+      if (!todayResponse.ok || todayPayload?.ok !== true) {
+        throw new Error(todayPayload?.error?.message ?? `HTTP ${todayResponse.status}`);
       }
-      setData(payload.data ?? null);
+      setData(todayPayload.data ?? null);
+
+      const exposurePayload = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
+      if (exposureResponse.ok && exposurePayload?.ok === true) {
+        setProfile(exposurePayload.profile ?? null);
+      } else {
+        setProfile(null);
+      }
     } catch (error) {
       setData(null);
+      setProfile(null);
       setErrorMessage(error instanceof Error ? error.message : "오늘 뉴스 요약을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -219,13 +283,77 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           ) : (
             <div className="grid gap-3 md:grid-cols-3">
               {data.scenarios.cards.map((card, index) => (
-                <div key={`${asString(card.name)}-${index}`} className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-sm font-black text-slate-900">{asString(card.name) || "Scenario"}</p>
-                  <p className="mt-1 text-xs text-slate-700">{asString(card.observation) || "-"}</p>
-                  <p className="mt-2 text-[11px] font-semibold text-slate-500">연결 토픽: {(card.linkedTopics ?? []).join(", ") || "-"}</p>
-                  <p className="mt-1 text-[11px] font-semibold text-slate-500">트리거: {(card.triggers ?? []).map((row) => `${asString(row.topicId)}:${asString(row.condition)}`).join(" · ") || "-"}</p>
-                  <p className="mt-1 text-[11px] text-slate-500">옵션: {(card.options ?? []).slice(0, 2).join(" / ") || "-"}</p>
-                </div>
+                (() => {
+                  const scenario: ScenarioForImpact = {
+                    name: normalizeScenarioName(card.name),
+                    triggerStatus: inferTriggerStatus(card),
+                    linkedTopics: (card.linkedTopics ?? []).map((row) => asString(row).toLowerCase()).filter(Boolean),
+                    confirmIndicators: (card.indicators ?? []).map((row) => asString(row).toLowerCase()).filter(Boolean),
+                    leadingIndicators: [],
+                    observation: asString(card.observation),
+                    triggerSummary: (card.triggers ?? []).map((row) => `${asString(row.topicId)}:${asString(row.condition)}`).join(" · "),
+                  };
+
+                  let impact = unknownImpactResult();
+                  try {
+                    impact = computeImpact({
+                      profile,
+                      scenario,
+                    });
+                  } catch {
+                    impact = unknownImpactResult();
+                  }
+                  const key = `${asString(card.name)}-${index}`;
+                  const showAdvanced = advancedImpact[key] === true;
+                  const isProfileMissing = profile === null;
+
+                  return (
+                    <div key={key} className="rounded-lg border border-slate-200 p-3">
+                      <p className="text-sm font-black text-slate-900">{asString(card.name) || "Scenario"}</p>
+                      <p className="mt-1 text-xs text-slate-700">{asString(card.observation) || "-"}</p>
+                      <p className="mt-2 text-[11px] font-semibold text-slate-500">연결 토픽: {(card.linkedTopics ?? []).join(", ") || "-"}</p>
+                      <p className="mt-1 text-[11px] font-semibold text-slate-500">트리거: {scenario.triggerSummary || "-"}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">옵션: {(card.options ?? []).slice(0, 2).join(" / ") || "-"}</p>
+
+                      <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-[11px] font-bold text-slate-700">내 상황 영향(요약)</p>
+                          <button
+                            type="button"
+                            className="text-[11px] font-semibold text-emerald-700 underline underline-offset-2"
+                            onClick={() => setAdvancedImpact((prev) => ({ ...prev, [key]: !showAdvanced }))}
+                          >
+                            {showAdvanced ? "고급 닫기" : "고급 보기"}
+                          </button>
+                        </div>
+
+                        {isProfileMissing ? (
+                          <p className="mt-1 text-[11px] text-slate-600">
+                            Unknown (프로필 설정 필요){" "}
+                            <Link href="/planning/v3/exposure" className="font-semibold text-emerald-700 underline underline-offset-2">설정하기</Link>
+                          </p>
+                        ) : (
+                          <>
+                            <p className="mt-1 text-[11px] text-slate-700">
+                              부채 {gradeLabel(impact.debtServiceRisk)} · 물가 {gradeLabel(impact.inflationPressureRisk)} · 환율 {gradeLabel(impact.fxPressureRisk)} · 완충력 {gradeLabel(impact.bufferAdequacy)}
+                            </p>
+                            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-slate-600">
+                              {impact.rationale.slice(0, 3).map((line, lineIndex) => (
+                                <li key={`${key}-rationale-${lineIndex}`}>{line}</li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+
+                        {showAdvanced ? (
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            watch seriesIds: {impact.watch.length > 0 ? impact.watch.join(", ") : "-"}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })()
               ))}
             </div>
           )}
