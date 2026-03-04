@@ -135,26 +135,27 @@ export async function GET(request: Request) {
   const effective = loadEffectiveNewsConfig();
   const sourceOverrideById = new Map(settings.sources.map((row) => [row.id, row]));
   const topicOverrideById = new Map(settings.topics.map((row) => [row.id, row]));
+  const defaultSourceById = new Map(NEWS_SOURCES.map((row) => [row.id, row]));
 
   const data = {
     updatedAt: settings.updatedAt ?? null,
-    sources: NEWS_SOURCES.map((source) => {
+    sources: effective.sources.map((source) => {
+      const base = defaultSourceById.get(source.id);
       const override = sourceOverrideById.get(source.id);
-      const merged = effective.sources.find((row) => row.id === source.id) ?? source;
       return {
         id: source.id,
         name: source.name,
         feedUrl: source.feedUrl,
         country: source.country,
         language: source.language,
-        defaultEnabled: source.enabled,
-        defaultWeight: source.weight,
+        defaultEnabled: base?.enabled ?? source.enabled,
+        defaultWeight: base?.weight ?? source.weight,
         overrideEnabled: typeof override?.enabled === "boolean" ? override.enabled : null,
         overrideWeight: Number.isFinite(override?.weight) ? Number(override?.weight) : null,
-        effectiveEnabled: merged.enabled,
-        effectiveWeight: merged.weight,
+        effectiveEnabled: source.enabled,
+        effectiveWeight: source.weight,
       };
-    }),
+    }).sort((a, b) => a.id.localeCompare(b.id)),
     topics: NEWS_TOPICS.map((topic) => {
       const override = topicOverrideById.get(topic.id);
       const merged = effective.topics.find((row) => row.id === topic.id) ?? topic;
@@ -197,12 +198,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const sourceIds = new Set(NEWS_SOURCES.map((row) => row.id));
+  const effective = loadEffectiveNewsConfig();
+  const allowedSourceIds = new Set(effective.sources.map((row) => row.id));
   const topicIds = new Set(NEWS_TOPICS.map((row) => row.id));
+  const current = readNewsSettings();
 
   const next = writeNewsSettings({
+    ...current,
     sources: parsed.data.sources
-      .filter((row) => sourceIds.has(row.id))
+      .filter((row) => allowedSourceIds.has(row.id))
       .map((row) => ({
         id: row.id,
         enabled: typeof row.enabled === "boolean" ? row.enabled : undefined,
@@ -216,6 +220,7 @@ export async function POST(request: Request) {
         keywords: Array.isArray(row.keywords) ? dedupeKeywords(row.keywords) : undefined,
       }))
       .filter((row) => Array.isArray(row.keywords)),
+    customSources: current.customSources ?? [],
   });
 
   const payload = parseWithV3Whitelist(SettingsPostResponseSchema, {
