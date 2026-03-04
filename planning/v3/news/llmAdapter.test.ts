@@ -3,6 +3,7 @@ import { type ScoredNewsItem } from "./contracts";
 import { type DigestDay } from "./digest/contracts";
 import { type ScenarioPack } from "./scenario/contracts";
 import { rewriteDigestScenarioTextWithLocalLlm } from "./llmAdapter";
+import { buildNewsRewritePrompt } from "../llm/prompts";
 
 function makeDigest(): DigestDay {
   return {
@@ -84,6 +85,36 @@ function makeTopItems(): Pick<ScoredNewsItem, "title" | "snippet" | "primaryTopi
 }
 
 describe("planning v3 news local llm adapter", () => {
+  it("uses SSOT prompt builder for local rewrite requests", () => {
+    const prompt = buildNewsRewritePrompt({
+      digest: {
+        observation: "관찰: 금리 신호를 조건부로 점검합니다.",
+        counterSignals: ["반대 흐름도 병행 확인합니다."],
+      },
+      scenarios: [
+        {
+          name: "Base",
+          observation: "현재 신호가 유지되는 가정입니다.",
+          invalidation: ["신호가 완화되면 경로가 약화될 수 있습니다."],
+          options: ["관찰 지표를 병행 확인합니다."],
+          linkedTopics: ["rates"],
+        },
+      ],
+      evidence: [
+        {
+          title: "기준금리 동결 발표",
+          snippet: "금리 동결 흐름을 유지합니다.",
+          topicId: "rates",
+          sourceId: "fixture",
+        },
+      ],
+    });
+
+    expect(prompt).toContain("Target JSON schema");
+    expect(prompt).toContain("Context JSON:");
+    expect(prompt).toContain("\"promptVersion\":\"v1\"");
+  });
+
   it("is off by default and keeps deterministic template output", async () => {
     const fetchMock = vi.fn(async () => new Response("{}")) as unknown as typeof fetch;
     const digest = makeDigest();
@@ -186,5 +217,44 @@ describe("planning v3 news local llm adapter", () => {
     expect(result.reason).toBe("llm_guard_rejected");
     expect(result.digest).toEqual(digest);
     expect(result.scenarios).toEqual(scenarios);
+  });
+
+  it("sanitizes rewritten text to short conditional sentences", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      response: JSON.stringify({
+        digest: {
+          observation: "시장 흐름을 그대로 본다 ".repeat(30),
+          counterSignals: ["[원문](https://example.com/raw) 신호 반전도 본다 ".repeat(20)],
+        },
+        scenarios: [
+          {
+            name: "Base",
+            observation: "추세를 확인한다 ".repeat(40),
+            invalidation: ["이 흐름이 약해지면 재검토한다 ".repeat(20)],
+            options: ["모니터링을 한다 ".repeat(20)],
+          },
+        ],
+      }),
+    }), { status: 200 })) as unknown as typeof fetch;
+
+    const result = await rewriteDigestScenarioTextWithLocalLlm({
+      digest: makeDigest(),
+      scenarios: makeScenarios(),
+      topItems: makeTopItems(),
+      fetchImpl: fetchMock,
+      env: {
+        V3_NEWS_LOCAL_LLM_ENABLED: "1",
+        V3_NEWS_LOCAL_LLM_MODEL: "local-model",
+        V3_NEWS_LOCAL_LLM_BASE_URL: "http://127.0.0.1:11434",
+      },
+    });
+
+    expect(result.applied).toBe(true);
+    expect(result.reason).toBe("llm_applied");
+    expect(result.digest.observation.length).toBeLessThanOrEqual(220);
+    expect(result.digest.observation).toContain("가능");
+    expect(result.digest.counterSignals[0]).not.toContain("https://");
+    expect(result.scenarios.cards[0]?.observation.length ?? 0).toBeLessThanOrEqual(220);
+    expect(result.scenarios.cards[0]?.options[0] ?? "").toContain("가능");
   });
 });

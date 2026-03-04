@@ -3,6 +3,7 @@ import { type ScoredNewsItem } from "./contracts";
 import { type DigestDay, DigestDaySchema } from "./digest/contracts";
 import { assertNoRecommendationText } from "./guard/noRecommendationText";
 import { type ScenarioPack, ScenarioPackSchema } from "./scenario/contracts";
+import { buildNewsRewritePrompt } from "../llm/prompts";
 
 const DEFAULT_LOCAL_BASE_URL = "http://127.0.0.1:11434";
 const DEFAULT_ENDPOINT_PATH = "/api/generate";
@@ -30,6 +31,9 @@ const LlmRewritePayloadSchema = z.object({
     options: z.array(z.string().trim().min(1)).min(1).max(3).optional(),
   })).max(3).optional(),
 });
+
+const CONDITIONAL_CUE_PATTERN = /(조건부|가능|가정|경우|완화|확대|유지|변동|관측|추정)/;
+const MARKDOWN_LINK_PATTERN = /\[[^\]]+\]\([^)]+\)/g;
 
 type LlmMode = {
   enabled: boolean;
@@ -132,10 +136,41 @@ function resolveMode(env: NodeJS.ProcessEnv): LlmMode {
   };
 }
 
+function normalizeWhitespace(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
 function truncate(value: string, max = 280): string {
-  const text = value.trim().replace(/\s+/g, " ");
+  const text = normalizeWhitespace(value);
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1)}…`;
+}
+
+function stripUnsafeTextArtifacts(value: string): string {
+  const withoutLinks = value.replace(MARKDOWN_LINK_PATTERN, "");
+  const withoutQuotes = withoutLinks.replace(/[`*_#>|]/g, " ");
+  return normalizeWhitespace(withoutQuotes);
+}
+
+function ensureConditionalTone(value: string): string {
+  if (!value) return value;
+  if (CONDITIONAL_CUE_PATTERN.test(value)) return value;
+  return `조건부 가능성: ${value}`;
+}
+
+function sanitizeShortConditionalText(value: unknown, max: number): string {
+  const cleaned = stripUnsafeTextArtifacts(asString(value));
+  if (!cleaned) return "";
+  const conditional = ensureConditionalTone(cleaned);
+  return truncate(conditional, max);
+}
+
+function sanitizeTextList(values: unknown[] | undefined, maxItems: number, maxChars: number): string[] {
+  if (!Array.isArray(values)) return [];
+  return values
+    .map((value) => sanitizeShortConditionalText(value, maxChars))
+    .filter(Boolean)
+    .slice(0, maxItems);
 }
 
 function buildPrompt(input: {
@@ -143,41 +178,25 @@ function buildPrompt(input: {
   scenarios: ScenarioPack;
   topItems: Pick<ScoredNewsItem, "title" | "snippet" | "primaryTopicId" | "sourceId">[];
 }): string {
-  const context = {
+  return buildNewsRewritePrompt({
     digest: {
-      observation: truncate(input.digest.observation, 240),
-      counterSignals: input.digest.counterSignals.map((line) => truncate(line, 140)).slice(0, 6),
+      observation: input.digest.observation,
+      counterSignals: input.digest.counterSignals,
     },
     scenarios: input.scenarios.cards.map((card) => ({
       name: card.name,
-      observation: truncate(card.observation, 240),
-      invalidation: card.invalidation.map((line) => truncate(line, 140)).slice(0, 3),
-      options: card.options.map((line) => truncate(line, 140)).slice(0, 3),
-      linkedTopics: card.linkedTopics.slice(0, 3),
+      observation: card.observation,
+      invalidation: card.invalidation,
+      options: card.options,
+      linkedTopics: card.linkedTopics,
     })),
-    evidence: input.topItems.slice(0, 6).map((item) => ({
-      title: truncate(item.title, 160),
-      snippet: truncate(asString(item.snippet), 200),
+    evidence: input.topItems.map((item) => ({
+      title: item.title,
+      snippet: asString(item.snippet),
       topicId: asString(item.primaryTopicId),
       sourceId: asString(item.sourceId),
     })),
-  };
-
-  return [
-    "You are rewriting short Korean planning texts for clarity.",
-    "Rules:",
-    "- Use ONLY the given summary/evidence context.",
-    "- Never provide investment recommendations or imperative language.",
-    "- Keep conditional and neutral wording.",
-    "- Keep arrays concise.",
-    "- Output JSON only.",
-    "",
-    "Target JSON schema:",
-    "{\"digest\":{\"observation\":\"...\",\"counterSignals\":[\"...\",\"...\"]},\"scenarios\":[{\"name\":\"Base|Bull|Bear\",\"observation\":\"...\",\"invalidation\":[\"...\"],\"options\":[\"...\"]}]}",
-    "",
-    "Context JSON:",
-    JSON.stringify(context),
-  ].join("\n");
+  });
 }
 
 function extractTextPayload(raw: unknown): string {
@@ -201,13 +220,12 @@ function applyRewrite(input: {
   scenarios: ScenarioPack;
   rewrite: z.infer<typeof LlmRewritePayloadSchema>;
 }): { digest: DigestDay; scenarios: ScenarioPack } {
+  const sanitizedObservation = sanitizeShortConditionalText(input.rewrite.digest?.observation, 220);
+  const sanitizedCounterSignals = sanitizeTextList(input.rewrite.digest?.counterSignals, 6, 140);
   const digest = DigestDaySchema.parse({
     ...input.digest,
-    observation: asString(input.rewrite.digest?.observation) || input.digest.observation,
-    counterSignals: (input.rewrite.digest?.counterSignals ?? input.digest.counterSignals)
-      .map((line) => asString(line))
-      .filter(Boolean)
-      .slice(0, 6),
+    observation: sanitizedObservation || input.digest.observation,
+    counterSignals: sanitizedCounterSignals.length > 0 ? sanitizedCounterSignals : input.digest.counterSignals,
   });
 
   const rewriteByName = new Map(
@@ -219,17 +237,14 @@ function applyRewrite(input: {
     cards: input.scenarios.cards.map((card) => {
       const rewrite = rewriteByName.get(card.name);
       if (!rewrite) return card;
+      const sanitizedScenarioObservation = sanitizeShortConditionalText(rewrite.observation, 220);
+      const sanitizedInvalidation = sanitizeTextList(rewrite.invalidation, 3, 140);
+      const sanitizedOptions = sanitizeTextList(rewrite.options, 3, 140);
       return {
         ...card,
-        observation: asString(rewrite.observation) || card.observation,
-        invalidation: (rewrite.invalidation ?? card.invalidation)
-          .map((line) => asString(line))
-          .filter(Boolean)
-          .slice(0, 3),
-        options: (rewrite.options ?? card.options)
-          .map((line) => asString(line))
-          .filter(Boolean)
-          .slice(0, 3),
+        observation: sanitizedScenarioObservation || card.observation,
+        invalidation: sanitizedInvalidation.length > 0 ? sanitizedInvalidation : card.invalidation,
+        options: sanitizedOptions.length > 0 ? sanitizedOptions : card.options,
       };
     }),
   });
