@@ -1,6 +1,9 @@
 import { regime, pctChange, zscore } from "../indicators/analytics";
+import { normalizeSeriesId } from "../indicators/aliases";
 import { type SeriesSnapshot } from "../indicators/contracts";
 import {
+  type ScenarioTriggerCondition,
+  type ScenarioTriggerMetric,
   type ScenarioTemplate,
   type ScenarioTriggerOp,
   type ScenarioTriggerStatus,
@@ -16,7 +19,7 @@ type TriggerEvaluationResult = {
 function asSnapshotMap(seriesSnapshots: SeriesSnapshot[]): Map<string, SeriesSnapshot> {
   const map = new Map<string, SeriesSnapshot>();
   for (const snapshot of seriesSnapshots) {
-    map.set(snapshot.seriesId, snapshot);
+    map.set(normalizeSeriesId(snapshot.seriesId), snapshot);
   }
   return map;
 }
@@ -36,12 +39,79 @@ function compareText(value: string, op: ScenarioTriggerOp, expected: string): bo
   return false;
 }
 
+function conditionFromLegacy(rule: ScenarioTemplate["triggers"][number]): ScenarioTriggerCondition | null {
+  if (rule.regimeValue === "up") return "up";
+  if (rule.regimeValue === "down") return "down";
+  if (rule.regimeValue === "flat") return "flat";
+  if (rule.op === "gt" || rule.op === "gte") return "up";
+  if (rule.op === "lt" || rule.op === "lte") return "down";
+  return null;
+}
+
+function resolveMetric(rule: ScenarioTemplate["triggers"][number]): ScenarioTriggerMetric {
+  return rule.metric ?? rule.view ?? "regime";
+}
+
+function resolveCondition(rule: ScenarioTemplate["triggers"][number]): ScenarioTriggerCondition | null {
+  return rule.condition ?? conditionFromLegacy(rule);
+}
+
+function evaluateByCondition(input: {
+  metric: ScenarioTriggerMetric;
+  condition: ScenarioTriggerCondition;
+  observations: SeriesSnapshot["observations"];
+  window: number;
+}): { status: ScenarioTriggerStatus; rationale: string } {
+  if (input.metric === "regime") {
+    const value = regime(input.observations, input.window);
+    if (value === "unknown") {
+      return { status: "unknown", rationale: "추세 관측치가 부족해 조건 평가를 보류합니다." };
+    }
+    const matched = input.condition === "high"
+      ? value === "up"
+      : input.condition === "low"
+        ? value === "down"
+        : value === input.condition;
+    return {
+      status: matched ? "met" : "not_met",
+      rationale: `추세 ${value} 기준에서 조건(${input.condition}) ${matched ? "충족" : "미충족"}으로 관찰됩니다.`,
+    };
+  }
+
+  const value = input.metric === "pctChange"
+    ? pctChange(input.observations, input.window)
+    : zscore(input.observations, input.window);
+
+  if (value === null) {
+    return { status: "unknown", rationale: "관측치가 부족해 조건 평가를 보류합니다." };
+  }
+
+  const abs = Math.abs(value);
+  const matched = input.condition === "up"
+    ? value > 0
+    : input.condition === "down"
+      ? value < 0
+      : input.condition === "high"
+        ? value > 0
+        : input.condition === "low"
+          ? value < 0
+          : input.condition === "flat"
+            ? abs <= 0.1
+            : false;
+
+  return {
+    status: matched ? "met" : "not_met",
+    rationale: `지표 ${input.metric} 흐름 기준에서 조건(${input.condition}) ${matched ? "충족" : "미충족"}으로 관찰됩니다.`,
+  };
+}
+
 function evaluateSingleRule(
   template: ScenarioTemplate,
   rule: ScenarioTemplate["triggers"][number],
   snapshotMap: Map<string, SeriesSnapshot>,
 ): TriggerEvaluation {
-  const snapshot = snapshotMap.get(rule.seriesId);
+  const seriesId = normalizeSeriesId(rule.seriesId);
+  const snapshot = snapshotMap.get(seriesId);
   if (!snapshot) {
     return {
       ruleId: rule.id,
@@ -51,9 +121,27 @@ function evaluateSingleRule(
     };
   }
 
-  if (rule.view === "regime") {
+  const metric = resolveMetric(rule);
+  const condition = resolveCondition(rule);
+  if (condition) {
+    const evaluated = evaluateByCondition({
+      metric,
+      condition,
+      observations: snapshot.observations,
+      window: rule.window,
+    });
+    return {
+      ruleId: rule.id,
+      label: rule.label,
+      status: evaluated.status,
+      rationale: `${template.name}:${rule.label} ${evaluated.rationale}`,
+    };
+  }
+
+  if (metric === "regime") {
     const value = regime(snapshot.observations, rule.window);
     const expected = rule.regimeValue ?? "unknown";
+    const op = rule.op ?? "eq";
     if (value === "unknown") {
       return {
         ruleId: rule.id,
@@ -63,7 +151,7 @@ function evaluateSingleRule(
       };
     }
 
-    const met = compareText(value, rule.op, expected);
+    const met = compareText(value, op, expected);
     return {
       ruleId: rule.id,
       label: rule.label,
@@ -72,11 +160,11 @@ function evaluateSingleRule(
     };
   }
 
-  const metric = rule.view === "pctChange"
+  const metricValue = metric === "pctChange"
     ? pctChange(snapshot.observations, rule.window)
     : zscore(snapshot.observations, rule.window);
 
-  if (metric === null || typeof rule.threshold !== "number") {
+  if (metricValue === null || typeof rule.threshold !== "number" || !rule.op) {
     return {
       ruleId: rule.id,
       label: rule.label,
@@ -85,7 +173,7 @@ function evaluateSingleRule(
     };
   }
 
-  const met = compareNumeric(metric, rule.op, rule.threshold);
+  const met = compareNumeric(metricValue, rule.op, rule.threshold);
   return {
     ruleId: rule.id,
     label: rule.label,
