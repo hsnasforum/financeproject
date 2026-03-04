@@ -87,6 +87,7 @@
     "planning:assumptions:sync": "node scripts/planning_assumptions_sync.mjs",
     "planning:v2:doctor": "node --import tsx scripts/planning_v2_doctor.mjs",
     "v3:doctor": "node --import tsx planning/v3/ops/doctor.ts",
+    "v3:refresh-all": "node --import tsx planning/v3/ops/refreshAll.ts",
     "v3:trim": "node --import tsx planning/v3/ops/trim.ts",
     "v3:export": "node --import tsx planning/v3/ops/export.ts",
     "v3:support-bundle": "node --import tsx planning/v3/ops/supportBundle.ts",
