@@ -13,6 +13,17 @@ describe("planning v3 indicators connector registry", () => {
     expect(connector.sourceType).toBe("fixture");
   });
 
+  it("returns fred connector for fred source", () => {
+    const connector = getConnector({
+      id: "fred_main",
+      name: "FRED",
+      type: "fred",
+      enabled: true,
+    });
+
+    expect(connector.sourceType).toBe("fred");
+  });
+
   it("throws INPUT when connector is not configured", () => {
     expect(() => getConnector({
       id: "ecos",

@@ -1,10 +1,12 @@
 import type { IndicatorSource } from "../contracts";
 import { ConnectorError } from "./errors";
+import { fredConnector } from "./fred";
 import { fixtureConnector } from "./fixture";
 import type { SeriesConnector } from "./types";
 
 const CONNECTOR_BY_SOURCE_TYPE: Partial<Record<IndicatorSource["type"], SeriesConnector>> = {
   fixture: fixtureConnector,
+  fred: fredConnector,
 };
 
 export function getConnector(source: IndicatorSource): SeriesConnector {
