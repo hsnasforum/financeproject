@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sample Atom</title>
+  <id>https://example.org/feed</id>
+  <updated>2026-03-04T09:00:00Z</updated>
+  <entry>
+    <title>USD strength pauses</title>
+    <id>tag:example.org,2026:entry-1</id>
+    <updated>2026-03-04T09:00:00Z</updated>
+    <link rel="alternate" href="https://example.org/fx/usdkrw?gclid=ad123" />
+    <summary>Dollar momentum cooled as treasury yields retraced.</summary>
+  </entry>
+  <entry>
+    <title>Equity indexes mixed in Asia</title>
+    <id>tag:example.org,2026:entry-2</id>
+    <published>2026-03-04T06:30:00Z</published>
+    <link href="https://example.org/markets/asia" />
+    <summary><![CDATA[Risk sentiment was mixed across sectors.]]></summary>
+  </entry>
+</feed>
