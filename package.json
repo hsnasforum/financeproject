@@ -89,6 +89,7 @@
     "v3:doctor": "node --import tsx planning/v3/ops/doctor.ts",
     "v3:trim": "node --import tsx planning/v3/ops/trim.ts",
     "v3:export": "node --import tsx planning/v3/ops/export.ts",
+    "v3:support-bundle": "node --import tsx planning/v3/ops/supportBundle.ts",
     "v3:restore": "node --import tsx planning/v3/ops/restore.ts",
     "v3:migrate": "node --import tsx planning/v3/ops/migrate.ts",
     "sec:check": "node scripts/security_check.mjs",
