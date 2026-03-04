@@ -1,7 +1,19 @@
-import { DateRangeSchema, DailyDigestSchema, type DailyDigest, type DateRange, type SelectTopResult, type TopicDailyStat } from "./contracts";
+import {
+  DateRangeSchema,
+  DailyDigestSchema,
+  type DailyDigest,
+  type DateRange,
+  type DigestWatchItem,
+  type DigestWatchSpec,
+  type SelectTopResult,
+  type TopicDailyStat,
+} from "./contracts";
 import { selectTopFromStore } from "./selectTop";
 import { readDailyStats } from "./store";
 import { shiftKstDay } from "./trend";
+import { pctChange, regime, trendSlope, zscore } from "../indicators/analytics";
+import { type Observation } from "../indicators/contracts";
+import { readSeriesObservations } from "../indicators/store";
 
 const BANNED_PATTERNS = [
   /매수/gi,
@@ -18,16 +30,41 @@ const BANNED_PATTERNS = [
   /must\s+sell/gi,
 ];
 
-const WATCHLIST_BY_TOPIC: Record<string, string[]> = {
-  rates: ["정책금리", "미국 2Y 금리", "미국 10Y 금리"],
-  fx: ["USDKRW", "DXY", "엔/달러"],
-  oil: ["WTI", "Brent", "미국 원유재고"],
-  equity: ["KOSPI", "S&P500", "VIX"],
-  policy: ["관세/규제 발표 일정", "예산/법안 일정"],
-  general: ["정책금리", "USDKRW", "WTI"],
+const WATCHLIST_BY_TOPIC: Record<string, DigestWatchSpec[]> = {
+  rates: [
+    { label: "정책금리", seriesId: "kr_base_rate", view: "pctChange", window: 3 },
+    { label: "소비자물가", seriesId: "kr_cpi", view: "zscore", window: 6 },
+  ],
+  fx: [
+    { label: "USDKRW", seriesId: "kr_usdkrw", view: "pctChange", window: 3 },
+  ],
+  oil: [
+    { label: "브렌트유", seriesId: "brent_oil", view: "pctChange", window: 3 },
+  ],
+  equity: [
+    { label: "USDKRW", seriesId: "kr_usdkrw", view: "trend", window: 5 },
+  ],
+  policy: [
+    { label: "정책금리", seriesId: "kr_base_rate", view: "last", window: 1 },
+  ],
+  general: [
+    { label: "정책금리", seriesId: "kr_base_rate", view: "pctChange", window: 3 },
+    { label: "USDKRW", seriesId: "kr_usdkrw", view: "pctChange", window: 3 },
+  ],
 };
 
-function dedupe(values: string[]): string[] {
+type WatchMetrics = {
+  spec: DigestWatchSpec;
+  observations: Observation[];
+  latestDate: string | null;
+  latestValue: number | null;
+  pct: number | null;
+  z: number | null;
+  slope: number | null;
+  reg: ReturnType<typeof regime>;
+};
+
+function dedupeStrings(values: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const value of values) {
@@ -35,6 +72,18 @@ function dedupe(values: string[]): string[] {
     if (!token || seen.has(token)) continue;
     seen.add(token);
     out.push(token);
+  }
+  return out;
+}
+
+function dedupeSpecs(values: DigestWatchSpec[]): DigestWatchSpec[] {
+  const seen = new Set<string>();
+  const out: DigestWatchSpec[] = [];
+  for (const value of values) {
+    const key = `${value.seriesId}|${value.view}|${value.window}|${value.label}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(value);
   }
   return out;
 }
@@ -89,27 +138,131 @@ function collectBurstTopics(dateRange: DateRange, readStats: (day: string) => To
     .slice(0, 5);
 }
 
-function buildWatchlist(topResult: SelectTopResult, burstTopics: TopicDailyStat[]): string[] {
-  const topics = dedupe([
+function buildWatchlistSpecs(topResult: SelectTopResult, burstTopics: TopicDailyStat[]): DigestWatchSpec[] {
+  const topics = dedupeStrings([
     ...topResult.topTopics.map((row) => row.topicId),
     ...burstTopics.map((row) => row.topicId),
   ]);
 
-  const watch = topics.flatMap((topicId) => WATCHLIST_BY_TOPIC[topicId] ?? []);
-  return dedupe(watch).slice(0, 6);
+  const specs = topics.flatMap((topicId) => WATCHLIST_BY_TOPIC[topicId] ?? []);
+  return dedupeSpecs(specs).slice(0, 6);
 }
 
-function buildObservationLines(topResult: SelectTopResult, burstTopics: TopicDailyStat[], watchlist: string[]): string[] {
+function toDirectionLabel(value: ReturnType<typeof regime>): string {
+  if (value === "up") return "상승";
+  if (value === "down") return "하락";
+  if (value === "flat") return "횡보";
+  return "불명";
+}
+
+function buildCompactSummary(item: {
+  view: DigestWatchSpec["view"];
+  status: DigestWatchItem["status"];
+  reg: ReturnType<typeof regime>;
+  grade: DigestWatchItem["grade"];
+}): string {
+  if (item.status !== "ok") return "데이터 부족";
+
+  const direction = toDirectionLabel(item.reg);
+  if (item.view === "zscore") return `${direction} 이탈 · 등급 ${item.grade}`;
+  if (item.view === "trend") return `${direction} 추세 · 등급 ${item.grade}`;
+  if (item.view === "pctChange") return `${direction} 변화 · 등급 ${item.grade}`;
+  return `${direction} 수준 · 등급 ${item.grade}`;
+}
+
+function gradeByRank(metrics: WatchMetrics[]): Map<string, DigestWatchItem["grade"]> {
+  const candidates = metrics
+    .filter((row) => typeof row.z === "number" && Number.isFinite(row.z))
+    .map((row) => ({ seriesId: row.spec.seriesId, strength: Math.abs(row.z as number) }))
+    .sort((a, b) => {
+      if (a.strength !== b.strength) return b.strength - a.strength;
+      return a.seriesId.localeCompare(b.seriesId);
+    });
+
+  const out = new Map<string, DigestWatchItem["grade"]>();
+  if (candidates.length === 0) return out;
+  if (candidates.length === 1) {
+    out.set(candidates[0].seriesId, "중");
+    return out;
+  }
+
+  for (let index = 0; index < candidates.length; index += 1) {
+    const rank = index / (candidates.length - 1);
+    const grade: DigestWatchItem["grade"] = rank <= (1 / 3) ? "상" : rank <= (2 / 3) ? "중" : "하";
+    out.set(candidates[index].seriesId, grade);
+  }
+  return out;
+}
+
+function analyzeWatchlist(
+  specs: DigestWatchSpec[],
+  readIndicatorSeries: (seriesId: string) => Observation[],
+): DigestWatchItem[] {
+  const metrics: WatchMetrics[] = specs.map((spec) => {
+    const observations = readIndicatorSeries(spec.seriesId);
+    const latest = observations
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .at(-1);
+
+    return {
+      spec,
+      observations,
+      latestDate: latest?.date ?? null,
+      latestValue: latest?.value ?? null,
+      pct: pctChange(observations, spec.window),
+      z: zscore(observations, Math.max(spec.window, 3)),
+      slope: trendSlope(observations, Math.max(spec.window, 3)),
+      reg: regime(observations, Math.max(spec.window, 3)),
+    };
+  });
+
+  const gradeMap = gradeByRank(metrics);
+
+  return metrics.map((row) => {
+    const status: DigestWatchItem["status"] = row.spec.view === "last"
+      ? (typeof row.latestValue === "number" ? "ok" : "unknown")
+      : row.spec.view === "pctChange"
+        ? (typeof row.pct === "number" ? "ok" : "unknown")
+        : row.spec.view === "zscore"
+          ? (typeof row.z === "number" ? "ok" : "unknown")
+          : (typeof row.slope === "number" ? "ok" : "unknown");
+
+    const grade: DigestWatchItem["grade"] = status === "ok"
+      ? (gradeMap.get(row.spec.seriesId) ?? "중")
+      : "unknown";
+
+    return {
+      ...row.spec,
+      status,
+      grade,
+      compactSummary: buildCompactSummary({
+        view: row.spec.view,
+        status,
+        reg: row.reg,
+        grade,
+      }),
+      asOf: row.latestDate,
+    };
+  });
+}
+
+function buildObservationLines(topResult: SelectTopResult, burstTopics: TopicDailyStat[], watchlist: DigestWatchItem[]): string[] {
   const topTopic = topResult.topTopics[0]?.topicLabel ?? "핵심 토픽";
   const topTopicCount = topResult.topTopics[0]?.count ?? 0;
   const burstLine = burstTopics[0]
     ? `조건부 관찰: ${burstTopics[0].topicLabel} 기사량 급증(${burstTopics[0].burstGrade})이 이어지면 변동성 확대 가능성이 있습니다.`
     : "조건부 관찰: 급증 토픽은 뚜렷하지 않으며 현재 흐름 유지 가능성이 있습니다.";
 
+  const watchSummary = watchlist
+    .slice(0, 4)
+    .map((row) => `${row.label}(${row.grade})`)
+    .join(", ");
+
   const lines = [
     `관찰: 최근 구간에서 ${topTopic} 관련 기사 비중이 상대적으로 높습니다(건수 ${topTopicCount}).`,
     burstLine,
-    `모니터링: ${watchlist.slice(0, 4).join(", ")} 중심으로 확인이 필요합니다.`,
+    `모니터링: ${watchSummary || "데이터 부족"} 중심으로 확인이 필요합니다.`,
   ];
 
   lines.forEach(assertNoRecommendationText);
@@ -121,9 +274,12 @@ export function buildDigestFromInputs(input: {
   dateRange: DateRange;
   topResult: SelectTopResult;
   burstTopics: TopicDailyStat[];
+  readIndicatorSeries?: (seriesId: string) => Observation[];
 }): DailyDigest {
   const dateRange = assertValidRange(input.dateRange);
-  const watchlist = buildWatchlist(input.topResult, input.burstTopics);
+  const readIndicatorSeries = input.readIndicatorSeries ?? (() => []);
+  const watchlistSpecs = buildWatchlistSpecs(input.topResult, input.burstTopics);
+  const watchlist = analyzeWatchlist(watchlistSpecs, readIndicatorSeries);
   const observationLines = buildObservationLines(input.topResult, input.burstTopics, watchlist);
 
   return DailyDigestSchema.parse({
@@ -139,7 +295,15 @@ export function buildDigestFromInputs(input: {
 
 export function buildDigest(
   dateRange: DateRange,
-  options: { rootDir?: string; now?: Date; topN?: number; topM?: number; readStats?: (day: string) => TopicDailyStat[] } = {},
+  options: {
+    rootDir?: string;
+    indicatorsRootDir?: string;
+    now?: Date;
+    topN?: number;
+    topM?: number;
+    readStats?: (day: string) => TopicDailyStat[];
+    readIndicatorSeries?: (seriesId: string) => Observation[];
+  } = {},
 ): DailyDigest {
   const normalizedRange = assertValidRange(dateRange);
   const now = options.now ?? new Date();
@@ -155,11 +319,14 @@ export function buildDigest(
 
   const readStats = options.readStats ?? ((day: string) => readDailyStats(day, options.rootDir));
   const burstTopics = collectBurstTopics(normalizedRange, readStats);
+  const readIndicatorSeries = options.readIndicatorSeries
+    ?? ((seriesId: string) => readSeriesObservations(seriesId, options.indicatorsRootDir));
 
   return buildDigestFromInputs({
     generatedAt,
     dateRange: normalizedRange,
     topResult,
     burstTopics,
+    readIndicatorSeries,
   });
 }

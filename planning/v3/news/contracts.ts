@@ -155,13 +155,34 @@ export const DateRangeSchema = z.object({
 
 export type DateRange = z.infer<typeof DateRangeSchema>;
 
+export const DigestWatchViewSchema = z.enum(["last", "pctChange", "zscore", "trend"]);
+export type DigestWatchView = z.infer<typeof DigestWatchViewSchema>;
+
+export const DigestWatchSpecSchema = z.object({
+  label: z.string().trim().min(1),
+  seriesId: z.string().trim().min(1),
+  view: DigestWatchViewSchema,
+  window: z.number().int().positive(),
+});
+
+export type DigestWatchSpec = z.infer<typeof DigestWatchSpecSchema>;
+
+export const DigestWatchItemSchema = DigestWatchSpecSchema.extend({
+  status: z.enum(["ok", "unknown"]),
+  grade: z.enum(["상", "중", "하", "unknown"]),
+  compactSummary: z.string().trim().min(1),
+  asOf: z.string().trim().min(1).nullable().optional(),
+});
+
+export type DigestWatchItem = z.infer<typeof DigestWatchItemSchema>;
+
 export const DailyDigestSchema = z.object({
   generatedAt: z.string().datetime(),
   dateRange: DateRangeSchema,
   topItems: z.array(ScoredNewsItemSchema),
   topTopics: z.array(TopTopicSchema),
   burstTopics: z.array(TopicDailyStatSchema),
-  watchlist: z.array(z.string().trim().min(1)),
+  watchlist: z.array(DigestWatchItemSchema),
   observationLines: z.array(z.string().trim().min(1)),
 });
 
