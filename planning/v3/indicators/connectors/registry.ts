@@ -1,11 +1,13 @@
 import type { IndicatorSource } from "../contracts";
 import { ConnectorError } from "./errors";
+import { ecosConnector } from "./ecos";
 import { fredConnector } from "./fred";
 import { fixtureConnector } from "./fixture";
 import type { SeriesConnector } from "./types";
 
 const CONNECTOR_BY_SOURCE_TYPE: Partial<Record<IndicatorSource["type"], SeriesConnector>> = {
   fixture: fixtureConnector,
+  ecos: ecosConnector,
   fred: fredConnector,
 };
 

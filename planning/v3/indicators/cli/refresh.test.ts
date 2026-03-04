@@ -21,6 +21,8 @@ describe("planning v3 indicators refresh cli", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-v3-ind-cli-"));
     roots.push(root);
 
+    const enabledSpecs = INDICATOR_SERIES_SPECS.filter((row) => row.enabled !== false);
+
     const first = await runIndicatorsRefresh({
       rootDir: root,
       sources: INDICATOR_SOURCES,
@@ -29,11 +31,11 @@ describe("planning v3 indicators refresh cli", () => {
     });
 
     expect(first.errors).toEqual([]);
-    expect(first.seriesProcessed).toBe(INDICATOR_SERIES_SPECS.length);
-    expect(first.seriesUpdated).toBe(INDICATOR_SERIES_SPECS.length);
+    expect(first.seriesProcessed).toBe(enabledSpecs.length);
+    expect(first.seriesUpdated).toBe(enabledSpecs.length);
     expect(first.observationsAppended).toBeGreaterThan(0);
 
-    for (const spec of INDICATOR_SERIES_SPECS) {
+    for (const spec of enabledSpecs) {
       expect(fs.existsSync(resolveSeriesPath(spec.id, root))).toBe(true);
     }
 
@@ -45,7 +47,7 @@ describe("planning v3 indicators refresh cli", () => {
     });
 
     expect(second.errors).toEqual([]);
-    expect(second.seriesProcessed).toBe(INDICATOR_SERIES_SPECS.length);
+    expect(second.seriesProcessed).toBe(enabledSpecs.length);
     expect(second.seriesUpdated).toBe(0);
     expect(second.observationsAppended).toBe(0);
 

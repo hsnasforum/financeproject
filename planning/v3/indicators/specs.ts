@@ -12,6 +12,12 @@ const RAW_SOURCES: IndicatorSource[] = [
     type: "fixture",
     enabled: true,
   },
+  {
+    id: "ecos_bok",
+    name: "Bank of Korea ECOS",
+    type: "ecos",
+    enabled: false,
+  },
 ];
 
 const RAW_SERIES_SPECS: SeriesSpec[] = [
@@ -58,6 +64,39 @@ const RAW_SERIES_SPECS: SeriesSpec[] = [
     transform: "none",
     notes: "Fixture daily oil benchmark series",
     enabled: true,
+  },
+  {
+    id: "ecos_kr_base_rate",
+    sourceId: "ecos_bok",
+    externalId: "722Y001|0101000|||M|202001|202612",
+    name: "ECOS Korea Base Rate",
+    frequency: "M",
+    units: "%",
+    transform: "none",
+    notes: "ECOS externalId format: statCode|itemCode1|itemCode2|itemCode3|freq|start|end",
+    enabled: false,
+  },
+  {
+    id: "ecos_kr_m2",
+    sourceId: "ecos_bok",
+    externalId: "101Y004|BBHA00|||M|202001|202612",
+    name: "ECOS Korea M2",
+    frequency: "M",
+    units: "Index",
+    transform: "none",
+    notes: "ECOS externalId format: statCode|itemCode1|itemCode2|itemCode3|freq|start|end",
+    enabled: false,
+  },
+  {
+    id: "ecos_kr_usdkrw",
+    sourceId: "ecos_bok",
+    externalId: "731Y003|0000001|||D|20240101|20261231",
+    name: "ECOS USDKRW",
+    frequency: "D",
+    units: "KRW",
+    transform: "none",
+    notes: "ECOS externalId format: statCode|itemCode1|itemCode2|itemCode3|freq|start|end",
+    enabled: false,
   },
 ];
 

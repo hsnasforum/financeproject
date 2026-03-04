@@ -85,7 +85,7 @@ describe("planning v3 indicators spec overrides", () => {
     expect(loadEffectiveSeriesSpecs(root).some((row) => row.id === "kr_custom_series")).toBe(true);
 
     const result = await runIndicatorsRefresh({ rootDir: root, retry: { maxAttempts: 1 } });
-    expect(result.seriesProcessed).toBe(loadEffectiveSeriesSpecs(root).length);
+    expect(result.seriesProcessed).toBe(loadEffectiveSeriesSpecs(root).filter((row) => row.enabled !== false).length);
     expect(readState(root).series.kr_custom_series).toBeTruthy();
   });
 });

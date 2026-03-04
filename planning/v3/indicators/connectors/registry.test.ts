@@ -24,11 +24,22 @@ describe("planning v3 indicators connector registry", () => {
     expect(connector.sourceType).toBe("fred");
   });
 
-  it("throws INPUT when connector is not configured", () => {
-    expect(() => getConnector({
-      id: "ecos",
+  it("returns ecos connector for ecos source", () => {
+    const connector = getConnector({
+      id: "ecos_bok",
       name: "ECOS",
       type: "ecos",
+      enabled: true,
+    });
+
+    expect(connector.sourceType).toBe("ecos");
+  });
+
+  it("throws INPUT when connector is not configured", () => {
+    expect(() => getConnector({
+      id: "kosis_main",
+      name: "KOSIS",
+      type: "kosis",
       enabled: true,
     })).toThrow(/connector_not_configured/);
   });
