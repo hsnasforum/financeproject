@@ -11,9 +11,12 @@ import {
 import { selectTopFromStore } from "./selectTop";
 import { readDailyStats } from "./store";
 import { shiftKstDay } from "./trend";
+import { canonicalizeTopicId } from "./taxonomy";
 import { pctChange, regime, trendSlope, zscore } from "../indicators/analytics";
 import { type Observation } from "../indicators/contracts";
+import { normalizeSeriesId } from "../indicators/aliases";
 import { readSeriesObservations } from "../indicators/store";
+import { WATCHLIST_BY_TOPIC } from "./digest/templates";
 
 const BANNED_PATTERNS = [
   /매수/gi,
@@ -29,29 +32,6 @@ const BANNED_PATTERNS = [
   /must\s+buy/gi,
   /must\s+sell/gi,
 ];
-
-const WATCHLIST_BY_TOPIC: Record<string, DigestWatchSpec[]> = {
-  rates: [
-    { label: "정책금리", seriesId: "kr_base_rate", view: "pctChange", window: 3 },
-    { label: "소비자물가", seriesId: "kr_cpi", view: "zscore", window: 6 },
-  ],
-  fx: [
-    { label: "USDKRW", seriesId: "kr_usdkrw", view: "pctChange", window: 3 },
-  ],
-  oil: [
-    { label: "브렌트유", seriesId: "brent_oil", view: "pctChange", window: 3 },
-  ],
-  equity: [
-    { label: "USDKRW", seriesId: "kr_usdkrw", view: "trend", window: 5 },
-  ],
-  policy: [
-    { label: "정책금리", seriesId: "kr_base_rate", view: "last", window: 1 },
-  ],
-  general: [
-    { label: "정책금리", seriesId: "kr_base_rate", view: "pctChange", window: 3 },
-    { label: "USDKRW", seriesId: "kr_usdkrw", view: "pctChange", window: 3 },
-  ],
-};
 
 type WatchMetrics = {
   spec: DigestWatchSpec;
@@ -80,10 +60,15 @@ function dedupeSpecs(values: DigestWatchSpec[]): DigestWatchSpec[] {
   const seen = new Set<string>();
   const out: DigestWatchSpec[] = [];
   for (const value of values) {
-    const key = `${value.seriesId}|${value.view}|${value.window}|${value.label}`;
+    const normalizedSeriesId = normalizeSeriesId(value.seriesId);
+    const normalized: DigestWatchSpec = {
+      ...value,
+      seriesId: normalizedSeriesId,
+    };
+    const key = `${normalized.seriesId}|${normalized.view}|${normalized.window}|${normalized.label}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push(value);
+    out.push(normalized);
   }
   return out;
 }
@@ -140,12 +125,12 @@ function collectBurstTopics(dateRange: DateRange, readStats: (day: string) => To
 
 function buildWatchlistSpecs(topResult: SelectTopResult, burstTopics: TopicDailyStat[]): DigestWatchSpec[] {
   const topics = dedupeStrings([
-    ...topResult.topTopics.map((row) => row.topicId),
-    ...burstTopics.map((row) => row.topicId),
+    ...topResult.topTopics.map((row) => canonicalizeTopicId(row.topicId)),
+    ...burstTopics.map((row) => canonicalizeTopicId(row.topicId)),
   ]);
 
   const specs = topics.flatMap((topicId) => WATCHLIST_BY_TOPIC[topicId] ?? []);
-  return dedupeSpecs(specs).slice(0, 6);
+  return dedupeSpecs(specs.length > 0 ? specs : WATCHLIST_BY_TOPIC.general).slice(0, 6);
 }
 
 function toDirectionLabel(value: ReturnType<typeof regime>): string {
@@ -199,14 +184,18 @@ function analyzeWatchlist(
   readIndicatorSeries: (seriesId: string) => Observation[],
 ): DigestWatchItem[] {
   const metrics: WatchMetrics[] = specs.map((spec) => {
-    const observations = readIndicatorSeries(spec.seriesId);
+    const normalizedSeriesId = normalizeSeriesId(spec.seriesId);
+    const observations = readIndicatorSeries(normalizedSeriesId);
     const latest = observations
       .slice()
       .sort((a, b) => a.date.localeCompare(b.date))
       .at(-1);
 
     return {
-      spec,
+      spec: {
+        ...spec,
+        seriesId: normalizedSeriesId,
+      },
       observations,
       latestDate: latest?.date ?? null,
       latestValue: latest?.value ?? null,

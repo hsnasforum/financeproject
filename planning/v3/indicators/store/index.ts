@@ -8,6 +8,7 @@ import {
   type Observation,
   type SeriesSnapshot,
 } from "../contracts";
+import { normalizeSeriesId } from "../aliases";
 
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "indicators");
 
@@ -33,11 +34,11 @@ export function resolveStatePath(rootDir = DEFAULT_ROOT): string {
 }
 
 export function resolveSeriesPath(seriesId: string, rootDir = DEFAULT_ROOT): string {
-  return path.join(resolveSeriesDir(rootDir), `${seriesId}.jsonl`);
+  return path.join(resolveSeriesDir(rootDir), `${normalizeSeriesId(seriesId)}.jsonl`);
 }
 
 export function resolveMetaPath(seriesId: string, rootDir = DEFAULT_ROOT): string {
-  return path.join(resolveMetaDir(rootDir), `${seriesId}.json`);
+  return path.join(resolveMetaDir(rootDir), `${normalizeSeriesId(seriesId)}.json`);
 }
 
 function ensureDirs(rootDir = DEFAULT_ROOT): void {
@@ -63,7 +64,8 @@ export function writeState(state: IndicatorsState, rootDir = DEFAULT_ROOT): void
 }
 
 export function readSeriesObservations(seriesId: string, rootDir = DEFAULT_ROOT): Observation[] {
-  const filePath = resolveSeriesPath(seriesId, rootDir);
+  const normalizedSeriesId = normalizeSeriesId(seriesId);
+  const filePath = resolveSeriesPath(normalizedSeriesId, rootDir);
   if (!fs.existsSync(filePath)) return [];
 
   const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
@@ -89,7 +91,8 @@ export function appendSeriesObservations(seriesId: string, observations: Observa
 } {
   ensureDirs(rootDir);
 
-  const existing = readSeriesObservations(seriesId, rootDir);
+  const normalizedSeriesId = normalizeSeriesId(seriesId);
+  const existing = readSeriesObservations(normalizedSeriesId, rootDir);
   const existingDates = new Set(existing.map((row) => row.date));
   const incoming = observations.map((row) => ObservationSchema.parse(row));
 
@@ -104,7 +107,7 @@ export function appendSeriesObservations(seriesId: string, observations: Observa
     .filter((row) => !existingDates.has(row.date))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  const filePath = resolveSeriesPath(seriesId, rootDir);
+  const filePath = resolveSeriesPath(normalizedSeriesId, rootDir);
   if (rowsToAppend.length > 0) {
     const payload = rowsToAppend.map((row) => JSON.stringify(row)).join("\n");
     const prefix = fs.existsSync(filePath) && fs.statSync(filePath).size > 0 ? "\n" : "";
@@ -137,5 +140,5 @@ export function writeSeriesMeta(snapshot: SeriesSnapshot, rootDir = DEFAULT_ROOT
       lastDate: validated.observations.map((row) => row.date).sort((a, b) => a.localeCompare(b)).at(-1),
     },
   };
-  fs.writeFileSync(resolveMetaPath(validated.seriesId, rootDir), `${JSON.stringify(out, null, 2)}\n`, "utf-8");
+  fs.writeFileSync(resolveMetaPath(normalizeSeriesId(validated.seriesId), rootDir), `${JSON.stringify(out, null, 2)}\n`, "utf-8");
 }
