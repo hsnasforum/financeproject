@@ -259,6 +259,7 @@ export function buildDigestFromInputs(input: {
   const observationLines = buildObservationLines(digestDay, watchlist);
 
   return DailyDigestSchema.parse({
+    schemaVersion: 1,
     generatedAt: input.generatedAt,
     dateRange,
     topItems: input.topResult.topItems,

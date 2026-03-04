@@ -56,6 +56,7 @@ export const AlertRuleSchema = z.discriminatedUnion("kind", [
 export type AlertRule = z.infer<typeof AlertRuleSchema>;
 
 export const AlertRulesConfigSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   version: z.number().int().positive().default(1),
   generatedAt: z.string().datetime().optional(),
   rules: z.array(AlertRuleSchema).default([]),
@@ -82,6 +83,7 @@ export const AlertRuleOverrideSchema = z.object({
 export type AlertRuleOverride = z.infer<typeof AlertRuleOverrideSchema>;
 
 export const AlertRuleOverridesSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   updatedAt: z.string().datetime().optional(),
   rules: z.array(AlertRuleOverrideSchema).default([]),
 });

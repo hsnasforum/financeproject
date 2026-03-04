@@ -49,6 +49,7 @@ export function saveExposureProfile(input: unknown, cwd = process.cwd()): Exposu
   assertServerOnly();
   const normalizedInput: ExposureProfileInput = parseExposureProfileInput(input);
   const next = parseWithV3Whitelist(ExposureProfileSchema, normalizeExposureProfile({
+    schemaVersion: 1,
     ...normalizedInput,
     savedAt: new Date().toISOString(),
   }), {

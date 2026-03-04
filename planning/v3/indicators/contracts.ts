@@ -70,6 +70,7 @@ export const SeriesStateSchema = z.object({
 export type SeriesState = z.infer<typeof SeriesStateSchema>;
 
 export const IndicatorsStateSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   lastRunAt: z.string().datetime().optional(),
   series: z.record(z.string(), SeriesStateSchema).default({}),
 });

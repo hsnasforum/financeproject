@@ -11,6 +11,7 @@ export const DigestEvidenceSchema = z.object({
 export type DigestEvidence = z.infer<typeof DigestEvidenceSchema>;
 
 export const DigestDaySchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   observation: z.string().trim().min(1),
   evidence: z.array(DigestEvidenceSchema).max(5),

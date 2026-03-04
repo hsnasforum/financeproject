@@ -76,6 +76,7 @@ export const SourceRuntimeStateSchema = z.object({
 export type SourceRuntimeState = z.infer<typeof SourceRuntimeStateSchema>;
 
 export const RuntimeStateSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   lastRunAt: z.string().datetime().optional(),
   sources: z.record(z.string(), SourceRuntimeStateSchema).default({}),
 });
@@ -98,6 +99,7 @@ export const NewsTopicOverrideSchema = z.object({
 export type NewsTopicOverride = z.infer<typeof NewsTopicOverrideSchema>;
 
 export const NewsSettingsSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   updatedAt: z.string().datetime().optional(),
   sources: z.array(NewsSourceOverrideSchema).default([]),
   topics: z.array(NewsTopicOverrideSchema).default([]),
@@ -218,6 +220,7 @@ export const DigestWatchItemSchema = DigestWatchSpecSchema.extend({
 export type DigestWatchItem = z.infer<typeof DigestWatchItemSchema>;
 
 export const DailyDigestSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   generatedAt: z.string().datetime(),
   dateRange: DateRangeSchema,
   topItems: z.array(ScoredNewsItemSchema),

@@ -13,6 +13,7 @@ import { NEWS_TOPICS, canonicalizeTopicId } from "./taxonomy";
 import { parseWithV3Whitelist } from "../security/whitelist";
 
 const DEFAULT_SETTINGS: NewsSettings = {
+  schemaVersion: 1,
   updatedAt: undefined,
   sources: [],
   topics: [],
@@ -50,6 +51,7 @@ export function readNewsSettings(rootDir = DEFAULT_NEWS_ROOT): NewsSettings {
 
 export function writeNewsSettings(input: NewsSettings, rootDir = DEFAULT_NEWS_ROOT): NewsSettings {
   const next = parseWithV3Whitelist(NewsSettingsSchema, {
+    schemaVersion: 1,
     ...input,
     updatedAt: new Date().toISOString(),
   }, {
