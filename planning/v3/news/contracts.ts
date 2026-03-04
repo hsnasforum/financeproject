@@ -5,6 +5,8 @@ export const NewsSourceSchema = z.object({
   name: z.string().trim().min(1),
   feedUrl: z.string().trim().url(),
   homepageUrl: z.string().trim().url().optional(),
+  country: z.string().trim().min(2).max(3),
+  language: z.string().trim().min(2).max(5),
   weight: z.number().finite(),
   enabled: z.boolean(),
 });
