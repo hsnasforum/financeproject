@@ -4,6 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { WeeklyPlanPanel } from "./WeeklyPlanPanel";
+
+type NewsTrendsTableClientProps = {
+  csrf?: string;
+};
 
 type TrendsResponse = {
   ok?: boolean;
@@ -55,7 +60,7 @@ function buildPolylinePoints(series: Array<{ count?: number }> | undefined): str
   }).join(" ");
 }
 
-export function NewsTrendsTableClient() {
+export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
   const [windowDays, setWindowDays] = useState<7 | 30>(7);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -118,6 +123,8 @@ export function NewsTrendsTableClient() {
           <p className="text-xs text-slate-500">기준일: {asString(data?.date) || "-"}</p>
           {errorMessage ? <p className="text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
         </Card>
+
+        <WeeklyPlanPanel csrf={csrf} />
 
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">Topic Table</h2>
