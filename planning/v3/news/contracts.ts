@@ -26,6 +26,19 @@ export const NewsItemSchema = z.object({
 
 export type NewsItem = z.infer<typeof NewsItemSchema>;
 
+export const NewsNoteTargetTypeSchema = z.enum(["item", "topic", "scenario"]);
+export type NewsNoteTargetType = z.infer<typeof NewsNoteTargetTypeSchema>;
+
+export const NewsNoteSchema = z.object({
+  targetType: NewsNoteTargetTypeSchema,
+  targetId: z.string().trim().min(1),
+  tags: z.array(z.string().trim().min(1)).default([]),
+  note: z.string().trim().min(1),
+  createdAt: z.string().datetime(),
+});
+
+export type NewsNote = z.infer<typeof NewsNoteSchema>;
+
 export const IngestErrorSchema = z.object({
   sourceId: z.string().trim().min(1),
   message: z.string().trim().min(1),
@@ -152,6 +165,7 @@ export const SelectTopResultSchema = z.object({
   windowHours: z.number().int().positive(),
   totalCandidates: z.number().int().nonnegative(),
   topItems: z.array(ScoredNewsItemSchema),
+  clusters: z.array(NewsClusterSchema).default([]),
   topTopics: z.array(TopTopicSchema),
 });
 
@@ -290,6 +304,10 @@ export function parseNewsSource(value: unknown): NewsSource {
 
 export function parseNewsItem(value: unknown): NewsItem {
   return NewsItemSchema.parse(value);
+}
+
+export function parseNewsNote(value: unknown): NewsNote {
+  return NewsNoteSchema.parse(value);
 }
 
 export function parseRuntimeState(value: unknown): RuntimeState {
