@@ -4,14 +4,20 @@ import {
   type ScenarioCard,
   type ScenarioName,
   type ScenarioPack,
+  type ScenarioTemplate,
   type TopicDailyStat,
 } from "./contracts";
 import { noRecommendationText } from "./digest";
+import { SCENARIO_TEMPLATES } from "./scenarioTemplates";
+import { evaluateTriggers } from "./triggerEvaluator";
+import { type SeriesSnapshot } from "../indicators/contracts";
 
 type BuildScenariosInput = {
   digest: DailyDigest;
   trends: TopicDailyStat[];
   generatedAt?: string;
+  seriesSnapshots?: SeriesSnapshot[];
+  templates?: ScenarioTemplate[];
 };
 
 function dedupe(values: string[]): string[] {
@@ -88,10 +94,16 @@ function buildScenarioCard(args: {
   burstTopic: string;
   linkedTopics: string[];
   indicators: string[];
+  triggerStatus: ScenarioCard["triggerStatus"];
+  triggerRationale: string;
+  triggerEvaluations: ScenarioCard["triggerEvaluations"];
 }): ScenarioCard {
   if (args.name === "Base") {
     const card = {
       name: "Base" as const,
+      triggerStatus: args.triggerStatus,
+      triggerRationale: args.triggerRationale,
+      triggerEvaluations: args.triggerEvaluations,
       assumptions: [
         `${args.topTopic} 중심의 보도 비중이 단기적으로 유지될 가능성이 있습니다.`,
         `${args.burstTopic} 관련 급증 흐름이 완만하게 이어질 수 있습니다.`,
@@ -110,6 +122,8 @@ function buildScenarioCard(args: {
     };
 
     assertConditionalStrings([
+      card.triggerRationale,
+      ...card.triggerEvaluations.map((row) => row.rationale),
       ...card.assumptions,
       ...card.triggers,
       ...card.invalidation,
@@ -121,6 +135,9 @@ function buildScenarioCard(args: {
   if (args.name === "Bull") {
     const card = {
       name: "Bull" as const,
+      triggerStatus: args.triggerStatus,
+      triggerRationale: args.triggerRationale,
+      triggerEvaluations: args.triggerEvaluations,
       assumptions: [
         `${args.burstTopic} 관련 보도 확산이 추가로 강화될 가능성이 있습니다.`,
         "상향 서프라이즈 지표가 겹치면 위험선호 회복이 나타날 수 있습니다.",
@@ -143,6 +160,8 @@ function buildScenarioCard(args: {
     };
 
     assertConditionalStrings([
+      card.triggerRationale,
+      ...card.triggerEvaluations.map((row) => row.rationale),
       ...card.assumptions,
       ...card.triggers,
       ...card.invalidation,
@@ -153,6 +172,9 @@ function buildScenarioCard(args: {
 
   const card = {
     name: "Bear" as const,
+    triggerStatus: args.triggerStatus,
+    triggerRationale: args.triggerRationale,
+    triggerEvaluations: args.triggerEvaluations,
     assumptions: [
       `${args.topTopic} 이슈가 부정적 헤드라인으로 재해석될 가능성이 있습니다.`,
       "거시 변수 변동폭 확대로 보수적 해석이 확대될 수 있습니다.",
@@ -175,6 +197,8 @@ function buildScenarioCard(args: {
   };
 
   assertConditionalStrings([
+    card.triggerRationale,
+    ...card.triggerEvaluations.map((row) => row.rationale),
     ...card.assumptions,
     ...card.triggers,
     ...card.invalidation,
@@ -185,19 +209,35 @@ function buildScenarioCard(args: {
 
 export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
   const generatedAt = input.generatedAt ?? input.digest.generatedAt;
+  const seriesSnapshots = input.seriesSnapshots ?? [];
+  const templateMap = new Map((input.templates ?? SCENARIO_TEMPLATES).map((row) => [row.name, row]));
   const topTopic = input.digest.topTopics[0]?.topicLabel ?? "핵심 토픽";
   const burstTopic = firstBurstTopicLabel(input.digest, input.trends);
   const linkedTopics = pickLinkedTopics(input.digest, input.trends);
   const indicators = pickIndicators(input.digest);
 
   const scenarioNames: ScenarioName[] = ["Base", "Bull", "Bear"];
-  const cards: ScenarioCard[] = scenarioNames.map((name) => buildScenarioCard({
-    name,
-    topTopic,
-    burstTopic,
-    linkedTopics,
-    indicators,
-  }));
+  const cards: ScenarioCard[] = scenarioNames.map((name) => {
+    const template = templateMap.get(name);
+    const evaluation = template
+      ? evaluateTriggers(seriesSnapshots, template)
+      : {
+        status: "unknown" as const,
+        rationale: `${name} 트리거 템플릿이 없어 평가를 보류합니다.`,
+        evaluations: [{ ruleId: `${name.toLowerCase()}-missing-template`, label: "템플릿 누락", status: "unknown" as const, rationale: `${name} 템플릿 누락으로 평가 보류.` }],
+      };
+
+    return buildScenarioCard({
+      name,
+      topTopic,
+      burstTopic,
+      linkedTopics,
+      indicators,
+      triggerStatus: evaluation.status,
+      triggerRationale: evaluation.rationale,
+      triggerEvaluations: evaluation.evaluations,
+    });
+  });
 
   return ScenarioPackSchema.parse({
     generatedAt,
