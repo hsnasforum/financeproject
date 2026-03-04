@@ -3,6 +3,7 @@ import {
   ScorePartsSchema,
   type NewsItem,
   type NewsSource,
+  type NewsTopic,
   type ScoreParts,
   type ScoredNewsItem,
   type TopicTag,
@@ -13,6 +14,7 @@ import { canonicalizeTopicId, tagItemTopics } from "./taxonomy";
 type ScoreOptions = {
   now?: Date;
   sourceWeights?: Record<string, number>;
+  topics?: NewsTopic[];
 };
 
 const FALLBACK_TOPIC = {
@@ -66,8 +68,9 @@ function totalFromParts(parts: ScoreParts): number {
 export function scoreItem(item: NewsItem, options: ScoreOptions = {}): ScoredNewsItem {
   const now = options.now ?? new Date();
   const sourceWeights = options.sourceWeights ?? toWeightMap(NEWS_SOURCES);
+  const topics = options.topics;
   const sourceWeight = sourceWeights[item.sourceId] ?? 0.5;
-  const tags = tagItemTopics(item);
+  const tags = tagItemTopics(item, topics);
   const primary = tags[0]
     ? { id: canonicalizeTopicId(tags[0].topicId), label: tags[0].topicLabel }
     : FALLBACK_TOPIC;

@@ -69,6 +69,29 @@ export const RuntimeStateSchema = z.object({
 
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 
+export const NewsSourceOverrideSchema = z.object({
+  id: z.string().trim().min(1),
+  enabled: z.boolean().optional(),
+  weight: z.number().finite().optional(),
+});
+
+export type NewsSourceOverride = z.infer<typeof NewsSourceOverrideSchema>;
+
+export const NewsTopicOverrideSchema = z.object({
+  id: z.string().trim().min(1),
+  keywords: z.array(z.string().trim().min(1)).optional(),
+});
+
+export type NewsTopicOverride = z.infer<typeof NewsTopicOverrideSchema>;
+
+export const NewsSettingsSchema = z.object({
+  updatedAt: z.string().datetime().optional(),
+  sources: z.array(NewsSourceOverrideSchema).default([]),
+  topics: z.array(NewsTopicOverrideSchema).default([]),
+});
+
+export type NewsSettings = z.infer<typeof NewsSettingsSchema>;
+
 export const NewsTopicSchema = z.object({
   id: z.string().trim().min(1),
   label: z.string().trim().min(1),
@@ -271,6 +294,10 @@ export function parseNewsItem(value: unknown): NewsItem {
 
 export function parseRuntimeState(value: unknown): RuntimeState {
   return RuntimeStateSchema.parse(value);
+}
+
+export function parseNewsSettings(value: unknown): NewsSettings {
+  return NewsSettingsSchema.parse(value);
 }
 
 export function parseScoredNewsItem(value: unknown): ScoredNewsItem {

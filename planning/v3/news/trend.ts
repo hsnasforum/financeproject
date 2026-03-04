@@ -1,4 +1,10 @@
-import { TopicDailyStatSchema, type BurstGrade, type NewsItem, type TopicDailyStat } from "./contracts";
+import {
+  TopicDailyStatSchema,
+  type BurstGrade,
+  type NewsItem,
+  type NewsTopic,
+  type TopicDailyStat,
+} from "./contracts";
 import { scoreItems } from "./score";
 import { canonicalizeTopicId } from "./taxonomy";
 
@@ -76,8 +82,20 @@ export function computeBurstMetrics(todayCount: number, historyCounts: number[])
   };
 }
 
-export function aggregateDailyTopicCounts(items: NewsItem[], dateKst: string, now: Date): TopicCountRow[] {
-  const scored = scoreItems(items, { now });
+export function aggregateDailyTopicCounts(
+  items: NewsItem[],
+  dateKst: string,
+  now: Date,
+  options: {
+    sourceWeights?: Record<string, number>;
+    topics?: NewsTopic[];
+  } = {},
+): TopicCountRow[] {
+  const scored = scoreItems(items, {
+    now,
+    sourceWeights: options.sourceWeights,
+    topics: options.topics,
+  });
   const topicMap = new Map<string, TopicCountRow>();
 
   for (const item of scored) {
@@ -133,9 +151,14 @@ export function buildRollingDailyStats(args: {
   historyStatsByDay: Record<string, TopicDailyStat[]>;
   baselineDays?: number;
   now: Date;
+  sourceWeights?: Record<string, number>;
+  topics?: NewsTopic[];
 }): TopicDailyStat[] {
   const baselineDays = Math.max(1, Math.min(30, Math.round(args.baselineDays ?? 7)));
-  const topicCounts = aggregateDailyTopicCounts(args.items, args.dateKst, args.now);
+  const topicCounts = aggregateDailyTopicCounts(args.items, args.dateKst, args.now, {
+    sourceWeights: args.sourceWeights,
+    topics: args.topics,
+  });
 
   const historyCountsByTopic: Record<string, number[]> = {};
   for (const row of topicCounts) {
