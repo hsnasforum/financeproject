@@ -4,6 +4,14 @@ import path from "node:path";
 import { z } from "zod";
 import { regime, pctChange, zscore } from "../../../planning/v3/indicators/analytics";
 import { normalizeSeriesId } from "../../../planning/v3/indicators/aliases";
+import { evaluateAlerts as evaluateAlertsV3 } from "../../../planning/v3/alerts/evaluateAlerts";
+import {
+  appendAlertEvents as appendAlertEventsV3,
+  groupAlertEventsByDay as groupAlertEventsByDayV3,
+  readAlertEvents as readAlertEventsV3,
+  readRecentAlertEvents as readRecentAlertEventsV3,
+  resolveAlertEventsPath as resolveAlertEventsPathV3,
+} from "../../../planning/v3/alerts/store";
 import { resolveDataDir } from "../planning/storage/dataDir.ts";
 import { readIndicatorSeriesSnapshots } from "../indicators/query.ts";
 import { type Observation, type SeriesSnapshot } from "../indicators/types.ts";
@@ -94,6 +102,15 @@ const AlertEventSchema = z.object({
   value: z.number().finite().optional(),
   valueText: z.string().trim().min(1).optional(),
   burstLevel: z.enum(["상", "중", "하"]).optional(),
+  snapshot: z.object({
+    triggerStatus: z.enum(["met", "not_met", "unknown"]).optional(),
+    burstLevel: z.enum(["상", "중", "하", "unknown"]).optional(),
+    indicator: z.object({
+      metric: z.enum(["pctChange", "zscore", "regime"]),
+      condition: z.enum(["up", "down", "high", "low", "flat", "unknown"]),
+      status: z.enum(["met", "not_met", "unknown"]),
+    }).optional(),
+  }).optional(),
 });
 
 export type AlertEvent = z.infer<typeof AlertEventSchema>;
@@ -203,7 +220,7 @@ export function resolveAlertsDataDir(cwd = process.cwd()): string {
 }
 
 export function resolveAlertEventsPath(cwd = process.cwd()): string {
-  return path.join(resolveAlertsDataDir(cwd), "events.jsonl");
+  return resolveAlertEventsPathV3(resolveAlertsDataDir(cwd));
 }
 
 export function resolveAlertRulesOverridePath(cwd = process.cwd()): string {
@@ -275,44 +292,19 @@ export function loadEffectiveAlertRules(cwd = process.cwd()): AlertRule[] {
 }
 
 export function readAlertEvents(cwd = process.cwd()): AlertEvent[] {
-  const filePath = resolveAlertEventsPath(cwd);
-  if (!fs.existsSync(filePath)) return [];
-  const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
-  const out: AlertEvent[] = [];
-  for (const line of lines) {
-    const row = readAlertEventLine(line);
-    if (!row) continue;
-    out.push(row);
-  }
-  out.sort((a, b) => {
-    const left = Date.parse(a.createdAt);
-    const right = Date.parse(b.createdAt);
-    if (left !== right) return right - left;
-    return b.id.localeCompare(a.id);
-  });
-  return out;
+  return readAlertEventsV3(resolveAlertsDataDir(cwd))
+    .map((row) => AlertEventSchema.parse(row));
 }
 
 export function appendAlertEvents(events: AlertEvent[], cwd = process.cwd()): { appended: number; total: number } {
-  if (events.length < 1) return { appended: 0, total: readAlertEvents(cwd).length };
-
-  const filePath = resolveAlertEventsPath(cwd);
-  const dir = path.dirname(filePath);
-  fs.mkdirSync(dir, { recursive: true });
-
-  const existingIds = new Set(readAlertEvents(cwd).map((row) => row.id));
-  const nextRows = events
-    .map((row) => AlertEventSchema.parse(row))
-    .filter((row) => !existingIds.has(row.id));
-
-  if (nextRows.length > 0) {
-    const payload = nextRows.map((row) => JSON.stringify(row)).join("\n");
-    fs.appendFileSync(filePath, `${payload}\n`, "utf-8");
-  }
-
+  const result = appendAlertEventsV3({
+    events: events.map((row) => AlertEventSchema.parse(row)),
+    rootDir: resolveAlertsDataDir(cwd),
+    dedupWindowMinutes: 180,
+  });
   return {
-    appended: nextRows.length,
-    total: existingIds.size + nextRows.length,
+    appended: result.appended,
+    total: result.total,
   };
 }
 
@@ -372,6 +364,29 @@ function evaluateRegimeCondition(current: string, condition: AlertRuleCondition)
   return current === condition;
 }
 
+function metricLabel(metric: "pctChange" | "zscore" | "regime"): string {
+  if (metric === "pctChange") return "변화율";
+  if (metric === "zscore") return "표준점수";
+  return "추세";
+}
+
+function conditionLabel(condition: AlertRuleCondition): string {
+  if (condition === "up") return "상승";
+  if (condition === "down") return "하락";
+  if (condition === "high") return "고점권";
+  if (condition === "low") return "저점권";
+  if (condition === "flat") return "횡보";
+  return "데이터 부족";
+}
+
+function regimeLabel(value: string): string {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === "up") return "상승";
+  if (normalized === "down") return "하락";
+  if (normalized === "flat") return "횡보";
+  return normalized || "데이터 부족";
+}
+
 function evaluateTopicBurstRule(input: {
   rule: z.infer<typeof TopicBurstRuleSchema>;
   trends: TopicTrend[];
@@ -393,7 +408,7 @@ function evaluateTopicBurstRule(input: {
     ruleKind: input.rule.kind,
     level: input.rule.level,
     title: `${input.rule.name}: ${row.topicLabel} (${row.burstLevel})`,
-    summary: `today=${row.todayCount}, delta=${row.delta}, ratio=${round2(row.ratio)}, z=${round2(row.burstZ)}`,
+    summary: `당일 기사 수 ${row.todayCount}건 · 전일 대비 ${row.delta}건 · 증가 배율 ${round2(row.ratio)}배 · 급증 지수 ${round2(row.burstZ)}`,
     targetType: "topic",
     targetId: row.topicId,
     link: topicLink(row.topicId),
@@ -438,7 +453,7 @@ function evaluateIndicatorRule(input: {
   if (input.rule.metric === "regime") {
     const regimeValue = asString(value);
     matched = evaluateRegimeCondition(regimeValue, input.rule.condition);
-    valueText = `regime=${regimeValue}`;
+    valueText = `${metricLabel(input.rule.metric)} ${regimeLabel(regimeValue)}`;
   } else {
     const metricNumber = asNumber(value, Number.NaN);
     if (!Number.isFinite(metricNumber)) return [];
@@ -448,7 +463,7 @@ function evaluateIndicatorRule(input: {
       condition: input.rule.condition,
       threshold: input.rule.threshold,
     });
-    valueText = `${input.rule.metric}=${formatSigned(metricNumber)}`;
+    valueText = `${metricLabel(input.rule.metric)} ${formatSigned(metricNumber)}`;
     numericValue = round2(metricNumber);
   }
 
@@ -473,7 +488,7 @@ function evaluateIndicatorRule(input: {
     ruleKind: input.rule.kind,
     level: input.rule.level,
     title: `${input.rule.name}: ${seriesId}`,
-    summary: `${valueText}, condition=${input.rule.condition}, asOf=${snapshot.observations[snapshot.observations.length - 1]?.date ?? "-"}`,
+    summary: `${valueText} · 조건 ${conditionLabel(input.rule.condition)} 충족 · 기준일 ${snapshot.observations[snapshot.observations.length - 1]?.date ?? "-"}`,
     targetType,
     targetId,
     link,
@@ -491,39 +506,24 @@ export function evaluateAlertEvents(input: {
 }): { events: AlertEvent[]; rules: AlertRule[] } {
   const cwd = input.cwd ?? process.cwd();
   const generatedAt = asString(input.generatedAt) || new Date().toISOString();
-  const dayKst = formatKstDay(generatedAt);
   const rules = loadEffectiveAlertRules(cwd).filter((row) => row.enabled !== false);
-
   const trends = readNewsTopicTrends(resolveNewsTrendsJsonPath(cwd))?.topics ?? [];
   const snapshotsBySeriesId = readSnapshotsBySeriesId(cwd, rules);
-
-  const events: AlertEvent[] = [];
-  for (const rule of rules) {
-    if (rule.kind === "topic_burst") {
-      events.push(...evaluateTopicBurstRule({
-        rule,
-        trends,
-        source: input.source,
-        generatedAt,
-        dayKst,
-      }));
-      continue;
-    }
-
-    events.push(...evaluateIndicatorRule({
-      rule,
-      snapshotsBySeriesId,
-      source: input.source,
-      generatedAt,
-      dayKst,
-    }));
-  }
-
-  events.sort((a, b) => {
-    if (a.ruleId !== b.ruleId) return a.ruleId.localeCompare(b.ruleId);
-    if (a.targetType !== b.targetType) return a.targetType.localeCompare(b.targetType);
-    return a.targetId.localeCompare(b.targetId);
-  });
+  const events = evaluateAlertsV3({
+    generatedAt,
+    source: input.source,
+    rules,
+    topicTrends: trends.map((row) => ({
+      topicId: row.topicId,
+      topicLabel: row.topicLabel,
+      todayCount: row.todayCount,
+      burstLevel: row.burstLevel,
+    })),
+    seriesSnapshots: [...snapshotsBySeriesId.values()].map((row) => ({
+      seriesId: row.seriesId,
+      observations: row.observations,
+    })),
+  }).map((row) => AlertEventSchema.parse(row));
 
   return {
     events,
@@ -565,32 +565,18 @@ export function readRecentAlertEvents(input: {
   nowIso?: string;
 } = {}): AlertEvent[] {
   const cwd = input.cwd ?? process.cwd();
-  const days = Math.max(1, Math.min(90, Math.round(asNumber(input.days, 14))));
-  const nowIso = asString(input.nowIso) || new Date().toISOString();
-  const todayKst = formatKstDay(nowIso);
-  const fromKst = shiftKstDay(todayKst, -(days - 1));
-  return readAlertEvents(cwd).filter((row) => row.dayKst >= fromKst && row.dayKst <= todayKst);
+  return readRecentAlertEventsV3({
+    rootDir: resolveAlertsDataDir(cwd),
+    days: input.days,
+    nowIso: input.nowIso,
+  }).map((row) => AlertEventSchema.parse(row));
 }
 
 export function groupAlertEventsByDay(events: AlertEvent[]): Array<{ dayKst: string; events: AlertEvent[] }> {
-  const byDay = new Map<string, AlertEvent[]>();
-  for (const row of events) {
-    const bucket = byDay.get(row.dayKst) ?? [];
-    bucket.push(row);
-    byDay.set(row.dayKst, bucket);
-  }
-
-  const out = [...byDay.entries()]
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([dayKst, rows]) => ({
-      dayKst,
-      events: rows.sort((left, right) => {
-        const l = Date.parse(left.createdAt);
-        const r = Date.parse(right.createdAt);
-        if (l !== r) return r - l;
-        return right.id.localeCompare(left.id);
-      }),
+  const normalized = events.map((row) => AlertEventSchema.parse(row));
+  return groupAlertEventsByDayV3(normalized)
+    .map((group) => ({
+      dayKst: group.dayKst,
+      events: group.events.map((row) => AlertEventSchema.parse(row)),
     }));
-
-  return out;
 }
