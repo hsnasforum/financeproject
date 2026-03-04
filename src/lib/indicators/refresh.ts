@@ -5,6 +5,7 @@ import {
   parseIndicatorSourcesFile,
   parseIndicatorsRefreshResult,
 } from "./contracts";
+import { fetchEcosSeries } from "./connectors/ecos";
 import { readIndicatorsState, writeIndicatorsState } from "./state";
 import { appendSeriesObservations, resolveIndicatorsRoot } from "./store";
 import {
@@ -119,6 +120,15 @@ function pushError(errors: IndicatorsRefreshError[], row: IndicatorsRefreshError
   });
 }
 
+const DEFAULT_CONNECTORS: Partial<Record<IndicatorSource["type"], IndicatorConnector>> = {
+  ecos: {
+    fetchSeries: async (input) => fetchEcosSeries({
+      externalId: input.spec.externalId,
+      fetchImpl: input.fetchImpl,
+    }),
+  },
+};
+
 export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions = {}): Promise<IndicatorsRefreshResult> {
   const cwd = options.cwd ?? process.cwd();
   const now = options.now ?? new Date();
@@ -129,7 +139,10 @@ export async function runIndicatorsRefresh(options: RunIndicatorsRefreshOptions 
   const sourcesConfig = loadSourcesConfig(cwd);
   const seriesConfig = loadSeriesConfig(cwd);
   const enabledSources = sourcesConfig.sources.filter((row) => row.enabled);
-  const connectors = options.connectors ?? {};
+  const connectors = {
+    ...DEFAULT_CONNECTORS,
+    ...(options.connectors ?? {}),
+  };
 
   const state = readIndicatorsState(rootDir);
   const nextState = {
