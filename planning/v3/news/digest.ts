@@ -55,7 +55,10 @@ function assertValidRange(range: DateRange): DateRange {
 function hasBannedPattern(text: string): boolean {
   const value = text.trim();
   if (!value) return false;
-  return BANNED_PATTERNS.some((pattern) => pattern.test(value));
+  return BANNED_PATTERNS.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(value);
+  });
 }
 
 export function noRecommendationText(text: string): boolean {
