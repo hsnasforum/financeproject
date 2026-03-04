@@ -3,6 +3,7 @@ import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { readNewsDigestDay } from "@/lib/news/digestReader";
 import { type DigestDay, type DigestWatchItem } from "@/lib/news/types";
+import { computeTopicContradictions } from "../../../../../../../planning/v3/news/contradiction";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -67,6 +68,15 @@ function sanitizeDigest(input: DigestDay | null): DigestDay | null {
       score: Number(item.score) || 0,
       publishedAt: asString(item.publishedAt),
       sourceName: asString(item.sourceName),
+      rationale: asString(item.rationale),
+      scoreParts: {
+        source: Number(item.scoreParts?.source) || 0,
+        recency: Number(item.scoreParts?.recency) || 0,
+        keyword: Number(item.scoreParts?.keyword) || 0,
+        burst: Number(item.scoreParts?.burst) || 0,
+        diversityPenalty: Number(item.scoreParts?.diversityPenalty) || 0,
+        duplicatePenalty: Number(item.scoreParts?.duplicatePenalty) || 0,
+      },
       snippet: asString(item.snippet),
     })),
     topTopics: (input.topTopics ?? []).map((row) => ({
@@ -92,6 +102,8 @@ function sanitizeDigest(input: DigestDay | null): DigestDay | null {
       observation: asString(card.observation),
       interpretations: (card.interpretations ?? []).map((row) => asString(row)).filter(Boolean),
       confirmIndicators: (card.confirmIndicators ?? []).map((row) => asString(row)).filter(Boolean),
+      uncertaintyLabel: asString(card.uncertaintyLabel),
+      consensusGrade: card.consensusGrade === "high" || card.consensusGrade === "med" ? card.consensusGrade : "low",
       options: (card.options ?? []).map((row) => asString(row)).filter(Boolean),
       assumptions: (card.assumptions ?? []).map((row) => asString(row)).filter(Boolean),
       trigger: (card.trigger ?? []).map((row) => asString(row)).filter(Boolean),
@@ -117,5 +129,13 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
 
   const data = sanitizeDigest(readNewsDigestDay());
-  return NextResponse.json({ ok: true, data });
+  const topicContradictions = computeTopicContradictions(
+    (data?.topItems ?? []).map((row) => ({
+      topicId: asString(row.topicId),
+      topicLabel: asString(row.topicLabel),
+      title: asString(row.title),
+      snippet: asString(row.snippet),
+    })),
+  );
+  return NextResponse.json({ ok: true, data, topicContradictions });
 }
