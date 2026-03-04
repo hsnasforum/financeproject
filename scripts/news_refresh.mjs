@@ -38,6 +38,7 @@ async function loadNewsDeps() {
     scoring,
     trend,
     indicatorsQuery,
+    alerts,
   ] = await Promise.all([
     loadTsModule("../src/lib/news/dedupe.ts"),
     loadTsModule("../src/lib/news/urlCanonical.ts"),
@@ -51,6 +52,7 @@ async function loadNewsDeps() {
     loadTsModule("../src/lib/news/scoring.ts"),
     loadTsModule("../src/lib/news/trend.ts"),
     loadTsModule("../src/lib/indicators/query.ts"),
+    loadTsModule("../src/lib/news/alerts.ts"),
   ]);
 
   return {
@@ -90,6 +92,7 @@ async function loadNewsDeps() {
     buildTopicTrendsArtifact: requireFunction(trend, "buildTopicTrendsArtifact", "trend"),
     buildWatchlistValues: requireFunction(indicatorsQuery, "buildWatchlistValues", "indicators.query"),
     readIndicatorSeriesSnapshots: requireFunction(indicatorsQuery, "readIndicatorSeriesSnapshots", "indicators.query"),
+    evaluateAndAppendAlertEvents: requireFunction(alerts, "evaluateAndAppendAlertEvents", "news.alerts"),
   };
 }
 
@@ -488,6 +491,7 @@ async function main() {
     buildTopicTrendsArtifact,
     buildWatchlistValues,
     readIndicatorSeriesSnapshots,
+    evaluateAndAppendAlertEvents,
   } = deps;
 
   const feedsConfig = normalizeFeedConfig(readJson(path.join(cwd, "config", "news-feeds.json"), { version: 1, feeds: [] }));
@@ -753,6 +757,12 @@ async function main() {
       cwd,
     });
 
+    const alertEval = evaluateAndAppendAlertEvents({
+      cwd,
+      generatedAt,
+      source: "news:refresh",
+    });
+
     const runId = `news-${generatedAt.replace(/[^0-9]/g, "").slice(0, 17)}`;
     recordNewsRun(db, {
       runId,
@@ -767,6 +777,7 @@ async function main() {
 
     console.log(`[news:refresh] feeds=${enabledFeeds.length}, fetchedItems=${fetchedItems}, deduped=${deduped.dedupedCount}, inserted=${persisted.insertedItems}`);
     console.log(`[news:refresh] topToday=${brief.topToday.length}, topByTopic=${brief.topByTopic.length}, risingTopics=${brief.risingTopics.length}, burstTopics=${trends.burstTopics.length}`);
+    console.log(`[news:refresh] alerts evaluated=${alertEval.evaluated}, appended=${alertEval.appended}, total=${alertEval.total}`);
     if (feedErrors.length > 0) {
       console.error(`[news:refresh] feed errors=${feedErrors.length}`);
       for (const row of feedErrors.slice(0, 10)) {

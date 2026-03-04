@@ -27,18 +27,35 @@ async function loadRefreshRunner() {
   return runIndicatorsRefresh;
 }
 
+async function loadAlertRunner() {
+  const raw = await tsImport("../src/lib/news/alerts.ts", { parentURL: import.meta.url });
+  const evaluateAndAppendAlertEvents = raw?.evaluateAndAppendAlertEvents;
+  if (typeof evaluateAndAppendAlertEvents !== "function") {
+    throw new Error("missing export news.alerts.evaluateAndAppendAlertEvents");
+  }
+  return evaluateAndAppendAlertEvents;
+}
+
 async function main() {
   const cwd = process.cwd();
   loadEnvFiles(cwd);
   const args = parseArgs(process.argv.slice(2));
   const runIndicatorsRefresh = await loadRefreshRunner();
+  const evaluateAndAppendAlertEvents = await loadAlertRunner();
 
   const result = await runIndicatorsRefresh({
     cwd,
     dry: args.dry,
   });
 
+  const alertEval = evaluateAndAppendAlertEvents({
+    cwd,
+    generatedAt: result.generatedAt,
+    source: "indicators:refresh",
+  });
+
   console.log(`[indicators:refresh] sources=${result.sourcesProcessed} series=${result.seriesProcessed} updated=${result.seriesUpdated} appended=${result.observationsAppended} errors=${result.errors.length}`);
+  console.log(`[indicators:refresh] alerts evaluated=${alertEval.evaluated} appended=${alertEval.appended} total=${alertEval.total}`);
   if (result.errors.length > 0) {
     for (const row of result.errors.slice(0, 20)) {
       console.error(`  - ${row.sourceId}/${row.seriesId ?? "-"} ${row.code}: ${row.message}`);
