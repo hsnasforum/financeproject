@@ -12,6 +12,7 @@ import { NEWS_SOURCES } from "../sources";
 import { canonicalizeTopicId } from "../taxonomy";
 import { tagTopics } from "./tagTopics";
 import { type BurstGrade } from "../contracts";
+import { extractEntities, normalizeEntityIds } from "../entities/extract";
 
 type ScoreOptions = {
   now?: Date;
@@ -98,6 +99,10 @@ export function scoreItem(item: NewsItem, options: ScoreOptions = {}): ScoredNew
   const sourceWeights = options.sourceWeights ?? toWeightMap(NEWS_SOURCES);
   const sourceWeight = sourceWeights[item.sourceId] ?? 0;
   const tags = tagTopics(item, { topics: options.topics });
+  const entities = normalizeEntityIds(item.entities && item.entities.length > 0
+    ? item.entities
+    : extractEntities({ title: item.title, snippet: item.snippet }));
+  const entityPayload = entities.length > 0 ? { entities } : {};
   const primary = tags[0]
     ? { id: canonicalizeTopicId(tags[0].topicId), label: tags[0].topicLabel }
     : FALLBACK_TOPIC;
@@ -105,6 +110,7 @@ export function scoreItem(item: NewsItem, options: ScoreOptions = {}): ScoredNew
 
   return ScoredNewsItemSchema.parse({
     ...item,
+    ...entityPayload,
     tags,
     primaryTopicId: primary.id,
     primaryTopicLabel: primary.label,

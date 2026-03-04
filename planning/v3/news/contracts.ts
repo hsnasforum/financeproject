@@ -21,6 +21,7 @@ export const NewsItemSchema = z.object({
   publishedAt: z.string().datetime().optional(),
   guid: z.string().trim().min(1).optional(),
   snippet: z.string().max(1500).optional(),
+  entities: z.array(z.string().trim().regex(/^[a-z0-9_]+$/)).optional(),
   fetchedAt: z.string().datetime(),
 });
 

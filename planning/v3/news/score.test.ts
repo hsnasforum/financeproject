@@ -21,5 +21,10 @@ describe("planning v3 news score", () => {
     expect(top.scoreParts.sourceWeight).toBeGreaterThan(0);
     expect(top.scoreParts.burstPlaceholder).toBe(0);
     expect(top.totalScore).toBeGreaterThanOrEqual(first[1]!.totalScore);
+
+    const rates = first.find((row) => row.id === "i-rates-1");
+    const fx = first.find((row) => row.id === "i-fx-1");
+    expect(rates?.entities).toContain("central_bank_fed");
+    expect(fx?.entities).toContain("currency_usdkrw");
   });
 });
