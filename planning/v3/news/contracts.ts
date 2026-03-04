@@ -67,6 +67,71 @@ export const RuntimeStateSchema = z.object({
 
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 
+export const NewsTopicSchema = z.object({
+  id: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  keywords: z.array(z.string().trim().min(1)),
+  entities: z.array(z.string().trim().min(1)).optional(),
+});
+
+export type NewsTopic = z.infer<typeof NewsTopicSchema>;
+
+export const TopicTagSchema = z.object({
+  topicId: z.string().trim().min(1),
+  topicLabel: z.string().trim().min(1),
+  keywordHits: z.number().int().nonnegative(),
+  entityHits: z.number().int().nonnegative(),
+  hits: z.array(z.string().trim().min(1)),
+});
+
+export type TopicTag = z.infer<typeof TopicTagSchema>;
+
+export const ScorePartsSchema = z.object({
+  sourceWeight: z.number().finite(),
+  recency: z.number().finite(),
+  keywordHits: z.number().finite(),
+  burstPlaceholder: z.number().finite(),
+});
+
+export type ScoreParts = z.infer<typeof ScorePartsSchema>;
+
+export const ScoredNewsItemSchema = NewsItemSchema.extend({
+  tags: z.array(TopicTagSchema),
+  primaryTopicId: z.string().trim().min(1),
+  primaryTopicLabel: z.string().trim().min(1),
+  scoreParts: ScorePartsSchema,
+  totalScore: z.number().finite(),
+});
+
+export type ScoredNewsItem = z.infer<typeof ScoredNewsItemSchema>;
+
+export const NewsClusterSchema = z.object({
+  clusterId: z.string().trim().min(1),
+  representative: ScoredNewsItemSchema,
+  items: z.array(ScoredNewsItemSchema).min(1),
+});
+
+export type NewsCluster = z.infer<typeof NewsClusterSchema>;
+
+export const TopTopicSchema = z.object({
+  topicId: z.string().trim().min(1),
+  topicLabel: z.string().trim().min(1),
+  count: z.number().int().nonnegative(),
+  scoreSum: z.number().finite(),
+  topScore: z.number().finite(),
+});
+
+export type TopTopic = z.infer<typeof TopTopicSchema>;
+
+export const SelectTopResultSchema = z.object({
+  windowHours: z.number().int().positive(),
+  totalCandidates: z.number().int().nonnegative(),
+  topItems: z.array(ScoredNewsItemSchema),
+  topTopics: z.array(TopTopicSchema),
+});
+
+export type SelectTopResult = z.infer<typeof SelectTopResultSchema>;
+
 export function parseNewsSource(value: unknown): NewsSource {
   return NewsSourceSchema.parse(value);
 }
@@ -77,4 +142,8 @@ export function parseNewsItem(value: unknown): NewsItem {
 
 export function parseRuntimeState(value: unknown): RuntimeState {
   return RuntimeStateSchema.parse(value);
+}
+
+export function parseScoredNewsItem(value: unknown): ScoredNewsItem {
+  return ScoredNewsItemSchema.parse(value);
 }
