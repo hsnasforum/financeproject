@@ -2,8 +2,9 @@ import { IngestResultSchema, type IngestResult, type NewsSource, type RuntimeSta
 import { fetchFeed } from "../ingest/fetchFeed";
 import { normalizeEntry } from "../ingest/normalizeEntry";
 import { parseFeed } from "../ingest/parseFeed";
+import { buildDigest } from "../digest";
 import { NEWS_SOURCES } from "../sources";
-import { hasItem, readAllItems, readDailyStats, readState, upsertItems, writeDailyStats, writeState } from "../store";
+import { hasItem, readAllItems, readDailyStats, readState, upsertItems, writeDailyStats, writeDigest, writeState } from "../store";
 import { buildRollingDailyStats, shiftKstDay, toKstDayKey } from "../trend";
 
 type RunNewsRefreshOptions = {
@@ -119,6 +120,12 @@ export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promi
     now: options.now ?? new Date(),
   });
   writeDailyStats(todayKst, dailyStats, rootDir);
+
+  const digest = buildDigest(
+    { fromKst: shiftKstDay(todayKst, -2), toKst: todayKst },
+    { rootDir, now: options.now ?? new Date(), topN: 10, topM: 5 },
+  );
+  writeDigest(digest, rootDir);
 
   return IngestResultSchema.parse({
     sourcesProcessed,

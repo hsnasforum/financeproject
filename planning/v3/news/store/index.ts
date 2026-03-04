@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  DailyDigestSchema,
   NewsItemSchema,
   RuntimeStateSchema,
   TopicDailyStatSchema,
+  type DailyDigest,
   type NewsItem,
   type RuntimeState,
   type TopicDailyStat,
@@ -34,6 +36,10 @@ export function resolveDailyDir(rootDir = DEFAULT_ROOT): string {
 
 export function resolveDailyStatsPath(dateKst: string, rootDir = DEFAULT_ROOT): string {
   return path.join(resolveDailyDir(rootDir), `${dateKst}.json`);
+}
+
+export function resolveDigestPath(rootDir = DEFAULT_ROOT): string {
+  return path.join(resolveNewsRoot(rootDir), "digest.latest.json");
 }
 
 function ensureStoreDirs(rootDir = DEFAULT_ROOT): void {
@@ -138,4 +144,10 @@ export function readDailyStats(dateKst: string, rootDir = DEFAULT_ROOT): TopicDa
   } catch {
     return [];
   }
+}
+
+export function writeDigest(digest: DailyDigest, rootDir = DEFAULT_ROOT): void {
+  ensureStoreDirs(rootDir);
+  const validated = DailyDigestSchema.parse(digest);
+  fs.writeFileSync(resolveDigestPath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
