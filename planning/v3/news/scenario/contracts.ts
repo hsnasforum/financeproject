@@ -25,6 +25,11 @@ export const ScenarioCardSchema = z.object({
   indicators: z.array(z.string().trim().min(1)).min(1),
   options: z.array(z.string().trim().min(1)).min(1),
   linkedTopics: z.array(z.string().trim().min(1)).min(1).max(3),
+  quality: z.object({
+    dedupeLevel: z.enum(["high", "med", "low"]),
+    contradictionLevel: z.enum(["high", "med", "low"]),
+    uncertaintyLabels: z.array(z.string().trim().min(1)).max(4),
+  }).optional(),
 });
 export type ScenarioCard = z.infer<typeof ScenarioCardSchema>;
 

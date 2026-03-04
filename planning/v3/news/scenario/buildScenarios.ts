@@ -13,6 +13,7 @@ import {
   type TriggerCondition,
 } from "./contracts";
 import { TOPIC_SCENARIO_TEMPLATE_MAP, TOPIC_SCENARIO_TEMPLATES } from "./templates";
+import { computeScenarioQualityGates, type ScenarioQualityGateResult } from "./qualityGates";
 import { resolveEvidenceSeriesIds } from "../evidenceGraph/ssot";
 
 type BuildScenariosInput = {
@@ -162,6 +163,7 @@ function buildCard(input: {
   topicLabelById: Record<string, string>;
   templateByTopicId: Map<string, TopicScenarioTemplate>;
   fallbackTemplate: TopicScenarioTemplate;
+  qualityGates: ScenarioQualityGateResult;
 }): ScenarioCard {
   const template = input.templateByTopicId.get(input.primary.topicId)
     ?? input.fallbackTemplate;
@@ -182,6 +184,7 @@ function buildCard(input: {
     observation,
     ...invalidation,
     ...options,
+    ...input.qualityGates.uncertaintyLabels,
     ...triggers.map((row) => row.note ?? ""),
     ...indicators,
   ]);
@@ -194,6 +197,13 @@ function buildCard(input: {
     indicators,
     options,
     linkedTopics: input.linkedTopics,
+    quality: input.qualityGates.uncertaintyLabels.length > 0
+      ? {
+          dedupeLevel: input.qualityGates.dedupeLevel,
+          contradictionLevel: input.qualityGates.contradictionLevel,
+          uncertaintyLabels: input.qualityGates.uncertaintyLabels,
+        }
+      : undefined,
   };
 }
 
@@ -233,6 +243,10 @@ export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
   for (const trend of input.trends) {
     topicLabelById[trend.topicId] = trend.topicLabel;
   }
+  const qualityGates = computeScenarioQualityGates({
+    digest: input.digest,
+    linkedTopics,
+  });
 
   const cards: ScenarioCard[] = (["Base", "Bull", "Bear"] as const)
     .map((name) => buildCard({
@@ -242,6 +256,7 @@ export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
       topicLabelById,
       templateByTopicId,
       fallbackTemplate,
+      qualityGates,
     }));
 
   const generatedAt = input.generatedAt ?? `${input.digest.date}T00:00:00.000Z`;
