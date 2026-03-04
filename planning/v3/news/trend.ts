@@ -8,6 +8,7 @@ import {
 import { scoreItems } from "./score";
 import { canonicalizeTopicId } from "./taxonomy";
 import { computeBurst } from "./trend/computeBurst";
+import { type TopicDailyStat as TrendTopicDailyStat } from "./trend/contracts";
 import { computeDailyStats } from "./trend/computeDailyStats";
 
 type TopicCountRow = {
@@ -26,6 +27,16 @@ type BuildTopicDailyStatsInput = {
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function normalizeBurstGradeForTrend(
+  grade: TopicDailyStat["burstGrade"],
+): TrendTopicDailyStat["burstGrade"] {
+  if (grade === "상") return "High";
+  if (grade === "중") return "Med";
+  if (grade === "하") return "Low";
+  if (grade === "High" || grade === "Med" || grade === "Low") return grade;
+  return "Unknown";
 }
 
 function burstGradeWeight(grade: BurstGrade): number {
@@ -188,14 +199,22 @@ export function buildRollingDailyStats(args: {
   topics?: NewsTopic[];
 }): TopicDailyStat[] {
   const baselineDays = Math.max(1, Math.min(30, Math.round(args.baselineDays ?? 7)));
-  const historyByTopic: Record<string, TopicDailyStat[]> = {};
+  const historyByTopic: Record<string, TrendTopicDailyStat[]> = {};
   for (let offset = baselineDays; offset >= 1; offset -= 1) {
     const day = shiftKstDay(args.dateKst, -offset);
     const rows = args.historyStatsByDay[day] ?? [];
     for (const row of rows) {
       const topicId = canonicalizeTopicId(row.topicId);
       const bucket = historyByTopic[topicId] ?? [];
-      bucket.push(row);
+      bucket.push({
+        dateKst: row.dateKst,
+        topicId,
+        topicLabel: row.topicLabel,
+        count: row.count,
+        scoreSum: row.scoreSum,
+        sourceDiversity: row.sourceDiversity,
+        burstGrade: normalizeBurstGradeForTrend(row.burstGrade),
+      });
       historyByTopic[topicId] = bucket;
     }
   }
@@ -222,4 +241,3 @@ export function buildRollingDailyStats(args: {
     });
   });
 }
-
