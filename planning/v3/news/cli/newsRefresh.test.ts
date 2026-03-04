@@ -30,6 +30,8 @@ describe("planning v3 news cli", () => {
         name: "Fixture RSS",
         feedUrl: "https://example.com/rss.xml",
         homepageUrl: "https://example.com",
+        country: "KR",
+        language: "ko",
         weight: 0.5,
         enabled: true,
       },

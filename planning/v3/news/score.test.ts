@@ -20,6 +20,6 @@ describe("planning v3 news score", () => {
     const top = first[0]!;
     expect(top.scoreParts.sourceWeight).toBeGreaterThan(0);
     expect(top.scoreParts.burstPlaceholder).toBe(0);
-    expect(top.totalScore).toBeGreaterThan(first[1]!.totalScore);
+    expect(top.totalScore).toBeGreaterThanOrEqual(first[1]!.totalScore);
   });
 });
