@@ -38,3 +38,21 @@ export const StressResultSchema = z.object({
   monitoringOptions: z.array(z.string().trim().min(1)),
 });
 export type StressResult = z.infer<typeof StressResultSchema>;
+
+export const CategoricalBandSchema = z.enum(["low", "med", "high", "unknown"]);
+export type CategoricalBand = z.infer<typeof CategoricalBandSchema>;
+
+export const DraftSummaryInputSchema = z.object({
+  medianIncomeKrw: z.number().finite().optional(),
+  medianExpenseKrw: z.number().finite().optional(),
+  avgNetKrw: z.number().finite().optional(),
+}).passthrough();
+export type DraftSummaryInput = z.infer<typeof DraftSummaryInputSchema>;
+
+export const DraftSummaryBandsSchema = z.object({
+  incomeBand: CategoricalBandSchema,
+  expenseBand: CategoricalBandSchema,
+  netBand: CategoricalBandSchema,
+  expensePressureBand: CategoricalBandSchema,
+});
+export type DraftSummaryBands = z.infer<typeof DraftSummaryBandsSchema>;
