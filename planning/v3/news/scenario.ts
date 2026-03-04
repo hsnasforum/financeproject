@@ -190,7 +190,8 @@ export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
   const linkedTopics = pickLinkedTopics(input.digest, input.trends);
   const indicators = pickIndicators(input.digest);
 
-  const cards: ScenarioCard[] = ["Base", "Bull", "Bear"].map((name) => buildScenarioCard({
+  const scenarioNames: ScenarioName[] = ["Base", "Bull", "Bear"];
+  const cards: ScenarioCard[] = scenarioNames.map((name) => buildScenarioCard({
     name,
     topTopic,
     burstTopic,
