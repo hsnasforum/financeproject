@@ -156,6 +156,42 @@ function buildTriggers(topic: TopicScore, mode: ScenarioName): Trigger[] {
   return triggers;
 }
 
+function buildChangeAttribution(input: {
+  primary: TopicScore;
+  linkedTopics: string[];
+  topicLabelById: Record<string, string>;
+  qualityGates: ScenarioQualityGateResult;
+}): { title: "가능한 요인"; drivers: string[] } {
+  const topicLabel = input.topicLabelById[input.primary.topicId] ?? input.primary.topicId;
+  const linkedLabels = input.linkedTopics
+    .map((topicId) => input.topicLabelById[topicId] ?? topicId)
+    .slice(0, 3)
+    .join("·");
+
+  const burstLine = input.primary.burstCondition === "high"
+    ? `가능한 요인: ${topicLabel} 토픽의 급증 강도가 높은 구간으로 관찰되어 변화 신호를 키웠을 수 있습니다.`
+    : input.primary.burstCondition === "med"
+      ? `가능한 요인: ${topicLabel} 토픽의 급증 강도가 중간 수준으로 누적되어 변화 흐름에 영향을 주었을 수 있습니다.`
+      : `가능한 요인: ${topicLabel} 토픽의 급증 강도는 낮지만 연속 노출이 누적되어 완만한 변화로 이어졌을 수 있습니다.`;
+
+  const shareLine = input.primary.shareCondition === "high"
+    ? `가능한 요인: 연결 토픽(${linkedLabels})의 기사 비중이 높아 상대적 주제 집중이 반영되었을 수 있습니다.`
+    : input.primary.shareCondition === "med"
+      ? `가능한 요인: 연결 토픽(${linkedLabels})의 기사 비중이 중간 수준으로 유지되어 요약 방향에 반영되었을 수 있습니다.`
+      : `가능한 요인: 연결 토픽(${linkedLabels})의 기사 비중이 분산되어 단일 흐름 강도는 제한되었을 수 있습니다.`;
+
+  const uncertaintyLine = input.qualityGates.contradictionLevel === "high"
+    ? "가능한 요인: 토픽 내부 상충 신호가 높아 해석 분기가 커졌을 수 있습니다."
+    : input.qualityGates.dedupeLevel === "high"
+      ? "가능한 요인: 유사 기사 중복이 높아 체감 변화 강도가 과대 인식되었을 수 있습니다."
+      : "가능한 요인: 소스 다양성과 상충 신호 조합이 해석 강도 차이를 만들었을 수 있습니다.";
+
+  return {
+    title: "가능한 요인",
+    drivers: [burstLine, shareLine, uncertaintyLine],
+  };
+}
+
 function buildCard(input: {
   name: ScenarioName;
   linkedTopics: string[];
@@ -179,11 +215,18 @@ function buildCard(input: {
     maxSeriesIds: 6,
   });
   const triggers = buildTriggers(input.primary, input.name);
+  const changeAttribution = buildChangeAttribution({
+    primary: input.primary,
+    linkedTopics: input.linkedTopics,
+    topicLabelById: input.topicLabelById,
+    qualityGates: input.qualityGates,
+  });
 
   assertNoRecommendationText([
     observation,
     ...invalidation,
     ...options,
+    ...changeAttribution.drivers,
     ...input.qualityGates.uncertaintyLabels,
     ...triggers.map((row) => row.note ?? ""),
     ...indicators,
@@ -197,6 +240,7 @@ function buildCard(input: {
     indicators,
     options,
     linkedTopics: input.linkedTopics,
+    changeAttribution,
     quality: input.qualityGates.uncertaintyLabels.length > 0
       ? {
           dedupeLevel: input.qualityGates.dedupeLevel,

@@ -91,6 +91,7 @@ describe("planning v3 news scenario engine", () => {
       card.observation,
       ...card.invalidation,
       ...card.options,
+      ...(card.changeAttribution?.drivers ?? []),
       ...card.triggers.map((trigger) => trigger.note ?? ""),
     ]);
 
@@ -115,6 +116,11 @@ describe("planning v3 news scenario engine", () => {
       expect(card.indicators.length).toBeGreaterThan(0);
       expect(card.indicators).toContain("kr_base_rate");
       expect(card.indicators.some((seriesId) => seriesId === "kr_usdkrw" || seriesId === "kr_cpi")).toBe(true);
+      expect(card.changeAttribution?.title).toBe("가능한 요인");
+      expect((card.changeAttribution?.drivers ?? []).length).toBeGreaterThan(0);
+      for (const line of card.changeAttribution?.drivers ?? []) {
+        expect(line.includes("가능한 요인")).toBe(true);
+      }
       if (card.quality) {
         for (const label of card.quality.uncertaintyLabels) {
           expect(noRecommendationText(label)).toBe(true);
