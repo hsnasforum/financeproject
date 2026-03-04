@@ -274,6 +274,8 @@ export type DigestWatchItem = {
 export type ScenarioCard = {
   name: "Base" | "Bull" | "Bear";
   confidence: "상" | "중" | "하";
+  triggerStatus?: "met" | "not_met" | "unknown";
+  triggerSummary?: string;
   assumptions: string[];
   trigger: string[];
   invalidation: string[];
@@ -321,8 +323,16 @@ export type MacroSnapshot = {
 export type NewsScenario = {
   name: "Base" | "Bull" | "Bear";
   confidence: "상" | "중" | "하";
+  triggerStatus: "met" | "not_met" | "unknown";
+  triggerSummary: string;
   assumptions: string[];
   trigger: string[];
+  triggerDetails?: Array<{
+    label: string;
+    expression: string;
+    status: "met" | "not_met" | "unknown";
+    summary: string;
+  }>;
   leadingIndicators: string[];
   invalidation: string[];
   impact: string;

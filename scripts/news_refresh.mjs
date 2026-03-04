@@ -89,6 +89,7 @@ async function loadNewsDeps() {
     scoreNewsItems: requireFunction(scoring, "scoreNewsItems", "scoring"),
     buildTopicTrendsArtifact: requireFunction(trend, "buildTopicTrendsArtifact", "trend"),
     buildWatchlistValues: requireFunction(indicatorsQuery, "buildWatchlistValues", "indicators.query"),
+    readIndicatorSeriesSnapshots: requireFunction(indicatorsQuery, "readIndicatorSeriesSnapshots", "indicators.query"),
   };
 }
 
@@ -290,6 +291,27 @@ function selectWatchlistSpecs(config, topicIds, limit) {
   return deduped;
 }
 
+function normalizeScenarioTemplateConfig(raw) {
+  function normalizeRules(input) {
+    return asArray(input)
+      .map((row, index) => ({
+        label: asString(row?.label) || `trigger-${index + 1}`,
+        expression: asString(row?.expression),
+      }))
+      .filter((row) => row.expression);
+  }
+
+  return {
+    version: Number.isInteger(raw?.version) ? raw.version : 1,
+    generatedAt: asString(raw?.generatedAt) || null,
+    templates: {
+      Base: normalizeRules(raw?.templates?.Base),
+      Bull: normalizeRules(raw?.templates?.Bull),
+      Bear: normalizeRules(raw?.templates?.Bear),
+    },
+  };
+}
+
 function compareByPublishedDesc(a, b) {
   if (a.publishedAt !== b.publishedAt) return String(b.publishedAt).localeCompare(String(a.publishedAt));
   return String(a.url).localeCompare(String(b.url));
@@ -465,6 +487,7 @@ async function main() {
     scoreNewsItems,
     buildTopicTrendsArtifact,
     buildWatchlistValues,
+    readIndicatorSeriesSnapshots,
   } = deps;
 
   const feedsConfig = normalizeFeedConfig(readJson(path.join(cwd, "config", "news-feeds.json"), { version: 1, feeds: [] }));
@@ -493,6 +516,10 @@ async function main() {
     version: 1,
     defaultTopK: 6,
     items: [],
+  }));
+  const scenarioTemplateConfig = normalizeScenarioTemplateConfig(readJson(path.join(cwd, "config", "news-scenario-templates.json"), {
+    version: 1,
+    templates: { Base: [], Bull: [], Bear: [] },
   }));
 
   const generatedAt = nowIso();
@@ -673,11 +700,14 @@ async function main() {
     });
 
     const macroSnapshot = loadMacroSnapshot(cwd, generatedAt, resolveNewsMacroOverridePath);
+    const indicatorSnapshots = readIndicatorSeriesSnapshots({ cwd });
     const scenarios = buildNewsScenarios({
       generatedAt,
       risingTopics: brief.risingTopics,
       topClusters: brief.topToday,
       macroSnapshot,
+      indicatorSnapshots,
+      triggerTemplates: scenarioTemplateConfig.templates,
     });
     const scenarioCards = toScenarioCards(scenarios);
     const topicPriority = [

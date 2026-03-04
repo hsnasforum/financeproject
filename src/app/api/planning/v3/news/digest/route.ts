@@ -87,6 +87,8 @@ function sanitizeDigest(input: DigestDay | null): DigestDay | null {
     scenarioCards: (input.scenarioCards ?? []).map((card) => ({
       name: card.name,
       confidence: card.confidence,
+      triggerStatus: card.triggerStatus === "met" || card.triggerStatus === "not_met" ? card.triggerStatus : "unknown",
+      triggerSummary: asString(card.triggerSummary),
       assumptions: (card.assumptions ?? []).map((row) => asString(row)).filter(Boolean),
       trigger: (card.trigger ?? []).map((row) => asString(row)).filter(Boolean),
       invalidation: (card.invalidation ?? []).map((row) => asString(row)).filter(Boolean),
