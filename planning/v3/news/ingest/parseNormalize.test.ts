@@ -27,6 +27,7 @@ describe("planning v3 news parse+normalize", () => {
     expect(firstRss?.url).toBe("https://example.com/news/rates?ref=home");
     expect(firstRss?.fetchedAt).toBe(fetchedAt);
     expect(secondRss?.entities).toContain("commodity_wti");
+    expect(secondRss?.eventTypes).toContain("commodity_supply_shock");
     expect(firstAtom?.url).toBe("https://example.org/fx/usdkrw");
   });
 

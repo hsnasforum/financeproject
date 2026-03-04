@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NewsEventTypeSchema } from "./events/contracts";
 
 export const NewsSourceSchema = z.object({
   id: z.string().trim().min(1),
@@ -22,6 +23,7 @@ export const NewsItemSchema = z.object({
   guid: z.string().trim().min(1).optional(),
   snippet: z.string().max(1500).optional(),
   entities: z.array(z.string().trim().regex(/^[a-z0-9_]+$/)).optional(),
+  eventTypes: z.array(NewsEventTypeSchema).optional(),
   fetchedAt: z.string().datetime(),
 });
 
