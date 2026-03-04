@@ -8,7 +8,7 @@ import {
   type TopicTag,
 } from "./contracts";
 import { NEWS_SOURCES } from "./sources";
-import { tagItemTopics } from "./taxonomy";
+import { canonicalizeTopicId, tagItemTopics } from "./taxonomy";
 
 type ScoreOptions = {
   now?: Date;
@@ -31,7 +31,7 @@ function round3(value: number): number {
 function toWeightMap(sources: NewsSource[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const source of sources) {
-    map[source.id] = clamp(Number(source.weight) || 0, 0, 1);
+    map[source.id] = clamp(Number(source.weight) || 0, 0, 2);
   }
   return map;
 }
@@ -69,7 +69,7 @@ export function scoreItem(item: NewsItem, options: ScoreOptions = {}): ScoredNew
   const sourceWeight = sourceWeights[item.sourceId] ?? 0.5;
   const tags = tagItemTopics(item);
   const primary = tags[0]
-    ? { id: tags[0].topicId, label: tags[0].topicLabel }
+    ? { id: canonicalizeTopicId(tags[0].topicId), label: tags[0].topicLabel }
     : FALLBACK_TOPIC;
 
   const scoreParts = buildScoreParts(item, tags, sourceWeight, now);

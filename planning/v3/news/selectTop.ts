@@ -2,12 +2,14 @@ import {
   SelectTopResultSchema,
   TopTopicSchema,
   type NewsItem,
+  type ScoredNewsItem,
   type SelectTopResult,
   type TopTopic,
 } from "./contracts";
 import { clusterItems } from "./cluster";
 import { scoreItems } from "./score";
 import { readAllItems } from "./store";
+import { canonicalizeTopicId } from "./taxonomy";
 
 type SelectTopOptions = {
   rootDir?: string;
@@ -37,13 +39,50 @@ function inWindow(item: NewsItem, nowMs: number, windowHours: number): boolean {
   return ageHours >= 0 && ageHours <= windowHours;
 }
 
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function applySourceDiversityPenalty(items: ScoredNewsItem[]): ScoredNewsItem[] {
+  const topicSourceMap = new Map<string, Map<string, number>>();
+  const topicTotalMap = new Map<string, number>();
+
+  for (const item of items) {
+    const topicId = canonicalizeTopicId(item.primaryTopicId);
+    const sourceMap = topicSourceMap.get(topicId) ?? new Map<string, number>();
+    sourceMap.set(item.sourceId, (sourceMap.get(item.sourceId) ?? 0) + 1);
+    topicSourceMap.set(topicId, sourceMap);
+    topicTotalMap.set(topicId, (topicTotalMap.get(topicId) ?? 0) + 1);
+  }
+
+  return items.map((item) => {
+    const topicId = canonicalizeTopicId(item.primaryTopicId);
+    const sourceMap = topicSourceMap.get(topicId);
+    const topicTotal = topicTotalMap.get(topicId) ?? 0;
+
+    let topSourceShare = 0;
+    if (sourceMap && topicTotal > 0) {
+      for (const count of sourceMap.values()) {
+        topSourceShare = Math.max(topSourceShare, count / topicTotal);
+      }
+    }
+
+    const diversityPenalty = Math.max(0, topSourceShare - 0.5) * 0.6;
+    return {
+      ...item,
+      primaryTopicId: topicId,
+      totalScore: round3(item.totalScore - diversityPenalty),
+    };
+  });
+}
+
 function aggregateTopTopics(items: ReturnType<typeof scoreItems>, topM: number): TopTopic[] {
   const map = new Map<string, TopTopic>();
 
   for (const item of items) {
-    const key = item.primaryTopicId;
+    const key = canonicalizeTopicId(item.primaryTopicId);
     const prev = map.get(key) ?? {
-      topicId: item.primaryTopicId,
+      topicId: key,
       topicLabel: item.primaryTopicLabel,
       count: 0,
       scoreSum: 0,
@@ -79,7 +118,7 @@ export function selectTopFromItems(items: NewsItem[], options: SelectTopOptions 
     .filter((item) => inWindow(item, nowMs, windowHours))
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  const scored = scoreItems(candidates, { now });
+  const scored = applySourceDiversityPenalty(scoreItems(candidates, { now }));
   const clusters = clusterItems(scored);
   const representatives = clusters.map((cluster) => cluster.representative);
 

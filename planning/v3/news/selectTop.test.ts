@@ -38,7 +38,7 @@ describe("planning v3 news selectTop", () => {
     expect(result.topTopics.map((row) => row.topicId)).toEqual([
       "rates",
       "fx",
-      "policy",
+      "fiscal",
     ]);
   });
 });

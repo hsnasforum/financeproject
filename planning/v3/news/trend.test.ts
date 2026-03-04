@@ -26,7 +26,7 @@ describe("planning v3 news trend", () => {
       historyCountsByTopic: {
         rates: [0, 1, 0, 1, 0, 1, 0],
         fx: [1, 1, 1, 1, 1, 1, 1],
-        policy: [0, 0, 0, 0, 0, 0, 0],
+        fiscal: [0, 0, 0, 0, 0, 0, 0],
       },
     });
 
