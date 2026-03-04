@@ -64,6 +64,33 @@ type RefreshResponse = {
   error?: { message?: string };
 };
 
+type RecoveryAction = "rebuild_caches" | "recompute_trends";
+
+type RecoveryResponse = {
+  ok?: boolean;
+  data?: {
+    requiresConfirmation?: boolean;
+    summary?: {
+      action?: RecoveryAction;
+      title?: string;
+      description?: string;
+      itemCount?: number;
+      dailyDays?: number;
+      writeTargets?: string[];
+      notes?: string[];
+    };
+    execution?: {
+      action?: RecoveryAction;
+      executedAt?: string;
+      itemCount?: number;
+      dailyDays?: number;
+      wroteCount?: number;
+      writeTargets?: string[];
+    } | null;
+  };
+  error?: { message?: string };
+};
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -127,6 +154,8 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
   const [data, setData] = useState<TodayResponse["data"]>(null);
   const [profile, setProfile] = useState<ExposureProfile | null>(null);
   const [advancedImpact, setAdvancedImpact] = useState<Record<string, boolean>>({});
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryPreview, setRecoveryPreview] = useState<NonNullable<RecoveryResponse["data"]>["summary"] | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,6 +217,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
       if (!response.ok || payload?.ok !== true) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
       }
+      setRecoveryPreview(null);
       setNotice(`수동 갱신 완료: 신규 ${payload.data?.itemsNew ?? 0}건, 중복 ${payload.data?.itemsDeduped ?? 0}건`);
       await load();
     } catch (error) {
@@ -196,6 +226,67 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
       setRefreshing(false);
     }
   }, [csrf, load]);
+
+  const requestRecoveryPreview = useCallback(async (action: RecoveryAction) => {
+    setRecovering(true);
+    setNotice("");
+    setErrorMessage("");
+    try {
+      const response = await fetch("/api/planning/v3/news/recovery", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-requested-with": "XMLHttpRequest",
+        },
+        body: JSON.stringify(withDevCsrf({ csrf, action, confirm: false })),
+      });
+      const payload = (await response.json().catch(() => null)) as RecoveryResponse | null;
+      if (!response.ok || payload?.ok !== true || !payload?.data?.summary) {
+        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
+      }
+      setRecoveryPreview(payload.data.summary);
+      setNotice("복구 요약을 확인한 뒤 실행 확인 버튼을 눌러 주세요.");
+    } catch (error) {
+      setRecoveryPreview(null);
+      setErrorMessage(error instanceof Error ? error.message : "복구 요약 생성 중 오류가 발생했습니다.");
+    } finally {
+      setRecovering(false);
+    }
+  }, [csrf]);
+
+  const runRecovery = useCallback(async () => {
+    const action = recoveryPreview?.action;
+    if (action !== "rebuild_caches" && action !== "recompute_trends") return;
+
+    setRecovering(true);
+    setNotice("");
+    setErrorMessage("");
+    try {
+      const response = await fetch("/api/planning/v3/news/recovery", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "content-type": "application/json",
+          "x-requested-with": "XMLHttpRequest",
+        },
+        body: JSON.stringify(withDevCsrf({ csrf, action, confirm: true })),
+      });
+      const payload = (await response.json().catch(() => null)) as RecoveryResponse | null;
+      if (!response.ok || payload?.ok !== true || !payload?.data?.execution) {
+        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
+      }
+      setRecoveryPreview(null);
+      setNotice(
+        `복구 완료: ${asString(payload.data.summary?.title) || "작업"} · 대상 ${payload.data.execution.dailyDays ?? 0}일 · 파일 ${payload.data.execution.wroteCount ?? 0}개`,
+      );
+      await load();
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "복구 실행 중 오류가 발생했습니다.");
+    } finally {
+      setRecovering(false);
+    }
+  }, [csrf, load, recoveryPreview?.action, recoveryPreview?.title]);
 
   return (
     <PageShell>
@@ -223,6 +314,67 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           </p>
           {notice ? <p className="text-xs font-semibold text-emerald-700">{notice}</p> : null}
           {errorMessage ? <p className="text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
+        </Card>
+
+        <Card className="space-y-3">
+          <h2 className="text-sm font-bold text-slate-900">수동 복구</h2>
+          <p className="text-xs text-slate-600">
+            자동 삭제 없이 캐시/트렌드만 재구성합니다. 실행 전에 변경 요약을 먼저 확인해야 합니다.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={recovering}
+              onClick={() => void requestRecoveryPreview("rebuild_caches")}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
+            >
+              캐시 재구성 요약 보기
+            </button>
+            <button
+              type="button"
+              disabled={recovering}
+              onClick={() => void requestRecoveryPreview("recompute_trends")}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
+            >
+              트렌드 재계산 요약 보기
+            </button>
+          </div>
+
+          {recoveryPreview ? (
+            <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+              <p className="text-xs font-bold text-amber-800">{asString(recoveryPreview.title) || "복구 요약"}</p>
+              <p className="text-xs text-amber-900">{asString(recoveryPreview.description) || "-"}</p>
+              <p className="text-xs text-amber-900">
+                기준 아이템 {recoveryPreview.itemCount ?? 0}건 · 대상 일수 {recoveryPreview.dailyDays ?? 0}일
+              </p>
+              <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-900">
+                {(recoveryPreview.notes ?? []).slice(0, 3).map((line, index) => (
+                  <li key={`recovery-note-${index}`}>{asString(line)}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-900">
+                예상 변경 파일: {(recoveryPreview.writeTargets ?? []).slice(0, 3).join(" / ") || "-"}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={recovering}
+                  onClick={() => void runRecovery()}
+                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {recovering ? "복구 실행 중..." : "요약 확인 후 실행"}
+                </button>
+                <button
+                  type="button"
+                  disabled={recovering}
+                  onClick={() => setRecoveryPreview(null)}
+                  className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 disabled:opacity-60"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : null}
         </Card>
 
         <Card className="space-y-3">
