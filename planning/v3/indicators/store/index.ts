@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { z } from "zod";
 import {
   IndicatorsStateSchema,
   ObservationSchema,
@@ -9,6 +10,7 @@ import {
   type SeriesSnapshot,
 } from "../contracts";
 import { normalizeSeriesId } from "../aliases";
+import { parseWithV3Whitelist } from "../../security/whitelist";
 
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "indicators");
 
@@ -59,7 +61,10 @@ export function readState(rootDir = DEFAULT_ROOT): IndicatorsState {
 
 export function writeState(state: IndicatorsState, rootDir = DEFAULT_ROOT): void {
   ensureDirs(rootDir);
-  const validated = IndicatorsStateSchema.parse(state);
+  const validated = parseWithV3Whitelist(IndicatorsStateSchema, state, {
+    scope: "persistence",
+    context: "indicators.store.state",
+  });
   fs.writeFileSync(resolveStatePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
@@ -94,7 +99,10 @@ export function appendSeriesObservations(seriesId: string, observations: Observa
   const normalizedSeriesId = normalizeSeriesId(seriesId);
   const existing = readSeriesObservations(normalizedSeriesId, rootDir);
   const existingDates = new Set(existing.map((row) => row.date));
-  const incoming = observations.map((row) => ObservationSchema.parse(row));
+  const incoming = observations.map((row) => parseWithV3Whitelist(ObservationSchema, row, {
+    scope: "persistence",
+    context: "indicators.store.observation",
+  }));
 
   const dedupedIncoming = new Map<string, Observation>();
   for (const row of incoming) {
@@ -129,7 +137,10 @@ export function appendSeriesObservations(seriesId: string, observations: Observa
 
 export function writeSeriesMeta(snapshot: SeriesSnapshot, rootDir = DEFAULT_ROOT): void {
   ensureDirs(rootDir);
-  const validated = SeriesSnapshotSchema.parse(snapshot);
+  const validated = parseWithV3Whitelist(SeriesSnapshotSchema, snapshot, {
+    scope: "persistence",
+    context: "indicators.store.meta",
+  });
   const out = {
     seriesId: validated.seriesId,
     asOf: validated.asOf,
@@ -140,5 +151,19 @@ export function writeSeriesMeta(snapshot: SeriesSnapshot, rootDir = DEFAULT_ROOT
       lastDate: validated.observations.map((row) => row.date).sort((a, b) => a.localeCompare(b)).at(-1),
     },
   };
-  fs.writeFileSync(resolveMetaPath(normalizeSeriesId(validated.seriesId), rootDir), `${JSON.stringify(out, null, 2)}\n`, "utf-8");
+  const safeOut = parseWithV3Whitelist(SeriesSnapshotSchema.pick({
+    seriesId: true,
+    asOf: true,
+    meta: true,
+  }).extend({
+    observations: z.object({
+      count: z.number().int().nonnegative(),
+      firstDate: z.string().nullable().optional(),
+      lastDate: z.string().nullable().optional(),
+    }),
+  }), out, {
+    scope: "persistence",
+    context: "indicators.store.meta.summary",
+  });
+  fs.writeFileSync(resolveMetaPath(normalizeSeriesId(validated.seriesId), rootDir), `${JSON.stringify(safeOut, null, 2)}\n`, "utf-8");
 }

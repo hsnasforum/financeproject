@@ -10,6 +10,7 @@ import {
 } from "./contracts";
 import { NEWS_SOURCES } from "./sources";
 import { NEWS_TOPICS, canonicalizeTopicId } from "./taxonomy";
+import { parseWithV3Whitelist } from "../security/whitelist";
 
 const DEFAULT_SETTINGS: NewsSettings = {
   updatedAt: undefined,
@@ -48,9 +49,12 @@ export function readNewsSettings(rootDir = DEFAULT_NEWS_ROOT): NewsSettings {
 }
 
 export function writeNewsSettings(input: NewsSettings, rootDir = DEFAULT_NEWS_ROOT): NewsSettings {
-  const next = NewsSettingsSchema.parse({
+  const next = parseWithV3Whitelist(NewsSettingsSchema, {
     ...input,
     updatedAt: new Date().toISOString(),
+  }, {
+    scope: "persistence",
+    context: "news.settings",
   });
 
   fs.mkdirSync(rootDir, { recursive: true });
