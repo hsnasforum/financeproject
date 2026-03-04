@@ -167,6 +167,28 @@ export const DailyDigestSchema = z.object({
 
 export type DailyDigest = z.infer<typeof DailyDigestSchema>;
 
+export const ScenarioNameSchema = z.enum(["Base", "Bull", "Bear"]);
+export type ScenarioName = z.infer<typeof ScenarioNameSchema>;
+
+export const ScenarioCardSchema = z.object({
+  name: ScenarioNameSchema,
+  assumptions: z.array(z.string().trim().min(1)).min(1),
+  triggers: z.array(z.string().trim().min(1)).min(1),
+  invalidation: z.array(z.string().trim().min(1)).min(1),
+  indicators: z.array(z.string().trim().min(1)).min(1),
+  impactPath: z.array(z.string().trim().min(1)).min(1),
+  linkedTopics: z.array(z.string().trim().min(1)).min(1),
+});
+
+export type ScenarioCard = z.infer<typeof ScenarioCardSchema>;
+
+export const ScenarioPackSchema = z.object({
+  generatedAt: z.string().datetime(),
+  cards: z.array(ScenarioCardSchema).length(3),
+});
+
+export type ScenarioPack = z.infer<typeof ScenarioPackSchema>;
+
 export function parseNewsSource(value: unknown): NewsSource {
   return NewsSourceSchema.parse(value);
 }
@@ -189,4 +211,8 @@ export function parseTopicDailyStat(value: unknown): TopicDailyStat {
 
 export function parseDailyDigest(value: unknown): DailyDigest {
   return DailyDigestSchema.parse(value);
+}
+
+export function parseScenarioPack(value: unknown): ScenarioPack {
+  return ScenarioPackSchema.parse(value);
 }
