@@ -18,6 +18,12 @@ const RAW_SOURCES: IndicatorSource[] = [
     type: "ecos",
     enabled: false,
   },
+  {
+    id: "kosis_kr",
+    name: "KOSIS OpenAPI",
+    type: "kosis",
+    enabled: false,
+  },
 ];
 
 const RAW_SERIES_SPECS: SeriesSpec[] = [
@@ -96,6 +102,28 @@ const RAW_SERIES_SPECS: SeriesSpec[] = [
     units: "KRW",
     transform: "none",
     notes: "ECOS externalId format: statCode|itemCode1|itemCode2|itemCode3|freq|start|end",
+    enabled: false,
+  },
+  {
+    id: "kosis_kr_cpi",
+    sourceId: "kosis_kr",
+    externalId: "orgId=101;tblId=DT_1YL20631;itmId=T001;objL1=ALL;prdSe=M;startPrdDe=202001;endPrdDe=202612",
+    name: "KOSIS Korea CPI",
+    frequency: "M",
+    units: "Index",
+    transform: "none",
+    notes: "KOSIS externalId format: serialized spec string(orgId/tblId/itmId/prdSe + optional objL*/start/end)",
+    enabled: false,
+  },
+  {
+    id: "kosis_kr_unemployment",
+    sourceId: "kosis_kr",
+    externalId: "orgId=101;tblId=DT_1DA7004S;itmId=T10;objL1=ALL;prdSe=M;startPrdDe=202001;endPrdDe=202612",
+    name: "KOSIS Korea Unemployment Rate",
+    frequency: "M",
+    units: "%",
+    transform: "none",
+    notes: "KOSIS externalId format: serialized spec string(orgId/tblId/itmId/prdSe + optional objL*/start/end)",
     enabled: false,
   },
 ];
