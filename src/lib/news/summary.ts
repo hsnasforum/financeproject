@@ -1,6 +1,8 @@
 import {
   type BurstLevel,
   type DigestDay,
+  type DigestWatchItem,
+  type DigestWatchView,
   type DigestTopItem,
   type DigestTopTopic,
   type NewsBrief,
@@ -211,6 +213,43 @@ function toDigestTopTopics(trends: TopicTrend[]): DigestTopTopic[] {
   }));
 }
 
+function normalizeWatchView(value: unknown): DigestWatchView {
+  const normalized = asString(value);
+  if (normalized === "pctChange") return "pctChange";
+  if (normalized === "zscore") return "zscore";
+  return "last";
+}
+
+function normalizeWatchItem(value: unknown): DigestWatchItem | null {
+  if (typeof value === "string") {
+    const label = asString(value);
+    if (!label) return null;
+    return {
+      label,
+      seriesId: "",
+      view: "last",
+      window: 1,
+      status: "unknown",
+      valueSummary: "데이터 부족",
+      asOf: null,
+    };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const label = asString(row.label);
+  if (!label) return null;
+  const status = asString(row.status) === "ok" ? "ok" : "unknown";
+  return {
+    label,
+    seriesId: asString(row.seriesId),
+    view: normalizeWatchView(row.view),
+    window: Math.max(1, Math.min(365, Math.round(asNumber(row.window, 1)))),
+    status,
+    valueSummary: asString(row.valueSummary) || "데이터 부족",
+    asOf: asString(row.asOf) || null,
+  };
+}
+
 export function buildDigestDay(input: {
   generatedAt: string;
   dateKst: string;
@@ -219,6 +258,7 @@ export function buildDigestDay(input: {
   scenarioCards?: ScenarioCard[];
   topItemsLimit?: number;
   topTopicsLimit?: number;
+  watchlistItems?: Array<DigestWatchItem | string>;
 }): DigestDay {
   const topItemsLimit = Math.max(1, Math.min(20, Math.round(asNumber(input.topItemsLimit, 10))));
   const topTopicsLimit = Math.max(1, Math.min(20, Math.round(asNumber(input.topTopicsLimit, 10))));
@@ -226,7 +266,16 @@ export function buildDigestDay(input: {
   const topItems = input.brief.topToday.slice(0, topItemsLimit).map(toDigestTopItem);
   const topTopics = toDigestTopTopics(input.trends.slice(0, topTopicsLimit));
   const burstTopics = toDigestTopTopics(input.trends.filter((row) => row.burstLevel !== "하").slice(0, topTopicsLimit));
-  const watchlist = [...new Set(input.brief.summary.watchVariables)].slice(0, 8);
+  const fallbackWatchlist = [...new Set(input.brief.summary.watchVariables)]
+    .slice(0, 8)
+    .map((label) => normalizeWatchItem(label))
+    .filter((row): row is DigestWatchItem => Boolean(row));
+
+  const incomingWatchlist = (input.watchlistItems ?? [])
+    .map((row) => normalizeWatchItem(row))
+    .filter((row): row is DigestWatchItem => Boolean(row));
+
+  const watchlist = incomingWatchlist.length > 0 ? incomingWatchlist : fallbackWatchlist;
 
   return {
     date: input.dateKst,
@@ -338,7 +387,7 @@ export function toDigestDayMarkdown(digest: DigestDay): string {
   lines.push("");
   lines.push("## 체크 변수");
   for (const row of digest.watchlist) {
-    lines.push(`- ${row}`);
+    lines.push(`- ${row.label}: ${row.valueSummary}`);
   }
   lines.push("");
   lines.push("## Top Items");

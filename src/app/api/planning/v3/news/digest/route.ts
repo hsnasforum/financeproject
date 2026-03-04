@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { readNewsDigestDay } from "@/lib/news/digestReader";
-import { type DigestDay } from "@/lib/news/types";
+import { type DigestDay, type DigestWatchItem } from "@/lib/news/types";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -29,6 +29,33 @@ function withReadGuard(request: Request): Response | null {
 
 function sanitizeDigest(input: DigestDay | null): DigestDay | null {
   if (!input) return null;
+  const watchlist = (input.watchlist ?? [])
+    .map((row) => {
+      if (typeof row === "string") {
+        const label = asString(row);
+        if (!label) return null;
+        return {
+          label,
+          seriesId: "",
+          view: "last",
+          window: 1,
+          status: "unknown",
+          valueSummary: "데이터 부족",
+          asOf: null,
+        } satisfies DigestWatchItem;
+      }
+      return {
+        label: asString(row.label),
+        seriesId: asString(row.seriesId),
+        view: row.view === "pctChange" || row.view === "zscore" ? row.view : "last",
+        window: Math.max(1, Math.round(Number(row.window) || 1)),
+        status: row.status === "ok" ? "ok" : "unknown",
+        valueSummary: asString(row.valueSummary) || "데이터 부족",
+        asOf: asString(row.asOf) || null,
+      } satisfies DigestWatchItem;
+    })
+    .filter((row) => Boolean(row?.label)) as DigestWatchItem[];
+
   return {
     date: asString(input.date),
     generatedAt: asString(input.generatedAt),
@@ -56,7 +83,7 @@ function sanitizeDigest(input: DigestDay | null): DigestDay | null {
       scoreSum: Number(row.scoreSum) || 0,
       burstLevel: row.burstLevel,
     })),
-    watchlist: (input.watchlist ?? []).map((row) => asString(row)).filter(Boolean),
+    watchlist,
     scenarioCards: (input.scenarioCards ?? []).map((card) => ({
       name: card.name,
       confidence: card.confidence,

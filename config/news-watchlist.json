@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T00:00:00.000Z",
+  "defaultTopK": 6,
+  "items": [
+    {
+      "topicId": "rates",
+      "label": "한국 기준금리",
+      "seriesId": "kr_base_rate",
+      "view": "last",
+      "window": 1
+    },
+    {
+      "topicId": "rates",
+      "label": "미국 CPI 3개월 변화",
+      "seriesId": "us_cpi",
+      "view": "pctChange",
+      "window": 3
+    },
+    {
+      "topicId": "fx",
+      "label": "원/달러 5일 변화",
+      "seriesId": "kr_usdkrw",
+      "view": "pctChange",
+      "window": 5
+    },
+    {
+      "topicId": "oil",
+      "label": "원/달러 z-score(60)",
+      "seriesId": "kr_usdkrw",
+      "view": "zscore",
+      "window": 60
+    },
+    {
+      "topicId": "equity",
+      "label": "광의통화(M2) z-score(12)",
+      "seriesId": "kr_m2",
+      "view": "zscore",
+      "window": 12
+    },
+    {
+      "topicId": "general",
+      "label": "한국 기준금리",
+      "seriesId": "kr_base_rate",
+      "view": "last",
+      "window": 1
+    }
+  ]
+}

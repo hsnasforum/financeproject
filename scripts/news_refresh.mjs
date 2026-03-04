@@ -37,6 +37,7 @@ async function loadNewsDeps() {
     storageSqlite,
     scoring,
     trend,
+    indicatorsQuery,
   ] = await Promise.all([
     loadTsModule("../src/lib/news/dedupe.ts"),
     loadTsModule("../src/lib/news/urlCanonical.ts"),
@@ -49,6 +50,7 @@ async function loadNewsDeps() {
     loadTsModule("../src/lib/news/storageSqlite.ts"),
     loadTsModule("../src/lib/news/scoring.ts"),
     loadTsModule("../src/lib/news/trend.ts"),
+    loadTsModule("../src/lib/indicators/query.ts"),
   ]);
 
   return {
@@ -86,6 +88,7 @@ async function loadNewsDeps() {
     countByPrimaryTopic: requireFunction(scoring, "countByPrimaryTopic", "scoring"),
     scoreNewsItems: requireFunction(scoring, "scoreNewsItems", "scoring"),
     buildTopicTrendsArtifact: requireFunction(trend, "buildTopicTrendsArtifact", "trend"),
+    buildWatchlistValues: requireFunction(indicatorsQuery, "buildWatchlistValues", "indicators.query"),
   };
 }
 
@@ -237,6 +240,54 @@ function normalizeScoringConfig(raw) {
       midThreshold: asNumber(raw?.burst?.midThreshold, 1.0),
     },
   };
+}
+
+function normalizeWatchlistConfig(raw) {
+  const items = asArray(raw?.items)
+    .map((row) => {
+      const topicId = asString(row?.topicId) || "general";
+      const label = asString(row?.label);
+      const seriesId = asString(row?.seriesId);
+      const viewToken = asString(row?.view);
+      const view = viewToken === "pctChange" || viewToken === "zscore" ? viewToken : "last";
+      const window = Math.max(1, Math.min(365, Math.round(asNumber(row?.window, 3))));
+      if (!label || !seriesId) return null;
+      return {
+        topicId,
+        label,
+        seriesId,
+        view,
+        window,
+      };
+    })
+    .filter((row) => row !== null);
+
+  return {
+    version: Number.isInteger(raw?.version) ? raw.version : 1,
+    generatedAt: asString(raw?.generatedAt) || null,
+    defaultTopK: Math.max(1, Math.min(12, Math.round(asNumber(raw?.defaultTopK, 6)))),
+    items,
+  };
+}
+
+function selectWatchlistSpecs(config, topicIds, limit) {
+  const normalizedLimit = Math.max(1, Math.min(20, Math.round(asNumber(limit, 6))));
+  const topicSet = new Set(topicIds.map((row) => asString(row)).filter(Boolean));
+  const ranked = [
+    ...config.items.filter((row) => topicSet.has(row.topicId)),
+    ...config.items.filter((row) => row.topicId === "general"),
+  ];
+
+  const deduped = [];
+  const seen = new Set();
+  for (const row of ranked) {
+    const key = `${row.label}|${row.seriesId}|${row.view}|${row.window}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(row);
+    if (deduped.length >= normalizedLimit) break;
+  }
+  return deduped;
 }
 
 function compareByPublishedDesc(a, b) {
@@ -413,6 +464,7 @@ async function main() {
     countByPrimaryTopic,
     scoreNewsItems,
     buildTopicTrendsArtifact,
+    buildWatchlistValues,
   } = deps;
 
   const feedsConfig = normalizeFeedConfig(readJson(path.join(cwd, "config", "news-feeds.json"), { version: 1, feeds: [] }));
@@ -436,6 +488,11 @@ async function main() {
       burstWindowDays: 7,
       burstHistoryMinDays: 3,
     },
+  }));
+  const watchlistConfig = normalizeWatchlistConfig(readJson(path.join(cwd, "config", "news-watchlist.json"), {
+    version: 1,
+    defaultTopK: 6,
+    items: [],
   }));
 
   const generatedAt = nowIso();
@@ -623,6 +680,26 @@ async function main() {
       macroSnapshot,
     });
     const scenarioCards = toScenarioCards(scenarios);
+    const topicPriority = [
+      ...new Set([
+        ...brief.risingTopics.map((row) => row.topicId),
+        ...trends.topics.slice(0, scoringConfig.defaults.topM).map((row) => row.topicId),
+      ].map((row) => asString(row)).filter(Boolean)),
+    ];
+    const watchSpecs = selectWatchlistSpecs(
+      watchlistConfig,
+      topicPriority,
+      Math.max(watchlistConfig.defaultTopK, scoringConfig.defaults.topM * 2),
+    );
+    const watchlistItems = buildWatchlistValues({
+      specs: watchSpecs.map((row) => ({
+        label: row.label,
+        seriesId: row.seriesId,
+        view: row.view,
+        window: row.window,
+      })),
+      cwd,
+    });
 
     const digest = buildDigestDay({
       generatedAt,
@@ -630,6 +707,7 @@ async function main() {
       brief,
       trends: trends.topics,
       scenarioCards,
+      watchlistItems,
       topItemsLimit: scoringConfig.defaults.topN,
       topTopicsLimit: scoringConfig.defaults.topM,
     });
