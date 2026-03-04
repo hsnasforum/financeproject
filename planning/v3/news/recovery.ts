@@ -24,6 +24,7 @@ import {
   writeTrendsCache,
 } from "./store";
 import { buildRollingDailyStats, shiftKstDay, toKstDayKey } from "./trend";
+import { loadEffectiveScenarioLibrary } from "../scenarios/library";
 
 export const NEWS_RECOVERY_ACTIONS = ["rebuild_caches", "recompute_trends"] as const;
 export const NEWS_RECOVERY_RECOMPUTE_DAYS = 45 as const;
@@ -248,6 +249,10 @@ export function runRecoveryAction(action: RecoveryAction, options: RecoveryOptio
       topResult,
       burstTopics: todayStats,
     });
+    const scenarioDataDir = rootDir
+      ? path.join(path.dirname(rootDir), "scenarios")
+      : undefined;
+    const scenarioLibrary = loadEffectiveScenarioLibrary(scenarioDataDir);
     const scenarios = buildScenarios({
       digest: digestDay,
       trends: todayStats.map((row) => ({
@@ -260,6 +265,7 @@ export function runRecoveryAction(action: RecoveryAction, options: RecoveryOptio
         burstGrade: normalizeBurstGradeForScenario(row.burstGrade),
       })),
       generatedAt: nowIso,
+      libraryTemplates: scenarioLibrary.templates,
     });
     const state = readState(rootDir);
     const lastRefreshedAt = state.lastRunAt ?? null;

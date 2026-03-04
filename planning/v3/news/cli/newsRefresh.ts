@@ -1,3 +1,4 @@
+import path from "node:path";
 import { IngestResultSchema, type IngestResult, type NewsSource, type RuntimeState, type TopicDailyStat } from "../contracts";
 import { fetchFeed } from "../ingest/fetchFeed";
 import { normalizeEntry } from "../ingest/normalizeEntry";
@@ -27,6 +28,7 @@ import {
 } from "../store";
 import { buildRollingDailyStats, shiftKstDay, toKstDayKey } from "../trend";
 import { sanitizeV3LogMessage } from "../../security/whitelist";
+import { loadEffectiveScenarioLibrary } from "../../scenarios/library";
 
 type RunNewsRefreshOptions = {
   rootDir?: string;
@@ -240,6 +242,10 @@ export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promi
     topResult,
     burstTopics: dailyStats,
   });
+  const scenarioDataDir = options.rootDir
+    ? path.join(path.dirname(options.rootDir), "scenarios")
+    : undefined;
+  const scenarioLibrary = loadEffectiveScenarioLibrary(scenarioDataDir);
   const scenarios = buildScenarios({
     digest: digestDay,
     trends: dailyStats.map((row) => ({
@@ -252,6 +258,7 @@ export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promi
       burstGrade: normalizeBurstGradeForScenario(row.burstGrade),
     })),
     generatedAt: fetchedAt,
+    libraryTemplates: scenarioLibrary.templates,
   });
 
   const rewritten = await rewriteDigestScenarioTextWithLocalLlm({
