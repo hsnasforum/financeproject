@@ -6,6 +6,7 @@ import {
   parseIndicatorsRefreshResult,
 } from "./contracts";
 import { fetchEcosSeries } from "./connectors/ecos";
+import { fetchKosisSeries } from "./connectors/kosis";
 import { readIndicatorsState, writeIndicatorsState } from "./state";
 import { appendSeriesObservations, resolveIndicatorsRoot } from "./store";
 import {
@@ -123,6 +124,12 @@ function pushError(errors: IndicatorsRefreshError[], row: IndicatorsRefreshError
 const DEFAULT_CONNECTORS: Partial<Record<IndicatorSource["type"], IndicatorConnector>> = {
   ecos: {
     fetchSeries: async (input) => fetchEcosSeries({
+      externalId: input.spec.externalId,
+      fetchImpl: input.fetchImpl,
+    }),
+  },
+  kosis: {
+    fetchSeries: async (input) => fetchKosisSeries({
       externalId: input.spec.externalId,
       fetchImpl: input.fetchImpl,
     }),
