@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T00:00:00.000Z",
+  "defaultTakeLatest": 50,
+  "feeds": [
+    {
+      "id": "google-news-finance-ko",
+      "name": "Google News KR Finance",
+      "homepageUrl": "https://news.google.com/",
+      "feedUrl": "https://news.google.com/rss/search?q=finance+when:1d&hl=ko&gl=KR&ceid=KR:ko",
+      "url": "https://news.google.com/rss/search?q=finance+when:1d&hl=ko&gl=KR&ceid=KR:ko",
+      "country": "KR",
+      "language": "ko",
+      "weight": 45,
+      "enabled": true,
+      "takeLatest": 50
+    },
+    {
+      "id": "yna-economy",
+      "name": "연합뉴스 경제",
+      "homepageUrl": "https://www.yna.co.kr/",
+      "feedUrl": "https://www.yna.co.kr/rss/economy.xml",
+      "url": "https://www.yna.co.kr/rss/economy.xml",
+      "country": "KR",
+      "language": "ko",
+      "weight": 78,
+      "enabled": true,
+      "takeLatest": 50
+    },
+    {
+      "id": "mk-economy",
+      "name": "매일경제 경제",
+      "homepageUrl": "https://www.mk.co.kr/",
+      "feedUrl": "https://www.mk.co.kr/rss/30000001/",
+      "url": "https://www.mk.co.kr/rss/30000001/",
+      "country": "KR",
+      "language": "ko",
+      "weight": 72,
+      "enabled": true,
+      "takeLatest": 50
+    },
+    {
+      "id": "hankyung-economy",
+      "name": "한국경제 경제",
+      "homepageUrl": "https://www.hankyung.com/",
+      "feedUrl": "https://www.hankyung.com/feed/economy",
+      "url": "https://www.hankyung.com/feed/economy",
+      "country": "KR",
+      "language": "ko",
+      "weight": 72,
+      "enabled": true,
+      "takeLatest": 50
+    },
+    {
+      "id": "marketwatch-topstories",
+      "name": "MarketWatch Top Stories",
+      "homepageUrl": "https://www.marketwatch.com/",
+      "feedUrl": "https://feeds.marketwatch.com/marketwatch/topstories/",
+      "url": "https://feeds.marketwatch.com/marketwatch/topstories/",
+      "country": "US",
+      "language": "en",
+      "weight": 66,
+      "enabled": true,
+      "takeLatest": 50
+    },
+    {
+      "id": "bbc-business",
+      "name": "BBC Business",
+      "homepageUrl": "https://www.bbc.com/",
+      "feedUrl": "https://feeds.bbci.co.uk/news/business/rss.xml",
+      "url": "https://feeds.bbci.co.uk/news/business/rss.xml",
+      "country": "GB",
+      "language": "en",
+      "weight": 64,
+      "enabled": true,
+      "takeLatest": 50
+    },
+    {
+      "id": "nyt-business",
+      "name": "NYT Business",
+      "homepageUrl": "https://www.nytimes.com/",
+      "feedUrl": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml",
+      "country": "US",
+      "language": "en",
+      "weight": 65,
+      "enabled": true,
+      "takeLatest": 50
+    }
+  ]
+}

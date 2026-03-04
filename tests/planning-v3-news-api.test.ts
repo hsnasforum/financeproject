@@ -193,4 +193,12 @@ describe("planning v3 news api", () => {
       timeoutMs: 120000,
     });
   });
+
+  it("news:refresh script is aligned to scripts/news_refresh.mjs", () => {
+    const packageJsonPath = path.join(process.cwd(), "package.json");
+    const parsed = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8")) as {
+      scripts?: Record<string, string>;
+    };
+    expect(parsed.scripts?.["news:refresh"]).toBe("node scripts/news_refresh.mjs");
+  });
 });
