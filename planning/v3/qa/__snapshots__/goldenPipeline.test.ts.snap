@@ -1,0 +1,305 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`planning v3 golden regression > matches golden snapshot for digest/scenarios/alerts/impact 1`] = `
+{
+  "alerts": [
+    {
+      "level": "high",
+      "ruleId": "indicator_fx_zscore_high",
+      "ruleKind": "indicator",
+      "snapshotStatus": "met",
+      "summary": "표준점수 고점권 조건이 충족되었습니다.",
+      "targetId": "fx",
+      "targetType": "topic",
+      "title": "환율 긴장 z-score: kr_usdkrw",
+    },
+    {
+      "level": "medium",
+      "ruleId": "indicator_rates_regime_up",
+      "ruleKind": "indicator",
+      "snapshotStatus": "met",
+      "summary": "추세 상승 조건이 충족되었습니다.",
+      "targetId": "Bear",
+      "targetType": "scenario",
+      "title": "금리 상승 레짐: kr_base_rate",
+    },
+    {
+      "level": "medium",
+      "ruleId": "topic_burst_mid",
+      "ruleKind": "topic_burst",
+      "snapshotStatus": "met",
+      "summary": "토픽 급증 조건이 충족되었습니다 (등급 상).",
+      "targetId": "rates",
+      "targetType": "topic",
+      "title": "토픽 급증(중 이상): 금리/통화정책",
+    },
+  ],
+  "digest": {
+    "burstTopics": [
+      {
+        "burstGrade": "High",
+        "count": 2,
+        "scoreSum": 11.6,
+        "sourceDiversity": 1,
+        "topicId": "rates",
+      },
+      {
+        "burstGrade": "Low",
+        "count": 1,
+        "scoreSum": 8.1,
+        "sourceDiversity": 1,
+        "topicId": "fx",
+      },
+    ],
+    "dateRange": {
+      "fromKst": "2026-03-02",
+      "toKst": "2026-03-04",
+    },
+    "evidence": [
+      {
+        "publishedAt": "2026-03-04T07:00:00.000Z",
+        "score": 8.1,
+        "title": "USDKRW climbs as treasury yields rise",
+        "topicId": "fx",
+        "url": "https://example.com/news/fx-1",
+      },
+      {
+        "publishedAt": "2026-03-04T09:00:00.000Z",
+        "score": 6.4,
+        "title": "Fed signals possible rate cut this summer",
+        "topicId": "rates",
+        "url": "https://example.com/news/rates-1",
+      },
+      {
+        "publishedAt": "2026-03-03T12:30:00.000Z",
+        "score": 5,
+        "title": "Tariff policy review expands to auto imports",
+        "topicId": "fiscal",
+        "url": "https://example.com/news/policy-1",
+      },
+    ],
+    "observationLines": [
+      "관찰: 금리/통화정책 토픽의 기사량이 상대적으로 확대된 구간이며, 환율/대외·금리/통화정책 이슈와의 동조 여부를 조건부로 점검할 필요가 있습니다.",
+      "근거: 대표 링크 3건을 기반으로 흐름을 확인합니다.",
+      "모니터링: USDKRW(하), 경상수지(중), 기준금리(중), 국채금리(3Y)(하) 중심으로 확인이 필요합니다.",
+      "반대 시그널: 달러 강세가 진정되면 환율 압력 해석은 완화될 수 있습니다. / 대외 수급이 안정되면 단기 변동성 관찰은 약화될 수 있습니다.",
+    ],
+    "watchlist": [
+      {
+        "compactSummary": "상승 변화 · 등급 하",
+        "grade": "하",
+        "label": "USDKRW",
+        "seriesId": "kr_usdkrw",
+        "status": "ok",
+      },
+      {
+        "compactSummary": "상승 추세 · 등급 중",
+        "grade": "중",
+        "label": "경상수지",
+        "seriesId": "kr_cab",
+        "status": "ok",
+      },
+      {
+        "compactSummary": "상승 수준 · 등급 중",
+        "grade": "중",
+        "label": "기준금리",
+        "seriesId": "kr_base_rate",
+        "status": "ok",
+      },
+      {
+        "compactSummary": "상승 변화 · 등급 하",
+        "grade": "하",
+        "label": "국채금리(3Y)",
+        "seriesId": "kr_gov_bond_3y",
+        "status": "ok",
+      },
+      {
+        "compactSummary": "상승 변화 · 등급 상",
+        "grade": "상",
+        "label": "국채 발행잔액",
+        "seriesId": "kr_treasury_outstanding",
+        "status": "ok",
+      },
+      {
+        "compactSummary": "상승 추세 · 등급 상",
+        "grade": "상",
+        "label": "재정수지",
+        "seriesId": "kr_fiscal_balance",
+        "status": "ok",
+      },
+    ],
+  },
+  "impact": [
+    {
+      "grades": {
+        "bufferAdequacy": "Low",
+        "cashflowRisk": "High",
+        "debtServiceRisk": "High",
+        "fxPressureRisk": "High",
+        "incomeRisk": "Med",
+        "inflationPressureRisk": "Low",
+      },
+      "name": "Base",
+      "rationale": [
+        "변동/단기 재조정 부채 노출로 금리 상방 구간에서 상환 압력이 커질 수 있습니다.",
+        "해외소비 노출이 커 환율 상승 구간의 영향 범위가 넓어질 수 있습니다.",
+        "현금완충력이 낮아 충격 흡수 여지가 제한될 수 있습니다.",
+      ],
+      "watch": [
+        "kr_base_rate",
+        "kr_usdkrw",
+        "kr_fiscal_balance",
+      ],
+    },
+    {
+      "grades": {
+        "bufferAdequacy": "Low",
+        "cashflowRisk": "High",
+        "debtServiceRisk": "High",
+        "fxPressureRisk": "High",
+        "incomeRisk": "Med",
+        "inflationPressureRisk": "Low",
+      },
+      "name": "Bull",
+      "rationale": [
+        "변동/단기 재조정 부채 노출로 금리 상방 구간에서 상환 압력이 커질 수 있습니다.",
+        "해외소비 노출이 커 환율 상승 구간의 영향 범위가 넓어질 수 있습니다.",
+        "현금완충력이 낮아 충격 흡수 여지가 제한될 수 있습니다.",
+      ],
+      "watch": [
+        "kr_base_rate",
+        "kr_usdkrw",
+        "kr_fiscal_balance",
+      ],
+    },
+    {
+      "grades": {
+        "bufferAdequacy": "Low",
+        "cashflowRisk": "High",
+        "debtServiceRisk": "High",
+        "fxPressureRisk": "High",
+        "incomeRisk": "Med",
+        "inflationPressureRisk": "Low",
+      },
+      "name": "Bear",
+      "rationale": [
+        "변동/단기 재조정 부채 노출로 금리 상방 구간에서 상환 압력이 커질 수 있습니다.",
+        "해외소비 노출이 커 환율 상승 구간의 영향 범위가 넓어질 수 있습니다.",
+        "현금완충력이 낮아 충격 흡수 여지가 제한될 수 있습니다.",
+      ],
+      "watch": [
+        "kr_base_rate",
+        "kr_usdkrw",
+        "kr_fiscal_balance",
+      ],
+    },
+  ],
+  "scenarios": [
+    {
+      "invalidation": [
+        "금리 토픽 기사 집중이 빠르게 분산되면 현재 관찰의 설명력은 약화될 수 있습니다.",
+      ],
+      "linkedTopics": [
+        "rates",
+        "fx",
+        "fiscal",
+      ],
+      "name": "Base",
+      "observation": "관찰: 금리 관련 보도 강도가 현재 수준으로 이어질 경우 민감도 유지 가능성이 있습니다. 연결 토픽: 금리/통화정책·환율/대외·fiscal.",
+      "options": [
+        "옵션: 금리 토픽의 기사 강도와 다양성 변화를 같은 주기로 점검합니다.",
+      ],
+      "triggers": [
+        {
+          "condition": "high",
+          "kind": "topicBurst",
+          "note": "rates 토픽 강도",
+          "topicId": "rates",
+        },
+        {
+          "condition": "med",
+          "kind": "topicShare",
+          "note": "rates 토픽 비중",
+          "topicId": "rates",
+        },
+        {
+          "condition": "high",
+          "kind": "sourceDiversity",
+          "note": "rates 토픽 소스 다양성",
+          "topicId": "rates",
+        },
+      ],
+    },
+    {
+      "invalidation": [
+        "금리 토픽 급증이 재확대되면 완화 가정은 약화될 수 있습니다.",
+      ],
+      "linkedTopics": [
+        "rates",
+        "fx",
+        "fiscal",
+      ],
+      "name": "Bull",
+      "observation": "관찰: 금리 관련 보도 강도가 완화될 경우 긴장 완화 흐름으로 해석될 수 있습니다. 연결 토픽: 금리/통화정책·환율/대외·fiscal.",
+      "options": [
+        "옵션: 완화 신호가 이어지는지 조건부로 점검 목록을 유지합니다.",
+      ],
+      "triggers": [
+        {
+          "condition": "med",
+          "kind": "topicBurst",
+          "note": "rates 토픽 강도",
+          "topicId": "rates",
+        },
+        {
+          "condition": "low",
+          "kind": "topicShare",
+          "note": "rates 토픽 비중",
+          "topicId": "rates",
+        },
+        {
+          "condition": "med",
+          "kind": "sourceDiversity",
+          "note": "rates 토픽 소스 다양성",
+          "topicId": "rates",
+        },
+      ],
+    },
+    {
+      "invalidation": [
+        "금리 토픽 강도가 완화되면 강화 가정은 재평가될 수 있습니다.",
+      ],
+      "linkedTopics": [
+        "rates",
+        "fx",
+        "fiscal",
+      ],
+      "name": "Bear",
+      "observation": "관찰: 금리 관련 보도 강도가 강화될 경우 변동성 확대 구간으로 이어질 수 있습니다. 연결 토픽: 금리/통화정책·환율/대외·fiscal.",
+      "options": [
+        "옵션: 강화 신호가 누적되는지 관찰 빈도를 높여 병행 점검합니다.",
+      ],
+      "triggers": [
+        {
+          "condition": "high",
+          "kind": "topicBurst",
+          "note": "rates 토픽 강도",
+          "topicId": "rates",
+        },
+        {
+          "condition": "high",
+          "kind": "topicShare",
+          "note": "rates 토픽 비중",
+          "topicId": "rates",
+        },
+        {
+          "condition": "high",
+          "kind": "sourceDiversity",
+          "note": "rates 토픽 소스 다양성",
+          "topicId": "rates",
+        },
+      ],
+    },
+  ],
+}
+`;
