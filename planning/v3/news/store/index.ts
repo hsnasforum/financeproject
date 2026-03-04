@@ -13,6 +13,7 @@ import {
 } from "../contracts";
 import { DigestDaySchema, type DigestDay } from "../digest/contracts";
 import { ScenarioPackSchema, type ScenarioPack } from "../scenario/contracts";
+import { parseWithV3Whitelist } from "../../security/whitelist";
 import { shiftKstDay } from "../trend";
 
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "news");
@@ -94,7 +95,10 @@ export function readState(rootDir = DEFAULT_ROOT): RuntimeState {
 
 export function writeState(state: RuntimeState, rootDir = DEFAULT_ROOT): void {
   ensureStoreDirs(rootDir);
-  const validated = RuntimeStateSchema.parse(state);
+  const validated = parseWithV3Whitelist(RuntimeStateSchema, state, {
+    scope: "persistence",
+    context: "news.store.state",
+  });
   fs.writeFileSync(resolveStatePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
@@ -106,7 +110,10 @@ export function upsertItems(items: NewsItem[], rootDir = DEFAULT_ROOT): { itemsN
   const seenIds = new Set<string>();
 
   for (const item of items) {
-    const validated = NewsItemSchema.parse(item);
+    const validated = parseWithV3Whitelist(NewsItemSchema, item, {
+      scope: "persistence",
+      context: "news.store.item",
+    });
     if (seenIds.has(validated.id)) {
       itemsDeduped += 1;
       continue;
@@ -150,7 +157,10 @@ export function readAllItems(rootDir = DEFAULT_ROOT): NewsItem[] {
 
 export function writeDailyStats(dateKst: string, stats: TopicDailyStat[], rootDir = DEFAULT_ROOT): void {
   ensureStoreDirs(rootDir);
-  const validated = stats.map((row) => TopicDailyStatSchema.parse(row));
+  const validated = stats.map((row) => parseWithV3Whitelist(TopicDailyStatSchema, row, {
+    scope: "persistence",
+    context: "news.store.daily",
+  }));
   const filePath = resolveDailyStatsPath(dateKst, rootDir);
   fs.writeFileSync(filePath, `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
@@ -183,7 +193,10 @@ export function readDailyStatsLastNDays(input: {
 
 export function writeDigest(digest: DailyDigest, rootDir = DEFAULT_ROOT): void {
   ensureStoreDirs(rootDir);
-  const validated = DailyDigestSchema.parse(digest);
+  const validated = parseWithV3Whitelist(DailyDigestSchema, digest, {
+    scope: "persistence",
+    context: "news.store.digest",
+  });
   fs.writeFileSync(resolveDigestPath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
@@ -232,7 +245,10 @@ export function writeTodayCache(
   rootDir = DEFAULT_ROOT,
 ): void {
   ensureStoreDirs(rootDir);
-  const validated = TodayCacheSchema.parse(input);
+  const validated = parseWithV3Whitelist(TodayCacheSchema, input, {
+    scope: "persistence",
+    context: "news.store.cache.today",
+  });
   fs.writeFileSync(resolveTodayCachePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
@@ -257,7 +273,10 @@ export function writeTrendsCache(
   rootDir = DEFAULT_ROOT,
 ): void {
   ensureStoreDirs(rootDir);
-  const validated = TrendsCacheSchema.parse(input);
+  const validated = parseWithV3Whitelist(TrendsCacheSchema, input, {
+    scope: "persistence",
+    context: "news.store.cache.trends",
+  });
   fs.writeFileSync(resolveTrendsCachePath(validated.windowDays, rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
@@ -281,7 +300,10 @@ export function writeScenariosCache(
   rootDir = DEFAULT_ROOT,
 ): void {
   ensureStoreDirs(rootDir);
-  const validated = ScenariosCacheSchema.parse(input);
+  const validated = parseWithV3Whitelist(ScenariosCacheSchema, input, {
+    scope: "persistence",
+    context: "news.store.cache.scenarios",
+  });
   fs.writeFileSync(resolveScenariosCachePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 

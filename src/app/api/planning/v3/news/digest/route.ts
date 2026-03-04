@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { readNewsDigestDay } from "@/lib/news/digestReader";
 import { type DigestDay, type DigestWatchItem } from "@/lib/news/types";
 import { computeTopicContradictions } from "../../../../../../../planning/v3/news/contradiction";
+import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -121,6 +123,12 @@ function sanitizeDigest(input: DigestDay | null): DigestDay | null {
   };
 }
 
+const DigestRouteSchema = z.object({
+  ok: z.literal(true),
+  data: z.unknown().nullable(),
+  topicContradictions: z.array(z.unknown()),
+});
+
 export async function GET(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -137,5 +145,9 @@ export async function GET(request: Request) {
       snippet: asString(row.snippet),
     })),
   );
-  return NextResponse.json({ ok: true, data, topicContradictions });
+  const payload = parseWithV3Whitelist(DigestRouteSchema, { ok: true, data, topicContradictions }, {
+    scope: "response",
+    context: "api.v3.news.digest",
+  });
+  return NextResponse.json(payload);
 }

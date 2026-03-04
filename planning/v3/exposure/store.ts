@@ -3,11 +3,13 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { resolveDataDir } from "../../../src/lib/planning/storage/dataDir";
 import {
+  ExposureProfileSchema,
   normalizeExposureProfile,
   parseExposureProfileInput,
   type ExposureProfile,
   type ExposureProfileInput,
 } from "./contracts";
+import { parseWithV3Whitelist } from "../security/whitelist";
 
 function assertServerOnly(): void {
   if (typeof window !== "undefined") {
@@ -46,9 +48,12 @@ export function readExposureProfile(cwd = process.cwd()): ExposureProfile | null
 export function saveExposureProfile(input: unknown, cwd = process.cwd()): ExposureProfile {
   assertServerOnly();
   const normalizedInput: ExposureProfileInput = parseExposureProfileInput(input);
-  const next = normalizeExposureProfile({
+  const next = parseWithV3Whitelist(ExposureProfileSchema, normalizeExposureProfile({
     ...normalizedInput,
     savedAt: new Date().toISOString(),
+  }), {
+    scope: "persistence",
+    context: "exposure.store.profile",
   });
 
   atomicWriteJson(resolveExposureProfilePath(cwd), next);

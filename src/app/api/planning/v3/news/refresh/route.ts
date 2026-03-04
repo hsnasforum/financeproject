@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import {
   assertCsrf,
   assertLocalHost,
@@ -7,9 +8,22 @@ import {
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { runNewsRefresh } from "../../../../../../../planning/v3/news/cli/newsRefresh";
+import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
 import { readState } from "../../../../../../../planning/v3/news/store";
 
 export const runtime = "nodejs";
+
+const RefreshResponseSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    sourcesProcessed: z.number().int().nonnegative(),
+    itemsFetched: z.number().int().nonnegative(),
+    itemsNew: z.number().int().nonnegative(),
+    itemsDeduped: z.number().int().nonnegative(),
+    errorCount: z.number().int().nonnegative(),
+    lastRefreshedAt: z.string().datetime().nullable(),
+  }),
+});
 
 export async function POST(request: Request) {
   const blocked = onlyDev();
@@ -43,7 +57,7 @@ export async function POST(request: Request) {
   try {
     const result = await runNewsRefresh();
     const lastRefreshedAt = readState().lastRunAt ?? null;
-    return NextResponse.json({
+    const payload = parseWithV3Whitelist(RefreshResponseSchema, {
       ok: true,
       data: {
         sourcesProcessed: result.sourcesProcessed,
@@ -53,7 +67,8 @@ export async function POST(request: Request) {
         errorCount: result.errors.length,
         lastRefreshedAt,
       },
-    });
+    }, { scope: "response", context: "api.v3.news.refresh" });
+    return NextResponse.json(payload);
   } catch {
     return NextResponse.json(
       {

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { AlertEventSchema, type AlertEvent } from "./contracts";
+import { parseWithV3Whitelist } from "../security/whitelist";
 
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "alerts");
 
@@ -94,7 +95,10 @@ export function appendAlertEvents(input: {
   }
 
   const rows = input.events
-    .map((row) => AlertEventSchema.parse(row))
+    .map((row) => parseWithV3Whitelist(AlertEventSchema, row, {
+      scope: "persistence",
+      context: "alerts.store.event",
+    }))
     .sort((a, b) => {
       const left = Date.parse(a.createdAt);
       const right = Date.parse(b.createdAt);

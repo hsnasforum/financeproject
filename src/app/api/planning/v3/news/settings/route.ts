@@ -10,6 +10,7 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { NEWS_SOURCES } from "../../../../../../../planning/v3/news/sources";
 import { NEWS_TOPICS } from "../../../../../../../planning/v3/news/taxonomy";
+import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
 import {
   loadEffectiveNewsConfig,
   readNewsSettings,
@@ -31,6 +32,42 @@ const SaveBodySchema = z.object({
   csrf: z.string().optional(),
   sources: z.array(SourceOverrideInputSchema).default([]),
   topics: z.array(TopicOverrideInputSchema).default([]),
+});
+
+const SettingsGetResponseSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    updatedAt: z.string().datetime().nullable(),
+    sources: z.array(z.object({
+      id: z.string().trim().min(1),
+      name: z.string().trim().min(1),
+      feedUrl: z.string().trim().min(1),
+      country: z.string().trim().min(1),
+      language: z.string().trim().min(1),
+      defaultEnabled: z.boolean(),
+      defaultWeight: z.number().finite(),
+      overrideEnabled: z.boolean().nullable(),
+      overrideWeight: z.number().finite().nullable(),
+      effectiveEnabled: z.boolean(),
+      effectiveWeight: z.number().finite(),
+    })),
+    topics: z.array(z.object({
+      id: z.string().trim().min(1),
+      label: z.string().trim().min(1),
+      defaultKeywords: z.array(z.string()),
+      overrideKeywords: z.array(z.string()).nullable(),
+      effectiveKeywords: z.array(z.string()),
+    })),
+  }),
+});
+
+const SettingsPostResponseSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    updatedAt: z.string().datetime().nullable(),
+    sourcesCount: z.number().int().nonnegative(),
+    topicsCount: z.number().int().nonnegative(),
+  }),
 });
 
 function dedupeKeywords(values: string[]): string[] {
@@ -131,7 +168,11 @@ export async function GET(request: Request) {
     }),
   };
 
-  return NextResponse.json({ ok: true, data });
+  const payload = parseWithV3Whitelist(SettingsGetResponseSchema, { ok: true, data }, {
+    scope: "response",
+    context: "api.v3.news.settings.get",
+  });
+  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {
@@ -177,12 +218,16 @@ export async function POST(request: Request) {
       .filter((row) => Array.isArray(row.keywords)),
   });
 
-  return NextResponse.json({
+  const payload = parseWithV3Whitelist(SettingsPostResponseSchema, {
     ok: true,
     data: {
       updatedAt: next.updatedAt ?? null,
       sourcesCount: next.sources.length,
       topicsCount: next.topics.length,
     },
+  }, {
+    scope: "response",
+    context: "api.v3.news.settings.post",
   });
+  return NextResponse.json(payload);
 }

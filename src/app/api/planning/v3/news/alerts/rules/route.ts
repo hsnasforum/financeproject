@@ -14,6 +14,7 @@ import {
   readAlertRulesConfig,
   writeAlertRuleOverrides,
 } from "@/lib/news/alerts";
+import { parseWithV3Whitelist } from "../../../../../../../../planning/v3/security/whitelist";
 
 const RuleOverrideInputSchema = z.object({
   id: z.string().trim().min(1),
@@ -34,6 +35,23 @@ const RuleOverrideInputSchema = z.object({
 const SaveBodySchema = z.object({
   csrf: z.string().optional(),
   rules: z.array(RuleOverrideInputSchema).default([]),
+});
+
+const RulesGetResponseSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    defaults: z.unknown(),
+    overrides: z.unknown(),
+    effective: z.unknown(),
+  }),
+});
+
+const RulesPostResponseSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    overrides: z.unknown(),
+    effective: z.unknown(),
+  }),
 });
 
 function withReadGuard(request: Request): Response | null {
@@ -89,14 +107,15 @@ export async function GET(request: Request) {
   const overrides = readAlertRuleOverrides();
   const effective = loadEffectiveAlertRules();
 
-  return NextResponse.json({
+  const payload = parseWithV3Whitelist(RulesGetResponseSchema, {
     ok: true,
     data: {
       defaults,
       overrides,
       effective,
     },
-  });
+  }, { scope: "response", context: "api.v3.news.alertRules.get" });
+  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {
@@ -124,11 +143,12 @@ export async function POST(request: Request) {
   const written = writeAlertRuleOverrides({ rules: parsed.data.rules });
   const effective = loadEffectiveAlertRules();
 
-  return NextResponse.json({
+  const payload = parseWithV3Whitelist(RulesPostResponseSchema, {
     ok: true,
     data: {
       overrides: written,
       effective,
     },
-  });
+  }, { scope: "response", context: "api.v3.news.alertRules.post" });
+  return NextResponse.json(payload);
 }

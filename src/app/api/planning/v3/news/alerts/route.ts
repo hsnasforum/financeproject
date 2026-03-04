@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { groupAlertEventsByDay, readRecentAlertEvents } from "@/lib/news/alerts";
+import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
 
 function asNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
@@ -27,6 +29,18 @@ function withReadGuard(request: Request): Response | null {
   }
 }
 
+const AlertsResponseSchema = z.object({
+  ok: z.literal(true),
+  data: z.object({
+    days: z.number().int().positive(),
+    total: z.number().int().nonnegative(),
+    groups: z.array(z.object({
+      dayKst: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      events: z.array(z.unknown()),
+    })),
+  }),
+});
+
 export async function GET(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -39,12 +53,13 @@ export async function GET(request: Request) {
   const events = readRecentAlertEvents({ days });
   const groups = groupAlertEventsByDay(events);
 
-  return NextResponse.json({
+  const payload = parseWithV3Whitelist(AlertsResponseSchema, {
     ok: true,
     data: {
       days,
       total: events.length,
       groups,
     },
-  });
+  }, { scope: "response", context: "api.v3.news.alerts" });
+  return NextResponse.json(payload);
 }

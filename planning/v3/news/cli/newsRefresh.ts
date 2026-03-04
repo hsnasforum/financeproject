@@ -25,6 +25,7 @@ import {
   writeTrendsCache,
 } from "../store";
 import { buildRollingDailyStats, shiftKstDay, toKstDayKey } from "../trend";
+import { sanitizeV3LogMessage } from "../../security/whitelist";
 
 type RunNewsRefreshOptions = {
   rootDir?: string;
@@ -297,6 +298,6 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : "unknown_error";
-  console.error(`[news:refresh] failed: ${message}`);
+  console.error(`[news:refresh] failed: ${sanitizeV3LogMessage(message)}`);
   process.exitCode = 1;
 });

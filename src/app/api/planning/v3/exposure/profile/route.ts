@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import {
   assertCsrf,
   assertLocalHost,
@@ -10,6 +11,18 @@ import {
   readExposureProfile,
   saveExposureProfile,
 } from "../../../../../../../planning/v3/exposure/store";
+import { ExposureProfileSchema } from "../../../../../../../planning/v3/exposure/contracts";
+import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
+
+const ExposureGetResponseSchema = z.object({
+  ok: z.literal(true),
+  profile: ExposureProfileSchema.nullable(),
+});
+
+const ExposurePostResponseSchema = z.object({
+  ok: z.literal(true),
+  profile: ExposureProfileSchema,
+});
 
 function withReadGuard(request: Request): Response | null {
   try {
@@ -58,10 +71,11 @@ export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
-  return NextResponse.json({
+  const payload = parseWithV3Whitelist(ExposureGetResponseSchema, {
     ok: true,
     profile: readExposureProfile(),
-  });
+  }, { scope: "response", context: "api.v3.exposure.get" });
+  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {
@@ -81,10 +95,11 @@ export async function POST(request: Request) {
   try {
     const payload = body as { profile?: unknown } | null;
     const saved = saveExposureProfile(payload?.profile ?? {});
-    return NextResponse.json({
+    const responsePayload = parseWithV3Whitelist(ExposurePostResponseSchema, {
       ok: true,
       profile: saved,
-    });
+    }, { scope: "response", context: "api.v3.exposure.post" });
+    return NextResponse.json(responsePayload);
   } catch {
     return NextResponse.json(
       { ok: false, error: { code: "INPUT", message: "노출 프로필 입력 형식이 올바르지 않습니다." } },

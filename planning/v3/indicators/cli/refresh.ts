@@ -12,6 +12,7 @@ import { normalizeConnectorError, shouldRetryConnectorError, toRefreshError } fr
 import type { ConnectorSeriesResult, SeriesConnector } from "../connectors/types";
 import { INDICATOR_SERIES_SPECS, INDICATOR_SOURCES } from "../specs";
 import { appendSeriesObservations, readState, writeSeriesMeta, writeState } from "../store";
+import { sanitizeV3LogMessage } from "../../security/whitelist";
 
 type RetryPolicy = {
   maxAttempts?: number;
@@ -171,7 +172,7 @@ const modulePath = fileURLToPath(import.meta.url);
 if (invokedPath && path.resolve(modulePath) === path.resolve(invokedPath)) {
   main().catch((error) => {
     const normalized = normalizeConnectorError(error);
-    console.error(`[planning:v3:indicators:refresh] failed: ${normalized.message}`);
+    console.error(`[planning:v3:indicators:refresh] failed: ${sanitizeV3LogMessage(normalized.message)}`);
     process.exitCode = 1;
   });
 }
