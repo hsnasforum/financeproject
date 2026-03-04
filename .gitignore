@@ -74,6 +74,8 @@ public/providers/*
 .data/news/
 .data/indicators/
 .data/alerts/
+.data/exposure/
+.data/journal/
 .data/planning/
 .data/planning-e2e/
 .data/planning_v3_drafts/
