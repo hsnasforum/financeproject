@@ -13,8 +13,9 @@ import {
   type ScenarioCard,
   type ScoredNewsItem,
   type TopicTrend,
-} from "./types";
-import { noRecommendationText, sanitizeNoRecommendationText } from "./noRecommendation";
+} from "./types.ts";
+import { noRecommendationText, sanitizeNoRecommendationText } from "./noRecommendation.ts";
+import { buildScoreRationale } from "./scoreRationale.ts";
 
 type TopicTrendRow = {
   topicId: string;
@@ -190,6 +191,7 @@ export function buildNewsBrief(input: {
 }
 
 function toDigestTopItem(cluster: NewsCluster): DigestTopItem {
+  const scoreParts = cluster.representative.scoreParts;
   return {
     topicId: cluster.topicId,
     topicLabel: cluster.topicLabel,
@@ -198,6 +200,8 @@ function toDigestTopItem(cluster: NewsCluster): DigestTopItem {
     score: round2(cluster.clusterScore),
     publishedAt: cluster.representativePublishedAt,
     sourceName: cluster.representative.sourceName,
+    rationale: buildScoreRationale({ scoreParts }),
+    scoreParts,
     snippet: cluster.representative.snippet || cluster.representative.description || "",
   };
 }
@@ -342,7 +346,7 @@ export function toNewsBriefMarkdown(brief: NewsBrief): string {
     lines.push("- 없음");
   } else {
     for (const topic of brief.risingTopics) {
-      lines.push(`- ${topic.topicLabel}: today=${topic.todayCount}, yesterday=${topic.yesterdayCount}, delta=${topic.delta}, ratio=${topic.ratio}`);
+      lines.push(`- ${topic.topicLabel}: 오늘 기사 수 ${topic.todayCount}건, 전일 기사 수 ${topic.yesterdayCount}건, 증감 ${topic.delta}건, 증가 배율 ${topic.ratio}배`);
     }
   }
 
@@ -371,7 +375,7 @@ export function toDigestDayMarkdown(digest: DigestDay): string {
     lines.push("- 없음");
   } else {
     for (const row of digest.topTopics) {
-      lines.push(`- ${row.topicLabel}: count=${row.count}, scoreSum=${round2(row.scoreSum)}, burst=${row.burstLevel}`);
+      lines.push(`- ${row.topicLabel}: 기사 수 ${row.count}건, 점수 합계 ${round2(row.scoreSum)}, 버스트 ${row.burstLevel}`);
     }
   }
   lines.push("");
@@ -380,7 +384,7 @@ export function toDigestDayMarkdown(digest: DigestDay): string {
     lines.push("- 없음");
   } else {
     for (const row of digest.burstTopics) {
-      lines.push(`- ${row.topicLabel}: burst=${row.burstLevel}`);
+      lines.push(`- ${row.topicLabel}: 버스트 ${row.burstLevel}`);
     }
   }
   lines.push("");
@@ -394,7 +398,7 @@ export function toDigestDayMarkdown(digest: DigestDay): string {
     lines.push("- 없음");
   } else {
     for (const item of digest.topItems) {
-      lines.push(`- [${item.score}] ${item.topicLabel} | ${item.title} | ${item.url}`);
+      lines.push(`- [${item.score}] ${item.topicLabel} | ${item.title} | ${item.url} | ${asString(item.rationale) || "기본 점수 규칙 반영"}`);
     }
   }
   return `${lines.join("\n").trimEnd()}\n`;

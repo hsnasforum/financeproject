@@ -2,8 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { GET } from "../src/app/api/dev/artifacts/route";
+import { resolveNewsBriefJsonPath } from "../src/lib/news/storageSqlite";
 
 const REFRESH_LOG_PATH = path.join(process.cwd(), "tmp", "daily_refresh.log");
+const NEWS_BRIEF_PATH = resolveNewsBriefJsonPath();
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 
@@ -59,6 +61,22 @@ describe("dev artifacts route", () => {
       expect(json.data).toBeNull();
     } finally {
       restoreFile(REFRESH_LOG_PATH, backup);
+    }
+  });
+
+  it("accepts news artifact key and returns null when file is missing", async () => {
+    env.NODE_ENV = "test";
+    const backup = backupAndRemove(NEWS_BRIEF_PATH);
+
+    try {
+      const response = await GET(new Request("http://localhost/api/dev/artifacts?name=news_brief_json"));
+      const json = (await response.json()) as { ok?: boolean; data?: unknown };
+
+      expect(response.status).toBe(200);
+      expect(json.ok).toBe(true);
+      expect(json.data).toBeNull();
+    } finally {
+      restoreFile(NEWS_BRIEF_PATH, backup);
     }
   });
 

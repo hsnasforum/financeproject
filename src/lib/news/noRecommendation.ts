@@ -1,4 +1,4 @@
-const FORBIDDEN_PATTERN = /(매수|매도|정답|무조건|확실|해야\s*한다|해야\s*하|[가-힣]+아야\s*한다)/i;
+const FORBIDDEN_PATTERN = /(매수|매도|정답|무조건|(?<!불)확실|해야\s*한다|해야\s*하|[가-힣]+아야\s*한다)/i;
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

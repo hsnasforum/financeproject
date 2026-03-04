@@ -1,4 +1,4 @@
-import { type BurstLevel, type NewsScoringConfig, type ScoredNewsItem, type TaggedNewsItem } from "./types";
+import { type BurstLevel, type NewsScoringConfig, type ScoredNewsItem, type TaggedNewsItem } from "./types.ts";
 
 type TopicCountRow = {
   topicId: string;

@@ -83,6 +83,13 @@ function parseCsvParam(value: string | null): string[] {
     .filter(Boolean);
 }
 
+function sanitizeSnapshotNote(note: string | null | undefined): string | null {
+  if (!note) return null;
+  return note
+    .replaceAll("pnpm finlife:probe", "데이터 점검")
+    .replaceAll("finlife:probe", "데이터 점검");
+}
+
 function isValidSortKey(value: string | null): value is SortKey {
   return value === "rateDesc" || value === "rateAsc" || value === "nameAsc" || value === "termAsc";
 }
@@ -442,7 +449,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
       isMock,
       hasNarrowGroup,
       hasIncomplete,
-      note: meta.note,
+      note: sanitizeSnapshotNote(meta.note),
     };
   }, [payload]);
 
@@ -460,7 +467,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     <PageShell className="bg-surface-muted py-6 md:py-10">
         <SectionHeader 
           title={title} 
-          subtitle={`서버 프록시(/api/finlife/${kind}) 기반으로 로드됩니다.`} 
+          subtitle="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
           icon="/icons/ic-products.png"
           className="mb-6"
         />
@@ -471,7 +478,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700">
             <p className="font-semibold">{snapshotStatus.text}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {snapshotStatus.hasNarrowGroup ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">업권 범위가 1개입니다. finlife:probe 권장</span> : null}
+              {snapshotStatus.hasNarrowGroup ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">업권 범위가 1개입니다. 데이터 점검 실행을 권장합니다.</span> : null}
               {snapshotStatus.hasIncomplete ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">미완주(하드캡/완주율)</span> : null}
               {snapshotStatus.isMock ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-700">MOCK 데이터(실 API 실패)</span> : null}
               {snapshotStatus.note ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{snapshotStatus.note}</span> : null}

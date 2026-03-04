@@ -12,7 +12,14 @@ export type ArtifactQuickActionName =
   | "refresh_log"
   | "alerts_json"
   | "digest_json"
-  | "brief_json";
+  | "brief_json"
+  | "news_brief_json"
+  | "news_brief_md"
+  | "news_scenarios_json"
+  | "news_scenarios_md"
+  | "news_topic_trends_json"
+  | "news_digest_day_json"
+  | "news_digest_day_md";
 
 type ArtifactQuickActionsProps = {
   artifactName: ArtifactQuickActionName;
@@ -39,6 +46,13 @@ const FILENAME_MAP: Record<ArtifactQuickActionName, string> = {
   alerts_json: "disclosure_alerts.json",
   digest_json: "disclosure_digest.json",
   brief_json: "daily_brief.json",
+  news_brief_json: "news_brief.latest.json",
+  news_brief_md: "news_brief.latest.md",
+  news_scenarios_json: "news_scenarios.latest.json",
+  news_scenarios_md: "news_scenarios.latest.md",
+  news_topic_trends_json: "topic_trends.latest.json",
+  news_digest_day_json: "digest_day.latest.json",
+  news_digest_day_md: "digest_day.latest.md",
 };
 
 function inferMimeType(artifactName: ArtifactQuickActionName): string {

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { resolveDataDir } from "../planning/storage/dataDir";
-import { type DigestDay, type NewsFeedConfig, type NewsScenarioPack, type NewsBrief, type ScoredNewsItem, type TopicDailyStat, type TopicTrendsArtifact } from "./types";
+import { resolveDataDir } from "../planning/storage/dataDir.ts";
+import { type DigestDay, type NewsFeedConfig, type NewsScenarioPack, type NewsBrief, type ScoredNewsItem, type TopicDailyStat, type TopicTrendsArtifact } from "./types.ts";
 
 export type TopicCountSnapshot = {
   topicId: string;
@@ -45,6 +45,35 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function isCorruptedNewsDbError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return normalized.includes("database disk image is malformed")
+    || normalized.includes("file is not a database")
+    || normalized.includes("malformed database schema");
+}
+
+function backupCorruptedNewsDbFiles(dbPath: string): string {
+  const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  const backupPath = `${dbPath}.corrupt.${stamp}`;
+  const pairs: Array<{ from: string; to: string }> = [
+    { from: dbPath, to: backupPath },
+    { from: `${dbPath}-wal`, to: `${backupPath}-wal` },
+    { from: `${dbPath}-shm`, to: `${backupPath}-shm` },
+  ];
+
+  for (const row of pairs) {
+    if (!fs.existsSync(row.from)) continue;
+    try {
+      fs.renameSync(row.from, row.to);
+    } catch {
+      // Best-effort backup. If file move fails we keep trying the rest.
+    }
+  }
+
+  return backupPath;
+}
+
 export function resolveNewsDataDir(cwd = process.cwd()): string {
   return path.join(resolveDataDir({ cwd }), "news");
 }
@@ -79,6 +108,10 @@ export function resolveNewsDigestDayJsonPath(cwd = process.cwd()): string {
 
 export function resolveNewsDigestDayMarkdownPath(cwd = process.cwd()): string {
   return path.join(resolveNewsDataDir(cwd), "digest_day.latest.md");
+}
+
+export function resolveNewsSearchIndexPath(cwd = process.cwd()): string {
+  return path.join(resolveNewsDataDir(cwd), "index.json");
 }
 
 export function resolveNewsMacroOverridePath(cwd = process.cwd()): string {
@@ -203,10 +236,32 @@ function ensureSchemaCompatibility(db: NewsDb): void {
 
 export function openNewsDatabase(dbPath = resolveNewsDbPath()): NewsDb {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-  const db = new Database(dbPath);
-  db.exec(SCHEMA_SQL);
-  ensureSchemaCompatibility(db);
-  return db;
+  let db: NewsDb | null = null;
+  try {
+    db = new Database(dbPath);
+    db.exec(SCHEMA_SQL);
+    ensureSchemaCompatibility(db);
+    return db;
+  } catch (error) {
+    if (db) {
+      try {
+        db.close();
+      } catch {
+        // noop
+      }
+    }
+    if (!isCorruptedNewsDbError(error)) {
+      throw error;
+    }
+
+    const backupPath = backupCorruptedNewsDbFiles(dbPath);
+    console.warn(`[news:db] corrupted db detected. recreated from empty db. backup=${backupPath}`);
+
+    const recovered = new Database(dbPath);
+    recovered.exec(SCHEMA_SQL);
+    ensureSchemaCompatibility(recovered);
+    return recovered;
+  }
 }
 
 export function closeNewsDatabase(db: NewsDb): void {

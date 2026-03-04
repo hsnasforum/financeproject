@@ -1,4 +1,4 @@
-import { type NewsCluster, type ScoredNewsItem } from "./types";
+import { type NewsCluster, type ScoredNewsItem } from "./types.ts";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

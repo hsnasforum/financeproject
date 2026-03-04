@@ -1,4 +1,4 @@
-import { type BurstLevel, type TopicDailyStat, type TopicTrend, type TopicTrendSeriesPoint, type TopicTrendsArtifact } from "./types";
+import { type BurstLevel, type ConsensusGrade, type TopicDailyStat, type TopicTrend, type TopicTrendSeriesPoint, type TopicTrendsArtifact } from "./types.ts";
 
 function asNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
@@ -45,6 +45,18 @@ export function burstLevelFromZ(z: number, highThreshold = 2.0, midThreshold = 1
   return "하";
 }
 
+function consensusGradeFromSignals(input: {
+  todayCount: number;
+  sourceDiversity: number;
+  topSourceShare: number;
+  lowHistory: boolean;
+}): ConsensusGrade {
+  if (input.lowHistory || input.todayCount < 2) return "low";
+  if (input.todayCount >= 4 && input.sourceDiversity >= 0.45 && input.topSourceShare <= 0.6) return "high";
+  if (input.sourceDiversity >= 0.25 && input.topSourceShare <= 0.75) return "med";
+  return "low";
+}
+
 function buildTopicTrend(args: {
   topicId: string;
   topicLabel: string;
@@ -84,6 +96,12 @@ function buildTopicTrend(args: {
 
   const sourceDiversity = round2(asNumber(todayRow?.sourceDiversity, 0));
   const topSourceShare = round2(asNumber(todayRow?.topSourceShare, 1));
+  const consensusGrade = consensusGradeFromSignals({
+    todayCount,
+    sourceDiversity,
+    topSourceShare,
+    lowHistory,
+  });
   const scoreSum = round2(asNumber(todayRow?.scoreSum, 0));
 
   const series: TopicTrendSeriesPoint[] = args.seriesDays.map((date) => {
@@ -109,6 +127,7 @@ function buildTopicTrend(args: {
     lowHistory,
     sourceDiversity,
     topSourceShare,
+    consensusGrade,
     scoreSum,
     series,
   };

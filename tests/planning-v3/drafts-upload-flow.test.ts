@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   fetchCsvDraftPreview,
@@ -11,6 +13,18 @@ function jsonResponse(payload: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+function readFixture(name: string): unknown {
+  const fixturePath = path.join(
+    process.cwd(),
+    "tests",
+    "fixtures",
+    "planning-v3",
+    "drafts-upload-flow",
+    name,
+  );
+  return JSON.parse(fs.readFileSync(fixturePath, "utf8")) as unknown;
 }
 
 describe("planning v3 drafts upload flow", () => {
@@ -46,7 +60,6 @@ describe("planning v3 drafts upload flow", () => {
         ok: true,
         id: "d_saved_1",
         createdAt: "2026-03-03T00:00:00.000Z",
-        data: { id: "d_saved_1", createdAt: "2026-03-03T00:00:00.000Z" },
       }, 201))
       .mockResolvedValueOnce(jsonResponse({
         ok: true,
@@ -62,11 +75,67 @@ describe("planning v3 drafts upload flow", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
     const firstUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
+    const firstInit = fetchMock.mock.calls[0]?.[1];
     const secondUrl = String(fetchMock.mock.calls[1]?.[0] ?? "");
     const thirdUrl = String(fetchMock.mock.calls[2]?.[0] ?? "");
     expect(firstUrl).toContain("/api/planning/v3/import/csv");
-    expect(firstUrl).toContain("persist=0");
+    expect(firstUrl).not.toContain("persist=");
+    expect(String(firstInit?.headers && (firstInit.headers as Record<string, string>)["content-type"])).toBe("application/json");
+    expect(String(firstInit?.body ?? "")).toContain("\"csvText\"");
     expect(secondUrl).toContain("/api/planning/v3/drafts");
     expect(thirdUrl).toContain("/api/planning/v3/drafts");
+  });
+
+  it("prefers payload.data.monthlyCashflow/meta/draftPatch", async () => {
+    const fixture = readFixture("preview-data-shape.json");
+    const fetchMock = vi.fn<[RequestInfo | URL, RequestInit?], Promise<Response>>()
+      .mockResolvedValueOnce(jsonResponse(fixture));
+
+    const preview = await fetchCsvDraftPreview(
+      "date,amount,description\n2026-02-01,3000000,salary",
+      fetchMock,
+      "csrf",
+    );
+
+    expect(preview.cashflow).toEqual([
+      { ym: "2026-02", incomeKrw: 3_000_000, expenseKrw: -1_000_000, netKrw: 2_000_000, txCount: 2 },
+    ]);
+    expect(preview.draftPatch).toEqual({
+      monthlyIncomeNet: 3_000_000,
+      monthlyEssentialExpenses: 1_000_000,
+      monthlyDiscretionaryExpenses: 300_000,
+    });
+    expect(preview.meta).toEqual({ rows: 2, months: 1 });
+    expect(preview.draftSummary).toEqual({ rows: 2, columns: 5 });
+
+    const firstUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
+    const firstInit = fetchMock.mock.calls[0]?.[1];
+    expect(firstUrl).toContain("/api/planning/v3/import/csv");
+    expect(firstUrl).not.toContain("persist=");
+    expect(String(firstInit?.headers && (firstInit.headers as Record<string, string>)["content-type"])).toBe("application/json");
+    expect(String(firstInit?.body ?? "")).toContain("\"csvText\"");
+  });
+
+  it("supports legacy top-level preview response shape from fixture", async () => {
+    const fixture = readFixture("preview-legacy-shape.json");
+    const fetchMock = vi.fn<[RequestInfo | URL, RequestInit?], Promise<Response>>()
+      .mockResolvedValueOnce(jsonResponse(fixture));
+
+    const preview = await fetchCsvDraftPreview(
+      "date,amount,description\n2026-01-01,1000,salary",
+      fetchMock,
+      "csrf",
+    );
+
+    expect(preview.cashflow).toEqual([
+      { ym: "2026-01", incomeKrw: 3_000_000, expenseKrw: -1_000_000, netKrw: 2_000_000, txCount: 2 },
+    ]);
+    expect(preview.draftPatch).toEqual({
+      monthlyIncomeNet: 3_000_000,
+      monthlyEssentialExpenses: 1_000_000,
+      monthlyDiscretionaryExpenses: 300_000,
+    });
+    expect(preview.meta).toEqual({ rows: 2, months: 1 });
+    expect(preview.draftSummary).toEqual({ rows: 2, columns: 3 });
   });
 });

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { type NewsItem } from "./types";
+import { type NewsItem } from "./types.ts";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";

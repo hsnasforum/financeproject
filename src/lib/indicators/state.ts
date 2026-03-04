@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { IndicatorsStateSchema, parseIndicatorsState } from "./contracts";
-import { resolveIndicatorsRoot } from "./store";
-import { type IndicatorsState } from "./types";
+import { IndicatorsStateSchema, parseIndicatorsState } from "./contracts.ts";
+import { resolveIndicatorsRoot } from "./store.ts";
+import { type IndicatorsState } from "./types.ts";
 
 const EMPTY_STATE: IndicatorsState = {
   lastRunAt: undefined,

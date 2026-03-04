@@ -8,7 +8,7 @@ import {
   type Observation,
   type SeriesSnapshot,
   type SeriesSpec,
-} from "./types";
+} from "./types.ts";
 
 export const IndicatorSourceTypeSchema = z.enum(["ecos", "kosis", "fred"]);
 export const IndicatorTransformSchema = z.enum(["none", "pct_change", "diff", "log"]);

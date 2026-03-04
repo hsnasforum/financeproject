@@ -47,6 +47,13 @@ const ARTIFACT_OPTIONS: ArtifactOption[] = [
   { name: "rules_suggest_json", label: "rules_suggest_json", isJson: true },
   { name: "rules_patch_json", label: "rules_patch_json", isJson: true },
   { name: "rules_pr_patch", label: "rules_pr_patch", isJson: false },
+  { name: "news_brief_json", label: "news_brief_json", isJson: true },
+  { name: "news_brief_md", label: "news_brief_md", isJson: false },
+  { name: "news_scenarios_json", label: "news_scenarios_json", isJson: true },
+  { name: "news_scenarios_md", label: "news_scenarios_md", isJson: false },
+  { name: "news_topic_trends_json", label: "news_topic_trends_json", isJson: true },
+  { name: "news_digest_day_json", label: "news_digest_day_json", isJson: true },
+  { name: "news_digest_day_md", label: "news_digest_day_md", isJson: false },
 ];
 
 const ARTIFACT_FILENAMES: Record<string, string> = {
@@ -68,6 +75,13 @@ const ARTIFACT_FILENAMES: Record<string, string> = {
   rules_suggest_json: "rules_suggestions.json",
   rules_patch_json: "rules_patch.json",
   rules_pr_patch: "rules_pr.patch",
+  news_brief_json: "news_brief.latest.json",
+  news_brief_md: "news_brief.latest.md",
+  news_scenarios_json: "news_scenarios.latest.json",
+  news_scenarios_md: "news_scenarios.latest.md",
+  news_topic_trends_json: "topic_trends.latest.json",
+  news_digest_day_json: "digest_day.latest.json",
+  news_digest_day_md: "digest_day.latest.md",
 };
 
 export default function DashboardArtifactsPage() {

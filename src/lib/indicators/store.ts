@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { resolveDataDir } from "../planning/storage/dataDir";
-import { ObservationSchema, SeriesSnapshotSchema } from "./contracts";
-import { type Observation, type SeriesSnapshot, type SeriesSpec } from "./types";
+import { resolveDataDir } from "../planning/storage/dataDir.ts";
+import { ObservationSchema, SeriesSnapshotSchema } from "./contracts.ts";
+import { type Observation, type SeriesSnapshot, type SeriesSpec } from "./types.ts";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
