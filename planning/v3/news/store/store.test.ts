@@ -44,6 +44,8 @@ describe("planning v3 news store", () => {
     const itemsDir = resolveItemsDir(root);
     const files = fs.readdirSync(itemsDir).filter((name) => name.endsWith(".json"));
     expect(files.length).toBe(2);
+    const stored = JSON.parse(fs.readFileSync(path.join(itemsDir, files[0]), "utf-8")) as Record<string, unknown>;
+    expect(Object.keys(stored).sort()).toEqual(["fetchedAt", "id", "sourceId", "title", "url"]);
 
     const state: RuntimeState = {
       lastRunAt: "2026-03-04T10:00:00.000Z",

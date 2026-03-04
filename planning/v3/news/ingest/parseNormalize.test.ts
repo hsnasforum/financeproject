@@ -69,8 +69,46 @@ describe("planning v3 news parse+normalize", () => {
       fetchedAt,
     );
 
+    const fallbackA = normalizeEntry(
+      {
+        title: "Fallback Id Candidate",
+        publishedAt: "Wed, 04 Mar 2026 09:00:00 GMT",
+      },
+      "fallback-source",
+      fetchedAt,
+    );
+
+    const fallbackB = normalizeEntry(
+      {
+        title: "fallback    id candidate",
+        publishedAt: "2026-03-04T11:10:00+09:00",
+      },
+      "fallback-source",
+      fetchedAt,
+    );
+
+    const crossSourceSameUrlA = normalizeEntry(
+      {
+        title: "same url a",
+        link: "https://example.com/shared?id=1",
+      },
+      "source-a",
+      fetchedAt,
+    );
+    const crossSourceSameUrlB = normalizeEntry(
+      {
+        title: "same url b",
+        link: "https://example.com/shared?id=1",
+      },
+      "source-b",
+      fetchedAt,
+    );
+
     expect(withGuidA?.id).toBe(withGuidB?.id);
     expect(noGuidA?.id).toBe(noGuidB?.id);
+    expect(fallbackA?.id).toBe(fallbackB?.id);
+    expect(fallbackA?.url.startsWith("urn:news:fallback-source:")).toBe(true);
+    expect(crossSourceSameUrlA?.id).not.toBe(crossSourceSameUrlB?.id);
     expect(canonicalizeUrl("https://example.com/x?utm_medium=a&k=2#h")).toBe("https://example.com/x?k=2");
   });
 });

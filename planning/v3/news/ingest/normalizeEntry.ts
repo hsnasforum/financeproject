@@ -20,22 +20,26 @@ export function normalizeEntry(raw: RawFeedEntry, sourceId: string, fetchedAtIso
   const title = cleanText(raw.title);
   const guid = cleanText(raw.guid) || undefined;
   const link = cleanText(raw.link);
-  const canonicalUrl = canonicalizeUrl(link || guid || "");
+  const publishedAt = normalizePublishedAt(raw.publishedAt);
+  const canonicalUrl = canonicalizeUrl(link);
 
-  if (!canonicalUrl) return null;
+  if (!title && !guid && !canonicalUrl) return null;
 
   const id = buildItemId({
     sourceId: source,
     guid,
     canonicalUrl,
+    title,
+    publishedAt,
   });
 
+  const fallbackUrl = `urn:news:${source}:${id}`;
   const item: NewsItem = {
     id,
     sourceId: source,
     title: title || "(untitled)",
-    url: canonicalUrl,
-    publishedAt: normalizePublishedAt(raw.publishedAt),
+    url: canonicalUrl || fallbackUrl,
+    publishedAt,
     guid,
     snippet: cleanText(raw.snippet).slice(0, 1500) || undefined,
     fetchedAt: fetchedAtIso,
