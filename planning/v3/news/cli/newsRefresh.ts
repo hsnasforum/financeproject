@@ -7,6 +7,7 @@ import { buildDigestDay } from "../digest/buildDigest";
 import { loadEffectiveNewsConfig } from "../settings";
 import { NEWS_SOURCES } from "../sources";
 import { buildScenarios } from "../scenario";
+import { rewriteDigestScenarioTextWithLocalLlm } from "../llmAdapter";
 import { selectTopFromStore } from "../selectTop";
 import { type TopicDailyStat as ScenarioTrendStat } from "../trend/contracts";
 import {
@@ -253,18 +254,31 @@ export async function runNewsRefresh(options: RunNewsRefreshOptions = {}): Promi
     generatedAt: fetchedAt,
   });
 
+  const rewritten = await rewriteDigestScenarioTextWithLocalLlm({
+    digest: digestDay,
+    scenarios,
+    topItems: topResult.topItems.map((item) => ({
+      title: item.title,
+      snippet: item.snippet,
+      primaryTopicId: item.primaryTopicId,
+      sourceId: item.sourceId,
+    })),
+  });
+  const finalDigestDay = rewritten.digest;
+  const finalScenarios = rewritten.scenarios;
+
   writeTodayCache({
     generatedAt: fetchedAt,
     date: todayKst,
     lastRefreshedAt: fetchedAt,
-    digest: digestDay,
-    scenarios,
+    digest: finalDigestDay,
+    scenarios: finalScenarios,
   }, rootDir);
 
   writeScenariosCache({
     generatedAt: fetchedAt,
     lastRefreshedAt: fetchedAt,
-    scenarios,
+    scenarios: finalScenarios,
   }, rootDir);
 
   const trends7Rows = readDailyStatsLastNDays({ toDateKst: todayKst, days: 7, rootDir });
