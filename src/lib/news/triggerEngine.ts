@@ -72,6 +72,24 @@ function parseRule(expression: string): ParsedRule | null {
   };
 }
 
+export function extractSeriesIdFromExpression(expression: string): string | null {
+  const parsed = parseRule(expression);
+  if (!parsed) return null;
+  return parsed.seriesId;
+}
+
+export function extractSeriesIdsFromRules(rules: ScenarioTriggerRule[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rules) {
+    const seriesId = extractSeriesIdFromExpression(row.expression);
+    if (!seriesId || seen.has(seriesId)) continue;
+    seen.add(seriesId);
+    out.push(seriesId);
+  }
+  return out;
+}
+
 function readValues(snapshot: SeriesSnapshot | undefined): number[] {
   if (!snapshot) return [];
   return snapshot.observations

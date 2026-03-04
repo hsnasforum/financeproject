@@ -276,6 +276,10 @@ export type ScenarioCard = {
   confidence: "상" | "중" | "하";
   triggerStatus?: "met" | "not_met" | "unknown";
   triggerSummary?: string;
+  observation?: string;
+  interpretations?: string[];
+  confirmIndicators?: string[];
+  options?: string[];
   assumptions: string[];
   trigger: string[];
   invalidation: string[];
@@ -325,6 +329,10 @@ export type NewsScenario = {
   confidence: "상" | "중" | "하";
   triggerStatus: "met" | "not_met" | "unknown";
   triggerSummary: string;
+  observation: string;
+  interpretations: string[];
+  confirmIndicators: string[];
+  options: string[];
   assumptions: string[];
   trigger: string[];
   triggerDetails?: Array<{

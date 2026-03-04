@@ -14,6 +14,7 @@ import {
   type ScoredNewsItem,
   type TopicTrend,
 } from "./types";
+import { noRecommendationText, sanitizeNoRecommendationText } from "./noRecommendation";
 
 type TopicTrendRow = {
   topicId: string;
@@ -23,8 +24,6 @@ type TopicTrendRow = {
   burstZ?: number;
   burstLevel?: BurstLevel;
 };
-
-const FORBIDDEN_DIRECTIVE_PATTERN = /(매수|매도|정답|해야|무조건|확실)/g;
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -40,7 +39,7 @@ function round2(value: number): number {
 }
 
 function sanitizeDirectiveText(input: string): string {
-  return asString(input).replace(FORBIDDEN_DIRECTIVE_PATTERN, "검토");
+  return sanitizeNoRecommendationText(asString(input));
 }
 
 function sanitizeLines(lines: string[]): string[] {
@@ -48,7 +47,7 @@ function sanitizeLines(lines: string[]): string[] {
 }
 
 export function hasForbiddenDirective(input: string): boolean {
-  return FORBIDDEN_DIRECTIVE_PATTERN.test(asString(input));
+  return !noRecommendationText(asString(input));
 }
 
 function compareCluster(a: NewsCluster, b: NewsCluster): number {
