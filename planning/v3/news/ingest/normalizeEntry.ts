@@ -1,5 +1,6 @@
 import { NewsItemSchema, type NewsItem, type RawFeedEntry } from "../contracts";
 import { buildItemId, canonicalizeUrl } from "./url";
+import { extractEntities } from "../entities/extract";
 
 function cleanText(value: string | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
@@ -44,6 +45,14 @@ export function normalizeEntry(raw: RawFeedEntry, sourceId: string, fetchedAtIso
     snippet: cleanText(raw.snippet).slice(0, 1500) || undefined,
     fetchedAt: fetchedAtIso,
   };
+
+  const entities = extractEntities({
+    title: item.title,
+    snippet: item.snippet,
+  });
+  if (entities.length > 0) {
+    item.entities = entities;
+  }
 
   return NewsItemSchema.parse(item);
 }

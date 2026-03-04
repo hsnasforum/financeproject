@@ -18,6 +18,7 @@ describe("planning v3 news parse+normalize", () => {
 
     const fetchedAt = "2026-03-04T10:00:00.000Z";
     const firstRss = normalizeEntry(rssEntries[0]!, "rss-source", fetchedAt);
+    const secondRss = normalizeEntry(rssEntries[1]!, "rss-source", fetchedAt);
     const firstAtom = normalizeEntry(atomEntries[0]!, "atom-source", fetchedAt);
 
     expect(firstRss).not.toBeNull();
@@ -25,6 +26,7 @@ describe("planning v3 news parse+normalize", () => {
     expect(firstRss?.title.length).toBeGreaterThan(0);
     expect(firstRss?.url).toBe("https://example.com/news/rates?ref=home");
     expect(firstRss?.fetchedAt).toBe(fetchedAt);
+    expect(secondRss?.entities).toContain("commodity_wti");
     expect(firstAtom?.url).toBe("https://example.org/fx/usdkrw");
   });
 
