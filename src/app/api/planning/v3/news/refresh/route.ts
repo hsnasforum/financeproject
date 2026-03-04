@@ -1,20 +1,15 @@
 import { NextResponse } from "next/server";
 import {
   assertCsrf,
-  assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { runScript } from "@/lib/dev/runScript";
 import { onlyDev } from "@/lib/dev/onlyDev";
+import { runNewsRefresh } from "../../../../../../../planning/v3/news/cli/newsRefresh";
+import { readState } from "../../../../../../../planning/v3/news/store";
 
-function statusFromErrorCode(code: string | undefined): number {
-  if (!code) return 500;
-  if (code === "NOT_ALLOWED") return 400;
-  if (code === "TIMEOUT") return 504;
-  return 500;
-}
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const blocked = onlyDev();
@@ -23,7 +18,6 @@ export async function POST(request: Request) {
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
-    assertDevUnlocked(request);
 
     let body: unknown = null;
     try {
@@ -46,29 +40,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await runScript({
-    command: "pnpm",
-    args: ["news:refresh"],
-    timeoutMs: 120_000,
-  });
-
-  if (result.ok) {
+  try {
+    const result = await runNewsRefresh();
+    const lastRefreshedAt = readState().lastRunAt ?? null;
     return NextResponse.json({
       ok: true,
-      tookMs: result.tookMs,
-      stdoutTail: result.stdoutTail,
-      stderrTail: result.stderrTail,
+      data: {
+        sourcesProcessed: result.sourcesProcessed,
+        itemsFetched: result.itemsFetched,
+        itemsNew: result.itemsNew,
+        itemsDeduped: result.itemsDeduped,
+        errorCount: result.errors.length,
+        lastRefreshedAt,
+      },
     });
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "INTERNAL",
+          message: "뉴스 갱신 실행 중 오류가 발생했습니다.",
+        },
+      },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json(
-    {
-      ok: false,
-      tookMs: result.tookMs,
-      error: result.error ?? { code: "INTERNAL", message: "스크립트 실행에 실패했습니다." },
-      stdoutTail: result.stdoutTail,
-      stderrTail: result.stderrTail,
-    },
-    { status: statusFromErrorCode(result.error?.code) },
-  );
 }

@@ -1,5 +1,5 @@
-import { NewsTrendsClient } from "../_components/NewsTrendsClient";
+import { NewsTrendsTableClient } from "../_components/NewsTrendsTableClient";
 
 export default function PlanningV3NewsTrendsPage() {
-  return <NewsTrendsClient />;
+  return <NewsTrendsTableClient />;
 }
