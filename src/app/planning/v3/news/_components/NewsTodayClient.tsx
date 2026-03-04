@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { WeeklyPlanPanel } from "./WeeklyPlanPanel";
 import { computeImpact } from "../../../../../../planning/v3/financeNews/impactModel";
 import { type ImpactResult, type ScenarioForImpact } from "../../../../../../planning/v3/financeNews/contracts";
 import { type ExposureProfile } from "../../../../../../planning/v3/exposure/contracts";
@@ -39,6 +40,11 @@ type TodayResponse = {
         indicators?: string[];
         options?: string[];
         linkedTopics?: string[];
+        quality?: {
+          dedupeLevel?: "high" | "med" | "low";
+          contradictionLevel?: "high" | "med" | "low";
+          uncertaintyLabels?: string[];
+        };
       }>;
     };
   } | null;
@@ -60,6 +66,9 @@ type DigestWatchlistRow = {
   grade?: "상" | "중" | "하" | "unknown";
   valueSummary?: string;
   asOf?: string | null;
+  unknownReasonCode?: "missing" | "disabled" | "no_data" | "insufficient_data" | "invalid_series_id" | "unknown";
+  unknownReasonLabel?: string;
+  resolveHref?: string | null;
   sparkline?: WatchSparkline;
 };
 
@@ -100,6 +109,9 @@ type WatchlistRow = {
   sparklinePoints: number[];
   sparklineTrend: "up" | "down" | "flat" | "unknown";
   sparklineLastValue: number | null;
+  unknownReasonCode?: "missing" | "disabled" | "no_data" | "insufficient_data" | "invalid_series_id" | "unknown";
+  unknownReasonLabel?: string;
+  resolveHref?: string | null;
 };
 
 type RecoveryAction = "rebuild_caches" | "recompute_trends";
@@ -220,6 +232,13 @@ function trendArrow(value: "up" | "down" | "flat" | "unknown"): string {
   return "·";
 }
 
+function qualityLevelLabel(value: "high" | "med" | "low" | undefined): string {
+  if (value === "high") return "높음";
+  if (value === "med") return "중간";
+  if (value === "low") return "낮음";
+  return "-";
+}
+
 function formatLastValue(value: number | null): string {
   if (!Number.isFinite(value ?? NaN)) return "-";
   return (Math.round((value ?? 0) * 100) / 100).toLocaleString("ko-KR");
@@ -320,6 +339,9 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
               sparklinePoints: points,
               sparklineTrend: normalizeWatchTrend(row.sparkline?.trend),
               sparklineLastValue: Number.isFinite(row.sparkline?.lastValue ?? NaN) ? Number(row.sparkline?.lastValue) : null,
+              unknownReasonCode: row.unknownReasonCode,
+              unknownReasonLabel: asString(row.unknownReasonLabel) || undefined,
+              resolveHref: asString(row.resolveHref) || null,
             };
           })
           .filter((row): row is NonNullable<typeof row> => Boolean(row));
@@ -458,6 +480,8 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           {errorMessage ? <p className="text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
         </Card>
 
+        <WeeklyPlanPanel csrf={csrf} />
+
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">수동 복구</h2>
           <p className="text-xs text-slate-600">
@@ -555,8 +579,29 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           </div>
 
           {watchlistRows.length > 0 ? (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {watchlistRows.map((row) => (
+            <>
+              {watchlistRows.some((row) => row.status === "unknown" || row.unknownReasonCode === "missing" || row.unknownReasonCode === "disabled") ? (
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-bold text-amber-800">상태 원인 안내</p>
+                  <ul className="mt-1 space-y-1 text-xs text-amber-900">
+                    {watchlistRows
+                      .filter((row) => row.status === "unknown" || row.unknownReasonCode === "missing" || row.unknownReasonCode === "disabled")
+                      .slice(0, 8)
+                      .map((row) => (
+                        <li key={`unknown-${row.seriesId}-${row.label}`}>
+                          {row.label}: {row.unknownReasonLabel || "원인을 확인하지 못했습니다."}{" "}
+                          {row.resolveHref ? (
+                            <Link href={row.resolveHref} className="font-semibold underline underline-offset-2">
+                              빠른 해결
+                            </Link>
+                          ) : null}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ) : null}
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {watchlistRows.map((row) => (
                 <li key={`${row.seriesId}-${row.label}`} className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-800">{row.label}</p>
@@ -572,9 +617,23 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                       최근값 {formatLastValue(row.sparklineLastValue)} · 기준일 {row.asOf ?? "-"}
                     </p>
                   ) : null}
+                  {row.status === "unknown" ? (
+                    <p className="mt-1 text-[11px] text-amber-700">
+                      {row.unknownReasonLabel || "데이터 부족"}
+                      {row.resolveHref ? (
+                        <>
+                          {" · "}
+                          <Link href={row.resolveHref} className="font-semibold underline underline-offset-2">
+                            빠른 해결
+                          </Link>
+                        </>
+                      ) : null}
+                    </p>
+                  ) : null}
                 </li>
-              ))}
-            </ul>
+                ))}
+              </ul>
+            </>
           ) : !data?.digest?.watchlist?.length ? (
             <p className="text-sm text-slate-600">체크 변수 없음</p>
           ) : (
@@ -639,6 +698,18 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                       <p className="mt-2 text-[11px] font-semibold text-slate-500">연결 토픽: {(card.linkedTopics ?? []).join(", ") || "-"}</p>
                       <p className="mt-1 text-[11px] font-semibold text-slate-500">트리거: {scenario.triggerSummary || "-"}</p>
                       <p className="mt-1 text-[11px] text-slate-500">옵션: {(card.options ?? []).slice(0, 2).join(" / ") || "-"}</p>
+                      {Array.isArray(card.quality?.uncertaintyLabels) && card.quality.uncertaintyLabels.length > 0 ? (
+                        <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2">
+                          <p className="text-[11px] font-semibold text-amber-800">
+                            불확실성 라벨 · 중복도 {qualityLevelLabel(card.quality?.dedupeLevel)} · 상충 {qualityLevelLabel(card.quality?.contradictionLevel)}
+                          </p>
+                          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-amber-900">
+                            {card.quality.uncertaintyLabels.slice(0, 2).map((line, lineIndex) => (
+                              <li key={`${key}-uncertainty-${lineIndex}`}>{asString(line)}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
 
                       <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2">
                         <div className="flex items-center justify-between gap-2">
