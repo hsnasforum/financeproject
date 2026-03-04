@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseIndicatorSeriesFile } from "./contracts";
+import { type SeriesSnapshot } from "./types";
 import { readSeriesObservations, resolveIndicatorsRoot } from "./store";
 
 export type IndicatorView = "last" | "pctChange" | "zscore";
@@ -46,16 +47,20 @@ export function resolveIndicatorsSeriesConfigPath(cwd = process.cwd()): string {
   return path.join(cwd, "config", "indicators-series.json");
 }
 
-export function hasSeriesSpec(seriesId: string, cwd = process.cwd()): boolean {
+function readSeriesSpecs(cwd = process.cwd()) {
   const filePath = resolveIndicatorsSeriesConfigPath(cwd);
-  if (!fs.existsSync(filePath)) return false;
+  if (!fs.existsSync(filePath)) return [];
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
     const file = parseIndicatorSeriesFile(parsed);
-    return file.series.some((row) => row.id === seriesId);
+    return file.series;
   } catch {
-    return false;
+    return [];
   }
+}
+
+export function hasSeriesSpec(seriesId: string, cwd = process.cwd()): boolean {
+  return readSeriesSpecs(cwd).some((row) => row.id === seriesId);
 }
 
 function unknownResult(seriesId: string, view: IndicatorView, window: number): IndicatorQueryResult {
@@ -168,4 +173,36 @@ export function buildWatchlistValues(input: {
       asOf: result.asOf,
     };
   });
+}
+
+export function readIndicatorSeriesSnapshots(input: {
+  cwd?: string;
+  seriesIds?: string[];
+} = {}): SeriesSnapshot[] {
+  const cwd = input.cwd ?? process.cwd();
+  const rootDir = resolveIndicatorsRoot(cwd);
+  const allowlist = input.seriesIds
+    ? new Set(input.seriesIds.map((row) => asString(row)).filter(Boolean))
+    : null;
+
+  return readSeriesSpecs(cwd)
+    .filter((spec) => !allowlist || allowlist.has(spec.id))
+    .map((spec) => {
+      const observations = readSeriesObservations(spec.id, rootDir);
+      const lastDate = observations[observations.length - 1]?.date ?? null;
+      return {
+        seriesId: spec.id,
+        asOf: lastDate ? new Date(`${lastDate}T00:00:00.000Z`).toISOString() : new Date().toISOString(),
+        observations,
+        meta: {
+          sourceId: spec.sourceId,
+          externalId: spec.externalId,
+          frequency: spec.frequency,
+          units: spec.units,
+          transform: spec.transform ?? "none",
+          lastUpdatedAt: lastDate ? new Date(`${lastDate}T00:00:00.000Z`).toISOString() : new Date().toISOString(),
+          observationCount: observations.length,
+        },
+      } satisfies SeriesSnapshot;
+    });
 }
