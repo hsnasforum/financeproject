@@ -7,11 +7,15 @@ import {
 } from "./contracts";
 import { scoreItems } from "./score";
 import { canonicalizeTopicId } from "./taxonomy";
+import { computeBurst } from "./trend/computeBurst";
+import { computeDailyStats } from "./trend/computeDailyStats";
 
 type TopicCountRow = {
   topicId: string;
   topicLabel: string;
   count: number;
+  scoreSum?: number;
+  sourceDiversity?: number;
 };
 
 type BuildTopicDailyStatsInput = {
@@ -22,6 +26,13 @@ type BuildTopicDailyStatsInput = {
 
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function burstGradeWeight(grade: BurstGrade): number {
+  if (grade === "High" || grade === "상") return 4;
+  if (grade === "Med" || grade === "중") return 3;
+  if (grade === "Low" || grade === "하") return 2;
+  return 1;
 }
 
 function parseKstDayParts(dayKst: string): { year: number; month: number; day: number } {
@@ -49,16 +60,11 @@ export function toKstDayKey(value: string | Date): string {
   }).format(date);
 }
 
-function stddev(values: number[], mean: number): number {
-  if (values.length < 1) return 0;
-  const variance = values.reduce((sum, current) => sum + ((current - mean) ** 2), 0) / values.length;
-  return Math.sqrt(variance);
-}
-
-export function computeBurstGrade(zScore: number): BurstGrade {
-  if (zScore >= 2.0) return "상";
-  if (zScore >= 1.0) return "중";
-  return "하";
+export function computeBurstGrade(todayCount: number, historyCounts: number[]): BurstGrade {
+  return computeBurst({
+    today: { count: todayCount },
+    last7: historyCounts.map((count) => ({ count })),
+  }).grade;
 }
 
 export function computeBurstMetrics(todayCount: number, historyCounts: number[]): {
@@ -67,18 +73,25 @@ export function computeBurstMetrics(todayCount: number, historyCounts: number[])
   burstZ: number;
   burstGrade: BurstGrade;
 } {
-  const normalized = historyCounts.map((value) => Math.max(0, Math.round(Number(value) || 0)));
-  const mean = normalized.length > 0
-    ? normalized.reduce((sum, value) => sum + value, 0) / normalized.length
+  const history = historyCounts
+    .map((value) => Math.max(0, Math.round(Number(value) || 0)))
+    .slice(-7);
+  const baselineMean = history.length > 0
+    ? history.reduce((sum, value) => sum + value, 0) / history.length
     : 0;
-  const sigma = stddev(normalized, mean);
-  const zScore = (todayCount - mean) / Math.max(1, sigma);
-  const roundedZ = round3(zScore);
+  const variance = history.length > 0
+    ? history.reduce((sum, current) => sum + ((current - baselineMean) ** 2), 0) / history.length
+    : 0;
+  const baselineStddev = Math.sqrt(variance);
+  const burstZ = history.length > 0
+    ? (todayCount - baselineMean) / Math.max(1, baselineStddev)
+    : 0;
+  const burstGrade = computeBurstGrade(todayCount, history);
   return {
-    baselineMean: round3(mean),
-    baselineStddev: round3(sigma),
-    burstZ: roundedZ,
-    burstGrade: computeBurstGrade(roundedZ),
+    baselineMean: round3(baselineMean),
+    baselineStddev: round3(baselineStddev),
+    burstZ: round3(burstZ),
+    burstGrade,
   };
 }
 
@@ -96,7 +109,13 @@ export function aggregateDailyTopicCounts(
     sourceWeights: options.sourceWeights,
     topics: options.topics,
   });
-  const topicMap = new Map<string, TopicCountRow>();
+  const topicMap = new Map<string, {
+    topicId: string;
+    topicLabel: string;
+    count: number;
+    scoreSum: number;
+    sources: Set<string>;
+  }>();
 
   for (const item of scored) {
     const day = toKstDayKey(item.publishedAt ?? item.fetchedAt);
@@ -107,31 +126,43 @@ export function aggregateDailyTopicCounts(
       topicId: key,
       topicLabel: item.primaryTopicLabel,
       count: 0,
+      scoreSum: 0,
+      sources: new Set<string>(),
     };
-
-    topicMap.set(key, {
-      ...prev,
-      count: prev.count + 1,
-    });
+    prev.count += 1;
+    prev.scoreSum += Number(item.totalScore) || 0;
+    prev.sources.add(item.sourceId);
+    topicMap.set(key, prev);
   }
 
-  return [...topicMap.values()].sort((a, b) => {
-    if (a.count !== b.count) return b.count - a.count;
-    return a.topicId.localeCompare(b.topicId);
-  });
+  return [...topicMap.values()]
+    .map((row) => ({
+      topicId: row.topicId,
+      topicLabel: row.topicLabel,
+      count: row.count,
+      scoreSum: round3(row.scoreSum),
+      sourceDiversity: row.count > 0 ? round3(row.sources.size / row.count) : 0,
+    }))
+    .sort((a, b) => {
+      if (a.count !== b.count) return b.count - a.count;
+      if ((a.scoreSum ?? 0) !== (b.scoreSum ?? 0)) return (b.scoreSum ?? 0) - (a.scoreSum ?? 0);
+      return a.topicId.localeCompare(b.topicId);
+    });
 }
 
 export function buildTopicDailyStats(input: BuildTopicDailyStatsInput): TopicDailyStat[] {
   return [...input.topicCounts]
     .map((row) => {
       const canonicalTopicId = canonicalizeTopicId(row.topicId);
-      const history = input.historyCountsByTopic[canonicalTopicId] ?? input.historyCountsByTopic[row.topicId] ?? [];
+      const history = (input.historyCountsByTopic[canonicalTopicId] ?? input.historyCountsByTopic[row.topicId] ?? []).slice(-7);
       const burst = computeBurstMetrics(row.count, history);
       return TopicDailyStatSchema.parse({
         dateKst: input.dateKst,
         topicId: canonicalTopicId,
         topicLabel: row.topicLabel,
         count: row.count,
+        scoreSum: round3(Number(row.scoreSum) || 0),
+        sourceDiversity: round3(Math.max(0, Math.min(1, Number(row.sourceDiversity) || 0))),
         baselineMean: burst.baselineMean,
         baselineStddev: burst.baselineStddev,
         burstZ: burst.burstZ,
@@ -139,8 +170,10 @@ export function buildTopicDailyStats(input: BuildTopicDailyStatsInput): TopicDai
       });
     })
     .sort((a, b) => {
-      if (a.burstZ !== b.burstZ) return b.burstZ - a.burstZ;
+      const gradeDiff = burstGradeWeight(b.burstGrade) - burstGradeWeight(a.burstGrade);
+      if (gradeDiff !== 0) return gradeDiff;
       if (a.count !== b.count) return b.count - a.count;
+      if (a.scoreSum !== b.scoreSum) return b.scoreSum - a.scoreSum;
       return a.topicId.localeCompare(b.topicId);
     });
 }
@@ -155,27 +188,38 @@ export function buildRollingDailyStats(args: {
   topics?: NewsTopic[];
 }): TopicDailyStat[] {
   const baselineDays = Math.max(1, Math.min(30, Math.round(args.baselineDays ?? 7)));
-  const topicCounts = aggregateDailyTopicCounts(args.items, args.dateKst, args.now, {
-    sourceWeights: args.sourceWeights,
-    topics: args.topics,
-  });
-
-  const historyCountsByTopic: Record<string, number[]> = {};
-  for (const row of topicCounts) {
-    const canonicalTopicId = canonicalizeTopicId(row.topicId);
-    const counts: number[] = [];
-    for (let offset = baselineDays; offset >= 1; offset -= 1) {
-      const day = shiftKstDay(args.dateKst, -offset);
-      const historyRows = args.historyStatsByDay[day] ?? [];
-      const matched = historyRows.find((entry) => canonicalizeTopicId(entry.topicId) === canonicalTopicId);
-      counts.push(matched?.count ?? 0);
+  const historyByTopic: Record<string, TopicDailyStat[]> = {};
+  for (let offset = baselineDays; offset >= 1; offset -= 1) {
+    const day = shiftKstDay(args.dateKst, -offset);
+    const rows = args.historyStatsByDay[day] ?? [];
+    for (const row of rows) {
+      const topicId = canonicalizeTopicId(row.topicId);
+      const bucket = historyByTopic[topicId] ?? [];
+      bucket.push(row);
+      historyByTopic[topicId] = bucket;
     }
-    historyCountsByTopic[canonicalTopicId] = counts;
   }
 
-  return buildTopicDailyStats({
+  return computeDailyStats({
+    items: args.items,
     dateKst: args.dateKst,
-    topicCounts,
-    historyCountsByTopic,
+    now: args.now,
+    sourceWeights: args.sourceWeights,
+    topics: args.topics,
+    historyByTopic,
+  }).map((row) => {
+    const history = historyByTopic[canonicalizeTopicId(row.topicId)] ?? [];
+    const burst = computeBurstMetrics(
+      row.count,
+      history.slice(-baselineDays).map((entry) => entry.count),
+    );
+    return TopicDailyStatSchema.parse({
+      ...row,
+      baselineMean: burst.baselineMean,
+      baselineStddev: burst.baselineStddev,
+      burstZ: burst.burstZ,
+      burstGrade: burst.burstGrade,
+    });
   });
 }
+

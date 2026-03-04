@@ -11,11 +11,13 @@ import {
 import { NEWS_SOURCES } from "../sources";
 import { canonicalizeTopicId } from "../taxonomy";
 import { tagTopics } from "./tagTopics";
+import { type BurstGrade } from "../contracts";
 
 type ScoreOptions = {
   now?: Date;
   sourceWeights?: Record<string, number>;
   topics?: NewsTopic[];
+  topicBurstGrades?: Record<string, BurstGrade>;
 };
 
 const FALLBACK_TOPIC = {
@@ -61,11 +63,18 @@ function totalKeywordHits(tags: TopicTag[]): number {
   return tags.reduce((sum, tag) => sum + Math.max(0, Number(tag.keywordHits) || 0), 0);
 }
 
-function buildScoreParts(item: NewsItem, tags: TopicTag[], sourceWeight: number, now: Date): ScoreParts {
+function buildScoreParts(
+  item: NewsItem,
+  tags: TopicTag[],
+  sourceWeight: number,
+  now: Date,
+  _topicBurstGrades?: Record<string, BurstGrade>,
+): ScoreParts {
   return ScorePartsSchema.parse({
     sourceWeight: round3(sourceWeight),
     recency: recencyTier(item, now),
     keywordHits: totalKeywordHits(tags),
+    // Integration hook exists, but V3-NEWS-003 keeps burst boost fixed to 0.
     burstPlaceholder: 0,
   });
 }
@@ -92,7 +101,7 @@ export function scoreItem(item: NewsItem, options: ScoreOptions = {}): ScoredNew
   const primary = tags[0]
     ? { id: canonicalizeTopicId(tags[0].topicId), label: tags[0].topicLabel }
     : FALLBACK_TOPIC;
-  const scoreParts = buildScoreParts(item, tags, sourceWeight, now);
+  const scoreParts = buildScoreParts(item, tags, sourceWeight, now, options.topicBurstGrades);
 
   return ScoredNewsItemSchema.parse({
     ...item,

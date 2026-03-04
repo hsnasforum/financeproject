@@ -10,6 +10,7 @@ import {
   type RuntimeState,
   type TopicDailyStat,
 } from "../contracts";
+import { shiftKstDay } from "../trend";
 
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "news");
 
@@ -144,6 +145,20 @@ export function readDailyStats(dateKst: string, rootDir = DEFAULT_ROOT): TopicDa
   } catch {
     return [];
   }
+}
+
+export function readDailyStatsLastNDays(input: {
+  toDateKst: string;
+  days: number;
+  rootDir?: string;
+}): TopicDailyStat[] {
+  const days = Math.max(1, Math.min(365, Math.round(input.days)));
+  const out: TopicDailyStat[] = [];
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const day = shiftKstDay(input.toDateKst, -offset);
+    out.push(...readDailyStats(day, input.rootDir));
+  }
+  return out;
 }
 
 export function writeDigest(digest: DailyDigest, rootDir = DEFAULT_ROOT): void {

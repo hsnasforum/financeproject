@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { type NewsItem, type RuntimeState } from "../contracts";
-import { hasItem, readState, resolveItemsDir, resolveStatePath, upsertItems, writeState } from "./index";
+import { hasItem, readDailyStatsLastNDays, readState, resolveItemsDir, resolveStatePath, upsertItems, writeDailyStats, writeState } from "./index";
 
 function makeItem(id: string): NewsItem {
   return {
@@ -64,5 +64,30 @@ describe("planning v3 news store", () => {
     const reloaded = readState(root);
     expect(reloaded.lastRunAt).toBe("2026-03-04T10:00:00.000Z");
     expect(reloaded.sources["test-source"]?.etag).toBe('W/"etag"');
+
+    writeDailyStats("2026-03-03", [{
+      dateKst: "2026-03-03",
+      topicId: "rates",
+      topicLabel: "금리",
+      count: 1,
+      scoreSum: 1,
+      sourceDiversity: 1,
+      burstGrade: "Low",
+    }], root);
+    writeDailyStats("2026-03-04", [{
+      dateKst: "2026-03-04",
+      topicId: "rates",
+      topicLabel: "금리",
+      count: 2,
+      scoreSum: 3,
+      sourceDiversity: 0.5,
+      burstGrade: "Med",
+    }], root);
+    const recent = readDailyStatsLastNDays({
+      toDateKst: "2026-03-04",
+      days: 2,
+      rootDir: root,
+    });
+    expect(recent).toHaveLength(2);
   });
 });
