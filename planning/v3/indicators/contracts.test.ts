@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   IndicatorSourceSchema,
   ObservationSchema,
+  RefreshErrorSchema,
   SeriesSnapshotSchema,
   SeriesSpecSchema,
 } from "./contracts";
@@ -53,5 +54,20 @@ describe("planning v3 indicators contracts", () => {
     });
 
     expect(parsed.observations.length).toBe(2);
+  });
+
+  it("uses unified connector error codes", () => {
+    expect(RefreshErrorSchema.parse({
+      sourceId: "fixture",
+      seriesId: "kr_cpi",
+      code: "FETCH",
+      message: "fixture_not_found",
+    }).code).toBe("FETCH");
+
+    expect(() => RefreshErrorSchema.parse({
+      sourceId: "fixture",
+      code: "UNKNOWN",
+      message: "x",
+    })).toThrow();
   });
 });
