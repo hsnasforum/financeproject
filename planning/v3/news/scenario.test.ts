@@ -1,144 +1,96 @@
 import { describe, expect, it } from "vitest";
-import { type SeriesSnapshot } from "../indicators/contracts";
-import { type ScenarioTemplate, type TopicDailyStat } from "./contracts";
-import { buildDigestFromInputs, noRecommendationText } from "./digest";
-import { FIXTURE_ITEMS, FIXTURE_NOW_ISO } from "./fixtures/sample-items";
+import { noRecommendationText } from "./guard/noRecommendationText";
 import { buildScenarios } from "./scenario";
-import { selectTopFromItems } from "./selectTop";
 
-function makeFixtureTrends(): TopicDailyStat[] {
+function makeDigest() {
+  return {
+    date: "2026-03-04",
+    observation: "관찰: 금리 토픽 강도가 확대되는 흐름이 관찰됩니다.",
+    evidence: [
+      {
+        title: "금리 관련 헤드라인 A",
+        url: "https://example.com/a",
+        sourceId: "bok_press_all",
+        publishedAt: "2026-03-04T08:00:00.000Z",
+        topics: ["rates", "inflation"],
+      },
+      {
+        title: "금리 관련 헤드라인 B",
+        url: "https://example.com/b",
+        sourceId: "bok_mpc_decisions",
+        publishedAt: "2026-03-04T09:00:00.000Z",
+        topics: ["rates"],
+      },
+      {
+        title: "환율 관련 헤드라인 C",
+        url: "https://example.com/c",
+        sourceId: "kosis_monthly_trend",
+        publishedAt: "2026-03-04T10:00:00.000Z",
+        topics: ["fx"],
+      },
+    ],
+    watchlist: ["기준금리", "USDKRW"],
+    counterSignals: ["토픽 집중도가 분산되면 현재 관찰은 약화될 수 있습니다."],
+  } as const;
+}
+
+function makeTrends() {
   return [
     {
       dateKst: "2026-03-04",
       topicId: "rates",
       topicLabel: "금리",
-      count: 5,
-      baselineMean: 1.8,
-      baselineStddev: 0.9,
-      burstZ: 2.4,
-      burstGrade: "상",
+      count: 9,
+      scoreSum: 12,
+      sourceDiversity: 0.7,
+      burstGrade: "High" as const,
+    },
+    {
+      dateKst: "2026-03-04",
+      topicId: "inflation",
+      topicLabel: "물가",
+      count: 6,
+      scoreSum: 9,
+      sourceDiversity: 0.45,
+      burstGrade: "Med" as const,
     },
     {
       dateKst: "2026-03-04",
       topicId: "fx",
       topicLabel: "환율",
-      count: 3,
-      baselineMean: 1.5,
-      baselineStddev: 0.8,
-      burstZ: 1.2,
-      burstGrade: "중",
+      count: 4,
+      scoreSum: 7,
+      sourceDiversity: 0.3,
+      burstGrade: "Low" as const,
     },
   ];
 }
 
-function makeFixtureDigest() {
-  const topResult = selectTopFromItems(FIXTURE_ITEMS, {
-    now: new Date(FIXTURE_NOW_ISO),
-    windowHours: 72,
-    topN: 10,
-    topM: 3,
-  });
+describe("planning v3 news scenario engine", () => {
+  it("returns deterministic Base/Bull/Bear cards for same input", () => {
+    const digest = makeDigest();
+    const trends = makeTrends();
 
-  return buildDigestFromInputs({
-    generatedAt: FIXTURE_NOW_ISO,
-    dateRange: {
-      fromKst: "2026-03-02",
-      toKst: "2026-03-04",
-    },
-    topResult,
-    burstTopics: makeFixtureTrends(),
-  });
-}
-
-function makeFixtureSeriesSnapshots(): SeriesSnapshot[] {
-  return [
-    {
-      seriesId: "kr_base_rate",
-      asOf: FIXTURE_NOW_ISO,
-      observations: [
-        { date: "2025-11", value: 3.5 },
-        { date: "2025-12", value: 3.5 },
-        { date: "2026-01", value: 3.25 },
-        { date: "2026-02", value: 3.25 },
-      ],
-      meta: {
-        sourceId: "fixture",
-        externalId: "fixture://kr_base_rate",
-        frequency: "M",
-      },
-    },
-    {
-      seriesId: "kr_usdkrw",
-      asOf: FIXTURE_NOW_ISO,
-      observations: [
-        { date: "2026-03-01", value: 1341.1 },
-        { date: "2026-03-02", value: 1347.8 },
-        { date: "2026-03-03", value: 1344.3 },
-        { date: "2026-03-04", value: 1342.9 },
-      ],
-      meta: {
-        sourceId: "fixture",
-        externalId: "fixture://kr_usdkrw",
-        frequency: "D",
-      },
-    },
-    {
-      seriesId: "kr_cpi",
-      asOf: FIXTURE_NOW_ISO,
-      observations: [
-        { date: "2025-10", value: 113.1 },
-        { date: "2025-11", value: 113.3 },
-        { date: "2025-12", value: 113.6 },
-        { date: "2026-01", value: 113.9 },
-        { date: "2026-02", value: 114.0 },
-        { date: "2026-03", value: 114.3 },
-      ],
-      meta: {
-        sourceId: "fixture",
-        externalId: "fixture://kr_cpi",
-        frequency: "M",
-      },
-    },
-  ];
-}
-
-describe("planning v3 news scenario", () => {
-  it("returns deterministic base/bull/bear cards", () => {
-    const digest = makeFixtureDigest();
-    const trends = makeFixtureTrends();
-    const seriesSnapshots = makeFixtureSeriesSnapshots();
-
-    const first = buildScenarios({ digest, trends, seriesSnapshots, generatedAt: FIXTURE_NOW_ISO });
-    const second = buildScenarios({ digest, trends, seriesSnapshots, generatedAt: FIXTURE_NOW_ISO });
+    const first = buildScenarios({ digest, trends, generatedAt: "2026-03-04T12:00:00.000Z" });
+    const second = buildScenarios({ digest, trends, generatedAt: "2026-03-04T12:00:00.000Z" });
 
     expect(first).toStrictEqual(second);
     expect(first.cards).toHaveLength(3);
     expect(first.cards.map((card) => card.name)).toEqual(["Base", "Bull", "Bear"]);
-
-    for (const card of first.cards) {
-      expect(["met", "not_met", "unknown"]).toContain(card.triggerStatus);
-      expect(card.triggerRationale.length).toBeGreaterThan(0);
-      expect(card.triggerEvaluations.length).toBeGreaterThan(0);
-      expect(card.observation.length).toBeGreaterThan(0);
-      expect(card.interpretations.length).toBeGreaterThan(0);
-      expect(card.invalidation.length).toBeGreaterThan(0);
-      expect(card.indicators.length).toBeGreaterThan(0);
-      expect(card.options.length).toBeGreaterThan(0);
-    }
   });
 
-  it("generated scenario text is conditional and recommendation-safe", () => {
-    const digest = makeFixtureDigest();
-    const trends = makeFixtureTrends();
-    const result = buildScenarios({ digest, trends, seriesSnapshots: makeFixtureSeriesSnapshots(), generatedAt: FIXTURE_NOW_ISO });
+  it("generated strings are neutral and pass noRecommendationText", () => {
+    const result = buildScenarios({
+      digest: makeDigest(),
+      trends: makeTrends(),
+      generatedAt: "2026-03-04T12:00:00.000Z",
+    });
 
     const lines = result.cards.flatMap((card) => [
-      card.triggerRationale,
-      ...card.triggerEvaluations.map((row) => row.rationale),
       card.observation,
-      ...card.interpretations,
       ...card.invalidation,
       ...card.options,
+      ...card.triggers.map((trigger) => trigger.note ?? ""),
     ]);
 
     for (const line of lines) {
@@ -147,60 +99,19 @@ describe("planning v3 news scenario", () => {
     }
   });
 
-  it("rejects banned recommendation phrases in scenario output", () => {
-    const digest = makeFixtureDigest();
-    const trends = makeFixtureTrends();
-    const templates: ScenarioTemplate[] = [
-      {
-        name: "Base",
-        triggers: [
-          {
-            id: "bad-label",
-            label: "매수 신호 확인",
-            seriesId: "kr_base_rate",
-            view: "pctChange",
-            window: 2,
-            op: "gte",
-            threshold: 0,
-          },
-        ],
-      },
-      {
-        name: "Bull",
-        triggers: [
-          {
-            id: "bull-safe",
-            label: "안전 라벨",
-            seriesId: "kr_cpi",
-            view: "zscore",
-            window: 3,
-            op: "lte",
-            threshold: 1,
-          },
-        ],
-      },
-      {
-        name: "Bear",
-        triggers: [
-          {
-            id: "bear-safe",
-            label: "안전 라벨",
-            seriesId: "kr_usdkrw",
-            view: "regime",
-            window: 3,
-            op: "eq",
-            regimeValue: "up",
-          },
-        ],
-      },
-    ];
+  it("keeps linkedTopics bounded and categorical triggers", () => {
+    const result = buildScenarios({
+      digest: makeDigest(),
+      trends: makeTrends(),
+      generatedAt: "2026-03-04T12:00:00.000Z",
+    });
 
-    expect(() => buildScenarios({
-      digest,
-      trends,
-      seriesSnapshots: makeFixtureSeriesSnapshots(),
-      templates,
-      generatedAt: FIXTURE_NOW_ISO,
-    })).toThrow(/recommendation_language_detected/);
+    for (const card of result.cards) {
+      expect(card.linkedTopics.length).toBeGreaterThanOrEqual(1);
+      expect(card.linkedTopics.length).toBeLessThanOrEqual(3);
+      expect(card.triggers.length).toBeGreaterThan(0);
+      expect(card.triggers.every((trigger) => ["high", "med", "low"].includes(trigger.condition))).toBe(true);
+      expect(card.indicators).toEqual(card.linkedTopics);
+    }
   });
 });
