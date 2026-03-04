@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { z } from "zod";
 import {
   DailyDigestSchema,
   NewsItemSchema,
@@ -10,6 +11,8 @@ import {
   type RuntimeState,
   type TopicDailyStat,
 } from "../contracts";
+import { DigestDaySchema, type DigestDay } from "../digest/contracts";
+import { ScenarioPackSchema, type ScenarioPack } from "../scenario/contracts";
 import { shiftKstDay } from "../trend";
 
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "news");
@@ -35,6 +38,10 @@ export function resolveDailyDir(rootDir = DEFAULT_ROOT): string {
   return path.join(resolveNewsRoot(rootDir), "daily");
 }
 
+export function resolveCacheDir(rootDir = DEFAULT_ROOT): string {
+  return path.join(resolveNewsRoot(rootDir), "cache");
+}
+
 export function resolveDailyStatsPath(dateKst: string, rootDir = DEFAULT_ROOT): string {
   return path.join(resolveDailyDir(rootDir), `${dateKst}.json`);
 }
@@ -43,9 +50,22 @@ export function resolveDigestPath(rootDir = DEFAULT_ROOT): string {
   return path.join(resolveNewsRoot(rootDir), "digest.latest.json");
 }
 
+export function resolveTodayCachePath(rootDir = DEFAULT_ROOT): string {
+  return path.join(resolveCacheDir(rootDir), "today.latest.json");
+}
+
+export function resolveTrendsCachePath(windowDays: 7 | 30, rootDir = DEFAULT_ROOT): string {
+  return path.join(resolveCacheDir(rootDir), `trends.${windowDays}d.latest.json`);
+}
+
+export function resolveScenariosCachePath(rootDir = DEFAULT_ROOT): string {
+  return path.join(resolveCacheDir(rootDir), "scenarios.latest.json");
+}
+
 function ensureStoreDirs(rootDir = DEFAULT_ROOT): void {
   fs.mkdirSync(resolveItemsDir(rootDir), { recursive: true });
   fs.mkdirSync(resolveDailyDir(rootDir), { recursive: true });
+  fs.mkdirSync(resolveCacheDir(rootDir), { recursive: true });
 }
 
 function resolveItemPath(id: string, rootDir = DEFAULT_ROOT): string {
@@ -165,4 +185,113 @@ export function writeDigest(digest: DailyDigest, rootDir = DEFAULT_ROOT): void {
   ensureStoreDirs(rootDir);
   const validated = DailyDigestSchema.parse(digest);
   fs.writeFileSync(resolveDigestPath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
+}
+
+const TrendCacheTopicSchema = z.object({
+  topicId: z.string().trim().min(1),
+  topicLabel: z.string().trim().min(1),
+  count: z.number().int().nonnegative(),
+  burstGrade: z.string().trim().min(1),
+  sourceDiversity: z.number().finite().min(0).max(1),
+});
+
+const TrendsCacheSchema = z.object({
+  generatedAt: z.string().datetime(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  windowDays: z.union([z.literal(7), z.literal(30)]),
+  topics: z.array(TrendCacheTopicSchema),
+});
+
+const TodayCacheSchema = z.object({
+  generatedAt: z.string().datetime(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  lastRefreshedAt: z.string().datetime().nullable(),
+  digest: DigestDaySchema,
+  scenarios: ScenarioPackSchema,
+});
+
+const ScenariosCacheSchema = z.object({
+  generatedAt: z.string().datetime(),
+  lastRefreshedAt: z.string().datetime().nullable(),
+  scenarios: ScenarioPackSchema,
+});
+
+export type TrendCacheTopic = z.infer<typeof TrendCacheTopicSchema>;
+export type TrendsCache = z.infer<typeof TrendsCacheSchema>;
+export type TodayCache = z.infer<typeof TodayCacheSchema>;
+export type ScenariosCache = z.infer<typeof ScenariosCacheSchema>;
+
+export function writeTodayCache(
+  input: {
+    generatedAt: string;
+    date: string;
+    lastRefreshedAt: string | null;
+    digest: DigestDay;
+    scenarios: ScenarioPack;
+  },
+  rootDir = DEFAULT_ROOT,
+): void {
+  ensureStoreDirs(rootDir);
+  const validated = TodayCacheSchema.parse(input);
+  fs.writeFileSync(resolveTodayCachePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
+}
+
+export function readTodayCache(rootDir = DEFAULT_ROOT): TodayCache | null {
+  const filePath = resolveTodayCachePath(rootDir);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+    return TodayCacheSchema.parse(parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function writeTrendsCache(
+  input: {
+    generatedAt: string;
+    date: string;
+    windowDays: 7 | 30;
+    topics: TrendCacheTopic[];
+  },
+  rootDir = DEFAULT_ROOT,
+): void {
+  ensureStoreDirs(rootDir);
+  const validated = TrendsCacheSchema.parse(input);
+  fs.writeFileSync(resolveTrendsCachePath(validated.windowDays, rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
+}
+
+export function readTrendsCache(windowDays: 7 | 30, rootDir = DEFAULT_ROOT): TrendsCache | null {
+  const filePath = resolveTrendsCachePath(windowDays, rootDir);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+    return TrendsCacheSchema.parse(parsed);
+  } catch {
+    return null;
+  }
+}
+
+export function writeScenariosCache(
+  input: {
+    generatedAt: string;
+    lastRefreshedAt: string | null;
+    scenarios: ScenarioPack;
+  },
+  rootDir = DEFAULT_ROOT,
+): void {
+  ensureStoreDirs(rootDir);
+  const validated = ScenariosCacheSchema.parse(input);
+  fs.writeFileSync(resolveScenariosCachePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
+}
+
+export function readScenariosCache(rootDir = DEFAULT_ROOT): ScenariosCache | null {
+  const filePath = resolveScenariosCachePath(rootDir);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+    return ScenariosCacheSchema.parse(parsed);
+  } catch {
+    return null;
+  }
 }
