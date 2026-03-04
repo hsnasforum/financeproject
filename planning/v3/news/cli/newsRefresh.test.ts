@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type NewsSource } from "../contracts";
 import { runNewsRefresh } from "./newsRefresh";
-import { resolveDailyDir, resolveItemsDir, resolveStatePath } from "../store";
+import { resolveDailyDir, resolveDigestPath, resolveItemsDir, resolveStatePath } from "../store";
 
 function readFixture(name: string): string {
   return fs.readFileSync(new URL(`../fixtures/${name}`, import.meta.url), "utf-8");
@@ -84,5 +84,6 @@ describe("planning v3 news cli", () => {
     const dailyDir = resolveDailyDir(root);
     expect(fs.existsSync(dailyDir)).toBe(true);
     expect(fs.readdirSync(dailyDir).some((name) => name.endsWith(".json"))).toBe(true);
+    expect(fs.existsSync(resolveDigestPath(root))).toBe(true);
   });
 });

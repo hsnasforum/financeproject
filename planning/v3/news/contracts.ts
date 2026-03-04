@@ -148,6 +148,25 @@ export const TopicDailyStatSchema = z.object({
 
 export type TopicDailyStat = z.infer<typeof TopicDailyStatSchema>;
 
+export const DateRangeSchema = z.object({
+  fromKst: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  toKst: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export type DateRange = z.infer<typeof DateRangeSchema>;
+
+export const DailyDigestSchema = z.object({
+  generatedAt: z.string().datetime(),
+  dateRange: DateRangeSchema,
+  topItems: z.array(ScoredNewsItemSchema),
+  topTopics: z.array(TopTopicSchema),
+  burstTopics: z.array(TopicDailyStatSchema),
+  watchlist: z.array(z.string().trim().min(1)),
+  observationLines: z.array(z.string().trim().min(1)),
+});
+
+export type DailyDigest = z.infer<typeof DailyDigestSchema>;
+
 export function parseNewsSource(value: unknown): NewsSource {
   return NewsSourceSchema.parse(value);
 }
@@ -166,4 +185,8 @@ export function parseScoredNewsItem(value: unknown): ScoredNewsItem {
 
 export function parseTopicDailyStat(value: unknown): TopicDailyStat {
   return TopicDailyStatSchema.parse(value);
+}
+
+export function parseDailyDigest(value: unknown): DailyDigest {
+  return DailyDigestSchema.parse(value);
 }
