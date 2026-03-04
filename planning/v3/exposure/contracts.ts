@@ -7,6 +7,7 @@ export const ExposureLevelSchema = z.enum(["low", "medium", "high", "unknown"]);
 export const ExposureIncomeStabilitySchema = z.enum(["stable", "moderate", "fragile", "unknown"]);
 
 export const ExposureProfileSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   savedAt: z.string().datetime().optional(),
   debt: z.object({
     hasDebt: ExposureHasDebtSchema.default("unknown"),

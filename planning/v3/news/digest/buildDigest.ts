@@ -108,6 +108,7 @@ export function buildDigestDay(input: BuildDigestDayInput): DigestDay {
   assertNoRecommendationText(counterSignals);
 
   return DigestDaySchema.parse({
+    schemaVersion: 1,
     date: input.date,
     observation,
     evidence,

@@ -138,11 +138,15 @@ function buildTriggers(topic: TopicScore, mode: ScenarioName): Trigger[] {
       ? higherCondition(topic.diversityCondition)
       : topic.diversityCondition;
 
+  const burstCondition = TriggerConditionSchema.parse(burst);
+  const shareCondition = TriggerConditionSchema.parse(share);
+  const diversityCondition = TriggerConditionSchema.parse(diversity);
+
   const triggers: Trigger[] = [
-    { kind: "topicBurst", topicId: topic.topicId, condition: burst, note: `${topic.topicId} 토픽 강도` },
-    { kind: "topicShare", topicId: topic.topicId, condition: share, note: `${topic.topicId} 토픽 비중` },
-    { kind: "sourceDiversity", topicId: topic.topicId, condition: diversity, note: `${topic.topicId} 토픽 소스 다양성` },
-  ].map((row) => ({ ...row, condition: TriggerConditionSchema.parse(row.condition) }));
+    { kind: "topicBurst", topicId: topic.topicId, condition: burstCondition, note: `${topic.topicId} 토픽 강도` },
+    { kind: "topicShare", topicId: topic.topicId, condition: shareCondition, note: `${topic.topicId} 토픽 비중` },
+    { kind: "sourceDiversity", topicId: topic.topicId, condition: diversityCondition, note: `${topic.topicId} 토픽 소스 다양성` },
+  ];
 
   return triggers;
 }
@@ -217,6 +221,7 @@ export function buildScenarios(input: BuildScenariosInput): ScenarioPack {
   const generatedAt = input.generatedAt ?? `${input.digest.date}T00:00:00.000Z`;
 
   return ScenarioPackSchema.parse({
+    schemaVersion: 1,
     generatedAt,
     cards,
   });

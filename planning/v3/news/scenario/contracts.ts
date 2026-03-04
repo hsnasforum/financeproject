@@ -29,6 +29,7 @@ export const ScenarioCardSchema = z.object({
 export type ScenarioCard = z.infer<typeof ScenarioCardSchema>;
 
 export const ScenarioPackSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   generatedAt: z.string().datetime(),
   cards: z.array(ScenarioCardSchema).length(3),
 });

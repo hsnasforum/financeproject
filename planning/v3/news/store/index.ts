@@ -19,6 +19,7 @@ import { shiftKstDay } from "../trend";
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "news");
 
 const EMPTY_STATE: RuntimeState = {
+  schemaVersion: 1,
   lastRunAt: undefined,
   sources: {},
 };
@@ -95,7 +96,10 @@ export function readState(rootDir = DEFAULT_ROOT): RuntimeState {
 
 export function writeState(state: RuntimeState, rootDir = DEFAULT_ROOT): void {
   ensureStoreDirs(rootDir);
-  const validated = parseWithV3Whitelist(RuntimeStateSchema, state, {
+  const validated = parseWithV3Whitelist(RuntimeStateSchema, {
+    ...state,
+    schemaVersion: 1,
+  }, {
     scope: "persistence",
     context: "news.store.state",
   });
@@ -193,7 +197,10 @@ export function readDailyStatsLastNDays(input: {
 
 export function writeDigest(digest: DailyDigest, rootDir = DEFAULT_ROOT): void {
   ensureStoreDirs(rootDir);
-  const validated = parseWithV3Whitelist(DailyDigestSchema, digest, {
+  const validated = parseWithV3Whitelist(DailyDigestSchema, {
+    ...digest,
+    schemaVersion: 1,
+  }, {
     scope: "persistence",
     context: "news.store.digest",
   });
@@ -208,14 +215,16 @@ const TrendCacheTopicSchema = z.object({
   sourceDiversity: z.number().finite().min(0).max(1),
 });
 
-const TrendsCacheSchema = z.object({
+export const TrendsCacheSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   generatedAt: z.string().datetime(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   windowDays: z.union([z.literal(7), z.literal(30)]),
   topics: z.array(TrendCacheTopicSchema),
 });
 
-const TodayCacheSchema = z.object({
+export const TodayCacheSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   generatedAt: z.string().datetime(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   lastRefreshedAt: z.string().datetime().nullable(),
@@ -223,7 +232,8 @@ const TodayCacheSchema = z.object({
   scenarios: ScenarioPackSchema,
 });
 
-const ScenariosCacheSchema = z.object({
+export const ScenariosCacheSchema = z.object({
+  schemaVersion: z.number().int().positive().optional(),
   generatedAt: z.string().datetime(),
   lastRefreshedAt: z.string().datetime().nullable(),
   scenarios: ScenarioPackSchema,
@@ -245,7 +255,10 @@ export function writeTodayCache(
   rootDir = DEFAULT_ROOT,
 ): void {
   ensureStoreDirs(rootDir);
-  const validated = parseWithV3Whitelist(TodayCacheSchema, input, {
+  const validated = parseWithV3Whitelist(TodayCacheSchema, {
+    schemaVersion: 1,
+    ...input,
+  }, {
     scope: "persistence",
     context: "news.store.cache.today",
   });
@@ -273,7 +286,10 @@ export function writeTrendsCache(
   rootDir = DEFAULT_ROOT,
 ): void {
   ensureStoreDirs(rootDir);
-  const validated = parseWithV3Whitelist(TrendsCacheSchema, input, {
+  const validated = parseWithV3Whitelist(TrendsCacheSchema, {
+    schemaVersion: 1,
+    ...input,
+  }, {
     scope: "persistence",
     context: "news.store.cache.trends",
   });
@@ -300,7 +316,10 @@ export function writeScenariosCache(
   rootDir = DEFAULT_ROOT,
 ): void {
   ensureStoreDirs(rootDir);
-  const validated = parseWithV3Whitelist(ScenariosCacheSchema, input, {
+  const validated = parseWithV3Whitelist(ScenariosCacheSchema, {
+    schemaVersion: 1,
+    ...input,
+  }, {
     scope: "persistence",
     context: "news.store.cache.scenarios",
   });

@@ -15,6 +15,7 @@ import { parseWithV3Whitelist } from "../../security/whitelist";
 const DEFAULT_ROOT = path.join(process.cwd(), ".data", "indicators");
 
 const EMPTY_STATE: IndicatorsState = {
+  schemaVersion: 1,
   lastRunAt: undefined,
   series: {},
 };
@@ -61,7 +62,10 @@ export function readState(rootDir = DEFAULT_ROOT): IndicatorsState {
 
 export function writeState(state: IndicatorsState, rootDir = DEFAULT_ROOT): void {
   ensureDirs(rootDir);
-  const validated = parseWithV3Whitelist(IndicatorsStateSchema, state, {
+  const validated = parseWithV3Whitelist(IndicatorsStateSchema, {
+    schemaVersion: 1,
+    ...state,
+  }, {
     scope: "persistence",
     context: "indicators.store.state",
   });
