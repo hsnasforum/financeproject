@@ -17,21 +17,9 @@ import { type Observation } from "../indicators/contracts";
 import { normalizeSeriesId } from "../indicators/aliases";
 import { readSeriesObservations } from "../indicators/store";
 import { WATCHLIST_BY_TOPIC } from "./digest/templates";
-
-const BANNED_PATTERNS = [
-  /매수/gi,
-  /매도/gi,
-  /정답/gi,
-  /무조건/gi,
-  /확실/gi,
-  /해야\s*한다/gi,
-  /사야\s*한다/gi,
-  /팔아야\s*한다/gi,
-  /buy\s+now/gi,
-  /sell\s+now/gi,
-  /must\s+buy/gi,
-  /must\s+sell/gi,
-];
+import { type DigestDay } from "./digest/contracts";
+import { buildDigestDay } from "./digest/buildDigest";
+import { assertNoRecommendationText } from "./guard/noRecommendationText";
 
 type WatchMetrics = {
   spec: DigestWatchSpec;
@@ -86,24 +74,7 @@ function assertValidRange(range: DateRange): DateRange {
   return parsed;
 }
 
-function hasBannedPattern(text: string): boolean {
-  const value = text.trim();
-  if (!value) return false;
-  return BANNED_PATTERNS.some((pattern) => {
-    pattern.lastIndex = 0;
-    return pattern.test(value);
-  });
-}
-
-export function noRecommendationText(text: string): boolean {
-  return !hasBannedPattern(text);
-}
-
-function assertNoRecommendationText(text: string): void {
-  if (!noRecommendationText(text)) {
-    throw new Error("recommendation_language_detected");
-  }
-}
+export { noRecommendationText } from "./guard/noRecommendationText";
 
 function isBurstLow(value: string | undefined): boolean {
   const normalized = (value ?? "").trim().toLowerCase();
@@ -251,25 +222,21 @@ function analyzeWatchlist(
   });
 }
 
-function buildObservationLines(topResult: SelectTopResult, burstTopics: TopicDailyStat[], watchlist: DigestWatchItem[]): string[] {
-  const topTopic = topResult.topTopics[0]?.topicLabel ?? "핵심 토픽";
-  const topTopicCount = topResult.topTopics[0]?.count ?? 0;
-  const burstLine = burstTopics[0]
-    ? `조건부 관찰: ${burstTopics[0].topicLabel} 기사량 급증(${burstTopics[0].burstGrade})이 이어지면 변동성 확대 가능성이 있습니다.`
-    : "조건부 관찰: 급증 토픽은 뚜렷하지 않으며 현재 흐름 유지 가능성이 있습니다.";
-
+function buildObservationLines(digestDay: DigestDay, watchlist: DigestWatchItem[]): string[] {
   const watchSummary = watchlist
     .slice(0, 4)
     .map((row) => `${row.label}(${row.grade})`)
     .join(", ");
+  const counterSummary = digestDay.counterSignals.slice(0, 2).join(" / ");
 
   const lines = [
-    `관찰: 최근 구간에서 ${topTopic} 관련 기사 비중이 상대적으로 높습니다(건수 ${topTopicCount}).`,
-    burstLine,
+    digestDay.observation,
+    `근거: 대표 링크 ${digestDay.evidence.length}건을 기반으로 흐름을 확인합니다.`,
     `모니터링: ${watchSummary || "데이터 부족"} 중심으로 확인이 필요합니다.`,
+    `반대 시그널: ${counterSummary || "추가 반대 시그널은 제한적으로 관찰됩니다."}`,
   ];
 
-  lines.forEach(assertNoRecommendationText);
+  assertNoRecommendationText(lines);
   return lines;
 }
 
@@ -284,7 +251,12 @@ export function buildDigestFromInputs(input: {
   const readIndicatorSeries = input.readIndicatorSeries ?? (() => []);
   const watchlistSpecs = buildWatchlistSpecs(input.topResult, input.burstTopics);
   const watchlist = analyzeWatchlist(watchlistSpecs, readIndicatorSeries);
-  const observationLines = buildObservationLines(input.topResult, input.burstTopics, watchlist);
+  const digestDay = buildDigestDay({
+    date: dateRange.toKst,
+    topResult: input.topResult,
+    burstTopics: input.burstTopics,
+  });
+  const observationLines = buildObservationLines(digestDay, watchlist);
 
   return DailyDigestSchema.parse({
     generatedAt: input.generatedAt,
