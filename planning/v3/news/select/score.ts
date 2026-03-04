@@ -13,6 +13,7 @@ import { canonicalizeTopicId } from "../taxonomy";
 import { tagTopics } from "./tagTopics";
 import { type BurstGrade } from "../contracts";
 import { extractEntities, normalizeEntityIds } from "../entities/extract";
+import { classifyEventTypes, normalizeEventTypes } from "../events/classify";
 
 type ScoreOptions = {
   now?: Date;
@@ -103,6 +104,14 @@ export function scoreItem(item: NewsItem, options: ScoreOptions = {}): ScoredNew
     ? item.entities
     : extractEntities({ title: item.title, snippet: item.snippet }));
   const entityPayload = entities.length > 0 ? { entities } : {};
+  const eventTypes = normalizeEventTypes(item.eventTypes && item.eventTypes.length > 0
+    ? item.eventTypes
+    : classifyEventTypes({
+      title: item.title,
+      snippet: item.snippet,
+      entities,
+    }));
+  const eventPayload = eventTypes.length > 0 ? { eventTypes } : {};
   const primary = tags[0]
     ? { id: canonicalizeTopicId(tags[0].topicId), label: tags[0].topicLabel }
     : FALLBACK_TOPIC;
@@ -111,6 +120,7 @@ export function scoreItem(item: NewsItem, options: ScoreOptions = {}): ScoredNew
   return ScoredNewsItemSchema.parse({
     ...item,
     ...entityPayload,
+    ...eventPayload,
     tags,
     primaryTopicId: primary.id,
     primaryTopicLabel: primary.label,

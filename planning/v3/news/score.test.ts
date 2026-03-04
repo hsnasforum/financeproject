@@ -26,5 +26,7 @@ describe("planning v3 news score", () => {
     const fx = first.find((row) => row.id === "i-fx-1");
     expect(rates?.entities).toContain("central_bank_fed");
     expect(fx?.entities).toContain("currency_usdkrw");
+    expect(rates?.eventTypes).toContain("policy_rate_signal");
+    expect(fx?.eventTypes).toContain("fx_volatility");
   });
 });

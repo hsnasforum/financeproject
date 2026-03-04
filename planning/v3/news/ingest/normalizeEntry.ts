@@ -1,6 +1,7 @@
 import { NewsItemSchema, type NewsItem, type RawFeedEntry } from "../contracts";
 import { buildItemId, canonicalizeUrl } from "./url";
 import { extractEntities } from "../entities/extract";
+import { classifyEventTypes } from "../events/classify";
 
 function cleanText(value: string | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
@@ -52,6 +53,14 @@ export function normalizeEntry(raw: RawFeedEntry, sourceId: string, fetchedAtIso
   });
   if (entities.length > 0) {
     item.entities = entities;
+  }
+  const eventTypes = classifyEventTypes({
+    title: item.title,
+    snippet: item.snippet,
+    entities,
+  });
+  if (eventTypes.length > 0) {
+    item.eventTypes = eventTypes;
   }
 
   return NewsItemSchema.parse(item);
