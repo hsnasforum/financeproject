@@ -22,4 +22,18 @@ describe("planning v3 news taxonomy", () => {
     expect(tags.length).toBeGreaterThan(0);
     expect(tags[0]?.topicId).toBe("fiscal");
   });
+
+  it("picks up to top 2 topics and applies deterministic priority tie-break", () => {
+    const tags = tagItemTopics({
+      id: "t-2",
+      sourceId: "fixture",
+      title: "금리 인상과 환율 상승",
+      url: "https://example.com/article-2",
+      snippet: "rate hike and fx rise",
+      fetchedAt: "2026-03-04T00:00:00.000Z",
+    });
+
+    expect(tags.length).toBeLessThanOrEqual(2);
+    expect(tags[0]?.topicId).toBe("rates");
+  });
 });

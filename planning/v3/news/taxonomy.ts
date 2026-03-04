@@ -55,6 +55,17 @@ export const LEGACY_TOPIC_ALIAS: Record<string, string> = {
   equity: "growth",
 };
 
+export const TOPIC_PRIORITY: string[] = [
+  "rates",
+  "inflation",
+  "fx",
+  "growth",
+  "labor",
+  "credit",
+  "commodities",
+  "fiscal",
+];
+
 const TOPIC_BY_ID = new Map(NEWS_TOPICS.map((topic) => [topic.id, topic]));
 
 export function canonicalizeTopicId(topicId: string): string {
@@ -78,14 +89,19 @@ function dedupe(values: string[]): string[] {
   return out;
 }
 
+function priorityIndex(topicId: string): number {
+  const index = TOPIC_PRIORITY.indexOf(canonicalizeTopicId(topicId));
+  return index >= 0 ? index : TOPIC_PRIORITY.length;
+}
+
 export function tagItemTopics(item: NewsItem, topics: NewsTopic[] = NEWS_TOPICS): TopicTag[] {
   const text = normalizeText(`${item.title} ${item.snippet ?? ""}`);
   if (!text) return [];
 
   const out = topics
     .map((topic) => {
-      const keywordHits = topic.keywords.filter((keyword) => text.includes(normalizeText(keyword)));
-      const entityHits = (topic.entities ?? []).filter((entity) => text.includes(normalizeText(entity)));
+      const keywordHits = dedupe(topic.keywords.filter((keyword) => text.includes(normalizeText(keyword))));
+      const entityHits = dedupe((topic.entities ?? []).filter((entity) => text.includes(normalizeText(entity))));
       const hits = dedupe([...keywordHits, ...entityHits]);
       const canonicalTopicId = canonicalizeTopicId(topic.id);
       const canonicalTopic = TOPIC_BY_ID.get(canonicalTopicId) ?? topic;
@@ -93,16 +109,18 @@ export function tagItemTopics(item: NewsItem, topics: NewsTopic[] = NEWS_TOPICS)
       return TopicTagSchema.parse({
         topicId: canonicalTopic.id,
         topicLabel: canonicalTopic.label,
-        keywordHits: keywordHits.length,
+        keywordHits: keywordHits.length + entityHits.length,
         entityHits: entityHits.length,
         hits,
       });
     })
     .filter((row) => row.hits.length > 0)
     .sort((a, b) => {
-      if (a.hits.length !== b.hits.length) return b.hits.length - a.hits.length;
+      if (a.keywordHits !== b.keywordHits) return b.keywordHits - a.keywordHits;
+      const priorityDiff = priorityIndex(a.topicId) - priorityIndex(b.topicId);
+      if (priorityDiff !== 0) return priorityDiff;
       return a.topicId.localeCompare(b.topicId);
     });
 
-  return out;
+  return out.slice(0, 2);
 }

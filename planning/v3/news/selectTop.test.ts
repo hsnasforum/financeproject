@@ -31,13 +31,14 @@ describe("planning v3 news selectTop", () => {
 
     expect(result.totalCandidates).toBe(4); // old item excluded by 72h window
     expect(result.topItems.map((row) => row.id)).toEqual([
-      "i-rates-1",
       "i-fx-1",
+      "i-rates-1",
       "i-policy-1",
     ]);
+    expect(result.clusters.length).toBe(3);
     expect(result.topTopics.map((row) => row.topicId)).toEqual([
-      "rates",
       "fx",
+      "rates",
       "fiscal",
     ]);
   });
