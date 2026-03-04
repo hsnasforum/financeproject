@@ -75,6 +75,7 @@
     "gov24:sync": "tsx scripts/gov24_sync.ts",
     "gov24:sync:if-stale": "tsx scripts/gov24_sync_if_stale.ts",
     "news:refresh": "node scripts/news_refresh.mjs",
+    "indicators:refresh": "node scripts/indicators_refresh.mjs",
     "provider:scaffold": "node scripts/provider_scaffold.mjs",
     "warm:if-stale": "node scripts/warm_if_stale.mjs",
     "warm:offline": "node scripts/warm_if_stale.mjs --offline",
