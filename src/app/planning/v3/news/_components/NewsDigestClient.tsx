@@ -230,9 +230,15 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                 <div key={row.name} className="rounded-lg border border-slate-200 p-3">
                   <p className="text-sm font-black text-slate-900">{row.name} ({row.confidence})</p>
                   <p className="mt-1 text-xs text-slate-600">Trigger: {row.triggerStatus} · {row.triggerSummary}</p>
+                  <p className="mt-2 text-xs font-semibold text-slate-700">관찰</p>
+                  <p className="mt-1 text-xs text-slate-600">{row.observation}</p>
                   <p className="mt-2 text-xs font-semibold text-slate-700">Trigger</p>
                   <ul className="mt-1 space-y-1 text-xs text-slate-600">
                     {row.trigger.slice(0, 3).map((line) => <li key={line}>- {line}</li>)}
+                  </ul>
+                  <p className="mt-2 text-xs font-semibold text-slate-700">옵션</p>
+                  <ul className="mt-1 space-y-1 text-xs text-slate-600">
+                    {(row.options ?? []).slice(0, 3).map((line) => <li key={line}>- {line}</li>)}
                   </ul>
                   <p className="mt-2 text-xs font-semibold text-slate-700">Monitoring</p>
                   <ul className="mt-1 space-y-1 text-xs text-slate-600">

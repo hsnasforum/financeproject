@@ -1,8 +1,14 @@
 import { type SeriesSnapshot } from "../indicators/types";
 import {
   evaluateScenarioTriggers,
+  extractSeriesIdsFromRules,
   type ScenarioTriggerRule,
 } from "./triggerEngine";
+import {
+  assertNoRecommendationLines,
+  assertNoRecommendationText,
+  sanitizeNoRecommendationText,
+} from "./noRecommendation";
 import {
   type MacroSnapshot,
   type NewsCluster,
@@ -12,20 +18,18 @@ import {
   type ScenarioCard,
 } from "./types";
 
-const FORBIDDEN_DIRECTIVE_PATTERN = /(매수|매도|정답|해야|무조건|확실)/g;
-
 type TriggerTemplateSource = Partial<Record<"Base" | "Bull" | "Bear", Array<{ label?: string; expression?: string }>>>;
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function sanitizeDirectiveText(input: string): string {
-  return asString(input).replace(FORBIDDEN_DIRECTIVE_PATTERN, "검토");
+function sanitizeLine(input: string): string {
+  return sanitizeNoRecommendationText(asString(input));
 }
 
 function sanitizeLines(lines: string[]): string[] {
-  return lines.map((row) => sanitizeDirectiveText(row)).filter(Boolean);
+  return lines.map((row) => sanitizeLine(row)).filter(Boolean);
 }
 
 function topTopicLabel(risingTopics: RisingTopic[], clusters: NewsCluster[]): string {
@@ -57,9 +61,17 @@ function takeLeadingIndicators(topic: string): string[] {
 
 function takeMonitoringOptions(topic: string): string[] {
   return sanitizeLines([
-    `${topic} 토픽 기사량이 3일 연속 증가하면 모니터링 빈도 상향`,
+    `${topic} 기사량이 3일 연속 증가하면 점검 빈도 상향`,
     "환율/유가 급변 시 익일 재평가",
     "정책 이벤트 전후 시나리오 재생성",
+  ]);
+}
+
+function takeResponseOptions(topic: string): string[] {
+  return sanitizeLines([
+    `방어 옵션: ${topic} 관련 변동성 확대 시 노출도 점검`,
+    "균형 옵션: 주요 지표 확인 후 비중 유지 여부 검토",
+    "공격 옵션: 트리거 충족 신호가 누적될 때 단계적 대응 검토",
   ]);
 }
 
@@ -101,6 +113,47 @@ function resolveRulesForScenario(input: {
   return defaultRules(input.name);
 }
 
+function ensureInterpretations(rows: string[]): string[] {
+  const base = sanitizeLines(rows);
+  if (base.length >= 2) return base.slice(0, 3);
+  const fallback = sanitizeLines([
+    ...base,
+    "뉴스/지표 신호가 단일 방향으로 수렴하지 않으면 중립 해석이 우선됩니다.",
+    "트리거 충족 누적 여부를 통해 해석 강도를 조정할 수 있습니다.",
+  ]);
+  return fallback.slice(0, 3);
+}
+
+function ensureTemplateFields(scenario: NewsScenario): NewsScenario {
+  const observation = sanitizeLine(scenario.observation) || "관찰 데이터가 부족합니다.";
+  const interpretations = ensureInterpretations(scenario.interpretations);
+  const confirmIndicators = scenario.confirmIndicators.map((row) => asString(row)).filter(Boolean).slice(0, 5);
+  const options = sanitizeLines(scenario.options).slice(0, 3);
+  const invalidation = sanitizeLines(scenario.invalidation);
+
+  return {
+    ...scenario,
+    observation,
+    interpretations,
+    confirmIndicators,
+    options,
+    invalidation,
+  };
+}
+
+function assertScenarioNoRecommendation(scenario: NewsScenario): void {
+  assertNoRecommendationText(scenario.observation, `${scenario.name}.observation`);
+  assertNoRecommendationText(scenario.triggerSummary, `${scenario.name}.triggerSummary`);
+  assertNoRecommendationText(scenario.impact, `${scenario.name}.impact`);
+  assertNoRecommendationLines(scenario.interpretations, `${scenario.name}.interpretations`);
+  assertNoRecommendationLines(scenario.options, `${scenario.name}.options`);
+  assertNoRecommendationLines(scenario.assumptions, `${scenario.name}.assumptions`);
+  assertNoRecommendationLines(scenario.trigger, `${scenario.name}.trigger`);
+  assertNoRecommendationLines(scenario.invalidation, `${scenario.name}.invalidation`);
+  assertNoRecommendationLines(scenario.monitoringOptions, `${scenario.name}.monitoringOptions`);
+  assertNoRecommendationLines(scenario.rationale, `${scenario.name}.rationale`);
+}
+
 function buildScenario(input: {
   name: "Base" | "Bull" | "Bear";
   confidence: "상" | "중" | "하";
@@ -120,12 +173,24 @@ function buildScenario(input: {
     rules,
     snapshots: input.indicatorSnapshots,
   });
+  const confirmIndicators = extractSeriesIdsFromRules(rules);
 
-  return {
+  const rawScenario: NewsScenario = {
     name: input.name,
     confidence: input.confidence,
     triggerStatus: triggerEval.status,
-    triggerSummary: sanitizeDirectiveText(triggerEval.summary || "trigger 데이터 부족"),
+    triggerSummary: sanitizeLine(triggerEval.summary || "trigger 데이터 부족"),
+    observation: sanitizeLine(`${input.topic} 관련 뉴스와 지표 신호를 함께 관찰한 결과 ${input.name} 시나리오를 점검 중입니다.`),
+    interpretations: sanitizeLines([
+      ...input.rationale,
+      triggerEval.status === "met"
+        ? "트리거 충족 신호가 누적되어 해당 해석의 우선순위가 높아졌습니다."
+        : triggerEval.status === "not_met"
+          ? "트리거 미충족으로 해석 강도를 낮춰 보는 것이 합리적입니다."
+          : "데이터 부족 구간은 해석을 보수적으로 유지하는 편이 안전합니다.",
+    ]),
+    confirmIndicators,
+    options: takeResponseOptions(input.topic),
     assumptions: sanitizeLines([
       ...input.assumptions,
       macroLine(input.macroSnapshot),
@@ -134,7 +199,7 @@ function buildScenario(input: {
     triggerDetails: triggerEval.details,
     leadingIndicators: takeLeadingIndicators(input.topic),
     invalidation: sanitizeLines(input.invalidation),
-    impact: sanitizeDirectiveText(
+    impact: sanitizeLine(
       input.name === "Base"
         ? "변동성은 유지되나 방향성 확정 신호는 제한적일 가능성이 높습니다."
         : input.name === "Bull"
@@ -144,6 +209,10 @@ function buildScenario(input: {
     monitoringOptions: takeMonitoringOptions(input.topic),
     rationale: sanitizeLines(input.rationale),
   };
+
+  const normalized = ensureTemplateFields(rawScenario);
+  assertScenarioNoRecommendation(normalized);
+  return normalized;
 }
 
 export function buildNewsScenarios(input: {
@@ -234,6 +303,10 @@ export function toScenarioCards(pack: NewsScenarioPack): ScenarioCard[] {
     confidence: row.confidence,
     triggerStatus: row.triggerStatus,
     triggerSummary: row.triggerSummary,
+    observation: row.observation,
+    interpretations: row.interpretations,
+    confirmIndicators: row.confirmIndicators,
+    options: row.options,
     assumptions: row.assumptions,
     trigger: row.trigger,
     invalidation: row.invalidation,
@@ -255,14 +328,23 @@ export function toNewsScenarioMarkdown(pack: NewsScenarioPack): string {
     lines.push(`## ${scenario.name} (확률: ${scenario.confidence})`);
     lines.push(`- Trigger status: ${scenario.triggerStatus}`);
     lines.push(`- Trigger summary: ${scenario.triggerSummary}`);
+    lines.push("### 관찰");
+    lines.push(`- ${scenario.observation}`);
+    lines.push("### 가능한 해석");
+    for (const row of scenario.interpretations) lines.push(`- ${row}`);
+    lines.push("### 확인할 지표(seriesId)");
+    if (scenario.confirmIndicators.length < 1) lines.push("- 없음");
+    for (const row of scenario.confirmIndicators) lines.push(`- ${row}`);
+    lines.push("### 옵션");
+    for (const row of scenario.options) lines.push(`- ${row}`);
+    lines.push("### 무효화 조건");
+    for (const row of scenario.invalidation) lines.push(`- ${row}`);
     lines.push("### Assumptions");
     for (const row of scenario.assumptions) lines.push(`- ${row}`);
     lines.push("### Trigger");
     for (const row of scenario.trigger) lines.push(`- ${row}`);
     lines.push("### Leading indicators");
     for (const row of scenario.leadingIndicators) lines.push(`- ${row}`);
-    lines.push("### Invalidation");
-    for (const row of scenario.invalidation) lines.push(`- ${row}`);
     lines.push("### Impact path");
     lines.push(`- ${scenario.impact}`);
     lines.push("### Monitoring options");
