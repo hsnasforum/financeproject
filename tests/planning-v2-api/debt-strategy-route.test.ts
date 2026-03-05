@@ -57,11 +57,15 @@ describe("POST /api/planning/v2/debt-strategy", () => {
         meta?: { debtServiceRatio?: number; totalMonthlyPaymentKrw?: number };
         summaries?: unknown[];
         refinance?: unknown[];
+        engine?: { stage?: string };
+        engineSchemaVersion?: number;
       };
     };
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
+    expect(payload.data?.engine?.stage).toBeTruthy();
+    expect(payload.data?.engineSchemaVersion).toBe(1);
     expect(payload.data?.meta?.debtServiceRatio).toBeGreaterThan(0);
     expect(payload.data?.meta?.totalMonthlyPaymentKrw).toBeGreaterThan(0);
     expect((payload.data?.summaries ?? []).length).toBe(1);

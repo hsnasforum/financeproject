@@ -1,3 +1,9 @@
+import {
+  normalizePlanningResponse,
+  type PlanningApiEngineEnvelope,
+  type PlanningApiEngineCompatibleData,
+} from "@/lib/planning/api/contracts";
+
 export type StepId = "simulate" | "scenarios" | "monteCarlo" | "actions" | "debtStrategy";
 
 export type StepState = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED" | "SKIPPED";
@@ -10,13 +16,15 @@ export type StepStatus = {
   endedAt?: number;
 };
 
+type EngineStepData = Record<string, unknown> & PlanningApiEngineEnvelope;
+
 export type RunPipelineResult = {
   meta?: Record<string, unknown>;
-  simulate?: Record<string, unknown>;
-  scenarios?: Record<string, unknown>;
+  simulate?: EngineStepData;
+  scenarios?: EngineStepData;
   monteCarlo?: Record<string, unknown>;
-  actions?: Record<string, unknown>;
-  debtStrategy?: Record<string, unknown>;
+  actions?: EngineStepData;
+  debtStrategy?: EngineStepData;
   stepStatuses: StepStatus[];
 };
 
@@ -109,6 +117,15 @@ async function parseApiResponse<T>(res: Response): Promise<ApiResponse<T> | null
   }
 }
 
+function normalizeEngineStepData(stepId: StepId, value: Record<string, unknown>): EngineStepData {
+  try {
+    return normalizePlanningResponse(value as Record<string, unknown> & PlanningApiEngineCompatibleData).data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Missing engine envelope in planning API response";
+    throw new RunPipelineFatalError(stepId, `${message}`);
+  }
+}
+
 function toMessage(
   resolveErrorMessage: ExecuteRunPipelineArgs["resolveErrorMessage"],
   error: ApiError | undefined,
@@ -163,12 +180,27 @@ export async function executeRunPipeline(args: ExecuteRunPipelineArgs): Promise<
     ...(args.snapshotId ? { snapshotId: args.snapshotId } : {}),
   };
 
-  const requestStep = async (
+  async function requestStep(
     stepId: StepId,
     url: string,
     payload: Record<string, unknown>,
     fallbackErrorMessage: string,
-  ): Promise<{ data: Record<string, unknown>; meta?: Record<string, unknown> }> => {
+    requireEngineEnvelope: true,
+  ): Promise<{ data: EngineStepData; meta?: Record<string, unknown> }>;
+  async function requestStep(
+    stepId: StepId,
+    url: string,
+    payload: Record<string, unknown>,
+    fallbackErrorMessage: string,
+    requireEngineEnvelope?: false,
+  ): Promise<{ data: Record<string, unknown>; meta?: Record<string, unknown> }>;
+  async function requestStep(
+    stepId: StepId,
+    url: string,
+    payload: Record<string, unknown>,
+    fallbackErrorMessage: string,
+    requireEngineEnvelope = false,
+  ): Promise<{ data: Record<string, unknown> | EngineStepData; meta?: Record<string, unknown> }> {
     updateStatus(stepId, "RUNNING");
     let res: Response;
     try {
@@ -192,18 +224,37 @@ export async function executeRunPipeline(args: ExecuteRunPipelineArgs): Promise<
     }
 
     updateStatus(stepId, "SUCCESS");
+    const data = asRecord(responsePayload.data);
+    const normalizedData = requireEngineEnvelope
+      ? normalizeEngineStepData(stepId, data)
+      : data;
     return {
-      data: asRecord(responsePayload.data),
+      data: normalizedData,
       meta: asRecord(responsePayload.meta),
     };
-  };
+  }
 
-  const runOptionalStep = async (
+  async function runOptionalStep(
     stepId: Exclude<StepId, "simulate">,
     url: string,
     payload: Record<string, unknown>,
     failMessage: string,
-  ): Promise<Record<string, unknown> | undefined> => {
+    requireEngineEnvelope: true,
+  ): Promise<EngineStepData | undefined>;
+  async function runOptionalStep(
+    stepId: Exclude<StepId, "simulate">,
+    url: string,
+    payload: Record<string, unknown>,
+    failMessage: string,
+    requireEngineEnvelope?: false,
+  ): Promise<Record<string, unknown> | undefined>;
+  async function runOptionalStep(
+    stepId: Exclude<StepId, "simulate">,
+    url: string,
+    payload: Record<string, unknown>,
+    failMessage: string,
+    requireEngineEnvelope = false,
+  ): Promise<Record<string, unknown> | EngineStepData | undefined> {
     updateStatus(stepId, "RUNNING");
     let res: Response;
     try {
@@ -236,15 +287,26 @@ export async function executeRunPipeline(args: ExecuteRunPipelineArgs): Promise<
       return undefined;
     }
 
-    updateStatus(stepId, "SUCCESS");
-    return asRecord(responsePayload.data);
-  };
+    try {
+      const data = asRecord(responsePayload.data);
+      const normalizedData = requireEngineEnvelope
+        ? normalizeEngineStepData(stepId, data)
+        : data;
+      updateStatus(stepId, "SUCCESS");
+      return normalizedData;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : failMessage;
+      updateStatus(stepId, "FAILED", message);
+      return undefined;
+    }
+  }
 
   const simulateResult = await requestStep(
     "simulate",
     "/api/planning/v2/simulate",
     basePayload,
     "시뮬레이션 실행에 실패했습니다.",
+    true,
   );
   result.simulate = simulateResult.data;
   result.meta = simulateResult.meta;
@@ -260,6 +322,7 @@ export async function executeRunPipeline(args: ExecuteRunPipelineArgs): Promise<
       "/api/planning/v2/scenarios",
       basePayload,
       "시나리오 계산에 실패했습니다.",
+      true,
     );
   }
 
@@ -297,6 +360,7 @@ export async function executeRunPipeline(args: ExecuteRunPipelineArgs): Promise<
         maxCandidatesPerAction: args.actions.maxCandidatesPerAction,
       },
       "실행 계획 생성에 실패했습니다.",
+      true,
     );
   }
 
@@ -312,6 +376,7 @@ export async function executeRunPipeline(args: ExecuteRunPipelineArgs): Promise<
         options: args.debt.options,
       },
       "부채 분석에 실패했습니다.",
+      true,
     );
   }
 

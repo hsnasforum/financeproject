@@ -15,6 +15,7 @@ import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/p
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { createEngineEnvelope, runPlanningEngine } from "../../../../../lib/planning/engine";
 
 type ScenariosRequestBody = {
   profile?: unknown;
@@ -122,6 +123,20 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
     const normalized = toPlanningError(guard);
     return fail(normalized.code, normalized.message, { status: guard.status });
   }
+}
+
+function toEngineInput(profile: ProfileV2) {
+  const debtBalance = profile.debts.reduce((total, debt) => {
+    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
+  }, 0);
+
+  return {
+    monthlyIncome: profile.monthlyIncomeNet,
+    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
+    age: profile.currentAge,
+    liquidAssets: profile.liquidAssets,
+    debtBalance,
+  };
 }
 
 function pickKeyTimelinePoints(rows: TimelineRowV2[]): Array<{ monthIndex: number; row: TimelineRowV2 }> {
@@ -257,6 +272,11 @@ export async function POST(request: Request) {
     riskTolerance,
   });
   const keyPrefix = keyBundle.key.slice(0, 8);
+  const engineResult = runPlanningEngine(toEngineInput(profile));
+  const engine = createEngineEnvelope({
+    status: engineResult.status,
+    decision: engineResult.decision,
+  });
 
   try {
     const cached = await getCache<{
@@ -269,13 +289,19 @@ export async function POST(request: Request) {
     }>("scenarios", keyBundle.key);
     if (cached) {
       await recordCacheUsage("scenarios", true).catch(() => undefined);
-      return ok(cached.data.data, {
-        ...cached.data.meta,
-        cache: {
-          hit: true,
-          keyPrefix,
+      return ok(
+        {
+          ...cached.data.data,
+          engine,
         },
-      });
+        {
+          ...cached.data.meta,
+          cache: {
+            hit: true,
+            keyPrefix,
+          },
+        },
+      );
     }
     await recordCacheUsage("scenarios", false).catch(() => undefined);
 
@@ -297,6 +323,7 @@ export async function POST(request: Request) {
         health: health.summary,
       },
       data: {
+        engine,
         healthWarnings: health.warnings,
         precisionNotes: taxPensionExplain.notes,
         base: {

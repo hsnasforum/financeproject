@@ -13,6 +13,7 @@ import { createPlanningService } from "../../../../../lib/planning/server/v2/ser
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { createEngineEnvelope, runPlanningEngine } from "../../../../../lib/planning/engine";
 
 type OptimizeRequestBody = {
   profile?: unknown;
@@ -227,6 +228,20 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   }
 }
 
+function toEngineInput(profile: ProfileV2) {
+  const debtBalance = profile.debts.reduce((total, debt) => {
+    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
+  }, 0);
+
+  return {
+    monthlyIncome: profile.monthlyIncomeNet,
+    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
+    age: profile.currentAge,
+    liquidAssets: profile.liquidAssets,
+    debtBalance,
+  };
+}
+
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -285,17 +300,24 @@ export async function POST(request: Request) {
       requestedSnapshotId,
     });
 
-    const candidates = generateCandidatePlans({
-      profile,
-      horizonMonths,
-      baseAssumptions: context.assumptions,
-      constraints,
-      knobs,
-      search,
+    const engineResult = runPlanningEngine(toEngineInput(profile), {
+      runCore: () => generateCandidatePlans({
+        profile,
+        horizonMonths,
+        baseAssumptions: context.assumptions,
+        constraints,
+        knobs,
+        search,
+      }),
+    });
+    const engine = createEngineEnvelope({
+      status: engineResult.status,
+      decision: engineResult.decision,
     });
 
     return ok({
-      candidates,
+      engine,
+      candidates: engineResult.core,
     }, {
       generatedAt: new Date().toISOString(),
       snapshot: context.snapshotMeta,

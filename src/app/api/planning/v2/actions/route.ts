@@ -16,6 +16,11 @@ import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/p
 import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
+import {
+  createEngineEnvelope,
+  ENGINE_SCHEMA_VERSION,
+  runPlanningEngine,
+} from "../../../../../lib/planning/engine";
 
 type ActionsRequestBody = {
   profile?: unknown;
@@ -146,6 +151,20 @@ function summarizePlan(plan: SimulationResultV2) {
   };
 }
 
+function toEngineInput(profile: ProfileV2) {
+  const debtBalance = profile.debts.reduce((total, debt) => {
+    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
+  }, 0);
+
+  return {
+    monthlyIncome: profile.monthlyIncomeNet,
+    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
+    age: profile.currentAge,
+    liquidAssets: profile.liquidAssets,
+    debtBalance,
+  };
+}
+
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -234,6 +253,11 @@ export async function POST(request: Request) {
     riskTolerance,
   });
   const keyPrefix = keyBundle.key.slice(0, 8);
+  const engineResult = runPlanningEngine(toEngineInput(profile));
+  const engine = createEngineEnvelope({
+    status: engineResult.status,
+    decision: engineResult.decision,
+  });
 
   try {
     const cached = await getCache<{
@@ -246,13 +270,20 @@ export async function POST(request: Request) {
     }>("actions", keyBundle.key);
     if (cached) {
       await recordCacheUsage("actions", true).catch(() => undefined);
-      return ok(cached.data.data, {
-        ...cached.data.meta,
-        cache: {
-          hit: true,
-          keyPrefix,
+      return ok(
+        {
+          ...cached.data.data,
+          engine,
+          engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         },
-      });
+        {
+          ...cached.data.meta,
+          cache: {
+            hit: true,
+            keyPrefix,
+          },
+        },
+      );
     }
     await recordCacheUsage("actions", false).catch(() => undefined);
 
@@ -279,6 +310,8 @@ export async function POST(request: Request) {
         health: health.summary,
       },
       data: {
+        engine,
+        engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         planSummary: summarizePlan(plan),
         actions: actionsWithCandidates,
         healthWarnings: health.warnings,

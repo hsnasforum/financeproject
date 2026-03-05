@@ -108,6 +108,11 @@ describe("POST /api/planning/v2/optimize", () => {
       ok?: boolean;
       meta?: { snapshot?: { missing?: boolean } };
       data?: {
+        engine?: {
+          stage?: string;
+          financialStatus?: { stage?: string };
+          stageDecision?: { priority?: string };
+        };
         candidates?: Array<{
           strategy?: { extraDebtPaymentKrw?: number };
           why?: string[];
@@ -118,6 +123,9 @@ describe("POST /api/planning/v2/optimize", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.meta?.snapshot?.missing).toBe(true);
+    expect(payload.data?.engine?.stage).toBeDefined();
+    expect(payload.data?.engine?.financialStatus?.stage).toBe(payload.data?.engine?.stage);
+    expect(typeof payload.data?.engine?.stageDecision?.priority).toBe("string");
     expect((payload.data?.candidates?.length ?? 0)).toBeGreaterThan(0);
     expect((payload.data?.candidates?.length ?? 0)).toBeLessThanOrEqual(2);
 

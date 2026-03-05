@@ -76,6 +76,11 @@ describe("POST /api/planning/v2/simulate", () => {
       ok?: boolean;
       meta?: { snapshot?: { missing?: boolean } };
       data?: {
+        engine?: {
+          stage?: string;
+          financialStatus?: { stage?: string };
+          stageDecision?: { priority?: string };
+        };
         assumptionsUsed?: {
           annualInflationRate?: number;
           annualExpectedReturnRate?: number;
@@ -88,6 +93,9 @@ describe("POST /api/planning/v2/simulate", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.meta?.snapshot?.missing).toBe(true);
+    expect(payload.data?.engine?.stage).toBeDefined();
+    expect(payload.data?.engine?.financialStatus?.stage).toBe(payload.data?.engine?.stage);
+    expect(typeof payload.data?.engine?.stageDecision?.priority).toBe("string");
     expect(payload.data?.assumptionsUsed?.annualInflationRate).toBeCloseTo(0.02, 8);
     expect(payload.data?.assumptionsUsed?.annualExpectedReturnRate).toBeCloseTo(0.05, 8);
     expect(payload.data?.warnings?.map((warning) => warning.reasonCode) ?? []).toEqual([]);

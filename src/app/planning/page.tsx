@@ -1,4 +1,5 @@
 import PlanningWorkspaceClient from "@/components/PlanningWorkspaceClient";
+import { cookies } from "next/headers";
 import { loadSnapshotListForPlanning } from "@/app/planning/_lib/snapshotList";
 import { getPlanningFeatureFlags } from "@/lib/planning/config";
 import { resolvePlanningLocale } from "@/lib/planning/i18n";
@@ -23,6 +24,8 @@ function pickProfileId(value: string | string[] | undefined): string {
 
 export default async function PlanningPage({ searchParams }: PlanningPageProps) {
   const featureFlags = getPlanningFeatureFlags();
+  const cookieStore = await cookies();
+  const csrf = cookieStore.get("dev_csrf")?.value ?? "";
   const resolvedSearchParams = await searchParams;
   const locale = resolvePlanningLocale(pickLang(resolvedSearchParams?.lang), process.env.PLANNING_LOCALE);
   const snapshotItems = await loadSnapshotListForPlanning(20);
@@ -33,6 +36,7 @@ export default async function PlanningPage({ searchParams }: PlanningPageProps) 
       locale={locale}
       snapshotItems={snapshotItems}
       initialSelectedProfileId={initialSelectedProfileId}
+      csrf={csrf}
     />
   );
 }

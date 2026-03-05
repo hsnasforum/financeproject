@@ -6,10 +6,16 @@ import {
 import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
 import { getPlanningFeatureFlags } from "../../../../../../../lib/planning/config";
+import { buildReportInputContractFromRun } from "../../../../../../../lib/planning/reports/reportInputContract";
+import { renderStandaloneHtml } from "../../../../../../../lib/planning/reports/standaloneHtmlReport";
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
-import { PdfReportError, renderPdfReport } from "../../../../../../../lib/planning/v2/report/pdfReport";
-import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
-import { type ResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
+import { buildInterpretationVM } from "../../../../../../../lib/planning/v2/insights/interpretationVm";
+import {
+  PdfReportError,
+  renderPdfReportFromHtml,
+} from "../../../../../../../lib/planning/v2/report/pdfReport";
+import { toInterpretationInputFromReportVM } from "../../../../../../planning/reports/_lib/reportInterpretationAdapter";
+import { buildReportVMFromContract } from "../../../../../../planning/reports/_lib/reportViewModel";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -49,22 +55,66 @@ export async function GET(request: Request, context: RouteContext) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
 
-    const outputs = run.outputs && typeof run.outputs === "object" ? run.outputs : {};
-    const rawResultDto = (outputs as Record<string, unknown>).resultDto;
-    const resultDto: ResultDtoV1 = isResultDtoV1(rawResultDto)
-      ? rawResultDto
-      : buildResultDtoV1FromRunRecord(run);
-
-    const pdf = await renderPdfReport(resultDto, {
-      title: run.title ? `${run.title} - 재무설계 결과 리포트` : "재무설계 결과 리포트",
+    const reportInput = buildReportInputContractFromRun(run, {
+      allowLegacyEngineFallback: true,
+      allowLegacyResultDtoFallback: true,
     });
+    const vm = buildReportVMFromContract(reportInput, run, {
+      id: run.id,
+      createdAt: run.createdAt,
+      runId: run.id,
+    });
+    const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm));
+
+    const html = renderStandaloneHtml({
+      runId: run.id,
+      reportId: vm.header.reportId,
+      createdAt: vm.header.createdAt,
+      summaryCards: {
+        monthlySurplusKrw: vm.summaryCards.monthlySurplusKrw,
+        dsrPct: vm.summaryCards.dsrPct,
+        emergencyFundMonths: vm.summaryCards.emergencyFundMonths,
+        debtTotalKrw: vm.summaryCards.debtTotalKrw,
+      },
+      warnings: vm.warningAgg.slice(0, 20).map((warning) => ({
+        title: warning.title,
+        code: warning.code,
+        severityMax: warning.severityMax,
+        count: warning.count,
+        periodMinMax: warning.periodMinMax,
+        plainDescription: warning.plainDescription,
+      })),
+      goals: vm.goalsTable.slice(0, 20),
+      actions: vm.topActions.slice(0, 3).map((action) => ({
+        title: action.title,
+        summary: action.summary,
+        steps: action.steps.slice(0, 3),
+      })),
+      verdict: {
+        label: interpretation.verdict.label,
+        headline: interpretation.verdict.headline,
+      },
+      diagnostics: interpretation.diagnostics.slice(0, 3).map((diag) => ({
+        title: diag.title,
+        evidence: diag.evidence,
+        description: diag.description,
+        ...(diag.evidenceDetail ? { evidenceDetail: diag.evidenceDetail } : {}),
+      })),
+      ...(vm.reproducibility
+        ? {
+          reproducibility: vm.reproducibility,
+        }
+        : {}),
+    });
+
+    const pdf = await renderPdfReportFromHtml(html);
     const pdfBody = Uint8Array.from(pdf).buffer;
 
     return new Response(pdfBody, {
       status: 200,
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="planning-run-${run.id}.pdf"`,
+        "content-disposition": `attachment; filename=\"planning-run-${run.id}.pdf\"`,
         "cache-control": "no-store",
       },
     });

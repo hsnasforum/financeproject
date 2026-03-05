@@ -1,0 +1,31 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/planning/api/**/*.ts",
+    "src/lib/planning/engine/**/*.ts",
+    "src/lib/planning/reports/**/*.ts",
+    "src/lib/planning/store/**/*.ts",
+    "src/lib/planning/v2/**/*.ts",
+    "src/lib/planner/**/*.ts",
+    "src/app/api/planning/v2/**/*.ts",
+    "src/app/api/planning/reports/**/*.ts",
+    "src/app/planning/_lib/**/*.ts",
+    "src/app/planning/reports/_lib/**/*.ts",
+    "src/components/PlanningWorkspaceClient.tsx",
+    "src/components/DebugPlanningV2Client.tsx",
+    "src/components/OpsMetricsClient.tsx",
+    "src/components/Planner*.tsx",
+    "src/components/SnapshotDeltaCards.tsx",
+    "src/components/PlannerExternalModules.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/lib/planning/v3/**",
+    "src/app/planning/v3/**",
+    "src/app/api/planning/v3/**"
+  ]
+}

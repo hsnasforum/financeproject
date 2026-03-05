@@ -4,10 +4,12 @@ import {
 } from "../../../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
+import { buildReportInputContractFromRun } from "../../../../../../../lib/planning/reports/reportInputContract";
+import { renderStandaloneHtml } from "../../../../../../../lib/planning/reports/standaloneHtmlReport";
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
-import { renderHtmlReport } from "../../../../../../../lib/planning/v2/report/htmlReport";
-import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
-import { type ResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
+import { buildInterpretationVM } from "../../../../../../../lib/planning/v2/insights/interpretationVm";
+import { toInterpretationInputFromReportVM } from "../../../../../../planning/reports/_lib/reportInterpretationAdapter";
+import { buildReportVMFromContract } from "../../../../../../planning/reports/_lib/reportViewModel";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -40,35 +42,61 @@ export async function GET(request: Request, context: RouteContext) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
 
-    const outputs = run.outputs && typeof run.outputs === "object" ? run.outputs : {};
-    const rawResultDto = (outputs as Record<string, unknown>).resultDto;
-    const resultDto: ResultDtoV1 = isResultDtoV1(rawResultDto)
-      ? rawResultDto
-      : buildResultDtoV1FromRunRecord(run);
-
-    const compareToRunId = (url.searchParams.get("compareTo") ?? "").trim();
-    let compareTo: { dto: ResultDtoV1; label?: string } | undefined;
-    if (compareToRunId && compareToRunId !== run.id) {
-      const compareRun = await getRun(compareToRunId);
-      if (compareRun) {
-        const compareOutputs = compareRun.outputs && typeof compareRun.outputs === "object" ? compareRun.outputs : {};
-        const rawCompareDto = (compareOutputs as Record<string, unknown>).resultDto;
-        const compareDto: ResultDtoV1 = isResultDtoV1(rawCompareDto)
-          ? rawCompareDto
-          : buildResultDtoV1FromRunRecord(compareRun);
-        compareTo = {
-          dto: compareDto,
-          label: compareRun.title || compareRun.id.slice(0, 8),
-        };
-      }
-    }
-
-    const html = renderHtmlReport(resultDto, {
-      title: run.title ? `${run.title} - 재무설계 결과 리포트` : "재무설계 결과 리포트",
-      locale: "ko-KR",
-      theme: "light",
-      ...(compareTo ? { compareTo } : {}),
+    const reportInput = buildReportInputContractFromRun(run, {
+      allowLegacyEngineFallback: true,
+      allowLegacyResultDtoFallback: true,
     });
+    const vm = buildReportVMFromContract(reportInput, run, {
+      id: run.id,
+      createdAt: run.createdAt,
+      runId: run.id,
+    });
+    const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm));
+
+    const viewMode = (url.searchParams.get("view") ?? "").trim().toLowerCase();
+    const printView = viewMode === "print" || viewMode === "view";
+    const html = renderStandaloneHtml({
+      runId: run.id,
+      reportId: vm.header.reportId,
+      createdAt: vm.header.createdAt,
+      summaryCards: {
+        monthlySurplusKrw: vm.summaryCards.monthlySurplusKrw,
+        dsrPct: vm.summaryCards.dsrPct,
+        emergencyFundMonths: vm.summaryCards.emergencyFundMonths,
+        debtTotalKrw: vm.summaryCards.debtTotalKrw,
+      },
+      warnings: vm.warningAgg.slice(0, 20).map((warning) => ({
+        title: warning.title,
+        code: warning.code,
+        severityMax: warning.severityMax,
+        count: warning.count,
+        periodMinMax: warning.periodMinMax,
+        plainDescription: warning.plainDescription,
+      })),
+      goals: vm.goalsTable.slice(0, 20),
+      actions: vm.topActions.slice(0, 3).map((action) => ({
+        title: action.title,
+        summary: action.summary,
+        steps: action.steps.slice(0, 3),
+      })),
+      verdict: {
+        label: interpretation.verdict.label,
+        headline: interpretation.verdict.headline,
+      },
+      diagnostics: interpretation.diagnostics.slice(0, 3).map((diag) => ({
+        title: diag.title,
+        evidence: diag.evidence,
+        description: diag.description,
+        ...(diag.evidenceDetail ? { evidenceDetail: diag.evidenceDetail } : {}),
+      })),
+      printView,
+      ...(vm.reproducibility
+        ? {
+          reproducibility: vm.reproducibility,
+        }
+        : {}),
+    });
+
     const shouldDownload = url.searchParams.get("download") === "1";
     const fileName = `planning-run-report-${run.id}.html`;
 
@@ -77,7 +105,7 @@ export async function GET(request: Request, context: RouteContext) {
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
-        ...(shouldDownload ? { "content-disposition": `attachment; filename="${fileName}"` } : {}),
+        ...(shouldDownload ? { "content-disposition": `attachment; filename=\"${fileName}\"` } : {}),
       },
     });
   } catch {
