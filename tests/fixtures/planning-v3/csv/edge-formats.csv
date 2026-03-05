@@ -1,0 +1,6 @@
+date,amount,description
+2026-03-01,"(1,000)",rent
+2026/03/02,"1,500",refund
+2026.03.03,"1,000-",fee
+20260304,"₩2,000",salary
+2026-03-99,100,invalid-date
