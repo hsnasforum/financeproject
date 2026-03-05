@@ -17,16 +17,18 @@ export type ImportCsvToDraftResult = {
   meta: {
     rows: number;
     months: number;
+    warnings: number;
   };
 };
 
 export class CsvImportInputError extends Error {
-  readonly code = "INPUT";
+  readonly code: "INPUT" | "PARSE";
   readonly meta?: Record<string, unknown>;
 
-  constructor(message: string, meta?: Record<string, unknown>) {
+  constructor(code: "INPUT" | "PARSE", message: string, meta?: Record<string, unknown>) {
     super(message);
     this.name = "CsvImportInputError";
+    this.code = code;
     this.meta = meta;
   }
 }
@@ -47,18 +49,11 @@ export function importCsvToDraft(
 ): ImportCsvToDraftResult {
   const imported = importCsvPipeline(csvText, options);
 
-  if (imported.parsed.errors.length > 0) {
-    throw new CsvImportInputError("일부 CSV 행을 해석하지 못했습니다.", {
+  if (imported.cashflows.length < 1) {
+    throw new CsvImportInputError("PARSE", "유효한 거래 행이 없습니다.", {
       rows: imported.parsed.stats.rows,
       skippedRows: imported.parsed.stats.skipped,
       parseErrorSummary: summarizeParseErrors(imported.parsed.errors),
-    });
-  }
-
-  if (imported.cashflows.length < 1) {
-    throw new CsvImportInputError("유효한 거래 행이 없습니다.", {
-      rows: imported.parsed.stats.rows,
-      skippedRows: imported.parsed.stats.skipped,
     });
   }
 
@@ -76,8 +71,9 @@ export function importCsvToDraft(
       monthlyDiscretionaryExpenses: imported.draft.monthlyDiscretionaryExpenses,
     },
     meta: {
-      rows: imported.parsed.stats.rows,
+      rows: imported.parsed.stats.parsed,
       months: imported.cashflows.length,
+      warnings: imported.parsed.errors.length,
     },
   };
 }

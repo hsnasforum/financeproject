@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   assertCsrf,
@@ -10,64 +9,68 @@ import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 import {
   CsvImportInputError,
   importCsvToDraft,
+  type ImportCsvToDraftResult,
 } from "../../../../../../lib/planning/v3/service/importCsvToDraft";
-import { createDraft } from "../../../../../../lib/planning/v3/drafts/draftStore";
+import { type CsvColumnMapping } from "../../../../../../lib/planning/v3/providers/csv/types";
 import { parseCsvText } from "../../../../../../lib/planning/v3/providers/csv/csvParse";
 
 const MAX_CSV_BYTES = 1024 * 1024;
-const ALLOWED_CONTENT_TYPES = new Set(["text/csv", "text/plain"]);
+const ALLOWED_CONTENT_TYPES = new Set([
+  "application/json",
+  "text/csv",
+  "text/plain",
+]);
 
-type ImportSuccessPayload = { ok: true } & ReturnType<typeof importCsvToDraft> & {
-  draftId?: string;
+type ApiErrorCode = "INPUT" | "PARSE" | "LIMIT" | "INTERNAL";
+
+type ApiErrorPayload = {
+  ok: false;
+  error: {
+    code: ApiErrorCode;
+    message: string;
+    details?: Record<string, unknown>;
+  };
+};
+
+type ApiSuccessPayload = {
+  ok: true;
+  data: {
+    draftPatch: ImportCsvToDraftResult["draftPatch"];
+    monthlyCashflow: ImportCsvToDraftResult["cashflow"];
+    meta: {
+      rows: number;
+      months: number;
+    };
+  };
+  // backward compatibility for existing v3 consumers
+  draftPatch: ImportCsvToDraftResult["draftPatch"];
+  cashflow: ImportCsvToDraftResult["cashflow"];
+  meta: {
+    rows: number;
+    months: number;
+  };
   draftSummary: {
     rows: number;
     columns: number;
   };
-  data: {
-    draftId?: string;
-    draftSummary: {
-      rows: number;
-      columns: number;
-    };
+};
+
+type JsonInput = {
+  csvText?: unknown;
+  mapping?: {
+    date?: unknown;
+    amount?: unknown;
+    desc?: unknown;
   };
 };
 
-type ImportErrorPayload = {
-  ok: false;
-  error: {
-    code: string;
-    message: string;
-  };
-  meta?: Record<string, unknown>;
-};
-
-function jsonOk(payload: ImportSuccessPayload): NextResponse<ImportSuccessPayload> {
-  return NextResponse.json(payload, { status: 200 });
-}
-
-function jsonErr(
-  status: number,
-  code: string,
-  message: string,
-  meta?: Record<string, unknown>,
-): NextResponse<ImportErrorPayload> {
-  return NextResponse.json(
-    {
-      ok: false,
-      error: { code, message },
-      ...(meta ? { meta } : {}),
-    },
-    { status },
-  );
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function normalizeContentType(value: string | null): string {
   if (!value) return "";
   return value.split(";")[0]?.trim().toLowerCase() ?? "";
-}
-
-function parseCsvBytes(value: string): number {
-  return Buffer.byteLength(value, "utf8");
 }
 
 function parseContentLength(value: string | null): number | null {
@@ -77,12 +80,8 @@ function parseContentLength(value: string | null): number | null {
   return Math.floor(parsed);
 }
 
-function buildDeterministicDraftId(input: unknown): string {
-  const hash = createHash("sha256")
-    .update(JSON.stringify(input), "utf-8")
-    .digest("hex")
-    .slice(0, 24);
-  return `d_${hash}`;
+function parseCsvBytes(value: string): number {
+  return Buffer.byteLength(value, "utf8");
 }
 
 function pickCsrfToken(request: Request): string {
@@ -92,14 +91,52 @@ function pickCsrfToken(request: Request): string {
   return (url.searchParams.get("csrf") ?? "").trim();
 }
 
-function shouldPersistDraft(url: string): boolean {
-  const value = new URL(url).searchParams.get("persist");
-  if (!value) return true;
-  const normalized = value.trim().toLowerCase();
-  return !(normalized === "0" || normalized === "false" || normalized === "no");
+function jsonError(
+  status: number,
+  code: ApiErrorCode,
+  message: string,
+  details?: Record<string, unknown>,
+): NextResponse<ApiErrorPayload> {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code,
+        message,
+        ...(details ? { details } : {}),
+      },
+    },
+    { status },
+  );
 }
 
-function guardRequest(request: Request): NextResponse<ImportErrorPayload> | null {
+function jsonOk(result: ImportCsvToDraftResult, csvText: string): NextResponse<ApiSuccessPayload> {
+  const parsed = parseCsvText(csvText, { hasHeader: true });
+  const columns = Array.isArray(parsed.header) ? parsed.header.length : 0;
+  return NextResponse.json({
+    ok: true,
+    data: {
+      draftPatch: result.draftPatch,
+      monthlyCashflow: result.cashflow,
+      meta: {
+        rows: result.meta.rows,
+        months: result.meta.months,
+      },
+    },
+    draftPatch: result.draftPatch,
+    cashflow: result.cashflow,
+    meta: {
+      rows: result.meta.rows,
+      months: result.meta.months,
+    },
+    draftSummary: {
+      rows: result.meta.rows,
+      columns,
+    },
+  });
+}
+
+function guardRequest(request: Request): NextResponse<ApiErrorPayload> | null {
   const csrf = pickCsrfToken(request);
   try {
     assertLocalHost(request);
@@ -109,10 +146,96 @@ function guardRequest(request: Request): NextResponse<ImportErrorPayload> | null
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
-      return jsonErr(500, "INTERNAL", "요청 검증 중 오류가 발생했습니다.");
+      return jsonError(500, "INTERNAL", "요청 검증 중 오류가 발생했습니다.");
     }
-    return jsonErr(guard.status, guard.code, guard.message);
+    return jsonError(guard.status, "INPUT", guard.message);
   }
+}
+
+function toMapping(input: JsonInput["mapping"]): CsvColumnMapping | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const date = asString(input.date);
+  const amount = asString(input.amount);
+  const desc = asString(input.desc);
+  if (!date && !amount && !desc) return undefined;
+  return {
+    ...(date ? { dateKey: date } : {}),
+    ...(amount ? { amountKey: amount } : {}),
+    ...(desc ? { descKey: desc } : {}),
+  };
+}
+
+async function parseInputBody(request: Request): Promise<{
+  ok: true;
+  csvText: string;
+  mapping?: CsvColumnMapping;
+} | {
+  ok: false;
+  response: NextResponse<ApiErrorPayload>;
+}> {
+  const contentType = normalizeContentType(request.headers.get("content-type"));
+  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+    return {
+      ok: false,
+      response: jsonError(415, "INPUT", "application/json 또는 text/csv 형식만 허용됩니다."),
+    };
+  }
+
+  const contentLength = parseContentLength(request.headers.get("content-length"));
+  if (contentLength !== null && contentLength > MAX_CSV_BYTES) {
+    return {
+      ok: false,
+      response: jsonError(413, "LIMIT", "CSV 본문이 최대 크기(1MB)를 초과했습니다."),
+    };
+  }
+
+  if (contentType === "application/json") {
+    let body: JsonInput;
+    try {
+      body = await request.json() as JsonInput;
+    } catch {
+      return {
+        ok: false,
+        response: jsonError(400, "INPUT", "JSON 본문 형식이 올바르지 않습니다."),
+      };
+    }
+
+    const csvText = typeof body.csvText === "string" ? body.csvText : "";
+    if (!csvText.trim()) {
+      return {
+        ok: false,
+        response: jsonError(400, "INPUT", "csvText가 비어 있습니다."),
+      };
+    }
+    if (parseCsvBytes(csvText) > MAX_CSV_BYTES) {
+      return {
+        ok: false,
+        response: jsonError(413, "LIMIT", "CSV 본문이 최대 크기(1MB)를 초과했습니다."),
+      };
+    }
+    const mapping = toMapping(body.mapping);
+    return {
+      ok: true,
+      csvText,
+      ...(mapping ? { mapping } : {}),
+    };
+  }
+
+  const csvText = await request.text();
+  if (!csvText.trim()) {
+    return {
+      ok: false,
+      response: jsonError(400, "INPUT", "CSV 본문이 비어 있습니다."),
+    };
+  }
+  if (parseCsvBytes(csvText) > MAX_CSV_BYTES) {
+    return {
+      ok: false,
+      response: jsonError(413, "LIMIT", "CSV 본문이 최대 크기(1MB)를 초과했습니다."),
+    };
+  }
+
+  return { ok: true, csvText };
 }
 
 export async function POST(request: Request) {
@@ -122,80 +245,23 @@ export async function POST(request: Request) {
   const guarded = guardRequest(request);
   if (guarded) return guarded;
 
-  const contentType = normalizeContentType(request.headers.get("content-type"));
-  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    return jsonErr(415, "UNSUPPORTED_MEDIA_TYPE", "text/csv 또는 text/plain 형식만 허용됩니다.");
-  }
-
-  const contentLength = parseContentLength(request.headers.get("content-length"));
-  if (contentLength !== null && contentLength > MAX_CSV_BYTES) {
-    return jsonErr(413, "PAYLOAD_TOO_LARGE", "CSV 본문이 최대 크기(1MB)를 초과했습니다.");
-  }
-
-  const csvText = await request.text();
-  const bodyBytes = parseCsvBytes(csvText);
-  if (bodyBytes > MAX_CSV_BYTES) {
-    return jsonErr(413, "PAYLOAD_TOO_LARGE", "CSV 본문이 최대 크기(1MB)를 초과했습니다.");
-  }
-  if (!csvText.trim()) {
-    return jsonErr(400, "INPUT", "CSV 본문이 비어 있습니다.");
-  }
+  const parsedBody = await parseInputBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
 
   try {
-    const imported = importCsvToDraft(csvText);
-    const parsedHeader = parseCsvText(csvText, { hasHeader: true });
-    const columns = Array.isArray(parsedHeader.header) ? parsedHeader.header.length : 0;
-    const persist = shouldPersistDraft(request.url);
-    const deterministicDraftId = buildDeterministicDraftId({
-      cashflow: imported.cashflow,
-      draftPatch: imported.draftPatch,
-      meta: imported.meta,
-      columns,
+    const imported = importCsvToDraft(parsedBody.csvText, {
+      ...(parsedBody.mapping ? { mapping: parsedBody.mapping } : {}),
     });
-
-    const draftSummary = {
-      rows: imported.meta.rows,
-      columns,
-    };
-
-    if (!persist) {
-      return jsonOk({
-        ok: true,
-        ...imported,
-        draftSummary,
-        data: {
-          draftSummary,
-        },
-      });
-    }
-
-    const saved = await createDraft({
-      id: deterministicDraftId,
-      source: { kind: "csv" },
-      payload: {
-        cashflow: imported.cashflow,
-        draftPatch: imported.draftPatch,
-      },
-      meta: {
-        rows: imported.meta.rows,
-        columns,
-      },
-    });
-
-    return jsonOk({
-      ok: true,
-      ...imported,
-      draftId: saved.id,
-      draftSummary,
-      data: {
-        draftId: saved.id,
-        draftSummary,
-      },
-    });
+    return jsonOk(imported, parsedBody.csvText);
   } catch (error) {
     if (error instanceof CsvImportInputError) {
-      return jsonErr(400, error.code, error.message, error.meta);
+      return jsonError(
+        400,
+        error.code === "PARSE" ? "PARSE" : "INPUT",
+        error.message,
+        error.meta,
+      );
     }
-    return jsonErr(500, "INTERNAL", "CSV 처리 중 오류가 발생했습니다.");
+    return jsonError(500, "INTERNAL", "CSV 처리 중 오류가 발생했습니다.");
   }
 }
