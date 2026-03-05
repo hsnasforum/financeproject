@@ -19,9 +19,13 @@ import {
   listRuns,
   restoreRunFromTrash,
 } from "../src/lib/planning/store/runStore";
+import {
+  getPlanningFallbackUsageSnapshot,
+  resetPlanningFallbackUsageSnapshot,
+} from "../src/lib/planning/engine";
 import { listPlanningTrash, purgePlanningTrashOlderThan } from "../src/lib/planning/store/trash";
 import { type PlanningRunRecord } from "../src/lib/planning/store/types";
-import { LIMITS } from "../src/lib/planning/v2/limits";
+import { buildResultDtoV1 } from "../src/lib/planning/v2/resultDto";
 
 const env = process.env as Record<string, string | undefined>;
 
@@ -276,6 +280,83 @@ describe("planning store", () => {
     const loaded = await getRun(createdRun.id);
     expect(loaded?.id).toBe(createdRun.id);
     expect(fs.existsSync(path.join(root, "vault", "profiles", profile.id, "runs", createdRun.id, "run.json"))).toBe(true);
+  });
+
+  it("lazy-migrates missing run engine envelope on read and persists schema version", async () => {
+    resetPlanningFallbackUsageSnapshot();
+    const profile = await createProfile({
+      name: "엔진 마이그레이션 프로필",
+      profile: sampleProfile(),
+    });
+
+    const resultDto = buildResultDtoV1({
+      generatedAt: "2026-03-05T00:00:00.000Z",
+      simulate: {
+        summary: {
+          startNetWorthKrw: 10_000_000,
+          endNetWorthKrw: 12_000_000,
+          worstCashKrw: 2_000_000,
+          worstCashMonthIndex: 3,
+          goalsAchievedCount: 1,
+          goalsMissedCount: 0,
+          warningsCount: 0,
+        },
+        warnings: [],
+        goalsStatus: [],
+        keyTimelinePoints: [
+          {
+            monthIndex: 0,
+            row: {
+              month: 1,
+              income: 4_000_000,
+              expenses: 2_200_000,
+              debtPayment: 300_000,
+              liquidAssets: 4_000_000,
+              netWorth: 10_000_000,
+              totalDebt: 1_000_000,
+            },
+          },
+        ],
+        timeline: [
+          {
+            month: 1,
+            income: 4_000_000,
+            expenses: 2_200_000,
+            debtPayment: 300_000,
+            liquidAssets: 4_000_000,
+            netWorth: 10_000_000,
+            totalDebt: 1_000_000,
+          },
+        ],
+      },
+    });
+
+    const created = await createRun({
+      profileId: profile.id,
+      title: "legacy-no-engine",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        resultDto,
+      },
+    });
+
+    expect(created.outputs.engine).toBeUndefined();
+    expect(created.outputs.engineSchemaVersion).toBeUndefined();
+
+    const before = getPlanningFallbackUsageSnapshot().legacyRunEngineMigrationCount;
+    const firstRead = await getRun(created.id);
+    const afterFirst = getPlanningFallbackUsageSnapshot().legacyRunEngineMigrationCount;
+
+    expect(firstRead?.outputs.engine).toBeDefined();
+    expect(firstRead?.outputs.engineSchemaVersion).toBe(1);
+    expect(afterFirst).toBeGreaterThanOrEqual(before);
+
+    const secondRead = await getRun(created.id);
+    const afterSecond = getPlanningFallbackUsageSnapshot().legacyRunEngineMigrationCount;
+    expect(secondRead?.outputs.engine).toBeDefined();
+    expect(secondRead?.outputs.engineSchemaVersion).toBe(1);
+    expect(afterSecond).toBe(afterFirst);
   });
 
   it("stores only resultDto by default and keeps compact raw outputs only when enabled", async () => {

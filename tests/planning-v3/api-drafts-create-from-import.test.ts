@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "../../src/app/api/planning/v3/drafts/route";
 
 const env = process.env as Record<string, string | undefined>;
@@ -97,5 +97,110 @@ describe("POST /api/planning/v3/drafts create-from-import", () => {
 
     const filePath = path.join(root, ".data", "planning_v3_drafts", `${id}.json`);
     expect(fs.existsSync(filePath)).toBe(true);
+  });
+
+  it("drops unknown draftPatch keys before persist", async () => {
+    const marker = "PATCH_UNKNOWN_KEY_SHOULD_NOT_BE_STORED";
+    const response = await POST(makePostRequest({
+      csrf: CSRF,
+      source: { kind: "csv", filename: "sample.csv" },
+      payload: {
+        cashflow: [
+          { ym: "2026-01", incomeKrw: 3_000_000, expenseKrw: -1_000_000, netKrw: 2_000_000, txCount: 2 },
+        ],
+        draftPatch: {
+          monthlyIncomeNet: 3_000_000,
+          monthlyEssentialExpenses: 1_000_000,
+          monthlyDiscretionaryExpenses: 300_000,
+          includeTransfers: true,
+          splitMode: "byCategory",
+          note: marker,
+          narrative: marker,
+        },
+      },
+      meta: { rows: 2, columns: 3 },
+    }));
+
+    const payload = await response.json() as {
+      ok?: boolean;
+      id?: string;
+      data?: { id?: string };
+    };
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+
+    const id = String(payload.id ?? payload.data?.id ?? "");
+    expect(id.length).toBeGreaterThan(0);
+    const filePath = path.join(root, ".data", "planning_v3_drafts", `${id}.json`);
+    expect(fs.existsSync(filePath)).toBe(true);
+    const storedText = fs.readFileSync(filePath, "utf-8");
+    expect(storedText.includes(marker)).toBe(false);
+
+    const stored = JSON.parse(storedText) as {
+      draftPatch?: Record<string, unknown>;
+    };
+    expect(Object.keys(stored.draftPatch ?? {}).sort()).toEqual([
+      "includeTransfers",
+      "monthlyDiscretionaryExpenses",
+      "monthlyEssentialExpenses",
+      "monthlyIncomeNet",
+      "splitMode",
+    ]);
+    expect(stored.draftPatch?.includeTransfers).toBe(true);
+    expect(stored.draftPatch?.splitMode).toBe("byCategory");
+  });
+
+  it("never leaks raw marker into response/file/log when unknown text fields are injected", async () => {
+    const marker = "SECRET_PII_SHOULD_NOT_LEAK_DRAFT_PAYLOAD";
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    try {
+      const response = await POST(makePostRequest({
+        csrf: CSRF,
+        source: { kind: "csv", filename: "sample.csv" },
+        payload: {
+          cashflow: [
+            {
+              ym: "2026-01",
+              incomeKrw: 3_000_000,
+              expenseKrw: -1_000_000,
+              netKrw: 2_000_000,
+              txCount: 2,
+              note: marker,
+            },
+          ],
+          draftPatch: {
+            monthlyIncomeNet: 3_000_000,
+            monthlyEssentialExpenses: 1_000_000,
+            monthlyDiscretionaryExpenses: 300_000,
+            narrative: marker,
+          },
+        },
+        meta: { rows: 2, columns: 3 },
+      }));
+
+      const responseText = await response.text();
+      expect(response.status).toBe(201);
+      expect(responseText.includes(marker)).toBe(false);
+
+      const payload = JSON.parse(responseText) as { id?: string; data?: { id?: string } };
+      const id = String(payload.id ?? payload.data?.id ?? "");
+      const filePath = path.join(root, ".data", "planning_v3_drafts", `${id}.json`);
+      const storedText = fs.readFileSync(filePath, "utf-8");
+      expect(storedText.includes(marker)).toBe(false);
+
+      const logText = [
+        ...logSpy.mock.calls.flat(),
+        ...warnSpy.mock.calls.flat(),
+        ...errorSpy.mock.calls.flat(),
+      ].map((entry) => String(entry)).join("\n");
+      expect(logText.includes(marker)).toBe(false);
+    } finally {
+      logSpy.mockRestore();
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 });

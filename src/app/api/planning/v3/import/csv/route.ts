@@ -14,6 +14,8 @@ import {
 import { type CsvColumnMapping } from "../../../../../../lib/planning/v3/providers/csv/types";
 import { parseCsvText } from "../../../../../../lib/planning/v3/providers/csv/csvParse";
 
+export const runtime = "nodejs";
+
 const MAX_CSV_BYTES = 1024 * 1024;
 const ALLOWED_CONTENT_TYPES = new Set([
   "application/json",
@@ -40,6 +42,10 @@ type ApiSuccessPayload = {
     meta: {
       rows: number;
       months: number;
+    };
+    draftSummary: {
+      rows: number;
+      columns: number;
     };
   };
   // backward compatibility for existing v3 consumers
@@ -113,6 +119,7 @@ function jsonError(
 function jsonOk(result: ImportCsvToDraftResult, csvText: string): NextResponse<ApiSuccessPayload> {
   const parsed = parseCsvText(csvText, { hasHeader: true });
   const columns = Array.isArray(parsed.header) ? parsed.header.length : 0;
+
   return NextResponse.json({
     ok: true,
     data: {
@@ -121,6 +128,10 @@ function jsonOk(result: ImportCsvToDraftResult, csvText: string): NextResponse<A
       meta: {
         rows: result.meta.rows,
         months: result.meta.months,
+      },
+      draftSummary: {
+        rows: result.meta.rows,
+        columns,
       },
     },
     draftPatch: result.draftPatch,
@@ -158,6 +169,7 @@ function toMapping(input: JsonInput["mapping"]): CsvColumnMapping | undefined {
   const amount = asString(input.amount);
   const desc = asString(input.desc);
   if (!date && !amount && !desc) return undefined;
+
   return {
     ...(date ? { dateKey: date } : {}),
     ...(amount ? { amountKey: amount } : {}),
@@ -213,6 +225,7 @@ async function parseInputBody(request: Request): Promise<{
         response: jsonError(413, "LIMIT", "CSV 본문이 최대 크기(1MB)를 초과했습니다."),
       };
     }
+
     const mapping = toMapping(body.mapping);
     return {
       ok: true,
@@ -262,6 +275,7 @@ export async function POST(request: Request) {
         error.meta,
       );
     }
+
     return jsonError(500, "INTERNAL", "CSV 처리 중 오류가 발생했습니다.");
   }
 }

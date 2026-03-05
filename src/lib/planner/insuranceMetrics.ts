@@ -1,4 +1,4 @@
-import { unitMultiplier, type PlannerInput } from "./metrics";
+import { unitMultiplier, type PlannerInput } from "./legacyPlanModel";
 
 export function computeInsuranceMetrics(input: Pick<PlannerInput, "unit" | "monthlyIncome" | "monthlyInsurancePremium">) {
   const mult = unitMultiplier(input.unit);

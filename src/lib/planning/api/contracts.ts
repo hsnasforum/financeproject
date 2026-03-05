@@ -1,4 +1,7 @@
 import { z } from "zod";
+import type { EngineEnvelope } from "../engine";
+import type { FinancialStatus, Stage, StageDecision } from "../engine";
+import { recordPlanningFallbackUsage } from "../engine";
 
 export const ApiErrorSchema = z.object({
   code: z.string(),
@@ -34,10 +37,46 @@ export type PlanningApiMeta = z.infer<typeof ApiMetaSchema>;
 export type PlanningApiOk = z.infer<typeof ApiOkSchema>;
 export type PlanningApiErr = z.infer<typeof ApiErrSchema>;
 export type PlanningApiResponse = z.infer<typeof ApiResponseSchema>;
+export type PlanningEngineEnvelope = EngineEnvelope;
+
+export type PlanningApiEngineData<TData extends Record<string, unknown> = Record<string, unknown>> =
+  TData & { engine: PlanningEngineEnvelope };
+
+export interface PlanningApiEngineEnvelope {
+  engineSchemaVersion: number;
+  engine: PlanningEngineEnvelope;
+}
+
+export interface LegacyPlanningResponseFields {
+  /**
+   * @deprecated use engine.stage
+   */
+  stage?: Stage;
+  /**
+   * @deprecated use engine.financialStatus
+   */
+  financialStatus?: FinancialStatus;
+  /**
+   * @deprecated use engine.stageDecision
+   */
+  stageDecision?: StageDecision;
+}
+
+export type PlanningApiEngineCompatibleData = Partial<PlanningApiEngineEnvelope> & LegacyPlanningResponseFields;
+
+function hasLegacyEngineFields(data: PlanningApiEngineCompatibleData): data is Required<LegacyPlanningResponseFields> {
+  return Boolean(data.stage && data.financialStatus && data.stageDecision);
+}
 
 export type PlanningApiTypedResponse<TData> =
   | { ok: true; data: TData; meta?: PlanningApiMeta }
   | { ok: false; error: PlanningApiError; meta?: Record<string, unknown> };
+
+export type NormalizedPlanningResponse<TData extends Record<string, unknown>> = {
+  data: TData & PlanningApiEngineEnvelope;
+  engine: PlanningEngineEnvelope;
+  engineSchemaVersion: number;
+};
 
 export function parsePlanningV2Response<TData = unknown>(payload: unknown): PlanningApiTypedResponse<TData> {
   const parsed = ApiResponseSchema.safeParse(payload);
@@ -58,4 +97,39 @@ export function parsePlanningV2Response<TData = unknown>(payload: unknown): Plan
     };
   }
   return parsed.data;
+}
+
+export function getEngineEnvelope<TData extends PlanningApiEngineCompatibleData>(response: TData): PlanningEngineEnvelope {
+  if (response.engine) return response.engine;
+  if (hasLegacyEngineFields(response)) {
+    recordPlanningFallbackUsage("legacyEnvelopeFallbackCount", {
+      source: "api/getEngineEnvelope",
+    });
+    return {
+      stage: response.stage,
+      financialStatus: response.financialStatus,
+      stageDecision: response.stageDecision,
+    };
+  }
+  throw new Error("Missing engine envelope in planning API response");
+}
+
+export function normalizePlanningResponse<TData extends Record<string, unknown> & PlanningApiEngineCompatibleData>(
+  response: TData,
+): NormalizedPlanningResponse<TData> {
+  const engine = getEngineEnvelope(response);
+  const engineSchemaVersion = typeof response.engineSchemaVersion === "number" && Number.isFinite(response.engineSchemaVersion)
+    ? Math.max(1, Math.trunc(response.engineSchemaVersion))
+    : 1;
+  const data = {
+    ...response,
+    engine,
+    engineSchemaVersion,
+  } as TData & PlanningApiEngineEnvelope;
+
+  return {
+    data,
+    engine,
+    engineSchemaVersion,
+  };
 }

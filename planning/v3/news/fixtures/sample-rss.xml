@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sample RSS</title>
+    <link>https://example.com</link>
+    <description>Sample feed for tests</description>
+    <item>
+      <title>Rate hike outlook cools</title>
+      <link>https://example.com/news/rates?utm_source=abc&amp;ref=home</link>
+      <guid isPermaLink="false">sample-guid-001</guid>
+      <pubDate>Wed, 04 Mar 2026 08:00:00 GMT</pubDate>
+      <description><![CDATA[<p>Central bank officials signaled a cautious stance.</p>]]></description>
+    </item>
+    <item>
+      <title>Oil prices steady after inventory data</title>
+      <link>https://example.com/news/oil#top</link>
+      <guid isPermaLink="false">sample-guid-002</guid>
+      <pubDate>Wed, 04 Mar 2026 07:00:00 GMT</pubDate>
+      <description>WTI remained range-bound in early trading.</description>
+    </item>
+  </channel>
+</rss>

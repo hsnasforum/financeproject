@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T00:00:00.000Z",
+  "series": [
+    {
+      "id": "kr_base_rate",
+      "sourceId": "ecos",
+      "externalId": "722Y001|0101000|||M|202001|209912",
+      "name": "한국 기준금리",
+      "frequency": "M",
+      "units": "pct",
+      "transform": "none",
+      "notes": "한국은행 기준금리"
+    },
+    {
+      "id": "kr_usdkrw",
+      "sourceId": "ecos",
+      "externalId": "731Y003|0000001|||D|20200101|20991231",
+      "name": "원/달러 환율",
+      "frequency": "D",
+      "units": "KRW",
+      "transform": "pct_change",
+      "notes": "종가 기준"
+    },
+    {
+      "id": "kr_m2",
+      "sourceId": "ecos",
+      "externalId": "101Y004|BBHS00|||M|202001|209912",
+      "name": "광의통화(M2)",
+      "frequency": "M",
+      "units": "bil_krw",
+      "transform": "pct_change",
+      "notes": "평잔 기준"
+    },
+    {
+      "id": "us_cpi",
+      "sourceId": "fred",
+      "externalId": "CPIAUCSL",
+      "name": "미국 CPI",
+      "frequency": "M",
+      "units": "index",
+      "transform": "pct_change",
+      "notes": "FRED CPIAUCSL"
+    }
+  ]
+}

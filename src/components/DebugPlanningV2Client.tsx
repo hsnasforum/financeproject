@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { normalizePlanningResponse } from "@/lib/planning/api/contracts";
 
 const DEFAULT_PROFILE_JSON = `{
   "monthlyIncomeNet": 4200000,
@@ -388,12 +389,16 @@ export default function DebugPlanningV2Client() {
         return;
       }
 
-      setResponse(payload);
-
       if (!res.ok || !payload.ok) {
+        setResponse(payload);
         window.alert(payload.error?.message ?? "시뮬레이션 실패");
         return;
       }
+      const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
+      setResponse({
+        ...payload,
+        data: normalized.data as unknown as SimulateApiPayload["data"],
+      });
 
       window.alert("시뮬레이션을 완료했습니다.");
     } catch (error) {
@@ -423,12 +428,16 @@ export default function DebugPlanningV2Client() {
         return;
       }
 
-      setScenariosResponse(payload);
-
       if (!res.ok || !payload.ok) {
+        setScenariosResponse(payload);
         window.alert(payload.error?.message ?? "시나리오 실행 실패");
         return;
       }
+      const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
+      setScenariosResponse({
+        ...payload,
+        data: normalized.data as unknown as ScenariosApiPayload["data"],
+      });
 
       window.alert("시나리오 실행을 완료했습니다.");
     } catch (error) {
@@ -520,12 +529,16 @@ export default function DebugPlanningV2Client() {
         return;
       }
 
-      setActionsResponse(payload);
-
       if (!res.ok || !payload.ok) {
+        setActionsResponse(payload);
         window.alert(payload.error?.message ?? "Actions 생성 실패");
         return;
       }
+      const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
+      setActionsResponse({
+        ...payload,
+        data: normalized.data as unknown as ActionsApiPayload["data"],
+      });
 
       window.alert("Action plan 생성을 완료했습니다.");
     } catch (error) {
@@ -577,12 +590,16 @@ export default function DebugPlanningV2Client() {
         return;
       }
 
-      setDebtResponse(payload);
-
       if (!res.ok || !payload.ok) {
+        setDebtResponse(payload);
         window.alert(payload.error?.message ?? "Debt strategy 분석 실패");
         return;
       }
+      const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
+      setDebtResponse({
+        ...payload,
+        data: normalized.data as unknown as DebtStrategyApiPayload["data"],
+      });
 
       window.alert("Debt strategy 분석을 완료했습니다.");
     } catch (error) {

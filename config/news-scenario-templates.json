@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T00:00:00.000Z",
+  "templates": {
+    "Base": [
+      {
+        "label": "원/달러 5일 변화",
+        "expression": "pctChange(kr_usdkrw,5) > 0"
+      },
+      {
+        "label": "기준금리 z-score",
+        "expression": "zscore(kr_base_rate,12) <= Mid"
+      }
+    ],
+    "Bull": [
+      {
+        "label": "통화량 확장",
+        "expression": "zscore(kr_m2,12) >= Mid"
+      },
+      {
+        "label": "환율 안정",
+        "expression": "zscore(kr_usdkrw,20) < Mid"
+      }
+    ],
+    "Bear": [
+      {
+        "label": "환율 긴장",
+        "expression": "zscore(kr_usdkrw,20) >= High"
+      },
+      {
+        "label": "미국 물가 상승",
+        "expression": "pctChange(us_cpi,3) > 0"
+      }
+    ]
+  }
+}

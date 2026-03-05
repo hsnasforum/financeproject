@@ -10,6 +10,48 @@ function jsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
+function withEngine(data: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...data,
+    engineSchemaVersion: 1,
+    engine: {
+      stage: "DEBT",
+      financialStatus: {
+        stage: "DEBT",
+        trace: {
+          savingCapacity: 1_000_000,
+          savingRate: 0.25,
+          liquidAssets: 5_000_000,
+          debtBalance: 2_000_000,
+          emergencyFundTarget: 12_000_000,
+          emergencyFundGap: 7_000_000,
+          triggeredRules: ["debt_balance_positive"],
+        },
+      },
+      stageDecision: {
+        priority: "PAY_DEBT",
+        investmentAllowed: false,
+        warnings: ["부채 정리가 우선입니다."],
+      },
+    },
+  };
+}
+
+function withLegacyEngineFields(data: Record<string, unknown>): Record<string, unknown> {
+  const engineData = withEngine({});
+  const engine = engineData.engine as {
+    stage: string;
+    financialStatus: Record<string, unknown>;
+    stageDecision: Record<string, unknown>;
+  };
+  return {
+    ...data,
+    stage: engine.stage,
+    financialStatus: engine.financialStatus,
+    stageDecision: engine.stageDecision,
+  };
+}
+
 function buildBaseArgs(fetchFn: typeof fetch) {
   return {
     profile: {
@@ -59,11 +101,11 @@ describe("planning runPipeline", () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({
         ok: true,
-        data: {
+        data: withEngine({
           summary: {
             endNetWorth: 100,
           },
-        },
+        }),
         meta: {},
       }))
       .mockResolvedValueOnce(jsonResponse({
@@ -94,11 +136,11 @@ describe("planning runPipeline", () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({
         ok: true,
-        data: {
+        data: withEngine({
           summary: {
             endNetWorth: 100,
           },
-        },
+        }),
         meta: {},
       }))
       .mockResolvedValueOnce(jsonResponse({
@@ -128,11 +170,11 @@ describe("planning runPipeline", () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({
         ok: true,
-        data: {
+        data: withEngine({
           summary: {
             endNetWorth: 100,
           },
-        },
+        }),
         meta: {},
       }));
 
@@ -195,5 +237,31 @@ describe("planning runPipeline", () => {
     expect(lastStatuses.find((step) => step.id === "actions")?.state).toBe("PENDING");
     expect(lastStatuses.find((step) => step.id === "debtStrategy")?.state).toBe("PENDING");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("normalizes legacy simulate response fields into engine envelope", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({
+        ok: true,
+        data: withLegacyEngineFields({
+          summary: {
+            endNetWorth: 100,
+          },
+        }),
+        meta: {},
+      }));
+
+    const result = await executeRunPipeline({
+      ...buildBaseArgs(fetchMock),
+      toggles: {
+        scenarios: false,
+        monteCarlo: false,
+        actions: false,
+        debt: false,
+      },
+    });
+
+    expect(result.simulate?.engine.stage).toBe("DEBT");
+    expect(result.simulate?.engineSchemaVersion).toBe(1);
   });
 });

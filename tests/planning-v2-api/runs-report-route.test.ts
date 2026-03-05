@@ -108,7 +108,9 @@ describe("GET /api/planning/v2/runs/[id]/report", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(html).toContain("Executive Summary");
-    expect(html).toContain("Warnings Summary");
+    expect(html).toContain("10초 판정");
+    expect(html).toContain("Warnings");
+    expect(html).toContain("Action Plan");
     expect(html).not.toContain(".data");
   });
 });

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T00:00:00.000Z",
+  "topics": [
+    {
+      "id": "rates",
+      "label": "금리",
+      "keywords": ["금리", "기준금리", "인하", "인상", "fomc", "fed", "한은"],
+      "entities": ["연준", "한국은행", "fomc"],
+      "watchVariables": ["미국 정책금리", "한국 기준금리"],
+      "counterSignals": ["물가 둔화", "성장 둔화"]
+    },
+    {
+      "id": "fx",
+      "label": "환율",
+      "keywords": ["환율", "원달러", "달러", "엔화", "위안화"],
+      "entities": ["dxy", "원/달러", "원달러"],
+      "watchVariables": ["원/달러 환율", "달러 인덱스"],
+      "counterSignals": ["무역수지 개선", "외환보유액 증가"]
+    },
+    {
+      "id": "oil",
+      "label": "유가",
+      "keywords": ["유가", "브렌트", "wti", "opec", "원유"],
+      "entities": ["opec", "브렌트유", "wti"],
+      "watchVariables": ["브렌트유", "WTI"],
+      "counterSignals": ["원유 재고 증가", "수요 둔화"]
+    },
+    {
+      "id": "equity",
+      "label": "주식시장",
+      "keywords": ["코스피", "코스닥", "s&p", "나스닥", "증시", "주가"],
+      "entities": ["코스피", "코스닥", "S&P500", "NASDAQ"],
+      "watchVariables": ["코스피 지수", "S&P500"],
+      "counterSignals": ["실적 하향", "밸류에이션 부담"]
+    },
+    {
+      "id": "policy",
+      "label": "정책/규제",
+      "keywords": ["정책", "규제", "세제", "예산", "법안", "정부"],
+      "entities": ["기획재정부", "금융위원회", "국회"],
+      "watchVariables": ["정책 발표 일정", "법안 통과 여부"],
+      "counterSignals": ["정책 지연", "정치 불확실성"]
+    }
+  ],
+  "fallbackTopic": {
+    "id": "general",
+    "label": "일반",
+    "watchVariables": ["금리", "환율", "유가"],
+    "counterSignals": ["핵심 지표 변동성 축소"]
+  },
+  "stopwords": ["그리고", "그러나", "대한", "관련", "이번", "오늘", "에서", "으로"]
+}

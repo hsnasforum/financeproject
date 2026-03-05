@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildBenefitQueries, inferSubscriptionRegion } from "../src/lib/planner/executionHints";
-import { type PlannerInput } from "../src/lib/planner/metrics";
+import { type PlannerInput } from "../src/lib/planner/plan";
 
 const baseInput: PlannerInput = {
   unit: "MANWON",

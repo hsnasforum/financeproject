@@ -80,6 +80,15 @@ describe("dev guards", () => {
     assertSameOrigin(request);
   });
 
+  it("accepts 0.0.0.0 as local same-origin alias", () => {
+    const request = buildRequest({
+      host: "0.0.0.0:3000",
+      origin: "http://localhost:3000",
+    });
+    assertLocalHost(request);
+    assertSameOrigin(request);
+  });
+
   it("accepts same-origin fetch-site when origin headers are missing", () => {
     const request = buildRequest({
       host: "localhost:3000",

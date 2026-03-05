@@ -39,8 +39,12 @@ function requestPost(pathname: string, body: unknown): Request {
   });
 }
 
-function requestImportCsv(csvText: string): Request {
-  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/import/csv`, {
+function requestImportCsv(csvText: string, persist?: string): Request {
+  const params = new URLSearchParams();
+  if (persist) params.set("persist", persist);
+  const query = params.toString();
+
+  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/import/csv${query ? `?${query}` : ""}`, {
     method: "POST",
     headers: {
       host: LOCAL_HOST,
@@ -71,7 +75,7 @@ describe("planning v3 drafts route", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("supports create/list and import route returns draft-only payload", async () => {
+  it("supports create/list and import route returns draft-only payload without persistence", async () => {
     const created = await POST(requestPost("/api/planning/v3/drafts", {
       csrf: CSRF,
       source: { kind: "csv", filename: "sample.csv" },
@@ -88,6 +92,7 @@ describe("planning v3 drafts route", () => {
       meta: { rows: 2, columns: 3 },
     }));
     expect(created.status).toBe(201);
+
     const createdPayload = await created.json() as { ok?: boolean; id?: string; data?: { id?: string } };
     expect(createdPayload.ok).toBe(true);
     const createdId = String(createdPayload.id ?? createdPayload.data?.id ?? "");
@@ -97,27 +102,68 @@ describe("planning v3 drafts route", () => {
     expect(listed.status).toBe(200);
     const listedPayload = await listed.json() as {
       ok?: boolean;
-      drafts?: Array<{ id?: string; createdAt?: string; source?: { kind?: string }; meta?: { rows?: number; columns?: number } }>;
+      drafts?: Array<{ id?: string }>;
     };
     expect(listedPayload.ok).toBe(true);
     expect(Array.isArray(listedPayload.drafts)).toBe(true);
     expect(listedPayload.drafts?.some((row) => row.id === createdId)).toBe(true);
 
+    const draftsDir = path.join(root, ".data", "planning_v3_drafts");
+    const beforeImportFiles = fs.existsSync(draftsDir)
+      ? fs.readdirSync(draftsDir).filter((name) => name.endsWith(".json")).sort()
+      : [];
+
     const imported = await importCsvPOST(requestImportCsv([
       "date,amount,description",
       "2026-01-01,1000,salary",
-    ].join("\n")));
+    ].join("\n"), "1"));
     expect(imported.status).toBe(200);
+
     const importedPayload = await imported.json() as {
       ok?: boolean;
+      draftId?: string;
       data?: {
+        draftId?: string;
         draftPatch?: Record<string, unknown>;
         monthlyCashflow?: unknown[];
-        meta?: { rows?: number; months?: number };
       };
     };
+
     expect(importedPayload.ok).toBe(true);
     expect(Array.isArray(importedPayload.data?.monthlyCashflow)).toBe(true);
     expect(typeof importedPayload.data?.draftPatch).toBe("object");
+    expect(importedPayload.draftId).toBeUndefined();
+    expect(importedPayload.data?.draftId).toBeUndefined();
+
+    const afterImportFiles = fs.existsSync(draftsDir)
+      ? fs.readdirSync(draftsDir).filter((name) => name.endsWith(".json")).sort()
+      : [];
+    expect(afterImportFiles).toEqual(beforeImportFiles);
+  });
+
+  it("does not persist or return draftId when persist=false", async () => {
+    const imported = await importCsvPOST(requestImportCsv([
+      "date,amount,description",
+      "2026-01-01,1000,groceries",
+    ].join("\n"), "false"));
+
+    expect(imported.status).toBe(200);
+    const importedPayload = await imported.json() as {
+      ok?: boolean;
+      draftId?: string;
+      data?: {
+        draftId?: string;
+        draftSummary?: { rows?: number; columns?: number };
+      };
+      draftSummary?: { rows?: number; columns?: number };
+    };
+
+    expect(importedPayload.ok).toBe(true);
+    expect(importedPayload.draftId).toBeUndefined();
+    expect(importedPayload.data?.draftId).toBeUndefined();
+    expect(importedPayload.data?.draftSummary).toEqual(importedPayload.draftSummary);
+
+    const draftsDir = path.join(root, ".data", "planning_v3_drafts");
+    expect(fs.existsSync(draftsDir)).toBe(false);
   });
 });

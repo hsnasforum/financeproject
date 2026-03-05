@@ -48,10 +48,15 @@ import { buildRunReproducibilityMeta } from "../../../../../lib/planning/v2/repr
 import { applyProfilePatch, type ScenarioPatch } from "../../../../../lib/planning/v2/profilePatch";
 import { applyScenario, validateScenario, type ScenarioMeta, type ScenarioPatch as LegacyScenarioPatch } from "../../../../../lib/planning/v2/scenario";
 import { DEFAULT_PLANNING_POLICY } from "../../../../../lib/planning/catalog/planningPolicy";
-import { PlanningV2ValidationError, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
+import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths } from "../../../../../lib/planning/server/v2/validate";
 import { type LiabilityV2, type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
 import { type PlanningRunRecord, type PlanningRunStageResult } from "../../../../../lib/planning/store/types";
+import {
+  createEngineEnvelope,
+  ENGINE_SCHEMA_VERSION,
+  runPlanningEngine,
+} from "../../../../../lib/planning/engine";
 
 type RunsCreateBody = {
   profileId?: unknown;
@@ -604,6 +609,20 @@ function summarizePlan(plan: SimulationResultV2) {
     goalsAchievedCount: plan.goalStatus.filter((goal) => goal.achieved).length,
     goalsMissedCount: plan.goalStatus.filter((goal) => !goal.achieved).length,
     warningsCount: plan.warnings.length,
+  };
+}
+
+function toEngineInput(profile: ProfileV2) {
+  const debtBalance = profile.debts.reduce((total, debt) => {
+    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
+  }, 0);
+
+  return {
+    monthlyIncome: profile.monthlyIncomeNet,
+    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
+    age: profile.currentAge,
+    liquidAssets: profile.liquidAssets,
+    debtBalance,
   };
 }
 
@@ -1209,8 +1228,17 @@ export async function POST(request: Request) {
       });
     }
 
+    const runEngineResult = runPlanningEngine(toEngineInput(canonicalProfile));
+    const runEngine = createEngineEnvelope({
+      status: runEngineResult.status,
+      decision: runEngineResult.decision,
+    });
+
     const outputs = {
+      engineSchemaVersion: ENGINE_SCHEMA_VERSION,
+      engine: runEngine,
       simulate: {
+        engine: runEngine,
         summary: summarizePlan(simulatePlan),
         warnings: simulatePlan.warnings.map((warning) => warning.reasonCode),
         goalsStatus: simulatePlan.goalStatus,

@@ -1,4 +1,4 @@
-import { type PlannerInput } from "@/lib/planner/metrics";
+import { type PlannerInput } from "@/lib/planner/plan";
 
 export function buildBenefitQueries(input: PlannerInput): string[] {
   const tags: string[] = [];

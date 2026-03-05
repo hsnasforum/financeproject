@@ -9,6 +9,7 @@ import { type ScenarioPatch } from "../v2/profilePatch";
 import { type PlanningInterpretationPolicy } from "../catalog/planningPolicy";
 import { type AssumptionsOverrideEntry } from "../assumptions/overrides";
 import { type ProfileNormalizationDisclosure } from "../v2/normalizationDisclosure";
+import { type EngineEnvelope } from "../engine";
 
 export type PlanningRunOverallStatus = "RUNNING" | "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
 export type PlanningRunActionStatus = "todo" | "doing" | "done" | "snoozed";
@@ -173,8 +174,14 @@ export type PlanningRunRecord = {
     progress: PlanningRunActionProgress;
   };
   outputs: {
+    engineSchemaVersion?: number;
+    engine?: EngineEnvelope;
     resultDto?: ResultDtoV1;
     simulate?: PlanningRunBlobRef & {
+      engine?: EngineEnvelope;
+      stage?: string;
+      financialStatus?: unknown;
+      stageDecision?: unknown;
       summary?: Record<string, unknown>;
       warnings?: string[];
       goalsStatus?: unknown;

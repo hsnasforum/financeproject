@@ -67,11 +67,19 @@ describe("ops metrics routes", () => {
 
   it("returns summary without csrf for local same-origin GET", async () => {
     const response = await metricsSummaryGET(buildRequest("/api/ops/metrics/summary?range=24h"));
-    const payload = await response.json() as { ok?: boolean; data?: { last24h?: { total?: number } } };
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: {
+        last24h?: { total?: number };
+        planningFallbacks?: { engineEnvelopeFallbackCount?: number; reportContractFallbackCount?: number };
+      };
+    };
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect((payload.data?.last24h?.total ?? 0)).toBeGreaterThan(0);
+    expect(typeof payload.data?.planningFallbacks?.engineEnvelopeFallbackCount).toBe("number");
+    expect(typeof payload.data?.planningFallbacks?.reportContractFallbackCount).toBe("number");
   });
 
   it("blocks non-local requests", async () => {

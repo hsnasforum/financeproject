@@ -77,10 +77,24 @@ describe("planning v3 drafts [id] route", () => {
       { params: Promise.resolve({ id: created.id }) },
     );
     expect(detail.status).toBe(200);
-    const detailPayload = await detail.json() as { ok?: boolean; draft?: { id?: string; source?: { rows?: number } } };
+    const detailPayload = await detail.json() as {
+      ok?: boolean;
+      draft?: { id?: string; source?: { rows?: number } };
+      data?: { id?: string; createdAt?: string };
+    };
     expect(detailPayload.ok).toBe(true);
     expect(detailPayload.draft?.id).toBe(created.id);
     expect(detailPayload.draft?.source?.rows).toBe(2);
+    expect(detailPayload.data).toBeUndefined();
+    expect(Object.keys(detailPayload).sort()).toEqual(["draft", "ok"]);
+    expect(Object.keys(detailPayload.draft ?? {}).sort()).toEqual([
+      "cashflow",
+      "createdAt",
+      "draftPatch",
+      "id",
+      "source",
+      "summary",
+    ]);
 
     const deleted = await DELETE(
       requestDelete(`/api/planning/v3/drafts/${encodeURIComponent(created.id)}`),
@@ -96,5 +110,64 @@ describe("planning v3 drafts [id] route", () => {
       { params: Promise.resolve({ id: created.id }) },
     );
     expect(missing.status).toBe(404);
+  });
+
+  it("drops unknown text keys and never returns injected marker in detail response", async () => {
+    const marker = "SECRET_PII_SHOULD_NOT_LEAK_DRAFT_DETAIL";
+    const created = await createDraft({
+      source: { kind: "csv", filename: "sample.csv" },
+      payload: {
+        cashflow: [
+          {
+            ym: "2026-01",
+            incomeKrw: 2_500_000,
+            expenseKrw: -900_000,
+            netKrw: 1_600_000,
+            txCount: 2,
+            note: marker,
+            narrative: marker,
+          },
+        ],
+        draftPatch: {
+          monthlyIncomeNet: 2_500_000,
+          monthlyEssentialExpenses: 900_000,
+          monthlyDiscretionaryExpenses: 300_000,
+          includeTransfers: true,
+          splitMode: "fixed",
+          note: marker,
+          narrative: marker,
+        },
+      },
+      meta: { rows: 2, columns: 3 },
+    } as unknown as Parameters<typeof createDraft>[0]);
+
+    const detail = await GET(
+      requestGet(`/api/planning/v3/drafts/${encodeURIComponent(created.id)}`),
+      { params: Promise.resolve({ id: created.id }) },
+    );
+    expect(detail.status).toBe(200);
+    const detailText = await detail.text();
+    expect(detailText.includes(marker)).toBe(false);
+
+    const payload = JSON.parse(detailText) as {
+      draft?: {
+        cashflow?: Array<Record<string, unknown>>;
+        draftPatch?: Record<string, unknown>;
+      };
+    };
+    expect(Object.keys(payload.draft?.draftPatch ?? {}).sort()).toEqual([
+      "includeTransfers",
+      "monthlyDiscretionaryExpenses",
+      "monthlyEssentialExpenses",
+      "monthlyIncomeNet",
+      "splitMode",
+    ]);
+    expect(Object.keys(payload.draft?.cashflow?.[0] ?? {}).sort()).toEqual([
+      "expenseKrw",
+      "incomeKrw",
+      "netKrw",
+      "txCount",
+      "ym",
+    ]);
   });
 });
