@@ -15,7 +15,11 @@ import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/p
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import { createEngineEnvelope, runPlanningEngine } from "../../../../../lib/planning/engine";
+import {
+  createEngineEnvelope,
+  ENGINE_SCHEMA_VERSION,
+  runPlanningEngine,
+} from "../../../../../lib/planning/engine";
 
 type ScenariosRequestBody = {
   profile?: unknown;
@@ -191,6 +195,16 @@ function summarizeResult(result: SimulationResultV2, includeFullTimeline: boolea
   };
 }
 
+function stripLegacyTopLevelFields(data: Record<string, unknown>): Record<string, unknown> {
+  const {
+    stage: _legacyStage,
+    financialStatus: _legacyFinancialStatus,
+    stageDecision: _legacyStageDecision,
+    ...rest
+  } = data;
+  return rest;
+}
+
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -289,10 +303,12 @@ export async function POST(request: Request) {
     }>("scenarios", keyBundle.key);
     if (cached) {
       await recordCacheUsage("scenarios", true).catch(() => undefined);
+      const cachedData = stripLegacyTopLevelFields(cached.data.data);
       return ok(
         {
-          ...cached.data.data,
+          ...cachedData,
           engine,
+          engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         },
         {
           ...cached.data.meta,
@@ -324,6 +340,7 @@ export async function POST(request: Request) {
       },
       data: {
         engine,
+        engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         healthWarnings: health.warnings,
         precisionNotes: taxPensionExplain.notes,
         base: {

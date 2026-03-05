@@ -13,7 +13,11 @@ import { createPlanningService } from "../../../../../lib/planning/server/v2/ser
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import { createEngineEnvelope, runPlanningEngine } from "../../../../../lib/planning/engine";
+import {
+  createEngineEnvelope,
+  ENGINE_SCHEMA_VERSION,
+  runPlanningEngine,
+} from "../../../../../lib/planning/engine";
 
 type OptimizeRequestBody = {
   profile?: unknown;
@@ -317,6 +321,7 @@ export async function POST(request: Request) {
 
     return ok({
       engine,
+      engineSchemaVersion: ENGINE_SCHEMA_VERSION,
       candidates: engineResult.core,
     }, {
       generatedAt: new Date().toISOString(),
