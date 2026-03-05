@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { downloadText } from "@/lib/browser/download";
 import { getRun, listRuns, type SavedRecommendRun } from "@/lib/recommend/savedRunsStore";
 import type { DailyBrief } from "@/lib/dart/dailyBriefBuilder";
@@ -110,11 +110,11 @@ export function ReportClient({
 }) {
   const [includeDisclosuresFromDigest, setIncludeDisclosuresFromDigest] = useState(false);
   const [includeDailyBrief, setIncludeDailyBrief] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-
-  useEffect(() => {
-    setHydrated(true);
-  }, []);
+  const hydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   const runResolution = useMemo(() => {
     if (!hydrated) {
