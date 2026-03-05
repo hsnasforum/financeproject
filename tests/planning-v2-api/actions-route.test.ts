@@ -123,6 +123,10 @@ describe("POST /api/planning/v2/actions", () => {
     expect(payload.ok).toBe(true);
     expect(payload.data?.engine?.stage).toBeTruthy();
     expect(payload.data?.engineSchemaVersion).toBe(1);
+    const data = payload.data as Record<string, unknown> | undefined;
+    expect(data?.stage).toBeUndefined();
+    expect(data?.financialStatus).toBeUndefined();
+    expect(data?.stageDecision).toBeUndefined();
     expect((payload.data?.actions ?? []).length).toBeGreaterThan(0);
     expect((payload.data?.actions ?? []).every((entry) => entry.candidates === undefined)).toBe(true);
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();

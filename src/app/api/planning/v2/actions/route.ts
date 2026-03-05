@@ -151,6 +151,16 @@ function summarizePlan(plan: SimulationResultV2) {
   };
 }
 
+function stripLegacyTopLevelFields(data: Record<string, unknown>): Record<string, unknown> {
+  const {
+    stage: _legacyStage,
+    financialStatus: _legacyFinancialStatus,
+    stageDecision: _legacyStageDecision,
+    ...rest
+  } = data;
+  return rest;
+}
+
 function toEngineInput(profile: ProfileV2) {
   const debtBalance = profile.debts.reduce((total, debt) => {
     return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
@@ -270,9 +280,10 @@ export async function POST(request: Request) {
     }>("actions", keyBundle.key);
     if (cached) {
       await recordCacheUsage("actions", true).catch(() => undefined);
+      const cachedData = stripLegacyTopLevelFields(cached.data.data);
       return ok(
         {
-          ...cached.data.data,
+          ...cachedData,
           engine,
           engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         },

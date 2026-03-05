@@ -16,7 +16,11 @@ import { type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import { createEngineEnvelope, runPlanningEngine } from "../../../../../lib/planning/engine";
+import {
+  createEngineEnvelope,
+  ENGINE_SCHEMA_VERSION,
+  runPlanningEngine,
+} from "../../../../../lib/planning/engine";
 
 type SimulateRequestBody = {
   profile?: unknown;
@@ -124,6 +128,16 @@ function toEngineInput(profile: ProfileV2) {
   };
 }
 
+function stripLegacyTopLevelFields(data: Record<string, unknown>): Record<string, unknown> {
+  const {
+    stage: _legacyStage,
+    financialStatus: _legacyFinancialStatus,
+    stageDecision: _legacyStageDecision,
+    ...rest
+  } = data;
+  return rest;
+}
+
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -226,13 +240,12 @@ export async function POST(request: Request) {
         status: cachedEngineResult.status,
         decision: cachedEngineResult.decision,
       });
+      const cachedData = stripLegacyTopLevelFields(cached.data.data);
       return ok(
         {
-          ...cached.data.data,
+          ...cachedData,
           engine,
-          stage: engine.stage,
-          financialStatus: engine.financialStatus,
-          stageDecision: engine.stageDecision,
+          engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         },
         {
           ...cached.data.meta,
@@ -257,9 +270,7 @@ export async function POST(request: Request) {
       data: {
         ...result,
         engine,
-        stage: engine.stage,
-        financialStatus: engine.financialStatus,
-        stageDecision: engine.stageDecision,
+        engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         healthWarnings: health.warnings,
         precisionNotes: taxPensionExplain.notes,
       },
