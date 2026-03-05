@@ -1,4 +1,4 @@
 declare module "better-sqlite3" {
-  const Database: any;
+  const Database: new (...args: unknown[]) => unknown;
   export default Database;
 }

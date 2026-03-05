@@ -515,7 +515,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">내 판단 메모</h2>
           {!activeTarget ? (
-            <p className="text-xs text-slate-600">기사/토픽/시나리오 카드에서 "메모"를 눌러 대상을 선택해 주세요.</p>
+            <p className="text-xs text-slate-600">기사/토픽/시나리오 카드에서 &quot;메모&quot;를 눌러 대상을 선택해 주세요.</p>
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-slate-700">
