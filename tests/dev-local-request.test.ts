@@ -23,6 +23,11 @@ describe("isLocalRequest", () => {
     expect(isLocalRequest(request)).toBe(true);
   });
 
+  it("allows 0.0.0.0 host in local dev", () => {
+    const request = makeRequestLike("http://0.0.0.0:3000/ops", { host: "0.0.0.0:3000" });
+    expect(isLocalRequest(request)).toBe(true);
+  });
+
   it("blocks non-local host", () => {
     const request = makeRequestLike("https://example.com/ops", { host: "example.com" });
     expect(isLocalRequest(request)).toBe(false);

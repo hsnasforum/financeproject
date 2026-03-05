@@ -16,6 +16,7 @@ import { type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { createEngineEnvelope, runPlanningEngine } from "../../../../../lib/planning/engine";
 
 type SimulateRequestBody = {
   profile?: unknown;
@@ -107,6 +108,20 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
     const normalized = toPlanningError(guard);
     return fail(normalized.code, normalized.message, { status: guard.status });
   }
+}
+
+function toEngineInput(profile: ProfileV2) {
+  const debtBalance = profile.debts.reduce((total, debt) => {
+    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
+  }, 0);
+
+  return {
+    monthlyIncome: profile.monthlyIncomeNet,
+    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
+    age: profile.currentAge,
+    liquidAssets: profile.liquidAssets,
+    debtBalance,
+  };
 }
 
 export async function POST(request: Request) {
@@ -206,20 +221,45 @@ export async function POST(request: Request) {
     }>("simulate", keyBundle.key);
     if (cached) {
       await recordCacheUsage("simulate", true).catch(() => undefined);
-      return ok(cached.data.data, {
-        ...cached.data.meta,
-        cache: {
-          hit: true,
-          keyPrefix,
-        },
+      const cachedEngineResult = runPlanningEngine(toEngineInput(profile));
+      const engine = createEngineEnvelope({
+        status: cachedEngineResult.status,
+        decision: cachedEngineResult.decision,
       });
+      return ok(
+        {
+          ...cached.data.data,
+          engine,
+          stage: engine.stage,
+          financialStatus: engine.financialStatus,
+          stageDecision: engine.stageDecision,
+        },
+        {
+          ...cached.data.meta,
+          cache: {
+            hit: true,
+            keyPrefix,
+          },
+        },
+      );
     }
     await recordCacheUsage("simulate", false).catch(() => undefined);
 
-    const result = planningService.simulate(profile, finalAssumptions, horizonMonths, { policyId });
+    const engineResult = runPlanningEngine(toEngineInput(profile), {
+      runCore: () => planningService.simulate(profile, finalAssumptions, horizonMonths, { policyId }),
+    });
+    const result = engineResult.core;
+    const engine = createEngineEnvelope({
+      status: engineResult.status,
+      decision: engineResult.decision,
+    });
     const payload = {
       data: {
         ...result,
+        engine,
+        stage: engine.stage,
+        financialStatus: engine.financialStatus,
+        stageDecision: engine.stageDecision,
         healthWarnings: health.warnings,
         precisionNotes: taxPensionExplain.notes,
       },

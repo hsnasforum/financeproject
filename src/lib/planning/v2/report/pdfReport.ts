@@ -88,12 +88,7 @@ async function importPlaywrightRuntime(): Promise<{ chromium?: ChromiumLauncher 
   return dynamicImport("playwright") as Promise<{ chromium?: ChromiumLauncher }>;
 }
 
-export async function renderPdfReport(dto: ResultDtoV1, options?: RenderPdfReportOptions): Promise<Buffer> {
-  const fontFamily = detectKoreanFontFamily();
-  if (!fontFamily) {
-    throw new PdfReportError("PDF_FONT_MISSING", "PDF 한글 폰트를 찾을 수 없습니다. 시스템 폰트를 설치하거나 HTML 리포트를 사용하세요.");
-  }
-
+async function renderPdfFromHtml(html: string): Promise<Buffer> {
   let chromium: ChromiumLauncher;
 
   try {
@@ -105,15 +100,6 @@ export async function renderPdfReport(dto: ResultDtoV1, options?: RenderPdfRepor
   } catch {
     throw new PdfReportError("PDF_ENGINE_MISSING", "PDF 엔진을 찾을 수 없습니다. 서버 환경에서 Playwright를 확인하세요.");
   }
-
-  const html = injectPdfFontStyle(
-    renderHtmlReport(dto, {
-      title: options?.title,
-      locale: "ko-KR",
-      theme: "light",
-    }),
-    fontFamily,
-  );
 
   let browser: Awaited<ReturnType<typeof chromium.launch>> | null = null;
 
@@ -145,4 +131,24 @@ export async function renderPdfReport(dto: ResultDtoV1, options?: RenderPdfRepor
       await browser.close().catch(() => undefined);
     }
   }
+}
+
+export async function renderPdfReportFromHtml(html: string): Promise<Buffer> {
+  const fontFamily = detectKoreanFontFamily();
+  if (!fontFamily) {
+    throw new PdfReportError("PDF_FONT_MISSING", "PDF 한글 폰트를 찾을 수 없습니다. 시스템 폰트를 설치하거나 HTML 리포트를 사용하세요.");
+  }
+
+  const styledHtml = injectPdfFontStyle(html, fontFamily);
+  return renderPdfFromHtml(styledHtml);
+}
+
+export async function renderPdfReport(dto: ResultDtoV1, options?: RenderPdfReportOptions): Promise<Buffer> {
+  const html = renderHtmlReport(dto, {
+    title: options?.title,
+    locale: "ko-KR",
+    theme: "light",
+  });
+
+  return renderPdfReportFromHtml(html);
 }

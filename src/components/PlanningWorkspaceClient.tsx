@@ -53,7 +53,7 @@ import PlanningOnboardingWizard from "@/components/planning/PlanningOnboardingWi
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
 import { buildMetricEvidence } from "@/app/planning/_lib/metricEvidence";
 import { copyToClipboard } from "@/lib/browser/clipboard";
-import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { withDevCsrf, writeDevCsrfToken } from "@/lib/dev/clientCsrf";
 import { isApiBaseResponse } from "@/lib/http/apiContract";
 import { buildConfirmString } from "@/lib/ops/confirm";
 import { type PlanningFeedbackCategory } from "@/lib/ops/feedback/planningFeedbackTypes";
@@ -76,6 +76,10 @@ import {
 import { LIMITS } from "@/lib/planning/v2/limits";
 import { SAMPLE_PROFILE_V2_KO, SAMPLE_PROFILE_V2_KO_NAME } from "@/lib/planning/samples/profile.sample.ko";
 import { type PlanningProfileRecord, type PlanningRunRecord } from "@/lib/planning/store/types";
+import {
+  normalizePlanningResponse,
+  type PlanningApiEngineEnvelope,
+} from "@/lib/planning/api/contracts";
 import { type ActionItemV2 } from "@/lib/planning/v2/actions/types";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import { buildResultDtoV1, isResultDtoV1, type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
@@ -204,6 +208,7 @@ type PlanningWorkspaceClientProps = {
     latest?: SnapshotListItem;
     history: SnapshotListItem[];
   };
+  csrf?: string;
 };
 
 type SnapshotItemsState = {
@@ -816,6 +821,7 @@ export function PlanningWorkspaceClient({
   locale,
   initialSelectedProfileId = "",
   snapshotItems,
+  csrf = "",
 }: PlanningWorkspaceClientProps) {
   const initialProfileModel = useMemo(() => {
     const parsed = tryParseJsonText<ProfileV2>(DEFAULT_PROFILE_JSON);
@@ -830,6 +836,10 @@ export function PlanningWorkspaceClient({
     return parseDebtOffersFormRows(parsed);
   }, []);
   const safeDefaults = useMemo(() => planningExecutionDefaults(true), []);
+
+  useEffect(() => {
+    writeDevCsrfToken(csrf);
+  }, [csrf]);
 
   const [profiles, setProfiles] = useState<PlanningProfileRecord[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState("");
@@ -886,6 +896,8 @@ export function PlanningWorkspaceClient({
   const [runResult, setRunResult] = useState<CombinedRunResult | null>(null);
   const [optimizeResult, setOptimizeResult] = useState<{
     meta?: PlanningMeta;
+    engine: PlanningApiEngineEnvelope["engine"];
+    engineSchemaVersion: number;
     candidates: Record<string, unknown>[];
   } | null>(null);
   const [savedRun, setSavedRun] = useState<PlanningRunRecord | null>(null);
@@ -1846,9 +1858,12 @@ export function PlanningWorkspaceClient({
       if (handleSnapshotNotFound(payload)) return;
       if (!parseApiPayload(locale, res, payload, "Optimizer 실행에 실패했습니다.")) return;
 
-      const rows = asArray(asRecord(payload.data).candidates).map((entry) => asRecord(entry));
+      const normalized = normalizePlanningResponse(asRecord(payload.data));
+      const rows = asArray(asRecord(normalized.data).candidates).map((entry) => asRecord(entry));
       setOptimizeResult({
         meta: asRecord(payload.meta) as PlanningMeta,
+        engine: normalized.engine,
+        engineSchemaVersion: normalized.engineSchemaVersion,
         candidates: rows,
       });
       window.alert(`Optimizer 후보 ${rows.length}개를 생성했습니다.`);
