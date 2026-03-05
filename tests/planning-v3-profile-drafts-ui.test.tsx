@@ -88,6 +88,7 @@ describe("planning v3 profile drafts UI", () => {
     expect(html).toContain('data-testid="v3-draft-meta"');
     expect(html).toContain('data-testid="v3-draft-base-profile-picker"');
     expect(html).toContain('data-testid="v3-draft-run-preflight"');
+    expect(html).toContain('data-testid="v3-draft-apply-profile"');
     expect(html).toContain('data-testid="v3-preflight-summary"');
     expect(html).toContain('data-testid="v3-preflight-errors"');
     expect(html).toContain('data-testid="v3-preflight-warnings"');

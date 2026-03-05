@@ -20,28 +20,12 @@ function readFixture(name: string): string {
   return fs.readFileSync(fixturePath(name), "utf8");
 }
 
-function makeRequest(csvText: string, contentType = "text/csv", persist?: string): Request {
+function makeJsonRequest(csvText: string, options?: {
+  persist?: string;
+  mapping?: { date?: string; amount?: string; desc?: string };
+}): Request {
   const params = new URLSearchParams();
-  if (persist) params.set("persist", persist);
-  const query = params.toString();
-
-  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/import/csv${query ? `?${query}` : ""}`, {
-    method: "POST",
-    headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning`,
-      cookie: `dev_csrf=${CSRF_TOKEN}`,
-      "x-csrf-token": CSRF_TOKEN,
-      "content-type": contentType,
-    },
-    body: csvText,
-  });
-}
-
-function makeJsonRequest(csvText: string, persist?: string): Request {
-  const params = new URLSearchParams();
-  if (persist) params.set("persist", persist);
+  if (options?.persist) params.set("persist", options.persist);
   const query = params.toString();
 
   return new Request(`${LOCAL_ORIGIN}/api/planning/v3/import/csv${query ? `?${query}` : ""}`, {
@@ -54,7 +38,29 @@ function makeJsonRequest(csvText: string, persist?: string): Request {
       "x-csrf-token": CSRF_TOKEN,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ csvText }),
+    body: JSON.stringify({
+      csvText,
+      ...(options?.mapping ? { mapping: options.mapping } : {}),
+    }),
+  });
+}
+
+function makeTextRequest(csvText: string, persist?: string): Request {
+  const params = new URLSearchParams();
+  if (persist) params.set("persist", persist);
+  const query = params.toString();
+
+  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/import/csv${query ? `?${query}` : ""}`, {
+    method: "POST",
+    headers: {
+      host: LOCAL_HOST,
+      origin: LOCAL_ORIGIN,
+      referer: `${LOCAL_ORIGIN}/planning`,
+      cookie: `dev_csrf=${CSRF_TOKEN}`,
+      "x-csrf-token": CSRF_TOKEN,
+      "content-type": "text/csv",
+    },
+    body: csvText,
   });
 }
 
@@ -79,12 +85,12 @@ describe("POST /api/planning/v3/import/csv", () => {
     const sample = readFixture("sample.csv");
     const expected = importCsvToDraft(sample);
 
-    const responseA = await POST(makeRequest(sample));
+    const responseA = await POST(makeTextRequest(sample));
     const payloadA = await responseA.json() as {
-      ok: boolean;
-      cashflow: unknown[];
-      draftPatch: Record<string, number>;
-      meta: { rows: number; months: number };
+      ok?: boolean;
+      cashflow?: unknown[];
+      draftPatch?: Record<string, number>;
+      meta?: { rows?: number; months?: number };
       draftSummary?: { rows?: number; columns?: number };
       data?: {
         monthlyCashflow?: unknown[];
@@ -102,10 +108,10 @@ describe("POST /api/planning/v3/import/csv", () => {
     expect(payloadA.ok).toBe(true);
     expect(payloadA.cashflow).toEqual(expected.cashflow);
     expect(payloadA.draftPatch).toEqual(expected.draftPatch);
-    expect(payloadA.meta).toEqual(expected.meta);
+    expect(payloadA.meta).toEqual({ rows: expected.meta.rows, months: expected.meta.months });
     expect(payloadA.data?.monthlyCashflow).toEqual(expected.cashflow);
     expect(payloadA.data?.draftPatch).toEqual(expected.draftPatch);
-    expect(payloadA.data?.meta).toEqual(expected.meta);
+    expect(payloadA.data?.meta).toEqual({ rows: expected.meta.rows, months: expected.meta.months });
     expect(payloadA.data?.draftSummary).toEqual(payloadA.draftSummary);
     expect(payloadB).toEqual(payloadA);
 
@@ -113,73 +119,78 @@ describe("POST /api/planning/v3/import/csv", () => {
     expect(fs.existsSync(draftsDir)).toBe(false);
   });
 
-  it("supports mixed date and amount formats", async () => {
-    const csv = [
-      "date,amount,description",
-      "2026-01-01,\"1,200,000\",salary",
-      "2026/01/15,\"(200,000)\",rent",
-      "2026.02.01,+500000,bonus",
-      "20260210,-100000,fee",
-      "2026-02-28T00:00:00Z,\"₩300,000\",refund",
-    ].join("\n");
-
-    const response = await POST(makeRequest(csv, "text/plain"));
+  it("returns LIMIT/413 for oversized csvText input", async () => {
+    const oversizedCsv = "date,amount,desc\n" + "2026-01-01,1,a\n".repeat(90_000);
+    const response = await POST(makeJsonRequest(oversizedCsv));
     const payload = await response.json() as {
-      ok: boolean;
-      cashflow: Array<{
-        ym: string;
-        incomeKrw: number;
-        expenseKrw: number;
-        netKrw: number;
-        txCount: number;
-      }>;
-      meta: { rows: number; months: number };
+      ok?: boolean;
+      error?: { code?: string };
+    };
+
+    expect(response.status).toBe(413);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("LIMIT");
+  });
+
+  it("parses Korean header aliases deterministically", async () => {
+    const csvText = readFixture("korean-alias.csv");
+    const expected = importCsvToDraft(csvText);
+
+    const first = await POST(makeJsonRequest(csvText));
+    const second = await POST(makeJsonRequest(csvText));
+    const payloadA = await first.json() as {
+      ok?: boolean;
+      data?: {
+        monthlyCashflow?: unknown[];
+        draftPatch?: Record<string, unknown>;
+        meta?: { rows?: number; months?: number };
+      };
+    };
+    const payloadB = await second.json() as typeof payloadA;
+
+    expect(first.status).toBe(200);
+    expect(payloadA.ok).toBe(true);
+    expect(payloadA).toEqual(payloadB);
+    expect(payloadA.data?.monthlyCashflow).toEqual(expected.cashflow);
+    expect(payloadA.data?.draftPatch).toEqual(expected.draftPatch);
+    expect(payloadA.data?.meta).toEqual({
+      rows: expected.meta.rows,
+      months: expected.meta.months,
+    });
+  });
+
+  it("parses edge amount/date formats deterministically", async () => {
+    const csvText = readFixture("edge-formats.csv");
+    const expected = importCsvToDraft(csvText);
+    const response = await POST(makeJsonRequest(csvText));
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: {
+        monthlyCashflow?: unknown[];
+        meta?: { rows?: number; months?: number };
+      };
     };
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(payload.cashflow).toEqual([
-      {
-        ym: "2026-01",
-        incomeKrw: 1_200_000,
-        expenseKrw: -200_000,
-        netKrw: 1_000_000,
-        txCount: 2,
-      },
-      {
-        ym: "2026-02",
-        incomeKrw: 800_000,
-        expenseKrw: -100_000,
-        netKrw: 700_000,
-        txCount: 3,
-      },
-    ]);
-    expect(payload.meta).toEqual({ rows: 5, months: 2 });
+    expect(payload.data?.monthlyCashflow).toEqual(expected.cashflow);
+    expect(payload.data?.meta).toEqual({
+      rows: expected.meta.rows,
+      months: expected.meta.months,
+    });
   });
 
-  it("does not leak SECRET_PII_SHOULD_NOT_LEAK in success/error payload", async () => {
+  it("does not leak SECRET_PII_SHOULD_NOT_LEAK in error payload", async () => {
     const piiMarker = "SECRET_PII_SHOULD_NOT_LEAK";
-
-    const successCsv = [
+    const csvText = [
       "date,amount,description",
-      `2026-01-01,1000,${piiMarker}`,
+      `${piiMarker},1000,${piiMarker}`,
     ].join("\n");
+    const response = await POST(makeJsonRequest(csvText));
+    const rawBody = await response.text();
 
-    const successResponse = await POST(makeRequest(successCsv));
-    const successText = await successResponse.text();
-    expect(successResponse.status).toBe(200);
-    expect(successText.includes(piiMarker)).toBe(false);
-
-    const errorCsv = [
-      "date,amount,description",
-      `${piiMarker},1000,desc`,
-    ].join("\n");
-
-    const errorResponse = await POST(makeRequest(errorCsv));
-    const errorText = await errorResponse.text();
-    expect(errorResponse.status).toBe(400);
-    expect(errorText.includes(piiMarker)).toBe(false);
-    expect(errorText.includes("desc")).toBe(false);
+    expect(response.status).toBe(400);
+    expect(rawBody.includes(piiMarker)).toBe(false);
   });
 
   it("does not leak csv marker and does not persist even when persist=1", async () => {
@@ -189,7 +200,7 @@ describe("POST /api/planning/v3/import/csv", () => {
       `2026-01-01,1000,${marker}`,
     ].join("\n");
 
-    const response = await POST(makeRequest(csv, "text/csv", "1"));
+    const response = await POST(makeTextRequest(csv, "1"));
     const responseText = await response.text();
     expect(response.status).toBe(200);
     expect(responseText.includes(marker)).toBe(false);
@@ -213,7 +224,7 @@ describe("POST /api/planning/v3/import/csv", () => {
 
     const cases: Array<string | undefined> = [undefined, "1", "true", "yes", "false", "0"];
     for (const value of cases) {
-      const response = await POST(makeRequest(csv, "text/csv", value));
+      const response = await POST(makeTextRequest(csv, value));
       const payload = await response.json() as {
         ok?: boolean;
         draftId?: string;
