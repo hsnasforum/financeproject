@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { downloadText } from "@/lib/browser/download";
-import { getRun, type SavedRecommendRun } from "@/lib/recommend/savedRunsStore";
+import { getRun, listRuns, type SavedRecommendRun } from "@/lib/recommend/savedRunsStore";
 import type { DailyBrief } from "@/lib/dart/dailyBriefBuilder";
 import {
   buildReportModel,
@@ -56,17 +56,26 @@ function formatDateTime(value: string | null): string {
 
 function formatRate(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "-";
-  return `${value.toFixed(2)}%`;
+  return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value)}%`;
 }
 
 function formatScore(value: number): string {
   if (!Number.isFinite(value)) return "-";
-  return value.toFixed(4);
+  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
 }
 
 function formatTerm(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "-";
-  return `${Math.trunc(value)}개월`;
+  return `${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value)}월`;
+}
+
+function formatMetricValue(value: number | null, unit?: "KRW" | "PCT" | "MONTHS" | "COUNT"): string {
+  if (value === null || !Number.isFinite(value)) return "-";
+  const formatted = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
+  if (unit === "KRW") return `${formatted}원`;
+  if (unit === "PCT") return `${formatted}%`;
+  if (unit === "MONTHS") return `${formatted}월`;
+  return formatted;
 }
 
 function digestLevel(item: {
@@ -101,16 +110,52 @@ export function ReportClient({
 }) {
   const [includeDisclosuresFromDigest, setIncludeDisclosuresFromDigest] = useState(false);
   const [includeDailyBrief, setIncludeDailyBrief] = useState(false);
+  const hydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
-  const savedRun: SavedRecommendRun | null = useMemo(() => {
-    if (!runId) return null;
-    return getRun(runId);
-  }, [runId]);
+  const runResolution = useMemo(() => {
+    if (!hydrated) {
+      return {
+        requestedRunId: (runId ?? "").trim(),
+        savedRun: null,
+        source: "none" as const,
+      };
+    }
+
+    const requestedRunId = (runId ?? "").trim();
+    const requestedRun = requestedRunId ? getRun(requestedRunId) : null;
+    if (requestedRun) {
+      return {
+        requestedRunId,
+        savedRun: requestedRun,
+        source: "query" as const,
+      };
+    }
+
+    const latestRun = listRuns()[0] ?? null;
+    if (latestRun) {
+      return {
+        requestedRunId,
+        savedRun: latestRun,
+        source: requestedRunId ? "fallback_latest" as const : "latest" as const,
+      };
+    }
+
+    return {
+      requestedRunId,
+      savedRun: null,
+      source: requestedRunId ? "missing_query" as const : "none" as const,
+    };
+  }, [hydrated, runId]);
+  const savedRun: SavedRecommendRun | null = runResolution.savedRun;
 
   const plannerSnapshot: PlannerLastSnapshot | null = useMemo(() => {
-    if (typeof window === "undefined") return null;
+    if (!hydrated || typeof window === "undefined") return null;
     return parsePlannerSnapshot(window.localStorage.getItem(PLANNER_LAST_SNAPSHOT_KEY));
-  }, []);
+  }, [hydrated]);
 
   const digestHasData = useMemo(() => {
     const top = Array.isArray(disclosureDigest?.topHighlights) ? disclosureDigest.topHighlights : [];
@@ -187,8 +232,8 @@ export function ReportClient({
               <p className="text-sm font-black text-slate-900">{formatDateTime(reportModel.generatedAt)}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">추천 실행 ID</p>
-              <p className="text-sm font-black text-slate-900 font-mono">{reportModel.overview.runId ?? "없음"}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">추천 상품 수</p>
+              <p className="text-sm font-black text-slate-900">{reportModel.overview.recommendationCount}개</p>
             </div>
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">재무설계 갱신 시각</p>
@@ -252,7 +297,9 @@ export function ReportClient({
                       {reportModel.planner.snapshot.result.metrics.map((metric) => (
                         <tr key={metric.key} className="hover:bg-slate-50 transition-colors">
                           <td className="py-4 px-5 font-bold text-slate-800">{metric.label}</td>
-                          <td className="py-4 px-5 text-right font-black text-primary tabular-nums">{metric.value ?? "-"}</td>
+                          <td className="py-4 px-5 text-right font-black text-primary tabular-nums">
+                            {formatMetricValue(metric.value, metric.unit)}
+                          </td>
                           <td className="py-4 px-5 text-[11px] text-slate-500 font-mono tracking-tight">{metric.formula ?? "-"}</td>
                         </tr>
                       ))}
@@ -343,7 +390,6 @@ export function ReportClient({
                           <p className="font-bold text-slate-900 text-base">{item.productName}</p>
                           <p className="text-[11px] font-medium text-slate-500 mt-1 flex items-center gap-1.5">
                             <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[9px] uppercase">{item.providerName}</span>
-                            {item.unifiedId}
                           </p>
                         </td>
                         <td className="py-4 px-5 text-right font-black text-emerald-600 text-lg tabular-nums">{formatRate(item.appliedRate)}</td>
@@ -512,9 +558,15 @@ export function ReportClient({
           </section>
         ) : null}
 
-        {!runId ? (
+        {runResolution.source === "fallback_latest" ? (
           <div className="no-print bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm font-bold text-center">
-            진행된 추천 세션(runId)이 없습니다. 추천 내역을 포함하려면 `/report?runId=...` 형태로 접근해 주세요.
+            요청한 세션을 찾지 못해 저장된 최신 추천 결과로 대체했습니다.
+          </div>
+        ) : null}
+
+        {runResolution.source === "none" || runResolution.source === "missing_query" ? (
+          <div className="no-print bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm font-bold text-center">
+            저장된 추천 결과가 없습니다. 먼저 추천을 실행한 뒤 다시 확인해 주세요.
           </div>
         ) : null}
       </div>

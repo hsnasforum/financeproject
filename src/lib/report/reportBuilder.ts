@@ -99,11 +99,20 @@ const DEFAULT_DISCLAIMER =
   "면책: 본 리포트는 공공/저장 데이터와 규칙 기반 계산을 요약한 참고 자료이며, 수익·원금·가입 승인·혜택 지급을 보장하지 않습니다.";
 
 const DEFAULT_AS_OF_NOTE =
-  "데이터 기준시각: 추천은 run.savedAt, 플래너는 planner.savedAt(저장 시각)을 기준으로 하며 최신 실시간 정보를 보장하지 않습니다.";
+  "데이터 기준시각: 추천 데이터와 플래너 데이터는 각각 마지막 저장 시각을 기준으로 표시되며, 실시간 최신 정보와 차이가 있을 수 있습니다.";
 
 function formatNumber(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "-";
-  return String(value);
+  return new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(value);
+}
+
+function formatMetricValue(value: number | null, unit?: "KRW" | "PCT" | "MONTHS" | "COUNT"): string {
+  if (value === null || !Number.isFinite(value)) return "-";
+  const formatted = formatNumber(value);
+  if (unit === "KRW") return `${formatted}원`;
+  if (unit === "PCT") return `${formatted}%`;
+  if (unit === "MONTHS") return `${formatted}월`;
+  return formatted;
 }
 
 function digestHighlightLevel(item: ReportDisclosureDigestHighlight): string {
@@ -119,8 +128,7 @@ function digestHighlightTitle(item: ReportDisclosureDigestHighlight): string {
 }
 
 function metricToLine(metric: PlannerMetricLine): string {
-  const unit = metric.unit ? ` ${metric.unit}` : "";
-  return `- ${metric.label}: ${formatNumber(metric.value)}${unit}`;
+  return `- ${metric.label}: ${formatMetricValue(metric.value, metric.unit)}`;
 }
 
 export function buildReportModel(input: {

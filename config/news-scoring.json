@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-04T00:00:00.000Z",
+  "weights": {
+    "sourceMax": 30,
+    "keywordMax": 35,
+    "recencyMax": 20,
+    "focusMax": 10
+  },
+  "recencyBuckets": [
+    { "maxHours": 6, "score": 20 },
+    { "maxHours": 24, "score": 16 },
+    { "maxHours": 48, "score": 12 },
+    { "maxHours": 72, "score": 8 },
+    { "maxHours": 168, "score": 4 }
+  ],
+  "defaults": {
+    "topN": 10,
+    "topM": 3,
+    "clusterWindowHours": 36,
+    "clusterMinJaccard": 0.55,
+    "retentionDays": 45,
+    "evidenceLinksMin": 2,
+    "evidenceLinksMax": 5,
+    "burstWindowDays": 7,
+    "burstHistoryMinDays": 3
+  },
+  "relativeScore": {
+    "recencyBoost": {
+      "within24h": 1.0,
+      "within48h": 0.6,
+      "within7d": 0.2,
+      "otherwise": 0
+    },
+    "keywordBoostCap": 1.2,
+    "topicBurstBoost": {
+      "high": 0.4,
+      "mid": 0.2,
+      "low": 0
+    },
+    "duplicatePenalty": 0.7,
+    "diversityPenaltySlope": 0.6,
+    "diversityPenaltyStart": 0.5
+  },
+  "burst": {
+    "highThreshold": 2.0,
+    "midThreshold": 1.0
+  }
+}

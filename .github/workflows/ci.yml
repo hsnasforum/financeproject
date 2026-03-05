@@ -48,7 +48,7 @@ jobs:
         run: pnpm exec prisma db push
 
       - name: Verify (lint/schema/rules)
-        run: pnpm validate:dumps:fixtures && pnpm data:doctor && pnpm dart:rules:gate && pnpm lint
+        run: pnpm validate:dumps:fixtures && pnpm data:doctor && pnpm dart:rules:gate && pnpm lint && pnpm typecheck:planning && pnpm planning:v2:engine:guard && pnpm planner:deprecated:guard
 
       - name: Install Playwright Chromium (for planning:v2:complete)
         run: pnpm exec playwright install --with-deps chromium

@@ -41,20 +41,22 @@ type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Respo
 
 type ImportDraftResponse = {
   ok: true;
-  cashflow: DraftUploadPreview["cashflow"];
-  draftPatch: DraftUploadPreview["draftPatch"];
-  meta: DraftUploadPreview["meta"];
-  draftSummary: DraftUploadPreview["draftSummary"];
+  cashflow?: DraftUploadPreview["cashflow"];
+  draftPatch?: DraftUploadPreview["draftPatch"];
+  meta?: DraftUploadPreview["meta"];
+  draftSummary?: DraftUploadPreview["draftSummary"];
+  data?: {
+    monthlyCashflow?: DraftUploadPreview["cashflow"];
+    draftPatch?: DraftUploadPreview["draftPatch"];
+    meta?: DraftUploadPreview["meta"];
+    draftSummary?: DraftUploadPreview["draftSummary"];
+  };
 };
 
 type SaveDraftResponse = {
   ok: true;
   id?: string;
   createdAt?: string;
-  data?: {
-    id?: string;
-    createdAt?: string;
-  };
 };
 
 type ListDraftResponse = {
@@ -82,9 +84,9 @@ function buildQuery(csrfToken?: string): string {
 
 function buildImportPreviewPath(csrfToken?: string): string {
   const params = new URLSearchParams();
-  params.set("persist", "0");
   if (csrfToken) params.set("csrf", csrfToken);
-  return `/api/planning/v3/import/csv?${params.toString()}`;
+  const query = params.toString();
+  return query ? `/api/planning/v3/import/csv?${query}` : "/api/planning/v3/import/csv";
 }
 
 function toResponseMessage(payload: unknown, fallback: string): string {
@@ -96,16 +98,84 @@ function toResponseMessage(payload: unknown, fallback: string): string {
 }
 
 function isImportDraftResponse(payload: unknown): payload is ImportDraftResponse {
-  if (!isRecord(payload) || payload.ok !== true) return false;
-  if (!Array.isArray(payload.cashflow) || !isRecord(payload.draftPatch) || !isRecord(payload.meta)) return false;
-  if (!isRecord(payload.draftSummary)) return false;
-  return true;
+  return isRecord(payload) && payload.ok === true;
+}
+
+type NormalizedPreviewPayload = {
+  cashflow: DraftUploadPreview["cashflow"];
+  draftPatch: DraftUploadPreview["draftPatch"];
+  meta: DraftUploadPreview["meta"];
+  draftSummary: DraftUploadPreview["draftSummary"];
+};
+
+function isCompletePreviewCore(
+  cashflow: unknown,
+  draftPatch: unknown,
+  meta: unknown,
+): cashflow is DraftUploadPreview["cashflow"] {
+  return Array.isArray(cashflow) && isRecord(draftPatch) && isRecord(meta);
+}
+
+function buildNormalizedPreviewPayload(
+  cashflow: DraftUploadPreview["cashflow"],
+  draftPatch: Record<string, unknown>,
+  meta: Record<string, unknown>,
+  summaryRaw: unknown,
+): NormalizedPreviewPayload {
+  const summary: Record<string, unknown> = isRecord(summaryRaw) ? summaryRaw : {};
+  return {
+    cashflow,
+    draftPatch,
+    meta: {
+      rows: asNumber(meta.rows),
+      months: asNumber(meta.months),
+    },
+    draftSummary: {
+      rows: asNumber(summary.rows) || asNumber(meta.rows),
+      columns: asNumber(summary.columns) || asNumber(meta.columns),
+    },
+  };
+}
+
+function pickPreviewPayload(payload: ImportDraftResponse): NormalizedPreviewPayload | null {
+  const hasData = isRecord(payload.data);
+  const nested = hasData ? payload.data : null;
+
+  const nestedCashflow = nested?.monthlyCashflow;
+  const nestedDraftPatch = nested?.draftPatch;
+  const nestedMeta = nested?.meta;
+  const nestedSummary = isRecord(nested?.draftSummary) ? nested.draftSummary : null;
+
+  const legacyCashflow = payload.cashflow;
+  const legacyDraftPatch = payload.draftPatch;
+  const legacyMeta = payload.meta;
+  const legacySummary = payload.draftSummary;
+
+  const useNested = isCompletePreviewCore(nestedCashflow, nestedDraftPatch, nestedMeta);
+  const useLegacy = isCompletePreviewCore(legacyCashflow, legacyDraftPatch, legacyMeta);
+  if (useNested) {
+    return buildNormalizedPreviewPayload(
+      nestedCashflow,
+      nestedDraftPatch as Record<string, unknown>,
+      nestedMeta as Record<string, unknown>,
+      nestedSummary,
+    );
+  }
+  if (useLegacy) {
+    return buildNormalizedPreviewPayload(
+      legacyCashflow,
+      legacyDraftPatch as Record<string, unknown>,
+      legacyMeta as Record<string, unknown>,
+      legacySummary,
+    );
+  }
+  return null;
 }
 
 function isSaveDraftResponse(payload: unknown): payload is SaveDraftResponse {
   if (!isRecord(payload) || payload.ok !== true) return false;
-  const id = asString(payload.id) || asString(isRecord(payload.data) ? payload.data.id : "");
-  const createdAt = asString(payload.createdAt) || asString(isRecord(payload.data) ? payload.data.createdAt : "");
+  const id = asString(payload.id);
+  const createdAt = asString(payload.createdAt);
   return id.length > 0 && createdAt.length > 0;
 }
 
@@ -130,32 +200,30 @@ export async function fetchCsvDraftPreview(
     method: "POST",
     credentials: "same-origin",
     headers: {
-      "content-type": "text/csv",
+      "content-type": "application/json",
       ...(csrfToken ? { "x-csrf-token": csrfToken } : {}),
     },
-    body: csvText,
+    body: JSON.stringify({ csvText }),
   });
   const payload = await response.json().catch(() => null);
   if (!response.ok || !isImportDraftResponse(payload)) {
     throw new Error(toResponseMessage(payload, "CSV 업로드에 실패했습니다."));
   }
+  const parsed = pickPreviewPayload(payload);
+  if (!parsed) {
+    throw new Error(toResponseMessage(payload, "CSV 업로드에 실패했습니다."));
+  }
   return {
-    cashflow: payload.cashflow.map((row) => ({
+    cashflow: parsed.cashflow.map((row) => ({
       ym: asString(isRecord(row) ? row.ym : ""),
       incomeKrw: asNumber(isRecord(row) ? row.incomeKrw : 0),
       expenseKrw: asNumber(isRecord(row) ? row.expenseKrw : 0),
       netKrw: asNumber(isRecord(row) ? row.netKrw : 0),
       txCount: asNumber(isRecord(row) ? row.txCount : 0),
     })),
-    draftPatch: payload.draftPatch,
-    meta: {
-      rows: asNumber(payload.meta.rows),
-      months: asNumber(payload.meta.months),
-    },
-    draftSummary: {
-      rows: asNumber(payload.draftSummary.rows),
-      columns: asNumber(payload.draftSummary.columns),
-    },
+    draftPatch: parsed.draftPatch,
+    meta: parsed.meta,
+    draftSummary: parsed.draftSummary,
   };
 }
 
@@ -190,8 +258,8 @@ export async function saveCsvDraftPreview(
   if (!response.ok || !isSaveDraftResponse(payload)) {
     throw new Error(toResponseMessage(payload, "드래프트 저장에 실패했습니다."));
   }
-  const id = asString(payload.id) || asString(isRecord(payload.data) ? payload.data.id : "");
-  const createdAt = asString(payload.createdAt) || asString(isRecord(payload.data) ? payload.data.createdAt : "");
+  const id = asString(payload.id);
+  const createdAt = asString(payload.createdAt);
   return { id, createdAt };
 }
 

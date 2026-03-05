@@ -31,17 +31,28 @@ describe("planning v3 txnOverridesStore batch mode", () => {
   });
 
   it("stores overrides per batch with txnId-asc deterministic ordering", async () => {
-    await upsertOverride({ batchId: "batch-1", txnId: TXN_B, categoryId: "food" });
-    await upsertOverride({ batchId: "batch-1", txnId: TXN_A, categoryId: "housing" });
+    await upsertOverride({ batchId: "batch-1", txnId: TXN_B, kind: "expense", categoryId: "food" });
+    await upsertOverride({ batchId: "batch-1", txnId: TXN_A, kind: "income", categoryId: "housing" });
 
     const listed = await getOverrides("batch-1");
     expect(Object.keys(listed)).toEqual([TXN_A, TXN_B]);
     expect(listed[TXN_A]?.categoryId).toBe("housing");
+    expect(listed[TXN_A]?.kind).toBe("income");
     expect(listed[TXN_B]?.categoryId).toBe("food");
+    expect(listed[TXN_B]?.kind).toBe("expense");
 
     const filePath = path.join(root, "planning-v3", "txn-overrides", "batch-1.json");
     const raw = fs.readFileSync(filePath, "utf-8");
     expect(raw.indexOf(TXN_A)).toBeLessThan(raw.indexOf(TXN_B));
+  });
+
+  it("updates batch override kind deterministically for the same txn", async () => {
+    await upsertOverride({ batchId: "batch-1", txnId: TXN_A, kind: "expense", categoryId: "food" });
+    await upsertOverride({ batchId: "batch-1", txnId: TXN_A, kind: "income" });
+
+    const listed = await getOverrides("batch-1");
+    expect(listed[TXN_A]?.kind).toBe("income");
+    expect(listed[TXN_A]?.categoryId).toBe("food");
   });
 
   it("deleteOverride removes only target txn in target batch", async () => {
@@ -55,4 +66,3 @@ describe("planning v3 txnOverridesStore batch mode", () => {
     expect(b2[TXN_A]?.categoryId).toBe("tax");
   });
 });
-

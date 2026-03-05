@@ -7,6 +7,7 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { summarize } from "@/lib/ops/metrics/metricsStore";
+import { getPlanningFallbackUsageSnapshot } from "@/lib/planning/engine";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -55,6 +56,13 @@ export async function GET(request: Request) {
       summarize({ rangeHours: 24 }),
       summarize({ rangeHours: 168 }),
     ]);
+    const fallbackSnapshot = getPlanningFallbackUsageSnapshot();
+    const planningFallbacks = {
+      engineEnvelopeFallbackCount: fallbackSnapshot.legacyEnvelopeFallbackCount,
+      reportContractFallbackCount: fallbackSnapshot.legacyReportContractFallbackCount,
+      runEngineMigrationCount: fallbackSnapshot.legacyRunEngineMigrationCount,
+      ...(fallbackSnapshot.lastEventAt ? { lastEventAt: fallbackSnapshot.lastEventAt } : {}),
+    };
     const requested = rangeHours === 168 ? last7d : last24h;
 
     return NextResponse.json({
@@ -63,6 +71,7 @@ export async function GET(request: Request) {
         requested,
         last24h,
         last7d,
+        planningFallbacks,
       },
       meta: {
         range: rangeHours === 168 ? "7d" : "24h",

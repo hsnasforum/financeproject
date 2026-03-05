@@ -114,11 +114,15 @@ describe("POST /api/planning/v2/actions", () => {
       ok?: boolean;
       data?: {
         actions?: Array<{ code?: string; candidates?: unknown[] }>;
+        engine?: { stage?: string };
+        engineSchemaVersion?: number;
       };
     };
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
+    expect(payload.data?.engine?.stage).toBeTruthy();
+    expect(payload.data?.engineSchemaVersion).toBe(1);
     expect((payload.data?.actions ?? []).length).toBeGreaterThan(0);
     expect((payload.data?.actions ?? []).every((entry) => entry.candidates === undefined)).toBe(true);
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();

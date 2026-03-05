@@ -30,6 +30,7 @@ import {
 import { buildEvidence, type EvidenceItem } from "../../../../lib/planning/v2/insights/evidence";
 import { aggregateWarningsByUniqueMonth, type DashboardWarningAggRow } from "./warningAggregation";
 import { resolveWarningCatalog, warningFallbackMessage } from "./warningCatalog";
+import { type ReportInputContract } from "../../../../lib/planning/reports/reportInputContract";
 
 type ReportLike = {
   id?: string;
@@ -169,6 +170,42 @@ function asRecord(value: unknown): Record<string, unknown> {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+function applyReportInputContractToRun(
+  run: PlanningRunRecord,
+  contract: ReportInputContract,
+): PlanningRunRecord {
+  const outputs = asRecord(run.outputs);
+  const simulate = asRecord(outputs.simulate);
+
+  return {
+    ...run,
+    outputs: {
+      ...outputs,
+      engineSchemaVersion: contract.engineSchemaVersion,
+      resultDto: contract.resultDto,
+      simulate: {
+        ...simulate,
+        engine: contract.engine,
+      },
+    } as PlanningRunRecord["outputs"],
+  };
+}
+
+export function buildReportVMFromContract(
+  contract: ReportInputContract,
+  run: PlanningRunRecord | null,
+  report?: ReportLike,
+): ReportVM {
+  if (!run) {
+    return buildReportVM(null, {
+      ...report,
+      runId: contract.runId,
+    });
+  }
+  const runWithContract = applyReportInputContractToRun(run, contract);
+  return buildReportVM(runWithContract, report);
 }
 
 function parseNormalizationDisclosure(value: unknown): ProfileNormalizationDisclosure | undefined {
@@ -602,3 +639,4 @@ export function buildReportVM(
 }
 
 export const buildReportViewModel = buildReportVM;
+export const buildReportViewModelFromContract = buildReportVMFromContract;

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { type Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { recordPlanningFallbackUsage } from "../engine";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
 import { atomicWriteJson } from "../storage/atomicWrite";
@@ -33,6 +34,7 @@ import {
   resolveTrashKindDir,
   restoreFileFromTrash,
 } from "./trash";
+import { migrateLegacyRunToEngineEnvelope } from "./engineEnvelopeMigration";
 import { type PlanningRunRecord, type PlanningRunStageId } from "./types";
 
 export const DEFAULT_RUNS_PER_PROFILE_RETENTION = 50;
@@ -174,6 +176,15 @@ function normalizeBlobName(name: unknown): RunBlobName | null {
   return null;
 }
 
+function isEngineEnvelopeLike(value: unknown): value is NonNullable<PlanningRunRecord["outputs"]["engine"]> {
+  if (!isRecord(value)) return false;
+  const stage = asString(value.stage);
+  if (stage !== "DEFICIT" && stage !== "DEBT" && stage !== "EMERGENCY" && stage !== "INVEST") return false;
+  if (!isRecord(value.financialStatus)) return false;
+  if (!isRecord(value.stageDecision)) return false;
+  return true;
+}
+
 function normalizeRelativePath(absPath: string, baseDir = process.cwd()): string {
   return path.relative(baseDir, absPath).replaceAll("\\", "/");
 }
@@ -183,11 +194,23 @@ function compactRunOutputs(
   options?: CreateRunOptions,
 ): PlanningRunRecord["outputs"] {
   const source = isRecord(outputs) ? outputs : {};
+  const rawEngineSchemaVersion = Math.trunc(Number(source.engineSchemaVersion));
+  const engineSchemaVersion = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1
+    ? rawEngineSchemaVersion
+    : undefined;
   const resultDto = source.resultDto;
   const hasResultDto = isRecord(resultDto) && Number(asRecord(resultDto).version) === 1;
   if (!hasResultDto) {
     return outputs;
   }
+  const rootEngine = isEngineEnvelopeLike(source.engine)
+    ? source.engine
+    : undefined;
+  const simulateSource = asRecord(source.simulate);
+  const simulateEngine = isEngineEnvelopeLike(simulateSource.engine)
+    ? simulateSource.engine
+    : undefined;
+
   if (options?.storeRawOutputs !== true) {
     const dto = asRecord(resultDto);
     // Keep dto small for run-meta payloads.
@@ -195,21 +218,32 @@ function compactRunOutputs(
       ...dto,
       ...(isRecord(dto.raw) ? { raw: {} } : {}),
     };
-    return { resultDto: lightDto as PlanningRunRecord["outputs"]["resultDto"] };
+    return {
+      ...(typeof engineSchemaVersion === "number" ? { engineSchemaVersion } : {}),
+      resultDto: lightDto as PlanningRunRecord["outputs"]["resultDto"],
+      ...(rootEngine ? { engine: rootEngine } : {}),
+      ...(simulateEngine ? { simulate: { engine: simulateEngine } as PlanningRunRecord["outputs"]["simulate"] } : {}),
+    };
   }
 
   const timelineSampleStepMonths = toSafeLimit(options?.timelineSampleStepMonths, RAW_TIMELINE_SAMPLE_STEP_MONTHS);
 
   const compacted: PlanningRunRecord["outputs"] = {
+    ...(typeof engineSchemaVersion === "number" ? { engineSchemaVersion } : {}),
     resultDto,
+    ...(rootEngine ? { engine: rootEngine } : {}),
   };
 
-  const simulate = asRecord(source.simulate);
+  const simulate = simulateSource;
   if (Object.keys(simulate).length > 0) {
     const simulateRef = pickBlobRef(simulate.ref);
     const timelineRows = asArray(simulate.timeline);
     const simulateOutput = {
       ...(simulateRef ? { ref: simulateRef } : {}),
+      ...(isRecord(simulate.engine) ? { engine: simulate.engine } : {}),
+      ...(typeof simulate.stage === "string" ? { stage: simulate.stage } : {}),
+      ...(isRecord(simulate.financialStatus) ? { financialStatus: simulate.financialStatus } : {}),
+      ...(isRecord(simulate.stageDecision) ? { stageDecision: simulate.stageDecision } : {}),
       ...(simulate.summary !== undefined ? { summary: simulate.summary } : {}),
       ...(Array.isArray(simulate.warnings) ? { warnings: takeTop(simulate.warnings, LIMITS.warningsTop) } : {}),
       ...(Array.isArray(simulate.goalsStatus) ? { goalsStatus: takeTop(simulate.goalsStatus, LIMITS.goalsTop) } : {}),
@@ -430,10 +464,17 @@ async function readRunMetaByPath(filePath: string): Promise<PlanningRunRecord | 
   try {
     const canonical = loadCanonicalRun(parsed);
     const record = toMetaRecord(canonical.run);
-    if (decoded.rewriteToVault) {
-      await writeJsonAtomic(filePath, await toStoredPayload(record));
+    const migration = migrateLegacyRunToEngineEnvelope(record);
+    if (migration.migrated) {
+      recordPlanningFallbackUsage("legacyRunEngineMigrationCount", {
+        source: `runStore/readRunMetaByPath/${migration.source ?? "unknown"}`,
+        runId: migration.run.id,
+      });
     }
-    return record;
+    if (decoded.rewriteToVault || migration.migrated) {
+      await writeJsonAtomic(filePath, await toStoredPayload(migration.run));
+    }
+    return migration.run;
   } catch {
     return null;
   }
@@ -738,6 +779,10 @@ function withStageBlobRefs(
   refs: Partial<Record<RunBlobName, { name: RunBlobName; path: string; sizeBytes: number }>>,
 ): PlanningRunRecord["outputs"] {
   const source = asRecord(outputs);
+  const rawEngineSchemaVersion = Math.trunc(Number(source.engineSchemaVersion));
+  const engineSchemaVersion = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1
+    ? rawEngineSchemaVersion
+    : undefined;
   const simulateRef = refs.simulate
     ? { ref: { name: refs.simulate.name, path: refs.simulate.path, ...(typeof refs.simulate.sizeBytes === "number" ? { sizeBytes: refs.simulate.sizeBytes } : {}) } }
     : undefined;
@@ -755,6 +800,8 @@ function withStageBlobRefs(
     : undefined;
 
   return {
+    ...(typeof engineSchemaVersion === "number" ? { engineSchemaVersion } : {}),
+    ...(isEngineEnvelopeLike(source.engine) ? { engine: source.engine } : {}),
     ...(source.resultDto !== undefined ? { resultDto: source.resultDto as PlanningRunRecord["outputs"]["resultDto"] } : {}),
     ...(isRecord(source.simulate)
       ? {

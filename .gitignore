@@ -71,6 +71,13 @@ public/providers/*
 
 # runtime data artifacts (keep local only)
 .data/ops/
+.data/news/
+.data/indicators/
+.data/alerts/
+.data/scenarios/
+.data/exposure/
+.data/journal/
+.data/routines/
 .data/planning/
 .data/planning-e2e/
 .data/planning_v3_drafts/

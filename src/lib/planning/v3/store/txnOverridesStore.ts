@@ -52,7 +52,8 @@ type UpsertLegacyPatch = {
 type UpsertBatchInput = {
   batchId: unknown;
   txnId: unknown;
-  categoryId: unknown;
+  kind?: unknown;
+  categoryId?: unknown;
   note?: unknown;
 };
 
@@ -306,10 +307,11 @@ export async function upsertOverride(
   if (isRecord(arg1) && arg2 === undefined) {
     const batchId = normalizeBatchId(arg1.batchId);
     const txnId = normalizeTxnId(arg1.txnId);
+    const kind = normalizeKind(arg1.kind);
     const categoryId = normalizeCategoryId(arg1.categoryId);
-    if (!categoryId) {
-      throw new TxnOverridesStoreInputError("missing categoryId", [
-        { field: "categoryId", message: "categoryId가 필요합니다." },
+    if (!kind && !categoryId) {
+      throw new TxnOverridesStoreInputError("empty override patch", [
+        { field: "override", message: "kind/categoryId 중 하나 이상 필요합니다." },
       ]);
     }
 
@@ -319,9 +321,11 @@ export async function upsertOverride(
     const next: TxnOverride = {
       batchId,
       txnId,
-      ...(current?.kind ? { kind: current.kind } : {}),
-      categoryId,
-      category: categoryId,
+      ...(kind ? { kind } : (current?.kind ? { kind: current.kind } : {})),
+      ...(categoryId ? { categoryId } : (current?.categoryId ? { categoryId: current.categoryId } : {})),
+      ...(categoryId
+        ? { category: categoryId }
+        : (current?.category ? { category: current.category } : {})),
       updatedAt: new Date().toISOString(),
       ...(note ? { note: note.slice(0, 120) } : (current?.note ? { note: current.note } : {})),
     };

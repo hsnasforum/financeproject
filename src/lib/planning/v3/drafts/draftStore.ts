@@ -4,45 +4,40 @@ import crypto from "node:crypto";
 import { atomicWriteJson } from "../../storage/atomicWrite";
 import { resolveDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
+import {
+  DraftRecordSchema,
+  DraftSourceSchema,
+  normalizeDraftMeta,
+  normalizeDraftPayload,
+  normalizeDraftSource,
+  type DraftMeta,
+  type DraftPatch,
+  type DraftRecord,
+  type DraftSource,
+} from "./draftSchema";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "../service/forbiddenDraftKeys";
 
 export type CsvDraft = {
-  cashflow: Array<{
-    ym: string;
-    incomeKrw: number;
-    expenseKrw: number;
-    netKrw: number;
-    txCount: number;
-  }>;
-  draftPatch: Record<string, unknown>;
+  monthlyCashflow: DraftRecord["monthlyCashflow"];
+  draftPatch: DraftPatch;
 };
 
-export type DraftV1 = {
-  id: string;
-  createdAt: string;
-  source: {
-    kind: "csv";
-    filename?: string;
-    sha256?: string;
-  };
-  payload: CsvDraft;
-  meta: {
-    rows: number;
-    columns: number;
-  };
-};
+export type DraftV1 = DraftRecord;
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function asNumber(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+let droppedDraftPayloadWarningCount = 0;
+
+function recordDroppedDraftPayloadWarnings(count: number): void {
+  if (count > 0) {
+    droppedDraftPayloadWarningCount += count;
+  }
 }
 
 function ensureServerOnly(): void {
@@ -65,60 +60,14 @@ function resolveDraftPath(id: string, cwd = process.cwd()): string {
   return path.join(resolveDraftsDir(cwd), `${sanitizeRecordId(id)}.json`);
 }
 
-function normalizeSource(value: unknown): DraftV1["source"] {
-  if (!isRecord(value) || value.kind !== "csv") {
-    return { kind: "csv" };
+function normalizePayloadFromRecord(value: unknown): ReturnType<typeof normalizeDraftPayload> {
+  if (isRecord(value) && isRecord(value.payload)) {
+    return normalizeDraftPayload(value.payload);
   }
-  const filename = asString(value.filename);
-  const sha256 = asString(value.sha256).toLowerCase();
-  const normalizedHash = /^[a-f0-9]{8,64}$/u.test(sha256) ? sha256 : "";
-  return {
-    kind: "csv",
-    ...(filename ? { filename: filename.slice(0, 255) } : {}),
-    ...(normalizedHash ? { sha256: normalizedHash } : {}),
-  };
-}
-
-function normalizeCashflow(value: unknown): CsvDraft["cashflow"] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((row) => {
-      if (!isRecord(row)) return null;
-      const ym = asString(row.ym);
-      if (!/^\d{4}-\d{2}$/u.test(ym)) return null;
-      return {
-        ym,
-        incomeKrw: asNumber(row.incomeKrw),
-        expenseKrw: asNumber(row.expenseKrw),
-        netKrw: asNumber(row.netKrw),
-        txCount: Math.max(0, asNumber(row.txCount)),
-      };
-    })
-    .filter((row): row is CsvDraft["cashflow"][number] => row !== null)
-    .sort((left, right) => left.ym.localeCompare(right.ym));
-}
-
-function normalizePayload(value: unknown): CsvDraft {
-  if (!isRecord(value)) {
-    return {
-      cashflow: [],
-      draftPatch: {},
-    };
-  }
-  return {
-    cashflow: normalizeCashflow(value.cashflow),
-    draftPatch: isRecord(value.draftPatch) ? value.draftPatch : {},
-  };
-}
-
-function normalizeMeta(value: unknown): DraftV1["meta"] {
-  if (!isRecord(value)) {
-    return { rows: 0, columns: 0 };
-  }
-  return {
-    rows: Math.max(0, asNumber(value.rows)),
-    columns: Math.max(0, asNumber(value.columns)),
-  };
+  return normalizeDraftPayload({
+    monthlyCashflow: isRecord(value) ? value.monthlyCashflow : undefined,
+    draftPatch: isRecord(value) ? value.draftPatch : undefined,
+  });
 }
 
 function normalizeDraft(value: unknown): DraftV1 | null {
@@ -129,13 +78,30 @@ function normalizeDraft(value: unknown): DraftV1 | null {
     const createdAt = Number.isFinite(Date.parse(createdAtRaw))
       ? new Date(createdAtRaw).toISOString()
       : new Date(0).toISOString();
+    const sourceNormalized = normalizeDraftSource(value.source);
+    const payloadNormalized = normalizePayloadFromRecord(value);
+    const allowedTopKeys = new Set([
+      "id",
+      "createdAt",
+      "source",
+      "meta",
+      "monthlyCashflow",
+      "draftPatch",
+      "payload",
+    ]);
+    const droppedByTopLevel = Object.keys(value).filter((key) => !allowedTopKeys.has(key)).length;
+    const droppedWarnings = sourceNormalized.droppedWarnings + payloadNormalized.droppedWarnings + droppedByTopLevel;
+    recordDroppedDraftPayloadWarnings(droppedWarnings);
+
     const draft: DraftV1 = {
       id,
       createdAt,
-      source: normalizeSource(value.source),
-      payload: normalizePayload(value.payload),
-      meta: normalizeMeta(value.meta),
+      source: sourceNormalized.value,
+      meta: normalizeDraftMeta(value.meta, droppedWarnings),
+      monthlyCashflow: payloadNormalized.value.monthlyCashflow,
+      draftPatch: payloadNormalized.value.draftPatch,
     };
+    DraftRecordSchema.parse(draft);
     assertNoForbiddenDraftKeys(draft);
     return draft;
   } catch (error) {
@@ -160,8 +126,9 @@ function sanitizeForWrite(value: DraftV1): DraftV1 {
     id: value.id,
     createdAt: value.createdAt,
     source: value.source,
-    payload: value.payload,
     meta: value.meta,
+    monthlyCashflow: value.monthlyCashflow,
+    draftPatch: value.draftPatch,
   };
 }
 
@@ -197,30 +164,63 @@ function buildDeterministicSha256(input: unknown): string {
 
 export async function createDraft(input: {
   id?: string;
-  source?: DraftV1["source"];
-  payload: CsvDraft;
-  meta: DraftV1["meta"];
+  source?: DraftSource;
+  payload?: {
+    monthlyCashflow?: unknown;
+    cashflow?: unknown;
+    draftPatch?: unknown;
+  };
+  monthlyCashflow?: unknown;
+  draftPatch?: unknown;
+  meta?: Partial<DraftMeta> & {
+    rows?: unknown;
+    columns?: unknown;
+  };
 }): Promise<DraftV1> {
   ensureServerOnly();
   const id = sanitizeRecordId(asString(input.id) || crypto.randomUUID());
-  const payload = normalizePayload(input.payload);
-  const source = normalizeSource(input.source);
-  const meta = normalizeMeta(input.meta);
+  const allowedInputKeys = new Set(["id", "source", "payload", "monthlyCashflow", "draftPatch", "meta"]);
+  const droppedByInputTopLevel = Object.keys(input).filter((key) => !allowedInputKeys.has(key)).length;
+  const sourceNormalized = normalizeDraftSource(input.source);
+  const payloadNormalized = normalizeDraftPayload(
+    isRecord(input.payload)
+      ? input.payload
+      : {
+        monthlyCashflow: input.monthlyCashflow,
+        draftPatch: input.draftPatch,
+      },
+  );
+  const droppedWarnings = droppedByInputTopLevel + sourceNormalized.droppedWarnings + payloadNormalized.droppedWarnings;
+  const source = sourceNormalized.value;
+  const payload = payloadNormalized.value;
+  const meta = normalizeDraftMeta(input.meta, droppedWarnings);
+  recordDroppedDraftPayloadWarnings(droppedWarnings);
+
   const draft: DraftV1 = {
     id,
     createdAt: nowIso(),
-    source: {
+    source: DraftSourceSchema.parse({
       kind: "csv",
       ...(source.filename ? { filename: source.filename } : {}),
       ...(source.sha256 ? { sha256: source.sha256 } : {}),
       ...(!source.sha256 ? { sha256: buildDeterministicSha256(payload).slice(0, 64) } : {}),
-    },
-    payload,
+    }),
     meta,
+    monthlyCashflow: payload.monthlyCashflow,
+    draftPatch: payload.draftPatch,
   };
-  assertNoForbiddenDraftKeys(draft);
-  await atomicWriteJson(resolveDraftPath(id), sanitizeForWrite(draft));
-  return draft;
+  const parsedDraft = DraftRecordSchema.parse(draft);
+  const normalizedDraft: DraftV1 = {
+    id: parsedDraft.id,
+    createdAt: parsedDraft.createdAt,
+    source: parsedDraft.source,
+    meta: parsedDraft.meta,
+    monthlyCashflow: parsedDraft.monthlyCashflow,
+    draftPatch: parsedDraft.draftPatch,
+  };
+  assertNoForbiddenDraftKeys(normalizedDraft);
+  await atomicWriteJson(resolveDraftPath(id), sanitizeForWrite(normalizedDraft));
+  return normalizedDraft;
 }
 
 export async function listDrafts(): Promise<Array<Pick<DraftV1, "id" | "createdAt" | "source" | "meta">>> {

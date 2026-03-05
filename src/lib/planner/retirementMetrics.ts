@@ -1,4 +1,4 @@
-import { unitMultiplier, type PlannerInput } from "./metrics";
+import { unitMultiplier, type PlannerInput } from "./legacyPlanModel";
 
 export function computeRetirementMetrics(
   input: Pick<

@@ -66,6 +66,7 @@ type DetailResponse = {
 };
 
 type TransactionKind = "income" | "expense" | "transfer";
+type TransactionKindOverride = TransactionKind | "auto";
 type CategoryId =
   | "income"
   | "transfer"
@@ -401,7 +402,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
   const [cashflowNonce, setCashflowNonce] = useState(0);
   const [draftSaving, setDraftSaving] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
-  const [txnKindDrafts, setTxnKindDrafts] = useState<Record<string, TransactionKind>>({});
+  const [txnKindDrafts, setTxnKindDrafts] = useState<Record<string, TransactionKindOverride>>({});
   const [txnCategoryDrafts, setTxnCategoryDrafts] = useState<Record<string, TransactionCategory>>({});
   const [txnAccountDrafts, setTxnAccountDrafts] = useState<Record<string, string>>({});
   const [txnOverrideSavingId, setTxnOverrideSavingId] = useState("");
@@ -513,7 +514,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
           });
           setTxnKindDrafts(Object.fromEntries(
             normalizedTransactions.map((row) => [row.txnId, row.kind]),
-          ) as Record<string, TransactionKind>);
+          ) as Record<string, TransactionKindOverride>);
           setTxnCategoryDrafts(Object.fromEntries(
             normalizedTransactions.map((row) => [row.txnId, row.category]),
           ) as Record<string, TransactionCategory>);
@@ -836,8 +837,10 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
 
   async function saveTxnOverride(txnId: string) {
     if (txnOverrideSavingId) return;
-    const category = txnCategoryDrafts[txnId];
-    if (!category) {
+    const currentRow = (detail?.transactions ?? []).find((row) => row.txnId === txnId);
+    const category = txnCategoryDrafts[txnId] ?? currentRow?.category;
+    const kind = txnKindDrafts[txnId] ?? currentRow?.kind ?? "auto";
+    if (!category && kind === "auto") {
       setTxnOverrideMessage("거래 분류값을 확인해 주세요.");
       return;
     }
@@ -850,29 +853,32 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
     setTxnOverrideSavingId(txnId);
     setTxnOverrideMessage("");
     try {
-      const response = await fetch("/api/planning/v3/transactions/overrides", {
-        method: "PATCH",
+      const response = await fetch(`/api/planning/v3/batches/${encodeURIComponent(batchId)}/txn-overrides`, {
+        method: "POST",
         credentials: "same-origin",
         headers: {
           "content-type": "application/json",
         },
         body: JSON.stringify(withDevCsrf({
-          batchId,
           txnId,
-          categoryId: category,
+          kind,
+          ...(category ? { categoryId: category } : {}),
         })),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !isRecord(payload) || payload.ok !== true || !isRecord(payload.override)) {
+      if (!response.ok || !isRecord(payload) || payload.ok !== true || !isRecord(payload.data)) {
         setTxnOverrideMessage("거래 오버라이드 저장에 실패했습니다.");
         return;
       }
 
-      const savedCategory = asString(payload.override.categoryId || payload.override.category);
-      if (!CATEGORY_OPTIONS.includes(savedCategory as TransactionCategory)) {
-        setTxnOverrideMessage("거래 오버라이드 저장에 실패했습니다.");
+      if (payload.data.deleted === true) {
+        setCashflowNonce((value) => value + 1);
+        setTxnOverrideMessage("거래 오버라이드를 초기화했습니다.");
         return;
       }
+
+      const savedKind = asString(payload.data.kind) as TransactionKind;
+      const savedCategory = asString(payload.data.categoryId || payload.data.category);
 
       setDetail((prev) => {
         if (!prev) return prev;
@@ -880,8 +886,15 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
           if (row.txnId !== txnId) return row;
           return {
             ...row,
-            category: savedCategory as TransactionCategory,
-            categoryId: savedCategory as CategoryId,
+            ...(savedKind === "income" || savedKind === "expense" || savedKind === "transfer"
+              ? { kind: savedKind }
+              : {}),
+            ...(CATEGORY_OPTIONS.includes(savedCategory as TransactionCategory)
+              ? {
+                  category: savedCategory as TransactionCategory,
+                  categoryId: savedCategory as CategoryId,
+                }
+              : {}),
             categorySource: "override" as const,
           };
         });
@@ -1205,11 +1218,12 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                             className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
                             data-testid={`v3-txn-kind-${row.txnId}`}
                             onChange={(event) => {
-                              const next = event.currentTarget.value as TransactionKind;
+                              const next = event.currentTarget.value as TransactionKindOverride;
                               setTxnKindDrafts((prev) => ({ ...prev, [row.txnId]: next }));
                             }}
                             value={txnKindDrafts[row.txnId] ?? row.kind}
                           >
+                            <option value="auto">auto</option>
                             <option value="income">income</option>
                             <option value="expense">expense</option>
                             <option value="transfer">transfer</option>
@@ -1232,7 +1246,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                         </td>
                         <td className="px-3 py-2">
                           <Button
-                            data-testid={`v3-txn-override-save-${row.txnId}`}
+                            data-testid={`v3-txn-save-${row.txnId}`}
                             disabled={Boolean(txnOverrideSavingId && txnOverrideSavingId !== row.txnId)}
                             onClick={() => {
                               void saveTxnOverride(row.txnId);

@@ -1,5 +1,10 @@
-import { buildRecommendations, type Recommendation } from "@/lib/planner/rules";
-import { computeMetrics, type PlannerInput, type PlannerMetrics } from "@/lib/planner/metrics";
+import {
+  buildRecommendations,
+  computeMetrics,
+  type PlannerInput,
+  type PlannerMetrics,
+  type Recommendation,
+} from "@/lib/planner/legacyPlanModel";
 
 export type ChecklistItem = {
   id: string;
@@ -115,4 +120,4 @@ export function buildPlan(input: PlannerInput): PlannerPlan {
   };
 }
 
-export type { PlannerInput, PlannerMetrics };
+export type { PlannerInput, PlannerMetrics, Recommendation };

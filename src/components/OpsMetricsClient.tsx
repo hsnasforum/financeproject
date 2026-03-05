@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -68,12 +68,27 @@ type SummaryPayload = {
   data?: {
     last24h?: MetricsSummary;
     last7d?: MetricsSummary;
+    planningFallbacks?: {
+      engineEnvelopeFallbackCount?: number;
+      reportContractFallbackCount?: number;
+      runEngineMigrationCount?: number;
+      lastEventAt?: string;
+    };
   };
   error?: { code?: string; message?: string; fixHref?: string };
 };
 
-type OpsMetricsClientProps = {
-  csrf?: string;
+type PlanningFallbackSummary = {
+  engineEnvelopeFallbackCount: number;
+  reportContractFallbackCount: number;
+  runEngineMigrationCount: number;
+  lastEventAt?: string;
+};
+
+type PlanningFallbackDelta = {
+  engineEnvelopeFallbackCount: number;
+  reportContractFallbackCount: number;
+  runEngineMigrationCount: number;
 };
 
 function asString(value: unknown): string {
@@ -103,14 +118,59 @@ function shortMeta(row: MetricsRow): string {
   return parts.length > 0 ? parts.join(" · ") : "-";
 }
 
-export function OpsMetricsClient(_props: OpsMetricsClientProps) {
+function toSafeCount(value: unknown): number {
+  const parsed = Math.trunc(Number(value));
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return parsed;
+}
+
+type RawPlanningFallbackSummary = {
+  engineEnvelopeFallbackCount?: number;
+  reportContractFallbackCount?: number;
+  runEngineMigrationCount?: number;
+  lastEventAt?: string;
+};
+
+function toFallbackSummary(value: RawPlanningFallbackSummary | undefined): PlanningFallbackSummary {
+  return {
+    engineEnvelopeFallbackCount: toSafeCount(value?.engineEnvelopeFallbackCount),
+    reportContractFallbackCount: toSafeCount(value?.reportContractFallbackCount),
+    runEngineMigrationCount: toSafeCount(value?.runEngineMigrationCount),
+    ...(asString(value?.lastEventAt) ? { lastEventAt: asString(value?.lastEventAt) } : {}),
+  };
+}
+
+function fallbackLevel(count: number): "ok" | "warn" | "check" {
+  if (count <= 0) return "ok";
+  if (count <= 5) return "warn";
+  return "check";
+}
+
+function fallbackLevelLabel(level: "ok" | "warn" | "check"): string {
+  if (level === "ok") return "정상";
+  if (level === "warn") return "경고";
+  return "점검 필요";
+}
+
+export function OpsMetricsClient() {
   const [rows, setRows] = useState<MetricsRow[]>([]);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [eventType, setEventType] = useState("");
   const [summary24h, setSummary24h] = useState<MetricsSummary | undefined>(undefined);
   const [summary7d, setSummary7d] = useState<MetricsSummary | undefined>(undefined);
+  const [planningFallbacks, setPlanningFallbacks] = useState<PlanningFallbackSummary>({
+    engineEnvelopeFallbackCount: 0,
+    reportContractFallbackCount: 0,
+    runEngineMigrationCount: 0,
+  });
+  const [planningFallbackDelta, setPlanningFallbackDelta] = useState<PlanningFallbackDelta>({
+    engineEnvelopeFallbackCount: 0,
+    reportContractFallbackCount: 0,
+    runEngineMigrationCount: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const previousFallbacksRef = useRef<PlanningFallbackSummary | null>(null);
 
   const loadMetrics = useCallback(async () => {
     setLoading(true);
@@ -145,11 +205,41 @@ export function OpsMetricsClient(_props: OpsMetricsClientProps) {
       setEventTypes(nextTypes);
       setSummary24h(summaryPayload.data.last24h);
       setSummary7d(summaryPayload.data.last7d);
+      const nextFallbacks = toFallbackSummary(summaryPayload.data.planningFallbacks);
+      const previousFallbacks = previousFallbacksRef.current;
+      const delta: PlanningFallbackDelta = previousFallbacks
+        ? {
+          engineEnvelopeFallbackCount: Math.max(
+            0,
+            nextFallbacks.engineEnvelopeFallbackCount - previousFallbacks.engineEnvelopeFallbackCount,
+          ),
+          reportContractFallbackCount: Math.max(
+            0,
+            nextFallbacks.reportContractFallbackCount - previousFallbacks.reportContractFallbackCount,
+          ),
+          runEngineMigrationCount: Math.max(
+            0,
+            nextFallbacks.runEngineMigrationCount - previousFallbacks.runEngineMigrationCount,
+          ),
+        }
+        : {
+          engineEnvelopeFallbackCount: 0,
+          reportContractFallbackCount: 0,
+          runEngineMigrationCount: 0,
+        };
+      setPlanningFallbackDelta(delta);
+      setPlanningFallbacks(nextFallbacks);
+      previousFallbacksRef.current = nextFallbacks;
     } catch (loadError) {
       setRows([]);
       setEventTypes([]);
       setSummary24h(undefined);
       setSummary7d(undefined);
+      setPlanningFallbackDelta({
+        engineEnvelopeFallbackCount: 0,
+        reportContractFallbackCount: 0,
+        runEngineMigrationCount: 0,
+      });
       setError(loadError instanceof Error ? loadError.message : "metrics를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
@@ -188,6 +278,35 @@ export function OpsMetricsClient(_props: OpsMetricsClientProps) {
     ];
   }, [summary24h, summary7d]);
 
+  const planningFallbackCards = useMemo(() => {
+    const engineLevel = fallbackLevel(planningFallbacks.engineEnvelopeFallbackCount);
+    const reportLevel = fallbackLevel(planningFallbacks.reportContractFallbackCount);
+    const migrationLevel = fallbackLevel(planningFallbacks.runEngineMigrationCount);
+    return [
+      {
+        title: "Engine envelope fallback",
+        value: planningFallbacks.engineEnvelopeFallbackCount,
+        delta: planningFallbackDelta.engineEnvelopeFallbackCount,
+        level: engineLevel,
+        levelLabel: fallbackLevelLabel(engineLevel),
+      },
+      {
+        title: "Report contract fallback",
+        value: planningFallbacks.reportContractFallbackCount,
+        delta: planningFallbackDelta.reportContractFallbackCount,
+        level: reportLevel,
+        levelLabel: fallbackLevelLabel(reportLevel),
+      },
+      {
+        title: "Run lazy migration",
+        value: planningFallbacks.runEngineMigrationCount,
+        delta: planningFallbackDelta.runEngineMigrationCount,
+        level: migrationLevel,
+        levelLabel: fallbackLevelLabel(migrationLevel),
+      },
+    ];
+  }, [planningFallbackDelta, planningFallbacks]);
+
   return (
     <PageShell>
       <div data-testid="ops-metrics">
@@ -218,6 +337,30 @@ export function OpsMetricsClient(_props: OpsMetricsClientProps) {
           </Card>
         ))}
       </div>
+
+      <Card className="mb-4 p-4" data-testid="planning-fallback-summary">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-base font-black text-slate-900">Planning fallback usage</h2>
+          <p className="text-xs text-slate-500">
+            마지막 발생: {planningFallbacks.lastEventAt ? formatDateTime(planningFallbacks.lastEventAt) : "-"}
+          </p>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          {planningFallbackCards.map((card) => (
+            <div key={card.title} className="rounded-lg border border-slate-200 bg-white p-3">
+              <p className="text-[11px] font-semibold text-slate-500">{card.title}</p>
+              <p className="mt-1 text-lg font-black text-slate-900">{card.value.toLocaleString()}</p>
+              <p className="mt-1 text-[11px] text-slate-600">최근 증가량 +{card.delta.toLocaleString()}</p>
+              <p className={`mt-1 text-[11px] font-semibold ${
+                card.level === "ok" ? "text-emerald-600" : card.level === "warn" ? "text-amber-600" : "text-rose-600"
+              }`}
+              >
+                {card.levelLabel}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <Card className="mb-4 p-4">
         <h2 className="text-base font-black text-slate-900">필터</h2>

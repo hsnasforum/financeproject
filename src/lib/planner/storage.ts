@@ -1,5 +1,4 @@
-import { type PlannerInput, type PlannerMetrics } from "@/lib/planner/plan";
-import { type Recommendation } from "@/lib/planner/rules";
+import { type PlannerInput, type PlannerMetrics, type Recommendation } from "@/lib/planner/plan";
 
 const STORAGE_KEY = "finlife_planner_snapshots_v1";
 const MAX_SNAPSHOTS = 20;
