@@ -305,6 +305,8 @@ describe("planning v2 persistence routes", () => {
     expect(runCreatePayload.data?.outputs?.resultDto).toBeDefined();
     expect((runCreatePayload.data?.outputs?.simulate as { ref?: { name?: string } } | undefined)?.ref?.name).toBe("simulate");
     expect((runCreatePayload.data?.outputs?.actions as { ref?: { name?: string } } | undefined)?.ref?.name).toBe("actions");
+    expect((runCreatePayload.data?.outputs?.simulate as { ref?: { path?: string } } | undefined)?.ref?.path).toBeUndefined();
+    expect((runCreatePayload.data?.outputs?.actions as { ref?: { path?: string } } | undefined)?.ref?.path).toBeUndefined();
 
     const runId = String(runCreatePayload.data?.id ?? "");
 
