@@ -15,9 +15,11 @@ import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
+import { runPlanningEngineFromProfile } from "../../../../../lib/planning/server/v2/toEngineInput";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import { attachEngineResponse } from "../../../../../lib/planning/engine";
 
 type MonteCarloRequestBody = {
   profile?: unknown;
@@ -144,6 +146,16 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   }
 }
 
+function stripLegacyTopLevelFields(data: Record<string, unknown>): Record<string, unknown> {
+  const {
+    stage: _legacyStage,
+    financialStatus: _legacyFinancialStatus,
+    stageDecision: _legacyStageDecision,
+    ...rest
+  } = data;
+  return rest;
+}
+
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -267,7 +279,9 @@ export async function POST(request: Request) {
     }>("monteCarlo", keyBundle.key);
     if (cached) {
       await recordCacheUsage("monteCarlo", true).catch(() => undefined);
-      return ok(cached.data.data, {
+      const cachedData = stripLegacyTopLevelFields(cached.data.data);
+      const cachedEngineResult = runPlanningEngineFromProfile(profile);
+      return ok(attachEngineResponse(cachedEngineResult, cachedData), {
         ...cached.data.meta,
         cache: {
           hit: true,
@@ -277,14 +291,16 @@ export async function POST(request: Request) {
     }
     await recordCacheUsage("monteCarlo", false).catch(() => undefined);
 
-    const monteCarlo = planningService.monteCarlo({
-      profile,
-      horizonMonths,
-      baseAssumptions,
-      policyId,
-      paths: monteCarloConfig.paths,
-      seed: monteCarloConfig.seed,
-      riskTolerance,
+    const engineResult = runPlanningEngineFromProfile(profile, {
+      runCore: () => planningService.monteCarlo({
+        profile,
+        horizonMonths,
+        baseAssumptions,
+        policyId,
+        paths: monteCarloConfig.paths,
+        seed: monteCarloConfig.seed,
+        riskTolerance,
+      }),
     });
 
     const payload = {
@@ -293,11 +309,11 @@ export async function POST(request: Request) {
         snapshot: snapshotMeta,
         health: health.summary,
       },
-      data: {
+      data: attachEngineResponse(engineResult, {
         baseAssumptionsUsed: baseAssumptions,
-        monteCarlo,
+        monteCarlo: engineResult.core,
         healthWarnings: health.warnings,
-      },
+      }),
     };
 
     await setCache({

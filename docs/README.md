@@ -44,6 +44,7 @@
 - [planning-v2-ux-freeze.md](./planning-v2-ux-freeze.md)
 - [planning-backlog.md](./planning-backlog.md)
 - [planning-v2-onepage.md](./planning-v2-onepage.md)
+- [planning-report-recommendation.md](./planning-report-recommendation.md)
 - [planning-v3-migration.md](./planning-v3-migration.md)
 - [planning-v3-kickoff.md](./planning-v3-kickoff.md)
 - [release.md](./release.md)
@@ -57,3 +58,7 @@
 1. `pnpm planning:v2:complete`
 2. 서버 실행 후 `pnpm planning:v2:acceptance`
 3. `docs/planning-v2-5min-selftest.md` 체크 항목 완료
+
+## v2 Core Change 메모
+- `pnpm planning:v2:freeze:guard`에서 `v2 core change`가 감지되면 `pnpm planning:v2:regress`까지 함께 실행합니다.
+- 리뷰/릴리즈 문맥에는 `[v2-core-change]` 태그를 남겨 변경 성격이 바로 드러나게 합니다.

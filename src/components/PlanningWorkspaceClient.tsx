@@ -80,10 +80,13 @@ import {
   normalizePlanningResponse,
   type PlanningApiEngineEnvelope,
 } from "@/lib/planning/api/contracts";
+import { resolveReportResultDtoFromRun } from "@/lib/planning/reports/reportInputContract";
 import { type ActionItemV2 } from "@/lib/planning/v2/actions/types";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
-import { buildResultDtoV1, isResultDtoV1, type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
+import { isResultDtoV1, type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
+import { rebuildResultDtoFromCombinedRunResultForCompat } from "@/lib/planning/v2/compatResultDto";
 import { buildPlanningChartPoints } from "@/lib/planning/v2/chartPoints";
+import { buildResultSummaryMetrics } from "@/lib/planning/v2/resultSummary";
 import { applySuggestions } from "@/lib/planning/v2/applySuggestions";
 import { preflightRun, type PreflightIssue } from "@/lib/planning/v2/preflight";
 import { applyProfilePatch, type ScenarioPatch } from "@/lib/planning/v2/profilePatch";
@@ -96,12 +99,16 @@ import {
   aggregateWarnings as aggregateGuideWarnings,
 } from "@/lib/planning/v2/resultGuide";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
-import { type ProfileNormalizationDisclosure } from "@/lib/planning/v2/normalizationDisclosure";
+import {
+  parseProfileNormalizationDisclosure,
+  type ProfileNormalizationDisclosure,
+} from "@/lib/planning/v2/normalizationDisclosure";
 import {
   mergeNormalizationReports,
   reportFromNormalizationDisclosure,
   type NormalizationReport,
 } from "@/lib/planning/v2/normalizationReport";
+import { SIDO_ADMIN_2025, SIGUNGU_BY_SIDO_CODE_2025 } from "@/lib/regions/kr_admin_2025";
 
 type ApiError = {
   code?: string;
@@ -456,33 +463,6 @@ function parseSnapshotListItem(value: unknown): SnapshotListItem | null {
     ...(Number.isFinite(Number(row.warningsCount))
       ? { warningsCount: Math.max(0, Math.trunc(Number(row.warningsCount))) }
       : {}),
-  };
-}
-
-function parseNormalizationDisclosure(value: unknown): ProfileNormalizationDisclosure | null {
-  const row = asRecord(value);
-  const defaultsApplied = asArray(row.defaultsApplied)
-    .map((entry) => asString(entry).trim())
-    .filter((entry) => entry.length > 0);
-  const fixesApplied = asArray(row.fixesApplied)
-    .map((entry) => {
-      const fix = asRecord(entry);
-      const path = asString(fix.path).trim();
-      const message = asString(fix.message).trim();
-      if (!path || !message) return null;
-      return {
-        path,
-        ...(fix.from !== undefined ? { from: fix.from } : {}),
-        ...(fix.to !== undefined ? { to: fix.to } : {}),
-        message,
-      };
-    })
-    .filter((entry): entry is ProfileNormalizationDisclosure["fixesApplied"][number] => entry !== null);
-
-  if (defaultsApplied.length < 1 && fixesApplied.length < 1) return null;
-  return {
-    defaultsApplied,
-    fixesApplied,
   };
 }
 
@@ -934,6 +914,14 @@ export function PlanningWorkspaceClient({
     () => appendProfileIdQuery("/planning/runs", selectedProfileId),
     [selectedProfileId],
   );
+  const selectedBenefitSidoCode = useMemo(
+    () => SIDO_ADMIN_2025.find((entry) => entry.name === (profileForm.sido ?? ""))?.code ?? "",
+    [profileForm.sido],
+  );
+  const benefitSigunguOptions = useMemo(
+    () => (selectedBenefitSidoCode ? SIGUNGU_BY_SIDO_CODE_2025[selectedBenefitSidoCode] ?? [] : []),
+    [selectedBenefitSidoCode],
+  );
   const reportsPageHref = useMemo(
     () => appendProfileIdQuery("/planning/reports", selectedProfileId),
     [selectedProfileId],
@@ -972,7 +960,7 @@ export function PlanningWorkspaceClient({
     }
   }, [policyId, profileForm, profileName]);
   const runNormalizationDisclosure = useMemo<ProfileNormalizationDisclosure | null>(() => {
-    return parseNormalizationDisclosure(runResult?.meta?.normalization);
+    return parseProfileNormalizationDisclosure(runResult?.meta?.normalization);
   }, [runResult?.meta?.normalization]);
   const lastNormalizationReport = useMemo<NormalizationReport>(
     () => reportFromNormalizationDisclosure(lastNormalizationDisclosure, "최근 적용 결과"),
@@ -1626,7 +1614,7 @@ export function PlanningWorkspaceClient({
       const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord> | null;
       if (!parseApiPayload(locale, res, payload, fallbackMessage)) return false;
 
-      const normalizationFromResponse = parseNormalizationDisclosure(payload?.meta?.normalization);
+      const normalizationFromResponse = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
       setLastNormalizationDisclosure(normalizationFromResponse ?? payloadProfile.normalization);
 
       await loadProfiles(payload.data?.id);
@@ -1900,7 +1888,8 @@ export function PlanningWorkspaceClient({
 
   function toCombinedRunResultFromRecord(run: PlanningRunRecord): CombinedRunResult {
     const outputs = asRecord(run.outputs);
-    const normalization = parseNormalizationDisclosure(run.meta.normalization);
+    const normalization = parseProfileNormalizationDisclosure(run.meta.normalization);
+    const resultDto = resolveReportResultDtoFromRun(run, { mode: "compat" });
     return {
       meta: {
         generatedAt: run.createdAt,
@@ -1908,7 +1897,7 @@ export function PlanningWorkspaceClient({
         ...(normalization ? { normalization } : {}),
         health: run.meta.health as PlanningMeta["health"],
       },
-      ...(isResultDtoV1(outputs.resultDto) ? { resultDto: outputs.resultDto } : {}),
+      ...(resultDto ? { resultDto } : {}),
       ...(isRecord(outputs.simulate) ? { simulate: asRecord(outputs.simulate) } : {}),
       ...(isRecord(outputs.scenarios) ? { scenarios: asRecord(outputs.scenarios) } : {}),
       ...(isRecord(outputs.monteCarlo) ? { monteCarlo: asRecord(outputs.monteCarlo) } : {}),
@@ -1997,7 +1986,7 @@ export function PlanningWorkspaceClient({
       const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
       if (handleSnapshotNotFound(payload)) return;
       if (!parseApiPayload(locale, response, payload, "실행 요청에 실패했습니다.")) return;
-      const normalizationFromRunMeta = parseNormalizationDisclosure(payload?.meta?.normalization);
+      const normalizationFromRunMeta = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
       if (normalizationFromRunMeta) {
         setLastNormalizationDisclosure(normalizationFromRunMeta);
       }
@@ -2095,7 +2084,7 @@ export function PlanningWorkspaceClient({
     if (!parseApiPayload(locale, res, payload, "실행 기록 저장 전 프로필 동기화에 실패했습니다.")) {
       return false;
     }
-    const normalizationFromResponse = parseNormalizationDisclosure(payload?.meta?.normalization);
+    const normalizationFromResponse = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
     setLastNormalizationDisclosure(normalizationFromResponse ?? canonicalProfile.normalization);
 
     await loadProfiles(selectedProfileId);
@@ -2273,24 +2262,9 @@ export function PlanningWorkspaceClient({
     }
   }
 
-  const resultDto = runResult
-    ? (isResultDtoV1(runResult.resultDto)
-      ? runResult.resultDto
-      : buildResultDtoV1({
-        generatedAt: runResult.meta?.generatedAt,
-        policyId,
-        meta: {
-          snapshot: runResult.meta?.snapshot,
-          health: runResult.meta?.health,
-          cache: runResult.meta?.cache,
-        },
-        simulate: runResult.simulate,
-        scenarios: runResult.scenarios,
-        monteCarlo: runResult.monteCarlo,
-        actions: runResult.actions,
-        debt: runResult.debt,
-      }))
-    : null;
+  const resultDto = isResultDtoV1(runResult?.resultDto)
+    ? runResult.resultDto
+    : rebuildResultDtoFromCombinedRunResultForCompat(runResult, policyId);
 
   const simulateRow = asRecord(resultDto?.raw?.simulate);
   const simulateTimeline = asArray(simulateRow.timeline).map((entry) => asRecord(entry));
@@ -2556,55 +2530,14 @@ export function PlanningWorkspaceClient({
   const summaryDsr = typeof simulateSummary.dsrPct === "number"
     ? (simulateSummary.dsrPct > 1 ? simulateSummary.dsrPct / 100 : simulateSummary.dsrPct)
     : debtMeta.debtServiceRatio;
-  const summaryStartPoint = (resultDto?.timeline.points ?? []).find((point) => point.label === "start")
-    ?? (resultDto?.timeline.points ?? [])[0];
-  const summaryStartIncome = typeof summaryStartPoint?.incomeKrw === "number" ? summaryStartPoint.incomeKrw : undefined;
-  const summaryStartExpenses = typeof summaryStartPoint?.expensesKrw === "number" ? summaryStartPoint.expensesKrw : undefined;
-  const summaryStartDebtPayment = typeof summaryStartPoint?.debtPaymentKrw === "number"
-    ? summaryStartPoint.debtPaymentKrw
-    : 0;
-  const summaryMonthlySurplusKrw = typeof summaryStartIncome === "number" && typeof summaryStartExpenses === "number"
-    ? computeMonthlySurplusKrw(summaryStartIncome, summaryStartExpenses, summaryStartDebtPayment)
-    : undefined;
-  const emergencyGoalForSummary = (resultDto?.goals ?? []).find((goal) => goal.type === "emergencyFund");
-  const summaryEmergencyFundMonths = typeof emergencyGoalForSummary?.currentKrw === "number"
-    && typeof summaryStartExpenses === "number"
-    && summaryStartExpenses > 0
-    ? computeEmergencyFundMonths(emergencyGoalForSummary.currentKrw, summaryStartExpenses)
-    : undefined;
-  const summaryEvidence: {
-    monthlySurplusKrw?: CalcEvidence;
-    dsrPct?: CalcEvidence;
-    emergencyFundMonths?: CalcEvidence;
-  } = {
-    ...(typeof summaryStartIncome === "number" && typeof summaryStartExpenses === "number"
-      ? {
-        monthlySurplusKrw: buildMonthlySurplusEvidence({
-          monthlyIncomeKrw: summaryStartIncome,
-          monthlyExpensesKrw: summaryStartExpenses,
-          monthlyDebtPaymentKrw: summaryStartDebtPayment,
-        }),
-      }
-      : {}),
-    ...(typeof summaryStartIncome === "number"
-      ? {
-        dsrPct: buildDsrPctEvidence({
-          monthlyDebtPaymentKrw: typeof debtMeta.totalMonthlyPaymentKrw === "number" ? debtMeta.totalMonthlyPaymentKrw : summaryStartDebtPayment,
-          monthlyIncomeKrw: summaryStartIncome,
-        }),
-      }
-      : {}),
-    ...(typeof emergencyGoalForSummary?.currentKrw === "number"
-      && typeof summaryStartExpenses === "number"
-      && summaryStartExpenses > 0
-      ? {
-        emergencyFundMonths: buildEmergencyMonthsEvidence({
-          emergencyFundKrw: emergencyGoalForSummary.currentKrw,
-          monthlyExpensesKrw: summaryStartExpenses,
-        }),
-      }
-      : {}),
-  };
+  const summaryMetrics = resultDto
+    ? buildResultSummaryMetrics(resultDto, {
+      debtMonthlyPaymentKrw: typeof debtMeta.totalMonthlyPaymentKrw === "number" ? debtMeta.totalMonthlyPaymentKrw : undefined,
+    })
+    : { evidence: {} as { monthlySurplusKrw?: CalcEvidence; dsrPct?: CalcEvidence; emergencyFundMonths?: CalcEvidence } };
+  const summaryMonthlySurplusKrw = summaryMetrics.monthlySurplusKrw;
+  const summaryEmergencyFundMonths = summaryMetrics.emergencyFundMonths;
+  const summaryEvidence = summaryMetrics.evidence;
   const summaryCriticalWarnings = Math.max(0, Math.trunc(Number(simulateSummary.criticalWarnings ?? resultDto?.meta.health?.criticalCount ?? 0)));
   const warningsSummaryTop5 = aggregatedWarnings.slice(0, 5);
 
@@ -2789,6 +2722,78 @@ export function PlanningWorkspaceClient({
               }}
             />
           </label>
+
+          <div className="space-y-4 rounded-xl border border-slate-200 p-3">
+            <div>
+              <p className="text-xs font-semibold text-slate-700">혜택 추천용 기본 조건</p>
+              <p className="mt-1 text-[11px] text-slate-500">출생연도, 성별, 지역을 입력하면 보조금24 추천 범위를 더 좁힐 수 있습니다.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <label className="block text-xs font-semibold text-slate-600">
+                출생연도
+                <input
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  inputMode="numeric"
+                  placeholder="예: 1994"
+                  type="text"
+                  value={profileForm.birthYear ? String(profileForm.birthYear) : ""}
+                  onChange={(event) => {
+                    const raw = normalizeLooseNumberText(event.target.value).replace(/\D/g, "");
+                    updateProfileField("birthYear", raw ? Math.trunc(Number(raw)) : undefined);
+                  }}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                성별
+                <select
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  value={profileForm.gender ?? ""}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    updateProfileField("gender", next === "" ? undefined : next as "M" | "F");
+                  }}
+                >
+                  <option value="">선택 안 함</option>
+                  <option value="F">여성</option>
+                  <option value="M">남성</option>
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                시/도
+                <select
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  value={profileForm.sido ?? ""}
+                  onChange={(event) => {
+                    const nextSido = event.target.value;
+                    applyProfileForm({
+                      ...profileForm,
+                      sido: nextSido || "",
+                      sigungu: "",
+                    });
+                  }}
+                >
+                  <option value="">선택 안 함</option>
+                  {SIDO_ADMIN_2025.map((entry) => (
+                    <option key={entry.code} value={entry.name}>{entry.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">
+                시/군/구
+                <select
+                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  disabled={!profileForm.sido}
+                  value={profileForm.sigungu ?? ""}
+                  onChange={(event) => updateProfileField("sigungu", event.target.value || "")}
+                >
+                  <option value="">선택 안 함</option>
+                  {benefitSigunguOptions.map((entry) => (
+                    <option key={entry.code} value={entry.name}>{entry.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
 
           <div className="space-y-4 rounded-xl border border-slate-200 p-3">
             <p className="text-xs font-semibold text-slate-700">월 현금흐름</p>

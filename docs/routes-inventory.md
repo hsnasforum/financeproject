@@ -77,6 +77,7 @@
 - `/invest`
 - `/ops`
 - `/planning`
+- `/planner`
 - `/products`
 - `/public`
 - `/recommend`

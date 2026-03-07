@@ -7,6 +7,7 @@ import {
 } from "../../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
+import { sanitizeRunRecordForResponse } from "../../../../../../lib/planning/api/runResponseSanitizer";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import {
   ensureRunActionPlan,
@@ -144,7 +145,7 @@ export async function GET(request: Request, context: RouteContext) {
         },
       });
     }
-    return jsonOk({ data: runWithActionCenter });
+    return jsonOk({ data: sanitizeRunRecordForResponse(runWithActionCenter) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
