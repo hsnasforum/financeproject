@@ -5,6 +5,7 @@ import {
 } from "../../../../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../../../lib/planning/api/response";
+import { sanitizeRunBlobForResponse } from "../../../../../../../../lib/planning/api/runResponseSanitizer";
 import { getRunBlob } from "../../../../../../../../lib/planning/server/store/runStore";
 import { gzipSync } from "node:zlib";
 
@@ -84,16 +85,17 @@ export async function GET(request: Request, context: RouteContext) {
     if (blob === null) {
       return jsonError("NO_DATA", "blob을 찾을 수 없습니다.", { status: 404 });
     }
+    const responseBlob = sanitizeRunBlobForResponse(blob);
     if (!isPreview) {
       return jsonResponseWithOptionalGzip(request, {
         ok: true,
-        data: blob,
+        data: responseBlob,
       });
     }
 
     const cursor = parsePositiveInt(url.searchParams.get("cursor"), 0, 0, Number.MAX_SAFE_INTEGER);
     const chunkChars = parsePositiveInt(url.searchParams.get("chunkChars"), 16_000, 64, 120_000);
-    const serialized = `${JSON.stringify(blob, null, 2)}\n`;
+    const serialized = `${JSON.stringify(responseBlob, null, 2)}\n`;
     const safeCursor = Math.min(cursor, serialized.length);
     const text = serialized.slice(safeCursor, safeCursor + chunkChars);
     const nextCursor = safeCursor + text.length;
