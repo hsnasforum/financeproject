@@ -33,6 +33,10 @@ import {
   type ProfileFormGoal,
   type ProfileFormModel,
 } from "@/app/planning/_lib/profileFormModel";
+import {
+  buildDebtWhatIfSummary,
+  buildWorkspaceResultSummaryVm,
+} from "@/app/planning/_lib/workspaceResultInsights";
 import { type SnapshotListItem } from "@/app/planning/_lib/snapshotList";
 import {
   defaults as planningExecutionDefaults,
@@ -61,14 +65,6 @@ import { type PlanningFeatureFlags } from "@/lib/planning/config";
 import { formatDate, formatKrw, formatPct } from "@/lib/planning/i18n/format";
 import { t, type Locale } from "@/lib/planning/i18n";
 import {
-  buildDsrPctEvidence,
-  buildEmergencyMonthsEvidence,
-  buildMonthlySurplusEvidence,
-  computeEmergencyFundMonths,
-  computeMonthlySurplusKrw,
-  type CalcEvidence,
-} from "@/lib/planning/calc";
-import {
   appendProfileIdQuery,
   normalizeProfileId,
   PLANNING_SELECTED_PROFILE_STORAGE_KEY,
@@ -85,8 +81,6 @@ import { type ActionItemV2 } from "@/lib/planning/v2/actions/types";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import { isResultDtoV1, type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
 import { rebuildResultDtoFromCombinedRunResultForCompat } from "@/lib/planning/v2/compatResultDto";
-import { buildPlanningChartPoints } from "@/lib/planning/v2/chartPoints";
-import { buildResultSummaryMetrics } from "@/lib/planning/v2/resultSummary";
 import { applySuggestions } from "@/lib/planning/v2/applySuggestions";
 import { preflightRun, type PreflightIssue } from "@/lib/planning/v2/preflight";
 import { applyProfilePatch, type ScenarioPatch } from "@/lib/planning/v2/profilePatch";
@@ -2266,89 +2260,6 @@ export function PlanningWorkspaceClient({
     ? runResult.resultDto
     : rebuildResultDtoFromCombinedRunResultForCompat(runResult, policyId);
 
-  const simulateRow = asRecord(resultDto?.raw?.simulate);
-  const simulateTimeline = asArray(simulateRow.timeline).map((entry) => asRecord(entry));
-  const keyTimelinePoints = (resultDto?.timeline.points ?? []).map((point) => ({
-    monthIndex: point.monthIndex,
-    row: {
-      income: point.incomeKrw ?? 0,
-      expenses: point.expensesKrw ?? 0,
-      debtPayment: point.debtPaymentKrw ?? 0,
-      operatingCashflow: 0,
-      liquidAssets: point.cashKrw ?? 0,
-      netWorth: point.netWorthKrw ?? 0,
-      totalDebt: point.totalDebtKrw ?? 0,
-    },
-  }));
-  const chartPoints = buildPlanningChartPoints({
-    timeline: simulateTimeline,
-    keyTimelinePoints,
-  });
-  const chartMode: "full" | "key" | "none" = simulateTimeline.length > 3
-    ? "full"
-    : chartPoints.length > 0
-      ? "key"
-      : "none";
-  const simulateWarnings = asArray(simulateRow.warnings).map((entry) => asRecord(entry));
-  const simulateGoals = asArray(simulateRow.goalStatus ?? simulateRow.goalsStatus).map((entry) => asRecord(entry));
-  const aggregatedWarningsForInsight = (resultDto?.warnings.aggregated ?? []).map((warning) => {
-    const severity: "info" | "warn" | "critical" = warning.severity === "critical" || warning.severity === "warn"
-      ? warning.severity
-      : "info";
-    return {
-      code: warning.code,
-      severity,
-      count: warning.count,
-      ...(typeof warning.firstMonth === "number" ? { firstMonth: warning.firstMonth } : {}),
-      ...(typeof warning.lastMonth === "number" ? { lastMonth: warning.lastMonth } : {}),
-      sampleMessage: warning.sampleMessage ?? `${warning.code} 경고가 감지되었습니다.`,
-    };
-  });
-  const aggregatedWarnings = aggregatedWarningsForInsight.map((warning) => ({
-    ...warning,
-    ...(typeof warning.firstMonth === "number" ? { firstMonth: warning.firstMonth + 1 } : {}),
-    ...(typeof warning.lastMonth === "number" ? { lastMonth: warning.lastMonth + 1 } : {}),
-  }));
-  const goalTableRows = (resultDto?.goals ?? []).map((goal) => {
-    const target = Number(goal.targetKrw ?? 0);
-    const current = Number(goal.currentKrw ?? 0);
-    const shortfall = Number(goal.shortfallKrw ?? Math.max(0, target - current));
-    const progressPct = target > 0 ? Math.min(100, Math.max(0, (current / target) * 100)) : 0;
-    return {
-      goalId: goal.id,
-      name: goal.title,
-      achieved: goal.achieved === true,
-      targetMonth: Math.max(0, Math.trunc(Number(goal.targetMonth ?? 0))),
-      progressPct,
-      shortfallKrw: shortfall,
-      interpretation: String(goal.comment ?? (goal.achieved ? "기한 내 목표를 달성했습니다." : "기한 내 달성을 위해 추가 조정이 필요합니다.")),
-    };
-  });
-  const goalsForInsight = (resultDto?.goals ?? []).map((goal) => ({
-    name: goal.title,
-    targetAmount: Number(goal.targetKrw ?? 0),
-    currentAmount: Number(goal.currentKrw ?? 0),
-    shortfall: Number(goal.shortfallKrw ?? 0),
-    targetMonth: Math.max(0, Math.trunc(Number(goal.targetMonth ?? 0))),
-    achieved: goal.achieved === true,
-    comment: String(goal.comment ?? ""),
-  }));
-  const timelineSummaryRows = (resultDto?.timeline.points ?? []).map((row) => {
-    const dsrRatio = typeof resultDto?.summary.dsrPct === "number"
-      ? ((resultDto.summary.dsrPct > 1 ? resultDto.summary.dsrPct / 100 : resultDto.summary.dsrPct))
-      : 0;
-    return {
-      label: row.label === "start" ? "시작" as const : row.label === "mid" ? "중간" as const : "마지막" as const,
-      monthIndex: row.monthIndex,
-      month: row.monthIndex + 1,
-      liquidAssetsKrw: Number(row.cashKrw ?? 0),
-      netWorthKrw: Number(row.netWorthKrw ?? 0),
-      totalDebtKrw: Number(row.totalDebtKrw ?? 0),
-      debtServiceRatio: dsrRatio,
-      interpretation: "핵심 포인트 구간입니다.",
-    };
-  });
-
   const scenariosRow = asRecord(resultDto?.scenarios);
   const scenarioTable = asArray(resultDto?.scenarios?.table).map((entry) => asRecord(entry));
   const scenariosBase = scenarioTable.find((entry) => String(entry.id ?? "") === "base") ?? {};
@@ -2412,44 +2323,6 @@ export function PlanningWorkspaceClient({
   const omittedActionRows = Math.max(0, actionTableRows.length - visibleActionRows.length);
   const actionsTopForInsight: ActionItemV2[] = asArray(actionsRow.top3).map((entry) => asRecord(entry) as ActionItemV2);
 
-  const achievedGoalCount = goalTableRows.filter((goal) => goal.achieved).length;
-  const dtoDsrRatio = typeof resultDto?.summary.dsrPct === "number"
-    ? (resultDto.summary.dsrPct > 1 ? resultDto.summary.dsrPct / 100 : resultDto.summary.dsrPct)
-    : 0;
-  const contributionSkippedCount = aggregatedWarningsForInsight.find((warning) => warning.code === "CONTRIBUTION_SKIPPED")?.count ?? 0;
-  const hasNegativeCashflow = aggregatedWarningsForInsight.some((warning) => warning.code === "NEGATIVE_CASHFLOW");
-  const missedGoals = goalTableRows.filter((goal) => !goal.achieved).length;
-  const guideBadge = (() => {
-    if ((resultDto?.summary.worstCashKrw ?? 0) <= 0 || hasNegativeCashflow || dtoDsrRatio >= 0.6) {
-      return {
-        status: "risk" as const,
-        reason: "현금 부족 또는 과도한 부채부담 신호가 있어 즉시 조정이 필요합니다.",
-        minCashKrw: resultDto?.summary.worstCashKrw ?? 0,
-        maxDsr: dtoDsrRatio,
-        missedGoals,
-        contributionSkippedCount,
-      };
-    }
-    if (dtoDsrRatio >= 0.4 || missedGoals > 0 || contributionSkippedCount >= 3) {
-      return {
-        status: "warn" as const,
-        reason: "일부 지표가 경고 구간입니다. 목표/지출/상환 계획을 점검하세요.",
-        minCashKrw: resultDto?.summary.worstCashKrw ?? 0,
-        maxDsr: dtoDsrRatio,
-        missedGoals,
-        contributionSkippedCount,
-      };
-    }
-    return {
-      status: "ok" as const,
-      reason: "현재 가정 기준으로 주요 지표가 안정 범위입니다.",
-      minCashKrw: resultDto?.summary.worstCashKrw ?? 0,
-      maxDsr: dtoDsrRatio,
-      missedGoals,
-      contributionSkippedCount,
-    };
-  })();
-
   const debtRow = asRecord(resultDto?.debt);
   const debtData = asRecord(debtRow);
   const debtMeta = {
@@ -2467,23 +2340,11 @@ export function PlanningWorkspaceClient({
     message: warning.message,
     data: warning.data,
   })));
-  const debtWhatIfSummary = [
-    {
-      title: "상환기간 연장",
-      count: asArray(debtWhatIf.termExtensions).length,
-      interpretation: "월 상환액을 낮추는 대신 총이자는 늘어날 수 있습니다.",
-    },
-    {
-      title: "상환기간 단축",
-      count: asArray(debtWhatIf.termReductions).length,
-      interpretation: "월 상환 부담은 늘지만 총이자는 줄어드는 방향입니다.",
-    },
-    {
-      title: "추가상환",
-      count: asArray(debtWhatIf.extraPayments).length,
-      interpretation: "여유자금을 투입해 만기 단축과 이자 절감을 기대할 수 있습니다.",
-    },
-  ];
+  const debtWhatIfSummary = buildDebtWhatIfSummary({
+    termExtensionsCount: asArray(debtWhatIf.termExtensions).length,
+    termReductionsCount: asArray(debtWhatIf.termReductions).length,
+    extraPaymentsCount: asArray(debtWhatIf.extraPayments).length,
+  });
   const optimizeCandidates = optimizeResult?.candidates ?? [];
 
   const healthDisabledReason = saveBlockedByHealth
@@ -2513,52 +2374,34 @@ export function PlanningWorkspaceClient({
   const hasMonteCarloData = Boolean(resultDto?.monteCarlo);
   const hasActionsData = Boolean(resultDto?.actions);
   const hasDebtData = Boolean(resultDto?.debt);
-
-  const simulateSummary = asRecord(resultDto?.summary);
-  const timelineLastRow = simulateTimeline.length > 0 ? simulateTimeline[simulateTimeline.length - 1] : {};
-  const summaryEndNetWorthKrw = typeof simulateSummary.endNetWorthKrw === "number"
-    ? simulateSummary.endNetWorthKrw
-    : Number(asRecord(timelineLastRow).netWorth ?? 0);
-  const summaryWorstCashKrw = typeof simulateSummary.worstCashKrw === "number"
-    ? simulateSummary.worstCashKrw
-    : Number(simulateSummary.minCashKrw ?? 0);
-  const summaryWorstCashMonth = typeof simulateSummary.worstCashMonthIndex === "number"
-    ? Math.max(0, Math.trunc(simulateSummary.worstCashMonthIndex))
-    : 0;
-  const summaryGoalsAchieved = Number(asRecord(simulateSummary.goalsAchieved).achieved ?? achievedGoalCount);
-  const summaryGoalsText = goalTableRows.length > 0 ? `${summaryGoalsAchieved}/${goalTableRows.length}` : "-";
-  const summaryDsr = typeof simulateSummary.dsrPct === "number"
-    ? (simulateSummary.dsrPct > 1 ? simulateSummary.dsrPct / 100 : simulateSummary.dsrPct)
-    : debtMeta.debtServiceRatio;
-  const summaryMetrics = resultDto
-    ? buildResultSummaryMetrics(resultDto, {
-      debtMonthlyPaymentKrw: typeof debtMeta.totalMonthlyPaymentKrw === "number" ? debtMeta.totalMonthlyPaymentKrw : undefined,
-    })
-    : { evidence: {} as { monthlySurplusKrw?: CalcEvidence; dsrPct?: CalcEvidence; emergencyFundMonths?: CalcEvidence } };
-  const summaryMonthlySurplusKrw = summaryMetrics.monthlySurplusKrw;
-  const summaryEmergencyFundMonths = summaryMetrics.emergencyFundMonths;
-  const summaryEvidence = summaryMetrics.evidence;
-  const summaryCriticalWarnings = Math.max(0, Math.trunc(Number(simulateSummary.criticalWarnings ?? resultDto?.meta.health?.criticalCount ?? 0)));
-  const warningsSummaryTop5 = aggregatedWarnings.slice(0, 5);
-
-  const keyFindings: string[] = [];
-  if (summaryWorstCashKrw <= 0) {
-    keyFindings.push("현금흐름 위험: 기간 중 최저 현금이 0 이하로 내려갑니다.");
-  } else {
-    keyFindings.push("현금흐름: 현재 가정에서는 현금이 0 이하로 내려가지 않습니다.");
-  }
-  if (typeof summaryDsr === "number" && Number.isFinite(summaryDsr)) {
-    if (summaryDsr >= 0.6) keyFindings.push("부채부담 위험: DSR이 60% 이상입니다.");
-    else if (summaryDsr >= 0.4) keyFindings.push("부채부담 주의: DSR이 40% 이상입니다.");
-    else keyFindings.push("부채부담: DSR이 상대적으로 안정 구간입니다.");
-  }
-  if (goalTableRows.length > 0) {
-    if (achievedGoalCount < goalTableRows.length) keyFindings.push(`목표 진행: ${goalTableRows.length - achievedGoalCount}개 목표가 미달입니다.`);
-    else keyFindings.push("목표 진행: 현재 시뮬레이션에서 모든 목표를 달성했습니다.");
-  }
-  if (keyFindings.length < 3) {
-    keyFindings.push(`경고 요약: 집계 경고 ${aggregatedWarnings.length}개(치명 ${summaryCriticalWarnings}개).`);
-  }
+  const {
+    simulateTimeline,
+    simulateWarnings,
+    simulateGoals,
+    chartPoints,
+    chartMode,
+    aggregatedWarningsForInsight,
+    aggregatedWarnings,
+    goalTableRows,
+    goalsForInsight,
+    timelineSummaryRows,
+    achievedGoalCount,
+    summaryEndNetWorthKrw,
+    summaryWorstCashKrw,
+    summaryWorstCashMonth,
+    summaryGoalsText,
+    summaryDsr,
+    summaryMonthlySurplusKrw,
+    summaryEmergencyFundMonths,
+    summaryEvidence,
+    summaryCriticalWarnings,
+    warningsSummaryTop5,
+    guideBadge,
+    keyFindings,
+  } = buildWorkspaceResultSummaryVm({
+    resultDto,
+    debtMonthlyPaymentKrw: typeof debtMeta.totalMonthlyPaymentKrw === "number" ? debtMeta.totalMonthlyPaymentKrw : undefined,
+  });
 
   const visibleSections = getVisibleSections(beginnerMode, {
     hasResult: Boolean(resultDto),
