@@ -5,6 +5,39 @@ function sanitizeNamedRef<T extends { name: string; path?: string; sizeBytes?: n
   return rest;
 }
 
+function hasNamedRef(value: unknown): value is { name: string; path?: string; sizeBytes?: number } {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && !Array.isArray(value)
+    && typeof (value as { name?: unknown }).name === "string",
+  );
+}
+
+function sanitizeRefFieldsDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeRefFieldsDeep(entry)) as T;
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const row = value as Record<string, unknown>;
+  const next: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(row)) {
+    if (key === "ref" && hasNamedRef(entry)) {
+      next[key] = sanitizeNamedRef(entry);
+      continue;
+    }
+    next[key] = sanitizeRefFieldsDeep(entry);
+  }
+  return next as T;
+}
+
+export function sanitizeRunBlobForResponse<T>(blob: T): T {
+  return sanitizeRefFieldsDeep(blob);
+}
+
 export function sanitizeRunRecordForResponse<TRun extends PlanningRunRecord>(run: TRun): TRun {
   return {
     ...run,
