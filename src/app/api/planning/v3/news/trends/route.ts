@@ -1,13 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
-import {
-  readDailyStatsLastNDays,
-  readTrendsCache,
-} from "../../../../../../../planning/v3/news/store";
-import { shiftKstDay } from "../../../../../../../planning/v3/news/trend";
+import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { readDailyStatsLastNDays, readTrendsCache } from "@/lib/planning/v3/news/store";
+import { shiftKstDay } from "@/lib/planning/v3/news/trend";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 export const runtime = "nodejs";
 
@@ -39,7 +35,7 @@ const TrendsApiSchema = z.object({
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -76,9 +72,6 @@ function dayRange(toDateKst: string, days: number): string[] {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

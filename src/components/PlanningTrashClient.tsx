@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -29,6 +29,25 @@ type ApiResponse<T> = {
   meta?: Record<string, unknown>;
 };
 
+type ConfirmDialogState =
+  | {
+    mode: "restore";
+    kind: TrashKind;
+    id: string;
+    expectedConfirm: string;
+  }
+  | {
+    mode: "delete";
+    kind: TrashKind;
+    id: string;
+    expectedConfirm: string;
+  }
+  | {
+    mode: "empty";
+    kind: TrashKindOrAll;
+    expectedConfirm: string;
+  };
+
 function formatDateTime(value: string): string {
   const ts = Date.parse(value);
   if (!Number.isFinite(ts)) return value;
@@ -46,6 +65,21 @@ export function PlanningTrashClient() {
   const [kindFilter, setKindFilter] = useState<TrashKindOrAll>("all");
   const [items, setItems] = useState<TrashItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [confirmWorking, setConfirmWorking] = useState(false);
+
+  function pushNotice(message: string): void {
+    setNotice(message);
+    setError("");
+  }
+
+  function pushError(message: string): void {
+    setError(message);
+    setNotice("");
+  }
 
   async function loadTrash(nextKind: TrashKindOrAll = kindFilter): Promise<void> {
     setLoading(true);
@@ -55,99 +89,147 @@ export function PlanningTrashClient() {
       const payload = (await res.json().catch(() => null)) as ApiResponse<TrashItem[]> | null;
       if (!res.ok || !payload?.ok || !Array.isArray(payload.data)) {
         setItems([]);
-        window.alert(payload?.error?.message ?? "휴지통 목록을 불러오지 못했습니다.");
+        pushError(payload?.error?.message ?? "휴지통 목록을 불러오지 못했습니다.");
         return;
       }
       setItems(payload.data);
     } catch (error) {
       setItems([]);
-      window.alert(error instanceof Error ? error.message : "휴지통 목록 조회 중 오류가 발생했습니다.");
+      pushError(error instanceof Error ? error.message : "휴지통 목록 조회 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
   }
+  const loadTrashRef = useRef(loadTrash);
+  loadTrashRef.current = loadTrash;
 
-  async function restoreItem(kind: TrashKind, id: string): Promise<void> {
+  function openRestoreDialog(kind: TrashKind, id: string): void {
     const expectedConfirm = buildConfirmString(`RESTORE ${kind}`, id);
-    const confirmText = window.prompt(
-      `복구 확인 문구를 입력하세요.\n${expectedConfirm}`,
+    setConfirmDialog({
+      mode: "restore",
+      kind,
+      id,
       expectedConfirm,
-    );
-    if (!confirmText) return;
-
-    try {
-      const res = await fetch("/api/planning/v2/trash/restore", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(withDevCsrf({ kind, id, confirmText })),
-      });
-      const payload = (await res.json().catch(() => null)) as ApiResponse<{ restored?: boolean }> | null;
-      if (!res.ok || !payload?.ok) {
-        window.alert(payload?.error?.message ?? "복구에 실패했습니다.");
-        return;
-      }
-      await loadTrash();
-      window.alert("휴지통 항목을 복구했습니다.");
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "복구 중 오류가 발생했습니다.");
-    }
+    });
+    setConfirmText(expectedConfirm);
+    setError("");
+    setNotice("");
   }
 
-  async function deletePermanently(kind: TrashKind, id: string): Promise<void> {
+  function openDeleteDialog(kind: TrashKind, id: string): void {
     const expectedConfirm = buildConfirmString(`DELETE ${kind}`, id);
-    const confirmText = window.prompt(
-      `영구 삭제 확인 문구를 입력하세요.\n${expectedConfirm}`,
+    setConfirmDialog({
+      mode: "delete",
+      kind,
+      id,
       expectedConfirm,
-    );
-    if (!confirmText) return;
-
-    try {
-      const res = await fetch("/api/planning/v2/trash", {
-        method: "DELETE",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(withDevCsrf({ kind, id, confirmText })),
-      });
-      const payload = (await res.json().catch(() => null)) as ApiResponse<{ deleted?: boolean }> | null;
-      if (!res.ok || !payload?.ok) {
-        window.alert(payload?.error?.message ?? "영구 삭제에 실패했습니다.");
-        return;
-      }
-      await loadTrash();
-      window.alert("휴지통 항목을 영구 삭제했습니다.");
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "영구 삭제 중 오류가 발생했습니다.");
-    }
+    });
+    setConfirmText(expectedConfirm);
+    setError("");
+    setNotice("");
   }
 
-  async function emptyTrashAction(): Promise<void> {
+  function openEmptyDialog(): void {
     const expectedConfirm = buildConfirmString("EMPTY_TRASH", kindFilter);
-    const confirmText = window.prompt(
-      `휴지통 비우기 확인 문구를 입력하세요.\n${expectedConfirm}`,
+    setConfirmDialog({
+      mode: "empty",
+      kind: kindFilter,
       expectedConfirm,
-    );
-    if (!confirmText) return;
+    });
+    setConfirmText(expectedConfirm);
+    setError("");
+    setNotice("");
+  }
+
+  function closeConfirmDialog(): void {
+    setConfirmDialog(null);
+    setConfirmText("");
+  }
+
+  async function submitConfirmDialog(): Promise<void> {
+    if (!confirmDialog) return;
+    if (confirmText.trim() !== confirmDialog.expectedConfirm) {
+      pushError(`확인 문구가 일치하지 않습니다. (${confirmDialog.expectedConfirm})`);
+      return;
+    }
+    setConfirmWorking(true);
+    setError("");
+    setNotice("");
 
     try {
+      if (confirmDialog.mode === "restore") {
+        const res = await fetch("/api/planning/v2/trash/restore", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(withDevCsrf({
+            kind: confirmDialog.kind,
+            id: confirmDialog.id,
+            confirmText: confirmText.trim(),
+          })),
+        });
+        const payload = (await res.json().catch(() => null)) as ApiResponse<{ restored?: boolean }> | null;
+        if (!res.ok || !payload?.ok) {
+          pushError(payload?.error?.message ?? "복구에 실패했습니다.");
+          return;
+        }
+        await loadTrash();
+        closeConfirmDialog();
+        pushNotice("휴지통 항목을 복구했습니다.");
+        return;
+      }
+
+      if (confirmDialog.mode === "delete") {
+        const res = await fetch("/api/planning/v2/trash", {
+          method: "DELETE",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(withDevCsrf({
+            kind: confirmDialog.kind,
+            id: confirmDialog.id,
+            confirmText: confirmText.trim(),
+          })),
+        });
+        const payload = (await res.json().catch(() => null)) as ApiResponse<{ deleted?: boolean }> | null;
+        if (!res.ok || !payload?.ok) {
+          pushError(payload?.error?.message ?? "영구 삭제에 실패했습니다.");
+          return;
+        }
+        await loadTrash();
+        closeConfirmDialog();
+        pushNotice("휴지통 항목을 영구 삭제했습니다.");
+        return;
+      }
+
       const res = await fetch("/api/planning/v2/trash/empty", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(withDevCsrf({ kind: kindFilter, confirmText })),
+        body: JSON.stringify(withDevCsrf({
+          kind: confirmDialog.kind,
+          confirmText: confirmText.trim(),
+        })),
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<{ deleted?: number }> | null;
       if (!res.ok || !payload?.ok) {
-        window.alert(payload?.error?.message ?? "휴지통 비우기에 실패했습니다.");
+        pushError(payload?.error?.message ?? "휴지통 비우기에 실패했습니다.");
         return;
       }
       await loadTrash();
-      window.alert(`휴지통 비우기 완료: ${payload.data?.deleted ?? 0}건`);
+      closeConfirmDialog();
+      pushNotice(`휴지통 비우기 완료: ${payload.data?.deleted ?? 0}건`);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "휴지통 비우기 중 오류가 발생했습니다.");
+      if (confirmDialog.mode === "restore") {
+        pushError(error instanceof Error ? error.message : "복구 중 오류가 발생했습니다.");
+      } else if (confirmDialog.mode === "delete") {
+        pushError(error instanceof Error ? error.message : "영구 삭제 중 오류가 발생했습니다.");
+      } else {
+        pushError(error instanceof Error ? error.message : "휴지통 비우기 중 오류가 발생했습니다.");
+      }
+    } finally {
+      setConfirmWorking(false);
     }
   }
 
   useEffect(() => {
-    void loadTrash("all");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    void loadTrashRef.current("all");
   }, []);
 
   return (
@@ -167,6 +249,16 @@ export function PlanningTrashClient() {
         <p className="text-sm font-semibold text-amber-900">영구 삭제는 되돌릴 수 없습니다.</p>
         <p className="mt-1 text-xs text-amber-800">복구가 필요한 경우 먼저 복구 버튼을 사용하세요.</p>
       </Card>
+      {error ? (
+        <Card className="mb-4 border border-rose-200 bg-rose-50">
+          <p className="text-sm font-semibold text-rose-700">{error}</p>
+        </Card>
+      ) : null}
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50">
+          <p className="text-sm font-semibold text-emerald-700">{notice}</p>
+        </Card>
+      ) : null}
 
       <Card>
         <div className="flex flex-wrap items-center gap-2">
@@ -190,7 +282,7 @@ export function PlanningTrashClient() {
           </select>
 
           <Button disabled={loading} onClick={() => void loadTrash()} size="sm" variant="ghost">새로고침</Button>
-          <Button disabled={loading} onClick={() => void emptyTrashAction()} size="sm" variant="outline">휴지통 비우기</Button>
+          <Button disabled={loading || confirmWorking} onClick={openEmptyDialog} size="sm" variant="outline">휴지통 비우기</Button>
         </div>
 
         <div className="mt-3 overflow-x-auto">
@@ -216,7 +308,7 @@ export function PlanningTrashClient() {
                   <td className="px-2 py-2">
                     <button
                       className="font-semibold text-emerald-700"
-                      onClick={() => void restoreItem(item.kind, item.id)}
+                      onClick={() => openRestoreDialog(item.kind, item.id)}
                       type="button"
                     >
                       복구
@@ -224,7 +316,7 @@ export function PlanningTrashClient() {
                     <span className="mx-1 text-slate-300">|</span>
                     <button
                       className="font-semibold text-rose-700"
-                      onClick={() => void deletePermanently(item.kind, item.id)}
+                      onClick={() => openDeleteDialog(item.kind, item.id)}
                       type="button"
                     >
                       영구 삭제
@@ -236,6 +328,53 @@ export function PlanningTrashClient() {
           </table>
         </div>
       </Card>
+      {confirmDialog ? (
+        <div
+          aria-labelledby="planning-trash-confirm-title"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+        >
+          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <h3 className="text-base font-black text-slate-900" id="planning-trash-confirm-title">
+              {confirmDialog.mode === "restore"
+                ? "휴지통 항목 복구"
+                : confirmDialog.mode === "delete"
+                  ? "휴지통 항목 영구 삭제"
+                  : "휴지통 비우기"}
+            </h3>
+            <p className="mt-2 text-sm text-slate-700">
+              확인 문구를 정확히 입력해야 진행됩니다.
+            </p>
+            <p className="mt-2 rounded-md bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700">{confirmDialog.expectedConfirm}</p>
+            <input
+              className="mt-3 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
+              value={confirmText}
+              onChange={(event) => setConfirmText(event.target.value)}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                disabled={confirmWorking}
+                onClick={closeConfirmDialog}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                취소
+              </Button>
+              <Button
+                disabled={confirmWorking || confirmText.trim() !== confirmDialog.expectedConfirm}
+                onClick={() => void submitConfirmDialog()}
+                size="sm"
+                type="button"
+                variant="primary"
+              >
+                {confirmWorking ? "처리 중..." : "진행"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

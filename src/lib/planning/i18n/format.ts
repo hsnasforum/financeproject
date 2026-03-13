@@ -1,4 +1,5 @@
 import { type Locale } from "./index";
+import { roundKrw } from "../calc/roundingPolicy";
 
 export function formatKrw(locale: Locale, amountKrw: number): string {
   if (!Number.isFinite(amountKrw)) return "-";
@@ -6,7 +7,7 @@ export function formatKrw(locale: Locale, amountKrw: number): string {
     style: "currency",
     currency: "KRW",
     maximumFractionDigits: 0,
-  }).format(Math.round(amountKrw));
+  }).format(roundKrw(amountKrw));
 }
 
 export function formatPct(locale: Locale, pct: number): string {

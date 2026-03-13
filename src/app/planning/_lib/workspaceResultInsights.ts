@@ -1,6 +1,8 @@
 import { buildPlanningChartPoints, type PlanningChartPoint } from "@/lib/planning/v2/chartPoints";
+import { aggregateWarnings as aggregateGuideWarnings } from "@/lib/planning/v2/resultGuide";
 import { buildResultSummaryMetrics, type ResultSummaryEvidence } from "@/lib/planning/v2/resultSummary";
 import { type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
+import { type ActionItemV2 } from "@/lib/planning/v2/actions/types";
 
 export type WorkspaceGuideBadge = {
   status: "risk" | "warn" | "ok";
@@ -162,6 +164,71 @@ export type WorkspaceTimelineSummaryRow = {
   interpretation: string;
 };
 
+export type WorkspaceScenarioComparisonRow = {
+  id: string;
+  title: string;
+  endNetWorthKrw: number;
+  worstCashKrw: number;
+  goalsAchieved: number;
+  warningsCount: number;
+  endNetWorthDeltaKrw: number;
+  goalsAchievedDelta: number;
+  shortWhy: string[];
+};
+
+export type WorkspaceScenarioVm = {
+  baseSummary: {
+    endNetWorthKrw: number;
+    worstCashKrw: number;
+    goalsAchieved: number;
+    warningsCount: number;
+  };
+  baseWarnings: Array<{ reasonCode: string; message: string }>;
+  comparisonRows: WorkspaceScenarioComparisonRow[];
+};
+
+export type WorkspaceDebtVm = {
+  meta: {
+    debtServiceRatio: number;
+    totalMonthlyPaymentKrw: number;
+  };
+  summaries: Array<Record<string, unknown>>;
+  refinance: Array<Record<string, unknown>>;
+  whatIfSummary: Array<{ title: string; count: number; interpretation: string }>;
+  warnings: WorkspaceAggregatedWarning[];
+};
+
+export type WorkspaceMonteCarloVm = {
+  data: Record<string, unknown>;
+  probabilities: Record<string, unknown>;
+  percentiles: {
+    endNetWorthKrw: Record<string, unknown>;
+    worstCashKrw: Record<string, unknown>;
+  };
+  depletionProbability?: number;
+};
+
+export type WorkspaceActionTableRow = {
+  code: string;
+  severity: string;
+  title: string;
+  summary: string;
+  whyCount: number;
+  steps: string[];
+  cautions: string[];
+};
+
+export type WorkspaceActionsVm = {
+  topActionTitles: string[];
+  tableRows: WorkspaceActionTableRow[];
+  topActionsForInsight: ActionItemV2[];
+};
+
+export type WorkspaceDebugSection = {
+  label: string;
+  value: unknown;
+};
+
 export type WorkspaceResultSummaryVm = {
   simulateTimeline: Array<Record<string, unknown>>;
   simulateWarnings: Array<Record<string, unknown>>;
@@ -188,6 +255,97 @@ export type WorkspaceResultSummaryVm = {
   keyFindings: string[];
 };
 
+export function buildWorkspaceWarningsGoalsDebugSections(input: {
+  beginnerMode: boolean;
+  aggregatedWarnings: WorkspaceAggregatedWarning[];
+  goalTableRows: WorkspaceGoalTableRow[];
+  timelineSummaryRows: WorkspaceTimelineSummaryRow[];
+  chartPoints: PlanningChartPoint[];
+}): WorkspaceDebugSection[] {
+  if (input.beginnerMode) return [];
+  return [
+    { label: "warning aggregates", value: input.aggregatedWarnings },
+    { label: "goal rows", value: input.goalTableRows },
+    { label: "timeline summary", value: input.timelineSummaryRows },
+    { label: "chart points", value: input.chartPoints },
+  ];
+}
+
+export function buildWorkspaceScenarioDebugSections(input: {
+  beginnerMode: boolean;
+  baseSummary: WorkspaceScenarioVm["baseSummary"];
+  comparisonRows: WorkspaceScenarioComparisonRow[];
+  baseWarnings: Array<{ reasonCode: string; message: string }>;
+}): WorkspaceDebugSection[] {
+  if (input.beginnerMode) return [];
+  return [
+    {
+      label: "scenario base summary",
+      value: {
+        endNetWorthKrw: Number(input.baseSummary.endNetWorthKrw ?? 0),
+        worstCashKrw: Number(input.baseSummary.worstCashKrw ?? 0),
+        goalsAchieved: Number(input.baseSummary.goalsAchieved ?? 0),
+        warningsCount: Number(input.baseSummary.warningsCount ?? 0),
+      },
+    },
+    { label: "scenario comparison rows", value: input.comparisonRows },
+    { label: "scenario base warnings", value: input.baseWarnings },
+  ];
+}
+
+export function buildWorkspaceMonteCarloDebugSections(input: {
+  beginnerMode: boolean;
+  probabilities: Record<string, unknown>;
+  endNetWorthKrw: Record<string, unknown>;
+  worstCashKrw: Record<string, unknown>;
+  depletionProbability?: number;
+}): WorkspaceDebugSection[] {
+  if (input.beginnerMode) return [];
+  return [
+    { label: "probabilities", value: input.probabilities },
+    {
+      label: "percentiles",
+      value: {
+        endNetWorthKrw: input.endNetWorthKrw,
+        worstCashKrw: input.worstCashKrw,
+      },
+    },
+    ...(typeof input.depletionProbability === "number"
+      ? [{ label: "retirement depletion probability", value: input.depletionProbability }]
+      : []),
+  ];
+}
+
+export function buildWorkspaceActionsDebugSections(input: {
+  beginnerMode: boolean;
+  topActionTitles: string[];
+  actionRows: WorkspaceActionTableRow[];
+}): WorkspaceDebugSection[] {
+  if (input.beginnerMode) return [];
+  return [
+    { label: "top action titles", value: input.topActionTitles },
+    { label: "action rows", value: input.actionRows },
+  ];
+}
+
+export function buildWorkspaceDebtDebugSections(input: {
+  beginnerMode: boolean;
+  debtMeta: WorkspaceDebtVm["meta"];
+  debtSummaries: Array<Record<string, unknown>>;
+  debtRefinance: Array<Record<string, unknown>>;
+  debtWhatIfSummary: Array<{ title: string; count: number; interpretation: string }>;
+  debtWarnings: WorkspaceAggregatedWarning[];
+}): WorkspaceDebugSection[] {
+  if (input.beginnerMode) return [];
+  return [
+    { label: "debt meta", value: input.debtMeta },
+    { label: "debt summary rows", value: input.debtSummaries },
+    { label: "debt refinance rows", value: input.debtRefinance },
+    { label: "debt what-if summary", value: input.debtWhatIfSummary },
+    { label: "debt warning rows", value: input.debtWarnings },
+  ];
+}
+
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
@@ -196,6 +354,127 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
+}
+
+export function buildWorkspaceScenarioVm(resultDto: ResultDtoV1 | null): WorkspaceScenarioVm {
+  const scenarioTable = asArray(resultDto?.scenarios?.table).map((entry) => asRecord(entry));
+  const scenariosBase = scenarioTable.find((entry) => String(entry.id ?? "") === "base") ?? {};
+  const scenariosList = scenarioTable.filter((entry) => String(entry.id ?? "") !== "base");
+  const scenariosBaseSummary = asRecord(asRecord(scenariosBase).summary);
+  const comparisonRows = scenariosList.map((scenario) => {
+    const summary = asRecord(scenario.summary);
+    const summarySource = Object.keys(summary).length > 0 ? summary : scenario;
+    const diffVsBase = asRecord(scenario.diffVsBase);
+    const diffMetrics = asRecord(diffVsBase.keyMetrics);
+    const shortWhy = asArray(diffVsBase.shortWhy).map((entry) => String(entry));
+    return {
+      id: String(scenario.id ?? ""),
+      title: String(scenario.title ?? "시나리오"),
+      endNetWorthKrw: Number(summarySource.endNetWorthKrw ?? summarySource.endNetWorth ?? 0),
+      worstCashKrw: Number(summarySource.worstCashKrw ?? 0),
+      goalsAchieved: Number(summarySource.goalsAchievedCount ?? summarySource.goalsAchieved ?? 0),
+      warningsCount: Number(summarySource.warningsCount ?? 0),
+      endNetWorthDeltaKrw: Number(diffMetrics.endNetWorthDeltaKrw ?? scenario.endNetWorthDeltaKrw ?? 0),
+      goalsAchievedDelta: Number(diffMetrics.goalsAchievedDelta ?? scenario.goalsAchievedDelta ?? 0),
+      shortWhy,
+    };
+  });
+
+  return {
+    baseSummary: {
+      endNetWorthKrw: Number(scenariosBaseSummary.endNetWorthKrw ?? scenariosBaseSummary.endNetWorth ?? 0),
+      worstCashKrw: Number(scenariosBaseSummary.worstCashKrw ?? 0),
+      goalsAchieved: Number(scenariosBaseSummary.goalsAchievedCount ?? scenariosBaseSummary.goalsAchieved ?? 0),
+      warningsCount: Number(scenariosBaseSummary.warningsCount ?? 0),
+    },
+    baseWarnings: asArray(resultDto?.warnings.top).map((entry) => ({
+      reasonCode: String(asRecord(entry).code ?? ""),
+      message: String(asRecord(entry).message ?? ""),
+    })),
+    comparisonRows,
+  };
+}
+
+export function buildWorkspaceDebtVm(resultDto: ResultDtoV1 | null): WorkspaceDebtVm {
+  const debtData = asRecord(resultDto?.debt);
+  const debtWhatIf = asRecord(debtData.whatIf);
+  const debtWarningsRaw = asArray(
+    debtData.warnings ?? asRecord(asRecord(resultDto?.raw).debt).warnings,
+  ).map((entry) => asRecord(entry));
+
+  return {
+    meta: {
+      debtServiceRatio: typeof debtData.dsrPct === "number"
+        ? (debtData.dsrPct > 1 ? debtData.dsrPct / 100 : debtData.dsrPct)
+        : 0,
+      totalMonthlyPaymentKrw: Number(
+        debtData.totalMonthlyPaymentKrw
+        ?? asRecord(asRecord(asRecord(resultDto?.raw).debt).summary).totalMonthlyPaymentKrw
+        ?? 0,
+      ),
+    },
+    summaries: asArray(debtData.summaries).map((entry) => asRecord(entry)),
+    refinance: asArray(debtData.refinance).map((entry) => asRecord(entry)),
+    whatIfSummary: buildDebtWhatIfSummary({
+      termExtensionsCount: asArray(debtWhatIf.termExtensions).length,
+      termReductionsCount: asArray(debtWhatIf.termReductions).length,
+      extraPaymentsCount: asArray(debtWhatIf.extraPayments).length,
+    }),
+    warnings: aggregateGuideWarnings(debtWarningsRaw.map((warning) => ({
+      reasonCode: warning.code,
+      message: warning.message,
+      data: warning.data,
+    }))),
+  };
+}
+
+export function buildWorkspaceMonteCarloVm(resultDto: ResultDtoV1 | null): WorkspaceMonteCarloVm {
+  const data = asRecord(resultDto?.monteCarlo);
+  const probabilities = asRecord(data.probabilities);
+  const percentiles = asRecord(data.percentiles);
+  const depletionProbability = typeof probabilities.retirementDepletionBeforeEnd === "number"
+    ? probabilities.retirementDepletionBeforeEnd
+    : undefined;
+
+  return {
+    data,
+    probabilities,
+    percentiles: {
+      endNetWorthKrw: asRecord(percentiles.endNetWorthKrw),
+      worstCashKrw: asRecord(percentiles.worstCashKrw),
+    },
+    ...(typeof depletionProbability === "number" ? { depletionProbability } : {}),
+  };
+}
+
+export function buildWorkspaceActionsVm(resultDto: ResultDtoV1 | null): WorkspaceActionsVm {
+  const actionsRow = asRecord(resultDto?.actions);
+  const items = asArray(actionsRow.items);
+  const tableRows = items.map((entry) => {
+    const row = asRecord(entry);
+    const whyRows = asArray(row.why);
+    const steps = asArray(row.steps).map((step) => String(step).trim()).filter((step) => step.length > 0);
+    const cautions = asArray(row.cautions).map((caution) => String(caution).trim()).filter((caution) => caution.length > 0);
+
+    return {
+      code: String(row.code ?? "UNKNOWN"),
+      severity: String(row.severity ?? "info"),
+      title: String(row.title ?? "권장 조치"),
+      summary: String(row.summary ?? "").trim(),
+      whyCount: whyRows.length,
+      steps,
+      cautions,
+    };
+  });
+
+  return {
+    topActionTitles: asArray(actionsRow.top3)
+      .map((entry) => String(asRecord(entry).title ?? "").trim())
+      .filter((title) => title.length > 0)
+      .slice(0, 3),
+    tableRows,
+    topActionsForInsight: asArray(actionsRow.top3).map((entry) => asRecord(entry) as ActionItemV2),
+  };
 }
 
 export function buildWorkspaceResultSummaryVm(input: {

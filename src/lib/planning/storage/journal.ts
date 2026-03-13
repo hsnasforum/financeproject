@@ -56,8 +56,17 @@ function resolveJournalPath(): string {
 }
 
 async function appendLine(filePath: string, line: string): Promise<void> {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.appendFile(filePath, line, "utf-8");
+  const dirPath = path.dirname(filePath);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await fs.mkdir(dirPath, { recursive: true });
+      await fs.appendFile(filePath, line, "utf-8");
+      return;
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError?.code !== "ENOENT" || attempt > 0) throw error;
+    }
+  }
 }
 
 async function appendEvent(event: StorageJournalEvent): Promise<void> {

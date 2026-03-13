@@ -1,21 +1,19 @@
 import { NextResponse } from "next/server";
 import {
-  assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   getDraft,
   listDrafts,
-} from "@/lib/planning/v3/drafts/draftStore";
+} from "@/lib/planning/v3/draft/store";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
   isSaveDraftFromImportForbiddenError,
   isSaveDraftFromImportInputError,
   saveDraftFromImport,
-} from "@/lib/planning/v3/service/saveDraftFromImport";
+} from "@/lib/planning/v3/draft/service";
 
 type DraftBody = {
   csrf?: unknown;
@@ -50,7 +48,7 @@ function pickCsrfToken(request: Request, body?: DraftBody): string {
 
 function withReadGuard(request: Request): NextResponse | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -69,9 +67,8 @@ function withReadGuard(request: Request): NextResponse | null {
 
 function withWriteGuard(request: Request, body: DraftBody): NextResponse | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertCsrf(request, { csrf: pickCsrfToken(request, body) });
+    requireCsrf(request, { csrf: pickCsrfToken(request, body) }, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -111,9 +108,6 @@ function summarizeDraft(cashflow: Array<{ incomeKrw: number; expenseKrw: number;
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -161,9 +155,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: DraftBody = null;
   try {
     body = (await request.json()) as DraftBody;

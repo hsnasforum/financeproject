@@ -13,6 +13,7 @@ import {
   type CandidateSource,
   type DepositProtectionMode,
   type LiquidityPref,
+  type RecommendPlanningContext,
   type RateMode,
   type RecommendKind,
   type RecommendPurpose,
@@ -40,6 +41,7 @@ export type RecommendProfileNormalized = {
     term: number;
     liquidity: number;
   };
+  planningContext?: RecommendPlanningContext;
 };
 
 type SearchParamsInput =
@@ -140,6 +142,28 @@ function parseCandidateSourcesFromQuery(raw: string, issues: Issue[]): Candidate
   return [...picked];
 }
 
+function parsePlanningMetric(
+  value: unknown,
+  path: string,
+  issues: Issue[],
+): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    issues.push(issue(path, "must be a non-negative number"));
+    return undefined;
+  }
+  return Math.round(parsed);
+}
+
+function mergePlanningContextInput(source: Record<string, unknown>): Record<string, unknown> {
+  const planningContext = isRecord(source.planningContext) ? source.planningContext : {};
+  return {
+    ...source,
+    ...planningContext,
+  };
+}
+
 export function defaults(): RecommendProfileNormalized {
   return {
     purpose: "seed-money",
@@ -148,8 +172,8 @@ export function defaults(): RecommendProfileNormalized {
     liquidityPref: "mid",
     rateMode: "max",
     topN: DEFAULT_TOP_N,
-    candidatePool: "legacy",
-    candidateSources: ["finlife"],
+    candidatePool: "unified",
+    candidateSources: ["finlife", "datago_kdb"],
     depositProtection: "any",
     weights: {
       rate: DEFAULT_WEIGHTS.rate,
@@ -163,6 +187,7 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
   const bag = createValidationBag();
   const fallback = defaults();
   const source = isRecord(input) ? input : {};
+  const planningContextInput = mergePlanningContextInput(source);
 
   const purpose = parseEnum(bag, {
     path: "purpose",
@@ -215,7 +240,7 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
   const candidatePool = parseEnum(bag, {
     path: "candidatePool",
     value: source.candidatePool,
-    allowed: ["legacy", "unified"] as const,
+    allowed: ["unified"] as const,
     fallback: fallback.candidatePool,
   });
 
@@ -263,6 +288,35 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
   });
 
   const issues = [...parseStringIssues(bag.issues), ...preferredTermIssues];
+  const planningContextIssues: Issue[] = [];
+  const monthlyIncomeKrw = parsePlanningMetric(
+    planningContextInput.monthlyIncomeKrw ?? planningContextInput.monthlyIncome,
+    "planningContext.monthlyIncomeKrw",
+    planningContextIssues,
+  );
+  const monthlyExpenseKrw = parsePlanningMetric(
+    planningContextInput.monthlyExpenseKrw ?? planningContextInput.monthlyExpense,
+    "planningContext.monthlyExpenseKrw",
+    planningContextIssues,
+  );
+  const liquidAssetsKrw = parsePlanningMetric(
+    planningContextInput.liquidAssetsKrw ?? planningContextInput.liquidAssets,
+    "planningContext.liquidAssetsKrw",
+    planningContextIssues,
+  );
+  const debtBalanceKrw = parsePlanningMetric(
+    planningContextInput.debtBalanceKrw ?? planningContextInput.debtBalance,
+    "planningContext.debtBalanceKrw",
+    planningContextIssues,
+  );
+  const planningContext: RecommendPlanningContext = {
+    ...(typeof monthlyIncomeKrw === "number" ? { monthlyIncomeKrw } : {}),
+    ...(typeof monthlyExpenseKrw === "number" ? { monthlyExpenseKrw } : {}),
+    ...(typeof liquidAssetsKrw === "number" ? { liquidAssetsKrw } : {}),
+    ...(typeof debtBalanceKrw === "number" ? { debtBalanceKrw } : {}),
+  };
+  const hasPlanningContext = Object.keys(planningContext).length > 0;
+  const allIssues = [...issues, ...planningContextIssues];
 
   return buildParseResult(
     {
@@ -280,8 +334,9 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
         term: weightTerm,
         liquidity: weightLiquidity,
       },
+      ...(hasPlanningContext ? { planningContext } : {}),
     },
-    issues,
+    allIssues,
   );
 }
 
@@ -351,10 +406,10 @@ export function fromSearchParams(params: SearchParamsInput): ParseResult<Partial
 
   const candidatePool = readParam(params, "candidatePool") || readParam(params, "pool");
   if (candidatePool) {
-    if (candidatePool === "legacy" || candidatePool === "unified") {
-      patch.candidatePool = candidatePool;
+    if (candidatePool === "unified") {
+      patch.candidatePool = "unified";
     } else {
-      issues.push(issue("candidatePool", "must be one of legacy|unified"));
+      issues.push(issue("candidatePool", "must be unified"));
     }
   }
 
@@ -375,6 +430,35 @@ export function fromSearchParams(params: SearchParamsInput): ParseResult<Partial
     }
   }
 
+  const planningContext: RecommendPlanningContext = {};
+  const monthlyIncomeKrw = parsePlanningMetric(
+    readParam(params, "monthlyIncomeKrw") || readParam(params, "monthlyIncome"),
+    "planningContext.monthlyIncomeKrw",
+    issues,
+  );
+  if (typeof monthlyIncomeKrw === "number") planningContext.monthlyIncomeKrw = monthlyIncomeKrw;
+  const monthlyExpenseKrw = parsePlanningMetric(
+    readParam(params, "monthlyExpenseKrw") || readParam(params, "monthlyExpense"),
+    "planningContext.monthlyExpenseKrw",
+    issues,
+  );
+  if (typeof monthlyExpenseKrw === "number") planningContext.monthlyExpenseKrw = monthlyExpenseKrw;
+  const liquidAssetsKrw = parsePlanningMetric(
+    readParam(params, "liquidAssetsKrw") || readParam(params, "liquidAssets"),
+    "planningContext.liquidAssetsKrw",
+    issues,
+  );
+  if (typeof liquidAssetsKrw === "number") planningContext.liquidAssetsKrw = liquidAssetsKrw;
+  const debtBalanceKrw = parsePlanningMetric(
+    readParam(params, "debtBalanceKrw") || readParam(params, "debtBalance"),
+    "planningContext.debtBalanceKrw",
+    issues,
+  );
+  if (typeof debtBalanceKrw === "number") planningContext.debtBalanceKrw = debtBalanceKrw;
+  if (Object.keys(planningContext).length > 0) {
+    patch.planningContext = planningContext;
+  }
+
   return buildParseResult(patch, issues);
 }
 
@@ -389,5 +473,17 @@ export function toSearchParams(profile: RecommendProfileNormalized): URLSearchPa
   params.set("candidatePool", profile.candidatePool);
   params.set("depositProtection", profile.depositProtection);
   params.set("candidateSources", profile.candidateSources.join(","));
+  if (typeof profile.planningContext?.monthlyIncomeKrw === "number") {
+    params.set("monthlyIncomeKrw", String(profile.planningContext.monthlyIncomeKrw));
+  }
+  if (typeof profile.planningContext?.monthlyExpenseKrw === "number") {
+    params.set("monthlyExpenseKrw", String(profile.planningContext.monthlyExpenseKrw));
+  }
+  if (typeof profile.planningContext?.liquidAssetsKrw === "number") {
+    params.set("liquidAssetsKrw", String(profile.planningContext.liquidAssetsKrw));
+  }
+  if (typeof profile.planningContext?.debtBalanceKrw === "number") {
+    params.set("debtBalanceKrw", String(profile.planningContext.debtBalanceKrw));
+  }
   return params;
 }

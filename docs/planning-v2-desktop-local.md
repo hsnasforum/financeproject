@@ -141,6 +141,8 @@ rm -rf $HOME/planning-v2-desktop
 pnpm planning:v2:prod:smoke -- --app-dir=$HOME/planning-v2-desktop --port=3210
 ```
 
+- 이 스모크는 production에서 실제 공개되는 `/public/dart`, 정적 asset, remote probe 차단과 함께 `/settings/data-sources`의 read-only `운영 최신 기준` 렌더도 확인합니다.
+
 Vault unlock + run/export까지 포함한 기존 시나리오는:
 ```bash
 PLANNING_VAULT_PASSPHRASE='your-passphrase' pnpm planning:v2:desktop:smoke -- --app-dir=$HOME/planning-v2-desktop

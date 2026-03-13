@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { BodyActionLink, bodyDenseActionRowClassName, BodySectionHeading } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -137,7 +137,7 @@ export function ProfileDraftClient() {
           <p className="text-sm font-semibold text-amber-700">
             이 초안은 자동 저장되지 않습니다.
           </p>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className={bodyDenseActionRowClassName}>
             <Button
               data-testid="v3-profile-draft-generate"
               disabled={loading}
@@ -149,12 +149,12 @@ export function ProfileDraftClient() {
             >
               {loading ? "생성 중..." : "초안 생성"}
             </Button>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/transactions">
+            <BodyActionLink href="/planning/v3/transactions/batches">
               배치 목록
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/drafts">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/drafts">
               저장된 Draft 목록
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
           {batchId ? <p className="text-xs text-slate-600">기준 배치: {batchId}</p> : null}
@@ -162,7 +162,7 @@ export function ProfileDraftClient() {
 
         {patch ? (
           <Card className="space-y-3" data-testid="v3-profile-draft-summary">
-            <h2 className="text-sm font-bold text-slate-900">초안 요약</h2>
+            <BodySectionHeading title="초안 요약" />
             <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
               <div>
                 <dt className="font-semibold">월 소득 추정</dt>

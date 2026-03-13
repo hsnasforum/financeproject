@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
-import { type ImportBatchMeta } from "@/lib/planning/v3/domain/transactions";
-import { listBatches as listLegacyBatches } from "@/lib/planning/v3/service/transactionStore";
-import { getBatchSummary } from "@/lib/planning/v3/service/getBatchSummary";
-import { listBatches as listStoredBatches } from "@/lib/planning/v3/store/batchesStore";
+import {
+  getBatchSummary,
+  type ImportBatchMeta,
+  listLegacyBatches,
+  listStoredBatches,
+} from "@/lib/planning/v3/batches/store";
 
 type LegacyBatchRow = {
   id: string;
@@ -51,7 +51,6 @@ function sortByCreatedAtDesc(items: ImportBatchMeta[]): ImportBatchMeta[] {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -72,9 +71,6 @@ function withReadGuard(request: Request): Response | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -147,4 +143,3 @@ export async function GET(request: Request) {
     );
   }
 }
-

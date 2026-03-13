@@ -16,6 +16,14 @@ function asString(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
+function normalizeCorpCode(value: string | null): string {
+  return (value ?? "").trim();
+}
+
+function isValidCorpCode(value: string): boolean {
+  return /^\d{8}$/.test(value);
+}
+
 function fixturePath(): string {
   return path.join(process.cwd(), "tests", "fixtures", "dart", "company.sample.json");
 }
@@ -40,10 +48,13 @@ function loadFixtureCompany() {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const corpCode = (searchParams.get("corpCode") ?? "").trim();
+  const corpCode = normalizeCorpCode(searchParams.get("corpCode"));
 
   if (!corpCode) {
     return NextResponse.json({ ok: false, error: { code: "INPUT", message: "corpCode를 입력하세요." } }, { status: 400 });
+  }
+  if (!isValidCorpCode(corpCode)) {
+    return NextResponse.json({ ok: false, error: { code: "INPUT", message: "corpCode 형식이 올바르지 않습니다." } }, { status: 400 });
   }
 
   if ((process.env.DART_E2E_FIXTURE ?? "").trim() === "1") {

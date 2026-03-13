@@ -76,6 +76,18 @@ function isLoopbackIp(raw: string): boolean {
   return false;
 }
 
+function isWslEnv(env: NodeJS.ProcessEnv): boolean {
+  return asString(env.WSL_DISTRO_NAME).length > 0 || asString(env.WSL_INTEROP).length > 0;
+}
+
+function isWslBridgeIp(raw: string): boolean {
+  const value = normalizeIp(raw);
+  const match = /^172\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(value);
+  if (!match) return false;
+  const second = Number(match[1]);
+  return Number.isInteger(second) && second >= 16 && second <= 31;
+}
+
 function isAllowRemote(env: NodeJS.ProcessEnv): boolean {
   const raw = asString(env.ALLOW_REMOTE).toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
@@ -118,5 +130,6 @@ export function isLocalRequest(request: RequestLike, env: NodeJS.ProcessEnv = pr
 
   const ips = collectIpCandidates(request);
   if (ips.length < 1) return true;
-  return ips.every((ip) => isLoopbackIp(ip));
+  const allowWslBridgeIp = isWslEnv(env);
+  return ips.every((ip) => isLoopbackIp(ip) || (allowWslBridgeIp && isWslBridgeIp(ip)));
 }

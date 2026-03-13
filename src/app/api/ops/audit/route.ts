@@ -55,17 +55,37 @@ export async function GET(request: Request) {
 
   const limit = toSafeInt(searchParams.get("limit"), 200, 1, 1000);
   const eventType = asString(searchParams.get("eventType")).toUpperCase();
+  const taskName = asString(searchParams.get("taskName")).toUpperCase();
 
   try {
-    const [items, eventTypeSource] = await Promise.all([
+    const [sourceItems, eventTypeSource] = await Promise.all([
       listOpsAuditEvents({
-        limit,
+        limit: taskName ? 1000 : limit,
         ...(eventType ? { eventType } : {}),
       }),
       listOpsAuditEvents({ limit: 1000 }),
     ]);
 
+    const filteredByTaskName = taskName
+      ? sourceItems.filter((row) => {
+          const meta = row.meta && typeof row.meta === "object" ? row.meta : null;
+          const currentTaskName = asString((meta as Record<string, unknown> | null)?.taskName).toUpperCase();
+          return currentTaskName === taskName;
+        })
+      : sourceItems;
+    const items = filteredByTaskName.slice(0, limit);
+
     const types = Array.from(new Set(eventTypeSource.map((row) => row.eventType))).sort((a, b) => a.localeCompare(b));
+    const taskNames = Array.from(
+      new Set(
+        eventTypeSource
+          .map((row) => {
+            const meta = row.meta && typeof row.meta === "object" ? row.meta : null;
+            return asString((meta as Record<string, unknown> | null)?.taskName).toUpperCase();
+          })
+          .filter((row) => row.length > 0),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
 
     return NextResponse.json({
       ok: true,
@@ -73,7 +93,9 @@ export async function GET(request: Request) {
       meta: {
         limit,
         ...(eventType ? { eventType } : {}),
+        ...(taskName ? { taskName } : {}),
         types,
+        taskNames,
       },
     });
   } catch (error) {

@@ -2,9 +2,9 @@ import { helpSections } from "@/lib/helpContent.ko";
 
 export const uiTextKo = {
   app: {
-    title: "핀라이프 로컬 시제품",
-    description: "개인용 금융상품 비교, 추천, 플래닝을 위한 로컬 우선 서비스",
-    brand: "핀라이프",
+    title: "MMD",
+    description: "개인용 금융 비교, 추천, 플래닝을 위한 로컬 우선 서비스",
+    brand: "MMD",
   },
   nav: {
     home: "홈",

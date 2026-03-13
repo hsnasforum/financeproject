@@ -1,9 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  BodyStatusInset,
+  BodyTableFrame,
+  bodyCompactFieldClassName,
+  bodyDenseActionRowClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -296,7 +302,7 @@ export function TransactionsBatchListClient() {
             <label className="text-sm font-semibold text-slate-700">
               거래 계좌
               <select
-                className="ml-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                className={`${bodyCompactFieldClassName} ml-2`}
                 data-testid="v3-upload-account-select"
                 disabled={accountLoading || accounts.length < 1}
                 onChange={(event) => {
@@ -312,15 +318,15 @@ export function TransactionsBatchListClient() {
                 ))}
               </select>
             </label>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/accounts">
+            <BodyActionLink href="/planning/v3/accounts">
               계좌 관리
-            </Link>
+            </BodyActionLink>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <input
               accept=".csv,text/csv"
-              className="max-w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+              className={bodyCompactFieldClassName}
               data-testid="v3-upload-input"
               onChange={(event) => {
                 const file = event.currentTarget.files?.[0] ?? null;
@@ -346,13 +352,13 @@ export function TransactionsBatchListClient() {
           {uploadStatus ? <p className="text-sm text-slate-700">{uploadStatus}</p> : null}
 
           {uploadError ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <BodyStatusInset tone="warning">
               <p className="font-semibold">{uploadError}</p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
                 <li>date + amount(또는 inflow/outflow) 컬럼이 있는지 확인해 주세요.</li>
                 <li>CSV 헤더명이 맞지 않으면 /planning/v3/import에서 매핑 UI로 먼저 검증해 주세요.</li>
               </ul>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className={`${bodyDenseActionRowClassName} mt-3`}>
                 <a
                   className="text-xs font-semibold underline underline-offset-2"
                   download
@@ -371,7 +377,7 @@ export function TransactionsBatchListClient() {
                   다시 시도
                 </Button>
               </div>
-            </div>
+            </BodyStatusInset>
           ) : null}
         </Card>
 
@@ -389,26 +395,23 @@ export function TransactionsBatchListClient() {
               새로고침
             </Button>
             {recentBatch ? (
-              <Link
-                className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                href={`/planning/v3/transactions/batches/${encodeURIComponent(recentBatch.id)}`}
-              >
+              <BodyActionLink href={`/planning/v3/transactions/batches/${encodeURIComponent(recentBatch.id)}`}>
                 최근 배치로 이동
-              </Link>
+              </BodyActionLink>
             ) : null}
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/batches">
+            <BodyActionLink href="/planning/v3/batches">
               Batch Center
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/import">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/import/csv">
               CSV Import
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
           {loading ? <p className="text-sm text-slate-600">목록을 불러오는 중...</p> : null}
           {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 배치가 없습니다.</p> : null}
 
           {rows.length > 0 ? (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-batch-list">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                   <tr>
@@ -429,18 +432,15 @@ export function TransactionsBatchListClient() {
                       <td className="px-3 py-2 text-right text-slate-800">{row.ok.toLocaleString("ko-KR")}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{row.failed.toLocaleString("ko-KR")}</td>
                       <td className="px-3 py-2">
-                        <Link
-                          className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                          href={`/planning/v3/transactions/batches/${encodeURIComponent(row.id)}`}
-                        >
+                        <BodyActionLink href={`/planning/v3/transactions/batches/${encodeURIComponent(row.id)}`}>
                           보기
-                        </Link>
+                        </BodyActionLink>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </BodyTableFrame>
           ) : null}
         </Card>
       </div>

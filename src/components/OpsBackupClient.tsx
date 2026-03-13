@@ -110,6 +110,10 @@ type OpsApiError = {
   fixHref?: string;
 };
 
+type OpsApiErrorPayload = {
+  error?: OpsApiError;
+};
+
 function formatDateTime(value: string | undefined): string {
   if (!value) return "-";
   const parsed = Date.parse(value);
@@ -122,6 +126,23 @@ function formatBytes(value: number | undefined): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function toBackupActionError(payload: OpsApiErrorPayload | null, fallbackMessage: string): string {
+  const code = (payload?.error?.code ?? "").trim().toUpperCase();
+  const rawMessage = (payload?.error?.message ?? "").trim();
+  if (rawMessage) return rawMessage;
+  if (code === "LOCAL_ONLY") {
+    return "로컬 주소(127.0.0.1 또는 localhost)에서만 실행할 수 있습니다.";
+  }
+  if (code === "CSRF") {
+    return "보안 토큰(CSRF)이 만료되었습니다. 페이지를 새로고침 후 다시 시도해 주세요.";
+  }
+  return fallbackMessage;
+}
+
+function getOpsApiErrorCode(payload: OpsApiErrorPayload | null): string {
+  return (payload?.error?.code ?? "").trim().toUpperCase();
 }
 
 export function OpsBackupClient() {
@@ -139,6 +160,7 @@ export function OpsBackupClient() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [errorFixHref, setErrorFixHref] = useState("");
+  const [confirmRestoreOpen, setConfirmRestoreOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -161,6 +183,20 @@ export function OpsBackupClient() {
     })();
     return () => { mounted = false; };
   }, []);
+
+  async function refreshCsrfToken(): Promise<string> {
+    const response = await fetch("/api/ops/security/status", { cache: "no-store" });
+    const payload = (await response.json().catch(() => null)) as VaultStatusPayload | null;
+    if (!response.ok || !payload?.ok) {
+      const apiError = payload?.error;
+      setErrorFixHref(typeof apiError?.fixHref === "string" ? apiError.fixHref : "");
+      throw new Error(apiError?.message ?? "CSRF 토큰을 다시 불러오지 못했습니다.");
+    }
+    const nextToken = typeof payload.csrfToken === "string" ? payload.csrfToken : "";
+    setCsrf(nextToken);
+    setErrorFixHref("");
+    return nextToken;
+  }
 
   const hasCsrf = csrf.trim().length > 0;
   const canUpload = hasCsrf && !previewing && !restoring && !exporting;
@@ -197,16 +233,33 @@ export function OpsBackupClient() {
     setErrorFixHref("");
     setNotice("");
     try {
-      const response = await fetch("/api/ops/backup/export", {
+      let activeCsrf = csrf;
+      let response = await fetch("/api/ops/backup/export", {
         method: "POST",
         cache: "no-store",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ csrf, passphrase, mode: exportMode, gzip: exportGzip }),
+        body: JSON.stringify({ csrf: activeCsrf, passphrase, mode: exportMode, gzip: exportGzip }),
       });
+      if (!response.ok && response.status === 403) {
+        const firstPayload = (await response.json().catch(() => null)) as OpsApiErrorPayload | null;
+        const firstCode = (firstPayload?.error?.code ?? "").trim().toUpperCase();
+        if (firstCode === "CSRF") {
+          activeCsrf = await refreshCsrfToken();
+          response = await fetch("/api/ops/backup/export", {
+            method: "POST",
+            cache: "no-store",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ csrf: activeCsrf, passphrase, mode: exportMode, gzip: exportGzip }),
+          });
+        } else {
+          setErrorFixHref(typeof firstPayload?.error?.fixHref === "string" ? firstPayload.error.fixHref : "");
+          throw new Error(toBackupActionError(firstPayload, "export에 실패했습니다."));
+        }
+      }
       if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: OpsApiError } | null;
+        const payload = (await response.json().catch(() => null)) as OpsApiErrorPayload | null;
         setErrorFixHref(typeof payload?.error?.fixHref === "string" ? payload.error.fixHref : "");
-        throw new Error(payload?.error?.message ?? "export에 실패했습니다.");
+        throw new Error(toBackupActionError(payload, "export에 실패했습니다."));
       }
       const blob = await response.blob();
       const fallbackName = `planning-data-vault-${Date.now()}.enc.json`;
@@ -245,18 +298,39 @@ export function OpsBackupClient() {
     setNotice("");
     setRestoreResult(null);
     try {
-      const formData = new FormData();
-      formData.set("csrf", csrf);
-      formData.set("passphrase", passphrase);
-      formData.set("file", file);
-      const response = await fetch("/api/ops/backup/preview", {
+      let activeCsrf = csrf;
+      const buildPreviewFormData = (csrfToken: string): FormData => {
+        const formData = new FormData();
+        formData.set("csrf", csrfToken);
+        formData.set("passphrase", passphrase);
+        formData.set("file", file);
+        return formData;
+      };
+
+      let response = await fetch("/api/ops/backup/preview", {
         method: "POST",
-        body: formData,
+        body: buildPreviewFormData(activeCsrf),
       });
+
+      if (!response.ok && response.status === 403) {
+        const firstPayload = (await response.json().catch(() => null)) as OpsApiErrorPayload | null;
+        const firstCode = getOpsApiErrorCode(firstPayload);
+        if (firstCode === "CSRF") {
+          activeCsrf = await refreshCsrfToken();
+          response = await fetch("/api/ops/backup/preview", {
+            method: "POST",
+            body: buildPreviewFormData(activeCsrf),
+          });
+        } else {
+          setErrorFixHref(typeof firstPayload?.error?.fixHref === "string" ? firstPayload.error.fixHref : "");
+          throw new Error(toBackupActionError(firstPayload, "preview에 실패했습니다."));
+        }
+      }
+
       const payload = (await response.json().catch(() => null)) as BackupPreviewPayload | null;
       if (!response.ok || !payload?.ok || !payload.data) {
         setErrorFixHref(typeof payload?.error?.fixHref === "string" ? payload.error.fixHref : "");
-        throw new Error(payload?.error?.message ?? "preview에 실패했습니다.");
+        throw new Error(toBackupActionError(payload, "preview에 실패했습니다."));
       }
       setPreview(payload.data);
       setNotice("preview 완료: 구조와 개수를 확인했습니다.");
@@ -268,7 +342,7 @@ export function OpsBackupClient() {
     }
   }
 
-  async function handleRestore(): Promise<void> {
+  async function executeRestore(): Promise<void> {
     if (!file) {
       setError("먼저 zip 파일을 선택해 주세요.");
       return;
@@ -278,30 +352,46 @@ export function OpsBackupClient() {
       return;
     }
 
-    const confirmText = mode === "replace"
-      ? "replace 모드는 기존 데이터를 삭제 후 복원합니다. 계속 진행할까요?"
-      : "merge 모드로 복원할까요?";
-    if (!window.confirm(confirmText)) return;
-
     setRestoring(true);
     setError("");
     setErrorFixHref("");
     setNotice("");
     setRestoreResult(null);
     try {
-      const formData = new FormData();
-      formData.set("csrf", csrf);
-      formData.set("mode", mode);
-      formData.set("passphrase", passphrase);
-      formData.set("file", file);
-      const response = await fetch("/api/ops/backup/restore", {
+      let activeCsrf = csrf;
+      const buildRestoreFormData = (csrfToken: string): FormData => {
+        const formData = new FormData();
+        formData.set("csrf", csrfToken);
+        formData.set("mode", mode);
+        formData.set("passphrase", passphrase);
+        formData.set("file", file);
+        return formData;
+      };
+
+      let response = await fetch("/api/ops/backup/restore", {
         method: "POST",
-        body: formData,
+        body: buildRestoreFormData(activeCsrf),
       });
+
+      if (!response.ok && response.status === 403) {
+        const firstPayload = (await response.json().catch(() => null)) as OpsApiErrorPayload | null;
+        const firstCode = getOpsApiErrorCode(firstPayload);
+        if (firstCode === "CSRF") {
+          activeCsrf = await refreshCsrfToken();
+          response = await fetch("/api/ops/backup/restore", {
+            method: "POST",
+            body: buildRestoreFormData(activeCsrf),
+          });
+        } else {
+          setErrorFixHref(typeof firstPayload?.error?.fixHref === "string" ? firstPayload.error.fixHref : "");
+          throw new Error(toBackupActionError(firstPayload, "restore에 실패했습니다."));
+        }
+      }
+
       const payload = (await response.json().catch(() => null)) as BackupRestorePayload | null;
       if (!response.ok || !payload?.ok || !payload.data) {
         setErrorFixHref(typeof payload?.error?.fixHref === "string" ? payload.error.fixHref : "");
-        throw new Error(payload?.error?.message ?? "restore에 실패했습니다.");
+        throw new Error(toBackupActionError(payload, "restore에 실패했습니다."));
       }
       setRestoreResult(payload.data);
       setNotice(payload.message ?? "restore를 완료했습니다.");
@@ -310,6 +400,18 @@ export function OpsBackupClient() {
     } finally {
       setRestoring(false);
     }
+  }
+
+  function handleRestore(): void {
+    if (!file) {
+      setError("먼저 zip 파일을 선택해 주세요.");
+      return;
+    }
+    if (!hasCsrf) {
+      setError("CSRF 토큰이 없어 restore를 실행할 수 없습니다.");
+      return;
+    }
+    setConfirmRestoreOpen(true);
   }
 
   return (
@@ -576,6 +678,49 @@ export function OpsBackupClient() {
             </div>
           ) : null}
         </Card>
+      ) : null}
+      {confirmRestoreOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ops-backup-restore-confirm-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <h3 id="ops-backup-restore-confirm-title" className="text-base font-black text-slate-900">Restore 실행 확인</h3>
+            <p className="mt-2 text-sm text-slate-700">
+              {mode === "replace"
+                ? "replace 모드는 기존 데이터를 삭제 후 복원합니다. 계속 진행할까요?"
+                : "merge 모드로 복원합니다. 계속 진행할까요?"}
+            </p>
+            <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
+              mode: <span className="font-semibold">{mode}</span> / file: <span className="font-semibold">{selectedName || "-"}</span>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmRestoreOpen(false)}
+                disabled={restoring}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                disabled={restoring}
+                onClick={() => {
+                  setConfirmRestoreOpen(false);
+                  void executeRestore();
+                }}
+              >
+                Restore 진행
+              </Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </PageShell>
   );

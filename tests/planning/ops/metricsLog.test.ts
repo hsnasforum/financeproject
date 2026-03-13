@@ -77,4 +77,22 @@ describe("metricsLog", () => {
     expect(raw).not.toContain("passphrase");
     expect(raw).not.toContain("rawBlob");
   });
+
+  it("reads sparse rotated files without probing missing suffixes", async () => {
+    await fs.writeFile(
+      logPath,
+      `${JSON.stringify({ type: "RUN_STAGE", at: "2026-03-01T00:00:03.000Z", meta: { status: "SUCCESS" } })}\n`,
+      "utf-8",
+    );
+    await fs.writeFile(
+      `${logPath}.2`,
+      `${JSON.stringify({ type: "RUN_STAGE", at: "2026-03-01T00:00:01.000Z", meta: { status: "FAILED" } })}\n`,
+      "utf-8",
+    );
+
+    const rows = await listOpsMetricEvents({ limit: 10 });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.at).toBe("2026-03-01T00:00:03.000Z");
+    expect(rows[1]?.at).toBe("2026-03-01T00:00:01.000Z");
+  });
 });

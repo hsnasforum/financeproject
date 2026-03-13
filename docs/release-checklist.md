@@ -1,10 +1,14 @@
 # Release Checklist
 
 ## 사전 확인
-- `pnpm verify` 통과
-- 멀티 에이전트 설정/프롬프트/skill 변경이 있으면 `pnpm multi-agent:guard` 통과
+- 기준 체크리스트는 루트 `RELEASE_CHECKLIST.md`
+- `pnpm release:verify` 통과
+  - 포함: `pnpm test`, `pnpm planning:v2:complete`, `pnpm multi-agent:guard`
+  - script가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`도 이어서 실행
+  - advisory `pnpm planning:ssot:check`는 WARN으로만 기록
 - `pnpm build` 통과
-- `pnpm e2e` 통과
+- 사용자 경로/셀렉터 영향이 있으면 `pnpm e2e:rc` 통과
+  - 범위가 넓거나 RC 밖 재현이 필요하면 `pnpm e2e`
 - 문서 3종 최신화 확인
   - `docs/current-screens.md`
   - `docs/deploy.md`

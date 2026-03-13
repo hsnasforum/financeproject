@@ -2,6 +2,7 @@ import {
   type CandidatePool,
   type CandidateSource,
   type DepositProtectionMode,
+  type RecommendPlanningContext,
   type RecommendPurpose,
   type UserRecommendProfile,
 } from "@/lib/recommend/types";
@@ -26,6 +27,7 @@ export type SavedRunProfile = {
     term: number;
     liquidity: number;
   };
+  planningContext?: RecommendPlanningContext;
 };
 
 export type SavedRunItem = {
@@ -134,7 +136,7 @@ function normalizeProfile(value: unknown): SavedRunProfile | null {
   const preferredTerm = value.preferredTerm;
   const liquidityPref = value.liquidityPref;
   const rateMode = value.rateMode;
-  const candidatePool = value.candidatePool;
+  const candidatePoolRaw = value.candidatePool;
   const depositProtection = value.depositProtection;
   const topN = normalizeInt(value.topN, 10);
 
@@ -143,8 +145,9 @@ function normalizeProfile(value: unknown): SavedRunProfile | null {
   if (preferredTerm !== 3 && preferredTerm !== 6 && preferredTerm !== 12 && preferredTerm !== 24 && preferredTerm !== 36) return null;
   if (liquidityPref !== "low" && liquidityPref !== "mid" && liquidityPref !== "high") return null;
   if (rateMode !== "max" && rateMode !== "base" && rateMode !== "simple") return null;
-  if (candidatePool !== "legacy" && candidatePool !== "unified") return null;
+  if (candidatePoolRaw !== undefined && candidatePoolRaw !== "legacy" && candidatePoolRaw !== "unified") return null;
   if (depositProtection !== "any" && depositProtection !== "prefer" && depositProtection !== "require") return null;
+  const candidatePool: CandidatePool = "unified";
 
   const rawCandidateSources = Array.isArray(value.candidateSources) ? value.candidateSources : [];
   const candidateSources = rawCandidateSources
@@ -154,6 +157,21 @@ function normalizeProfile(value: unknown): SavedRunProfile | null {
     : ["finlife"];
 
   const rawWeights = isRecord(value.weights) ? value.weights : {};
+  const rawPlanningContext = isRecord(value.planningContext) ? value.planningContext : {};
+  const planningContext: RecommendPlanningContext = {
+    ...(normalizeNumber(rawPlanningContext.monthlyIncomeKrw) !== null
+      ? { monthlyIncomeKrw: Math.max(0, Math.round(normalizeNumber(rawPlanningContext.monthlyIncomeKrw) as number)) }
+      : {}),
+    ...(normalizeNumber(rawPlanningContext.monthlyExpenseKrw) !== null
+      ? { monthlyExpenseKrw: Math.max(0, Math.round(normalizeNumber(rawPlanningContext.monthlyExpenseKrw) as number)) }
+      : {}),
+    ...(normalizeNumber(rawPlanningContext.liquidAssetsKrw) !== null
+      ? { liquidAssetsKrw: Math.max(0, Math.round(normalizeNumber(rawPlanningContext.liquidAssetsKrw) as number)) }
+      : {}),
+    ...(normalizeNumber(rawPlanningContext.debtBalanceKrw) !== null
+      ? { debtBalanceKrw: Math.max(0, Math.round(normalizeNumber(rawPlanningContext.debtBalanceKrw) as number)) }
+      : {}),
+  };
   return {
     purpose,
     kind,
@@ -169,6 +187,7 @@ function normalizeProfile(value: unknown): SavedRunProfile | null {
       term: normalizeNumber(rawWeights.term) ?? 0,
       liquidity: normalizeNumber(rawWeights.liquidity) ?? 0,
     },
+    ...(Object.keys(planningContext).length > 0 ? { planningContext } : {}),
   };
 }
 

@@ -28,20 +28,28 @@
 ## E2E 실패
 증상: Playwright E2E가 반복적으로 실패한다.
 원인: 서버 상태/fixture/브라우저 캐시가 테스트 기대와 다르다.
-해결 명령: `pnpm test:e2e`
+해결 명령:
+- 기본 재현: `pnpm e2e:rc`
+- 범위가 넓거나 RC 밖 재현이 필요하면 `pnpm e2e`
 
 ## Codex foreground build 143
 증상: Codex foreground exec에서 `pnpm build`가 장시간 진행 뒤 `143`으로 종료된다.
 원인: [환경 관찰] 저장소 build 자체가 항상 실패하는 것이 아니라, 현재 Codex foreground exec가 장시간 build 세션을 중간 종료할 수 있다. detached 실행이나 일반 사용자 셸에서는 같은 build가 통과한 기록이 있다.
 해결 명령:
+- `pnpm cleanup:next-artifacts -- --build-preflight`
 - 일반 사용자 셸에서 `pnpm build`
-- 또는 Linux 기준 detached 검증:
-  - `setsid -f /bin/bash -lc 'cd /path/to/finance && env NEXT_BUILD_HEARTBEAT_MS=5000 pnpm build >/tmp/finance-build-detached.log 2>&1; printf "%s\n" "$?" >/tmp/finance-build-detached.exit'`
-  - `cat /tmp/finance-build-detached.exit`
+- 또는 helper 사용:
+  - `pnpm build:detached`
+  - 출력된 `exit=...json` 경로를 확인
 추가 메모:
+- `cleanup:next-artifacts`는 최신 성공 isolated build(`.next-build-info.json` 기준)는 보존하고, 오래된 `.next-build-*`와 대응 `-tsconfig.json`만 정리한다.
+- `cleanup:next-artifacts -- --build-preflight`는 위 정리에 더해 tracked isolated build 내부 `standalone/.data` shadow까지 같이 정리한다.
+- dev 서버가 살아 있으면 공유 runtime 산출물 정리는 건너뛰지만, 오래된 `.next-build*` 정리는 계속 수행한다.
+- active build/prod/playwright runtime이 있으면 build-preflight용 `standalone/.data` 정리는 건너뛴다.
 - detached build가 `0`으로 끝나면 앱 회귀와 Codex foreground 제약을 분리해서 판단한다.
 - production smoke가 필요하면 detached build PASS 뒤 `pnpm planning:v2:prod:smoke`를 이어서 확인한다.
 - raw `next build`보다 저장소 wrapper인 `pnpm build`를 우선 사용한다.
+- `pnpm build`, `pnpm e2e:rc`, `pnpm release:verify`는 shared `.next` 충돌을 피하려고 단일 소유자로 순차 실행한다.
 
 ## dev unlock
 증상: `/api/dev/*` 호출이 `UNAUTHORIZED` 또는 `CSRF_MISMATCH`다.

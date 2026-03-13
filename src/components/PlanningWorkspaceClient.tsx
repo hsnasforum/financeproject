@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -10,34 +10,83 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import PlanningMiniCharts from "@/app/planning/_components/PlanningMiniCharts";
-import SnapshotPicker, { type SnapshotSelection } from "@/app/planning/_components/SnapshotPicker";
+import SnapshotPicker from "@/app/planning/_components/SnapshotPicker";
 import {
   createInitialStepStatuses,
   type StepId,
   type StepStatus,
 } from "@/app/planning/_lib/runPipeline";
+import { type SnapshotSelection } from "@/app/planning/_lib/snapshotSelection";
 import {
+  buildProfileJsonEditorState,
   createDefaultProfileFormModel,
   estimateDebtMonthlyPaymentKrw,
   normalizeDraft,
   normalizeDraftWithDisclosure,
   type FormDraft,
   formToProfile,
-  fromProfileJson,
-  profileToForm,
-  safeParseProfileJson,
+  hydrateProfileJsonEditorState,
+  parseProfileJsonEditorDraft,
   toProfileJson,
   validateDebtOfferLiabilityIds,
   validateProfileForm,
   type ProfileFormDebt,
   type ProfileFormGoal,
+  type ProfileJsonEditorState,
   type ProfileFormModel,
 } from "@/app/planning/_lib/profileFormModel";
 import {
-  buildDebtWhatIfSummary,
+  buildWorkspaceActionsDebugSections,
+  buildWorkspaceActionsVm,
+  buildWorkspaceDebtDebugSections,
+  buildWorkspaceDebtVm,
+  buildWorkspaceMonteCarloDebugSections,
+  buildWorkspaceMonteCarloVm,
+  buildWorkspaceScenarioDebugSections,
+  buildWorkspaceWarningsGoalsDebugSections,
   buildWorkspaceResultSummaryVm,
+  buildWorkspaceScenarioVm,
 } from "@/app/planning/_lib/workspaceResultInsights";
+import {
+  buildWorkspaceLiveSummary,
+  buildWorkspaceQuickStartVm,
+  isWorkspaceQuickStartProfileDone,
+  resolveWorkspaceSelectedProfileSyncState,
+  stableStringifyWorkspaceValue,
+  type WorkspaceQuickStartProgressState,
+} from "@/app/planning/_lib/workspaceQuickStart";
+import {
+  ASSUMPTIONS_FORM_DEFAULT,
+  assumptionsFormToRecord,
+  parseAssumptionsEditorJson,
+  splitAssumptionsRecord,
+  type AssumptionsFormModel,
+} from "@/app/planning/_lib/workspaceAssumptionsEditor";
+import {
+  debtOfferRowsToPayload,
+  parseDebtOffersEditorJson,
+  parseDebtOffersFormRows,
+  type DebtOfferFormRow,
+} from "@/app/planning/_lib/workspaceDebtOffersEditor";
+import {
+  buildWorkspaceCompletedRunState,
+  buildWorkspaceHealthGuardState,
+  buildWorkspaceSnapshotState,
+  buildStepStatusesFromRunStages,
+  type WorkspaceRunMeta as PlanningMeta,
+  type WorkspaceRunResult,
+} from "@/app/planning/_lib/workspaceRunResult";
 import { type SnapshotListItem } from "@/app/planning/_lib/snapshotList";
+import {
+  buildWorkspaceSnapshotItemsStateFromApi,
+  isSameWorkspaceSnapshotSelection,
+  normalizeWorkspaceSnapshotItemsState,
+  normalizeWorkspaceSnapshotSelection,
+  resolveInitialWorkspaceSnapshotSelection,
+  resolveWorkspaceSelectedSnapshotItem,
+  resolveWorkspaceSnapshotSelectionFallback,
+  type SnapshotItemsState,
+} from "@/app/planning/_lib/workspaceSnapshotSelection";
 import {
   defaults as planningExecutionDefaults,
   getVisibleSections,
@@ -50,10 +99,29 @@ import {
   TimelineSummaryTable,
   WarningsTable,
 } from "@/components/planning/ResultGuideSections";
+import {
+  BodyActionLink,
+  BodyDialogSurface,
+  BodyEmptyState,
+  BodyInset,
+  BodySectionHeading,
+  BodyStatusInset,
+  BodyTableFrame,
+  bodyChoiceRowClassName,
+  bodyActionLinkClassName,
+  bodyCompactFieldClassName,
+  bodyDenseActionRowClassName,
+  bodyDialogActionsClassName,
+  bodyFieldClassName,
+  bodyLabelClassName,
+  bodyMetaChipClassName,
+  bodyTextAreaClassName,
+} from "@/components/ui/BodyTone";
 import EvidencePanel from "@/components/planning/EvidencePanel";
 import DisclosuresPanel from "@/components/planning/DisclosuresPanel";
 import ProfileV2Form from "@/components/planning/ProfileV2Form";
 import PlanningOnboardingWizard from "@/components/planning/PlanningOnboardingWizard";
+import PlanningQuickStartGate from "@/components/planning/PlanningQuickStartGate";
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
 import { buildMetricEvidence } from "@/app/planning/_lib/metricEvidence";
 import { copyToClipboard } from "@/lib/browser/clipboard";
@@ -76,11 +144,7 @@ import {
   normalizePlanningResponse,
   type PlanningApiEngineEnvelope,
 } from "@/lib/planning/api/contracts";
-import { resolveReportResultDtoFromRun } from "@/lib/planning/reports/reportInputContract";
-import { type ActionItemV2 } from "@/lib/planning/v2/actions/types";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
-import { isResultDtoV1, type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
-import { rebuildResultDtoFromCombinedRunResultForCompat } from "@/lib/planning/v2/compatResultDto";
 import { applySuggestions } from "@/lib/planning/v2/applySuggestions";
 import { preflightRun, type PreflightIssue } from "@/lib/planning/v2/preflight";
 import { applyProfilePatch, type ScenarioPatch } from "@/lib/planning/v2/profilePatch";
@@ -119,55 +183,6 @@ type ApiResponse<T> = {
 
 type PlanningFeedbackCreateResponse = {
   id?: string;
-};
-
-type HealthWarning = {
-  code: string;
-  severity: "info" | "warn" | "critical";
-  message: string;
-  data?: Record<string, unknown>;
-};
-
-type HealthSummary = {
-  warningsCount: number;
-  criticalCount: number;
-  warningCodes: string[];
-  snapshotStaleDays?: number;
-  flags?: {
-    snapshotMissing?: boolean;
-    snapshotStaleDays?: number;
-    optimisticReturn?: boolean;
-    riskMismatch?: boolean;
-  };
-};
-
-type PlanningMeta = {
-  generatedAt?: string;
-  snapshot?: {
-    id?: string;
-    asOf?: string;
-    fetchedAt?: string;
-    missing?: boolean;
-    warningsCount?: number;
-    sourcesCount?: number;
-  };
-  health?: HealthSummary;
-  cache?: {
-    hit?: boolean;
-    keyPrefix?: string;
-  };
-  normalization?: ProfileNormalizationDisclosure;
-};
-
-type CombinedRunResult = {
-  meta?: PlanningMeta;
-  resultDto?: ResultDtoV1;
-  simulate?: Record<string, unknown>;
-  scenarios?: Record<string, unknown>;
-  monteCarlo?: Record<string, unknown>;
-  actions?: Record<string, unknown>;
-  debt?: Record<string, unknown>;
-  stepStatuses: StepStatus[];
 };
 
 type ParsedRunInputs = {
@@ -212,12 +227,52 @@ type PlanningWorkspaceClientProps = {
   csrf?: string;
 };
 
-type SnapshotItemsState = {
-  latest?: SnapshotListItem;
-  history: SnapshotListItem[];
+type ProfileSaveMode = "create" | "duplicate" | "update";
+
+export type WorkspaceAdvancedExecutionOptions = {
+  runScenariosEnabled: boolean;
+  runMonteCarloEnabled: boolean;
+  runActionsEnabled: boolean;
+  runDebtEnabled: boolean;
+  runOptimizeEnabled: boolean;
+  includeProducts: boolean;
 };
 
-type ProfileSaveMode = "create" | "duplicate" | "update";
+export function transitionWorkspaceExecutionOptionsForMode(input: {
+  beginnerMode: boolean;
+  wasBeginnerMode: boolean;
+  current: WorkspaceAdvancedExecutionOptions;
+  snapshot: WorkspaceAdvancedExecutionOptions | null;
+}): {
+  nextState?: WorkspaceAdvancedExecutionOptions;
+  nextSnapshot: WorkspaceAdvancedExecutionOptions | null;
+} {
+  if (input.beginnerMode === input.wasBeginnerMode) {
+    return {
+      nextSnapshot: input.snapshot,
+    };
+  }
+
+  if (input.beginnerMode) {
+    return {
+      nextState: {
+        ...input.current,
+        runScenariosEnabled: true,
+        runMonteCarloEnabled: false,
+        runActionsEnabled: true,
+        runDebtEnabled: true,
+        runOptimizeEnabled: false,
+        includeProducts: false,
+      },
+      nextSnapshot: { ...input.current },
+    };
+  }
+
+  return {
+    ...(input.snapshot ? { nextState: { ...input.snapshot } } : {}),
+    nextSnapshot: null,
+  };
+}
 
 const DEFAULT_PROFILE_JSON = `{
   "monthlyIncomeNet": 4200000,
@@ -275,28 +330,6 @@ const BEGINNER_GOAL_IDS = {
 } as const;
 
 type BeginnerGoalKind = keyof typeof BEGINNER_GOAL_IDS;
-
-type AssumptionsFormModel = {
-  inflationPct: number;
-  expectedReturnPct: number;
-  cashReturnPct: number;
-  withdrawalRatePct: number;
-};
-
-type DebtOfferFormRow = {
-  rowId: string;
-  liabilityId: string;
-  title: string;
-  newAprPct: number;
-  feeKrw: number;
-};
-
-const ASSUMPTIONS_FORM_DEFAULT: AssumptionsFormModel = {
-  inflationPct: 2.0,
-  expectedReturnPct: 5.0,
-  cashReturnPct: 2.0,
-  withdrawalRatePct: 4.0,
-};
 
 type BeginnerGoalContext = {
   monthlyExpenses: number;
@@ -444,28 +477,11 @@ function asString(value: unknown): string {
   return "";
 }
 
-function parseSnapshotListItem(value: unknown): SnapshotListItem | null {
-  const row = asRecord(value);
-  const id = asString(row.id).trim();
-  if (!id) return null;
-  const staleDaysRaw = Number(row.staleDays);
-  return {
-    id,
-    ...(asString(row.asOf).trim() ? { asOf: asString(row.asOf).trim() } : {}),
-    ...(asString(row.fetchedAt).trim() ? { fetchedAt: asString(row.fetchedAt).trim() } : {}),
-    ...(Number.isFinite(staleDaysRaw) ? { staleDays: Math.max(0, Math.trunc(staleDaysRaw)) } : {}),
-    ...(Number.isFinite(Number(row.warningsCount))
-      ? { warningsCount: Math.max(0, Math.trunc(Number(row.warningsCount))) }
-      : {}),
-  };
-}
-
-function parseJsonText<T = unknown>(label: string, text: string): T | null {
+function parseJsonText<T = unknown>(label: string, text: string): { value: T | null; error: string } {
   try {
-    return JSON.parse(text) as T;
+    return { value: JSON.parse(text) as T, error: "" };
   } catch {
-    window.alert(`${label} JSON 파싱에 실패했습니다.`);
-    return null;
+    return { value: null, error: `${label} JSON 파싱에 실패했습니다.` };
   }
 }
 
@@ -503,10 +519,7 @@ function createScenarioPatchesFromTemplate(
 
 function parseHorizonMonths(value: string): number | null {
   const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1200) {
-    window.alert("horizonMonths는 1~1200 범위 숫자여야 합니다.");
-    return null;
-  }
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1200) return null;
   return parsed;
 }
 
@@ -554,155 +567,26 @@ function inputToMonthOffset(value: string): number {
   return Math.max(1, diffMonths);
 }
 
-function splitAssumptionsRecord(raw: Record<string, unknown>): {
-  form: AssumptionsFormModel;
-  extra: Record<string, unknown>;
-} {
-  const knownKeys = new Set([
-    "inflation",
-    "expectedReturn",
-    "cashReturnPct",
-    "withdrawalRatePct",
-    "inflationPct",
-    "expectedReturnPct",
-    "investReturnPct",
-  ]);
-
-  const inflationPct = typeof raw.inflationPct === "number"
-    ? raw.inflationPct
-    : (typeof raw.inflation === "number" ? raw.inflation : ASSUMPTIONS_FORM_DEFAULT.inflationPct);
-  const expectedReturnPct = typeof raw.expectedReturnPct === "number"
-    ? raw.expectedReturnPct
-    : (typeof raw.expectedReturn === "number"
-      ? raw.expectedReturn
-      : (typeof raw.investReturnPct === "number" ? raw.investReturnPct : ASSUMPTIONS_FORM_DEFAULT.expectedReturnPct));
-  const cashReturnPct = typeof raw.cashReturnPct === "number" ? raw.cashReturnPct : ASSUMPTIONS_FORM_DEFAULT.cashReturnPct;
-  const withdrawalRatePct = typeof raw.withdrawalRatePct === "number" ? raw.withdrawalRatePct : ASSUMPTIONS_FORM_DEFAULT.withdrawalRatePct;
-
-  const extra: Record<string, unknown> = {};
-  Object.entries(raw).forEach(([key, value]) => {
-    if (!knownKeys.has(key)) {
-      extra[key] = value;
-    }
-  });
-
-  return {
-    form: {
-      inflationPct,
-      expectedReturnPct,
-      cashReturnPct,
-      withdrawalRatePct,
-    },
-    extra,
-  };
-}
-
-function assumptionsFormToRecord(form: AssumptionsFormModel, extra: Record<string, unknown>): Record<string, unknown> {
-  const inflationPct = Number.isFinite(form.inflationPct) ? form.inflationPct : ASSUMPTIONS_FORM_DEFAULT.inflationPct;
-  const expectedReturnPct = Number.isFinite(form.expectedReturnPct)
-    ? form.expectedReturnPct
-    : ASSUMPTIONS_FORM_DEFAULT.expectedReturnPct;
-  return {
-    ...extra,
-    inflationPct,
-    expectedReturnPct,
-    cashReturnPct: Number.isFinite(form.cashReturnPct) ? form.cashReturnPct : ASSUMPTIONS_FORM_DEFAULT.cashReturnPct,
-    withdrawalRatePct: Number.isFinite(form.withdrawalRatePct) ? form.withdrawalRatePct : ASSUMPTIONS_FORM_DEFAULT.withdrawalRatePct,
-    // Keep compatibility with current API parser fields.
-    inflation: inflationPct,
-    expectedReturn: expectedReturnPct,
-    investReturnPct: expectedReturnPct,
-  };
-}
-
-function parseDebtOffersFormRows(raw: unknown): DebtOfferFormRow[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((row, index) => {
-    const record = asRecord(row);
-    return {
-      rowId: `offer-${index + 1}`,
-      liabilityId: String(record.liabilityId ?? "").trim(),
-      title: String(record.title ?? "").trim(),
-      newAprPct: typeof record.newAprPct === "number" ? record.newAprPct : 0,
-      feeKrw: typeof record.feeKrw === "number" ? record.feeKrw : 0,
-    };
-  });
-}
-
-function debtOfferRowsToPayload(rows: DebtOfferFormRow[]): Array<Record<string, unknown>> {
-  return rows
-    .map((row) => ({
-      liabilityId: row.liabilityId.trim(),
-      newAprPct: row.newAprPct,
-      feeKrw: row.feeKrw,
-      ...(row.title.trim() ? { title: row.title.trim() } : {}),
-    }))
-    .filter((row) => row.liabilityId.length > 0);
-}
-
 function parseApiPayload<T>(
   locale: Locale,
   res: Response,
   payload: ApiResponse<T> | null,
   fallbackMessage: string,
-): payload is ApiResponse<T> {
+): { ok: boolean; errorMessage: string } {
   if (!isApiBaseResponse(payload)) {
-    window.alert(`${fallbackMessage}: 응답 파싱 실패`);
-    return false;
+    return {
+      ok: false,
+      errorMessage: `${fallbackMessage}: 응답 파싱 실패`,
+    };
   }
   const typedPayload = payload as ApiResponse<T>;
   if (!res.ok || !typedPayload.ok) {
-    window.alert(resolveApiErrorMessage(locale, typedPayload.error, fallbackMessage));
-    return false;
+    return {
+      ok: false,
+      errorMessage: resolveApiErrorMessage(locale, typedPayload.error, fallbackMessage),
+    };
   }
-  return true;
-}
-
-function pickTimelinePoints(rows: unknown): Array<{ monthIndex: number; row: Record<string, unknown> }> {
-  const list = asArray(rows).map((item) => asRecord(item));
-  if (list.length === 0) return [];
-  const candidates = [0, 12, list.length - 1];
-  const seen = new Set<number>();
-  const out: Array<{ monthIndex: number; row: Record<string, unknown> }> = [];
-  for (const index of candidates) {
-    if (index < 0 || index >= list.length || seen.has(index)) continue;
-    seen.add(index);
-    out.push({ monthIndex: index, row: list[index] });
-  }
-  return out;
-}
-
-type ActionSeverity = "info" | "warn" | "critical";
-
-const ACTION_SEVERITY_ORDER: Record<ActionSeverity, number> = {
-  critical: 0,
-  warn: 1,
-  info: 2,
-};
-
-function pickTopActionTitles(actions: unknown[]): string[] {
-  return actions
-    .map((action) => {
-      const row = asRecord(action);
-      const severityRaw = String(row.severity ?? "").trim();
-      const severity: ActionSeverity = severityRaw === "critical" || severityRaw === "warn"
-        ? severityRaw
-        : "info";
-      const title = String(row.title ?? "").trim();
-      const code = String(row.code ?? "").trim();
-      return {
-        severity,
-        title: title || code || "권장 조치",
-        code: code || "UNKNOWN",
-      };
-    })
-    .sort((a, b) => {
-      const severityDiff = ACTION_SEVERITY_ORDER[a.severity] - ACTION_SEVERITY_ORDER[b.severity];
-      if (severityDiff !== 0) return severityDiff;
-      return a.code.localeCompare(b.code);
-    })
-    .slice(0, 3)
-    .map((action) => action.title);
+  return { ok: true, errorMessage: "" };
 }
 
 function formatRatioPct(locale: Locale, value: unknown): string {
@@ -723,6 +607,14 @@ function formatPreflightIssue(issue: PreflightIssue): string {
     return `${issue.message} (${issue.fixHint})`;
   }
   return issue.message;
+}
+
+function formatRunOverallStatusKo(status: PlanningRunRecord["overallStatus"] | undefined): string {
+  if (status === "SUCCESS") return "성공";
+  if (status === "PARTIAL_SUCCESS") return "부분 성공";
+  if (status === "FAILED") return "실패";
+  if (status === "RUNNING") return "실행 중";
+  return "저장됨";
 }
 
 function formatDisclosureValue(value: unknown): string {
@@ -786,8 +678,10 @@ function stepStateClass(state: StepStatus["state"]): string {
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
-function isServerDisabledMessage(message: string | undefined): boolean {
-  return typeof message === "string" && message.includes("서버 비활성");
+function quickStartProgressToneClassName(state: WorkspaceQuickStartProgressState): string {
+  if (state === "done") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (state === "current") return "border-sky-200 bg-sky-50 text-sky-700";
+  return "border-slate-200 bg-white text-slate-600";
 }
 
 export function PlanningWorkspaceClient({
@@ -797,18 +691,28 @@ export function PlanningWorkspaceClient({
   snapshotItems,
   csrf = "",
 }: PlanningWorkspaceClientProps) {
-  const initialProfileModel = useMemo(() => {
+  const initialProfileEditorState = useMemo(() => {
     const parsed = tryParseJsonText<ProfileV2>(DEFAULT_PROFILE_JSON);
-    return parsed ? fromProfileJson(parsed, "기본 프로필") : createDefaultProfileFormModel();
+    return parsed
+      ? hydrateProfileJsonEditorState(parsed, "기본 프로필")
+      : buildProfileJsonEditorState(createDefaultProfileFormModel(), "기본 프로필");
   }, []);
   const initialAssumptionsSplit = useMemo(() => {
     const parsed = tryParseJsonText<Record<string, unknown>>(DEFAULT_ASSUMPTIONS_OVERRIDE) ?? {};
     return splitAssumptionsRecord(parsed);
   }, []);
+  const initialAssumptionsJson = useMemo(
+    () => pretty(assumptionsFormToRecord(initialAssumptionsSplit.form, initialAssumptionsSplit.extra)),
+    [initialAssumptionsSplit],
+  );
   const initialDebtOfferRows = useMemo(() => {
     const parsed = tryParseJsonText<unknown[]>(DEFAULT_DEBT_OFFERS_JSON) ?? [];
     return parseDebtOffersFormRows(parsed);
   }, []);
+  const initialSnapshotItems = useMemo(
+    () => normalizeWorkspaceSnapshotItemsState(snapshotItems),
+    [snapshotItems],
+  );
   const safeDefaults = useMemo(() => planningExecutionDefaults(true), []);
 
   useEffect(() => {
@@ -818,22 +722,20 @@ export function PlanningWorkspaceClient({
   const [profiles, setProfiles] = useState<PlanningProfileRecord[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [profileName, setProfileName] = useState("기본 프로필");
-  const [profileJson, setProfileJson] = useState(DEFAULT_PROFILE_JSON);
-  const [profileJsonDraft, setProfileJsonDraft] = useState(DEFAULT_PROFILE_JSON);
-  const [profileJsonError, setProfileJsonError] = useState("");
-  const [profileForm, setProfileForm] = useState<ProfileFormModel>(initialProfileModel);
+  const [profileJson, setProfileJson] = useState(initialProfileEditorState.json);
+  const [profileJsonDraft, setProfileJsonDraft] = useState(initialProfileEditorState.jsonDraft);
+  const [profileJsonError, setProfileJsonError] = useState(initialProfileEditorState.jsonError);
+  const [profileForm, setProfileForm] = useState<ProfileFormModel>(initialProfileEditorState.form);
 
-  const [availableSnapshotItems, setAvailableSnapshotItems] = useState<SnapshotItemsState>(snapshotItems);
+  const [availableSnapshotItems, setAvailableSnapshotItems] = useState<SnapshotItemsState>(initialSnapshotItems);
   const [snapshotItemsWarning, setSnapshotItemsWarning] = useState("");
-  const [snapshotSelection, setSnapshotSelection] = useState<SnapshotSelection>(() => {
-    if (snapshotItems.latest) return { mode: "latest" };
-    const firstHistory = snapshotItems.history[0];
-    return firstHistory ? { mode: "history", id: firstHistory.id } : { mode: "latest" };
-  });
+  const [snapshotSelection, setSnapshotSelection] = useState<SnapshotSelection>(
+    () => resolveInitialWorkspaceSnapshotSelection(initialSnapshotItems),
+  );
   const [policyId, setPolicyId] = useState<AllocationPolicyId>("balanced");
   const [horizonMonths, setHorizonMonths] = useState(safeDefaults.horizonMonths);
   const [runTitle, setRunTitle] = useState("기본 실행");
-  const [assumptionsOverrideJson, setAssumptionsOverrideJson] = useState(DEFAULT_ASSUMPTIONS_OVERRIDE);
+  const [assumptionsOverrideJson, setAssumptionsOverrideJson] = useState(initialAssumptionsJson);
   const [assumptionsJsonError, setAssumptionsJsonError] = useState("");
   const [assumptionsForm, setAssumptionsForm] = useState<AssumptionsFormModel>(initialAssumptionsSplit.form);
   const [assumptionsExtraOverrides, setAssumptionsExtraOverrides] = useState<Record<string, unknown>>(initialAssumptionsSplit.extra);
@@ -858,7 +760,7 @@ export function PlanningWorkspaceClient({
   const [optimizerKnobsJson, setOptimizerKnobsJson] = useState(DEFAULT_OPTIMIZER_KNOBS_JSON);
   const [optimizerSearchJson, setOptimizerSearchJson] = useState(DEFAULT_OPTIMIZER_SEARCH_JSON);
 
-  const [loadingProfiles, setLoadingProfiles] = useState(false);
+  const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [profilesLoadError, setProfilesLoadError] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [running, setRunning] = useState(false);
@@ -867,7 +769,7 @@ export function PlanningWorkspaceClient({
   const [autoSaveRunAfterSuccess, setAutoSaveRunAfterSuccess] = useState(false);
   const [pipelineStatuses, setPipelineStatuses] = useState<StepStatus[]>(() => createInitialStepStatuses());
 
-  const [runResult, setRunResult] = useState<CombinedRunResult | null>(null);
+  const [runResult, setRunResult] = useState<WorkspaceRunResult | null>(null);
   const [optimizeResult, setOptimizeResult] = useState<{
     meta?: PlanningMeta;
     engine: PlanningApiEngineEnvelope["engine"];
@@ -875,6 +777,10 @@ export function PlanningWorkspaceClient({
     candidates: Record<string, unknown>[];
   } | null>(null);
   const [savedRun, setSavedRun] = useState<PlanningRunRecord | null>(null);
+  const [currentProfileHashState, setCurrentProfileHashState] = useState<{ input: string; hash: string }>({
+    input: "",
+    hash: "",
+  });
   const [baselineRuns, setBaselineRuns] = useState<BaselineRunOption[]>([]);
   const [loadingBaselineRuns, setLoadingBaselineRuns] = useState(false);
   const [baselineRunId, setBaselineRunId] = useState("");
@@ -891,6 +797,9 @@ export function PlanningWorkspaceClient({
   const [acceptedSuggestionCodes, setAcceptedSuggestionCodes] = useState<string[]>([]);
   const [beginnerMode, setBeginnerMode] = useState(true);
   const [beginnerModeLoaded, setBeginnerModeLoaded] = useState(false);
+  const isMountedRef = useRef(true);
+  const previousBeginnerModeRef = useRef(beginnerMode);
+  const advancedExecutionOptionsRef = useRef<WorkspaceAdvancedExecutionOptions | null>(null);
   const [saveWarningConfirmed, setSaveWarningConfirmed] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
@@ -899,6 +808,36 @@ export function PlanningWorkspaceClient({
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [feedbackToast, setFeedbackToast] = useState("");
   const [lastNormalizationDisclosure, setLastNormalizationDisclosure] = useState<ProfileNormalizationDisclosure | null>(null);
+  const [workspaceNotice, setWorkspaceNotice] = useState("");
+  const [workspaceError, setWorkspaceError] = useState("");
+  const [profileDeleteDialog, setProfileDeleteDialog] = useState<{
+    profileId: string;
+    expectedConfirm: string;
+    confirmText: string;
+  } | null>(null);
+
+  function pushWorkspaceNotice(message: string): void {
+    if (!isMountedRef.current) return;
+    setWorkspaceNotice(message);
+    setWorkspaceError("");
+  }
+
+  function pushWorkspaceError(message: string): void {
+    if (!isMountedRef.current) return;
+    setWorkspaceError(message);
+    setWorkspaceNotice("");
+  }
+
+  const applyHydratedProfileEditorState = useCallback((
+    nextState: ProfileJsonEditorState,
+    nextProfileName = profileName,
+  ): void => {
+    setProfileName(nextProfileName);
+    setProfileForm(nextState.form);
+    setProfileJson(nextState.json);
+    setProfileJsonDraft(nextState.jsonDraft);
+    setProfileJsonError(nextState.jsonError);
+  }, [profileName]);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
@@ -907,6 +846,14 @@ export function PlanningWorkspaceClient({
   const runsPageHref = useMemo(
     () => appendProfileIdQuery("/planning/runs", selectedProfileId),
     [selectedProfileId],
+  );
+  const runsLinkProfileState = useMemo(
+    () => (loadingProfiles ? "loading" : selectedProfileId.trim().length > 0 ? "selected" : "empty"),
+    [loadingProfiles, selectedProfileId],
+  );
+  const runsLinkReady = useMemo(
+    () => runsPageHref.includes("/planning/runs"),
+    [runsPageHref],
   );
   const selectedBenefitSidoCode = useMemo(
     () => SIDO_ADMIN_2025.find((entry) => entry.name === (profileForm.sido ?? ""))?.code ?? "",
@@ -920,24 +867,7 @@ export function PlanningWorkspaceClient({
     () => appendProfileIdQuery("/planning/reports", selectedProfileId),
     [selectedProfileId],
   );
-  const liveSummary = useMemo(() => {
-    const income = Math.max(0, profileForm.monthlyIncomeNet);
-    const essential = Math.max(0, profileForm.monthlyEssentialExpenses);
-    const discretionary = Math.max(0, profileForm.monthlyDiscretionaryExpenses);
-    const liquidAssets = Math.max(0, profileForm.liquidAssets);
-    const monthlySurplus = income - essential - discretionary;
-    const totalMonthlyDebtPayment = profileForm.debts.reduce((sum, debt) => sum + Math.max(0, debt.monthlyPayment), 0);
-    const dsrPct = income > 0 ? (totalMonthlyDebtPayment / income) * 100 : 0;
-    const emergencyTargetKrw = (essential + discretionary) * 6;
-    const emergencyGapKrw = Math.max(0, emergencyTargetKrw - liquidAssets);
-    return {
-      monthlySurplus,
-      totalMonthlyDebtPayment,
-      dsrPct,
-      emergencyTargetKrw,
-      emergencyGapKrw,
-    };
-  }, [profileForm]);
+  const liveSummary = useMemo(() => buildWorkspaceLiveSummary(profileForm), [profileForm]);
   const metricEvidenceItems = useMemo(() => {
     const profile = formToProfile(profileForm);
     return buildMetricEvidence({
@@ -978,11 +908,23 @@ export function PlanningWorkspaceClient({
     };
   }, [beginnerGoalsContext, profileForm.goals]);
   const beginnerEmergencyMonths = emergencyMonthsFromGoal(beginnerGoals.emergency, beginnerGoalsContext.monthlyExpenses);
+  const effectiveSnapshotSelection = useMemo(
+    () => normalizeWorkspaceSnapshotSelection(availableSnapshotItems, snapshotSelection),
+    [availableSnapshotItems, snapshotSelection],
+  );
   const selectedSnapshotItem = useMemo(() => {
-    if (snapshotSelection.mode === "latest") return availableSnapshotItems.latest;
-    return availableSnapshotItems.history.find((item) => item.id === snapshotSelection.id);
-  }, [availableSnapshotItems.history, availableSnapshotItems.latest, snapshotSelection]);
-  const selectedSnapshotId = snapshotSelection.mode === "history" ? snapshotSelection.id.trim() || undefined : undefined;
+    return resolveWorkspaceSelectedSnapshotItem(availableSnapshotItems, effectiveSnapshotSelection);
+  }, [availableSnapshotItems, effectiveSnapshotSelection]);
+  const workspaceSnapshotState = useMemo(
+    () => buildWorkspaceSnapshotState({
+      runResult,
+      selectedSnapshot: selectedSnapshotItem,
+    }),
+    [runResult, selectedSnapshotItem],
+  );
+  const selectedSnapshotId = effectiveSnapshotSelection.mode === "history"
+    ? effectiveSnapshotSelection.id.trim() || undefined
+    : undefined;
   const debtLiabilityOptions = useMemo(
     () => profileForm.debts.map((debt, index) => ({
       id: debt.id.trim(),
@@ -1003,17 +945,17 @@ export function PlanningWorkspaceClient({
     [scenarioTemplateId],
   );
 
-  const healthSummary = useMemo(() => {
-    return runResult?.meta?.health ?? null;
-  }, [runResult?.meta?.health]);
-
-  const healthWarnings = useMemo(() => {
-    return asArray(runResult?.simulate && asRecord(runResult.simulate).healthWarnings)
-      .map((entry) => asRecord(entry) as HealthWarning);
-  }, [runResult?.simulate]);
-
-  const hasCriticalHealth = (healthSummary?.criticalCount ?? 0) > 0;
-  const saveBlockedByHealth = hasCriticalHealth && !healthAck;
+  const healthGuard = useMemo(
+    () => buildWorkspaceHealthGuardState({
+      runResult,
+      healthAck,
+    }),
+    [healthAck, runResult],
+  );
+  const healthSummary = healthGuard.summary;
+  const healthWarnings = healthGuard.warnings;
+  const hasCriticalHealth = healthGuard.hasCriticalHealth;
+  const saveBlockedByHealth = healthGuard.saveBlockedByHealth;
   const monteCarloServerDisabled = !featureFlags.monteCarloEnabled;
   const includeProductsServerDisabled = !featureFlags.includeProductsEnabled;
   const optimizerServerDisabled = !featureFlags.optimizerEnabled;
@@ -1039,7 +981,7 @@ export function PlanningWorkspaceClient({
   const preflightIssues = useMemo(
     () => preflightRun({
       profile: profileForm as unknown as Record<string, unknown>,
-      selectedSnapshot: snapshotSelection,
+      selectedSnapshot: effectiveSnapshotSelection,
       debtOffers: debtOffersForPreflight,
       assumptionsOverride: assumptionsOverrideForPreflight,
       ...(effectiveRunMonteCarloEnabled ? {
@@ -1056,7 +998,7 @@ export function PlanningWorkspaceClient({
       horizonMonths,
       monteCarloPaths,
       profileForm,
-      snapshotSelection,
+      effectiveSnapshotSelection,
       assumptionsOverrideForPreflight,
     ],
   );
@@ -1074,7 +1016,6 @@ export function PlanningWorkspaceClient({
     () => preflightWarnIssues.map((issue) => `${issue.code}:${issue.message}`).join("|"),
     [preflightWarnIssues],
   );
-  const preflightBlockSummary = preflightBlockIssues[0] ? formatPreflightIssue(preflightBlockIssues[0]) : "";
   const saveNeedsWarningConfirmation = preflightWarnIssues.length > 0 && !saveWarningConfirmed;
 
   useEffect(() => {
@@ -1133,14 +1074,37 @@ export function PlanningWorkspaceClient({
   }, [beginnerMode, beginnerModeLoaded]);
 
   useEffect(() => {
-    if (!beginnerMode) return;
-    setRunScenariosEnabled(true);
-    setRunMonteCarloEnabled(false);
-    setRunActionsEnabled(true);
-    setRunDebtEnabled(true);
-    setRunOptimizeEnabled(false);
-    setIncludeProducts(false);
-  }, [beginnerMode]);
+    const transition = transitionWorkspaceExecutionOptionsForMode({
+      beginnerMode,
+      wasBeginnerMode: previousBeginnerModeRef.current,
+      current: {
+        runScenariosEnabled,
+        runMonteCarloEnabled,
+        runActionsEnabled,
+        runDebtEnabled,
+        runOptimizeEnabled,
+        includeProducts,
+      },
+      snapshot: advancedExecutionOptionsRef.current,
+    });
+    previousBeginnerModeRef.current = beginnerMode;
+    advancedExecutionOptionsRef.current = transition.nextSnapshot;
+    if (!transition.nextState) return;
+    setRunScenariosEnabled(transition.nextState.runScenariosEnabled);
+    setRunMonteCarloEnabled(transition.nextState.runMonteCarloEnabled);
+    setRunActionsEnabled(transition.nextState.runActionsEnabled);
+    setRunDebtEnabled(transition.nextState.runDebtEnabled);
+    setRunOptimizeEnabled(transition.nextState.runOptimizeEnabled);
+    setIncludeProducts(transition.nextState.includeProducts);
+  }, [
+    beginnerMode,
+    includeProducts,
+    runActionsEnabled,
+    runDebtEnabled,
+    runMonteCarloEnabled,
+    runOptimizeEnabled,
+    runScenariosEnabled,
+  ]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1158,22 +1122,8 @@ export function PlanningWorkspaceClient({
         }
 
         const dataNode = isRecord(payload.data) ? payload.data : payload;
-        const latest = parseSnapshotListItem(dataNode.latest);
-        const items = asArray(dataNode.items)
-          .map((entry) => parseSnapshotListItem(entry))
-          .filter((entry): entry is SnapshotListItem => entry !== null)
-          .sort((a, b) => {
-            const aTs = Date.parse(asString(a.fetchedAt));
-            const bTs = Date.parse(asString(b.fetchedAt));
-            if (Number.isFinite(aTs) && Number.isFinite(bTs) && bTs !== aTs) return bTs - aTs;
-            return b.id.localeCompare(a.id);
-          });
-
         if (cancelled) return;
-        setAvailableSnapshotItems({
-          ...(latest ? { latest } : {}),
-          history: items,
-        });
+        setAvailableSnapshotItems(buildWorkspaceSnapshotItemsStateFromApi(dataNode));
         setSnapshotItemsWarning("");
       } catch {
         if (cancelled) return;
@@ -1189,30 +1139,30 @@ export function PlanningWorkspaceClient({
   }, []);
 
   useEffect(() => {
-    if (snapshotSelection.mode !== "history") return;
-    const exists = availableSnapshotItems.history.some((item) => item.id === snapshotSelection.id);
-    if (!exists) {
-      setSnapshotSelection({ mode: "latest" });
-    }
-  }, [availableSnapshotItems.history, snapshotSelection]);
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isSameWorkspaceSnapshotSelection(effectiveSnapshotSelection, snapshotSelection)) return;
+    setSnapshotSelection(effectiveSnapshotSelection);
+  }, [effectiveSnapshotSelection, snapshotSelection]);
 
   useEffect(() => {
     if (!beginnerMode) return;
     const context = beginnerGoalContext(profileForm);
     const nextGoals = ensureBeginnerGoals(profileForm.goals, context);
-    if (nextGoals.length !== profileForm.goals.length) {
-      applyProfileForm({
-        ...profileForm,
-        goals: nextGoals,
-      });
-    }
-  }, [beginnerMode, profileForm]);
+    if (nextGoals.length === profileForm.goals.length) return;
 
-  useEffect(() => {
-    if (!beginnerMode) return;
-    if (profileForm.debts.length > 0) return;
-    addDebtRow();
-  }, [beginnerMode, profileForm.debts.length]);
+    const nextForm = {
+      ...profileForm,
+      goals: nextGoals,
+    };
+    applyHydratedProfileEditorState(buildProfileJsonEditorState(nextForm, profileName));
+    clearPendingSuggestions();
+  }, [applyHydratedProfileEditorState, beginnerMode, profileForm, profileName]);
 
   useEffect(() => {
     setSaveWarningConfirmed(false);
@@ -1224,12 +1174,19 @@ export function PlanningWorkspaceClient({
     return () => window.clearTimeout(timer);
   }, [feedbackToast]);
 
-  async function loadProfiles(nextSelectedId?: string): Promise<void> {
+  useEffect(() => {
+    if (!workspaceNotice) return;
+    const timer = window.setTimeout(() => setWorkspaceNotice(""), 4500);
+    return () => window.clearTimeout(timer);
+  }, [workspaceNotice]);
+
+  const loadProfiles = useCallback(async (nextSelectedId?: string): Promise<void> => {
     setLoadingProfiles(true);
     setProfilesLoadError("");
     try {
       const res = await fetch("/api/planning/v2/profiles", { cache: "no-store" });
       const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord[]> | null;
+      if (!isMountedRef.current) return;
       if (!payload?.ok || !Array.isArray(payload.data)) {
         setProfiles([]);
         setSelectedProfileId("");
@@ -1246,19 +1203,19 @@ export function PlanningWorkspaceClient({
 
       const picked = payload.data.find((item) => item.id === pickedId);
       if (picked) {
-        setProfileName(picked.name);
-        const nextForm = fromProfileJson(picked.profile, picked.name);
-        setProfileForm(nextForm);
-        syncProfileJsonFromForm(nextForm);
+        const nextProfileName = picked.name;
+        applyHydratedProfileEditorState(hydrateProfileJsonEditorState(picked.profile, nextProfileName), nextProfileName);
       }
     } catch (error) {
+      if (!isMountedRef.current) return;
       setProfilesLoadError(error instanceof Error ? error.message : "프로필 목록 조회 중 오류가 발생했습니다.");
       setProfiles([]);
       setSelectedProfileId("");
     } finally {
+      if (!isMountedRef.current) return;
       setLoadingProfiles(false);
     }
-  }
+  }, [applyHydratedProfileEditorState, locale]);
 
   async function loadBaselineRuns(profileId: string): Promise<void> {
     const safeProfileId = profileId.trim();
@@ -1273,6 +1230,7 @@ export function PlanningWorkspaceClient({
         cache: "no-store",
       });
       const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunRecord[]> | null;
+      if (!isMountedRef.current) return;
       if (!response.ok || !payload?.ok || !Array.isArray(payload.data)) {
         setBaselineRuns([]);
         setBaselineRunId("");
@@ -1291,9 +1249,11 @@ export function PlanningWorkspaceClient({
         return preferred;
       });
     } catch {
+      if (!isMountedRef.current) return;
       setBaselineRuns([]);
       setBaselineRunId("");
     } finally {
+      if (!isMountedRef.current) return;
       setLoadingBaselineRuns(false);
     }
   }
@@ -1308,7 +1268,7 @@ export function PlanningWorkspaceClient({
       }
     }
     void loadProfiles(preferredProfileId || undefined);
-  }, [initialSelectedProfileId]);
+  }, [initialSelectedProfileId, loadProfiles]);
 
   useEffect(() => {
     try {
@@ -1333,13 +1293,11 @@ export function PlanningWorkspaceClient({
 
   useEffect(() => {
     if (!selectedProfile) return;
-    setProfileName(selectedProfile.name);
-    const nextForm = fromProfileJson(selectedProfile.profile, selectedProfile.name);
-    setProfileForm(nextForm);
-    syncProfileJsonFromForm(nextForm);
+    const nextProfileName = selectedProfile.name;
+    applyHydratedProfileEditorState(hydrateProfileJsonEditorState(selectedProfile.profile, nextProfileName), nextProfileName);
     setLastNormalizationDisclosure(null);
     clearPendingSuggestions();
-  }, [selectedProfile]);
+  }, [applyHydratedProfileEditorState, selectedProfile]);
 
   function clearPendingSuggestions(): void {
     setPendingProfileSave(null);
@@ -1355,13 +1313,12 @@ export function PlanningWorkspaceClient({
   }
 
   function syncProfileJsonFromForm(nextForm: ProfileFormModel): void {
-    const canonical = normalizeDraft(nextForm as unknown as FormDraft, profileName);
-    const nextJson = pretty(canonical);
-    if (profileJson !== nextJson) {
-      setProfileJson(nextJson);
+    const nextState = buildProfileJsonEditorState(nextForm, profileName);
+    if (profileJson !== nextState.json) {
+      setProfileJson(nextState.json);
     }
-    setProfileJsonDraft(nextJson);
-    setProfileJsonError("");
+    setProfileJsonDraft(nextState.jsonDraft);
+    setProfileJsonError(nextState.jsonError);
   }
 
   function applyProfileForm(nextForm: ProfileFormModel): void {
@@ -1371,11 +1328,19 @@ export function PlanningWorkspaceClient({
   }
 
   function applyWizardOutputAction(output: PlanningWizardOutput): void {
-    const nextForm = fromProfileJson(output.profile, profileName);
-    setProfileForm(nextForm);
-    syncProfileJsonFromForm(nextForm);
+    applyHydratedProfileEditorState(hydrateProfileJsonEditorState(output.profile, profileName));
     clearPendingSuggestions();
-    window.alert("위저드 결과를 적용했습니다. 필요 시 값을 조정한 뒤 저장하세요.");
+    pushWorkspaceNotice("위저드 결과를 적용했습니다. 필요 시 값을 조정한 뒤 저장하세요.");
+  }
+
+  function applyQuickStartAction(output: PlanningWizardOutput): void {
+    applyHydratedProfileEditorState(hydrateProfileJsonEditorState(output.profile, profileName));
+    clearPendingSuggestions();
+    pushWorkspaceNotice(
+      selectedProfileId
+        ? "간단 시작 입력을 적용했습니다. 현재 프로필과 편집값이 달라졌을 수 있으니 저장 여부를 먼저 확인해 주세요."
+        : "간단 시작 입력을 적용했습니다. 다음 단계는 프로필 저장이며, 아래 새로 만들기를 누르면 첫 실행 시작으로 이어집니다.",
+    );
   }
 
   function replaceProfileFromJsonText(nextJson: string): void {
@@ -1384,28 +1349,23 @@ export function PlanningWorkspaceClient({
   }
 
   function applyProfileJsonEditorAction(): void {
-    const parsed = safeParseProfileJson(profileJsonDraft, profileName);
+    const parsed = parseProfileJsonEditorDraft(profileJsonDraft, profileName);
     if (!parsed.ok) {
       setProfileJsonError(parsed.error);
       return;
     }
-    const nextForm = profileToForm(parsed.profile, profileName);
-    const nextJson = pretty(formToProfile(nextForm));
-    setProfileForm(nextForm);
-    setProfileJson(nextJson);
-    setProfileJsonDraft(nextJson);
+    applyHydratedProfileEditorState(buildProfileJsonEditorState(parsed.form, profileName));
     setLastNormalizationDisclosure(parsed.normalization);
-    setProfileJsonError("");
     if (pendingSuggestions.length > 0) clearPendingSuggestions();
   }
 
   async function copyProfileJsonEditorAction(): Promise<void> {
     const result = await copyToClipboard(profileJsonDraft);
     if (!result.ok) {
-      window.alert(result.message ?? "프로필 JSON 복사에 실패했습니다.");
+      pushWorkspaceError(result.message ?? "프로필 JSON 복사에 실패했습니다.");
       return;
     }
-    window.alert("프로필 JSON을 클립보드에 복사했습니다.");
+    pushWorkspaceNotice("프로필 JSON을 클립보드에 복사했습니다.");
   }
 
   function syncAssumptionsJsonFromForm(nextForm: AssumptionsFormModel, nextExtra: Record<string, unknown>): void {
@@ -1420,15 +1380,14 @@ export function PlanningWorkspaceClient({
 
   function replaceAssumptionsFromJsonText(nextJson: string): void {
     setAssumptionsOverrideJson(nextJson);
-    const parsed = tryParseJsonText<Record<string, unknown>>(nextJson);
-    if (!parsed) {
-      setAssumptionsJsonError("가정 JSON 파싱 실패: 형식을 확인하세요.");
+    const parsed = parseAssumptionsEditorJson(nextJson);
+    if (!parsed.ok) {
+      setAssumptionsJsonError(parsed.error);
       return;
     }
     setAssumptionsJsonError("");
-    const split = splitAssumptionsRecord(parsed);
-    setAssumptionsForm(split.form);
-    setAssumptionsExtraOverrides(split.extra);
+    setAssumptionsForm(parsed.form);
+    setAssumptionsExtraOverrides(parsed.extra);
   }
 
   function syncDebtOfferJsonFromRows(rows: DebtOfferFormRow[]): void {
@@ -1443,13 +1402,13 @@ export function PlanningWorkspaceClient({
 
   function replaceDebtOffersFromJsonText(nextJson: string): void {
     setDebtOffersJson(nextJson);
-    const parsed = tryParseJsonText<unknown[]>(nextJson);
-    if (!parsed) {
-      setDebtOffersJsonError("리파이낸스 제안 JSON 파싱 실패: 형식을 확인하세요.");
+    const parsed = parseDebtOffersEditorJson(nextJson);
+    if (!parsed.ok) {
+      setDebtOffersJsonError(parsed.error);
       return;
     }
     setDebtOffersJsonError("");
-    setDebtOfferRows(parseDebtOffersFormRows(parsed));
+    setDebtOfferRows(parsed.rows);
   }
 
   function updateProfileField<K extends keyof ProfileFormModel>(key: K, value: ProfileFormModel[K]): void {
@@ -1564,17 +1523,14 @@ export function PlanningWorkspaceClient({
   }
 
   function loadSampleProfileAction(): void {
-    setProfileName(SAMPLE_PROFILE_V2_KO_NAME);
-    const nextForm = fromProfileJson(SAMPLE_PROFILE_V2_KO, SAMPLE_PROFILE_V2_KO_NAME);
-    setProfileForm(nextForm);
-    syncProfileJsonFromForm(nextForm);
+    applyHydratedProfileEditorState(hydrateProfileJsonEditorState(SAMPLE_PROFILE_V2_KO, SAMPLE_PROFILE_V2_KO_NAME), SAMPLE_PROFILE_V2_KO_NAME);
     clearPendingSuggestions();
-    window.alert("샘플 프로필을 편집 영역에 불러왔습니다. Save를 눌러야 실제 저장됩니다.");
+    pushWorkspaceNotice("샘플 프로필을 편집 영역에 불러왔습니다. Save를 눌러야 실제 저장됩니다.");
   }
 
   async function performProfileSave(mode: ProfileSaveMode, profile: ProfileV2 | Record<string, unknown>): Promise<boolean> {
     if (mode === "update" && !selectedProfileId) {
-      window.alert("수정할 프로필을 먼저 선택하세요.");
+      pushWorkspaceError("수정할 프로필을 먼저 선택하세요.");
       return false;
     }
 
@@ -1590,10 +1546,14 @@ export function PlanningWorkspaceClient({
           ? "프로필 복제에 실패했습니다."
           : "프로필 수정에 실패했습니다.";
       const successMessage = mode === "create"
-        ? "프로필을 저장했습니다."
+        ? beginnerMode
+          ? "프로필 저장 완료. 다음 단계는 첫 실행 시작입니다."
+          : "프로필을 저장했습니다."
         : mode === "duplicate"
           ? "프로필을 복제했습니다."
-          : "프로필을 수정했습니다.";
+          : beginnerMode
+            ? "프로필 저장 완료. 다음 단계는 첫 실행 시작입니다."
+            : "프로필을 수정했습니다.";
       const payloadName = mode === "duplicate" ? `${profileName || "프로필"} (copy)` : profileName;
       const payloadProfile = normalizeDraftWithDisclosure(profile as unknown as FormDraft, profileName);
 
@@ -1606,13 +1566,18 @@ export function PlanningWorkspaceClient({
         })),
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord> | null;
-      if (!parseApiPayload(locale, res, payload, fallbackMessage)) return false;
+      const parsedPayload = parseApiPayload(locale, res, payload, fallbackMessage);
+      if (!parsedPayload.ok) {
+        pushWorkspaceError(parsedPayload.errorMessage);
+        return false;
+      }
+      const typedPayload = payload as ApiResponse<PlanningProfileRecord>;
 
       const normalizationFromResponse = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
       setLastNormalizationDisclosure(normalizationFromResponse ?? payloadProfile.normalization);
 
-      await loadProfiles(payload.data?.id);
-      window.alert(successMessage);
+      await loadProfiles(typedPayload.data?.id);
+      pushWorkspaceNotice(successMessage);
       return true;
     } catch (error) {
       const message = mode === "create"
@@ -1620,7 +1585,7 @@ export function PlanningWorkspaceClient({
         : mode === "duplicate"
           ? "프로필 복제 중 오류가 발생했습니다."
           : "프로필 수정 중 오류가 발생했습니다.";
-      window.alert(error instanceof Error ? error.message : message);
+      pushWorkspaceError(error instanceof Error ? error.message : message);
       return false;
     } finally {
       setSavingProfile(false);
@@ -1629,7 +1594,7 @@ export function PlanningWorkspaceClient({
 
   function beginProfileSave(mode: ProfileSaveMode): void {
     if (profileValidation.errors.length > 0) {
-      window.alert(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
+      pushWorkspaceError(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
       return;
     }
 
@@ -1660,30 +1625,43 @@ export function PlanningWorkspaceClient({
 
   async function deleteProfileAction(): Promise<void> {
     if (!selectedProfileId) {
-      window.alert("삭제할 프로필을 먼저 선택하세요.");
+      pushWorkspaceError("삭제할 프로필을 먼저 선택하세요.");
       return;
     }
     const expectedConfirm = buildConfirmString("DELETE profile", selectedProfileId);
-    const confirmText = window.prompt(
-      `삭제 확인 문구를 입력하세요.\n${expectedConfirm}`,
+    setProfileDeleteDialog({
+      profileId: selectedProfileId,
       expectedConfirm,
-    );
-    if (!confirmText) return;
+      confirmText: expectedConfirm,
+    });
+  }
+
+  async function submitDeleteProfileAction(): Promise<void> {
+    if (!profileDeleteDialog) return;
+    if (profileDeleteDialog.confirmText.trim() !== profileDeleteDialog.expectedConfirm) {
+      pushWorkspaceError(`삭제 확인 문구가 일치하지 않습니다. (${profileDeleteDialog.expectedConfirm})`);
+      return;
+    }
 
     setSavingProfile(true);
     try {
-      const res = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(selectedProfileId)}`, {
+      const res = await fetch(`/api/planning/v2/profiles/${encodeURIComponent(profileDeleteDialog.profileId)}`, {
         method: "DELETE",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(withDevCsrf({ confirmText })),
+        body: JSON.stringify(withDevCsrf({ confirmText: profileDeleteDialog.confirmText.trim() })),
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<{ deleted?: boolean }> | null;
-      if (!parseApiPayload(locale, res, payload, "프로필 삭제에 실패했습니다.")) return;
+      const parsedPayload = parseApiPayload(locale, res, payload, "프로필 삭제에 실패했습니다.");
+      if (!parsedPayload.ok) {
+        pushWorkspaceError(parsedPayload.errorMessage);
+        return;
+      }
 
       await loadProfiles();
-      window.alert("프로필을 휴지통으로 이동했습니다.");
+      setProfileDeleteDialog(null);
+      pushWorkspaceNotice("프로필을 휴지통으로 이동했습니다.");
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "프로필 삭제 중 오류가 발생했습니다.");
+      pushWorkspaceError(error instanceof Error ? error.message : "프로필 삭제 중 오류가 발생했습니다.");
     } finally {
       setSavingProfile(false);
     }
@@ -1697,7 +1675,7 @@ export function PlanningWorkspaceClient({
     snapshotId?: string;
   } | null {
     if (profileValidation.errors.length > 0) {
-      window.alert(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
+      pushWorkspaceError(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
       return null;
     }
     let profile: Record<string, unknown>;
@@ -1705,13 +1683,16 @@ export function PlanningWorkspaceClient({
       profile = normalizeDraftWithDisclosure(profileForm as unknown as FormDraft, profileName).profile as unknown as Record<string, unknown>;
     } catch (error) {
       const message = error instanceof Error ? error.message : "프로필 정규화에 실패했습니다.";
-      window.alert(message);
+      pushWorkspaceError(message);
       return null;
     }
     const assumptions = assumptionsFormToRecord(assumptionsForm, assumptionsExtraOverrides);
 
     const horizon = parseHorizonMonths(horizonMonths);
-    if (!horizon) return null;
+    if (!horizon) {
+      pushWorkspaceError("horizonMonths는 1~1200 범위 숫자여야 합니다.");
+      return null;
+    }
 
     const snapshotId = selectedSnapshotId;
 
@@ -1732,24 +1713,24 @@ export function PlanningWorkspaceClient({
     const seed = Number.parseInt(monteCarloSeed, 10);
     if (effectiveRunMonteCarloEnabled) {
       if (!Number.isFinite(paths) || paths < 1 || paths > 20000) {
-        window.alert("Monte Carlo paths는 1~20000 범위여야 합니다.");
+        pushWorkspaceError("Monte Carlo paths는 1~20000 범위여야 합니다.");
         return null;
       }
       if (!Number.isFinite(seed)) {
-        window.alert("Monte Carlo seed는 숫자여야 합니다.");
+        pushWorkspaceError("Monte Carlo seed는 숫자여야 합니다.");
         return null;
       }
     }
 
     const maxCandidates = Number.parseInt(maxCandidatesPerAction, 10);
     if (effectiveRunActionsEnabled && (!Number.isFinite(maxCandidates) || maxCandidates < 1 || maxCandidates > 20)) {
-      window.alert("후보 최대 개수는 1~20 범위여야 합니다.");
+      pushWorkspaceError("후보 최대 개수는 1~20 범위여야 합니다.");
       return null;
     }
 
     const extraPayment = Math.max(0, Math.trunc(toFiniteNumber(debtExtraPaymentKrw, 0)));
     if (!Number.isFinite(extraPayment) || extraPayment < 0) {
-      window.alert("debt extraPaymentKrw는 0 이상의 숫자여야 합니다.");
+      pushWorkspaceError("debt extraPaymentKrw는 0 이상의 숫자여야 합니다.");
       return null;
     }
 
@@ -1760,7 +1741,7 @@ export function PlanningWorkspaceClient({
         profileForm.debts,
       );
       if (invalidLiabilityIds.length > 0) {
-        window.alert(`리파이낸스 제안의 liabilityId가 프로필 부채와 일치하지 않습니다.\n- ${invalidLiabilityIds.join("\n- ")}`);
+        pushWorkspaceError(`리파이낸스 제안의 liabilityId가 프로필 부채와 일치하지 않습니다.\n- ${invalidLiabilityIds.join("\n- ")}`);
         return null;
       }
     }
@@ -1781,11 +1762,11 @@ export function PlanningWorkspaceClient({
     };
   }
 
-  function handleSnapshotNotFoundCode(code: unknown): boolean {
-    const normalized = typeof code === "string" ? code.trim().toUpperCase() : "";
-    if (normalized !== "SNAPSHOT_NOT_FOUND") return false;
-    setSnapshotSelection({ mode: "latest" });
-    window.alert("선택한 스냅샷을 찾을 수 없습니다. 목록을 새로고침하거나 latest를 사용하세요.");
+function handleSnapshotNotFoundCode(code: unknown): boolean {
+    const fallbackSelection = resolveWorkspaceSnapshotSelectionFallback(code);
+    if (!fallbackSelection) return false;
+    setSnapshotSelection(fallbackSelection);
+    pushWorkspaceError("선택한 스냅샷을 찾을 수 없습니다. 목록을 새로고침하거나 latest를 사용하세요.");
     return true;
   }
 
@@ -1796,13 +1777,13 @@ export function PlanningWorkspaceClient({
   async function copyStrategyAction(strategy: unknown): Promise<void> {
     try {
       if (!navigator?.clipboard?.writeText) {
-        window.alert("클립보드 복사를 지원하지 않는 환경입니다.");
+        pushWorkspaceError("클립보드 복사를 지원하지 않는 환경입니다.");
         return;
       }
       await navigator.clipboard.writeText(pretty(strategy));
-      window.alert("후보 전략 값을 클립보드에 복사했습니다.");
+      pushWorkspaceNotice("후보 전략 값을 클립보드에 복사했습니다.");
     } catch {
-      window.alert("전략 값 복사에 실패했습니다.");
+      pushWorkspaceError("전략 값 복사에 실패했습니다.");
     }
   }
 
@@ -1810,16 +1791,25 @@ export function PlanningWorkspaceClient({
     const core = parseCoreInputs();
     if (!core) return;
     if (optimizerServerDisabled) {
-      window.alert("서버 설정으로 Optimizer 기능이 비활성화되어 있습니다.");
+      pushWorkspaceError("서버 설정으로 Optimizer 기능이 비활성화되어 있습니다.");
       return;
     }
 
-    const constraints = parseJsonText<Record<string, unknown>>("Optimizer constraints", optimizerConstraintsJson);
-    if (!constraints) return;
-    const knobs = parseJsonText<Record<string, unknown>>("Optimizer knobs", optimizerKnobsJson);
-    if (!knobs) return;
-    const search = parseJsonText<Record<string, unknown>>("Optimizer search", optimizerSearchJson);
-    if (!search) return;
+    const constraintsParsed = parseJsonText<Record<string, unknown>>("Optimizer constraints", optimizerConstraintsJson);
+    if (!constraintsParsed.value) {
+      pushWorkspaceError(constraintsParsed.error);
+      return;
+    }
+    const knobsParsed = parseJsonText<Record<string, unknown>>("Optimizer knobs", optimizerKnobsJson);
+    if (!knobsParsed.value) {
+      pushWorkspaceError(knobsParsed.error);
+      return;
+    }
+    const searchParsed = parseJsonText<Record<string, unknown>>("Optimizer search", optimizerSearchJson);
+    if (!searchParsed.value) {
+      pushWorkspaceError(searchParsed.error);
+      return;
+    }
 
     setRunningOptimize(true);
     try {
@@ -1831,74 +1821,34 @@ export function PlanningWorkspaceClient({
           horizonMonths: core.horizon,
           assumptions: core.assumptions,
           ...(core.snapshotId ? { snapshotId: core.snapshotId } : {}),
-          constraints,
-          knobs,
-          search,
+          constraints: constraintsParsed.value,
+          knobs: knobsParsed.value,
+          search: searchParsed.value,
         })),
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<Record<string, unknown>> | null;
       if (handleSnapshotNotFound(payload)) return;
-      if (!parseApiPayload(locale, res, payload, "Optimizer 실행에 실패했습니다.")) return;
+      const parsedPayload = parseApiPayload(locale, res, payload, "Optimizer 실행에 실패했습니다.");
+      if (!parsedPayload.ok) {
+        pushWorkspaceError(parsedPayload.errorMessage);
+        return;
+      }
+      const typedPayload = payload as ApiResponse<Record<string, unknown>>;
 
-      const normalized = normalizePlanningResponse(asRecord(payload.data));
+      const normalized = normalizePlanningResponse(asRecord(typedPayload.data));
       const rows = asArray(asRecord(normalized.data).candidates).map((entry) => asRecord(entry));
       setOptimizeResult({
-        meta: asRecord(payload.meta) as PlanningMeta,
+        meta: asRecord(typedPayload.meta) as PlanningMeta,
         engine: normalized.engine,
         engineSchemaVersion: normalized.engineSchemaVersion,
         candidates: rows,
       });
-      window.alert(`Optimizer 후보 ${rows.length}개를 생성했습니다.`);
+      pushWorkspaceNotice(`Optimizer 후보 ${rows.length}개를 생성했습니다.`);
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "Optimizer 실행 중 오류가 발생했습니다.");
+      pushWorkspaceError(error instanceof Error ? error.message : "Optimizer 실행 중 오류가 발생했습니다.");
     } finally {
       setRunningOptimize(false);
     }
-  }
-
-  function toStepStatusesFromRunStages(stages: PlanningRunRecord["stages"]): StepStatus[] {
-    if (!Array.isArray(stages) || stages.length < 1) return createInitialStepStatuses();
-    const normalized = stages.map((stage) => {
-      const normalizedId = stage.id === "debt" ? "debtStrategy" : stage.id;
-      const startedAt = stage.startedAt ? Date.parse(stage.startedAt) : NaN;
-      const endedAt = stage.endedAt ? Date.parse(stage.endedAt) : NaN;
-      const reason = asString(stage.reason).trim();
-      const errorSummary = asString(stage.errorSummary).trim();
-      const message = [reason, errorSummary].filter((item, index, arr) => item && arr.indexOf(item) === index).join(" · ");
-      return {
-        id: normalizedId,
-        state: stage.status,
-        ...(message ? { message } : {}),
-        ...(Number.isFinite(startedAt) ? { startedAt } : {}),
-        ...(Number.isFinite(endedAt) ? { endedAt } : {}),
-      };
-    });
-    const byId = new Map<StepId, StepStatus>();
-    for (const row of normalized) {
-      byId.set(row.id, row);
-    }
-    return createInitialStepStatuses().map((row) => byId.get(row.id) ?? row);
-  }
-
-  function toCombinedRunResultFromRecord(run: PlanningRunRecord): CombinedRunResult {
-    const outputs = asRecord(run.outputs);
-    const normalization = parseProfileNormalizationDisclosure(run.meta.normalization);
-    const resultDto = resolveReportResultDtoFromRun(run, { mode: "compat" });
-    return {
-      meta: {
-        generatedAt: run.createdAt,
-        snapshot: run.meta.snapshot,
-        ...(normalization ? { normalization } : {}),
-        health: run.meta.health as PlanningMeta["health"],
-      },
-      ...(resultDto ? { resultDto } : {}),
-      ...(isRecord(outputs.simulate) ? { simulate: asRecord(outputs.simulate) } : {}),
-      ...(isRecord(outputs.scenarios) ? { scenarios: asRecord(outputs.scenarios) } : {}),
-      ...(isRecord(outputs.monteCarlo) ? { monteCarlo: asRecord(outputs.monteCarlo) } : {}),
-      ...(isRecord(outputs.actions) ? { actions: asRecord(outputs.actions) } : {}),
-      ...(isRecord(outputs.debtStrategy) ? { debt: asRecord(outputs.debtStrategy) } : {}),
-      stepStatuses: toStepStatusesFromRunStages(run.stages),
-    };
   }
 
   function isTerminalOverallStatus(status: PlanningRunRecord["overallStatus"]): boolean {
@@ -1908,15 +1858,18 @@ export function PlanningWorkspaceClient({
   async function pollRunUntilTerminal(runId: string, seed?: PlanningRunRecord): Promise<PlanningRunRecord | null> {
     let latest = seed ?? null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
+      if (!isMountedRef.current) return latest;
       if (latest?.stages) {
-        setPipelineStatuses(toStepStatusesFromRunStages(latest.stages));
+        setPipelineStatuses(buildStepStatusesFromRunStages(latest.stages));
       }
       if (latest && isTerminalOverallStatus(latest.overallStatus)) {
         return latest;
       }
       await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
+      if (!isMountedRef.current) return latest;
       const response = await fetch(`/api/planning/v2/runs/${encodeURIComponent(runId)}`, { cache: "no-store" });
       const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
+      if (!isMountedRef.current) return latest;
       if (!response.ok || !payload?.ok || !payload.data) {
         return latest;
       }
@@ -1933,9 +1886,9 @@ export function PlanningWorkspaceClient({
       applyProfilePatch(canonicalProfile, patches);
     } catch (error) {
       if (error instanceof Error) {
-        window.alert(`시나리오 검증에 실패했습니다.\n${error.message}`);
+        pushWorkspaceError(`시나리오 검증에 실패했습니다.\n${error.message}`);
       } else {
-        window.alert("시나리오 검증에 실패했습니다.");
+        pushWorkspaceError("시나리오 검증에 실패했습니다.");
       }
       return undefined;
     }
@@ -1949,11 +1902,11 @@ export function PlanningWorkspaceClient({
   async function runPlanAction(options?: { scenario?: RunInputScenario }): Promise<void> {
     if (preflightHasBlockers) {
       const details = preflightBlockIssues.map((issue) => `- [${issue.code}] ${formatPreflightIssue(issue)}`).join("\n");
-      window.alert(`사전 점검 오류를 먼저 해결하세요.\n${details}`);
+      pushWorkspaceError(`사전 점검 오류를 먼저 해결하세요.\n${details}`);
       return;
     }
     if (!selectedProfileId) {
-      window.alert("실행할 프로필을 먼저 선택하세요.");
+      pushWorkspaceError("실행할 프로필을 먼저 선택하세요.");
       return;
     }
 
@@ -1966,6 +1919,7 @@ export function PlanningWorkspaceClient({
 
     try {
       const synced = await syncProfileIfNeeded();
+      if (!isMountedRef.current) return;
       if (!synced) return;
 
       const response = await fetch("/api/planning/run", {
@@ -1978,54 +1932,53 @@ export function PlanningWorkspaceClient({
         })),
       });
       const payload = (await response.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
+      if (!isMountedRef.current) return;
       if (handleSnapshotNotFound(payload)) return;
-      if (!parseApiPayload(locale, response, payload, "실행 요청에 실패했습니다.")) return;
+      const parsedPayload = parseApiPayload(locale, response, payload, "실행 요청에 실패했습니다.");
+      if (!parsedPayload.ok) {
+        pushWorkspaceError(parsedPayload.errorMessage);
+        return;
+      }
+      const typedPayload = payload as ApiResponse<PlanningRunRecord>;
       const normalizationFromRunMeta = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
       if (normalizationFromRunMeta) {
         setLastNormalizationDisclosure(normalizationFromRunMeta);
       }
 
-      const created = payload.data;
+      const created = typedPayload.data;
       if (!created?.id) {
-        window.alert("실행 ID를 확인하지 못했습니다.");
+        pushWorkspaceError("실행 ID를 확인하지 못했습니다.");
         return;
       }
       const finalRun = await pollRunUntilTerminal(created.id, created);
+      if (!isMountedRef.current) return;
       if (!finalRun) {
-        window.alert("실행 상태를 확인하지 못했습니다.");
+        pushWorkspaceError("실행 상태를 확인하지 못했습니다.");
         return;
       }
 
-      const nextResult = toCombinedRunResultFromRecord(finalRun);
-      setRunResult(nextResult);
+      const completedRunState = buildWorkspaceCompletedRunState(finalRun);
+      setRunResult(completedRunState.runResult);
       setSavedRun(finalRun);
-      setPipelineStatuses(nextResult.stepStatuses);
+      setPipelineStatuses(completedRunState.stepStatuses);
       if (selectedProfileId) {
         void loadBaselineRuns(selectedProfileId);
       }
       setActiveTab("summary");
       setShowAllActions(false);
 
-      const statusById = new Map(nextResult.stepStatuses.map((row) => [row.id, row]));
-      const notices: string[] = [];
-      if (statusById.get("scenarios")?.state === "FAILED") notices.push("시나리오 계산에 실패했습니다.");
-      if (statusById.get("monteCarlo")?.state === "FAILED") notices.push("몬테카를로 계산에 실패했습니다.");
-      if (statusById.get("monteCarlo")?.state === "SKIPPED" && statusById.get("monteCarlo")?.message?.includes("budget")) {
-        notices.push("몬테카를로는 예산 초과로 생략되었습니다.");
-      }
-      if (statusById.get("actions")?.state === "FAILED") notices.push("실행 계획 생성에 실패했습니다.");
-      if (statusById.get("debtStrategy")?.state === "FAILED") notices.push("부채 분석에 실패했습니다.");
-      if (finalRun.overallStatus === "PARTIAL_SUCCESS") notices.push("전체 상태: PARTIAL_SUCCESS");
-      if (finalRun.overallStatus === "FAILED") notices.push("전체 상태: FAILED");
-
-      if (notices.length > 0) {
-        window.alert(`실행을 완료했습니다.\n- ${notices.join("\n- ")}`);
+      const runCompletedNotice = beginnerMode
+        ? "첫 실행을 완료했습니다. 이제 리포트나 실행 내역에서 비교를 이어가세요."
+        : "실행을 완료했습니다.";
+      if (completedRunState.notices.length > 0) {
+        pushWorkspaceNotice([runCompletedNotice, ...completedRunState.notices.map((notice) => `- ${notice}`)].join("\n"));
       } else {
-        window.alert("실행을 완료했습니다.");
+        pushWorkspaceNotice(runCompletedNotice);
       }
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "실행 중 오류가 발생했습니다.");
+      pushWorkspaceError(error instanceof Error ? error.message : "실행 중 오류가 발생했습니다.");
     } finally {
+      if (!isMountedRef.current) return;
       setRunning(false);
     }
   }
@@ -2033,7 +1986,7 @@ export function PlanningWorkspaceClient({
   async function runScenarioAction(): Promise<void> {
     const scenario = buildRunInputScenarioFromSelection();
     if (!scenario) {
-      window.alert("시나리오 템플릿을 먼저 선택하세요.");
+      pushWorkspaceError("시나리오 템플릿을 먼저 선택하세요.");
       return;
     }
     await runPlanAction({ scenario });
@@ -2041,12 +1994,12 @@ export function PlanningWorkspaceClient({
 
   async function syncProfileIfNeeded(): Promise<boolean> {
     if (!selectedProfileId) {
-      window.alert("저장할 프로필을 먼저 선택하세요.");
+      pushWorkspaceError("저장할 프로필을 먼저 선택하세요.");
       return false;
     }
 
     if (profileValidation.errors.length > 0) {
-      window.alert(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
+      pushWorkspaceError(`프로필 입력 오류를 먼저 수정하세요.\n- ${profileValidation.errors.join("\n- ")}`);
       return false;
     }
     const parsedProfile = toProfileJson(profileForm);
@@ -2057,7 +2010,7 @@ export function PlanningWorkspaceClient({
       setPendingProfileSave({ mode: "update", profile: parsedProfile });
       setPendingSuggestions(suggestions);
       setAcceptedSuggestionCodes([]);
-      window.alert("프로필 저장 전 정규화 제안을 먼저 확인해주세요.");
+      pushWorkspaceError("프로필 저장 전 정규화 제안을 먼저 확인해주세요.");
       return false;
     }
 
@@ -2075,7 +2028,9 @@ export function PlanningWorkspaceClient({
       })),
     });
     const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningProfileRecord> | null;
-    if (!parseApiPayload(locale, res, payload, "실행 기록 저장 전 프로필 동기화에 실패했습니다.")) {
+    const parsedPayload = parseApiPayload(locale, res, payload, "실행 기록 저장 전 프로필 동기화에 실패했습니다.");
+    if (!parsedPayload.ok) {
+      pushWorkspaceError(parsedPayload.errorMessage);
       return false;
     }
     const normalizationFromResponse = parseProfileNormalizationDisclosure(payload?.meta?.normalization);
@@ -2111,19 +2066,19 @@ export function PlanningWorkspaceClient({
     options?: { silent?: boolean; bypassWarningConfirmation?: boolean; scenario?: RunInputScenario },
   ): Promise<PlanningRunRecord | null> {
     if (!selectedProfileId) {
-      if (!options?.silent) window.alert("저장할 프로필을 먼저 선택하세요.");
+      if (!options?.silent) pushWorkspaceError("저장할 프로필을 먼저 선택하세요.");
       return null;
     }
     if (preflightHasBlockers) {
       if (!options?.silent) {
         const details = preflightBlockIssues.map((issue) => `- [${issue.code}] ${formatPreflightIssue(issue)}`).join("\n");
-        window.alert(`사전 점검 오류로 저장할 수 없습니다.\n${details}`);
+        pushWorkspaceError(`사전 점검 오류로 저장할 수 없습니다.\n${details}`);
       }
       return null;
     }
     if (preflightWarnIssues.length > 0 && !options?.bypassWarningConfirmation) {
       if (!options?.silent) {
-        window.alert("사전 점검 경고를 확인한 뒤 '이대로 저장' 체크를 켜주세요.");
+        pushWorkspaceError("사전 점검 경고를 확인한 뒤 '이대로 저장' 체크를 켜주세요.");
       }
       return null;
     }
@@ -2144,16 +2099,25 @@ export function PlanningWorkspaceClient({
       });
       const payload = (await res.json().catch(() => null)) as ApiResponse<PlanningRunRecord> | null;
       if (handleSnapshotNotFound(payload)) return null;
-      if (!parseApiPayload(locale, res, payload, "실행 기록 저장에 실패했습니다.")) return null;
+      const parsedPayload = parseApiPayload(locale, res, payload, "실행 기록 저장에 실패했습니다.");
+      if (!parsedPayload.ok) {
+        pushWorkspaceError(parsedPayload.errorMessage);
+        return null;
+      }
+      const typedPayload = payload as ApiResponse<PlanningRunRecord>;
 
-      const saved = payload.data ?? null;
+      const saved = typedPayload.data ?? null;
       setSavedRun(saved);
       if (!options?.silent) {
-        window.alert("실행 기록 저장을 완료했습니다. /planning/runs에서 비교할 수 있습니다.");
+        pushWorkspaceNotice(
+          beginnerMode
+            ? "결과 저장을 완료했습니다. 이제 리포트와 실행 기록에서 비교할 수 있습니다."
+            : "실행 기록 저장을 완료했습니다. /planning/runs에서 비교할 수 있습니다.",
+        );
       }
       return saved;
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "실행 기록 저장 중 오류가 발생했습니다.");
+      pushWorkspaceError(error instanceof Error ? error.message : "실행 기록 저장 중 오류가 발생했습니다.");
       return null;
     } finally {
       setSavingRun(false);
@@ -2161,21 +2125,21 @@ export function PlanningWorkspaceClient({
   }
 
   async function saveRunAction(): Promise<void> {
-    if (!runResult?.simulate) {
-      window.alert("먼저 실행을 진행하세요.");
+    if (!runResult?.hasSimulateResult) {
+      pushWorkspaceError("먼저 실행을 진행하세요.");
       return;
     }
     if (saveBlockedByHealth) {
-      window.alert("치명 경고 확인 체크 후 저장할 수 있습니다.");
+      pushWorkspaceError("치명 경고 확인 체크 후 저장할 수 있습니다.");
       return;
     }
     if (preflightHasBlockers) {
       const details = preflightBlockIssues.map((issue) => `- [${issue.code}] ${formatPreflightIssue(issue)}`).join("\n");
-      window.alert(`사전 점검 오류로 저장할 수 없습니다.\n${details}`);
+      pushWorkspaceError(`사전 점검 오류로 저장할 수 없습니다.\n${details}`);
       return;
     }
     if (saveNeedsWarningConfirmation) {
-      window.alert("사전 점검 경고를 확인한 뒤 '이대로 저장' 체크를 켜주세요.");
+      pushWorkspaceError("사전 점검 경고를 확인한 뒤 '이대로 저장' 체크를 켜주세요.");
       return;
     }
 
@@ -2192,22 +2156,13 @@ export function PlanningWorkspaceClient({
     const title = feedbackTitle.trim();
     const message = feedbackMessage.trim();
     if (title.length < 2 || title.length > 160) {
-      window.alert("피드백 제목은 2~160자로 입력하세요.");
+      pushWorkspaceError("피드백 제목은 2~160자로 입력하세요.");
       return;
     }
     if (message.length < 5 || message.length > 5000) {
-      window.alert("피드백 내용은 5~5000자로 입력하세요.");
+      pushWorkspaceError("피드백 내용은 5~5000자로 입력하세요.");
       return;
     }
-
-    const snapshotFromRun = runResult?.meta?.snapshot;
-    const snapshotFromSelection = selectedSnapshotItem;
-    const snapshotContext = {
-      ...(asString(snapshotFromRun?.id || snapshotFromSelection?.id) ? { id: asString(snapshotFromRun?.id || snapshotFromSelection?.id) } : {}),
-      ...(asString(snapshotFromRun?.asOf || snapshotFromSelection?.asOf) ? { asOf: asString(snapshotFromRun?.asOf || snapshotFromSelection?.asOf) } : {}),
-      ...(asString(snapshotFromRun?.fetchedAt || snapshotFromSelection?.fetchedAt) ? { fetchedAt: asString(snapshotFromRun?.fetchedAt || snapshotFromSelection?.fetchedAt) } : {}),
-      ...(typeof snapshotFromRun?.missing === "boolean" ? { missing: snapshotFromRun.missing } : {}),
-    };
 
     setFeedbackSubmitting(true);
     try {
@@ -2217,7 +2172,7 @@ export function PlanningWorkspaceClient({
         body: JSON.stringify(withDevCsrf({
           from: { screen: "/planning" },
           context: {
-            ...(Object.keys(snapshotContext).length > 0 ? { snapshot: snapshotContext } : {}),
+            ...(Object.keys(workspaceSnapshotState.feedbackContext).length > 0 ? { snapshot: workspaceSnapshotState.feedbackContext } : {}),
             ...(savedRun?.id ? { runId: savedRun.id } : {}),
             ...(healthSummary ? {
               health: {
@@ -2250,110 +2205,42 @@ export function PlanningWorkspaceClient({
       setFeedbackMessage("");
       setFeedbackToast(createdId ? `저장됨(${createdId})` : "저장됨");
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "피드백 저장 중 오류가 발생했습니다.");
+      pushWorkspaceError(error instanceof Error ? error.message : "피드백 저장 중 오류가 발생했습니다.");
     } finally {
       setFeedbackSubmitting(false);
     }
   }
 
-  const resultDto = isResultDtoV1(runResult?.resultDto)
-    ? runResult.resultDto
-    : rebuildResultDtoFromCombinedRunResultForCompat(runResult, policyId);
+  const resultDto = runResult?.resultDto ?? null;
 
-  const scenariosRow = asRecord(resultDto?.scenarios);
-  const scenarioTable = asArray(resultDto?.scenarios?.table).map((entry) => asRecord(entry));
-  const scenariosBase = scenarioTable.find((entry) => String(entry.id ?? "") === "base") ?? {};
-  const scenariosList = scenarioTable.filter((entry) => String(entry.id ?? "") !== "base");
-  const scenariosBaseSummary = asRecord(asRecord(scenariosBase).summary);
-  const scenariosBaseWarnings = asArray(resultDto?.warnings.top).map((entry) => ({
-    reasonCode: asString(asRecord(entry).code),
-    message: asString(asRecord(entry).message),
-  }));
-  const scenarioComparisonRows = scenariosList.map((scenario) => {
-    const summary = asRecord(scenario.summary);
-    const summarySource = Object.keys(summary).length > 0 ? summary : scenario;
-    const diffVsBase = asRecord(scenario.diffVsBase);
-    const diffMetrics = asRecord(diffVsBase.keyMetrics);
-    const shortWhy = asArray(diffVsBase.shortWhy).map((entry) => String(entry));
-    return {
-      id: String(scenario.id ?? ""),
-      title: String(scenario.title ?? "시나리오"),
-      endNetWorthKrw: Number(summarySource.endNetWorthKrw ?? summarySource.endNetWorth ?? 0),
-      worstCashKrw: Number(summarySource.worstCashKrw ?? 0),
-      goalsAchieved: Number(summarySource.goalsAchievedCount ?? summarySource.goalsAchieved ?? 0),
-      warningsCount: Number(summarySource.warningsCount ?? 0),
-      endNetWorthDeltaKrw: Number(diffMetrics.endNetWorthDeltaKrw ?? scenario.endNetWorthDeltaKrw ?? 0),
-      goalsAchievedDelta: Number(diffMetrics.goalsAchievedDelta ?? scenario.goalsAchievedDelta ?? 0),
-      shortWhy,
-    };
-  });
+  const scenariosVm = buildWorkspaceScenarioVm(resultDto);
+  const scenariosBaseSummary = scenariosVm.baseSummary;
+  const scenariosBaseWarnings = scenariosVm.baseWarnings;
+  const scenarioComparisonRows = scenariosVm.comparisonRows;
 
-  const monteRow = asRecord(resultDto?.monteCarlo);
-  const monteData = monteRow;
-  const monteProbabilities = asRecord(monteData.probabilities);
-  const montePercentiles = asRecord(monteData.percentiles);
-  const monteEndNetWorth = asRecord(montePercentiles.endNetWorthKrw);
-  const monteWorstCash = asRecord(montePercentiles.worstCashKrw);
-  const monteDepletionProb = typeof monteProbabilities.retirementDepletionBeforeEnd === "number"
-    ? monteProbabilities.retirementDepletionBeforeEnd
-    : undefined;
+  const monteVm = buildWorkspaceMonteCarloVm(resultDto);
+  const monteData = monteVm.data;
+  const monteProbabilities = monteVm.probabilities;
+  const monteEndNetWorth = monteVm.percentiles.endNetWorthKrw;
+  const monteWorstCash = monteVm.percentiles.worstCashKrw;
+  const monteDepletionProb = monteVm.depletionProbability;
 
-  const actionsRow = asRecord(resultDto?.actions);
-  const actionsList = asArray(actionsRow.items);
-  const topActionTitles = asArray(actionsRow.top3)
-    .map((entry) => asString(asRecord(entry).title))
-    .filter((title) => title.length > 0)
-    .slice(0, 3);
-  const actionTableRows = actionsList.map((entry) => {
-    const row = asRecord(entry);
-    const whyRows = asArray(row.why);
-    const steps = asArray(row.steps).map((step) => String(step).trim()).filter((step) => step.length > 0);
-    const cautions = asArray(row.cautions).map((caution) => String(caution).trim()).filter((caution) => caution.length > 0);
-    return {
-      code: String(row.code ?? "UNKNOWN"),
-      severity: String(row.severity ?? "info"),
-      title: String(row.title ?? "권장 조치"),
-      summary: String(row.summary ?? "").trim(),
-      whyCount: whyRows.length,
-      steps,
-      cautions,
-    };
-  });
+  const actionsVm = buildWorkspaceActionsVm(resultDto);
+  const topActionTitles = actionsVm.topActionTitles;
+  const actionTableRows = actionsVm.tableRows;
   const visibleActionRows = showAllActions ? actionTableRows : actionTableRows.slice(0, LIMITS.actionsTop);
   const omittedActionRows = Math.max(0, actionTableRows.length - visibleActionRows.length);
-  const actionsTopForInsight: ActionItemV2[] = asArray(actionsRow.top3).map((entry) => asRecord(entry) as ActionItemV2);
+  const actionsTopForInsight = actionsVm.topActionsForInsight;
 
-  const debtRow = asRecord(resultDto?.debt);
-  const debtData = asRecord(debtRow);
-  const debtMeta = {
-    debtServiceRatio: typeof debtData.dsrPct === "number"
-      ? (debtData.dsrPct > 1 ? debtData.dsrPct / 100 : debtData.dsrPct)
-      : 0,
-    totalMonthlyPaymentKrw: Number(asRecord(asRecord(resultDto?.raw?.debt).summary).totalMonthlyPaymentKrw ?? 0),
-  };
-  const debtSummaries = asArray(debtData.summaries).map((entry) => asRecord(entry));
-  const debtRefinance = asArray(debtData.refinance).map((entry) => asRecord(entry));
-  const debtWhatIf = asRecord(debtData.whatIf);
-  const debtWarningsRaw = asArray(asRecord(resultDto?.raw?.debt).warnings).map((entry) => asRecord(entry));
-  const debtWarnings = aggregateGuideWarnings(debtWarningsRaw.map((warning) => ({
-    reasonCode: warning.code,
-    message: warning.message,
-    data: warning.data,
-  })));
-  const debtWhatIfSummary = buildDebtWhatIfSummary({
-    termExtensionsCount: asArray(debtWhatIf.termExtensions).length,
-    termReductionsCount: asArray(debtWhatIf.termReductions).length,
-    extraPaymentsCount: asArray(debtWhatIf.extraPayments).length,
-  });
+  const debtVm = buildWorkspaceDebtVm(resultDto);
+  const debtMeta = debtVm.meta;
+  const debtSummaries = debtVm.summaries;
+  const debtRefinance = debtVm.refinance;
+  const debtWarnings = debtVm.warnings;
+  const debtWhatIfSummary = debtVm.whatIfSummary;
   const optimizeCandidates = optimizeResult?.candidates ?? [];
 
-  const healthDisabledReason = saveBlockedByHealth
-    ? (
-      healthWarnings.some((warning) => warning.code === "SNAPSHOT_VERY_STALE")
-        ? "치명 경고 확인이 필요합니다. 스냅샷이 매우 오래되었습니다. /ops/assumptions에서 동기화를 권장합니다."
-        : "치명 경고 확인이 필요합니다. 확인 전에는 실행 기록 저장 및 고비용 액션이 제한됩니다."
-    )
-    : "";
+  const healthDisabledReason = healthGuard.disabledReason;
   const saveButtonDescribedBy = [
     preflightHasBlockers ? "planning-preflight-block-reason" : "",
     saveBlockedByHealth ? "planning-save-disabled-reason" : "",
@@ -2375,9 +2262,6 @@ export function PlanningWorkspaceClient({
   const hasActionsData = Boolean(resultDto?.actions);
   const hasDebtData = Boolean(resultDto?.debt);
   const {
-    simulateTimeline,
-    simulateWarnings,
-    simulateGoals,
     chartPoints,
     chartMode,
     aggregatedWarningsForInsight,
@@ -2402,6 +2286,39 @@ export function PlanningWorkspaceClient({
     resultDto,
     debtMonthlyPaymentKrw: typeof debtMeta.totalMonthlyPaymentKrw === "number" ? debtMeta.totalMonthlyPaymentKrw : undefined,
   });
+  const warningsGoalsDebugSections = buildWorkspaceWarningsGoalsDebugSections({
+    beginnerMode,
+    aggregatedWarnings,
+    goalTableRows,
+    timelineSummaryRows,
+    chartPoints,
+  });
+  const scenariosDebugSections = buildWorkspaceScenarioDebugSections({
+    beginnerMode,
+    baseSummary: scenariosBaseSummary,
+    comparisonRows: scenarioComparisonRows,
+    baseWarnings: scenariosBaseWarnings,
+  });
+  const monteCarloDebugSections = buildWorkspaceMonteCarloDebugSections({
+    beginnerMode,
+    probabilities: monteProbabilities,
+    endNetWorthKrw: monteEndNetWorth,
+    worstCashKrw: monteWorstCash,
+    ...(typeof monteDepletionProb === "number" ? { depletionProbability: monteDepletionProb } : {}),
+  });
+  const actionsDebugSections = buildWorkspaceActionsDebugSections({
+    beginnerMode,
+    topActionTitles,
+    actionRows: actionTableRows,
+  });
+  const debtDebugSections = buildWorkspaceDebtDebugSections({
+    beginnerMode,
+    debtMeta,
+    debtSummaries,
+    debtRefinance,
+    debtWhatIfSummary,
+    debtWarnings,
+  });
 
   const visibleSections = getVisibleSections(beginnerMode, {
     hasResult: Boolean(resultDto),
@@ -2414,16 +2331,178 @@ export function PlanningWorkspaceClient({
     id,
     label: TAB_LABELS[id],
   }));
-  const beginnerStepProfileDone = profileValidation.errors.length === 0
-    && (
-      profileForm.monthlyIncomeNet > 0
-      || profileForm.monthlyEssentialExpenses > 0
-      || profileForm.monthlyDiscretionaryExpenses > 0
-      || profileForm.liquidAssets > 0
-      || profileForm.investmentAssets > 0
-    );
-  const beginnerStepRunDone = Boolean(runResult?.simulate);
-  const beginnerStepSaveDone = Boolean(savedRun?.id);
+  const beginnerStepProfileDone = isWorkspaceQuickStartProfileDone(profileForm, profileValidation.errors.length);
+  const profileSyncState = useMemo(() => resolveWorkspaceSelectedProfileSyncState({
+    selectedProfileId,
+    selectedProfile: selectedProfile
+      ? {
+        name: selectedProfile.name,
+        profile: selectedProfile.profile as Record<string, unknown>,
+      }
+      : null,
+    profileForm,
+    profileName,
+    pendingSuggestionsCount: pendingSuggestions.length,
+  }), [pendingSuggestions.length, profileForm, profileName, selectedProfile, selectedProfileId]);
+  const currentProfileHashInput = useMemo(() => {
+    if (profileSyncState === "missing" || profileSyncState === "unknown") return "";
+    try {
+      return stableStringifyWorkspaceValue(normalizeDraftWithDisclosure(
+        toProfileJson(profileForm) as FormDraft,
+        profileName,
+      ).profile);
+    } catch {
+      return "";
+    }
+  }, [profileForm, profileName, profileSyncState]);
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutId: number | undefined;
+
+    function commitHashState(nextState: { input: string; hash: string }): void {
+      timeoutId = window.setTimeout(() => {
+        if (!cancelled) {
+          setCurrentProfileHashState(nextState);
+        }
+      }, 0);
+    }
+
+    async function syncCurrentProfileHash(): Promise<void> {
+      const nextInput = currentProfileHashInput;
+      if (!nextInput) {
+        commitHashState({ input: "", hash: "" });
+        return;
+      }
+
+      try {
+        const subtle = globalThis.crypto?.subtle;
+        if (!subtle) {
+          commitHashState({ input: nextInput, hash: "" });
+          return;
+        }
+
+        const digest = await subtle.digest("SHA-256", new TextEncoder().encode(nextInput));
+        if (cancelled) return;
+        const hash = Array.from(new Uint8Array(digest))
+          .map((byte) => byte.toString(16).padStart(2, "0"))
+          .join("");
+        commitHashState({ input: nextInput, hash });
+      } catch {
+        commitHashState({ input: nextInput, hash: "" });
+      }
+    }
+
+    void syncCurrentProfileHash();
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [currentProfileHashInput]);
+  const currentProfileHash = currentProfileHashState.input === currentProfileHashInput
+    ? currentProfileHashState.hash
+    : "";
+  const runStatusReviewRequired = useMemo(() => {
+    if (profileSyncState !== "saved" || !savedRun?.id || !selectedProfileId) return false;
+    if (savedRun.profileId !== selectedProfileId) return false;
+    if (!savedRun.reproducibility?.profileHash) return true;
+    if (!currentProfileHashInput) return true;
+    if (currentProfileHashState.input !== currentProfileHashInput) return true;
+    return !currentProfileHashState.hash;
+  }, [
+    currentProfileHashInput,
+    currentProfileHashState.hash,
+    currentProfileHashState.input,
+    profileSyncState,
+    savedRun,
+    selectedProfileId,
+  ]);
+  const runMatchesCurrentProfile = useMemo(() => {
+    if (runStatusReviewRequired) return false;
+    if (profileSyncState !== "saved" || !savedRun?.id || !selectedProfileId || !currentProfileHash) return false;
+    return savedRun.profileId === selectedProfileId
+      && savedRun.reproducibility?.profileHash === currentProfileHash;
+  }, [currentProfileHash, profileSyncState, runStatusReviewRequired, savedRun, selectedProfileId]);
+  const beginnerStepRunDone = Boolean(runResult?.hasSimulateResult) && runMatchesCurrentProfile;
+  const beginnerStepSaveDone = Boolean(savedRun?.id) && runMatchesCurrentProfile;
+  const quickStartVm = useMemo(() => buildWorkspaceQuickStartVm({
+    selectedProfileId,
+    profileSyncState,
+    beginnerStepProfileDone,
+    beginnerStepRunDone,
+    beginnerStepSaveDone,
+    runStatusReviewRequired,
+    savedRunId: savedRun?.id,
+    savedRunOverallStatus: savedRun?.overallStatus,
+    reportsPageHref,
+    selectedProfileReportHref: (runId) => appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(runId)}`, selectedProfileId),
+    formatRunOverallStatus: formatRunOverallStatusKo,
+  }), [
+    beginnerStepProfileDone,
+    beginnerStepRunDone,
+    beginnerStepSaveDone,
+    profileSyncState,
+    reportsPageHref,
+    runStatusReviewRequired,
+    savedRun?.id,
+    savedRun?.overallStatus,
+    selectedProfileId,
+  ]);
+  const quickStartNextStep = useMemo(() => {
+    if (profileSyncState === "missing") {
+      return {
+        label: "먼저 프로필 저장",
+        description: "아래 프로필 영역에서 새로 만들기를 누르면 저장 직후 첫 실행 시작으로 이어집니다.",
+        targetId: "planning-profile-create-button",
+      };
+    }
+    if (profileSyncState === "unknown") {
+      return {
+        label: "진행 상태 다시 확인",
+        description: "저장된 프로필과 현재 편집값을 아직 맞춰 보지 못했습니다. 아래 프로필 목록을 새로고침한 뒤 상태를 다시 확인해 주세요.",
+        targetId: "planning-profile-refresh-button",
+      };
+    }
+    if (profileSyncState === "dirty") {
+      return {
+        label: "먼저 프로필 저장",
+        description: "선택된 프로필과 현재 편집값이 달라 먼저 저장하거나 변경 상태를 정리한 뒤 첫 실행으로 이어가세요.",
+        targetId: "planning-profile-update-button",
+      };
+    }
+    if (quickStartVm.runStatusReviewRequired) {
+      return {
+        label: "진행 상태 다시 확인",
+        description: "현재 환경에서는 최근 저장 실행과 현재 프로필의 일치 여부를 자동 확인하지 못했습니다. 아래 실행 내역에서 진행 상태를 다시 확인해 주세요.",
+        targetId: "planning-quickstart-runs-link",
+      };
+    }
+    if (!quickStartVm.beginnerStepRunDone) {
+      return {
+        label: "이제 첫 실행 시작",
+        description: "아래 간단 진행 카드의 첫 실행 시작을 누르면 요약, 액션, 경고를 한 번에 계산합니다.",
+        targetId: "planning-quickstart-run-cta",
+      };
+    }
+    if (!quickStartVm.beginnerStepSaveDone) {
+      return {
+        label: "이제 결과 저장",
+        description: "첫 실행이 끝났습니다. 아래 결과 저장 버튼으로 현재 상태를 보관하면 비교와 리포트로 이어집니다.",
+        targetId: "planning-quickstart-save-run-button",
+      };
+    }
+    return {
+      label: "리포트 보기",
+      description: "저장까지 끝났습니다. 아래 리포트 버튼으로 결과와 비교 화면을 이어서 볼 수 있습니다.",
+      targetId: "planning-quickstart-report-button",
+    };
+  }, [
+    profileSyncState,
+    quickStartVm.beginnerStepRunDone,
+    quickStartVm.beginnerStepSaveDone,
+    quickStartVm.runStatusReviewRequired,
+  ]);
 
   useEffect(() => {
     if (visibleSections.includes(activeTab)) return;
@@ -2436,11 +2515,11 @@ export function PlanningWorkspaceClient({
         title={t(locale, "PLANNING_TITLE")}
         description={t(locale, "PLANNING_DESC")}
         action={(
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <div className={bodyDenseActionRowClassName}>
+            <label className={`flex items-center gap-2 text-xs ${bodyLabelClassName}`}>
               프로필
               <select
-                className="h-8 rounded-lg border border-slate-300 px-2 text-xs"
+                className={bodyCompactFieldClassName}
                 value={selectedProfileId}
                 onChange={(event) => setSelectedProfileId(event.target.value)}
               >
@@ -2458,25 +2537,156 @@ export function PlanningWorkspaceClient({
             >
               피드백 보내기
             </Button>
-            <Link className="font-semibold text-emerald-700" href={runsPageHref}>실행 기록</Link>
-            <Link className="font-semibold text-emerald-700" href={reportsPageHref}>리포트</Link>
+            <a
+              className={bodyActionLinkClassName}
+              data-profile-state={runsLinkProfileState}
+              data-ready={runsLinkReady ? "true" : "false"}
+              data-testid="planning-runs-link"
+              href={runsPageHref}
+              onClick={(event) => {
+                if (event.defaultPrevented) return;
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+                event.preventDefault();
+                window.location.assign(runsPageHref);
+              }}
+            >
+              실행 기록
+            </a>
+            <BodyActionLink href={reportsPageHref} prefetch={false}>리포트</BodyActionLink>
           </div>
         )}
       />
 
       {feedbackToast ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 py-3 text-sm font-semibold text-emerald-700">
+        <BodyStatusInset className="mb-4 py-3 text-sm font-semibold" tone="success">
           {feedbackToast}
-        </Card>
+        </BodyStatusInset>
+      ) : null}
+      {workspaceError ? (
+        <BodyStatusInset className="mb-4 py-3 text-sm font-semibold whitespace-pre-line" tone="danger">
+          {workspaceError}
+        </BodyStatusInset>
+      ) : null}
+      {workspaceNotice ? (
+        <BodyStatusInset className="mb-4 py-3 text-sm font-semibold whitespace-pre-line" tone="default">
+          {workspaceNotice}
+        </BodyStatusInset>
       ) : null}
 
-      <Card className="mb-6 border border-amber-200 bg-amber-50">
+      <BodyStatusInset className="mb-6" tone="warning">
         <p className="text-sm font-semibold text-amber-900">{t(locale, "DISCLAIMER_TITLE")}</p>
         <p className="mt-1 text-xs text-amber-800">{t(locale, "DISCLAIMER_BODY")}</p>
+      </BodyStatusInset>
+
+      {beginnerMode ? (
+        <PlanningQuickStartGate
+          disabled={savingProfile || running || savingRun}
+          nextStepDescription={quickStartNextStep.description}
+          nextStepLabel={quickStartNextStep.label}
+          nextStepTargetId={quickStartNextStep.targetId}
+          profileSyncState={profileSyncState}
+          runStatusReviewRequired={quickStartVm.runStatusReviewRequired}
+          runDone={quickStartVm.beginnerStepRunDone}
+          saveDone={quickStartVm.beginnerStepSaveDone}
+          onApply={applyQuickStartAction}
+        />
+      ) : null}
+
+      <Card className={`mb-6 border ${quickStartVm.tone}`} data-testid="planning-workspace-quickstart-card">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">간단 진행</p>
+            <h2 className="mt-2 text-lg font-black tracking-tight text-slate-950">{quickStartVm.title}</h2>
+            <p className="mt-2 text-sm text-slate-700">{quickStartVm.description}</p>
+            <div className={`mt-3 text-xs text-slate-600 ${bodyDenseActionRowClassName}`}>
+              <span className={bodyMetaChipClassName}>
+                프로필 {selectedProfile ? selectedProfile.name : "미선택"}
+              </span>
+              <span className={bodyMetaChipClassName}>
+                스냅샷 {selectedSnapshotItem?.id ?? "latest"}
+              </span>
+              <span className={bodyMetaChipClassName}>
+                사전 점검 {preflightHasBlockers ? `차단 ${preflightBlockIssues.length}` : preflightWarnIssues.length > 0 ? `경고 ${preflightWarnIssues.length}` : "정상"}
+              </span>
+              <span className={bodyMetaChipClassName}>
+                최근 저장 {savedRun ? formatRunOverallStatusKo(savedRun.overallStatus) : "없음"}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {profiles.length < 1 ? (
+              <Button disabled={savingProfile || running || savingRun} onClick={loadSampleProfileAction} variant="primary">
+                샘플 프로필 불러오기
+              </Button>
+            ) : null}
+            {selectedProfileId && !quickStartVm.beginnerStepRunDone && !quickStartVm.runStatusReviewRequired ? (
+              <Button
+                data-testid="planning-quickstart-run-cta"
+                disabled={running || preflightHasBlockers}
+                id="planning-quickstart-run-cta"
+                onClick={() => void runPlanAction()}
+                variant="primary"
+              >
+                {running ? "실행 중..." : "첫 실행 시작"}
+              </Button>
+            ) : null}
+            {selectedProfileId && quickStartVm.beginnerStepRunDone && !quickStartVm.beginnerStepSaveDone ? (
+              <Button
+                aria-describedby={saveButtonDescribedBy}
+                data-testid="planning-quickstart-save-run-button"
+                disabled={savingRun || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
+                id="planning-quickstart-save-run-button"
+                onClick={() => void saveRunAction()}
+                variant="primary"
+              >
+                {savingRun ? "저장 중..." : "결과 저장"}
+              </Button>
+            ) : null}
+            <Link href={runsPageHref}>
+              <Button
+                data-testid="planning-quickstart-runs-link"
+                id="planning-quickstart-runs-link"
+                variant={quickStartVm.runStatusReviewRequired ? "primary" : "outline"}
+              >
+                실행 내역
+              </Button>
+            </Link>
+            {quickStartVm.beginnerStepSaveDone ? (
+              <Link href={quickStartVm.selectedRunReportHref}>
+                <Button data-testid="planning-quickstart-report-button" id="planning-quickstart-report-button" variant="outline">리포트</Button>
+              </Link>
+            ) : (
+              <Button disabled title="실행 결과를 저장하면 리포트를 열 수 있습니다." variant="outline">리포트는 저장 후</Button>
+            )}
+          </div>
+        </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <BodyInset className="bg-white/90 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">월 잉여금</p>
+              <p className="mt-1 text-base font-black text-slate-950">{formatKrw(locale, liveSummary.monthlySurplus)}</p>
+              <p className="mt-1 text-xs text-slate-600">실수령에서 필수/선택지출을 뺀 값</p>
+            </BodyInset>
+            <BodyInset className="bg-white/90 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">비상금 버팀력</p>
+              <p className="mt-1 text-base font-black text-slate-950">{beginnerEmergencyMonths}개월</p>
+              <p className="mt-1 text-xs text-slate-600">6개월 목표 대비 부족액 {formatKrw(locale, liveSummary.emergencyGapKrw)}</p>
+            </BodyInset>
+            <BodyInset className="bg-white/90 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">부채 부담</p>
+              <p className="mt-1 text-base font-black text-slate-950">{profileForm.debts.length}건</p>
+              <p className="mt-1 text-xs text-slate-600">월 상환 {formatKrw(locale, liveSummary.totalMonthlyDebtPayment)} · DSR {formatPct(locale, liveSummary.dsrPct)}</p>
+            </BodyInset>
+            <BodyInset className="bg-white/90 px-4 py-3" data-testid="planning-workspace-quickstart-status">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">완료 상태</p>
+              <p className="mt-1 text-base font-black text-slate-950">{quickStartVm.completedSummary}</p>
+              <p className="mt-2 text-xs font-semibold text-slate-600">다음 단계 · {quickStartVm.nextStepSummary}</p>
+            </BodyInset>
+          </div>
       </Card>
 
       <Card className="mb-6">
-        <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        <label className={bodyChoiceRowClassName}>
           <input
             checked={beginnerMode}
             onChange={(event) => setBeginnerMode(event.target.checked)}
@@ -2486,20 +2696,16 @@ export function PlanningWorkspaceClient({
         </label>
       </Card>
       {beginnerMode ? (
-        <Card className="mb-6 border border-slate-200 bg-slate-50">
+        <BodyInset className="mb-6">
           <p className="text-xs font-semibold text-slate-800">5분 진행 안내</p>
           <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-3">
-            <p className={`rounded-lg border px-3 py-2 ${beginnerStepProfileDone ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`}>
-              1) 프로필 입력 {beginnerStepProfileDone ? "완료" : "대기"}
-            </p>
-            <p className={`rounded-lg border px-3 py-2 ${beginnerStepRunDone ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`}>
-              2) 실행 {beginnerStepRunDone ? "완료" : "대기"}
-            </p>
-            <p className={`rounded-lg border px-3 py-2 ${beginnerStepSaveDone ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white"}`}>
-              3) 저장 {beginnerStepSaveDone ? "완료" : "대기"}
-            </p>
+            {quickStartVm.progressItems.map((item) => (
+              <p key={item.label} className={`rounded-lg border px-3 py-2 ${quickStartProgressToneClassName(item.state)}`}>
+                {item.label} · {item.stateLabel}
+              </p>
+            ))}
           </div>
-        </Card>
+        </BodyInset>
       ) : null}
 
       {beginnerMode ? (
@@ -2539,10 +2745,10 @@ export function PlanningWorkspaceClient({
             />
           ) : null}
 
-          <label className="block text-xs font-semibold text-slate-600">
+          <label className={`block text-xs ${bodyLabelClassName}`}>
             프로필 선택
             <select
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+              className={bodyFieldClassName}
               aria-label="프로필 선택"
               value={selectedProfileId}
               onChange={(event) => setSelectedProfileId(event.target.value)}
@@ -2554,10 +2760,10 @@ export function PlanningWorkspaceClient({
             </select>
           </label>
 
-          <label className="block text-xs font-semibold text-slate-600">
+          <label className={`block text-xs ${bodyLabelClassName}`}>
             프로필 이름
             <input
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+              className={bodyFieldClassName}
               value={profileName}
               onChange={(event) => {
                 setProfileName(event.target.value);
@@ -2566,16 +2772,16 @@ export function PlanningWorkspaceClient({
             />
           </label>
 
-          <div className="space-y-4 rounded-xl border border-slate-200 p-3">
+          <BodyInset className="space-y-4">
             <div>
               <p className="text-xs font-semibold text-slate-700">혜택 추천용 기본 조건</p>
               <p className="mt-1 text-[11px] text-slate-500">출생연도, 성별, 지역을 입력하면 보조금24 추천 범위를 더 좁힐 수 있습니다.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 출생연도
                 <input
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  className={bodyFieldClassName}
                   inputMode="numeric"
                   placeholder="예: 1994"
                   type="text"
@@ -2586,10 +2792,10 @@ export function PlanningWorkspaceClient({
                   }}
                 />
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 성별
                 <select
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  className={bodyFieldClassName}
                   value={profileForm.gender ?? ""}
                   onChange={(event) => {
                     const next = event.target.value;
@@ -2601,10 +2807,10 @@ export function PlanningWorkspaceClient({
                   <option value="M">남성</option>
                 </select>
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 시/도
                 <select
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  className={bodyFieldClassName}
                   value={profileForm.sido ?? ""}
                   onChange={(event) => {
                     const nextSido = event.target.value;
@@ -2621,10 +2827,10 @@ export function PlanningWorkspaceClient({
                   ))}
                 </select>
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 시/군/구
                 <select
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  className={bodyFieldClassName}
                   disabled={!profileForm.sido}
                   value={profileForm.sigungu ?? ""}
                   onChange={(event) => updateProfileField("sigungu", event.target.value || "")}
@@ -2636,16 +2842,16 @@ export function PlanningWorkspaceClient({
                 </select>
               </label>
             </div>
-          </div>
+          </BodyInset>
 
-          <div className="space-y-4 rounded-xl border border-slate-200 p-3">
+          <BodyInset className="space-y-4">
             <p className="text-xs font-semibold text-slate-700">월 현금흐름</p>
             <div className="grid gap-3 sm:grid-cols-3">
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 월 실수령
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className="h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                    className={bodyFieldClassName.replace("mt-1 ", "")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 5,100,000"
@@ -2655,11 +2861,11 @@ export function PlanningWorkspaceClient({
                   <span className="text-[11px] font-medium text-slate-500">(원)</span>
                 </div>
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 필수지출
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className="h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                    className={bodyFieldClassName.replace("mt-1 ", "")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 2,200,000"
@@ -2669,11 +2875,11 @@ export function PlanningWorkspaceClient({
                   <span className="text-[11px] font-medium text-slate-500">(원)</span>
                 </div>
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 선택지출
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className="h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                    className={bodyFieldClassName.replace("mt-1 ", "")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 900,000"
@@ -2684,16 +2890,16 @@ export function PlanningWorkspaceClient({
                 </div>
               </label>
             </div>
-          </div>
+          </BodyInset>
 
-          <div className="space-y-4 rounded-xl border border-slate-200 p-3">
+          <BodyInset className="space-y-4">
             <p className="text-xs font-semibold text-slate-700">자산</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 현금(예금)
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className="h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                    className={bodyFieldClassName.replace("mt-1 ", "")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 12,000,000"
@@ -2703,11 +2909,11 @@ export function PlanningWorkspaceClient({
                   <span className="text-[11px] font-medium text-slate-500">(원)</span>
                 </div>
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 투자자산
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className="h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                    className={bodyFieldClassName.replace("mt-1 ", "")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 18,000,000"
@@ -2718,9 +2924,9 @@ export function PlanningWorkspaceClient({
                 </div>
               </label>
             </div>
-          </div>
+          </BodyInset>
 
-          <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+          <BodyInset className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-slate-700">부채 리스트</p>
               <Button
@@ -2736,37 +2942,40 @@ export function PlanningWorkspaceClient({
               <p className="text-xs text-slate-500">초보자 모드는 부채 1~3개 입력을 권장합니다.</p>
             ) : null}
             {profileForm.debts.length === 0 ? (
-              <p className="text-xs text-slate-500">등록된 부채가 없습니다.</p>
+              <BodyEmptyState
+                description="부채가 없다면 비워두고 진행해도 됩니다. 주택담보대출, 신용대출, 카드론처럼 월 상환이 있는 항목만 추가하세요."
+                title="등록된 부채가 없습니다."
+              />
             ) : (
               <div className="space-y-3">
                 {profileForm.debts.map((debt, index) => {
                   const estimated = estimateDebtMonthlyPaymentKrw(debt);
                   return (
-                    <div className="rounded-lg border border-slate-200 p-3" key={debt.id || `debt-${index}`}>
+                    <BodyInset className="bg-white" key={debt.id || `debt-${index}`}>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="block text-xs font-semibold text-slate-600">
+                        <label className={`block text-xs ${bodyLabelClassName}`}>
                           부채 ID
                           <input
-                            className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                            className={bodyFieldClassName}
                             value={debt.id}
                             onChange={(event) => updateDebtRow(index, { ...debt, id: event.target.value })}
                           />
                         </label>
-                        <label className="block text-xs font-semibold text-slate-600">
+                        <label className={`block text-xs ${bodyLabelClassName}`}>
                           이름
                           <input
-                            className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                            className={bodyFieldClassName}
                             value={debt.name}
                             onChange={(event) => updateDebtRow(index, { ...debt, name: event.target.value })}
                           />
                         </label>
                       </div>
                       <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                        <label className="block text-xs font-semibold text-slate-600">
+                        <label className={`block text-xs ${bodyLabelClassName}`}>
                           대출 잔액
                           <div className="mt-1 flex items-center gap-2">
                             <input
-                              className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                              className={bodyCompactFieldClassName}
                               inputMode="numeric"
                               type="text"
                               placeholder="예: 25,000,000"
@@ -2776,11 +2985,11 @@ export function PlanningWorkspaceClient({
                             <span className="text-[11px] font-medium text-slate-500">(원)</span>
                           </div>
                         </label>
-                        <label className="block text-xs font-semibold text-slate-600">
+                        <label className={`block text-xs ${bodyLabelClassName}`}>
                           금리
                           <div className="mt-1 flex items-center gap-2">
                             <input
-                              className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                              className={bodyCompactFieldClassName}
                               type="number"
                               placeholder="예: 4.8"
                               value={debt.aprPct}
@@ -2789,11 +2998,11 @@ export function PlanningWorkspaceClient({
                             <span className="text-[11px] font-medium text-slate-500">(%)</span>
                           </div>
                         </label>
-                        <label className="block text-xs font-semibold text-slate-600">
+                        <label className={`block text-xs ${bodyLabelClassName}`}>
                           최소 상환액
                           <div className="mt-1 flex items-center gap-2">
                             <input
-                              className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                              className={bodyCompactFieldClassName}
                               inputMode="numeric"
                               type="text"
                               min={0}
@@ -2805,13 +3014,13 @@ export function PlanningWorkspaceClient({
                           </div>
                         </label>
                       </div>
-                      <details className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <details className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
                         <summary className="cursor-pointer text-xs font-semibold text-slate-700">상환 조건(고급)</summary>
                         <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                          <label className="block text-xs font-semibold text-slate-600">
+                          <label className={`block text-xs ${bodyLabelClassName}`}>
                             상환 방식
                             <select
-                              className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                              className={bodyFieldClassName}
                               value={debt.repaymentType}
                               onChange={(event) => updateDebtRow(index, {
                                 ...debt,
@@ -2822,11 +3031,11 @@ export function PlanningWorkspaceClient({
                               <option value="interestOnly">이자만 상환</option>
                             </select>
                           </label>
-                          <label className="block text-xs font-semibold text-slate-600">
+                          <label className={`block text-xs ${bodyLabelClassName}`}>
                             남은 개월
                             <div className="mt-1 flex items-center gap-2">
                               <input
-                                className="h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                                className={bodyCompactFieldClassName}
                                 type="number"
                                 min={1}
                                 placeholder="예: 60"
@@ -2861,12 +3070,12 @@ export function PlanningWorkspaceClient({
                           삭제
                         </Button>
                       </div>
-                    </div>
+                    </BodyInset>
                   );
                 })}
               </div>
             )}
-          </div>
+          </BodyInset>
 
           <div className="space-y-3 rounded-xl border border-slate-200 p-3">
             <p className="text-xs font-semibold text-slate-700">목표</p>
@@ -2934,34 +3143,37 @@ export function PlanningWorkspaceClient({
                 </div>
               </div>
             ) : (
-              <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <BodyInset className="space-y-2 rounded-lg border-slate-100">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-slate-700">목표 목록</p>
                   <Button onClick={addGoalRow} size="sm" variant="outline">목표 추가</Button>
                 </div>
                 {profileForm.goals.length === 0 ? (
-                  <p className="text-xs text-slate-500">등록된 목표가 없습니다.</p>
+                  <BodyEmptyState
+                    description="비상금 외에 목돈 마련이나 은퇴 목표가 있다면 추가해 두면 결과 화면에서 달성 가능성을 함께 비교할 수 있습니다."
+                    title="등록된 목표가 없습니다."
+                  />
                 ) : (
                   <div className="space-y-2">
                     {profileForm.goals.map((goal, index) => (
                       <div className="grid gap-2 sm:grid-cols-[1fr_1.2fr_1fr_1fr_1fr_0.8fr_1fr_auto]" key={goal.id || `goal-${index}`}>
                           <input
                             aria-label={`목표 ${index + 1} ID`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             value={goal.id}
                             onChange={(event) => updateGoalRow(index, { ...goal, id: event.target.value })}
                             placeholder="goal-id"
                           />
                           <input
                             aria-label={`목표 ${index + 1} 이름`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             value={goal.name}
                             onChange={(event) => updateGoalRow(index, { ...goal, name: event.target.value })}
                             placeholder="목표 이름"
                           />
                           <input
                             aria-label={`목표 ${index + 1} 목표 금액`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             inputMode="numeric"
                             type="text"
                             value={formatGroupedIntegerInput(goal.targetAmount)}
@@ -2970,7 +3182,7 @@ export function PlanningWorkspaceClient({
                           />
                           <input
                             aria-label={`목표 ${index + 1} 현재 금액`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             inputMode="numeric"
                             type="text"
                             value={formatGroupedIntegerInput(goal.currentAmount)}
@@ -2979,14 +3191,14 @@ export function PlanningWorkspaceClient({
                           />
                           <input
                             aria-label={`목표 ${index + 1} 목표 시점`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             type="month"
                             value={monthOffsetToInput(goal.targetMonth)}
                             onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value) })}
                           />
                           <input
                             aria-label={`목표 ${index + 1} 우선순위`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             type="number"
                             min={1}
                             value={goal.priority}
@@ -2995,7 +3207,7 @@ export function PlanningWorkspaceClient({
                           />
                           <input
                             aria-label={`목표 ${index + 1} 최소 월 납입`}
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             inputMode="numeric"
                             type="text"
                             min={0}
@@ -3008,61 +3220,61 @@ export function PlanningWorkspaceClient({
                       ))}
                     </div>
                 )}
-              </div>
+              </BodyInset>
             )}
           </div>
 
-          <div className="grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+          <BodyStatusInset className="grid gap-2 text-xs" tone="success">
             <p>월 잉여: <span className="font-semibold">{formatKrw(locale, liveSummary.monthlySurplus)}</span></p>
             <p>DSR(월부채상환/수입): <span className="font-semibold">{formatPct(locale, liveSummary.dsrPct)}</span></p>
             <p>총 월상환액: <span className="font-semibold">{formatKrw(locale, liveSummary.totalMonthlyDebtPayment)}</span></p>
             <p>비상금 목표액(6개월): <span className="font-semibold">{formatKrw(locale, liveSummary.emergencyTargetKrw)}</span></p>
             <p>비상금 부족분: <span className="font-semibold">{formatKrw(locale, liveSummary.emergencyGapKrw)}</span></p>
-          </div>
+          </BodyStatusInset>
 
           {profileValidation.errors.length > 0 ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+            <BodyStatusInset tone="danger">
               <p className="font-semibold">입력 오류 ({profileValidation.errors.length})</p>
               {profileValidation.errors.map((item) => (
                 <p key={item}>- {item}</p>
               ))}
-            </div>
+            </BodyStatusInset>
           ) : null}
 
           {profileValidation.warnings.length > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <BodyStatusInset tone="warning">
               <p className="font-semibold">입력 경고 ({profileValidation.warnings.length})</p>
               {profileValidation.warnings.map((item) => (
                 <p key={item}>- {item}</p>
               ))}
-            </div>
+            </BodyStatusInset>
           ) : null}
 
           <details className="rounded-xl border border-slate-200 p-3" data-testid="planning-advanced-panel">
             <summary className="cursor-pointer text-xs font-semibold text-slate-700" data-testid="planning-advanced-toggle">고급(개발자): Profile JSON</summary>
-            <label className="mt-3 block text-xs font-semibold text-slate-600">
+            <label className={`mt-3 block text-xs ${bodyLabelClassName}`}>
               편집 (JSON)
               <textarea
-                className="mt-1 min-h-[260px] w-full rounded-xl border border-slate-300 p-3 font-mono text-xs"
+                className={bodyTextAreaClassName}
                 data-testid="planning-json-editor"
                 value={profileJsonDraft}
                 onChange={(event) => replaceProfileFromJsonText(event.target.value)}
               />
               {profileJsonError ? <p className="mt-2 text-xs text-rose-700">{profileJsonError}</p> : null}
             </label>
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className={`mt-3 ${bodyDenseActionRowClassName}`}>
               <Button onClick={() => applyProfileJsonEditorAction()} size="sm" variant="outline">Apply JSON</Button>
               <Button onClick={() => void copyProfileJsonEditorAction()} size="sm" variant="ghost">Copy</Button>
             </div>
           </details>
 
           {pendingSuggestions.length > 0 ? (
-            <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <BodyStatusInset className="space-y-3 text-xs" tone="warning">
               <p className="font-semibold">입력 정규화 제안 ({pendingSuggestions.length})</p>
               <p className="text-amber-800">선택한 항목만 반영해 저장합니다. 선택하지 않으면 원본 그대로 저장됩니다.</p>
               <div className="space-y-2">
                 {pendingSuggestions.map((suggestion) => (
-                  <label className="flex items-start gap-2" key={suggestion.code}>
+                  <label className={bodyChoiceRowClassName} key={suggestion.code}>
                     <input
                       checked={acceptedSuggestionCodes.includes(suggestion.code)}
                       onChange={(event) => toggleSuggestionCode(suggestion.code, event.target.checked)}
@@ -3072,44 +3284,44 @@ export function PlanningWorkspaceClient({
                   </label>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className={bodyDenseActionRowClassName}>
                 <Button disabled={savingProfile || !pendingProfileSave} onClick={() => void applySuggestedProfileSaveAction()} size="sm" variant="primary">선택 적용 후 저장</Button>
                 <Button disabled={savingProfile || !pendingProfileSave} onClick={() => void continueProfileSaveWithoutSuggestionsAction()} size="sm" variant="outline">변경 없이 저장</Button>
                 <Button disabled={savingProfile} onClick={() => clearPendingSuggestions()} size="sm" variant="ghost">취소</Button>
               </div>
-            </div>
+            </BodyStatusInset>
           ) : null}
 
-          <div className="flex flex-wrap gap-2">
-            <Button data-testid="planning-profile-create-button" disabled={savingProfile} onClick={() => beginProfileSave("create")} variant="primary">새로 만들기</Button>
+          <div className={bodyDenseActionRowClassName}>
+            <Button data-testid="planning-profile-create-button" disabled={savingProfile} id="planning-profile-create-button" onClick={() => beginProfileSave("create")} variant="primary">새로 만들기</Button>
             <Button disabled={savingProfile || !selectedProfileId} onClick={() => beginProfileSave("duplicate")} variant="outline">복제</Button>
-            <Button disabled={savingProfile || !selectedProfileId} onClick={() => beginProfileSave("update")} variant="outline">저장</Button>
+            <Button data-testid="planning-profile-update-button" disabled={savingProfile || !selectedProfileId} id="planning-profile-update-button" onClick={() => beginProfileSave("update")} variant="outline">저장</Button>
             <Button disabled={savingProfile || !selectedProfileId} onClick={() => void deleteProfileAction()} variant="ghost">삭제</Button>
-            <Button disabled={loadingProfiles} onClick={() => void loadProfiles(selectedProfileId)} variant="ghost">목록 새로고침</Button>
+            <Button data-testid="planning-profile-refresh-button" disabled={loadingProfiles} id="planning-profile-refresh-button" onClick={() => void loadProfiles(selectedProfileId)} variant="ghost">목록 새로고침</Button>
             <Button disabled={savingProfile} onClick={loadSampleProfileAction} variant="ghost">샘플 프로필 불러오기</Button>
           </div>
         </ProfileV2Form>
 
         <Card className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900">실행 옵션</h2>
-            <span className="text-xs text-slate-500">기본값만으로도 실행 가능합니다.</span>
-          </div>
+          <BodySectionHeading
+            description="기본값만으로도 실행 가능합니다."
+            title="실행 옵션"
+          />
 
           <SnapshotPicker
             advancedEnabled={!beginnerMode}
             items={availableSnapshotItems}
-            value={snapshotSelection}
+            value={effectiveSnapshotSelection}
             onChange={(next) => setSnapshotSelection(next)}
           />
           {snapshotItemsWarning ? (
             <p className="text-xs text-amber-700">{snapshotItemsWarning}</p>
           ) : null}
 
-          <label className="block text-xs font-semibold text-slate-600">
+          <label className={`block text-xs ${bodyLabelClassName}`}>
             분배 정책
             <select
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+              className={bodyFieldClassName}
               value={policyId}
               onChange={(event) => setPolicyId(event.target.value as AllocationPolicyId)}
             >
@@ -3119,16 +3331,16 @@ export function PlanningWorkspaceClient({
             </select>
           </label>
 
-          <label className="block text-xs font-semibold text-slate-600">
+          <label className={`block text-xs ${bodyLabelClassName}`}>
             실행 제목
             <input
-              className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+              className={bodyFieldClassName}
               value={runTitle}
               onChange={(event) => setRunTitle(event.target.value)}
             />
           </label>
 
-          <label className="block text-xs font-semibold text-slate-600">
+          <label className={`block text-xs ${bodyLabelClassName}`}>
             기간 (개월)
             {beginnerMode ? (
               <div className="mt-2 grid grid-cols-2 gap-2">
@@ -3149,7 +3361,7 @@ export function PlanningWorkspaceClient({
               </div>
             ) : (
               <input
-                className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                className={bodyFieldClassName}
                 value={horizonMonths}
                 onChange={(event) => setHorizonMonths(event.target.value)}
               />
@@ -3164,78 +3376,78 @@ export function PlanningWorkspaceClient({
           ) : null}
 
           {!beginnerMode ? (
-            <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+            <BodyInset className="space-y-3">
               <p className="text-xs font-semibold text-slate-700">가정(Assumptions) override</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-xs font-semibold text-slate-600">
+                <label className={`block text-xs ${bodyLabelClassName}`}>
                   인플레이션(%)
                   <input
-                    className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                    className={bodyFieldClassName}
                     type="number"
                     value={assumptionsForm.inflationPct}
                     onChange={(event) => updateAssumptionsField("inflationPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.inflationPct))}
                   />
                 </label>
-                <label className="block text-xs font-semibold text-slate-600">
+                <label className={`block text-xs ${bodyLabelClassName}`}>
                   기대수익률(%)
                   <input
-                    className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                    className={bodyFieldClassName}
                     type="number"
                     value={assumptionsForm.expectedReturnPct}
                     onChange={(event) => updateAssumptionsField("expectedReturnPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.expectedReturnPct))}
                   />
                 </label>
-                <label className="block text-xs font-semibold text-slate-600">
+                <label className={`block text-xs ${bodyLabelClassName}`}>
                   현금수익률(%)
                   <input
-                    className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                    className={bodyFieldClassName}
                     type="number"
                     value={assumptionsForm.cashReturnPct}
                     onChange={(event) => updateAssumptionsField("cashReturnPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.cashReturnPct))}
                   />
                 </label>
-                <label className="block text-xs font-semibold text-slate-600">
+                <label className={`block text-xs ${bodyLabelClassName}`}>
                   인출률(%)
                   <input
-                    className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                    className={bodyFieldClassName}
                     type="number"
                     value={assumptionsForm.withdrawalRatePct}
                     onChange={(event) => updateAssumptionsField("withdrawalRatePct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.withdrawalRatePct))}
                   />
                 </label>
               </div>
-            </div>
+            </BodyInset>
           ) : null}
 
           {beginnerMode ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <BodyInset className="text-xs text-slate-700">
               <p>시나리오: ON</p>
               <p>Monte Carlo: OFF</p>
               <p>Actions: ON (상품 후보 OFF)</p>
               <p>Debt 분석: ON</p>
-            </div>
+            </BodyInset>
           ) : (
             <div className="grid gap-2 text-sm">
-              <label className="flex items-center gap-2 text-slate-700">
+              <label className={bodyChoiceRowClassName}>
                 <input checked={runScenariosEnabled} onChange={(event) => setRunScenariosEnabled(event.target.checked)} type="checkbox" />
                 시나리오 실행
               </label>
               {!monteCarloServerDisabled ? (
-                <label className="flex items-center gap-2 text-slate-700">
+                <label className={bodyChoiceRowClassName}>
                   <input checked={runMonteCarloEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunMonteCarloEnabled(event.target.checked)} type="checkbox" />
                   몬테카를로 실행
                 </label>
               ) : null}
-              <label className="flex items-center gap-2 text-slate-700">
+              <label className={bodyChoiceRowClassName}>
                 <input checked={runActionsEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunActionsEnabled(event.target.checked)} type="checkbox" />
                 실행 계획 생성
               </label>
-              <label className="flex items-center gap-2 text-slate-700">
+              <label className={bodyChoiceRowClassName}>
                 <input checked={runDebtEnabled} onChange={(event) => setRunDebtEnabled(event.target.checked)} type="checkbox" />
                 부채 분석
               </label>
               {!optimizerServerDisabled ? (
-                <label className="flex items-center gap-2 text-slate-700">
+                <label className={bodyChoiceRowClassName}>
                   <input checked={runOptimizeEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunOptimizeEnabled(event.target.checked)} type="checkbox" />
                   실험용 최적화
                 </label>
@@ -3255,13 +3467,13 @@ export function PlanningWorkspaceClient({
 
           {!beginnerMode && runMonteCarloEnabled ? (
             <div className="grid grid-cols-2 gap-3">
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 몬테카를로 paths
-                <input className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm" value={monteCarloPaths} onChange={(event) => setMonteCarloPaths(event.target.value)} />
+                <input className={bodyFieldClassName} value={monteCarloPaths} onChange={(event) => setMonteCarloPaths(event.target.value)} />
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 몬테카를로 seed
-                <input className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm" value={monteCarloSeed} onChange={(event) => setMonteCarloSeed(event.target.value)} />
+                <input className={bodyFieldClassName} value={monteCarloSeed} onChange={(event) => setMonteCarloSeed(event.target.value)} />
               </label>
             </div>
           ) : null}
@@ -3269,24 +3481,24 @@ export function PlanningWorkspaceClient({
           {!beginnerMode && runActionsEnabled ? (
             <div className="grid grid-cols-2 gap-3">
               {!includeProductsServerDisabled ? (
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                <label className={bodyChoiceRowClassName}>
                   <input checked={includeProducts} disabled={saveBlockedByHealth} onChange={(event) => setIncludeProducts(event.target.checked)} type="checkbox" />
                   상품 후보 포함
                 </label>
               ) : <div />}
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 후보 최대 개수
-                <input className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm" value={maxCandidatesPerAction} onChange={(event) => setMaxCandidatesPerAction(event.target.value)} />
+                <input className={bodyFieldClassName} value={maxCandidatesPerAction} onChange={(event) => setMaxCandidatesPerAction(event.target.value)} />
               </label>
             </div>
           ) : null}
 
           {effectiveRunDebtEnabled ? (
-            <div className="space-y-3 rounded-xl border border-slate-200 p-3">
-              <label className="block text-xs font-semibold text-slate-600">
+            <BodyInset className="space-y-3">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 부채 추가상환 금액(KRW)
                 <input
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  className={bodyFieldClassName}
                   inputMode="numeric"
                   type="text"
                   value={formatGroupedIntegerInput(toFiniteNumber(debtExtraPaymentKrw, 0))}
@@ -3294,19 +3506,22 @@ export function PlanningWorkspaceClient({
                 />
               </label>
               {!beginnerMode ? (
-                <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                <BodyInset className="space-y-2 rounded-lg border-slate-100 bg-white">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold text-slate-700">리파이낸스 제안</p>
                     <Button onClick={addDebtOfferRow} size="sm" variant="outline">제안 추가</Button>
                   </div>
                   {debtOfferRows.length === 0 ? (
-                    <p className="text-xs text-slate-500">리파이낸스 제안을 입력하지 않았습니다.</p>
+                    <BodyEmptyState
+                      description="현재 부채를 다른 조건으로 갈아탈 가능성이 있을 때만 입력하세요. 없으면 비워두고 계산해도 됩니다."
+                      title="리파이낸스 제안을 입력하지 않았습니다."
+                    />
                   ) : (
                     <div className="space-y-2">
                       {debtOfferRows.map((row, index) => (
                         <div className="grid gap-2 sm:grid-cols-[1.1fr_1fr_0.8fr_0.8fr_auto]" key={row.rowId}>
                           <select
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             value={row.liabilityId}
                             onChange={(event) => updateDebtOfferRow(index, { ...row, liabilityId: event.target.value })}
                           >
@@ -3316,20 +3531,20 @@ export function PlanningWorkspaceClient({
                             ))}
                           </select>
                           <input
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             value={row.title}
                             onChange={(event) => updateDebtOfferRow(index, { ...row, title: event.target.value })}
                             placeholder="제안 제목(선택)"
                           />
                           <input
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             type="number"
                             value={row.newAprPct}
                             onChange={(event) => updateDebtOfferRow(index, { ...row, newAprPct: toFiniteNumber(event.target.value) })}
                             placeholder="신규 금리(%)"
                           />
                           <input
-                            className="h-9 rounded-lg border border-slate-300 px-2 text-xs"
+                            className={bodyCompactFieldClassName}
                             inputMode="numeric"
                             type="text"
                             value={formatGroupedIntegerInput(row.feeKrw)}
@@ -3342,40 +3557,40 @@ export function PlanningWorkspaceClient({
                     </div>
                   )}
                   {debtOfferInvalidIds.length > 0 ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <BodyStatusInset className="text-xs" tone="warning">
                       <p className="font-semibold">DEBT_OFFER_LIABILITY_NOT_FOUND</p>
                       <p className="mt-1">다음 liabilityId가 현재 프로필 부채 목록에 없습니다: {debtOfferInvalidIds.join(", ")}</p>
-                    </div>
+                    </BodyStatusInset>
                   ) : null}
-                </div>
+                </BodyInset>
               ) : null}
-            </div>
+            </BodyInset>
           ) : null}
 
           {!beginnerMode && runOptimizeEnabled ? (
-            <div className="space-y-3 rounded-xl border border-indigo-200 bg-indigo-50 p-3">
+            <BodyInset className="space-y-3 border-indigo-200 bg-indigo-50">
               <p className="text-xs font-semibold text-indigo-900">실험용 최적화기</p>
               <p className="text-xs text-indigo-800">후보 전략 2~5개를 비교만 제공합니다. 자동 적용은 하지 않습니다.</p>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 Optimizer 제약 JSON
                 <textarea
-                  className="mt-1 min-h-[90px] w-full rounded-xl border border-slate-300 p-3 font-mono text-xs"
+                  className={`${bodyTextAreaClassName} min-h-[90px]`}
                   value={optimizerConstraintsJson}
                   onChange={(event) => setOptimizerConstraintsJson(event.target.value)}
                 />
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 Optimizer 파라미터 JSON
                 <textarea
-                  className="mt-1 min-h-[90px] w-full rounded-xl border border-slate-300 p-3 font-mono text-xs"
+                  className={`${bodyTextAreaClassName} min-h-[90px]`}
                   value={optimizerKnobsJson}
                   onChange={(event) => setOptimizerKnobsJson(event.target.value)}
                 />
               </label>
-              <label className="block text-xs font-semibold text-slate-600">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 Optimizer 탐색 JSON
                 <textarea
-                  className="mt-1 min-h-[90px] w-full rounded-xl border border-slate-300 p-3 font-mono text-xs"
+                  className={`${bodyTextAreaClassName} min-h-[90px]`}
                   value={optimizerSearchJson}
                   onChange={(event) => setOptimizerSearchJson(event.target.value)}
                 />
@@ -3383,26 +3598,26 @@ export function PlanningWorkspaceClient({
               <Button disabled={runningOptimize || optimizerServerDisabled || saveBlockedByHealth} onClick={() => void runOptimizeAction()} size="sm" variant="outline">
                 {runningOptimize ? "최적화 실행 중..." : "최적화 실행"}
               </Button>
-            </div>
+            </BodyInset>
           ) : null}
 
           {!beginnerMode ? (
             <details className="rounded-xl border border-slate-200 p-3">
               <summary className="cursor-pointer text-xs font-semibold text-slate-700">고급(개발자): JSON 편집기</summary>
               <div className="mt-3 space-y-3">
-                <label className="block text-xs font-semibold text-slate-600">
+                <label className={`block text-xs ${bodyLabelClassName}`}>
                   가정 Override JSON
                   <textarea
-                    className="mt-1 min-h-[120px] w-full rounded-xl border border-slate-300 p-3 font-mono text-xs"
+                    className={`${bodyTextAreaClassName} min-h-[120px]`}
                     value={assumptionsOverrideJson}
                     onChange={(event) => replaceAssumptionsFromJsonText(event.target.value)}
                   />
                   {assumptionsJsonError ? <p className="mt-2 text-xs text-rose-700">{assumptionsJsonError}</p> : null}
                 </label>
-                <label className="block text-xs font-semibold text-slate-600">
+                <label className={`block text-xs ${bodyLabelClassName}`}>
                   리파이낸스 제안 JSON
                   <textarea
-                    className="mt-1 min-h-[100px] w-full rounded-xl border border-slate-300 p-3 font-mono text-xs"
+                    className={`${bodyTextAreaClassName} min-h-[100px]`}
                     value={debtOffersJson}
                     onChange={(event) => replaceDebtOffersFromJsonText(event.target.value)}
                   />
@@ -3413,7 +3628,7 @@ export function PlanningWorkspaceClient({
           ) : null}
 
           {healthWarnings.length > 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <BodyStatusInset className="text-xs" tone="warning">
               <p className="font-semibold">가정 건강도 경고 ({healthWarnings.length})</p>
               <div className="mt-2 space-y-1">
                 {healthWarnings.map((warning) => (
@@ -3422,21 +3637,21 @@ export function PlanningWorkspaceClient({
               </div>
               {healthWarnings.some((warning) => warning.code === "SNAPSHOT_STALE" || warning.code === "SNAPSHOT_VERY_STALE" || warning.code === "SNAPSHOT_MISSING") ? (
                 <div className="mt-2">
-                  <Link className="font-semibold text-emerald-700 underline" href="/ops/assumptions">/ops/assumptions로 이동해 스냅샷 동기화</Link>
+                  <BodyActionLink href="/ops/assumptions">/ops/assumptions로 이동해 스냅샷 동기화</BodyActionLink>
                 </div>
               ) : null}
-            </div>
+            </BodyStatusInset>
           ) : null}
 
           {preflightHasBlockers ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900" id="planning-preflight-block-reason">
+            <BodyStatusInset className="text-xs" id="planning-preflight-block-reason" tone="danger">
               <p className="font-semibold">사전 점검 차단 ({preflightBlockIssues.length})</p>
               <div className="mt-2 space-y-1">
                 {preflightBlockIssues.map((issue, index) => (
                   <p key={`${issue.code}-${index}`}>[{issue.code}] {formatPreflightIssue(issue)}</p>
                 ))}
               </div>
-            </div>
+            </BodyStatusInset>
           ) : null}
           {preflightWarnIssues.length > 0 ? (
             <p className="text-xs text-amber-700">
@@ -3446,12 +3661,12 @@ export function PlanningWorkspaceClient({
           ) : null}
 
           {hasCriticalHealth ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
-              <label className="flex items-start gap-2">
+            <BodyStatusInset className="text-xs" tone="danger">
+              <label className={bodyChoiceRowClassName}>
                 <input checked={healthAck} onChange={(event) => setHealthAck(event.target.checked)} type="checkbox" />
                 <span>위 경고를 확인했고, 이 가정으로 계산 결과가 왜곡될 수 있음을 이해했습니다.</span>
               </label>
-            </div>
+            </BodyStatusInset>
           ) : null}
 
           {healthDisabledReason ? (
@@ -3461,15 +3676,15 @@ export function PlanningWorkspaceClient({
             <p className="text-xs text-amber-700">Monte Carlo는 예산 초과로 생략되었습니다.</p>
           ) : null}
 
-          <div className="space-y-3 rounded-xl border border-slate-200 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-slate-700">What-if 시나리오</p>
-              <p className="text-[11px] text-slate-500">추천이 아닌 기준 대비 비교 실행</p>
-            </div>
-            <label className="block text-xs font-semibold text-slate-600">
+          <BodyInset className="space-y-3">
+            <BodySectionHeading
+              description="추천이 아닌 기준 대비 비교 실행"
+              title="What-if 시나리오"
+            />
+            <label className={`block text-xs ${bodyLabelClassName}`}>
               기준 실행(Baseline)
               <select
-                className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                className={bodyFieldClassName}
                 value={baselineRunId}
                 onChange={(event) => setBaselineRunId(event.target.value)}
               >
@@ -3482,10 +3697,10 @@ export function PlanningWorkspaceClient({
               </select>
             </label>
             {loadingBaselineRuns ? <p className="text-[11px] text-slate-500">기준 실행 목록을 불러오는 중입니다...</p> : null}
-            <label className="block text-xs font-semibold text-slate-600">
+            <label className={`block text-xs ${bodyLabelClassName}`}>
               시나리오 템플릿
               <select
-                className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                className={bodyFieldClassName}
                 value={scenarioTemplateId}
                 onChange={(event) => setScenarioTemplateId(event.target.value as ScenarioTemplateId)}
               >
@@ -3496,10 +3711,14 @@ export function PlanningWorkspaceClient({
                 ))}
               </select>
             </label>
-            <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+            <BodyInset className="rounded-lg border-slate-100 bg-white px-3 py-2">
               <p className="text-[11px] font-semibold text-slate-700">적용 patch</p>
               {scenarioPatchesPreview.length < 1 ? (
-                <p className="mt-1 text-[11px] text-slate-500">적용할 patch가 없습니다.</p>
+                <BodyEmptyState
+                  className="mt-2 border-none bg-transparent px-0 py-2 text-left"
+                  description="선택한 템플릿이 현재 입력값에서 바꾸는 항목이 있으면 여기 표시됩니다."
+                  title="적용할 patch가 없습니다."
+                />
               ) : (
                 <ul className="mt-1 space-y-1 text-[11px] text-slate-600">
                   {scenarioPatchesPreview.map((patch, index) => (
@@ -3511,17 +3730,17 @@ export function PlanningWorkspaceClient({
                   ))}
                 </ul>
               )}
-            </div>
-          </div>
+            </BodyInset>
+          </BodyInset>
 
-          <div className="rounded-xl border border-slate-200 p-3" data-testid="run-stages-timeline">
+          <BodyInset data-testid="run-stages-timeline">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold text-slate-700">Pipeline</p>
               <p className="text-xs text-slate-500">{running ? "단계 실행 중" : "최근 실행 기준"}</p>
             </div>
             <div className="grid gap-2 md:grid-cols-2">
               {currentStepStatuses.map((step) => (
-                <div className="rounded-lg border px-3 py-2 text-xs" data-testid={`stage-${step.id}`} key={step.id}>
+                <BodyInset className="rounded-lg bg-white px-3 py-2 text-xs" data-testid={`stage-${step.id}`} key={step.id}>
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-slate-800">{STEP_LABELS[step.id]}</span>
                     <span
@@ -3537,13 +3756,13 @@ export function PlanningWorkspaceClient({
                     </span>
                   </div>
                   {step.message ? <p className="mt-1 text-slate-600">{step.message}</p> : null}
-                </div>
+                </BodyInset>
               ))}
             </div>
-          </div>
+          </BodyInset>
 
           {preflightWarnIssues.length > 0 ? (
-            <label className="flex items-center gap-2 text-xs text-slate-700" id="planning-save-warning-confirm-hint">
+            <label className={bodyChoiceRowClassName} id="planning-save-warning-confirm-hint">
               <input
                 checked={saveWarningConfirmed}
                 disabled={savingRun || preflightHasBlockers}
@@ -3554,7 +3773,7 @@ export function PlanningWorkspaceClient({
             </label>
           ) : null}
 
-          <label className="flex items-center gap-2 text-xs text-slate-700">
+          <label className={bodyChoiceRowClassName}>
             <input
               checked={autoSaveRunAfterSuccess}
               disabled={running || savingRun || saveBlockedByHealth || preflightHasBlockers || preflightWarnIssues.length > 0}
@@ -3564,7 +3783,7 @@ export function PlanningWorkspaceClient({
             실행 성공 시 실행 기록 자동 저장
           </label>
 
-          <div className="flex flex-wrap gap-2">
+          <div className={bodyDenseActionRowClassName}>
             <Button
               aria-describedby={preflightHasBlockers ? "planning-preflight-block-reason" : undefined}
               data-testid="run-button"
@@ -3583,7 +3802,7 @@ export function PlanningWorkspaceClient({
             </Button>
             <Button
               aria-describedby={saveButtonDescribedBy}
-              disabled={savingRun || !selectedProfileId || !runResult?.simulate || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
+              disabled={savingRun || !selectedProfileId || !runResult?.hasSimulateResult || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
               onClick={() => void saveRunAction()}
               variant="outline"
             >
@@ -3648,7 +3867,7 @@ export function PlanningWorkspaceClient({
             />
           </div>
 
-          <Card className="text-xs text-slate-700">
+          <BodyInset className="text-xs text-slate-700">
             <details>
               <summary className="cursor-pointer font-semibold text-slate-900">결과 해석 가이드</summary>
               <div className="mt-3 space-y-2">
@@ -3659,7 +3878,7 @@ export function PlanningWorkspaceClient({
                 <p><span className="font-semibold">실행 계획 후보</span>: 실행 비교용 제안 목록입니다. 특정 상품 가입 권유가 아닙니다.</p>
               </div>
             </details>
-          </Card>
+          </BodyInset>
 
           <Card>
             <div className="flex flex-wrap gap-2">
@@ -3699,10 +3918,7 @@ export function PlanningWorkspaceClient({
                   goals={goalsForInsight}
                   outcomes={{
                     ...(actionsTopForInsight.length > 0 ? { actionsTop: actionsTopForInsight } : {}),
-                    snapshotMeta: {
-                      missing: runResult?.meta?.snapshot?.missing === true,
-                      staleDays: runResult?.meta?.health?.snapshotStaleDays,
-                    },
+                    snapshotMeta: workspaceSnapshotState.outcomesMeta,
                     monteCarlo: {
                       retirementDepletionBeforeEnd: monteDepletionProb,
                     },
@@ -3710,7 +3926,7 @@ export function PlanningWorkspaceClient({
                   }}
                 />
 
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2" data-testid="planning-metric-evidence">
+                <BodyInset data-testid="planning-metric-evidence">
                   <p className="text-xs font-semibold text-slate-900">계산 근거</p>
                   <p className="mt-1 text-[11px] text-slate-600">현재 입력값과 선택한 정책 기준으로 계산합니다.</p>
                   <div className="mt-2 space-y-2">
@@ -3720,66 +3936,68 @@ export function PlanningWorkspaceClient({
                       formatNumber={(value) => formatNumber(locale, value)}
                     />
                   </div>
-                </div>
+                </BodyInset>
 
                 <DisclosuresPanel report={combinedNormalizationReport} />
 
                 <div className="grid gap-2 md:grid-cols-5">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  <BodyInset>
                     말기 순자산: <span className="font-semibold">{formatKrw(locale, summaryEndNetWorthKrw)}</span>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  </BodyInset>
+                  <BodyInset>
                     최저 현금(월): <span className="font-semibold">{formatKrw(locale, summaryWorstCashKrw)} (M{summaryWorstCashMonth + 1})</span>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  </BodyInset>
+                  <BodyInset>
                     목표 달성: <span className="font-semibold">{summaryGoalsText}</span>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  </BodyInset>
+                  <BodyInset>
                     DSR: <span className="font-semibold">{typeof summaryDsr === "number" ? formatRatioPct(locale, summaryDsr) : "-"}</span>
-                  </div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                  </BodyInset>
+                  <BodyInset>
                     치명 경고: <span className="font-semibold">{summaryCriticalWarnings}</span>
-                  </div>
+                  </BodyInset>
                 </div>
 
                 {Object.keys(summaryEvidence).length > 0 ? (
-                  <details className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700" data-testid="planning-summary-evidence">
+                  <details className="text-xs text-slate-700" data-testid="planning-summary-evidence">
                     <summary className="cursor-pointer font-semibold text-slate-900">요약 지표 계산 근거</summary>
-                    <div className="mt-2 space-y-2">
-                      {Object.entries(summaryEvidence).map(([metric, evidence]) => (
-                        evidence ? (
-                          <article className="rounded-md border border-slate-200 bg-white px-3 py-2" key={metric}>
-                            <p className="font-semibold text-slate-900">{metric}</p>
-                            <p className="mt-1 text-[11px] text-slate-600">공식: {evidence.formula}</p>
-                            <p className="mt-1 text-[11px] text-slate-600">입력:</p>
-                            <ul className="list-disc pl-4">
-                              {Object.entries(evidence.inputs).map(([key, value]) => (
-                                <li key={`${metric}:${key}`}>{key}: {formatDisclosureValue(value)}</li>
-                              ))}
-                            </ul>
-                            <p className="mt-1 text-[11px] text-slate-600">가정:</p>
-                            <ul className="list-disc pl-4">
-                              {evidence.assumptions.map((assumption, index) => (
-                                <li key={`${metric}:assumption:${index}`}>{assumption}</li>
-                              ))}
-                            </ul>
-                          </article>
-                        ) : null
-                      ))}
-                    </div>
+                    <BodyInset className="mt-2">
+                      <div className="space-y-2">
+                        {Object.entries(summaryEvidence).map(([metric, evidence]) => (
+                          evidence ? (
+                            <BodyInset className="bg-white" key={metric}>
+                              <p className="font-semibold text-slate-900">{metric}</p>
+                              <p className="mt-1 text-[11px] text-slate-600">공식: {evidence.formula}</p>
+                              <p className="mt-1 text-[11px] text-slate-600">입력:</p>
+                              <ul className="list-disc pl-4">
+                                {Object.entries(evidence.inputs).map(([key, value]) => (
+                                  <li key={`${metric}:${key}`}>{key}: {formatDisclosureValue(value)}</li>
+                                ))}
+                              </ul>
+                              <p className="mt-1 text-[11px] text-slate-600">가정:</p>
+                              <ul className="list-disc pl-4">
+                                {evidence.assumptions.map((assumption, index) => (
+                                  <li key={`${metric}:assumption:${index}`}>{assumption}</li>
+                                ))}
+                              </ul>
+                            </BodyInset>
+                          ) : null
+                        ))}
+                      </div>
+                    </BodyInset>
                   </details>
                 ) : null}
 
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <BodyInset>
                   <p className="font-semibold text-slate-900">Key Findings</p>
                   <div className="mt-1 space-y-1">
                     {keyFindings.slice(0, 3).map((line, index) => (
                       <p key={`finding-${index}`}>- {line}</p>
                     ))}
                   </div>
-                </div>
+                </BodyInset>
 
-                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <BodyInset>
                   <p className="font-semibold text-slate-900">Warnings Summary (Top 5)</p>
                   {warningsSummaryTop5.length === 0 ? (
                     <p className="mt-1">경고가 없습니다.</p>
@@ -3792,35 +4010,34 @@ export function PlanningWorkspaceClient({
                       ))}
                     </div>
                   )}
-                </div>
+                </BodyInset>
 
                 <div className="grid gap-2 md:grid-cols-2">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">{t(locale, "SUMMARY_LABEL_GENERATED_AT")}: <span className="font-semibold">{formatDateTime(locale, resultDto?.meta.generatedAt)}</span></div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">{t(locale, "SUMMARY_LABEL_SNAPSHOT_ID")}: <span className="font-semibold">{resultDto?.meta.snapshot.id ?? "latest"}</span></div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">{t(locale, "SUMMARY_LABEL_SNAPSHOT_AS_OF")}: <span className="font-semibold">{resultDto?.meta.snapshot.asOf ?? "-"}</span></div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">{t(locale, "SUMMARY_LABEL_SNAPSHOT_FETCHED_AT")}: <span className="font-semibold">{formatDateTime(locale, resultDto?.meta.snapshot.fetchedAt)}</span></div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">snapshot staleDays: <span className="font-semibold">{formatNumber(locale, resultDto?.meta.health?.snapshotStaleDays)}</span></div>
-                  <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">snapshot missing: <span className="font-semibold">{resultDto?.meta.snapshot.missing ? "true" : "false"}</span></div>
+                  <BodyInset>{t(locale, "SUMMARY_LABEL_GENERATED_AT")}: <span className="font-semibold">{formatDateTime(locale, resultDto?.meta.generatedAt)}</span></BodyInset>
+                  <BodyInset>{t(locale, "SUMMARY_LABEL_SNAPSHOT_ID")}: <span className="font-semibold">{resultDto?.meta.snapshot.id ?? "latest"}</span></BodyInset>
+                  <BodyInset>{t(locale, "SUMMARY_LABEL_SNAPSHOT_AS_OF")}: <span className="font-semibold">{resultDto?.meta.snapshot.asOf ?? "-"}</span></BodyInset>
+                  <BodyInset>{t(locale, "SUMMARY_LABEL_SNAPSHOT_FETCHED_AT")}: <span className="font-semibold">{formatDateTime(locale, resultDto?.meta.snapshot.fetchedAt)}</span></BodyInset>
+                  <BodyInset>snapshot staleDays: <span className="font-semibold">{formatNumber(locale, resultDto?.meta.health?.snapshotStaleDays)}</span></BodyInset>
+                  <BodyInset>snapshot missing: <span className="font-semibold">{resultDto?.meta.snapshot.missing ? "true" : "false"}</span></BodyInset>
                 </div>
 
                 {currentStepStatuses.some((step) => step.state === "FAILED") ? (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+                  <BodyStatusInset tone="warning">
                     부분 실패 단계: {currentStepStatuses.filter((step) => step.state === "FAILED").map((step) => STEP_LABELS[step.id]).join(", ")}
-                  </div>
+                  </BodyStatusInset>
                 ) : null}
                 {savedRun ? (
-                  <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-900">
+                  <BodyStatusInset tone="success">
                     저장된 실행 기록: {savedRun.id}
                     {" · "}
-                    <Link className="underline" href={runsPageHref}>/planning/runs로 이동</Link>
+                    <BodyActionLink href={runsPageHref}>/planning/runs로 이동</BodyActionLink>
                     {" · "}
-                    <Link
-                      className="underline"
+                    <BodyActionLink
                       href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(savedRun.id)}`, selectedProfileId)}
                     >
                       리포트 보기
-                    </Link>
-                  </div>
+                    </BodyActionLink>
+                  </BodyStatusInset>
                 ) : null}
               </div>
             ) : null}
@@ -3829,27 +4046,22 @@ export function PlanningWorkspaceClient({
               <div className="mt-4 space-y-3 text-xs text-slate-700">
                 <h3 className="font-semibold text-slate-900">{t(locale, "CHARTS_HEADER")}</h3>
                 {chartMode === "none" ? (
-                  <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                    {t(locale, "CHART_NOT_AVAILABLE")}
-                  </p>
+                  <BodyEmptyState title={t(locale, "CHART_NOT_AVAILABLE")} />
                 ) : (
                   <PlanningMiniCharts locale={locale} mode={chartMode} points={chartPoints} />
                 )}
 
-                <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <BodyInset>
                   해석: 상태 배지와 아래 표를 함께 보면 반복 경고, 목표 부족액, 현금흐름 악화 구간을 빠르게 확인할 수 있습니다.
-                </p>
+                </BodyInset>
 
                 <WarningsTable warnings={aggregatedWarnings} />
                 <GoalsTable locale={locale} goals={goalTableRows} />
                 <TimelineSummaryTable locale={locale} rows={timelineSummaryRows} />
-                {!beginnerMode ? (
+                {warningsGoalsDebugSections.length > 0 ? (
                   <AdvancedJsonPanel
-                    sections={[
-                      { label: "warnings (raw)", value: simulateWarnings },
-                      { label: "goalStatus (raw)", value: simulateGoals },
-                      { label: "timeline (raw)", value: simulateTimeline },
-                    ]}
+                    sections={warningsGoalsDebugSections}
+                    title="고급 보기 (canonical 요약)"
                   />
                 ) : null}
               </div>
@@ -3858,39 +4070,39 @@ export function PlanningWorkspaceClient({
             {activeTab === "scenarios" ? (
               <div className="mt-4 space-y-3 text-xs text-slate-700">
                 {scenariosStatus.state === "FAILED" ? (
-                  <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-rose-900">
+                  <BodyStatusInset tone="danger">
                     시나리오 단계 실패: {scenariosStatus.message ?? "시나리오 계산에 실패했습니다."}
-                  </p>
+                  </BodyStatusInset>
                 ) : !hasScenariosData ? (
-                  <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">시나리오 결과가 없습니다.</p>
+                  <BodyEmptyState title="시나리오 결과가 없습니다" />
                 ) : (
                   <>
-                    <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <BodyInset>
                       해석: 기준 대비 순자산 변화와 목표 달성 변화를 함께 보면 어떤 가정이 결과를 악화시키는지 빠르게 파악할 수 있습니다.
-                    </p>
+                    </BodyInset>
 
                     <div className="grid gap-2 md:grid-cols-4">
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                        기준 말기 순자산: <span className="font-semibold">{formatKrw(locale, Number(scenariosBaseSummary.endNetWorth ?? 0))}</span>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      <BodyInset>
+                        기준 말기 순자산: <span className="font-semibold">{formatKrw(locale, Number(scenariosBaseSummary.endNetWorthKrw ?? 0))}</span>
+                      </BodyInset>
+                      <BodyInset>
                         기준 최저 현금: <span className="font-semibold">{formatKrw(locale, Number(scenariosBaseSummary.worstCashKrw ?? 0))}</span>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      </BodyInset>
+                      <BodyInset>
                         기준 목표 달성: <span className="font-semibold">{formatNumber(locale, scenariosBaseSummary.goalsAchieved)}</span>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      </BodyInset>
+                      <BodyInset>
                         기준 경고 수: <span className="font-semibold">{formatNumber(locale, scenariosBaseSummary.warningsCount)}</span>
-                      </div>
+                      </BodyInset>
                     </div>
 
                     <WarningsTable warnings={aggregateGuideWarnings(scenariosBaseWarnings)} />
 
                     <h3 className="font-semibold text-slate-900">시나리오 비교 표</h3>
                     {scenarioComparisonRows.length === 0 ? (
-                      <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">시나리오 결과가 없습니다.</p>
+                      <BodyEmptyState title="시나리오 결과가 없습니다" />
                     ) : (
-                      <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <BodyTableFrame>
                         <table className="min-w-full divide-y divide-slate-200">
                           <thead className="bg-slate-50">
                             <tr>
@@ -3921,15 +4133,13 @@ export function PlanningWorkspaceClient({
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </BodyTableFrame>
                     )}
 
-                    {!beginnerMode ? (
+                    {scenariosDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
-                        sections={[
-                          { label: "scenario base (raw)", value: scenariosBase },
-                          { label: "scenario list (raw)", value: scenariosList },
-                        ]}
+                        sections={scenariosDebugSections}
+                        title="고급 보기 (scenario summary)"
                       />
                     ) : null}
                   </>
@@ -3940,23 +4150,23 @@ export function PlanningWorkspaceClient({
             {activeTab === "monteCarlo" ? (
               <div className="mt-4 space-y-3 text-xs text-slate-700">
                 {monteCarloStatus.state === "FAILED" ? (
-                  <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-rose-900">
+                  <BodyStatusInset tone="danger">
                     몬테카를로 단계 실패: {monteCarloStatus.message ?? "몬테카를로 계산에 실패했습니다."}
-                  </p>
+                  </BodyStatusInset>
                 ) : monteCarloStatus.state === "SKIPPED" ? (
-                  <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+                  <BodyStatusInset tone="warning">
                     몬테카를로 단계 생략: {monteCarloStatus.message ?? "실행 조건에 의해 생략되었습니다."}
-                  </p>
+                  </BodyStatusInset>
                 ) : !hasMonteCarloData || Object.keys(monteData).length === 0 ? (
-                  <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">몬테카를로 결과가 없습니다.</p>
+                  <BodyEmptyState title="몬테카를로 결과가 없습니다" />
                 ) : (
                   <>
-                    <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <BodyInset>
                       {typeof monteDepletionProb === "number"
                         ? `은퇴 자산 고갈 확률: ${formatPct(locale, monteDepletionProb * 100)} (모델 기반, 보장 아님)`
                         : "고갈 확률 지표가 제공되지 않았습니다."}
-                    </p>
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    </BodyInset>
+                    <BodyTableFrame>
                       <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                           <tr>
@@ -3981,14 +4191,13 @@ export function PlanningWorkspaceClient({
                           </tr>
                         </tbody>
                       </table>
-                    </div>
+                    </BodyTableFrame>
                   </>
                 )}
-                {!beginnerMode ? (
+                {monteCarloDebugSections.length > 0 ? (
                   <AdvancedJsonPanel
-                    sections={[
-                      { label: "monte carlo (raw)", value: monteRow },
-                    ]}
+                    sections={monteCarloDebugSections}
+                    title="고급 보기 (monte carlo summary)"
                   />
                 ) : null}
               </div>
@@ -3997,19 +4206,19 @@ export function PlanningWorkspaceClient({
             {activeTab === "actions" ? (
               <div className="mt-4 space-y-3 text-xs text-slate-700">
                 {actionsStatus.state === "FAILED" ? (
-                  <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-rose-900">
+                  <BodyStatusInset tone="danger">
                     실행 계획 단계 실패: {actionsStatus.message ?? "실행 계획 생성에 실패했습니다."}
-                  </p>
+                  </BodyStatusInset>
                 ) : (
                   <>
-                    <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <BodyInset>
                       해석: 심각도(치명/경고/정보) 순서대로 우선 처리하면 경고를 가장 빠르게 줄일 수 있습니다.
-                    </p>
+                    </BodyInset>
 
                     {actionTableRows.length === 0 ? (
-                      <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">실행 계획이 없습니다.</p>
+                      <BodyEmptyState title="실행 계획이 없습니다" />
                     ) : (
-                      <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <BodyTableFrame>
                         <table className="min-w-full divide-y divide-slate-200">
                           <thead className="bg-slate-50">
                             <tr>
@@ -4041,10 +4250,10 @@ export function PlanningWorkspaceClient({
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </BodyTableFrame>
                     )}
                     {actionTableRows.length > LIMITS.actionsTop ? (
-                      <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      <BodyInset className="flex items-center justify-between">
                         <span>{showAllActions ? `전체 ${actionTableRows.length}개 액션 표시 중` : `추가 ${omittedActionRows}개 액션이 생략되었습니다.`}</span>
                         <button
                           className="font-semibold text-emerald-700"
@@ -4053,13 +4262,13 @@ export function PlanningWorkspaceClient({
                         >
                           {showAllActions ? "접기" : "더 보기"}
                         </button>
-                      </div>
+                      </BodyInset>
                     ) : null}
 
                     {actionTableRows.length > 0 ? (
                       <div className="grid gap-2 md:grid-cols-2">
                         {actionTableRows.slice(0, 3).map((row) => (
-                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3" key={`detail-${row.code}-${row.title}`}>
+                          <BodyInset key={`detail-${row.code}-${row.title}`}>
                             <p className="font-semibold text-slate-900">{row.title}</p>
                             <p className="mt-1">{row.summary || "핵심 문제를 줄이기 위한 조치입니다."}</p>
                             <p className="mt-2 font-semibold text-slate-900">권장 단계</p>
@@ -4075,16 +4284,15 @@ export function PlanningWorkspaceClient({
                             {row.cautions.length > 0 ? (
                               <p className="mt-2 text-amber-800">주의: {row.cautions[0]}</p>
                             ) : null}
-                          </div>
+                          </BodyInset>
                         ))}
                       </div>
                     ) : null}
 
-                    {!beginnerMode ? (
+                    {actionsDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
-                        sections={[
-                          { label: "actions (raw)", value: actionsList },
-                        ]}
+                        sections={actionsDebugSections}
+                        title="고급 보기 (actions summary)"
                       />
                     ) : null}
                   </>
@@ -4095,33 +4303,33 @@ export function PlanningWorkspaceClient({
             {activeTab === "debt" ? (
               <div className="mt-4 space-y-3 text-xs text-slate-700">
                 {debtStatus.state === "FAILED" ? (
-                  <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-rose-900">
+                  <BodyStatusInset tone="danger">
                     부채 분석 단계 실패: {debtStatus.message ?? "부채 분석에 실패했습니다."}
-                  </p>
+                  </BodyStatusInset>
                 ) : !hasDebtData ? (
-                  <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">부채 분석 결과가 없습니다.</p>
+                  <BodyEmptyState title="부채 분석 결과가 없습니다" />
                 ) : (
                   <>
-                    <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                    <BodyInset>
                       해석: 부채 탭은 현재 상환부담(DSR), 이자비용, 리파이낸스 효과를 함께 보고 우선순위를 정하는 용도입니다.
-                    </p>
+                    </BodyInset>
 
                     <div className="grid gap-2 md:grid-cols-2">
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      <BodyInset>
                         현재 DSR: <span className="font-semibold">{formatRatioPct(locale, debtMeta.debtServiceRatio)}</span>
-                      </div>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      </BodyInset>
+                      <BodyInset>
                         월 총상환액: <span className="font-semibold">{formatKrw(locale, Number(debtMeta.totalMonthlyPaymentKrw ?? 0))}</span>
-                      </div>
+                      </BodyInset>
                     </div>
 
                     <WarningsTable warnings={debtWarnings} />
 
                     <h3 className="font-semibold text-slate-900">부채별 상환 요약</h3>
                     {debtSummaries.length === 0 ? (
-                      <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">부채 요약 데이터가 없습니다.</p>
+                      <BodyEmptyState title="부채 요약 데이터가 없습니다" />
                     ) : (
-                      <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <BodyTableFrame>
                         <table className="min-w-full divide-y divide-slate-200">
                           <thead className="bg-slate-50">
                             <tr>
@@ -4148,16 +4356,16 @@ export function PlanningWorkspaceClient({
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </BodyTableFrame>
                     )}
 
                     <h3 className="font-semibold text-slate-900">리파이낸스 비교</h3>
                     {debtRefinance.length === 0 ? (
-                      <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                      <BodyInset>
                         적용 가능한 리파이낸스 제안이 없습니다. 현재 조건 유지 또는 추가상환을 먼저 검토하세요.
-                      </p>
+                      </BodyInset>
                     ) : (
-                      <div className="overflow-x-auto rounded-xl border border-slate-200">
+                      <BodyTableFrame>
                         <table className="min-w-full divide-y divide-slate-200">
                           <thead className="bg-slate-50">
                             <tr>
@@ -4184,11 +4392,11 @@ export function PlanningWorkspaceClient({
                             ))}
                           </tbody>
                         </table>
-                      </div>
+                      </BodyTableFrame>
                     )}
 
                     <h3 className="font-semibold text-slate-900">What-if 요약</h3>
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <BodyTableFrame>
                       <table className="min-w-full divide-y divide-slate-200">
                         <thead className="bg-slate-50">
                           <tr>
@@ -4207,17 +4415,12 @@ export function PlanningWorkspaceClient({
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                    </BodyTableFrame>
 
-                    {!beginnerMode ? (
+                    {debtDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
-                        sections={[
-                          { label: "debt meta (raw)", value: debtMeta },
-                          { label: "debt summaries (raw)", value: debtSummaries },
-                          { label: "debt refinance (raw)", value: debtRefinance },
-                          { label: "debt whatIf (raw)", value: debtWhatIf },
-                          { label: "debt warnings (raw)", value: debtWarningsRaw },
-                        ]}
+                        sections={debtDebugSections}
+                        title="고급 보기 (debt summary)"
                       />
                     ) : null}
                   </>
@@ -4228,17 +4431,56 @@ export function PlanningWorkspaceClient({
         </div>
       ) : null}
 
+      {profileDeleteDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="planning-profile-delete-title">
+          <BodyDialogSurface className="max-w-lg">
+            <h2 id="planning-profile-delete-title" className="text-base font-bold text-slate-900">프로필 삭제 확인</h2>
+            <p className="mt-1 text-xs text-slate-600">아래 확인 문구를 정확히 입력해야 삭제가 진행됩니다.</p>
+            <BodyInset className="mt-3 px-3 py-2 font-mono text-xs text-slate-700">{profileDeleteDialog.expectedConfirm}</BodyInset>
+            <input
+              className={bodyFieldClassName}
+              value={profileDeleteDialog.confirmText}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setProfileDeleteDialog((prev) => (prev ? { ...prev, confirmText: nextValue } : prev));
+              }}
+              disabled={savingProfile}
+            />
+            <div className={bodyDialogActionsClassName}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  if (savingProfile) return;
+                  setProfileDeleteDialog(null);
+                }}
+                disabled={savingProfile}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void submitDeleteProfileAction()}
+                disabled={savingProfile || profileDeleteDialog.confirmText.trim() !== profileDeleteDialog.expectedConfirm}
+              >
+                {savingProfile ? "삭제 중..." : "삭제 진행"}
+              </Button>
+            </div>
+          </BodyDialogSurface>
+        </div>
+      ) : null}
+
       {feedbackModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="planning-feedback-title">
-          <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+          <BodyDialogSurface className="max-w-xl">
             <h2 id="planning-feedback-title" className="text-base font-bold text-slate-900">피드백 보내기</h2>
             <p className="mt-1 text-xs text-slate-600">/planning 사용 중 불편/버그를 로컬에 저장합니다.</p>
 
             <div className="mt-4 space-y-3">
-              <label className="block text-xs font-semibold text-slate-700">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 분류
                 <select
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  className={bodyFieldClassName}
                   value={feedbackCategory}
                   onChange={(event) => setFeedbackCategory(event.target.value as PlanningFeedbackCategory)}
                   disabled={feedbackSubmitting}
@@ -4249,10 +4491,10 @@ export function PlanningWorkspaceClient({
                 </select>
               </label>
 
-              <label className="block text-xs font-semibold text-slate-700">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 제목
                 <input
-                  className="mt-1 h-10 w-full rounded-xl border border-slate-300 px-3 text-sm"
+                  className={bodyFieldClassName}
                   placeholder="예: 실행 결과 탭 전환이 헷갈려요"
                   value={feedbackTitle}
                   onChange={(event) => setFeedbackTitle(event.target.value)}
@@ -4261,10 +4503,10 @@ export function PlanningWorkspaceClient({
                 />
               </label>
 
-              <label className="block text-xs font-semibold text-slate-700">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
                 내용
                 <textarea
-                  className="mt-1 min-h-28 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  className={`${bodyTextAreaClassName} min-h-28`}
                   placeholder="재현 단계/기대 결과/실제 결과를 간단히 적어주세요."
                   value={feedbackMessage}
                   onChange={(event) => setFeedbackMessage(event.target.value)}
@@ -4274,13 +4516,13 @@ export function PlanningWorkspaceClient({
               </label>
             </div>
 
-            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              <p>snapshot: {asString(runResult?.meta?.snapshot?.id || selectedSnapshotItem?.id) || "-"}</p>
+            <BodyInset className="mt-4 px-3 py-2 text-xs text-slate-700">
+              <p>snapshot: {workspaceSnapshotState.displayId || "-"}</p>
               <p>runId: {savedRun?.id ?? "-"}</p>
               <p>health: critical={healthSummary?.criticalCount ?? "-"}, warnings={healthSummary?.warningCodes?.slice(0, 10).join(", ") || "-"}</p>
-            </div>
+            </BodyInset>
 
-            <div className="mt-4 flex justify-end gap-2">
+            <div className={bodyDialogActionsClassName}>
               <Button
                 type="button"
                 variant="ghost"
@@ -4300,7 +4542,7 @@ export function PlanningWorkspaceClient({
                 {feedbackSubmitting ? "저장 중..." : "저장"}
               </Button>
             </div>
-          </div>
+          </BodyDialogSurface>
         </div>
       ) : null}
     </PageShell>

@@ -105,4 +105,14 @@ describe("planning migration manager", () => {
     expect(storageMigration?.code).toBe("LOCKED");
     expect(storageMigration?.fixHref).toBe("/ops/security");
   });
+
+  it("falls back to initial migration state when migration state json is corrupted", async () => {
+    fs.mkdirSync(path.dirname(env.PLANNING_MIGRATION_STATE_PATH as string), { recursive: true });
+    fs.writeFileSync(env.PLANNING_MIGRATION_STATE_PATH as string, "{ invalid json", "utf-8");
+
+    const report = await inspectPlanningMigrations({ baseDir: root });
+
+    expect(report.summary.pending).toBeGreaterThan(0);
+    expect(report.summary.failed).toBe(0);
+  });
 });

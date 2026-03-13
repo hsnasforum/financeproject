@@ -76,4 +76,22 @@ describe("securityAuditLog", () => {
     expect(raw).not.toContain("ghp_raw");
     expect(raw).not.toContain(".data/planning/profiles/u1.json");
   });
+
+  it("reads sparse rotated audit files without probing missing suffixes", async () => {
+    await fs.writeFile(
+      auditPath,
+      `${JSON.stringify({ eventType: "SCHEDULED_TASK", at: "2026-03-01T00:00:03.000Z", actor: "local" })}\n`,
+      "utf-8",
+    );
+    await fs.writeFile(
+      `${auditPath}.2`,
+      `${JSON.stringify({ eventType: "VAULT_UNLOCK", at: "2026-03-01T00:00:01.000Z", actor: "local" })}\n`,
+      "utf-8",
+    );
+
+    const rows = await listOpsAuditEvents({ limit: 10 });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.eventType).toBe("SCHEDULED_TASK");
+    expect(rows[1]?.eventType).toBe("VAULT_UNLOCK");
+  });
 });

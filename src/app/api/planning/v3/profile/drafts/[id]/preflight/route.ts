@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { getProfile } from "@/lib/planning/server/store/profileStore";
+import { getProfile } from "@/lib/planning/v3/profiles/store";
+import { preflightDraftPatch } from "@/lib/planning/v3/draft/service";
+import { getProfileDraft } from "@/lib/planning/v3/draft/store";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
-import { preflightDraftPatch } from "@/lib/planning/v3/service/preflightDraftPatch";
-import { getProfileDraft } from "@/lib/planning/v3/store/draftStore";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -26,7 +24,6 @@ function asString(value: unknown): string {
 
 function withGuard(request: Request, csrfValue: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrfValue) }, { allowWhenCookieMissing: true });
     return null;
@@ -46,9 +43,6 @@ function withGuard(request: Request, csrfValue: unknown): Response | null {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: PreflightBody = null;
   try {
     body = (await request.json()) as PreflightBody;
@@ -112,4 +106,3 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 }
-

@@ -8,7 +8,8 @@ export type TaxPensionProvider = {
 
 export function createPlaceholderTaxPensionProvider(): TaxPensionProvider {
   return {
-    explain(_profile) {
+    explain(profile) {
+      void profile;
       return {
         applied: false,
         notes: [TAX_PENSION_PLACEHOLDER_NOTE],
@@ -16,4 +17,3 @@ export function createPlaceholderTaxPensionProvider(): TaxPensionProvider {
     },
   };
 }
-

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { DevUnlockShortcutLink } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -84,6 +85,7 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
   const [rows, setRows] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [status, setStatus] = useState("");
   const [profileId, setProfileId] = useState("");
   const [query, setQuery] = useState("");
@@ -99,6 +101,8 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
   const [cleanupRunning, setCleanupRunning] = useState(false);
   const [cleanupMessage, setCleanupMessage] = useState("");
   const [cleanupPreview, setCleanupPreview] = useState<Array<{ id: string; profileId: string; createdAt: string; reasons: string[] }>>([]);
+  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState("");
+  const [deleteRunningId, setDeleteRunningId] = useState("");
 
   const hasCsrf = asString(csrf).length > 0;
 
@@ -150,11 +154,19 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
     void loadRuns();
   }, [loadRuns]);
 
+  function requestDeleteRunAction(runId: string): void {
+    if (!hasCsrf) {
+      setError("Dev unlock/CSRF가 없어 삭제할 수 없습니다.");
+      return;
+    }
+    setConfirmDeleteRunId(runId);
+  }
+
   async function deleteRunAction(runId: string): Promise<void> {
     if (!hasCsrf) return;
-    const ok = window.confirm(`실행 기록을 삭제(휴지통 이동)할까요?\n${runId}`);
-    if (!ok) return;
-
+    setDeleteRunningId(runId);
+    setError("");
+    setNotice("");
     try {
       const response = await fetch(`/api/ops/runs/${encodeURIComponent(runId)}`, {
         method: "DELETE",
@@ -166,8 +178,11 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
         throw new Error(payload?.message ?? "삭제에 실패했습니다.");
       }
       await loadRuns();
+      setNotice(`실행 기록을 휴지통으로 이동했습니다. (${runId})`);
     } catch (deleteError) {
-      window.alert(deleteError instanceof Error ? deleteError.message : "삭제에 실패했습니다.");
+      setError(deleteError instanceof Error ? deleteError.message : "삭제에 실패했습니다.");
+    } finally {
+      setDeleteRunningId("");
     }
   }
 
@@ -233,10 +248,16 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
           </div>
         )}
       />
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          {notice}
+        </Card>
+      ) : null}
 
       {!hasCsrf ? (
         <Card className="mb-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Dev unlock/CSRF가 없어 실행되지 않습니다.
+          Dev unlock/CSRF가 없어 실행되지 않습니다.{" "}
+          <DevUnlockShortcutLink className="text-amber-900" />
         </Card>
       ) : null}
 
@@ -398,10 +419,11 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
                       <button
                         aria-label={`run ${row.id} 삭제`}
                         className="font-semibold text-rose-700"
-                        onClick={() => void deleteRunAction(row.id)}
+                        onClick={() => requestDeleteRunAction(row.id)}
                         type="button"
+                        disabled={deleteRunningId.length > 0}
                       >
-                        삭제
+                        {deleteRunningId === row.id ? "삭제 중..." : "삭제"}
                       </button>
                     </td>
                   </tr>
@@ -417,6 +439,48 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
           <p className="text-xs text-slate-500">offset {offset}</p>
         </div>
       </Card>
+      {confirmDeleteRunId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ops-runs-delete-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <h3 id="ops-runs-delete-title" className="text-base font-black text-slate-900">실행 기록 삭제 확인</h3>
+            <p className="mt-2 text-sm text-slate-700">
+              실행 기록을 휴지통으로 이동합니다. 계속 진행할까요?
+            </p>
+            <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
+              runId: <span className="font-semibold">{confirmDeleteRunId}</span>
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmDeleteRunId("")}
+                disabled={deleteRunningId.length > 0}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                disabled={deleteRunningId.length > 0}
+                onClick={() => {
+                  const runId = confirmDeleteRunId;
+                  setConfirmDeleteRunId("");
+                  void deleteRunAction(runId);
+                }}
+              >
+                삭제 진행
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

@@ -3,10 +3,18 @@ import net from "node:net";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
+import {
+  logPruneSummary,
+  pruneRootIsolatedBuildArtifacts,
+  pruneRootTransientNextArtifacts,
+  pruneStandaloneShadowNextArtifacts,
+} from "./next_artifact_prune.mjs";
+import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
 
 const FORCED_HOST = "127.0.0.1";
 const DEFAULT_PORT = 3100;
 const DEFAULT_SCAN_RANGE = 30;
+const FALLBACK_BUILD_DIST_DIR = (process.env.BUILD_FALLBACK_DIST_DIR ?? ".next-build").trim() || ".next-build";
 
 function parsePort(value, fallback = DEFAULT_PORT) {
   const parsed = Number(value);
@@ -145,27 +153,119 @@ function resolveNextBin(startDir) {
   return null;
 }
 
+function readIsolatedBuildInfo(cwd = process.cwd()) {
+  const infoPath = path.join(cwd, ".next-build-info.json");
+  if (!fs.existsSync(infoPath)) return "";
+
+  try {
+    const raw = fs.readFileSync(infoPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && typeof parsed.distDir === "string" ? parsed.distDir.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 function resolveStandaloneServer(cwd = process.cwd()) {
-  const direct = path.join(cwd, ".next", "standalone", "server.js");
-  if (fs.existsSync(direct)) return direct;
+  const requestedDistDir = typeof process.env.PLAYWRIGHT_DIST_DIR === "string" ? process.env.PLAYWRIGHT_DIST_DIR.trim() : "";
+  const metadataDistDir = readIsolatedBuildInfo(cwd);
+  const candidates = [requestedDistDir, metadataDistDir, ".next", FALLBACK_BUILD_DIST_DIR];
+  const seen = new Set();
+
+  for (const distDir of candidates) {
+    if (!distDir || seen.has(distDir)) continue;
+    seen.add(distDir);
+    const serverPath = path.join(cwd, distDir, "standalone", "server.js");
+    if (fs.existsSync(serverPath)) {
+      return { distDir, serverPath };
+    }
+  }
+
   return null;
+}
+
+function sameResolvedPath(left, right) {
+  try {
+    return fs.realpathSync(left) === fs.realpathSync(right);
+  } catch {
+    return false;
+  }
+}
+
+function ensureStandaloneAssetLink({ sourcePath, targetPath, label }) {
+  if (!fs.existsSync(sourcePath)) return;
+
+  if (fs.existsSync(targetPath) || fs.lstatSync(targetPath, { throwIfNoEntry: false })) {
+    if (sameResolvedPath(sourcePath, targetPath)) return;
+    fs.rmSync(targetPath, { recursive: true, force: true });
+  }
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  fs.symlinkSync(fs.realpathSync(sourcePath), targetPath, linkType);
+  console.log(`[next_prod_safe] linked ${label}: ${targetPath} -> ${sourcePath}`);
+}
+
+function ensureStandaloneRuntimeAssets({ standaloneServer, distDir, cwd = process.cwd() }) {
+  const standaloneDir = path.dirname(standaloneServer);
+  const distDirPath = path.join(cwd, distDir);
+
+  ensureStandaloneAssetLink({
+    sourcePath: path.join(distDirPath, "static"),
+    targetPath: path.join(standaloneDir, distDir, "static"),
+    label: `${distDir}/static`,
+  });
+
+  ensureStandaloneAssetLink({
+    sourcePath: path.join(cwd, "public"),
+    targetPath: path.join(standaloneDir, "public"),
+    label: "public",
+  });
 }
 
 async function main() {
   const { overridePort, scanRange, passthroughArgs } = parseCliArgs(process.argv.slice(2));
-  const preferredPort = parsePort(overridePort ?? process.env.PORT, DEFAULT_PORT);
-  const port = await pickPort({ preferredPort, scanRange, host: FORCED_HOST });
-
-  const standaloneServer = resolveStandaloneServer(process.cwd());
+  const standaloneRuntime = resolveStandaloneServer(process.cwd());
   const nextBin = resolveNextBin(process.cwd());
 
-  if (!standaloneServer && !nextBin) {
+  if (!standaloneRuntime && !nextBin) {
     console.error("[next_prod_safe] no runtime found. Run `pnpm build` first.");
     process.exit(2);
     return;
   }
 
-  const env = { ...process.env };
+  if (standaloneRuntime) {
+    logPruneSummary(
+      "[next_prod_safe] standalone prune",
+      pruneStandaloneShadowNextArtifacts({
+        cwd: process.cwd(),
+        distDir: standaloneRuntime.distDir,
+        preserveNames: [standaloneRuntime.distDir],
+        ignorePids: [process.ppid],
+      }),
+    );
+    logPruneSummary(
+      "[next_prod_safe] root prune",
+      pruneRootTransientNextArtifacts({
+        cwd: process.cwd(),
+        preserveNames: [standaloneRuntime.distDir],
+        ignorePids: [process.ppid],
+      }),
+    );
+    logPruneSummary(
+      "[next_prod_safe] root build prune",
+      pruneRootIsolatedBuildArtifacts({
+        cwd: process.cwd(),
+        preserveNames: [standaloneRuntime.distDir],
+        ignorePids: [process.ppid],
+      }),
+    );
+  }
+
+  const preferredPort = parsePort(overridePort ?? process.env.PORT, DEFAULT_PORT);
+  const port = await pickPort({ preferredPort, scanRange, host: FORCED_HOST });
+
+  const env = sanitizeInheritedColorEnv(process.env);
   delete env.HOSTNAME;
   delete env.PORT;
   env.HOSTNAME = FORCED_HOST;
@@ -180,9 +280,16 @@ async function main() {
   console.log(`Open (same env): http://localhost:${port}`);
 
   let child;
-  if (standaloneServer) {
-    console.log(`[next_prod_safe] mode=standalone server=${standaloneServer}`);
-    child = spawn(process.execPath, [standaloneServer, ...passthroughArgs], {
+  if (standaloneRuntime) {
+    ensureStandaloneRuntimeAssets({
+      standaloneServer: standaloneRuntime.serverPath,
+      distDir: standaloneRuntime.distDir,
+      cwd: process.cwd(),
+    });
+    console.log(
+      `[next_prod_safe] mode=standalone distDir=${standaloneRuntime.distDir} server=${standaloneRuntime.serverPath}`,
+    );
+    child = spawn(process.execPath, [standaloneRuntime.serverPath, ...passthroughArgs], {
       stdio: "inherit",
       env,
     });
@@ -208,4 +315,3 @@ main().catch((error) => {
   console.error("[next_prod_safe] failed to start:", message);
   process.exit(1);
 });
-

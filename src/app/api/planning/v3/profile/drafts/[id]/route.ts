@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { deleteProfileDraft, getProfileDraft } from "@/lib/planning/v3/store/draftStore";
+import { deleteProfileDraft, getProfileDraft } from "@/lib/planning/v3/draft/store";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 
 type RouteContext = {
@@ -23,7 +21,6 @@ function asString(value: unknown): string {
 
 function withGuard(request: Request, csrfValue: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrfValue) }, { allowWhenCookieMissing: true });
     return null;
@@ -43,9 +40,6 @@ function withGuard(request: Request, csrfValue: unknown): Response | null {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const csrf = asString(new URL(request.url).searchParams.get("csrf"));
   const guarded = withGuard(request, csrf);
   if (guarded) return guarded;
@@ -86,9 +80,6 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: DeleteBody = null;
   try {
     body = (await request.json()) as DeleteBody;
@@ -96,7 +87,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     body = null;
   }
 
-  const guarded = withGuard(request, body?.csrf ?? new URL(request.url).searchParams.get("csrf"));
+  const guarded = withGuard(request, body?.csrf);
   if (guarded) return guarded;
 
   const { id } = await context.params;

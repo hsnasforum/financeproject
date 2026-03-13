@@ -3,6 +3,7 @@ import { z } from "zod";
 import { type TopicDailyStat } from "./contracts";
 import { buildDigest } from "./digest";
 import { buildDigestDay } from "./digest/buildDigest";
+import { resolveNewsRootDir } from "./rootDir";
 import { loadEffectiveNewsConfig } from "./settings";
 import { buildScenarios } from "./scenario";
 import { selectTopFromStore } from "./selectTop";
@@ -151,18 +152,19 @@ function recomputeDayRange(toDateKst: string, days: number): string[] {
 
 export function previewRecoveryAction(action: RecoveryAction, options: RecoveryOptions = {}): RecoverySummary {
   const rootDir = options.rootDir;
+  const baseRoot = rootDir ?? resolveNewsRootDir();
   const now = options.now ?? new Date();
   const todayKst = toKstDayKey(now);
   const itemCount = readAllItems(rootDir).length;
 
   if (action === "rebuild_caches") {
     const writeTargets = [
-      toWritePath(resolveDailyStatsPath(todayKst, rootDir), rootDir ?? path.join(process.cwd(), ".data", "news")),
-      toWritePath(resolveDigestPath(rootDir), rootDir ?? path.join(process.cwd(), ".data", "news")),
-      toWritePath(resolveTodayCachePath(rootDir), rootDir ?? path.join(process.cwd(), ".data", "news")),
-      toWritePath(resolveScenariosCachePath(rootDir), rootDir ?? path.join(process.cwd(), ".data", "news")),
-      toWritePath(resolveTrendsCachePath(7, rootDir), rootDir ?? path.join(process.cwd(), ".data", "news")),
-      toWritePath(resolveTrendsCachePath(30, rootDir), rootDir ?? path.join(process.cwd(), ".data", "news")),
+      toWritePath(resolveDailyStatsPath(todayKst, rootDir), baseRoot),
+      toWritePath(resolveDigestPath(rootDir), baseRoot),
+      toWritePath(resolveTodayCachePath(rootDir), baseRoot),
+      toWritePath(resolveScenariosCachePath(rootDir), baseRoot),
+      toWritePath(resolveTrendsCachePath(7, rootDir), baseRoot),
+      toWritePath(resolveTrendsCachePath(30, rootDir), baseRoot),
     ];
     return RecoverySummarySchema.parse({
       action,
@@ -180,7 +182,6 @@ export function previewRecoveryAction(action: RecoveryAction, options: RecoveryO
 
   const days = NEWS_RECOVERY_RECOMPUTE_DAYS;
   const dayRange = recomputeDayRange(todayKst, days);
-  const baseRoot = rootDir ?? path.join(process.cwd(), ".data", "news");
   const writeTargets = [
     toWritePath(resolveDailyStatsPath(dayRange[0], rootDir), baseRoot),
     toWritePath(resolveDailyStatsPath(dayRange[dayRange.length - 1], rootDir), baseRoot),
@@ -206,7 +207,7 @@ export function runRecoveryAction(action: RecoveryAction, options: RecoveryOptio
   const now = options.now ?? new Date();
   const nowIso = now.toISOString();
   const todayKst = toKstDayKey(now);
-  const baseRoot = rootDir ?? path.join(process.cwd(), ".data", "news");
+  const baseRoot = rootDir ?? resolveNewsRootDir();
   const items = readAllItems(rootDir);
   const itemCount = items.length;
   const effective = loadEffectiveNewsConfig(rootDir);

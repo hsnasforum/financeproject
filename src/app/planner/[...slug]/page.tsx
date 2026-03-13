@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { resolveLegacyPlannerRedirectFromSlug } from "@/lib/planning/legacyPlannerRedirect";
 
 type PlannerLegacyCatchAllPageProps = {
   params: Promise<{ slug: string[] }>;
@@ -6,5 +7,5 @@ type PlannerLegacyCatchAllPageProps = {
 
 export default async function PlannerLegacyCatchAllPage(props: PlannerLegacyCatchAllPageProps) {
   const { slug } = await props.params;
-  redirect(`/planning/${slug.join("/")}`);
+  redirect(resolveLegacyPlannerRedirectFromSlug(slug));
 }

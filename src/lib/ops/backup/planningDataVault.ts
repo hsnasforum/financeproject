@@ -47,6 +47,7 @@ const ASSUMPTIONS_DIR = "assumptions";
 const POLICIES_DIR = "policies";
 const PROFILE_OVERRIDES_FILE = "assumptions-overrides.json";
 const OPS_AUTO_MERGE_POLICY_FILE = "auto-merge-policy.json";
+const OPS_SCHEDULER_POLICY_FILE = "scheduler-policy.json";
 const BACKUP_SYNC_STATE_PATH = "backup/sync-state.json";
 const KNOWN_BLOB_NAMES = ["simulate", "scenarios", "monteCarlo", "actions", "debtStrategy"] as const;
 const BACKUP_SYNC_STATE_VERSION = 1 as const;
@@ -784,6 +785,7 @@ async function clearAssumptions(): Promise<void> {
 
 async function clearPolicies(): Promise<void> {
   await fs.unlink(path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE)).catch(() => undefined);
+  await fs.unlink(path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE)).catch(() => undefined);
 }
 
 function toManifestWithoutFiles(
@@ -934,6 +936,15 @@ export async function buildPlanningDataVaultZip(options?: {
   const policyBytes = await readFileIfExists(policyPath);
   if (policyBytes && (mode === "full" || deltaCutoffMs < 1 || policyMtimeMs > deltaCutoffMs)) {
     fileEntries.set(`${POLICIES_DIR}/ops-auto-merge-policy.json`, policyBytes);
+  }
+  const schedulerPolicyPath = path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE);
+  const schedulerPolicyMtimeMs = await readFileMtimeMs(schedulerPolicyPath);
+  const schedulerPolicyBytes = await readFileIfExists(schedulerPolicyPath);
+  if (
+    schedulerPolicyBytes
+    && (mode === "full" || deltaCutoffMs < 1 || schedulerPolicyMtimeMs > deltaCutoffMs)
+  ) {
+    fileEntries.set(`${POLICIES_DIR}/ops-scheduler-threshold-policy.json`, schedulerPolicyBytes);
   }
 
   const manifestFiles: VaultManifest["files"] = {};
@@ -1358,6 +1369,21 @@ export async function restorePlanningDataVaultZip(
         entity: "policy",
         path: autoMergePolicyEntry,
         message: error instanceof Error ? error.message : "policy restore failed",
+      });
+    }
+  }
+  const schedulerPolicyEntry = `${POLICIES_DIR}/ops-scheduler-threshold-policy.json`;
+  const schedulerPolicyBytes = parsed.entries.get(schedulerPolicyEntry);
+  if (schedulerPolicyBytes) {
+    try {
+      const payload = JSON.parse(schedulerPolicyBytes.toString("utf-8")) as unknown;
+      await writeJsonAtomic(path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE), payload);
+      imported.policies += 1;
+    } catch (error) {
+      issues.push({
+        entity: "policy",
+        path: schedulerPolicyEntry,
+        message: error instanceof Error ? error.message : "scheduler policy restore failed",
       });
     }
   }

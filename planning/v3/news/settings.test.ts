@@ -24,6 +24,7 @@ describe("planning v3 news settings overrides", () => {
     const saved = writeNewsSettings({
       sources: [{ id: "bok_press_all", enabled: false, weight: 0.8 }],
       topics: [{ id: "rates", keywords: ["기준금리", "테스트키워드"] }],
+      customSources: [],
     }, root);
 
     expect(saved.updatedAt).toBeTruthy();
@@ -44,6 +45,7 @@ describe("planning v3 news settings overrides", () => {
       topics: [
         { id: "rates", keywords: ["customrate"] },
       ],
+      customSources: [],
     }, root);
 
     const nowIso = "2026-03-04T12:00:00.000Z";
@@ -94,6 +96,7 @@ describe("planning v3 news settings overrides", () => {
         { id: "moef_econ_policy_en", enabled: false },
       ],
       topics: [],
+      customSources: [],
     }, root);
 
     const result = await runNewsRefresh({

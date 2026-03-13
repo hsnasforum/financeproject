@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { loadCanonicalProfile, migrateProfile } from "../../../src/lib/planning/v2/loadCanonicalProfile";
 import { computeProfileHash } from "../../../src/lib/planning/v2/reproducibility";
-import { PlanningV2ValidationError } from "../../../src/lib/planning/core/v2/types";
+import { PlanningV2ValidationError } from "../../../src/lib/planning/v2/types";
 
 function baseProfile() {
   return {

@@ -73,9 +73,69 @@ type SummaryPayload = {
       reportContractFallbackCount?: number;
       runEngineMigrationCount?: number;
       lastEventAt?: string;
+      sourceBreakdown?: RawPlanningFallbackSourceBreakdown;
+      recentEvents?: RawPlanningFallbackEvent[];
+    };
+    legacyRunBackfill?: {
+      totalRuns?: number;
+      opsDoctorRuns?: number;
+      userRuns?: number;
+      legacyCandidates?: number;
+      opsDoctorLegacyCandidates?: number;
+      userLegacyCandidates?: number;
+      resultDtoOnlyCandidates?: number;
+      missingResultDtoCandidates?: number;
+      missingEngineSchemaCandidates?: number;
+      unreadableCandidates?: number;
     };
   };
   error?: { code?: string; message?: string; fixHref?: string };
+};
+
+type PlanningFallbackSourceKey =
+  | "legacyEngineFallback"
+  | "legacyResultDtoFallback"
+  | "compatRebuild"
+  | "legacySnapshot"
+  | "contractBuildFailureFallback";
+
+type PlanningFallbackCounterKey =
+  | "legacyEnvelopeFallbackCount"
+  | "legacyReportContractFallbackCount"
+  | "legacyRunEngineMigrationCount";
+
+type RawPlanningFallbackSourceBreakdown =
+  Partial<Record<PlanningFallbackCounterKey, Partial<Record<PlanningFallbackSourceKey, number>>>>;
+
+type RawPlanningFallbackEvent = {
+  at?: string;
+  key?: PlanningFallbackCounterKey;
+  source?: string;
+  sourceKey?: PlanningFallbackSourceKey;
+  runKind?: "opsDoctor" | "user" | "unknown";
+  runId?: string;
+};
+
+type PlanningFallbackEvent = {
+  at: string;
+  key: PlanningFallbackCounterKey;
+  source: string;
+  sourceKey?: PlanningFallbackSourceKey;
+  runKind?: "opsDoctor" | "user" | "unknown";
+  runId?: string;
+};
+
+type LegacyRunBackfillSummary = {
+  totalRuns: number;
+  opsDoctorRuns: number;
+  userRuns: number;
+  legacyCandidates: number;
+  opsDoctorLegacyCandidates: number;
+  userLegacyCandidates: number;
+  resultDtoOnlyCandidates: number;
+  missingResultDtoCandidates: number;
+  missingEngineSchemaCandidates: number;
+  unreadableCandidates: number;
 };
 
 type PlanningFallbackSummary = {
@@ -83,6 +143,8 @@ type PlanningFallbackSummary = {
   reportContractFallbackCount: number;
   runEngineMigrationCount: number;
   lastEventAt?: string;
+  sourceBreakdown?: RawPlanningFallbackSourceBreakdown;
+  recentEvents?: PlanningFallbackEvent[];
 };
 
 type PlanningFallbackDelta = {
@@ -129,14 +191,73 @@ type RawPlanningFallbackSummary = {
   reportContractFallbackCount?: number;
   runEngineMigrationCount?: number;
   lastEventAt?: string;
+  sourceBreakdown?: RawPlanningFallbackSourceBreakdown;
+  recentEvents?: RawPlanningFallbackEvent[];
 };
 
+const FALLBACK_COUNTER_KEYS: PlanningFallbackCounterKey[] = [
+  "legacyEnvelopeFallbackCount",
+  "legacyReportContractFallbackCount",
+  "legacyRunEngineMigrationCount",
+];
+
+const FALLBACK_SOURCE_KEYS: PlanningFallbackSourceKey[] = [
+  "legacyEngineFallback",
+  "legacyResultDtoFallback",
+  "compatRebuild",
+  "legacySnapshot",
+  "contractBuildFailureFallback",
+];
+
+function toSourceBreakdown(
+  value: RawPlanningFallbackSourceBreakdown | undefined,
+): RawPlanningFallbackSourceBreakdown | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const next: RawPlanningFallbackSourceBreakdown = {};
+  for (const counterKey of FALLBACK_COUNTER_KEYS) {
+    const bucket = value[counterKey];
+    if (!bucket || typeof bucket !== "object") continue;
+    const normalized: Partial<Record<PlanningFallbackSourceKey, number>> = {};
+    for (const sourceKey of FALLBACK_SOURCE_KEYS) {
+      const count = toSafeCount(bucket[sourceKey]);
+      if (count > 0) normalized[sourceKey] = count;
+    }
+    if (Object.keys(normalized).length > 0) {
+      next[counterKey] = normalized;
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function toFallbackEvents(value: RawPlanningFallbackEvent[] | undefined): PlanningFallbackEvent[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const next = value.flatMap((row) => {
+    const at = asString(row.at);
+    const source = asString(row.source);
+    const key = row.key;
+    if (!at || !source || !key) return [];
+    return [{
+      at,
+      key,
+      source,
+      ...(row.sourceKey ? { sourceKey: row.sourceKey } : {}),
+      ...(row.runKind ? { runKind: row.runKind } : {}),
+      ...(asString(row.runId) ? { runId: asString(row.runId) } : {}),
+    }];
+  });
+  return next.length > 0 ? next : undefined;
+}
+
 function toFallbackSummary(value: RawPlanningFallbackSummary | undefined): PlanningFallbackSummary {
+  const sourceBreakdown = toSourceBreakdown(value?.sourceBreakdown);
+  const recentEvents = toFallbackEvents(value?.recentEvents);
   return {
     engineEnvelopeFallbackCount: toSafeCount(value?.engineEnvelopeFallbackCount),
     reportContractFallbackCount: toSafeCount(value?.reportContractFallbackCount),
     runEngineMigrationCount: toSafeCount(value?.runEngineMigrationCount),
     ...(asString(value?.lastEventAt) ? { lastEventAt: asString(value?.lastEventAt) } : {}),
+    ...(sourceBreakdown ? { sourceBreakdown } : {}),
+    ...(recentEvents ? { recentEvents } : {}),
   };
 }
 
@@ -146,10 +267,42 @@ function fallbackLevel(count: number): "ok" | "warn" | "check" {
   return "check";
 }
 
+function migrationLevel(
+  total: number,
+  delta: number,
+  recentEvents: PlanningFallbackEvent[] | undefined,
+): "ok" | "warn" | "check" {
+  const migrationEvents = (recentEvents ?? []).filter((event) => event.key === "legacyRunEngineMigrationCount");
+  const hasUserEvent = migrationEvents.some((event) => event.runKind === "user" || event.runKind === "unknown");
+  if (hasUserEvent) return "check";
+  if (delta > 0) return "warn";
+  if (total > 0) return "warn";
+  return "ok";
+}
+
+function backlogLevel(summary: LegacyRunBackfillSummary): "ok" | "warn" | "check" {
+  if (summary.unreadableCandidates > 0) return "check";
+  if (
+    summary.userLegacyCandidates > 0
+    || summary.resultDtoOnlyCandidates > 0
+    || summary.missingResultDtoCandidates > 0
+    || summary.missingEngineSchemaCandidates > 0
+  ) return "warn";
+  return "ok";
+}
+
 function fallbackLevelLabel(level: "ok" | "warn" | "check"): string {
   if (level === "ok") return "정상";
   if (level === "warn") return "경고";
   return "점검 필요";
+}
+
+function fallbackSourceKeyLabel(sourceKey: PlanningFallbackSourceKey): string {
+  if (sourceKey === "legacyEngineFallback") return "legacy engine fallback";
+  if (sourceKey === "legacyResultDtoFallback") return "legacy resultDto fallback";
+  if (sourceKey === "compatRebuild") return "canonical dto rebuild";
+  if (sourceKey === "legacySnapshot") return "legacy snapshot";
+  return "contract build failure";
 }
 
 export function OpsMetricsClient() {
@@ -162,6 +315,18 @@ export function OpsMetricsClient() {
     engineEnvelopeFallbackCount: 0,
     reportContractFallbackCount: 0,
     runEngineMigrationCount: 0,
+  });
+  const [legacyRunBackfill, setLegacyRunBackfill] = useState<LegacyRunBackfillSummary>({
+    totalRuns: 0,
+    opsDoctorRuns: 0,
+    userRuns: 0,
+    legacyCandidates: 0,
+    opsDoctorLegacyCandidates: 0,
+    userLegacyCandidates: 0,
+    resultDtoOnlyCandidates: 0,
+    missingResultDtoCandidates: 0,
+    missingEngineSchemaCandidates: 0,
+    unreadableCandidates: 0,
   });
   const [planningFallbackDelta, setPlanningFallbackDelta] = useState<PlanningFallbackDelta>({
     engineEnvelopeFallbackCount: 0,
@@ -206,6 +371,18 @@ export function OpsMetricsClient() {
       setSummary24h(summaryPayload.data.last24h);
       setSummary7d(summaryPayload.data.last7d);
       const nextFallbacks = toFallbackSummary(summaryPayload.data.planningFallbacks);
+      setLegacyRunBackfill({
+        totalRuns: toSafeCount(summaryPayload.data.legacyRunBackfill?.totalRuns),
+        opsDoctorRuns: toSafeCount(summaryPayload.data.legacyRunBackfill?.opsDoctorRuns),
+        userRuns: toSafeCount(summaryPayload.data.legacyRunBackfill?.userRuns),
+        legacyCandidates: toSafeCount(summaryPayload.data.legacyRunBackfill?.legacyCandidates),
+        opsDoctorLegacyCandidates: toSafeCount(summaryPayload.data.legacyRunBackfill?.opsDoctorLegacyCandidates),
+        userLegacyCandidates: toSafeCount(summaryPayload.data.legacyRunBackfill?.userLegacyCandidates),
+        resultDtoOnlyCandidates: toSafeCount(summaryPayload.data.legacyRunBackfill?.resultDtoOnlyCandidates),
+        missingResultDtoCandidates: toSafeCount(summaryPayload.data.legacyRunBackfill?.missingResultDtoCandidates),
+        missingEngineSchemaCandidates: toSafeCount(summaryPayload.data.legacyRunBackfill?.missingEngineSchemaCandidates),
+        unreadableCandidates: toSafeCount(summaryPayload.data.legacyRunBackfill?.unreadableCandidates),
+      });
       const previousFallbacks = previousFallbacksRef.current;
       const delta: PlanningFallbackDelta = previousFallbacks
         ? {
@@ -235,6 +412,18 @@ export function OpsMetricsClient() {
       setEventTypes([]);
       setSummary24h(undefined);
       setSummary7d(undefined);
+      setLegacyRunBackfill({
+        totalRuns: 0,
+        opsDoctorRuns: 0,
+        userRuns: 0,
+        legacyCandidates: 0,
+        opsDoctorLegacyCandidates: 0,
+        userLegacyCandidates: 0,
+        resultDtoOnlyCandidates: 0,
+        missingResultDtoCandidates: 0,
+        missingEngineSchemaCandidates: 0,
+        unreadableCandidates: 0,
+      });
       setPlanningFallbackDelta({
         engineEnvelopeFallbackCount: 0,
         reportContractFallbackCount: 0,
@@ -281,7 +470,11 @@ export function OpsMetricsClient() {
   const planningFallbackCards = useMemo(() => {
     const engineLevel = fallbackLevel(planningFallbacks.engineEnvelopeFallbackCount);
     const reportLevel = fallbackLevel(planningFallbacks.reportContractFallbackCount);
-    const migrationLevel = fallbackLevel(planningFallbacks.runEngineMigrationCount);
+    const migrationStatus = migrationLevel(
+      planningFallbacks.runEngineMigrationCount,
+      planningFallbackDelta.runEngineMigrationCount,
+      planningFallbacks.recentEvents,
+    );
     return [
       {
         title: "Engine envelope fallback",
@@ -301,11 +494,33 @@ export function OpsMetricsClient() {
         title: "Run lazy migration",
         value: planningFallbacks.runEngineMigrationCount,
         delta: planningFallbackDelta.runEngineMigrationCount,
-        level: migrationLevel,
-        levelLabel: fallbackLevelLabel(migrationLevel),
+        level: migrationStatus,
+        levelLabel: fallbackLevelLabel(migrationStatus),
       },
     ];
   }, [planningFallbackDelta, planningFallbacks]);
+
+  const legacyBacklogStatus = useMemo(() => backlogLevel(legacyRunBackfill), [legacyRunBackfill]);
+
+  const planningFallbackSourceRows = useMemo(() => {
+    const labels: Record<PlanningFallbackCounterKey, string> = {
+      legacyEnvelopeFallbackCount: "Engine envelope source",
+      legacyReportContractFallbackCount: "Report contract source",
+      legacyRunEngineMigrationCount: "Run migration source",
+    };
+    return FALLBACK_COUNTER_KEYS.flatMap((counterKey) => {
+      const bucket = planningFallbacks.sourceBreakdown?.[counterKey];
+      if (!bucket) return [];
+      return Object.entries(bucket)
+        .sort((a, b) => b[1] - a[1])
+        .map(([sourceKey, count]) => ({
+          counterKey,
+          label: labels[counterKey],
+          sourceKey,
+          count,
+        }));
+    });
+  }, [planningFallbacks.sourceBreakdown]);
 
   return (
     <PageShell>
@@ -359,6 +574,82 @@ export function OpsMetricsClient() {
               </p>
             </div>
           ))}
+        </div>
+        <div className="mt-4 border-t border-slate-200 pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold text-slate-600">Fallback source breakdown</p>
+            <p className="text-[11px] text-slate-500">docs/planning-report-p4-observation-kit.md</p>
+          </div>
+          {planningFallbackSourceRows.length > 0 ? (
+            <div className="mt-2 grid gap-2 md:grid-cols-3">
+              {planningFallbackSourceRows.map((row) => (
+                <div key={`${row.counterKey}-${row.sourceKey}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                  <p className="text-[11px] font-semibold text-slate-500">{row.label}</p>
+                  <p className="mt-1 text-sm font-black text-slate-900">{fallbackSourceKeyLabel(row.sourceKey as PlanningFallbackSourceKey)}</p>
+                  <p className="text-[11px] text-slate-500">{row.sourceKey}</p>
+                  <p className="text-[11px] text-slate-600">count {row.count.toLocaleString()}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-slate-500">표준 source_key 기준 breakdown 데이터가 아직 없습니다.</p>
+          )}
+        </div>
+        <div className="mt-4 border-t border-slate-200 pt-3">
+          <p className="text-xs font-semibold text-slate-600">Recent fallback events</p>
+          {planningFallbacks.recentEvents?.length ? (
+            <div className="mt-2 space-y-2">
+              {planningFallbacks.recentEvents.slice(0, 8).map((event, index) => (
+                <div key={`${event.at}-${event.key}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2">
+                  <p className="text-[11px] font-semibold text-slate-900">
+                    {event.sourceKey ? fallbackSourceKeyLabel(event.sourceKey) : "unknown"} · {event.key}
+                  </p>
+                  <p className="mt-1 text-[11px] text-slate-600">
+                    {formatDateTime(event.at)} · source={event.source}
+                    {event.runKind ? ` · kind=${event.runKind}` : ""}
+                    {event.runId ? ` · run=${event.runId}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-slate-500">최근 fallback 이벤트가 없습니다.</p>
+          )}
+        </div>
+        <div className="mt-4 border-t border-slate-200 pt-3">
+          <p className="text-xs font-semibold text-slate-600">Legacy run backlog</p>
+          <div className="mt-2 grid gap-2 md:grid-cols-3">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[11px] font-semibold text-slate-500">Legacy candidates</p>
+              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.legacyCandidates.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-600">user {legacyRunBackfill.userLegacyCandidates.toLocaleString()} / ops-doctor {legacyRunBackfill.opsDoctorLegacyCandidates.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[11px] font-semibold text-slate-500">Canonical DTO gap</p>
+              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.resultDtoOnlyCandidates.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-600">engine schema missing {legacyRunBackfill.missingEngineSchemaCandidates.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[11px] font-semibold text-slate-500">Backlog status</p>
+              <p className="mt-1 text-sm font-black text-slate-900">{fallbackLevelLabel(legacyBacklogStatus)}</p>
+              <p className="text-[11px] text-slate-600">backfillable {legacyRunBackfill.missingResultDtoCandidates.toLocaleString()} / unreadable {legacyRunBackfill.unreadableCandidates.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[11px] font-semibold text-slate-500">Run split</p>
+              <p className="mt-1 text-sm font-black text-slate-900">user {legacyRunBackfill.userRuns.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-600">ops-doctor {legacyRunBackfill.opsDoctorRuns.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[11px] font-semibold text-slate-500">Backfillable missing resultDto</p>
+              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.missingResultDtoCandidates.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-600">total runs {legacyRunBackfill.totalRuns.toLocaleString()}</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+              <p className="text-[11px] font-semibold text-slate-500">Unreadable meta</p>
+              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.unreadableCandidates.toLocaleString()}</p>
+              <p className="text-[11px] text-slate-600">separate investigation needed</p>
+            </div>
+          </div>
         </div>
       </Card>
 

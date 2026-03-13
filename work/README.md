@@ -1,6 +1,6 @@
 # /work 정책
 
-`/work`는 라운드 종료 기록을 남기는 tracked closeout 디렉터리입니다.
+`/work`는 라운드 종료 기록을 남기는 closeout 디렉터리입니다. 최종적으로는 tracked closeout을 기준으로 유지합니다.
 
 ## tracked 대상
 - `work/<month>/<day>/YYYY-MM-DD-<slug>.md` 형식의 closeout 메모
@@ -11,6 +11,7 @@
 - 오늘 문서가 없으면 전날 날짜 폴더의 `/work` 문서 중 최신 파일을 확인하고 이어받습니다.
 - 종료 기록을 저장할 때는 `work/<현재월>/<현재일>/` 폴더가 없으면 먼저 생성합니다.
 - 한 라운드가 끝날 때 실제 변경, 실제 검증, 남은 리스크, 다음 우선순위를 한 파일에 정리합니다.
+- 최종 `pnpm multi-agent:guard` 전에 이번 라운드 closeout도 git tracked 상태로 맞춰 `latestTrackedWorkNote`가 현재 라운드를 가리키게 유지합니다.
 - 새 closeout에는 `## 사용 skill` 섹션을 항상 두고, 실제 사용한 skill이 없으면 `- 없음`으로 적습니다.
 - 후속 라운드는 이전 메모를 읽고 이어받되, 새 사실이 생기면 같은 날이라도 새 slug로 별도 파일을 추가합니다.
 - 파일명은 `YYYY-MM-DD-<slug>.md` 형식을 유지해 연도와 작업 주제를 함께 식별합니다.
@@ -27,3 +28,4 @@
 ## 레거시 메모
 - flat 경로(`work/YYYY-MM-DD-<slug>.md`) closeout은 더 이상 허용하지 않습니다. 남아 있으면 month/day 폴더로 이동한 뒤 링크도 함께 갱신합니다.
 - `pnpm multi-agent:guard`는 최신 closeout 경로와 핵심 섹션을 함께 확인합니다.
+- 최신 closeout이 아직 untracked여도 guard는 그 파일을 `latestWorkNote`로 보고 경로/섹션을 검증하며, 출력에 `latestWorkNoteTracking=tracked|untracked`를 같이 남깁니다.

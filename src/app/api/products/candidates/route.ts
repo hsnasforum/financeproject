@@ -1,5 +1,4 @@
-import { assertLocalHost, toGuardErrorResponse } from "../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../lib/dev/onlyDev";
+import { assertSameOrigin, toGuardErrorResponse } from "../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../lib/http/apiResponse";
 import {
   DEFAULT_INTEREST_TAX_POLICY,
@@ -30,9 +29,9 @@ function clampInt(value: unknown, fallback: number, min: number, max: number): n
   return Math.max(min, Math.min(max, normalized));
 }
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -98,6 +97,23 @@ function normalizeCandidateRows(
   return rows;
 }
 
+function isCatalogUnavailableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const codeValue = (error as Error & { code?: unknown }).code;
+  const code = typeof codeValue === "string" ? codeValue : "";
+  if (code === "P2021" || code === "P1003") return true;
+
+  const message = error.message.toLowerCase();
+  return message.includes("the table `main.product` does not exist")
+    || message.includes("the table `main.externalproduct` does not exist")
+    || message.includes("the table `main.externalsourcesnapshot` does not exist")
+    || message.includes("does not exist in the current database");
+}
+
+function toErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 async function fetchCandidatesByKind(kind: CandidateKind, q: string, limit: number, fetchedAt: string): Promise<CandidateVM[]> {
   const data = await getUnifiedProducts({
     kind,
@@ -119,10 +135,7 @@ async function fetchCandidatesByKind(kind: CandidateKind, q: string, limit: numb
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   try {
@@ -151,10 +164,24 @@ export async function GET(request: Request) {
     const fetchedAt = new Date().toISOString();
 
     const kinds: CandidateKind[] = kind === "all" ? ["deposit", "saving"] : [kind];
-    const rowsByKind = await Promise.all(
-      kinds.map(async (targetKind) => fetchCandidatesByKind(targetKind, q, limit, fetchedAt)),
-    );
-    const candidates = rowsByKind.flat().slice(0, limit);
+    let candidates: CandidateVM[] = [];
+    let degradedReason = "";
+    try {
+      const rowsByKind = await Promise.all(
+        kinds.map(async (targetKind) => fetchCandidatesByKind(targetKind, q, limit, fetchedAt)),
+      );
+      candidates = rowsByKind.flat().slice(0, limit);
+    } catch (error) {
+      if (!isCatalogUnavailableError(error)) {
+        throw error;
+      }
+      degradedReason = "PRODUCT_CATALOG_UNAVAILABLE";
+      console.warn("[products/candidates] catalog unavailable; returning empty candidates", {
+        runId,
+        kind,
+        reason: toErrorMessage(error, "unknown"),
+      });
+    }
 
     const profileContext: CandidateProfileContext = {
       monthlyIncomeNet: profileRecord.profile.monthlyIncomeNet,
@@ -189,7 +216,13 @@ export async function GET(request: Request) {
         },
         fetchedAt,
       },
-    });
+    }, degradedReason
+      ? {
+          meta: {
+            degradedReason,
+          },
+        }
+      : undefined);
   } catch (error) {
     if (error instanceof UnifiedInputError) {
       return jsonError("INPUT", error.message, { status: 400 });

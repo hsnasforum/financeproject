@@ -1,23 +1,24 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { type StoredTransaction } from "@/lib/planning/v3/domain/transactions";
-import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
-import { computeMonthlyBalances } from "@/lib/planning/v3/service/computeMonthlyBalances";
-import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
-import { buildTxnId, normalizeDescriptionForTxnId } from "@/lib/planning/v3/service/txnId";
-import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
-import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
-import { listAccounts } from "@/lib/planning/v3/store/accountsStore";
-import { getOpeningBalances } from "@/lib/planning/v3/store/openingBalancesStore";
-import { getBatchTransactions } from "@/lib/planning/v3/store/batchesStore";
-import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
-import { listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
+import {
+  applyAccountMappingOverrides,
+  buildTxnId,
+  computeMonthlyBalances,
+  detectTransfers,
+  getAccountMappingOverrides,
+  getBatchTransactions,
+  getOpeningBalances,
+  getTransferOverrides,
+  listAccounts,
+  listOverrides,
+  normalizeDescriptionForTxnId,
+  readBatchTransactions,
+  type StoredTransaction,
+} from "@/lib/planning/v3/balances/monthly";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -30,7 +31,6 @@ function asBoolean(value: string | null): boolean {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -68,9 +68,6 @@ function toStoredTransactions(batchId: string, rows: Awaited<ReturnType<typeof r
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

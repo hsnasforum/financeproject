@@ -10,6 +10,8 @@ import { buildScenarios } from "../news/scenario";
 import { selectTopFromItems } from "../news/select/selectTop";
 import { computeDailyStats } from "../news/trend/computeDailyStats";
 import { type Observation } from "../indicators/contracts";
+import { type TopicDailyStat as DigestTopicDailyStat } from "../news/contracts";
+import { type TopicDailyStat as TrendTopicDailyStat } from "../news/trend/contracts";
 
 type GoldenOutput = {
   digest: {
@@ -206,7 +208,7 @@ const HISTORY_BY_TOPIC = {
     sourceDiversity: 0,
     burstGrade: "Low" as const,
   })),
-} as const;
+} as Record<string, TrendTopicDailyStat[]>;
 
 const PROFILE: ExposureProfile = {
   savedAt: "2026-03-04T12:00:00.000Z",
@@ -263,6 +265,24 @@ function runFixturePipeline(): GoldenOutput {
     now: NOW,
     historyByTopic: HISTORY_BY_TOPIC,
   });
+  const digestBurstTopics: DigestTopicDailyStat[] = todayStats.map((row) => ({
+    topicId: row.topicId,
+    topicLabel: row.topicLabel,
+    count: row.count,
+    scoreSum: row.scoreSum,
+    dateKst: DATE_KST,
+    sourceDiversity: row.sourceDiversity,
+    baselineMean: 0,
+    baselineStddev: 0,
+    burstZ: 0,
+    burstGrade: row.burstGrade === "High"
+      ? "상"
+      : row.burstGrade === "Med"
+        ? "중"
+        : row.burstGrade === "Low"
+          ? "하"
+          : "Unknown",
+  }));
 
   const digest = buildDigestFromInputs({
     generatedAt: NOW.toISOString(),
@@ -271,14 +291,14 @@ function runFixturePipeline(): GoldenOutput {
       toKst: DATE_KST,
     },
     topResult,
-    burstTopics: todayStats,
+    burstTopics: digestBurstTopics,
     readIndicatorSeries,
   });
 
   const digestDay = buildDigestDay({
     date: DATE_KST,
     topResult,
-    burstTopics: todayStats,
+    burstTopics: digestBurstTopics,
   });
 
   const scenarios = buildScenarios({
@@ -398,7 +418,13 @@ function runFixturePipeline(): GoldenOutput {
       burstTopics: digest.burstTopics.map((row) => ({
         topicId: row.topicId,
         count: row.count,
-        burstGrade: row.burstGrade,
+        burstGrade: row.burstGrade === "상"
+          ? "High"
+          : row.burstGrade === "중"
+            ? "Med"
+            : row.burstGrade === "하"
+              ? "Low"
+              : row.burstGrade,
         scoreSum: row.scoreSum,
         sourceDiversity: row.sourceDiversity,
       })),

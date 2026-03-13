@@ -4,7 +4,6 @@ import { useState } from "react";
 import { scoreProducts, type RecommendProfile, type ScoredProduct } from "@/lib/recommend/score";
 import { type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
-import { uiTextKo } from "@/lib/uiText.ko";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";

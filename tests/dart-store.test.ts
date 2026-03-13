@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   add,
   addFavorite,
+  clearRecentSearches,
   dartStoreConfig,
   isFavorite,
   list,
   listFavorites,
   listRecent,
+  listRecentSearches,
   pushRecent,
+  pushRecentSearch,
   remove,
   removeFavorite,
 } from "../src/lib/dart/dartStore";
@@ -78,5 +81,26 @@ describe("dartStore favorites/recent", () => {
     expect(deduped.length).toBe(20);
     expect(deduped[0]?.corpCode).toBe("10000010");
     expect(deduped.filter((item) => item.corpCode === "10000010")).toHaveLength(1);
+  });
+
+  it("pushes recent searches with dedupe and max 8", () => {
+    const storage = createStorage();
+    for (let i = 0; i < 12; i += 1) {
+      pushRecentSearch(`회사 ${i}`, storage);
+    }
+
+    const recentSearches = listRecentSearches(storage);
+    expect(recentSearches.length).toBe(dartStoreConfig.recentSearchesMax);
+    expect(recentSearches[0]?.query).toBe("회사 11");
+    expect(recentSearches[7]?.query).toBe("회사 4");
+    expect(storage.getItem(dartStoreConfig.recentSearchesKey)).not.toBeNull();
+
+    pushRecentSearch("  회사   7  ", storage);
+    const deduped = listRecentSearches(storage);
+    expect(deduped[0]?.query).toBe("회사 7");
+    expect(deduped.filter((item) => item.query === "회사 7")).toHaveLength(1);
+
+    clearRecentSearches(storage);
+    expect(listRecentSearches(storage)).toEqual([]);
   });
 });

@@ -1,12 +1,23 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { NumberField } from "@/components/forms/NumberField";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
+import {
+  BodyActionLink,
+  BodyEmptyState,
+  BodyInset,
+  BodySectionHeading,
+  BodyStatusInset,
+  BodyTableFrame,
+  bodyChoiceRowClassName,
+  bodyDenseActionRowClassName,
+  bodyFieldClassName,
+  bodyLabelClassName,
+} from "@/components/ui/BodyTone";
 import { SourceBadge } from "@/components/debug/SourceBadge";
 import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
 import { type FreshnessSourceSpec } from "@/components/data/freshness";
@@ -543,7 +554,7 @@ function RecommendPageInner() {
   const autoRunTriggeredRef = useRef(false);
   const submitInFlightRef = useRef(false);
 
-  function showValidationIssues(issues: Issue[]) {
+  const showValidationIssues = useCallback((issues: Issue[]) => {
     setFormIssues(issues);
     setError(firstError(issues) ?? "입력값을 확인해 주세요.");
     setTimeout(() => {
@@ -551,65 +562,16 @@ function RecommendPageInner() {
       focusFirstError(issues.map((entry) => entry.path));
       announce(`입력 오류 ${issues.length}건이 있습니다.`);
     }, 0);
-  }
-
-  useEffect(() => {
-    let nextProfile: StoredProfile = recommendProfileDefaults();
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as unknown;
-        const normalized = parseRecommendProfile({
-          ...nextProfile,
-          ...(typeof parsed === "object" && parsed ? (parsed as Record<string, unknown>) : {}),
-        });
-        nextProfile = normalized.value;
-      }
-    } catch {
-      // ignore malformed localStorage
-    }
-
-    const queryOverrides = parseQueryOverrides(searchParams);
-    if (queryOverrides.issues.length > 0) {
-      showValidationIssues(queryOverrides.issues);
-    } else {
-      setFormIssues([]);
-    }
-    if (queryOverrides.hasQuery) {
-      nextProfile = parseRecommendProfile({ ...nextProfile, ...queryOverrides.profilePatch }).value;
-    }
-    const stored = parseStoredResult(localStorage.getItem(RESULT_STORAGE_KEY));
-    setLastStored(stored);
-    lastStoredRef.current = stored;
-    setDiff(null);
-    setEntrySource(queryOverrides.source);
-    setProfile(nextProfile);
-    setReadyToPersist(true);
-
-    if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
-      autoRunTriggeredRef.current = true;
-      void submitWithProfile(nextProfile, {
-        autoSave: queryOverrides.autoSave,
-        goHistory: queryOverrides.goHistory,
-        autorunSig: buildAutorunSignature(nextProfile),
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!readyToPersist) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
-  }, [profile, readyToPersist]);
-
-  async function submitWithProfile(
+  const submitWithProfile = useCallback(async (
     profileInput: StoredProfile,
     options?: {
       autoSave?: boolean;
       goHistory?: boolean;
       autorunSig?: string;
     },
-  ) {
+  ) => {
     if (submitInFlightRef.current) return;
     submitInFlightRef.current = true;
     setLoading(true);
@@ -681,7 +643,55 @@ function RecommendPageInner() {
       setLoading(false);
       submitInFlightRef.current = false;
     }
-  }
+  }, [router, showValidationIssues]);
+
+  useEffect(() => {
+    let nextProfile: StoredProfile = recommendProfileDefaults();
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        const normalized = parseRecommendProfile({
+          ...nextProfile,
+          ...(typeof parsed === "object" && parsed ? (parsed as Record<string, unknown>) : {}),
+        });
+        nextProfile = normalized.value;
+      }
+    } catch {
+      // ignore malformed localStorage
+    }
+
+    const queryOverrides = parseQueryOverrides(searchParams);
+    if (queryOverrides.issues.length > 0) {
+      showValidationIssues(queryOverrides.issues);
+    } else {
+      setFormIssues([]);
+    }
+    if (queryOverrides.hasQuery) {
+      nextProfile = parseRecommendProfile({ ...nextProfile, ...queryOverrides.profilePatch }).value;
+    }
+    const stored = parseStoredResult(localStorage.getItem(RESULT_STORAGE_KEY));
+    setLastStored(stored);
+    lastStoredRef.current = stored;
+    setDiff(null);
+    setEntrySource(queryOverrides.source);
+    setProfile(nextProfile);
+    setReadyToPersist(true);
+
+    if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
+      autoRunTriggeredRef.current = true;
+      void submitWithProfile(nextProfile, {
+        autoSave: queryOverrides.autoSave,
+        goHistory: queryOverrides.goHistory,
+        autorunSig: buildAutorunSignature(nextProfile),
+      });
+    }
+  }, [searchParams, showValidationIssues, submitWithProfile]);
+
+  useEffect(() => {
+    if (!readyToPersist) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
+  }, [profile, readyToPersist]);
 
   const purposeLabel = useMemo(() => {
     if (profile.purpose === "emergency") return "단기 비상금";
@@ -735,18 +745,20 @@ function RecommendPageInner() {
     <main data-testid="recommend-root" className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4">
       <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
-      <section className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-slate-900">설명가능 예적금 추천</h1>
-        <p className="mt-2 text-sm text-slate-600">후보군 내 상대 비교 점수이며 확정 수익을 의미하지 않습니다.</p>
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <BodySectionHeading
+          title="설명가능 예적금 추천"
+          description="후보군 내 상대 비교 점수이며 확정 수익을 의미하지 않습니다."
+        />
         <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mt-4" />
         <ErrorAnnouncer />
 
         <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <label className="text-sm">
+          <label className={bodyLabelClassName}>
             목적
             <select
               id={pathToId("purpose")}
-              className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3"
+              className={bodyFieldClassName}
               value={profile.purpose}
               onChange={(e) => setProfile((prev) => ({ ...prev, purpose: e.target.value as StoredProfile["purpose"] }))}
               aria-invalid={Boolean(fieldIssueMap.purpose?.[0])}
@@ -759,11 +771,11 @@ function RecommendPageInner() {
             <FieldError id={`${pathToId("purpose")}_error`} message={fieldIssueMap.purpose?.[0]} />
           </label>
 
-          <label className="text-sm">
+          <label className={bodyLabelClassName}>
             상품 유형
             <select
               id={pathToId("kind")}
-              className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3"
+              className={bodyFieldClassName}
               value={profile.kind}
               onChange={(e) => setProfile((prev) => ({ ...prev, kind: e.target.value as StoredProfile["kind"] }))}
               aria-invalid={Boolean(fieldIssueMap.kind?.[0])}
@@ -775,11 +787,11 @@ function RecommendPageInner() {
             <FieldError id={`${pathToId("kind")}_error`} message={fieldIssueMap.kind?.[0]} />
           </label>
 
-          <label className="text-sm">
+          <label className={bodyLabelClassName}>
             선호 기간
             <select
               id={pathToId("preferredTerm")}
-              className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3"
+              className={bodyFieldClassName}
               value={profile.preferredTerm}
               onChange={(e) => setProfile((prev) => ({ ...prev, preferredTerm: Number(e.target.value) as StoredProfile["preferredTerm"] }))}
               aria-invalid={Boolean(fieldIssueMap.preferredTerm?.[0])}
@@ -794,11 +806,11 @@ function RecommendPageInner() {
             <FieldError id={`${pathToId("preferredTerm")}_error`} message={fieldIssueMap.preferredTerm?.[0]} />
           </label>
 
-          <label className="text-sm">
+          <label className={bodyLabelClassName}>
             유동성 선호
             <select
               id={pathToId("liquidityPref")}
-              className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3"
+              className={bodyFieldClassName}
               value={profile.liquidityPref}
               onChange={(e) => setProfile((prev) => ({ ...prev, liquidityPref: e.target.value as StoredProfile["liquidityPref"] }))}
               aria-invalid={Boolean(fieldIssueMap.liquidityPref?.[0])}
@@ -811,11 +823,11 @@ function RecommendPageInner() {
             <FieldError id={`${pathToId("liquidityPref")}_error`} message={fieldIssueMap.liquidityPref?.[0]} />
           </label>
 
-          <label className="text-sm">
+          <label className={bodyLabelClassName}>
             금리 선택 정책
             <select
               id={pathToId("rateMode")}
-              className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3"
+              className={bodyFieldClassName}
               value={profile.rateMode}
               onChange={(e) => setProfile((prev) => ({ ...prev, rateMode: e.target.value as StoredProfile["rateMode"] }))}
               aria-invalid={Boolean(fieldIssueMap.rateMode?.[0])}
@@ -828,13 +840,13 @@ function RecommendPageInner() {
             <FieldError id={`${pathToId("rateMode")}_error`} message={fieldIssueMap.rateMode?.[0]} />
           </label>
 
-          <label className="text-sm">
+          <label className={bodyLabelClassName}>
             Top N
             <NumberField
               id={pathToId("topN")}
               min={1}
               max={50}
-              className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3"
+              className={bodyFieldClassName}
               value={profile.topN}
               onValueChange={(value) => setProfile((prev) => ({ ...prev, topN: value === null ? 0 : Math.trunc(value) }))}
               aria-invalid={Boolean(fieldIssueMap.topN?.[0])}
@@ -844,7 +856,7 @@ function RecommendPageInner() {
           </label>
         </div>
 
-        <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50 p-4">
+        <BodyInset className="mt-5">
           <Button
             size="sm"
             variant="ghost"
@@ -855,33 +867,13 @@ function RecommendPageInner() {
           </Button>
           {advancedOpen ? (
             <div className="mt-4 space-y-4">
-              <div className="grid gap-2 md:grid-cols-3">
-                <label className="inline-flex items-center gap-2 text-xs">
-                  <input
-                    id={pathToId("candidatePool")}
-                    type="radio"
-                    name="candidate-pool"
-                    checked={profile.candidatePool === "legacy"}
-                    onChange={() => setProfile((prev) => ({ ...prev, candidatePool: "legacy", candidateSources: ["finlife"] }))}
-                  />
-                  후보풀 legacy
-                </label>
-                <label className="inline-flex items-center gap-2 text-xs">
-                  <input
-                    id={pathToId("candidatePool_unified")}
-                    type="radio"
-                    name="candidate-pool"
-                    checked={profile.candidatePool === "unified"}
-                    onChange={() => setProfile((prev) => ({ ...prev, candidatePool: "unified", candidateSources: ["finlife"] }))}
-                  />
-                  후보풀 unified(merged)
-                </label>
-              </div>
-              <FieldError id={`${pathToId("candidatePool")}_error`} message={fieldIssueMap.candidatePool?.[0]} />
+              <BodyInset className="bg-white px-3 py-2 text-xs text-slate-600">
+                후보풀은 `unified(merged)`로 고정되어 동작합니다.
+              </BodyInset>
               <p className="text-xs text-slate-500">unified 모드는 merged만 사용하며 integrated는 사용자 화면에 노출하지 않습니다.</p>
 
               <div className="grid gap-2 md:grid-cols-3">
-                <label className="inline-flex items-center gap-2 text-xs">
+                <label className={bodyChoiceRowClassName}>
                   <input
                     id={pathToId("depositProtection")}
                     type="radio"
@@ -891,7 +883,7 @@ function RecommendPageInner() {
                   />
                   보호신호 any
                 </label>
-                <label className="inline-flex items-center gap-2 text-xs">
+                <label className={bodyChoiceRowClassName}>
                   <input
                     id={pathToId("depositProtection_prefer")}
                     type="radio"
@@ -901,7 +893,7 @@ function RecommendPageInner() {
                   />
                   보호신호 prefer
                 </label>
-                <label className="inline-flex items-center gap-2 text-xs">
+                <label className={bodyChoiceRowClassName}>
                   <input
                     id={pathToId("depositProtection_require")}
                     type="radio"
@@ -961,9 +953,9 @@ function RecommendPageInner() {
               </div>
             </div>
           ) : null}
-        </div>
+        </BodyInset>
 
-        <div className="mt-6 flex items-center gap-3">
+        <div className={`mt-6 ${bodyDenseActionRowClassName}`}>
           <Button
             data-testid="recommend-submit"
             variant="primary"
@@ -980,20 +972,20 @@ function RecommendPageInner() {
         ) : null}
       </section>
 
-      {error ? <section className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</section> : null}
+      {error ? <BodyStatusInset className="text-sm" tone="danger">{error}</BodyStatusInset> : null}
 
       {result?.message ? (
-        <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{result.message}</section>
+        <BodyStatusInset className="text-sm" tone="warning">{result.message}</BodyStatusInset>
       ) : null}
 
       <FallbackBanner fallback={result?.meta?.fallback} />
 
       {result?.meta ? (
-        <section className="rounded-[2rem] shadow-sm border border-slate-100 bg-white p-5">
-          <h2 className="text-lg font-semibold text-slate-900">가정값 및 메타</h2>
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <BodySectionHeading title="가정값 및 메타" />
           <div className="mt-3 grid gap-2 text-sm text-slate-700">
             <p>kind: {result.meta.kind} / topN: {result.meta.topN} / rateMode: {result.meta.rateMode}</p>
-            <p>candidatePool: {result.meta.candidatePool ?? "legacy"} / sources: {(result.meta.candidateSources ?? ["finlife"]).join(", ")} / depositProtection: {result.meta.depositProtection ?? "any"}</p>
+            <p>candidatePool: {result.meta.candidatePool ?? "unified"} / sources: {(result.meta.candidateSources ?? ["finlife"]).join(", ")} / depositProtection: {result.meta.depositProtection ?? "any"}</p>
             <p>weights: rate {result.meta.weights.rate.toFixed(2)}, term {result.meta.weights.term.toFixed(2)}, liquidity {result.meta.weights.liquidity.toFixed(2)}</p>
             <p>{result.meta.assumptions.rateSelectionPolicy}</p>
             <p>{result.meta.assumptions.liquidityPolicy}</p>
@@ -1006,8 +998,8 @@ function RecommendPageInner() {
       ) : null}
 
       {result ? (
-        <section className="rounded-[2rem] shadow-sm border border-slate-100 bg-white p-5">
-          <div className="flex flex-wrap items-center gap-2">
+        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className={bodyDenseActionRowClassName}>
             <Button
               size="sm"
               variant="outline"
@@ -1032,15 +1024,20 @@ function RecommendPageInner() {
             >
               CSV 내보내기
             </Button>
-            <Link href="/recommend/history"><Button size="sm" variant="secondary">히스토리 보기</Button></Link>
+            <BodyActionLink
+              href="/recommend/history"
+              className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 no-underline shadow-sm transition hover:bg-white"
+            >
+              히스토리 보기
+            </BodyActionLink>
           </div>
           {actionNotice ? <p className="mt-2 text-xs text-slate-600">{actionNotice}</p> : null}
         </section>
       ) : null}
 
-      <section className="rounded-[2rem] shadow-sm border border-slate-100 bg-white p-5">
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">지난 추천 기록</h2>
+          <BodySectionHeading title="지난 추천 기록" />
           <Button
             size="sm"
             variant="outline"
@@ -1057,7 +1054,11 @@ function RecommendPageInner() {
         </div>
 
         {!lastStored ? (
-          <p className="mt-2 text-sm text-slate-600">저장된 추천 기록이 없습니다. 추천 실행 후 비교 기록이 생성됩니다.</p>
+          <BodyEmptyState
+            className="mt-3"
+            description="추천 실행을 저장하면 다음 실행 때 순위, 금리, 기간 변화가 여기에서 비교됩니다."
+            title="저장된 추천 기록이 없습니다."
+          />
         ) : (
           <>
             <p className="mt-2 text-sm text-slate-600">
@@ -1072,22 +1073,22 @@ function RecommendPageInner() {
                   비교 기준: {formatKoreanDateTime(diff.previousSavedAt)} → {formatKoreanDateTime(diff.currentSavedAt)}
                 </p>
                 <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
+                  <BodyInset className="text-sm">
                     <p className="font-semibold text-slate-900">변경</p>
                     <p className="mt-1 text-slate-700">{diff.changed.length}건</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
+                  </BodyInset>
+                  <BodyInset className="text-sm">
                     <p className="font-semibold text-slate-900">신규</p>
                     <p className="mt-1 text-slate-700">{diff.added.length}건</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
+                  </BodyInset>
+                  <BodyInset className="text-sm">
                     <p className="font-semibold text-slate-900">제외</p>
                     <p className="mt-1 text-slate-700">{diff.removed.length}건</p>
-                  </div>
+                  </BodyInset>
                 </div>
 
                 {changedPreview.length > 0 ? (
-                  <div className="mt-4 overflow-x-auto">
+                  <BodyTableFrame className="mt-4">
                     <p className="text-sm font-semibold text-slate-900">변경 항목 (최대 12)</p>
                     <table className="mt-2 min-w-full text-sm">
                       <thead>
@@ -1122,7 +1123,7 @@ function RecommendPageInner() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
+                  </BodyTableFrame>
                 ) : null}
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -1159,12 +1160,18 @@ function RecommendPageInner() {
 
       <section data-testid="recommend-result" className="grid gap-4">
         {(result?.items ?? []).length === 0 && result?.ok ? (
-          <article className="rounded-[2rem] shadow-sm border border-slate-100 bg-white p-6 text-sm text-slate-600">
-            추천 후보가 없어 표시할 항목이 없습니다. 조건을 바꿔 다시 실행하거나 상품 탐색에서 직접 확인해보세요.
+          <article className="rounded-[2rem] border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+            <BodyEmptyState
+              description="조건을 조금 완화해서 다시 실행하거나 상품 탐색 화면에서 직접 필터링해 확인해보세요."
+              title="추천 후보가 없어 표시할 항목이 없습니다."
+            />
             <div className="mt-4">
-              <Link href={profile.kind === "saving" ? "/products/saving" : "/products/deposit"} className="inline-flex rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <BodyActionLink
+                href={profile.kind === "saving" ? "/products/saving" : "/products/deposit"}
+                className="inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:bg-white"
+              >
                 상품 탐색으로 이동
-              </Link>
+              </BodyActionLink>
             </div>
           </article>
         ) : null}
@@ -1173,7 +1180,7 @@ function RecommendPageInner() {
           const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
           const detailProduct = buildDetailProduct(item);
           return (
-            <article key={itemKey} className="rounded-[2rem] shadow-sm border border-slate-100 bg-white p-5">
+            <article key={itemKey} className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white">#{index + 1}</span>
                 <SourceBadge sourceId={item.sourceId} />
@@ -1192,7 +1199,7 @@ function RecommendPageInner() {
               <p className="mt-1 text-xs text-slate-500">unifiedId: {item.unifiedId}</p>
               <p className="mt-1 text-sm text-slate-700">선택 옵션: {item.selectedOption.saveTrm ?? "-"}개월 / 적용금리 {item.selectedOption.appliedRate.toFixed(2)}%</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">최종 점수: {item.finalScore.toFixed(4)}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className={`mt-3 ${bodyDenseActionRowClassName}`}>
                 <Button
                   size="sm"
                   variant="outline"
@@ -1200,9 +1207,12 @@ function RecommendPageInner() {
                 >
                   상세보기
                 </Button>
-                <Link href={`/products/catalog/${encodeURIComponent(item.unifiedId)}`}>
-                  <Button size="sm" variant="outline">통합 상세 보기</Button>
-                </Link>
+                <BodyActionLink
+                  href={`/products/catalog/${encodeURIComponent(item.unifiedId)}`}
+                  className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 no-underline shadow-sm transition hover:bg-white"
+                >
+                  통합 상세 보기
+                </BodyActionLink>
                 <Button
                   size="sm"
                   variant="secondary"
@@ -1217,13 +1227,13 @@ function RecommendPageInner() {
 
               <div className="mt-4 grid gap-2 md:grid-cols-3">
                 {item.breakdown.map((part) => (
-                  <div key={part.key} className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
+                  <BodyInset className="text-sm" key={part.key}>
                     <p className="font-semibold text-slate-900">{part.label}</p>
                     <p>raw: {part.raw.toFixed(4)}</p>
                     <p>weight: {part.weight.toFixed(2)}</p>
                     <p>contribution: {part.contribution.toFixed(4)}</p>
                     <p className="mt-1 text-xs text-slate-600">{part.reason}</p>
-                  </div>
+                  </BodyInset>
                 ))}
               </div>
 

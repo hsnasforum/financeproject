@@ -9,6 +9,7 @@ const DOCS_DIR = path.join(ROOT, "docs");
 const DOCS_RELEASES_DIR = path.join(DOCS_DIR, "releases");
 const SCRIPTS_DIR = path.join(ROOT, "scripts");
 const ROUTES_INVENTORY_PATH = path.join(DOCS_DIR, "routes-inventory.md");
+const CURRENT_SCREENS_PATH = path.join(DOCS_DIR, "current-screens.md");
 const PLANNING_API_DIR = path.join(APP_DIR, "api", "planning", "v2");
 const PLANNING_CORE_DIR = path.join(SRC_DIR, "lib", "planning", "core");
 const README_PATH = path.join(ROOT, "README.md");
@@ -285,8 +286,12 @@ function checkPlanningCoreFile(filePath, content) {
 }
 
 const LEGACY_PLANNER_ROUTE_PATTERN = /(^|[\s("'`])\/planner(?:[/?#][^\s"'`)]*)?(?=$|[\s)"'`.,;:])/;
+const LEGACY_PLANNER_ROUTE_ALLOWLIST = new Set([
+  "src/lib/planning/legacyPlannerRedirect.ts",
+]);
 
 function checkLegacyPlannerRoute(filePath, content) {
+  if (LEGACY_PLANNER_ROUTE_ALLOWLIST.has(rel(filePath))) return [];
   const issues = [];
   const lines = content.split(/\r?\n/);
   lines.forEach((line, index) => {
@@ -376,6 +381,7 @@ async function run() {
 
   for (const filePath of legacyRouteScanFiles) {
     if (path.resolve(filePath) === path.resolve(ROUTES_INVENTORY_PATH)) continue;
+    if (path.resolve(filePath) === path.resolve(CURRENT_SCREENS_PATH)) continue;
     const content = await fs.readFile(filePath, "utf8");
     issues.push(...checkLegacyPlannerRoute(filePath, content));
   }

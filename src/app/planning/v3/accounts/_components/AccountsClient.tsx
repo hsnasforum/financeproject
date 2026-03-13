@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { reportHeroActionLinkClassName, ReportHeroCard, ReportHeroStatCard, ReportHeroStatGrid } from "@/components/ui/ReportTone";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
 type Account = {
@@ -92,6 +93,8 @@ export function AccountsClient() {
   const [openingDateDrafts, setOpeningDateDrafts] = useState<Record<string, string>>({});
   const [openingAmountDrafts, setOpeningAmountDrafts] = useState<Record<string, string>>({});
   const [savingOpeningId, setSavingOpeningId] = useState("");
+  const openingCount = rows.filter((row) => Boolean(openingByAccount[row.id])).length;
+  const notedCount = rows.filter((row) => asString(row.note).length > 0).length;
 
   const loadAccounts = useCallback(async () => {
     setLoading(true);
@@ -282,29 +285,38 @@ export function AccountsClient() {
   return (
     <PageShell>
       <div className="space-y-5" data-testid="v3-accounts-root">
-        <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Accounts</h1>
-          <p className="text-sm text-slate-600">
-            계좌 레지스트리와 기준일 초기잔액을 관리합니다.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/transactions/batches">
-              배치 목록
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/import">
-              CSV Import
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/balances">
-              Balance Timeline
-            </Link>
-          </div>
-        </Card>
+        <ReportHeroCard
+          kicker="Account Registry"
+          title="계좌와 기준 잔액을 먼저 정리합니다"
+          description="입출금, 카드, 현금 계정을 한곳에서 정리하고 월별 잔액 계산에 쓰일 기준일 초기잔액까지 연결합니다."
+          action={(
+            <>
+              <Link className={reportHeroActionLinkClassName} href="/planning/v3/transactions/batches">
+                배치 목록
+              </Link>
+              <Link className={reportHeroActionLinkClassName} href="/planning/v3/import/csv">
+                CSV Import
+              </Link>
+              <Link className={reportHeroActionLinkClassName} href="/planning/v3/balances">
+                Balance Timeline
+              </Link>
+            </>
+          )}
+        >
+          <ReportHeroStatGrid>
+            <ReportHeroStatCard label="등록 계좌" value={`${rows.length}개`} description="현재 저장된 계좌 수" />
+            <ReportHeroStatCard label="기준 잔액 입력" value={`${openingCount}개`} description="opening balance 연결 완료" />
+            <ReportHeroStatCard label="메모 포함" value={`${notedCount}개`} description="설명/식별 노트가 있는 계좌" />
+            <ReportHeroStatCard label="현재 상태" value={loading ? "불러오는 중" : "편집 가능"} description={message ? "처리 메시지 확인 필요" : "바로 추가/수정할 수 있습니다."} />
+          </ReportHeroStatGrid>
+          {message ? <p className="text-xs font-semibold text-rose-300">{message}</p> : null}
+        </ReportHeroCard>
 
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">계좌 추가</h2>
           <div className="grid gap-2 sm:grid-cols-4">
             <input
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
               data-testid="v3-account-name"
               onChange={(event) => {
                 setName(event.currentTarget.value);
@@ -313,7 +325,7 @@ export function AccountsClient() {
               value={name}
             />
             <select
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
               data-testid="v3-account-kind"
               onChange={(event) => {
                 setKind(event.currentTarget.value as Account["kind"]);
@@ -329,7 +341,7 @@ export function AccountsClient() {
               <option value="other">other</option>
             </select>
             <input
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
+              className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2"
               onChange={(event) => {
                 setNote(event.currentTarget.value);
               }}
@@ -352,7 +364,6 @@ export function AccountsClient() {
 
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">계좌 목록</h2>
-          {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
           {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : null}
           {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">등록된 계좌가 없습니다.</p> : null}
 
@@ -360,7 +371,7 @@ export function AccountsClient() {
             <div className="space-y-2">
               {rows.map((row) => (
                 <div
-                  className="rounded-xl border border-slate-200 p-3"
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
                   data-testid={`v3-account-row-${row.id}`}
                   key={row.id}
                 >
@@ -368,14 +379,14 @@ export function AccountsClient() {
                     <div className="space-y-2">
                       <div className="grid gap-2 sm:grid-cols-4">
                         <input
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
                           onChange={(event) => {
                             setEditName(event.currentTarget.value);
                           }}
                           value={editName}
                         />
                         <select
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
                           onChange={(event) => {
                             setEditKind(event.currentTarget.value as Account["kind"]);
                           }}
@@ -390,7 +401,7 @@ export function AccountsClient() {
                           <option value="other">other</option>
                         </select>
                         <input
-                          className="rounded-lg border border-slate-300 px-3 py-2 text-sm sm:col-span-2"
+                          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm sm:col-span-2"
                           onChange={(event) => {
                             setEditNote(event.currentTarget.value);
                           }}

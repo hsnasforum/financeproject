@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   CategoryRulesStoreInputError,
   deleteRule,
-} from "@/lib/planning/v3/store/categoryRulesStore";
+} from "@/lib/planning/v3/categories/store";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -21,7 +19,6 @@ function asString(value: unknown): string {
 
 function withDeleteGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -42,9 +39,6 @@ function withDeleteGuard(request: Request): Response | null {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withDeleteGuard(request);
   if (guarded) return guarded;
 
@@ -65,4 +59,3 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
   }
 }
-

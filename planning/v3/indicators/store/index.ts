@@ -11,8 +11,7 @@ import {
 } from "../contracts";
 import { normalizeSeriesId } from "../aliases";
 import { parseWithV3Whitelist } from "../../security/whitelist";
-
-const DEFAULT_ROOT = path.join(process.cwd(), ".data", "indicators");
+import { resolveIndicatorsRootDir } from "../rootDir";
 
 const EMPTY_STATE: IndicatorsState = {
   schemaVersion: 1,
@@ -20,36 +19,40 @@ const EMPTY_STATE: IndicatorsState = {
   series: {},
 };
 
-export function resolveIndicatorsRoot(rootDir = DEFAULT_ROOT): string {
+function defaultRootDir(): string {
+  return resolveIndicatorsRootDir();
+}
+
+export function resolveIndicatorsRoot(rootDir = defaultRootDir()): string {
   return rootDir;
 }
 
-export function resolveSeriesDir(rootDir = DEFAULT_ROOT): string {
+export function resolveSeriesDir(rootDir = defaultRootDir()): string {
   return path.join(resolveIndicatorsRoot(rootDir), "series");
 }
 
-export function resolveMetaDir(rootDir = DEFAULT_ROOT): string {
+export function resolveMetaDir(rootDir = defaultRootDir()): string {
   return path.join(resolveIndicatorsRoot(rootDir), "meta");
 }
 
-export function resolveStatePath(rootDir = DEFAULT_ROOT): string {
+export function resolveStatePath(rootDir = defaultRootDir()): string {
   return path.join(resolveIndicatorsRoot(rootDir), "state.json");
 }
 
-export function resolveSeriesPath(seriesId: string, rootDir = DEFAULT_ROOT): string {
+export function resolveSeriesPath(seriesId: string, rootDir = defaultRootDir()): string {
   return path.join(resolveSeriesDir(rootDir), `${normalizeSeriesId(seriesId)}.jsonl`);
 }
 
-export function resolveMetaPath(seriesId: string, rootDir = DEFAULT_ROOT): string {
+export function resolveMetaPath(seriesId: string, rootDir = defaultRootDir()): string {
   return path.join(resolveMetaDir(rootDir), `${normalizeSeriesId(seriesId)}.json`);
 }
 
-function ensureDirs(rootDir = DEFAULT_ROOT): void {
+function ensureDirs(rootDir = defaultRootDir()): void {
   fs.mkdirSync(resolveSeriesDir(rootDir), { recursive: true });
   fs.mkdirSync(resolveMetaDir(rootDir), { recursive: true });
 }
 
-export function readState(rootDir = DEFAULT_ROOT): IndicatorsState {
+export function readState(rootDir = defaultRootDir()): IndicatorsState {
   const filePath = resolveStatePath(rootDir);
   if (!fs.existsSync(filePath)) return EMPTY_STATE;
   try {
@@ -60,7 +63,7 @@ export function readState(rootDir = DEFAULT_ROOT): IndicatorsState {
   }
 }
 
-export function writeState(state: IndicatorsState, rootDir = DEFAULT_ROOT): void {
+export function writeState(state: IndicatorsState, rootDir = defaultRootDir()): void {
   ensureDirs(rootDir);
   const validated = parseWithV3Whitelist(IndicatorsStateSchema, {
     schemaVersion: 1,
@@ -72,7 +75,7 @@ export function writeState(state: IndicatorsState, rootDir = DEFAULT_ROOT): void
   fs.writeFileSync(resolveStatePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
-export function readSeriesObservations(seriesId: string, rootDir = DEFAULT_ROOT): Observation[] {
+export function readSeriesObservations(seriesId: string, rootDir = defaultRootDir()): Observation[] {
   const normalizedSeriesId = normalizeSeriesId(seriesId);
   const filePath = resolveSeriesPath(normalizedSeriesId, rootDir);
   if (!fs.existsSync(filePath)) return [];
@@ -92,7 +95,7 @@ export function readSeriesObservations(seriesId: string, rootDir = DEFAULT_ROOT)
   return out;
 }
 
-export function appendSeriesObservations(seriesId: string, observations: Observation[], rootDir = DEFAULT_ROOT): {
+export function appendSeriesObservations(seriesId: string, observations: Observation[], rootDir = defaultRootDir()): {
   appended: number;
   skippedDuplicate: number;
   total: number;
@@ -139,7 +142,7 @@ export function appendSeriesObservations(seriesId: string, observations: Observa
   };
 }
 
-export function writeSeriesMeta(snapshot: SeriesSnapshot, rootDir = DEFAULT_ROOT): void {
+export function writeSeriesMeta(snapshot: SeriesSnapshot, rootDir = defaultRootDir()): void {
   ensureDirs(rootDir);
   const validated = parseWithV3Whitelist(SeriesSnapshotSchema, snapshot, {
     scope: "persistence",

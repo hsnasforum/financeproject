@@ -518,6 +518,76 @@ export function formToProfile(form: ProfileFormModel): ProfileV2 {
   return toProfileJson(form);
 }
 
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
+
+export type ProfileJsonEditorState = {
+  form: ProfileFormModel;
+  json: string;
+  jsonDraft: string;
+  jsonError: string;
+};
+
+export function buildProfileJsonEditorDraft(
+  form: ProfileFormModel,
+  name = "기본 프로필",
+): string {
+  const canonical = normalizeDraft(form as unknown as FormDraft, name);
+  return prettyJson(canonical);
+}
+
+export function buildProfileJsonEditorState(
+  form: ProfileFormModel,
+  name = "기본 프로필",
+): ProfileJsonEditorState {
+  const json = buildProfileJsonEditorDraft(form, name);
+  return {
+    form,
+    json,
+    jsonDraft: json,
+    jsonError: "",
+  };
+}
+
+export function hydrateProfileJsonEditorState(
+  profile: ProfileV2 | CanonicalProfile | unknown,
+  name = "기본 프로필",
+): ProfileJsonEditorState {
+  return buildProfileJsonEditorState(profileToForm(profile, name), name);
+}
+
+export function parseProfileJsonEditorDraft(
+  profileJsonText: string,
+  name = "기본 프로필",
+):
+  | {
+    ok: true;
+    form: ProfileFormModel;
+    json: string;
+    normalization: ProfileNormalizationDisclosure;
+  }
+  | {
+    ok: false;
+    error: string;
+  } {
+  const parsed = safeParseProfileJson(profileJsonText, name);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: parsed.error,
+    };
+  }
+
+  const form = profileToForm(parsed.profile, name);
+  return {
+    ok: true,
+    form,
+    json: prettyJson(formToProfile(form)),
+    normalization: parsed.normalization,
+  };
+}
+
 export function safeParseProfileJson(
   profileJsonText: string,
   name = "기본 프로필",
@@ -540,7 +610,7 @@ export function safeParseProfileJson(
   }
 
   try {
-  const canonical = normalizeDraftWithDisclosure(parsed as FormDraft, name);
+    const canonical = normalizeDraftWithDisclosure(parsed as FormDraft, name);
     const validation = validateProfile(canonical.profile);
     const profileErrors = validation.issues.filter((issue) => issue.severity === "error");
     if (profileErrors.length > 0) {

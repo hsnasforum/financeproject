@@ -49,9 +49,10 @@ describe("fetchEcosKeyStatisticList", () => {
       },
     }), { status: 200 }));
 
-    const error = await fetchEcosKeyStatisticList().catch((reason) => reason as Error);
+    const error = await fetchEcosKeyStatisticList().catch((reason) => reason);
     expect(error).toBeInstanceOf(Error);
-    expect(error.message).toContain("ECOS API returned an error response.");
-    expect(error.message).not.toContain("test-ecos-secret-key");
+    const message = error instanceof Error ? error.message : "";
+    expect(message).toContain("ECOS API returned an error response.");
+    expect(message).not.toContain("test-ecos-secret-key");
   });
 });

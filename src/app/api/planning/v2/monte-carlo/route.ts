@@ -15,11 +15,14 @@ import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
-import { runPlanningEngineFromProfile } from "../../../../../lib/planning/server/v2/toEngineInput";
+import {
+  buildEnginePayloadFromProfile,
+  resolveAssumptionsContextForProfile,
+  type PlanningAssumptionsContext,
+} from "../../../../../lib/planning/server/v2/toEngineInput";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import { attachEngineResponse } from "../../../../../lib/planning/engine";
 
 type MonteCarloRequestBody = {
   profile?: unknown;
@@ -33,7 +36,6 @@ type MonteCarloRequestBody = {
 
 const MONTE_CARLO_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const planningService = createPlanningService();
-type AssumptionsContext = Awaited<ReturnType<typeof planningService.resolveAssumptionsContext>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -146,16 +148,6 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   }
 }
 
-function stripLegacyTopLevelFields(data: Record<string, unknown>): Record<string, unknown> {
-  const {
-    stage: _legacyStage,
-    financialStatus: _legacyFinancialStatus,
-    stageDecision: _legacyStageDecision,
-    ...rest
-  } = data;
-  return rest;
-}
-
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -226,29 +218,30 @@ export async function POST(request: Request) {
     });
   }
 
-  let baseAssumptions: AssumptionsContext["assumptions"];
-  let snapshotMeta: AssumptionsContext["snapshotMeta"];
-  let health: AssumptionsContext["health"];
-  let scenarioOverrideForCache: AssumptionsContext["scenarioOverrideForCache"];
+  let baseAssumptions: PlanningAssumptionsContext["assumptions"];
+  let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
+  let health: PlanningAssumptionsContext["health"];
+  let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
   let snapshotId: string | undefined;
-  try {
-    const context = await planningService.resolveAssumptionsContext({
+  {
+    const resolvedContext = await resolveAssumptionsContextForProfile({
+      planningService,
       profile,
       riskTolerance,
       assumptionsOverridesRaw: assumptionsOverrides,
       requestedSnapshotId,
     });
-    baseAssumptions = context.assumptions;
-    snapshotMeta = context.snapshotMeta;
-    health = context.health;
-    scenarioOverrideForCache = context.scenarioOverrideForCache;
-    snapshotId = context.snapshotId;
-  } catch (error) {
-    const normalized = toPlanningError(error);
-    if (normalized.code === "SNAPSHOT_NOT_FOUND") {
-      return fail("SNAPSHOT_NOT_FOUND", undefined, { status: 400 });
+    if (!resolvedContext.ok) {
+      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+        return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+      }
+      return fail(resolvedContext.error.code, resolvedContext.error.message);
     }
-    return fail(normalized.code, normalized.message);
+    baseAssumptions = resolvedContext.context.assumptions;
+    snapshotMeta = resolvedContext.context.snapshotMeta;
+    health = resolvedContext.context.health;
+    scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
+    snapshotId = resolvedContext.context.snapshotId;
   }
 
   const keyBundle = buildCacheKey({
@@ -279,9 +272,8 @@ export async function POST(request: Request) {
     }>("monteCarlo", keyBundle.key);
     if (cached) {
       await recordCacheUsage("monteCarlo", true).catch(() => undefined);
-      const cachedData = stripLegacyTopLevelFields(cached.data.data);
-      const cachedEngineResult = runPlanningEngineFromProfile(profile);
-      return ok(attachEngineResponse(cachedEngineResult, cachedData), {
+      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
+      return ok(data, {
         ...cached.data.meta,
         cache: {
           hit: true,
@@ -291,17 +283,25 @@ export async function POST(request: Request) {
     }
     await recordCacheUsage("monteCarlo", false).catch(() => undefined);
 
-    const engineResult = runPlanningEngineFromProfile(profile, {
-      runCore: () => planningService.monteCarlo({
-        profile,
-        horizonMonths,
-        baseAssumptions,
-        policyId,
-        paths: monteCarloConfig.paths,
-        seed: monteCarloConfig.seed,
-        riskTolerance,
+    const { data } = buildEnginePayloadFromProfile(
+      profile,
+      (engineResult) => ({
+        baseAssumptionsUsed: baseAssumptions,
+        monteCarlo: engineResult.core,
+        healthWarnings: health.warnings,
       }),
-    });
+      {
+        runCore: () => planningService.monteCarlo({
+          profile,
+          horizonMonths,
+          baseAssumptions,
+          policyId,
+          paths: monteCarloConfig.paths,
+          seed: monteCarloConfig.seed,
+          riskTolerance,
+        }),
+      },
+    );
 
     const payload = {
       meta: {
@@ -309,11 +309,7 @@ export async function POST(request: Request) {
         snapshot: snapshotMeta,
         health: health.summary,
       },
-      data: attachEngineResponse(engineResult, {
-        baseAssumptionsUsed: baseAssumptions,
-        monteCarlo: engineResult.core,
-        healthWarnings: health.warnings,
-      }),
+      data,
     };
 
     await setCache({

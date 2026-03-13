@@ -1,7 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  BodyActionLink,
+  BodyEmptyState,
+  BodyInset,
+  BodyTableFrame,
+  bodyDenseActionRowClassName,
+} from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -135,11 +141,15 @@ export default function ProductsComparePage() {
 
       <Card className="mb-6 border-none shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3 text-sm font-bold text-slate-700">
-            <span className="bg-surface-muted px-3 py-1 rounded-full border border-border">비교함: <span className="text-primary font-black ml-1">{ids.length}/{compareStoreConfig.max}</span></span>
-            <span className="bg-surface-muted px-3 py-1 rounded-full border border-border">유효 상품: <span className="text-primary font-black ml-1">{validCount}</span></span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <BodyInset className="px-3 py-2 text-sm font-bold text-slate-700">
+              비교함: <span className="ml-1 font-black text-primary">{ids.length}/{compareStoreConfig.max}</span>
+            </BodyInset>
+            <BodyInset className="px-3 py-2 text-sm font-bold text-slate-700">
+              유효 상품: <span className="ml-1 font-black text-primary">{validCount}</span>
+            </BodyInset>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className={bodyDenseActionRowClassName}>
             <Button variant="outline" size="sm" className="h-9 px-4 rounded-full" onClick={() => void refresh()} disabled={loading}>
               {loading ? "불러오는 중..." : "새로고침"}
             </Button>
@@ -155,9 +165,9 @@ export default function ProductsComparePage() {
             >
               비우기
             </Button>
-            <Link href="/products/catalog" className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-5 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-700 transition-colors">
+            <BodyActionLink href="/products/catalog" className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-5 text-[11px] font-bold text-white no-underline shadow-sm transition-colors hover:bg-emerald-700">
               상품 추가하기
-            </Link>
+            </BodyActionLink>
           </div>
         </div>
       </Card>
@@ -167,16 +177,21 @@ export default function ProductsComparePage() {
           <div className="h-16 w-16 mx-auto bg-surface rounded-full flex items-center justify-center text-slate-300 mb-4 shadow-sm">
              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
           </div>
-          <h3 className="text-lg font-black text-slate-900 mb-2">비교함이 비어 있습니다.</h3>
-          <p className="text-sm font-medium text-slate-500">통합 카탈로그나 상세 페이지에서 &quot;비교 담기&quot;를 눌러주세요.</p>
+          <BodyEmptyState
+            className="mx-auto max-w-xl border-none bg-transparent px-0 py-0"
+            description="통합 카탈로그나 상세 페이지에서 '비교 담기'를 눌러주세요."
+            title="비교함이 비어 있습니다."
+          />
         </Card>
       ) : !hasEnoughItems ? (
         <Card className="py-16 text-center border-dashed border-2 shadow-none bg-surface/50">
-          <p className="text-sm font-bold text-amber-700 bg-amber-50 inline-block px-4 py-2 rounded-xl">비교를 위해 최소 2개의 상품이 필요합니다. (현재 {ids.length}개)</p>
+          <BodyInset className="mx-auto inline-block border-amber-200 bg-amber-50 text-sm font-bold text-amber-700">
+            비교를 위해 최소 2개의 상품이 필요합니다. (현재 {ids.length}개)
+          </BodyInset>
         </Card>
       ) : (
         <Card className="p-0 overflow-hidden border-none shadow-card">
-          <div className="overflow-x-auto no-scrollbar pb-4">
+          <BodyTableFrame className="no-scrollbar rounded-none border-none pb-4">
             <table className="min-w-[840px] w-full text-sm">
               <thead className="sticky top-0 z-20 bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                 <tr className="text-left text-slate-500">
@@ -196,12 +211,12 @@ export default function ProductsComparePage() {
                       </button>
                       <p className="text-[10px] font-bold text-primary mb-1 uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
                       <p className="font-black text-base text-slate-900 leading-snug mb-3 line-clamp-2">{cell.item?.productName ?? cell.id}</p>
-                      <Link
+                      <BodyActionLink
                         href={`/products/catalog/${encodeURIComponent(cell.id)}`}
-                        className="inline-flex rounded-full bg-surface-muted px-4 py-1.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200 transition-colors"
+                        className="inline-flex rounded-full bg-slate-100 px-4 py-1.5 text-[10px] font-bold text-slate-700 no-underline transition-colors hover:bg-slate-200"
                       >
                         상세 정보 보기
-                      </Link>
+                      </BodyActionLink>
                     </th>
                   ))}
                 </tr>
@@ -262,7 +277,7 @@ export default function ProductsComparePage() {
                 </tr>
               </tbody>
             </table>
-          </div>
+          </BodyTableFrame>
         </Card>
       )}
     </PageShell>

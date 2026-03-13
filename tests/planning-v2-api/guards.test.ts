@@ -55,16 +55,14 @@ describe("planning v2 route guards", () => {
     findAssumptionsSnapshotIdMock.mockResolvedValue(undefined);
   });
 
-  it("blocks non-local host request for simulate route", async () => {
+  it("allows same-origin remote host request for simulate route", async () => {
     const response = await simulatePOST(requestWithHost("example.com", "http://example.com"));
     const payload = await response.json() as {
       ok?: boolean;
-      error?: { code?: string };
     };
 
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
   });
 
   it("passes local host request for simulate route", async () => {

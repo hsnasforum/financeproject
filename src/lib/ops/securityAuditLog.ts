@@ -171,13 +171,29 @@ async function readFromFile(filePath: string): Promise<OpsAuditEvent[]> {
     .filter((row): row is OpsAuditEvent => row !== null);
 }
 
+async function listReadableAuditFiles(filePath: string): Promise<string[]> {
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath);
+  const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const entries = await fs.readdir(dir).catch(() => [] as string[]);
+  const rotated = entries
+    .map((name) => {
+      const matched = name.match(new RegExp(`^${escapedBase}\\.(\\d+)$`));
+      if (!matched) return null;
+      return { name, index: Number(matched[1]) };
+    })
+    .filter((row): row is { name: string; index: number } => row !== null && Number.isFinite(row.index))
+    .sort((a, b) => a.index - b.index)
+    .map((row) => path.join(dir, row.name));
+  return [filePath, ...rotated];
+}
+
 export async function listOpsAuditEvents(options?: {
   limit?: number;
   eventType?: string;
 }): Promise<OpsAuditEvent[]> {
   const filePath = resolveAuditPath();
-  const maxFiles = resolveMaxFiles();
-  const filePaths = [filePath, ...Array.from({ length: maxFiles }, (_, idx) => `${filePath}.${idx + 1}`)];
+  const filePaths = await listReadableAuditFiles(filePath);
 
   const chunks: OpsAuditEvent[][] = [];
   for (const candidate of filePaths) {

@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   TxnOverridesStoreInputError,
   deleteOverride,
@@ -31,7 +29,6 @@ function asString(value: unknown): string {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -53,7 +50,6 @@ function withReadGuard(request: Request): Response | null {
 
 function withWriteGuard(request: Request, csrf: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -83,9 +79,6 @@ function mapKind(kindRaw: unknown): "income" | "expense" | "transfer" | "auto" |
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -113,9 +106,6 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: PostBody = null;
   try {
     body = (await request.json()) as PostBody;

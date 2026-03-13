@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/Button";
+import { DevUnlockShortcutLink, isDevUnlockCsrfMessage } from "@/components/DevUnlockShortcutLink";
 import { cn } from "@/lib/utils";
 
 type ErrorStateProps = {
@@ -26,6 +27,8 @@ export function ErrorState({
   className,
   testId,
 }: ErrorStateProps) {
+  const shouldShowDevUnlockLink = isDevUnlockCsrfMessage(message);
+
   return (
     <div
       className={cn(
@@ -37,6 +40,11 @@ export function ErrorState({
     >
       <p className="text-sm font-semibold text-rose-900">{title}</p>
       <p className="mt-1 text-xs text-rose-800">{normalizeErrorMessage(message)}</p>
+      {shouldShowDevUnlockLink ? (
+        <p className="mt-2 text-xs font-semibold text-rose-900">
+          <DevUnlockShortcutLink className="text-rose-900" />
+        </p>
+      ) : null}
       {retryLabel && onRetry ? (
         <Button className="mt-3" onClick={onRetry} size="sm" variant="outline">
           {retryLabel}
@@ -45,4 +53,3 @@ export function ErrorState({
     </div>
   );
 }
-

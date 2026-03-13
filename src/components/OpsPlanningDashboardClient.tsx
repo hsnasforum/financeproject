@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { DevUnlockShortcutLink } from "@/components/DevUnlockShortcutLink";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { resolveClientApiError } from "@/lib/http/clientApiError";
 import { Button } from "@/components/ui/Button";
@@ -130,16 +131,22 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
   const [runningDoctor, setRunningDoctor] = useState(false);
   const [doctorStrict, setDoctorStrict] = useState(false);
   const [doctorReport, setDoctorReport] = useState(props.doctor);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [errorFixHref, setErrorFixHref] = useState("");
   const hasCsrf = props.csrf.trim().length > 0;
   const stale = staleTag(props.assumptions.staleDays);
 
   async function refreshSnapshotNow(): Promise<void> {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 없어 동기화할 수 없습니다.");
+      setError("Dev unlock/CSRF가 없어 동기화할 수 없습니다.");
       return;
     }
 
     setSyncing(true);
+    setError("");
+    setErrorFixHref("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/assumptions/refresh", {
         method: "POST",
@@ -149,12 +156,12 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
       const payload = (await response.json().catch(() => null)) as RefreshPayload | null;
       if (!response.ok || !payload?.ok) {
         const apiError = resolveClientApiError(payload, "스냅샷 동기화에 실패했습니다.");
-        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
+        setErrorFixHref(apiError.fixHref ?? "");
+        throw new Error(apiError.message);
       }
-      window.alert(payload.message ?? "스냅샷 동기화를 완료했습니다.");
-      window.location.reload();
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "스냅샷 동기화 중 오류가 발생했습니다.");
+      setNotice(payload.message ?? "스냅샷 동기화를 완료했습니다. 최신 수치는 새로고침 후 반영됩니다.");
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "스냅샷 동기화 중 오류가 발생했습니다.");
     } finally {
       setSyncing(false);
     }
@@ -162,11 +169,14 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
   async function purgeExpiredCache(): Promise<void> {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 없어 정리할 수 없습니다.");
+      setError("Dev unlock/CSRF가 없어 정리할 수 없습니다.");
       return;
     }
 
     setPurging(true);
+    setError("");
+    setErrorFixHref("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/planning-cache/purge", {
         method: "POST",
@@ -176,33 +186,38 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
       const payload = (await response.json().catch(() => null)) as PurgePayload | null;
       if (!response.ok || !payload?.ok) {
         const apiError = resolveClientApiError(payload, "만료 캐시 정리에 실패했습니다.");
-        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
+        setErrorFixHref(apiError.fixHref ?? "");
+        throw new Error(apiError.message);
       }
-      window.alert(payload.message ?? `만료 캐시 ${payload?.data?.purged ?? 0}건을 정리했습니다.`);
-      window.location.reload();
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "만료 캐시 정리 중 오류가 발생했습니다.");
+      setNotice(payload.message ?? `만료 캐시 ${payload?.data?.purged ?? 0}건을 정리했습니다. 최신 수치는 새로고침 후 반영됩니다.`);
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "만료 캐시 정리 중 오류가 발생했습니다.");
     } finally {
       setPurging(false);
     }
   }
 
   async function copyRegressionCommand(): Promise<void> {
+    setError("");
+    setErrorFixHref("");
     const result = await copyToClipboard("pnpm planning:v2:regress");
     if (result.ok) {
-      window.alert("회귀 실행 명령을 복사했습니다.");
+      setNotice("회귀 실행 명령을 복사했습니다.");
       return;
     }
-    window.alert(result.message ?? "명령 복사에 실패했습니다.");
+    setError(result.message ?? "명령 복사에 실패했습니다.");
   }
 
   async function runPlanningDoctor(): Promise<void> {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 없어 doctor를 실행할 수 없습니다.");
+      setError("Dev unlock/CSRF가 없어 doctor를 실행할 수 없습니다.");
       return;
     }
 
     setRunningDoctor(true);
+    setError("");
+    setErrorFixHref("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/planning/doctor", {
         method: "POST",
@@ -212,12 +227,13 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
       const payload = (await response.json().catch(() => null)) as DoctorPayload | null;
       if (!response.ok || !payload?.ok || !payload.data) {
         const apiError = resolveClientApiError(payload, "planning doctor 실행에 실패했습니다.");
-        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
+        setErrorFixHref(apiError.fixHref ?? "");
+        throw new Error(apiError.message);
       }
       setDoctorReport(payload.data);
-      window.alert(payload.message ?? "planning doctor 실행을 완료했습니다.");
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : "planning doctor 실행 중 오류가 발생했습니다.");
+      setNotice(payload.message ?? "planning doctor 실행을 완료했습니다.");
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "planning doctor 실행 중 오류가 발생했습니다.");
     } finally {
       setRunningDoctor(false);
     }
@@ -242,6 +258,22 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
           </div>
         )}
       />
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          {notice}
+        </Card>
+      ) : null}
+      {error ? (
+        <Card className="mb-4 border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+          {error}
+          {errorFixHref ? (
+            <>
+              {" "}
+              <Link href={errorFixHref} className="underline">{errorFixHref}</Link>
+            </>
+          ) : null}
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -257,7 +289,12 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
             </div>
           </div>
 
-          {!hasCsrf ? <p className="mt-2 text-xs font-semibold text-amber-700">Dev unlock/CSRF가 없어 동기화 버튼이 비활성화됩니다.</p> : null}
+          {!hasCsrf ? (
+            <p className="mt-2 text-xs font-semibold text-amber-700">
+              Dev unlock/CSRF가 없어 동기화 버튼이 비활성화됩니다.{" "}
+              <DevUnlockShortcutLink className="text-amber-700" />
+            </p>
+          ) : null}
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">스냅샷 ID: <span className="font-semibold">{props.assumptions.snapshotId ?? "-"}</span></div>
@@ -329,7 +366,12 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
             </div>
           </div>
 
-          {!hasCsrf ? <p className="mt-2 text-xs font-semibold text-amber-700">Dev unlock/CSRF가 없어 purge 버튼이 비활성화됩니다.</p> : null}
+          {!hasCsrf ? (
+            <p className="mt-2 text-xs font-semibold text-amber-700">
+              Dev unlock/CSRF가 없어 purge 버튼이 비활성화됩니다.{" "}
+              <DevUnlockShortcutLink className="text-amber-700" />
+            </p>
+          ) : null}
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
             <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 엔트리: <span className="font-semibold">{props.cache.totalEntries}</span></div>
@@ -390,7 +432,12 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
               </div>
             </div>
 
-            {!hasCsrf ? <p className="mt-2 text-xs font-semibold text-amber-700">Dev unlock/CSRF가 없어 doctor 버튼이 비활성화됩니다.</p> : null}
+            {!hasCsrf ? (
+              <p className="mt-2 text-xs font-semibold text-amber-700">
+                Dev unlock/CSRF가 없어 doctor 버튼이 비활성화됩니다.{" "}
+                <DevUnlockShortcutLink className="text-amber-700" />
+              </p>
+            ) : null}
 
             <div className="mt-3 grid gap-2 text-xs md:grid-cols-3">
               <div className="rounded-md border border-slate-200 bg-white px-2 py-1">정상 여부: <span className="font-semibold">{doctorReport.ok ? "true" : "false"}</span></div>

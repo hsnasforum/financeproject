@@ -1,3 +1,10 @@
+/**
+ * @deprecated
+ * This builder powers the legacy `/report` route only.
+ * Planning 공식 report 경로는 `src/lib/planning/reports/*` 및
+ * `/planning/reports` UI를 사용한다.
+ * 신규 planning/report 기능은 이 파일에 추가하지 않는다.
+ */
 import type { PlannerInput, PlannerMetricLine, PlannerResult } from "@/lib/planner/types";
 import type { SavedRecommendRun } from "@/lib/recommend/savedRunsStore";
 

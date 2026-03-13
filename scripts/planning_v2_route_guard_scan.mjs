@@ -29,8 +29,10 @@ async function gatherFiles(baseDir, suffix) {
   return files.filter((filePath) => filePath.endsWith(suffix));
 }
 
-function hasLocalGuard(content) {
-  return /assertLocalHost\s*\(/.test(content) || /guardLocalRequest\s*\(/.test(content);
+function hasRequestGuard(content) {
+  return /assertSameOrigin\s*\(/.test(content)
+    || /assertLocalHost\s*\(/.test(content)
+    || /guardLocalRequest\s*\(/.test(content);
 }
 
 function hasDevGate(content) {
@@ -78,7 +80,7 @@ async function resolveProxyFile(fromFile, sourcePath) {
   return null;
 }
 
-async function validateRouteGroup(name, files) {
+async function validatePlanningRoutes(files) {
   const issues = [];
   for (const filePath of files) {
     const content = await fs.readFile(filePath, "utf8");
@@ -90,11 +92,30 @@ async function validateRouteGroup(name, files) {
         scanContent = await fs.readFile(proxyFile, "utf8");
       }
     }
-    if (!hasLocalGuard(scanContent)) {
-      issues.push(`${name}: missing local guard -> ${rel(filePath)}`);
+    if (!hasRequestGuard(scanContent)) {
+      issues.push(`planning-api: missing request guard -> ${rel(filePath)}`);
+    }
+  }
+  return issues;
+}
+
+async function validateOpsRoutes(files) {
+  const issues = [];
+  for (const filePath of files) {
+    const content = await fs.readFile(filePath, "utf8");
+    let scanContent = content;
+    const proxy = parseRouteProxy(content);
+    if (proxy) {
+      const proxyFile = await resolveProxyFile(filePath, proxy.source);
+      if (proxyFile) {
+        scanContent = await fs.readFile(proxyFile, "utf8");
+      }
+    }
+    if (!hasRequestGuard(scanContent)) {
+      issues.push(`ops-api: missing request guard -> ${rel(filePath)}`);
     }
     if (!hasDevGate(scanContent)) {
-      issues.push(`${name}: missing onlyDev gate -> ${rel(filePath)}`);
+      issues.push(`ops-api: missing onlyDev gate -> ${rel(filePath)}`);
     }
   }
   return issues;
@@ -106,8 +127,8 @@ async function run() {
   const debugPages = await gatherFiles(DEBUG_DIR, "page.tsx");
 
   const issues = [
-    ...(await validateRouteGroup("planning-api", planningRoutes)),
-    ...(await validateRouteGroup("ops-api", opsRoutes)),
+    ...(await validatePlanningRoutes(planningRoutes)),
+    ...(await validateOpsRoutes(opsRoutes)),
   ];
 
   for (const pagePath of debugPages) {

@@ -26,6 +26,10 @@ function runFixture(input: {
     },
     outputs: {
       simulate: {
+        ref: {
+          name: "simulate",
+          path: `.data/test/planning-v2-diff/${input.id}/simulate.json`,
+        },
         summary: {
           endNetWorthKrw: input.endNetWorthKrw,
           worstCashKrw: input.worstCashKrw,

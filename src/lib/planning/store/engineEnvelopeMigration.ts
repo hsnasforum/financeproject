@@ -8,7 +8,6 @@ import {
   type StageDecision,
 } from "../engine";
 import {
-  buildResultDtoV1FromRunRecord,
   isResultDtoV1,
   type ResultDtoV1,
 } from "../v2/resultDto";
@@ -90,15 +89,9 @@ function extractEngineFromOutputs(run: PlanningRunRecord): { engine: EngineEnvel
 }
 
 function buildEngineFromResultDto(run: PlanningRunRecord): EngineEnvelope | null {
-  try {
-    const rawResultDto = asRecord(run.outputs).resultDto;
-    const resultDto = isResultDtoV1(rawResultDto)
-      ? rawResultDto
-      : buildResultDtoV1FromRunRecord(run);
-    return buildLegacyEngineEnvelopeFromResultDto(resultDto);
-  } catch {
-    return null;
-  }
+  const rawResultDto = asRecord(run.outputs).resultDto;
+  if (!isResultDtoV1(rawResultDto)) return null;
+  return buildLegacyEngineEnvelopeFromResultDto(rawResultDto);
 }
 
 function buildLegacyEngineEnvelopeFromResultDto(resultDto: ResultDtoV1): EngineEnvelope {

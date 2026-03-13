@@ -205,7 +205,8 @@ export function aggregateWarningsByUniqueMonth(input: unknown): DashboardWarning
   }
 
   return Array.from(grouped.values())
-    .map(({ seenMonths: _seenMonths, ...row }) => {
+    .map(({ seenMonths, ...row }) => {
+      void seenMonths;
       const catalog = resolveWarningCatalog(row.code);
       return {
         ...row,

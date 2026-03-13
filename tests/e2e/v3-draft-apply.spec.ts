@@ -1,148 +1,132 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/e2eTest";
 
-test("planning v3 batch detail can move to draft review and export merged profile JSON", async ({ page }) => {
-  await page.route("**/api/planning/v3/accounts**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        items: [
-          { id: "acc-main", name: "메인 통장", kind: "checking", currency: "KRW" },
-        ],
-      }),
-    });
-  });
+test("planning v3 profile draft flow can create, preflight, and apply a saved draft", async ({ page }) => {
+  let listGetCount = 0;
 
-  await page.route(/\/api\/planning\/v3\/transactions\/batches\/batch-1(\?.*)?$/, async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        batch: {
-          id: "batch-1",
-          createdAt: "2026-03-03T00:00:00.000Z",
-          kind: "csv",
-          fileName: "sample.csv",
-          accountId: "acc-main",
-          accountHint: "acc-main",
-          sha256: "hash-1",
-          total: 4,
-          ok: 4,
-          failed: 0,
-        },
-        sample: [
-          { line: 2, dateIso: "2026-01-10", amountKrw: 3200000, descMasked: "salary***", ok: true },
-        ],
-        stats: { total: 4, ok: 4, failed: 0, inferredMonths: 2 },
-        monthsSummary: [
-          { ym: "2026-01", incomeKrw: 3200000, expenseKrw: -1200000, netKrw: 2000000, txCount: 2 },
-          { ym: "2026-02", incomeKrw: 3300000, expenseKrw: -1500000, netKrw: 1800000, txCount: 2 },
-        ],
-      }),
-    });
-  });
-
-  await page.route("**/api/planning/v3/transactions/batches/batch-1/cashflow**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        monthly: [
-          {
-            month: "2026-01",
-            inflowKrw: 3200000,
-            outflowKrw: 1200000,
-            netKrw: 2000000,
-            fixedOutflowKrw: 800000,
-            variableOutflowKrw: 400000,
-            transferNetKrw: 0,
-            daysCovered: 30,
-            txCount: 2,
-          },
-          {
-            month: "2026-02",
-            inflowKrw: 3300000,
-            outflowKrw: 1500000,
-            netKrw: 1800000,
-            fixedOutflowKrw: 900000,
-            variableOutflowKrw: 600000,
-            transferNetKrw: 0,
-            daysCovered: 28,
-            txCount: 2,
-          },
-        ],
-        draftPatch: {
-          suggestedMonthlyIncomeKrw: 3250000,
-          suggestedMonthlyEssentialSpendKrw: 850000,
-          suggestedMonthlyDiscretionarySpendKrw: 500000,
-          confidence: "mid",
-          splitMode: "byCategory",
-          evidence: [
+  await page.route(/\/api\/planning\/v3\/profile\/drafts(\?.*)?$/, async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      listGetCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: listGetCount === 1 ? [] : [
             {
-              key: "income-median",
-              title: "월평균 소득",
-              formula: "median(last2)",
-              inputs: { months: 2, incomeMedian: 3250000 },
-              assumption: "최근 2개월 기준",
+              draftId: "draft-1",
+              id: "draft-1",
+              batchId: "batch-1",
+              createdAt: "2026-03-03T00:00:00.000Z",
+              stats: {
+                months: 2,
+                unassignedCount: 1,
+              },
             },
           ],
-        },
-        profilePatch: {
-          monthlyIncomeNet: 3250000,
-          monthlyEssentialExpenses: 850000,
-          monthlyDiscretionaryExpenses: 500000,
-        },
-      }),
-    });
+        }),
+      });
+      return;
+    }
+
+    if (method === "POST") {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          data: {
+            id: "draft-1",
+            batchId: "batch-1",
+            createdAt: "2026-03-03T00:00:00.000Z",
+            stats: {
+              months: 2,
+              unassignedCount: 1,
+            },
+          },
+        }),
+      });
+      return;
+    }
+
+    await route.fallback();
   });
 
-  await page.route("**/api/planning/v3/drafts", async (route) => {
-    if (route.request().method() !== "POST") {
+  await page.route(/\/api\/planning\/v3\/profile\/drafts\/draft-1(\?.*)?$/, async (route) => {
+    if (route.request().method() !== "GET") {
       await route.fallback();
       return;
     }
-    await route.fulfill({
-      status: 201,
-      contentType: "application/json",
-      body: JSON.stringify({ ok: true, id: "draft-1" }),
-    });
-  });
 
-  await page.route(/\/api\/planning\/v3\/drafts\/draft-1(\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         ok: true,
-        draft: {
+        data: {
           id: "draft-1",
+          batchId: "batch-1",
           createdAt: "2026-03-03T00:00:00.000Z",
-          source: { kind: "csv", rows: 4, months: 2 },
-          summary: {
-            medianIncomeKrw: 3250000,
-            medianExpenseKrw: 1350000,
-            avgNetKrw: 1900000,
-          },
-          cashflow: [
-            { ym: "2026-01", incomeKrw: 3200000, expenseKrw: -1200000, netKrw: 2000000, txCount: 2 },
-            { ym: "2026-02", incomeKrw: 3300000, expenseKrw: -1500000, netKrw: 1800000, txCount: 2 },
-          ],
           draftPatch: {
-            monthlyIncomeNet: 3250000,
-            monthlyEssentialExpenses: 850000,
-            monthlyDiscretionaryExpenses: 500000,
-            assumptions: ["split mode=byCategory"],
+            monthlyIncomeNet: 3_250_000,
+            monthlyEssentialExpenses: 850_000,
+            monthlyDiscretionaryExpenses: 500_000,
+            assumptions: ["최근 2개월 기준"],
             monthsConsidered: 2,
+          },
+          evidence: {
+            monthsUsed: ["2026-01", "2026-02"],
+            ymStats: [
+              {
+                ym: "2026-01",
+                incomeKrw: 3_200_000,
+                expenseKrw: 1_200_000,
+                fixedExpenseKrw: 800_000,
+                variableExpenseKrw: 400_000,
+                debtExpenseKrw: 0,
+                transferKrw: 0,
+              },
+              {
+                ym: "2026-02",
+                incomeKrw: 3_300_000,
+                expenseKrw: 1_500_000,
+                fixedExpenseKrw: 900_000,
+                variableExpenseKrw: 600_000,
+                debtExpenseKrw: 0,
+                transferKrw: 0,
+              },
+            ],
+            byCategoryStats: [
+              { categoryId: "housing", totalKrw: 900_000 },
+              { categoryId: "food", totalKrw: 450_000 },
+            ],
+            medians: {
+              incomeKrw: 3_250_000,
+              expenseKrw: 1_350_000,
+              fixedExpenseKrw: 850_000,
+              variableExpenseKrw: 500_000,
+              debtExpenseKrw: 0,
+            },
+            ruleCoverage: {
+              total: 3,
+              override: 0,
+              rule: 3,
+              default: 0,
+              transfer: 0,
+            },
+          },
+          assumptions: ["최근 2개월 기준"],
+          stats: {
+            months: 2,
+            transfersExcluded: true,
+            unassignedCount: 1,
           },
         },
       }),
     });
   });
 
-  await page.route("**/api/planning/profiles", async (route) => {
+  await page.route(/\/api\/planning\/v3\/profiles(\?.*)?$/, async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -152,60 +136,81 @@ test("planning v3 batch detail can move to draft review and export merged profil
           {
             profileId: "profile-base",
             name: "기본 프로필",
-            isDefault: true,
+            updatedAt: "2026-03-03T00:00:00.000Z",
           },
         ],
-        meta: {
-          defaultProfileId: "profile-base",
-        },
       }),
     });
   });
 
-  await page.route("**/api/planning/v3/draft/preview", async (route) => {
+  await page.route("**/api/planning/v3/profile/drafts/draft-1/preflight", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
         ok: true,
-        mergedProfile: {
-          monthlyIncomeNet: 3250000,
-          monthlyEssentialExpenses: 850000,
-          monthlyDiscretionaryExpenses: 500000,
-          liquidAssets: 1000000,
-          investmentAssets: 500000,
-          debts: [],
-          goals: [],
-        },
-        diffSummary: {
-          changedKeys: ["monthlyIncomeNet", "monthlyEssentialExpenses", "monthlyDiscretionaryExpenses"],
-          notes: ["monthly surplus: 1,000,000 -> 1,900,000 KRW"],
-        },
-        evidence: [
-          {
-            key: "income-median",
-            title: "월평균 소득",
-            formula: "median(last2)",
-            inputs: { months: 2, incomeMedian: 3250000 },
-            assumption: "최근 2개월 기준",
+        data: {
+          ok: true,
+          targetProfileId: "profile-base",
+          changes: [
+            {
+              path: "/monthlyIncomeNet",
+              kind: "set",
+              before: 3_000_000,
+              after: 3_250_000,
+            },
+          ],
+          warnings: [
+            {
+              code: "W_SAMPLE",
+              message: "변경 내용을 검토한 뒤 적용해 주세요.",
+            },
+          ],
+          errors: [],
+          summary: {
+            changedCount: 1,
+            errorCount: 0,
+            warningCount: 1,
           },
-        ],
+        },
       }),
     });
   });
 
-  await page.goto("/planning/v3/transactions/batches/batch-1");
+  await page.route("**/api/planning/v3/profile/drafts/draft-1/apply", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          profileId: "profile-new",
+        },
+      }),
+    });
+  });
 
-  await page.getByTestId("v3-go-draft-review").click();
-  await expect(page).toHaveURL(/\/planning\/v3\/drafts\/draft-1(?:\?.*)?$/);
-  await expect(page.getByTestId("v3-draft-review-root")).toBeVisible();
+  await page.goto("/planning/v3/profile/drafts");
 
-  await page.getByRole("button", { name: "적용 결과 미리보기" }).click();
-  await expect(page.getByTestId("v3-draft-diff")).toBeVisible();
+  await expect(page.getByText("저장된 profile draft가 없습니다.")).toBeVisible();
 
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByTestId("v3-export-merged-json").click(),
-  ]);
-  expect(download.suggestedFilename()).toContain("profile-v2-draft-draft-1.json");
+  await page.getByLabel("batchId").fill("batch-1");
+  await page.getByRole("button", { name: "초안 생성" }).click();
+
+  await expect(page).toHaveURL(/\/planning\/v3\/profile\/drafts\/draft-1$/);
+  await expect(page.getByTestId("v3-draft-meta")).toBeVisible();
+  await expect(page.getByTestId("v3-draft-apply-guidance")).toContainText(
+    "프리플라이트를 먼저 실행하면 이 기준으로 적용 가능 여부가 정리됩니다.",
+  );
+
+  await page.getByTestId("v3-draft-base-profile-picker").selectOption("profile-base");
+  await page.getByTestId("v3-draft-run-preflight").click();
+
+  await expect(page.getByTestId("v3-preflight-summary")).toBeVisible();
+  await expect(page.getByTestId("v3-draft-apply-guidance")).toContainText(
+    "경고를 확인한 뒤 적용할 수 있습니다.",
+  );
+
+  await page.getByTestId("v3-draft-apply-profile").click();
+  await expect(page).toHaveURL(/\/planning\?profileId=profile-new$/);
 });

@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import {
-  assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
-} from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
+} from "@/lib/dev/devGuards";
 import {
   CsvImportInputError,
   importCsvToDraft,
   type ImportCsvToDraftResult,
-} from "../../../../../../lib/planning/v3/service/importCsvToDraft";
-import { type CsvColumnMapping } from "../../../../../../lib/planning/v3/providers/csv/types";
-import { parseCsvText } from "../../../../../../lib/planning/v3/providers/csv/csvParse";
+} from "@/lib/planning/v3/service/importCsvToDraft";
+import { parseCsvText } from "@/lib/planning/v3/providers/csv/csvParse";
+import { type CsvColumnMapping } from "@/lib/planning/v3/providers/csv/types";
 
 export const runtime = "nodejs";
 
@@ -23,7 +21,13 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "text/plain",
 ]);
 
-type ApiErrorCode = "INPUT" | "PARSE" | "LIMIT" | "INTERNAL";
+type ApiErrorCode =
+  | "INPUT"
+  | "PARSE"
+  | "LIMIT"
+  | "INTERNAL"
+  | "ORIGIN_MISMATCH"
+  | "CSRF_MISMATCH";
 
 type ApiErrorPayload = {
   ok: false;
@@ -64,8 +68,15 @@ type ApiSuccessPayload = {
 type JsonInput = {
   csvText?: unknown;
   mapping?: {
+    dateKey?: unknown;
     date?: unknown;
+    amountKey?: unknown;
     amount?: unknown;
+    inflowKey?: unknown;
+    inflow?: unknown;
+    outflowKey?: unknown;
+    outflow?: unknown;
+    descKey?: unknown;
     desc?: unknown;
   };
 };
@@ -150,29 +161,32 @@ function jsonOk(result: ImportCsvToDraftResult, csvText: string): NextResponse<A
 function guardRequest(request: Request): NextResponse<ApiErrorPayload> | null {
   const csrf = pickCsrfToken(request);
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertCsrf(request, { csrf });
+    requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
       return jsonError(500, "INTERNAL", "요청 검증 중 오류가 발생했습니다.");
     }
-    return jsonError(guard.status, "INPUT", guard.message);
+    return jsonError(guard.status, guard.code as ApiErrorCode, guard.message);
   }
 }
 
 function toMapping(input: JsonInput["mapping"]): CsvColumnMapping | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
-  const date = asString(input.date);
-  const amount = asString(input.amount);
-  const desc = asString(input.desc);
-  if (!date && !amount && !desc) return undefined;
+  const date = asString(input.dateKey) || asString(input.date);
+  const amount = asString(input.amountKey) || asString(input.amount);
+  const inflow = asString(input.inflowKey) || asString(input.inflow);
+  const outflow = asString(input.outflowKey) || asString(input.outflow);
+  const desc = asString(input.descKey) || asString(input.desc);
+  if (!date && !amount && !inflow && !outflow && !desc) return undefined;
 
   return {
     ...(date ? { dateKey: date } : {}),
     ...(amount ? { amountKey: amount } : {}),
+    ...(inflow ? { inflowKey: inflow } : {}),
+    ...(outflow ? { outflowKey: outflow } : {}),
     ...(desc ? { descKey: desc } : {}),
   };
 }
@@ -252,9 +266,6 @@ async function parseInputBody(request: Request): Promise<{
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = guardRequest(request);
   if (guarded) return guarded;
 

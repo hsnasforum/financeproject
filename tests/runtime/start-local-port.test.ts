@@ -13,7 +13,7 @@ describe("start:local port selection helper", () => {
 
   it("returns the first available port", async () => {
     const candidates = [3100, 3101, 3102];
-    const chosen = await choosePort(candidates, async (port) => port === 3102);
+    const chosen = await choosePort(candidates, async (port: number) => port === 3102);
     expect(chosen).toBe(3102);
   });
 
@@ -22,4 +22,3 @@ describe("start:local port selection helper", () => {
     expect(chosen).toBe(0);
   });
 });
-

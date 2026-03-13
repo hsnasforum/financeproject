@@ -127,4 +127,46 @@ describe("GET /api/products/candidates", () => {
     expect(serialized.includes("GITHUB_TOKEN")).toBe(false);
     expect(serialized.includes("ECOS_API_KEY")).toBe(false);
   });
+
+  it("returns an empty candidate set when product catalog tables are unavailable", async () => {
+    const unavailable = Object.assign(
+      new Error("The table `main.Product` does not exist in the current database."),
+      { code: "P2021" },
+    );
+    mocked.getUnifiedProducts.mockRejectedValueOnce(unavailable);
+
+    const response = await GET(buildRequest("/api/products/candidates?runId=run-1&kind=deposit&limit=10"));
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: {
+        candidates?: unknown[];
+      };
+      meta?: {
+        degradedReason?: string;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.candidates).toEqual([]);
+    expect(payload.meta?.degradedReason).toBe("PRODUCT_CATALOG_UNAVAILABLE");
+  });
+
+  it("keeps returning 500 for unexpected candidate loading failures", async () => {
+    mocked.getUnifiedProducts.mockRejectedValueOnce(new Error("boom"));
+
+    const response = await GET(buildRequest("/api/products/candidates?runId=run-1&kind=deposit&limit=10"));
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
+    expect(response.status).toBe(500);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("INTERNAL");
+    expect(payload.error?.message).toBe("boom");
+  });
 });

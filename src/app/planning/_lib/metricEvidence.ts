@@ -1,4 +1,4 @@
-import { getAllocationPolicy } from "../../../lib/planning/core/v2/policy/presets";
+import { getAllocationPolicy } from "@/lib/planning/v2/policy/presets";
 import { type AllocationPolicyId } from "@/lib/planning/v2/policy/types";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
 import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";

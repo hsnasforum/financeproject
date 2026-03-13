@@ -81,13 +81,6 @@ function hasIndicatorSignal(
   return false;
 }
 
-function downgradeBufferAdequacy(grade: ImpactGrade): ImpactGrade {
-  if (grade === "High") return "Med";
-  if (grade === "Med") return "Low";
-  if (grade === "Low") return "Low";
-  return "Unknown";
-}
-
 function deriveIncomeRisk(stability: IncomeStabilityLevel | undefined, hot: boolean): ImpactGrade {
   if (!stability) return "Unknown";
   if (stability === "stable") return hot ? "Med" : "Low";

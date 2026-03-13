@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
 
@@ -80,15 +81,19 @@ export async function runComplete(options = {}) {
   }
 }
 
+export async function runCompleteCli(options = {}) {
+  await loadRedactText();
+  await runComplete(options);
+  console.log("[planning:v2:complete] PASS");
+  console.log("[planning:v2:complete] Report Gate: planning:v2:report:test");
+  console.log("[planning:v2:complete] Guide Gate: planning:v2:guide:test");
+  console.log("[planning:v2:complete] UX Gate: planning:v2:e2e:fast");
+  console.log(`[planning:v2:complete] User Gate (manual): 5-min self-test -> ${SELF_TEST_DOC_PATH}`);
+}
+
 async function main() {
   try {
-    await loadRedactText();
-    await runComplete();
-    console.log("[planning:v2:complete] PASS");
-    console.log("[planning:v2:complete] Report Gate: planning:v2:report:test");
-    console.log("[planning:v2:complete] Guide Gate: planning:v2:guide:test");
-    console.log("[planning:v2:complete] UX Gate: planning:v2:e2e:fast");
-    console.log(`[planning:v2:complete] User Gate (manual): 5-min self-test -> ${SELF_TEST_DOC_PATH}`);
+    await runCompleteCli();
   } catch (error) {
     const message = error instanceof Error ? error.stack ?? error.message : String(error);
     console.error(`[planning:v2:complete] FAIL\n${redactTextImpl(message)}`);
@@ -96,4 +101,7 @@ async function main() {
   }
 }
 
-main();
+const directScriptPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : "";
+if (directScriptPath === import.meta.url) {
+  void main();
+}

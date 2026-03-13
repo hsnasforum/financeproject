@@ -1,11 +1,9 @@
 import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import { getCache, recordCacheUsage, setCache } from "../../../../../lib/planning/server/cache/storage";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
@@ -13,13 +11,13 @@ import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenar
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
+import {
+  buildEnginePayloadFromProfile,
+  resolveAssumptionsContextForProfile,
+  type PlanningAssumptionsContext,
+} from "../../../../../lib/planning/server/v2/toEngineInput";
 import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import {
-  createEngineEnvelope,
-  ENGINE_SCHEMA_VERSION,
-  runPlanningEngine,
-} from "../../../../../lib/planning/engine";
 
 type ScenariosRequestBody = {
   profile?: unknown;
@@ -32,7 +30,6 @@ type ScenariosRequestBody = {
 
 const SCENARIOS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const planningService = createPlanningService();
-type AssumptionsContext = Awaited<ReturnType<typeof planningService.resolveAssumptionsContext>>;
 
 type Presentation = {
   summary: {
@@ -109,9 +106,8 @@ function hasCsrfCookie(request: Request): boolean {
   return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -127,20 +123,6 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
     const normalized = toPlanningError(guard);
     return fail(normalized.code, normalized.message, { status: guard.status });
   }
-}
-
-function toEngineInput(profile: ProfileV2) {
-  const debtBalance = profile.debts.reduce((total, debt) => {
-    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
-  }, 0);
-
-  return {
-    monthlyIncome: profile.monthlyIncomeNet,
-    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
-    age: profile.currentAge,
-    liquidAssets: profile.liquidAssets,
-    debtBalance,
-  };
 }
 
 function pickKeyTimelinePoints(rows: TimelineRowV2[]): Array<{ monthIndex: number; row: TimelineRowV2 }> {
@@ -195,20 +177,7 @@ function summarizeResult(result: SimulationResultV2, includeFullTimeline: boolea
   };
 }
 
-function stripLegacyTopLevelFields(data: Record<string, unknown>): Record<string, unknown> {
-  const {
-    stage: _legacyStage,
-    financialStatus: _legacyFinancialStatus,
-    stageDecision: _legacyStageDecision,
-    ...rest
-  } = data;
-  return rest;
-}
-
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const includeFullTimeline = new URL(request.url).searchParams.get("full") === "1";
 
   let body: ScenariosRequestBody = null;
@@ -221,7 +190,7 @@ export async function POST(request: Request) {
   if (!isRecord(body)) {
     return fail("INPUT");
   }
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   let profile: ProfileV2;
@@ -244,31 +213,32 @@ export async function POST(request: Request) {
     return fail("INPUT");
   }
 
-  let baseAssumptions: AssumptionsContext["assumptions"];
-  let snapshotMeta: AssumptionsContext["snapshotMeta"];
-  let health: AssumptionsContext["health"];
-  let scenarioOverrideForCache: AssumptionsContext["scenarioOverrideForCache"];
+  let baseAssumptions: PlanningAssumptionsContext["assumptions"];
+  let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
+  let health: PlanningAssumptionsContext["health"];
+  let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
   let snapshotId: string | undefined;
-  let taxPensionExplain: AssumptionsContext["taxPensionExplain"];
-  try {
-    const context = await planningService.resolveAssumptionsContext({
+  let taxPensionExplain: PlanningAssumptionsContext["taxPensionExplain"];
+  {
+    const resolvedContext = await resolveAssumptionsContextForProfile({
+      planningService,
       profile,
       riskTolerance,
       assumptionsOverridesRaw: assumptionsOverrides,
       requestedSnapshotId,
     });
-    baseAssumptions = context.assumptions;
-    snapshotMeta = context.snapshotMeta;
-    health = context.health;
-    scenarioOverrideForCache = context.scenarioOverrideForCache;
-    snapshotId = context.snapshotId;
-    taxPensionExplain = context.taxPensionExplain;
-  } catch (error) {
-    const normalized = toPlanningError(error);
-    if (normalized.code === "SNAPSHOT_NOT_FOUND") {
-      return fail("SNAPSHOT_NOT_FOUND", undefined, { status: 400 });
+    if (!resolvedContext.ok) {
+      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+        return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+      }
+      return fail(resolvedContext.error.code, resolvedContext.error.message);
     }
-    return fail(normalized.code, normalized.message);
+    baseAssumptions = resolvedContext.context.assumptions;
+    snapshotMeta = resolvedContext.context.snapshotMeta;
+    health = resolvedContext.context.health;
+    scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
+    snapshotId = resolvedContext.context.snapshotId;
+    taxPensionExplain = resolvedContext.context.taxPensionExplain;
   }
 
   const keyBundle = buildCacheKey({
@@ -286,11 +256,6 @@ export async function POST(request: Request) {
     riskTolerance,
   });
   const keyPrefix = keyBundle.key.slice(0, 8);
-  const engineResult = runPlanningEngine(toEngineInput(profile));
-  const engine = createEngineEnvelope({
-    status: engineResult.status,
-    decision: engineResult.decision,
-  });
 
   try {
     const cached = await getCache<{
@@ -303,13 +268,9 @@ export async function POST(request: Request) {
     }>("scenarios", keyBundle.key);
     if (cached) {
       await recordCacheUsage("scenarios", true).catch(() => undefined);
-      const cachedData = stripLegacyTopLevelFields(cached.data.data);
+      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
       return ok(
-        {
-          ...cachedData,
-          engine,
-          engineSchemaVersion: ENGINE_SCHEMA_VERSION,
-        },
+        data,
         {
           ...cached.data.meta,
           cache: {
@@ -339,8 +300,6 @@ export async function POST(request: Request) {
         health: health.summary,
       },
       data: {
-        engine,
-        engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         healthWarnings: health.warnings,
         precisionNotes: taxPensionExplain.notes,
         base: {
@@ -358,6 +317,7 @@ export async function POST(request: Request) {
         })),
       },
     };
+    payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
 
     await setCache({
       version: 1,

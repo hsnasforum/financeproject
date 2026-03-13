@@ -47,7 +47,7 @@ describe("planning v3 indicators ecos connector", () => {
 
   it("returns INPUT when api key is missing", async () => {
     const connector = createEcosConnector({
-      env: {} as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test" } as NodeJS.ProcessEnv,
       fetchImpl: vi.fn() as unknown as typeof fetch,
     });
     await expect(connector.fetchSeries(SPEC, makeOptions())).rejects.toMatchObject({
@@ -62,7 +62,7 @@ describe("planning v3 indicators ecos connector", () => {
       headers: { "content-type": "application/json" },
     }));
     const connector = createEcosConnector({
-      env: { BOK_ECOS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", BOK_ECOS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
 
@@ -81,7 +81,7 @@ describe("planning v3 indicators ecos connector", () => {
       headers: { "content-type": "text/csv; charset=utf-8" },
     }));
     const connector = createEcosConnector({
-      env: { ECOS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", ECOS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
 
@@ -102,7 +102,7 @@ describe("planning v3 indicators ecos connector", () => {
       }));
     const sleepMock = vi.fn(async () => {});
     const connector = createEcosConnector({
-      env: { BOK_ECOS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", BOK_ECOS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
       fetchImpl: fetchMock as unknown as typeof fetch,
       sleep: sleepMock,
       limitRetries: 2,

@@ -9,6 +9,8 @@ const ROOT_ISOLATED_BUILD_DIR_PATTERN = /^\.next-build(?:-.+)?$/;
 const ROOT_ISOLATED_BUILD_TSCONFIG_PATTERN = /^\.next-build(?:-.+)?-tsconfig\.json$/;
 const STANDALONE_SHADOW_NEXT_DIR_PATTERN = /^\.next-.+/;
 const ISOLATED_BUILD_INFO_FILENAME = ".next-build-info.json";
+const ROOT_ISOLATED_BUILD_BLOCKING_RUNTIME_KINDS = ["build", "prod", "playwright"];
+const STANDALONE_DATA_DIRNAME = ".data";
 
 function parsePsRows() {
   try {
@@ -134,6 +136,24 @@ function expandIsolatedBuildPreserveNames(preserveNames = []) {
   return preserve;
 }
 
+function collectIsolatedBuildDistDirs(baseDir, values = []) {
+  const distDirs = new Set();
+
+  const trackedDistDir = readTrackedIsolatedBuildDist(baseDir);
+  if (trackedDistDir && ROOT_ISOLATED_BUILD_DIR_PATTERN.test(trackedDistDir)) {
+    distDirs.add(trackedDistDir);
+  }
+
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const name = value.trim();
+    if (!name || !ROOT_ISOLATED_BUILD_DIR_PATTERN.test(name)) continue;
+    distDirs.add(name);
+  }
+
+  return [...distDirs];
+}
+
 function pruneDirectories(baseDir, matcher, preserveNames = []) {
   const removed = [];
   const skipped = [];
@@ -166,7 +186,10 @@ function pruneDirectories(baseDir, matcher, preserveNames = []) {
 
 export function pruneRootIsolatedBuildArtifacts(options = {}) {
   const cwd = path.resolve(options.cwd ?? process.cwd());
-  return withRuntimeGuard(cwd, options, () => {
+  return withRuntimeGuard(cwd, {
+    ...options,
+    blockedRuntimeKinds: ROOT_ISOLATED_BUILD_BLOCKING_RUNTIME_KINDS,
+  }, () => {
     const trackedDistDir = readTrackedIsolatedBuildDist(cwd);
     const preserve = expandIsolatedBuildPreserveNames([
       ...(options.preserveNames ?? []),
@@ -199,6 +222,40 @@ export function pruneRootIsolatedBuildArtifacts(options = {}) {
         removeEntry(infoPath);
         removed.push(ISOLATED_BUILD_INFO_FILENAME);
       }
+    }
+
+    return {
+      baseDir: cwd,
+      removed,
+      skipped,
+      skippedDueToActiveRuntime: false,
+      activeRuntimeProcesses: [],
+    };
+  });
+}
+
+export function pruneStandaloneDataArtifactsForBuildPreflight(options = {}) {
+  const cwd = path.resolve(options.cwd ?? process.cwd());
+  return withRuntimeGuard(cwd, {
+    ...options,
+    blockedRuntimeKinds: ROOT_ISOLATED_BUILD_BLOCKING_RUNTIME_KINDS,
+  }, () => {
+    const removed = [];
+    const skipped = [];
+    const distDirs = collectIsolatedBuildDistDirs(cwd, [
+      ...(options.distDirs ?? []),
+      ...(options.preserveNames ?? []),
+    ]);
+
+    for (const distDir of distDirs) {
+      const standaloneDataDir = path.join(cwd, distDir, "standalone", STANDALONE_DATA_DIRNAME);
+      if (!fs.existsSync(standaloneDataDir)) {
+        skipped.push(path.posix.join(distDir, "standalone", STANDALONE_DATA_DIRNAME));
+        continue;
+      }
+
+      removeDirectory(standaloneDataDir);
+      removed.push(path.posix.join(distDir, "standalone", STANDALONE_DATA_DIRNAME));
     }
 
     return {
@@ -250,13 +307,25 @@ function withRuntimeGuard(cwd, options, run) {
   }
 
   const activeRuntimeProcesses = listRepoManagedRuntimeProcesses(cwd, options);
-  if (activeRuntimeProcesses.length > 0) {
+  const blockedRuntimeKinds = new Set(
+    Array.isArray(options.blockedRuntimeKinds)
+      ? options.blockedRuntimeKinds
+        .filter((value) => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean)
+      : [],
+  );
+  const blockingRuntimeProcesses = blockedRuntimeKinds.size > 0
+    ? activeRuntimeProcesses.filter((entry) => blockedRuntimeKinds.has(entry.kind))
+    : activeRuntimeProcesses;
+
+  if (blockingRuntimeProcesses.length > 0) {
     return {
       baseDir: "",
       removed: [],
       skipped: [],
       skippedDueToActiveRuntime: true,
-      activeRuntimeProcesses,
+      activeRuntimeProcesses: blockingRuntimeProcesses,
     };
   }
 
@@ -309,6 +378,7 @@ function parseCliArgs(argv) {
     allowRunning: false,
     rootOnly: false,
     standaloneOnly: false,
+    buildPreflight: false,
     preserveNames: [],
   };
 
@@ -343,6 +413,10 @@ function parseCliArgs(argv) {
     }
     if (token === "--standalone-only") {
       options.standaloneOnly = true;
+      continue;
+    }
+    if (token === "--build-preflight") {
+      options.buildPreflight = true;
     }
   }
 
@@ -372,6 +446,17 @@ function runCli() {
         ignorePids,
       }),
     );
+    if (options.buildPreflight) {
+      logPruneSummary(
+        "[next_artifact_prune] root build preflight",
+        pruneStandaloneDataArtifactsForBuildPreflight({
+          cwd: options.cwd,
+          preserveNames: options.preserveNames,
+          allowRunning: options.allowRunning,
+          ignorePids,
+        }),
+      );
+    }
   }
 
   if (!options.rootOnly) {

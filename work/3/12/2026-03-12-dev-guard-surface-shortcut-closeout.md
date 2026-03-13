@@ -42,6 +42,7 @@
 - `for f in $(rg -l "Dev unlock/CSRF|Dev unlock 및 CSRF|동일 origin|로컬 환경|localhost/local only" src/components src/app | sort); do rg -q "DevUnlockShortcut(Link|Message)|ErrorState" "$f" || echo "$f"; done`
 - `git status --short | awk '{print $2}' | awk ' /^src\\/app\\/api\\/planning\\/v3\\// || /^src\\/lib\\/planning\\/v3\\// || /^planning\\/v3\\// || /^tests\\/planning-v3/ {bucket["planning-v3"]++; next} /^src\\/app\\/planning\\/reports\\// || /^src\\/components\\/PlanningReports/ || /^tests\\/planning\\/reports\\// || /^tests\\/planning-reports/ || /^src\\/app\\/planning\\/_components\\// || /^src\\/app\\/planning\\/_lib\\// {bucket["planning-report"]++; next} /^src\\/lib\\/dart\\// || /^src\\/app\\/api\\/public\\/disclosure\\// || /^src\\/app\\/api\\/dev\\/data-sources\\// || /^src\\/components\\/DataSource/ || /^tests\\/dart/ || /^tests\\/data-source/ || /^docs\\/data-sources/ {bucket["dart-data-sources"]++; next} /^scripts\\// || /^next\\.config\\.ts$/ || /^playwright\\.config\\.ts$/ || /^package\\.json$/ || /^README\\.md$/ || /^docs\\/release/ || /^docs\\/maintenance/ || /^docs\\/runbook/ {bucket["runtime-release"]++; next} /^work\\// || /^multi_agent\\.md$/ || /^\\.codex\\// {bucket["multi-agent-worklog"]++; next} /^docs\\// {bucket["docs-other"]++; next} {bucket["other"]++} END {for (name in bucket) print name, bucket[name]}' | sort`
 - `pnpm build`
+- `pnpm multi-agent:guard`
 
 ## 남은 리스크
 - 이번 배치의 dev guard raw shortcut 리스크는 닫혔다. `for f in ...` 재스캔 결과 helper 또는 `ErrorState` 없이 남은 표면은 없었다.

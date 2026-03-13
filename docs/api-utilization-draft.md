@@ -126,16 +126,26 @@
 ## Data Sources Registry (P0/P1 토대)
 - 코드: `src/lib/dataSources/registry.ts`
 - P0: FINLIFE, MOLIT(매매/전월세), MOIS, REB, EXIM
-- P1 토대: NPS, 실손보험, 퇴직연금(금융위/KDB), 금융회사기본정보, ECOS
+- P1 토대: NPS, 실손보험, 퇴직연금(금융위/KDB), 금융회사기본정보, ECOS, FRED, KOSIS
 - 각 소스는 `id/label/priority/env/status()`를 가지며 상태는 `configured|missing|error`.
 - 스키마 미확정 API는 샘플 호출 후 normalize/필드 라벨을 확정한다.
 - `/settings/data-sources`에서 P0 소스별 `연결 테스트`를 실행해 실제 호출 성공/실패와 요약(`asOf`, `count`)을 확인한다.
+- dev에서는 최근 연결 확인 결과를 카드 안에 저장해, 확인 시각과 주요 기준값을 새로고침 뒤에도 다시 볼 수 있게 한다.
+- 같은 dev 확인 결과를 `사용자 도움 연결` 카드에도 read-only로 묶어, 어떤 사용자 질문 축이 최근에 실제 호출로 확인됐는지 한 화면에서 같이 판단한다.
+- 같은 화면에서 각 API가 어떤 사용자 질문을 돕는지와, 직접 노출 전 확장 후보가 무엇인지 함께 설명한다.
+- 같은 화면의 사용자 도움 카드에는 `활용 기준`과 `기준 시점`을 같이 노출해, 참고용 데이터인지와 언제 기준인지 한 번에 이해되게 한다.
+- ping 버튼이 없는 OPENDART/planning 카드는 `/api/dev/data-sources/health`를 바탕으로 저장된 최신 기준 시각(read-only)을 같이 보여준다.
+- production에서는 `운영 최신 기준`만 유지하고, `최근 연결 확인`과 fallback/쿨다운 진단은 dev 운영 화면으로 제한한다.
+- 확장 후보 카드에는 `노출 전 체크`를 붙여 운영 검토 없이 바로 사용자 화면에 올리지 않도록 한다.
+- optional-only 소스는 값이 비어 있으면 `configured`로 보지 않고 `선택 ENV 미설정`으로 표시한다.
 - 연결 테스트는 개발 환경 전용 라우트(`/api/dev/data-sources/ping`)를 사용하며, production에서는 비활성화된다.
+- 운영 순서는 `docs/data-sources-settings-ops.md`를 단일 체크리스트로 유지한다.
+- `/settings/data-sources` 회귀는 기본 RC 묶음(`pnpm e2e:rc`)에 포함하고, 화면만 빠르게 다시 확인할 때는 `pnpm e2e:rc:data-sources`를 사용한다.
 
 ### 환율이 안 뜰 때 체크리스트
 1. `EXIM_EXCHANGE_API_URL`은 샘플 URL 전체가 아니라 `origin + pathname`만 입력한다(쿼리 제거).
 2. `.env.local` 수정 후 `pnpm dev`를 재시작한다.
-3. `/settings/data-sources`에서 `EXIM` 연결 테스트를 실행한다.
+3. `/settings/data-sources`에서 `국토부 실거래(매매)` 연결 테스트를 실행한다.
 4. 주말/공휴일에는 최근 7일 내 영업일 데이터로 자동 fallback될 수 있다.
 
 ### 실거래·주거비 벤치마크 UX

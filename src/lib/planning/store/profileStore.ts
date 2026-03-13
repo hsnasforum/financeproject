@@ -185,6 +185,12 @@ async function toStoredPayload(payload: unknown): Promise<unknown> {
   return encodeStoragePayload(payload);
 }
 
+function isRecoverableJsonReadError(error: unknown): boolean {
+  const nodeError = error as NodeJS.ErrnoException;
+  if (nodeError?.code === "ENOENT") return true;
+  return error instanceof SyntaxError;
+}
+
 async function readProfileFile(filePath: string): Promise<PlanningProfileRecord | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
@@ -203,8 +209,7 @@ async function readProfileFile(filePath: string): Promise<PlanningProfileRecord 
     }
     return record;
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return null;
+    if (isRecoverableJsonReadError(error)) return null;
     throw error;
   }
 }
@@ -231,8 +236,7 @@ async function readProfileMetaState(): Promise<ProfileMetaState> {
     }
     return state;
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") {
+    if (isRecoverableJsonReadError(error)) {
       return { version: PROFILE_META_VERSION };
     }
     throw error;
@@ -299,8 +303,7 @@ async function readProfileRegistryState(): Promise<ProfileRegistryState | null> 
     }
     return out;
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return null;
+    if (isRecoverableJsonReadError(error)) return null;
     throw error;
   }
 }

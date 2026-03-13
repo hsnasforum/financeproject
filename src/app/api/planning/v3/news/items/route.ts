@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { closeNewsDatabase, openNewsDatabase } from "@/lib/news/storageSqlite";
-import { readNewsTopicTrends } from "@/lib/news/trendReader";
-import { type BurstLevel } from "@/lib/news/types";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
+import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { closeNewsDatabase, openNewsDatabase, readNewsTopicTrends, type BurstLevel } from "@/lib/planning/v3/news/items";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 type ItemRow = {
   id: string;
@@ -100,7 +97,7 @@ function asNumber(value: unknown, fallback = 0): number {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -209,9 +206,6 @@ function buildWhere(input: {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

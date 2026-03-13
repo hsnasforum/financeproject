@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DevUnlockShortcutLink } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -79,6 +80,7 @@ function toHost(url: string): string {
 export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [selectedSnapshot, setSelectedSnapshot] = useState<AssumptionsSnapshot | null>(null);
@@ -173,6 +175,9 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
   const setLatest = useCallback(async () => {
     if (!hasCsrf || !selectedId) return;
     setSettingLatest(true);
+    setError("");
+    setErrorFixHref("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/assumptions/set-latest", {
         method: "POST",
@@ -186,13 +191,14 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
       const payload = (await response.json().catch(() => null)) as SetLatestPayload | null;
       if (!response.ok || !payload?.ok) {
         const apiError = resolveClientApiError(payload, "latest 포인터 변경에 실패했습니다.");
-        throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
+        setErrorFixHref(apiError.fixHref ?? "");
+        throw new Error(apiError.message);
       }
-      window.alert(payload.message ?? "latest 포인터를 변경했습니다.");
+      setNotice(payload.message ?? "latest 포인터를 변경했습니다.");
       setConfirmText("");
       await loadLatestRef();
-    } catch (setError) {
-      window.alert(setError instanceof Error ? setError.message : "latest 포인터 변경 중 오류가 발생했습니다.");
+    } catch (setLatestError) {
+      setError(setLatestError instanceof Error ? setLatestError.message : "latest 포인터 변경 중 오류가 발생했습니다.");
     } finally {
       setSettingLatest(false);
     }
@@ -259,11 +265,21 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
           </div>
         )}
       />
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          {notice}
+        </Card>
+      ) : null}
 
       <Card>
         <h2 className="text-base font-black text-slate-900">History</h2>
         <p className="mt-2 text-sm text-slate-600">현재 latest snapshotId: <span className="font-semibold">{currentLatestId || "-"}</span></p>
-        {!hasCsrf ? <p className="mt-3 text-sm font-semibold text-amber-700">Dev unlock/CSRF가 없어 조회/롤백이 차단됩니다.</p> : null}
+        {!hasCsrf ? (
+          <p className="mt-3 text-sm font-semibold text-amber-700">
+            Dev unlock/CSRF가 없어 조회/롤백이 차단됩니다.{" "}
+            <DevUnlockShortcutLink className="text-amber-700" />
+          </p>
+        ) : null}
         {error ? (
           <p className="mt-3 text-sm font-semibold text-rose-600">
             {error}

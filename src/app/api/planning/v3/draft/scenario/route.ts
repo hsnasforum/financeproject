@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   type DraftScenarioSimulationInput,
   simulateDraftScenario,
-} from "@/lib/planning/v3/service/draftScenarioSimulation";
+} from "@/lib/planning/v3/draft/service";
 
 type ScenarioBody = DraftScenarioSimulationInput & {
   csrf?: unknown;
@@ -25,7 +23,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function withWriteGuard(request: Request, body: ScenarioBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -45,9 +42,6 @@ function withWriteGuard(request: Request, body: ScenarioBody): Response | null {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: ScenarioBody = null;
   try {
     body = (await request.json()) as ScenarioBody;
@@ -86,4 +80,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

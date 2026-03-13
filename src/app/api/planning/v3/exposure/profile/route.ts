@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   readExposureProfile,
   saveExposureProfile,
-} from "../../../../../../../planning/v3/exposure/store";
-import { ExposureProfileSchema } from "../../../../../../../planning/v3/exposure/contracts";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
+} from "@/lib/planning/v3/exposure/store";
+import { ExposureProfileSchema } from "@/lib/planning/v3/exposure/contracts";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 const ExposureGetResponseSchema = z.object({
   ok: z.literal(true),
@@ -26,7 +24,7 @@ const ExposurePostResponseSchema = z.object({
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -45,9 +43,8 @@ function withReadGuard(request: Request): Response | null {
 
 function withWriteGuard(request: Request, body: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertCsrf(request, body as { csrf?: unknown } | null);
+    requireCsrf(request, body as { csrf?: unknown } | null, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -65,9 +62,6 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -79,9 +73,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: unknown = null;
   try {
     body = await request.json();

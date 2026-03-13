@@ -3,19 +3,6 @@ import { spawnSync } from "node:child_process";
 
 const ROUNDING_BASELINE_EXCLUDES = [
   "!src/lib/planning/calc/**",
-  "!src/lib/planning/assumptions/mapSnapshotToAssumptionsV2.ts",
-  "!src/lib/planning/assumptions/overrides.ts",
-  "!src/lib/planning/candidates/buildCandidatesEvidence.ts",
-  "!src/lib/planning/catalog/copyTemplates.ts",
-  "!src/lib/planning/engine/stageDecision.ts",
-  "!src/lib/planning/i18n/format.ts",
-  "!src/lib/planning/normalizeRates.ts",
-  "!src/lib/planning/ops/shouldSyncSnapshot.ts",
-  "!src/lib/planning/reports/standaloneHtmlReport.ts",
-  "!src/lib/planning/retention/cleanup.ts",
-  "!src/lib/planning/share/mask.ts",
-  "!src/lib/planning/store/runActionStore.ts",
-  "!src/lib/planning/store/trash.ts",
 ];
 
 function runRg(label, args) {

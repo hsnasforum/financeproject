@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { applyTxnOverrides } from "@/lib/planning/v3/service/applyOverrides";
-import { classifyTransactions } from "@/lib/planning/v3/service/classify";
-import { readBatch, readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
-import { buildTxnId, normalizeDescriptionForTxnId } from "@/lib/planning/v3/service/txnId";
-import { getBatchMeta, getBatchTransactions } from "@/lib/planning/v3/store/batchesStore";
-import { type ImportBatchMeta, type StoredTransaction } from "@/lib/planning/v3/domain/transactions";
-import { listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
+import {
+  applyTxnOverrides,
+  buildTxnId,
+  classifyTransactions,
+  getBatchMeta,
+  getBatchTransactions,
+  listOverrides,
+  normalizeDescriptionForTxnId,
+  readBatch,
+  readBatchTransactions,
+  type ImportBatchMeta,
+  type StoredTransaction,
+} from "@/lib/planning/v3/transactions/store";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -24,7 +28,6 @@ function asString(value: unknown): string {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -156,9 +159,6 @@ function summarizeAccountMonthlyNet(rows: Array<{ accountId?: string; date: stri
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -303,9 +303,6 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

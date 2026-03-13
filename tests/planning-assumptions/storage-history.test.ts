@@ -103,4 +103,18 @@ describe("assumptions storage history", () => {
     await setLatestSnapshotFromHistory(newerSaved.id);
     expect((await loadLatestAssumptionsSnapshot())?.korea.policyRatePct).toBe(2.75);
   });
+
+  it("skips truncated history files when listing snapshots", async () => {
+    const valid = makeSnapshot({
+      asOf: "2026-03-31",
+      fetchedAt: "2026-03-31T09:00:00.000Z",
+      korea: { policyRatePct: 3.0 },
+    });
+    const saved = await saveAssumptionsSnapshotToHistory(valid);
+    fs.writeFileSync(path.join(root, "history", "broken.json"), "{\n", "utf-8");
+
+    const listed = await listAssumptionsHistory(10);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.id).toBe(saved.id);
+  });
 });

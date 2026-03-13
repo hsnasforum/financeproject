@@ -11,7 +11,6 @@ const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3700";
-const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 
 function requestJson(pathName: string, body: unknown, host = LOCAL_HOST): Request {
   const origin = `http://${host}`;
@@ -159,19 +158,41 @@ describe("POST /api/planning/v3/draft/apply", () => {
     expect(saved?.profile.monthlyDiscretionaryExpenses).toBe(300_000);
   });
 
-  it("blocks non-local host by local-only guard", async () => {
+  it("allows same-origin remote host and still blocks cross-origin", async () => {
     const response = await applyDraftPOST(requestJson("/api/planning/v3/draft/apply", {
       profileId: "p1",
       batchId: "b1",
       mode: "preview",
     }, "example.com"));
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
       ok?: boolean;
       error?: { code?: string };
     };
     expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+    expect(payload.error?.code).toBe("NO_DATA");
+
+    const crossOrigin = await applyDraftPOST(new Request("http://localhost:3700/api/planning/v3/draft/apply", {
+      method: "POST",
+      headers: {
+        host: "localhost:3700",
+        origin: "http://evil.com",
+        referer: "http://evil.com/planning/v3/transactions",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        profileId: "p1",
+        batchId: "b1",
+        mode: "preview",
+      }),
+    }));
+    expect(crossOrigin.status).toBe(403);
+    const crossOriginPayload = await crossOrigin.json() as {
+      ok?: boolean;
+      error?: { code?: string };
+    };
+    expect(crossOriginPayload.ok).toBe(false);
+    expect(crossOriginPayload.error?.code).toBe("ORIGIN_MISMATCH");
   });
 });

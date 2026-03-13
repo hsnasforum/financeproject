@@ -5,14 +5,16 @@ import { redactText } from "../planning/privacy/redact";
 
 export type ScheduledTaskName =
   | "OPS_REFRESH_ASSUMPTIONS"
-  | "PLANNING_RUN_MONTHLY";
+  | "PLANNING_RUN_MONTHLY"
+  | "OPS_SCHEDULER_HEALTH";
 
 export type ScheduledTaskCode =
   | "OK"
   | "LOCKED"
   | "STALE_ASSUMPTIONS"
   | "VALIDATION"
-  | "INTERNAL";
+  | "INTERNAL"
+  | "RISK_STREAK";
 
 export type ScheduledTaskVaultGuard = {
   ok: boolean;

@@ -1,7 +1,6 @@
 import {
   normalizePlanningResponse,
   type PlanningApiEngineEnvelope,
-  type PlanningApiEngineCompatibleData,
 } from "@/lib/planning/api/contracts";
 
 export type StepId = "simulate" | "scenarios" | "monteCarlo" | "actions" | "debtStrategy";
@@ -119,7 +118,7 @@ async function parseApiResponse<T>(res: Response): Promise<ApiResponse<T> | null
 
 function normalizeEngineStepData(stepId: StepId, value: Record<string, unknown>): EngineStepData {
   try {
-    return normalizePlanningResponse(value as Record<string, unknown> & PlanningApiEngineCompatibleData).data;
+    return normalizePlanningResponse(value as Record<string, unknown> & Partial<PlanningApiEngineEnvelope>).data;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Missing engine envelope in planning API response";
     throw new RunPipelineFatalError(stepId, `${message}`);

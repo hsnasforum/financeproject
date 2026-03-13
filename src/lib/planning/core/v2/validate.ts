@@ -313,6 +313,36 @@ function normalizeOptionalBirthYear(value: unknown, path: string, issues: Valida
   return normalized;
 }
 
+function normalizeOptionalGender(value: unknown, path: string, issues: ValidationIssueV2[]): "M" | "F" | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    issues.push({ path, message: "must be 'M' or 'F'" });
+    return undefined;
+  }
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return undefined;
+  if (normalized !== "M" && normalized !== "F") {
+    issues.push({ path, message: "must be 'M' or 'F'" });
+    return undefined;
+  }
+  return normalized;
+}
+
+function normalizeOptionalRegionText(value: unknown, path: string, issues: ValidationIssueV2[]): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") {
+    issues.push({ path, message: "must be a string" });
+    return undefined;
+  }
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+  if (normalized.length > 60) {
+    issues.push({ path, message: "must be 60 chars or fewer" });
+    return undefined;
+  }
+  return normalized;
+}
+
 function normalizeOptionalPayout(value: unknown, path: string, issues: ValidationIssueV2[]): number | undefined {
   if (value === undefined) return undefined;
   return assertNonNegativeNumber(value, path, issues);
@@ -638,10 +668,16 @@ export function validateProfileV2(input: unknown): ProfileV2 {
   const normalizedDefaultsApplied = normalizeDefaultsApplied(input.defaultsApplied, issues);
   const currentAge = normalizeOptionalAge(input.currentAge, "profile.currentAge", issues);
   const birthYear = normalizeOptionalBirthYear(input.birthYear, "profile.birthYear", issues);
+  const gender = normalizeOptionalGender(input.gender, "profile.gender", issues);
+  const sido = normalizeOptionalRegionText(input.sido, "profile.sido", issues);
+  const sigungu = normalizeOptionalRegionText(input.sigungu, "profile.sigungu", issues);
 
   const profile: ProfileV2 = {
     ...(currentAge !== undefined ? { currentAge } : {}),
     ...(birthYear !== undefined ? { birthYear } : {}),
+    ...(gender !== undefined ? { gender } : {}),
+    ...(sido !== undefined ? { sido } : {}),
+    ...(sigungu !== undefined ? { sigungu } : {}),
     monthlyIncomeNet: assertNonNegativeNumber(input.monthlyIncomeNet, "profile.monthlyIncomeNet", issues),
     monthlyEssentialExpenses: assertNonNegativeNumber(input.monthlyEssentialExpenses, "profile.monthlyEssentialExpenses", issues),
     monthlyDiscretionaryExpenses: assertNonNegativeNumber(input.monthlyDiscretionaryExpenses, "profile.monthlyDiscretionaryExpenses", issues),

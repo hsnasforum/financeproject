@@ -247,7 +247,7 @@ export async function purgePlanningTrashOlderThan(
   for (const row of rows) {
     const deletedMs = Date.parse(row.deletedAt);
     if (!Number.isFinite(deletedMs)) continue;
-    const ageDays = Math.floor(Math.max(0, nowMs - deletedMs) / (24 * 60 * 60 * 1000));
+    const ageDays = Math.trunc(Math.max(0, nowMs - deletedMs) / (24 * 60 * 60 * 1000));
     if (ageDays <= keepDays) continue;
 
     if (row.kind === "reports") {

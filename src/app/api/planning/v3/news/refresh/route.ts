@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { runNewsRefresh } from "../../../../../../../planning/v3/news/cli/newsRefresh";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
-import { readState } from "../../../../../../../planning/v3/news/store";
+import { runNewsRefresh } from "@/lib/planning/v3/news/cli/newsRefresh";
+import { readState } from "@/lib/planning/v3/news/store";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 export const runtime = "nodejs";
 
@@ -26,11 +24,7 @@ const RefreshResponseSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
 
     let body: unknown = null;
@@ -39,7 +33,7 @@ export async function POST(request: Request) {
     } catch {
       body = null;
     }
-    assertCsrf(request, body as { csrf?: unknown } | null);
+    requireCsrf(request, body as { csrf?: unknown } | null, { allowWhenCookieMissing: true });
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {

@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  assertCsrf,
-  assertDevUnlocked,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   deleteNewsNote,
   updateNewsNote,
-} from "../../../../../../../../planning/v3/news/notes";
+} from "@/lib/planning/v3/news/notes";
 
 const UpdateBodySchema = z.object({
   csrf: z.string().optional(),
@@ -23,10 +20,8 @@ const UpdateBodySchema = z.object({
 
 function withWriteGuard(request: Request, body: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertDevUnlocked(request);
-    assertCsrf(request, body as { csrf?: unknown } | null);
+    requireCsrf(request, body as { csrf?: unknown } | null, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -54,9 +49,6 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ noteId: string }> },
 ) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: unknown = null;
   try {
     body = await request.json();
@@ -112,9 +104,6 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ noteId: string }> },
 ) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: unknown = null;
   try {
     body = await request.json();

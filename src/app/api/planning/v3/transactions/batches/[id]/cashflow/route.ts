@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
 import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
 import {
@@ -68,7 +66,6 @@ function parseIncludeTransfersOption(request: Request): boolean {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -93,9 +90,6 @@ function isInvalidIdError(error: unknown): boolean {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
