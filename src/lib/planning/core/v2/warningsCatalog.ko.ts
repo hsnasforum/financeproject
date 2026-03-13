@@ -1,3 +1,4 @@
+import { roundToDigits } from "../../calc/roundingPolicy";
 import { type ReasonCode } from "./types";
 
 export const REASON_CODE_MESSAGES_KO: Record<ReasonCode, string> = {
@@ -28,7 +29,7 @@ export type AssumptionsHealthWarningCode =
 
 function asPercent1(value: unknown): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-  return (Math.round((value + Number.EPSILON) * 10) / 10).toFixed(1);
+  return roundToDigits(value, 1).toFixed(1);
 }
 
 function asDays(value: unknown): string {

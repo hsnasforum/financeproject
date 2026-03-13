@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { roundKrw } from "../../calc/roundingPolicy";
 
 export type BuildTxnIdInput = {
   dateIso: string;
@@ -23,7 +24,7 @@ function normalizeDateIso(value: unknown): string {
 function normalizeAmount(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  return Math.round(parsed);
+  return roundKrw(parsed);
 }
 
 function normalizeToken(value: unknown): string {

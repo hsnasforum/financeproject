@@ -1,3 +1,5 @@
+import { roundKrw, roundToDigits } from "@/lib/planning/calc/roundingPolicy";
+
 export type ScenarioName = "conservative" | "base" | "aggressive";
 
 type DraftPatchInput = {
@@ -113,7 +115,7 @@ function normalizeVolatilityRate(value: unknown): number {
 function quantile(sorted: number[], q: number): number {
   if (sorted.length < 1) return 0;
   const idx = (sorted.length - 1) * q;
-  const lower = Math.floor(idx);
+  const lower = Math.trunc(idx);
   const upper = Math.ceil(idx);
   if (lower === upper) return sorted[lower] ?? 0;
   const lo = sorted[lower] ?? 0;
@@ -159,14 +161,14 @@ function normalizeRunParams(input: MonteCarloRunParams): MonteCarloRunParams {
   const minShock = Math.min(shockFloorRaw, shockCapRaw);
   const maxShock = Math.max(shockFloorRaw, shockCapRaw);
   return {
-    monthlyNetKrw: Math.round(toFiniteNumber(input.monthlyNetKrw) ?? 0),
+    monthlyNetKrw: roundKrw(toFiniteNumber(input.monthlyNetKrw) ?? 0),
     periodMonths: toIntInRange(input.periodMonths, 120, 1, 600),
     sampleCount: toIntInRange(input.sampleCount, 2000, 100, 20000),
     volatility: Math.max(0, Math.min(3, volatilityRaw)),
     drift: Math.max(-0.5, Math.min(0.5, driftRaw)),
     shockFloor: Math.max(-0.99, minShock),
     shockCap: Math.min(5, maxShock),
-    failureThresholdKrw: Math.round(toFiniteNumber(input.failureThresholdKrw) ?? 0),
+    failureThresholdKrw: roundKrw(toFiniteNumber(input.failureThresholdKrw) ?? 0),
   };
 }
 
@@ -184,21 +186,21 @@ export function monteCarloRun(params: MonteCarloRunParams, seed: number): MonteC
       const boundedShock = Math.max(normalized.shockFloor, Math.min(normalized.shockCap, randomShock));
       cumulative += normalized.monthlyNetKrw * (1 + boundedShock);
     }
-    const rounded = Math.round(cumulative);
+    const rounded = roundKrw(cumulative);
     outcomes.push(rounded);
     if (rounded < normalized.failureThresholdKrw) failures += 1;
   }
 
   const sorted = [...outcomes].sort((a, b) => a - b);
-  const mean = Math.round(outcomes.reduce((sum, value) => sum + value, 0) / outcomes.length);
-  const failureProbability = Math.round((failures / outcomes.length) * 1_000_000) / 1_000_000;
+  const mean = roundKrw(outcomes.reduce((sum, value) => sum + value, 0) / outcomes.length);
+  const failureProbability = roundToDigits(failures / outcomes.length, 6);
   return {
     mean,
-    median: Math.round(quantile(sorted, 0.5)),
-    p05: Math.round(quantile(sorted, 0.05)),
-    p25: Math.round(quantile(sorted, 0.25)),
-    p75: Math.round(quantile(sorted, 0.75)),
-    p95: Math.round(quantile(sorted, 0.95)),
+    median: roundKrw(quantile(sorted, 0.5)),
+    p05: roundKrw(quantile(sorted, 0.05)),
+    p25: roundKrw(quantile(sorted, 0.25)),
+    p75: roundKrw(quantile(sorted, 0.75)),
+    p95: roundKrw(quantile(sorted, 0.95)),
     failureProbability,
   };
 }
@@ -289,18 +291,18 @@ function deriveBaselineMonthlyNet(draftPatch: DraftPatchInput, summary: SummaryI
   const essential = toFiniteNumber(patch.monthlyEssentialExpenses);
   const discretionary = toFiniteNumber(patch.monthlyDiscretionaryExpenses);
   const fromPatch = income !== null || essential !== null || discretionary !== null
-    ? Math.round((income ?? 0) - (essential ?? 0) - (discretionary ?? 0))
+    ? roundKrw((income ?? 0) - (essential ?? 0) - (discretionary ?? 0))
     : null;
   if (fromPatch !== null) return fromPatch;
 
   const summaryRecord = isRecord(summary) ? summary : {};
   const avgNet = toFiniteNumber(summaryRecord.avgNetKrw);
-  if (avgNet !== null) return Math.round(avgNet);
+  if (avgNet !== null) return roundKrw(avgNet);
 
   const medianIncome = toFiniteNumber(summaryRecord.medianIncomeKrw);
   const medianExpense = toFiniteNumber(summaryRecord.medianExpenseKrw);
   if (medianIncome !== null || medianExpense !== null) {
-    return Math.round((medianIncome ?? 0) - Math.abs(medianExpense ?? 0));
+    return roundKrw((medianIncome ?? 0) - Math.abs(medianExpense ?? 0));
   }
   return null;
 }
@@ -314,7 +316,7 @@ function compareAgainstBase(
     deltaMedian: target.median - base.median,
     deltaP05: target.p05 - base.p05,
     deltaP95: target.p95 - base.p95,
-    deltaFailureProbability: Math.round((target.failureProbability - base.failureProbability) * 1_000_000) / 1_000_000,
+    deltaFailureProbability: roundToDigits(target.failureProbability - base.failureProbability, 6),
   };
 }
 
@@ -354,7 +356,7 @@ export function buildScenarioParams(input: MonteCarloInput): MonteCarloScenarios
       seed,
       sampleCount,
       periodMonths,
-      baseVolatilityPct: Math.round(baseVolatilityRate * 10000) / 100,
+      baseVolatilityPct: roundToDigits(baseVolatilityRate * 100, 2),
       baselineMonthlyNetKrw,
       scenarios: {
         conservative,

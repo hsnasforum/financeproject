@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
+import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
 
 const FIXTURE_ROOT = path.resolve(process.cwd(), "tests/fixtures/compat");
 const PLAIN_STORAGE_FIXTURE = "v1_plain_storage";
@@ -130,10 +131,24 @@ async function runPlainStorageCompatGate(options) {
     }
 
     if (options.withAcceptance && !options.skipComplete) {
-      await runPnpm("planning:v2:e2e:fast", {
-        cwd: process.cwd(),
-        env: compatEnv,
+      const isolated = await createIsolatedPlanningV2E2EOptions(compatEnv, {
+        defaultPort: 3226,
+        preferredPort: compatEnv.PLANNING_FAST_E2E_PORT ?? compatEnv.PORT,
+        scanFrom: compatEnv.PLANNING_FAST_E2E_SCAN_FROM,
+        scanTo: compatEnv.PLANNING_FAST_E2E_SCAN_TO,
+        sandboxPrefix: "finance-planning-compat-e2e-",
       });
+      console.log(
+        `[planning:v2:compat] isolated acceptance fast e2e port=${isolated.port} distDir=${isolated.distDir} reuseExistingServer=0 planningDataDir=${isolated.planningDataDir}`,
+      );
+      try {
+        await runPnpm("planning:v2:e2e:fast", {
+          cwd: process.cwd(),
+          env: isolated.env,
+        });
+      } finally {
+        await isolated.cleanup();
+      }
     }
   } finally {
     if (!options.keepSandbox) {

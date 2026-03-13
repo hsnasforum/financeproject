@@ -4,6 +4,7 @@ import {
   type MonteCarloScenarioComparison,
   type ScenarioName,
 } from "./monteCarloCore";
+import { roundKrw, roundToDigits } from "@/lib/planning/calc/roundingPolicy";
 
 type DraftPatchInput = {
   monthlyIncomeNet?: unknown;
@@ -71,7 +72,7 @@ function toIntInRange(value: unknown, fallback: number, min: number, max: number
 function toVolatilityPct(value: unknown): number {
   const raw = Math.abs(toFiniteNumber(value, 20));
   const pct = raw <= 1 ? raw * 100 : raw;
-  return Math.max(0, Math.min(300, Math.round(pct * 100) / 100));
+  return Math.max(0, Math.min(300, roundToDigits(pct, 2)));
 }
 
 function normalizeSeed(value: unknown): number {
@@ -127,9 +128,9 @@ export function simulateDraftScenario(input: DraftScenarioSimulationInput): Draf
   const scenario = isRecord(input.scenario) ? input.scenario : {};
 
   const normalizedPatch = {
-    monthlyIncomeNet: Math.round(toFiniteNumber(draftPatch.monthlyIncomeNet, 0)),
-    monthlyEssentialExpenses: Math.round(toFiniteNumber(draftPatch.monthlyEssentialExpenses, 0)),
-    monthlyDiscretionaryExpenses: Math.round(toFiniteNumber(draftPatch.monthlyDiscretionaryExpenses, 0)),
+    monthlyIncomeNet: roundKrw(toFiniteNumber(draftPatch.monthlyIncomeNet, 0)),
+    monthlyEssentialExpenses: roundKrw(toFiniteNumber(draftPatch.monthlyEssentialExpenses, 0)),
+    monthlyDiscretionaryExpenses: roundKrw(toFiniteNumber(draftPatch.monthlyDiscretionaryExpenses, 0)),
   };
 
   const volatilityPct = scenario.volatilityPct ?? input.volatilityPct;

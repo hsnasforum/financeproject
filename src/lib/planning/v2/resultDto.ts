@@ -1,3 +1,4 @@
+import { roundKrw, roundToDigits } from "../calc/roundingPolicy";
 import { type ActionItemV2 } from "./actions/types";
 import { LIMITS, RAW_TIMELINE_SAMPLE_STEP_MONTHS, sampleByStride, takeTop } from "./limits";
 import { aggregateWarnings, type AggregatedWarning, type WarningV2 } from "./report/aggregateWarnings";
@@ -79,7 +80,15 @@ export type ResultDtoV1 = {
   actions?: { items: ActionItemV2[]; top3: ActionItemV2[]; top: ActionItemV2[] };
   scenarios?: { table: unknown; shortWhy: string[] };
   monteCarlo?: { probabilities: unknown; percentiles: unknown; notes: string[] };
-  debt?: { dsrPct?: number; summaries?: unknown; refinance?: unknown; whatIf?: unknown; cautions?: string[] };
+  debt?: {
+    dsrPct?: number;
+    totalMonthlyPaymentKrw?: number;
+    warnings?: Array<{ code: string; message: string; data?: unknown }>;
+    summaries?: unknown;
+    refinance?: unknown;
+    whatIf?: unknown;
+    cautions?: string[];
+  };
   raw?: { simulate?: unknown; scenarios?: unknown; monteCarlo?: unknown; actions?: unknown; debt?: unknown };
 };
 
@@ -136,8 +145,7 @@ function asNumber(value: unknown): number | undefined {
 
 function roundTo(value: number, digits = 4): number {
   if (!Number.isFinite(value)) return value;
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
+  return roundToDigits(value, digits);
 }
 
 function normalizePct(value: unknown): number | undefined {
@@ -376,8 +384,24 @@ function buildDebtDto(raw: Record<string, unknown>): ResultDtoV1["debt"] | undef
   const meta = asRecord(raw.meta);
   const dsrRaw = asNumber(summary.debtServiceRatio) ?? asNumber(meta.debtServiceRatio);
   const dsrPct = normalizePct(dsrRaw);
+  const totalMonthlyPaymentKrw = asNumber(summary.totalMonthlyPaymentKrw) ?? asNumber(meta.totalMonthlyPaymentKrw);
+  const warnings = asArray(raw.warnings)
+    .map((entry) => asRecord(entry))
+    .map((entry) => {
+      const code = asString(entry.code);
+      const message = asString(entry.message);
+      if (!code && !message) return null;
+      return {
+        code: code || "UNKNOWN",
+        message: message || "부채 경고",
+        ...(entry.data !== undefined ? { data: entry.data } : {}),
+      };
+    })
+    .filter((entry): entry is { code: string; message: string; data?: unknown } => entry !== null);
   return {
     ...(typeof dsrPct === "number" ? { dsrPct } : {}),
+    ...(typeof totalMonthlyPaymentKrw === "number" ? { totalMonthlyPaymentKrw: Math.max(0, roundKrw(totalMonthlyPaymentKrw)) } : {}),
+    ...(warnings.length > 0 ? { warnings: takeTop(warnings, LIMITS.warningsTop) } : {}),
     ...(raw.summaries !== undefined ? { summaries: takeTop(asArray(raw.summaries), LIMITS.actionsTop) } : {}),
     ...(raw.refinance !== undefined ? { refinance: takeTop(asArray(raw.refinance), LIMITS.actionsTop) } : {}),
     ...(raw.whatIf !== undefined ? { whatIf: raw.whatIf } : {}),
@@ -521,7 +545,7 @@ function toMarkdownWarningPeriod(firstMonth: number | undefined, lastMonth: numb
 
 function toMoney(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-  return `${Math.round(value).toLocaleString("ko-KR")}원`;
+  return `${roundKrw(value).toLocaleString("ko-KR")}원`;
 }
 
 function toPct(value: number | undefined): string {
@@ -686,7 +710,7 @@ export function toMarkdownFromResultDto(
     lines.push("| 목표 | 목표액 | 현재 | 부족액 | 목표월 | 달성 | 코멘트 |");
     lines.push("| --- | ---: | ---: | ---: | ---: | --- | --- |");
     goalsTop.forEach((goal) => {
-      lines.push(`| ${toSafeLine(goal.title)} | ${Math.round(goal.targetKrw ?? 0).toLocaleString("ko-KR")} | ${Math.round(goal.currentKrw ?? 0).toLocaleString("ko-KR")} | ${Math.round(goal.shortfallKrw ?? 0).toLocaleString("ko-KR")} | ${goal.targetMonth ?? "-"} | ${goal.achieved ? "Y" : "N"} | ${toSafeLine(goal.comment ?? "-")} |`);
+      lines.push(`| ${toSafeLine(goal.title)} | ${roundKrw(goal.targetKrw ?? 0).toLocaleString("ko-KR")} | ${roundKrw(goal.currentKrw ?? 0).toLocaleString("ko-KR")} | ${roundKrw(goal.shortfallKrw ?? 0).toLocaleString("ko-KR")} | ${goal.targetMonth ?? "-"} | ${goal.achieved ? "Y" : "N"} | ${toSafeLine(goal.comment ?? "-")} |`);
     });
     const omitted = dto.goals.length - goalsTop.length;
     if (omitted > 0) lines.push(`- 추가 목표 ${omitted}건은 요약 출력에서 생략했습니다.`);
@@ -719,8 +743,8 @@ export function toMarkdownFromResultDto(
     const cash = asRecord(asRecord(dto.monteCarlo.percentiles).worstCashKrw);
     lines.push("| 지표 | P10 | P50 | P90 |");
     lines.push("| --- | ---: | ---: | ---: |");
-    lines.push(`| 말기 순자산 | ${Math.round(asNumber(end.p10) ?? 0).toLocaleString("ko-KR")} | ${Math.round(asNumber(end.p50) ?? 0).toLocaleString("ko-KR")} | ${Math.round(asNumber(end.p90) ?? 0).toLocaleString("ko-KR")} |`);
-    lines.push(`| 최저 현금 | ${Math.round(asNumber(cash.p10) ?? 0).toLocaleString("ko-KR")} | ${Math.round(asNumber(cash.p50) ?? 0).toLocaleString("ko-KR")} | ${Math.round(asNumber(cash.p90) ?? 0).toLocaleString("ko-KR")} |`);
+    lines.push(`| 말기 순자산 | ${roundKrw(asNumber(end.p10) ?? 0).toLocaleString("ko-KR")} | ${roundKrw(asNumber(end.p50) ?? 0).toLocaleString("ko-KR")} | ${roundKrw(asNumber(end.p90) ?? 0).toLocaleString("ko-KR")} |`);
+    lines.push(`| 최저 현금 | ${roundKrw(asNumber(cash.p10) ?? 0).toLocaleString("ko-KR")} | ${roundKrw(asNumber(cash.p50) ?? 0).toLocaleString("ko-KR")} | ${roundKrw(asNumber(cash.p90) ?? 0).toLocaleString("ko-KR")} |`);
     lines.push("");
   }
 

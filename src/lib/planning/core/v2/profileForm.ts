@@ -1,6 +1,7 @@
 import { amortizingMonthlyPayment, normalizeAprPct } from "./debt/calc";
 import { type ProfileV2, type ProfileV2Debt, type ProfileV2Goal } from "./types";
 import { decimalToAprPct, toEngineRateBoundary } from "../../v2/aprBoundary";
+import { roundKrw } from "../../calc/roundingPolicy";
 
 export type ProfileFormDebt = {
   id: string;
@@ -63,17 +64,17 @@ function isRetirementGoal(goal: ProfileV2Goal): boolean {
 
 function estimateEmergencyMonths(targetAmount: number, monthlyExpenses: number): number {
   if (monthlyExpenses <= 0) return 6;
-  return clampInt(Math.round(targetAmount / monthlyExpenses), 0, 120);
+  return clampInt(roundKrw(targetAmount / monthlyExpenses), 0, 120);
 }
 
 function estimateRetirementMonthlySpend(targetAmount: number): number {
   if (targetAmount <= 0) return 0;
-  return Math.round((targetAmount * RETIREMENT_WITHDRAWAL_RATE) / 12);
+  return roundKrw((targetAmount * RETIREMENT_WITHDRAWAL_RATE) / 12);
 }
 
 function estimateRetirementAge(currentAge: number, targetMonth?: number): number {
   if (!targetMonth || targetMonth <= 0) return currentAge + 25;
-  return clampInt(currentAge + Math.round(targetMonth / 12), currentAge, 100);
+  return clampInt(currentAge + roundKrw(targetMonth / 12), currentAge, 100);
 }
 
 function normalizeDebtId(index: number): string {
@@ -86,7 +87,7 @@ function normalizeGoalId(index: number): string {
 
 function monthlyInterestPayment(balance: number, aprPct: number): number {
   const normalizedAprPct = normalizeAprPct(aprPct);
-  return Math.round(balance * (normalizedAprPct / 100 / 12));
+  return roundKrw(balance * (normalizedAprPct / 100 / 12));
 }
 
 export function estimateDebtMonthlyPaymentKrw(debt: ProfileFormDebt): number {
@@ -96,7 +97,7 @@ export function estimateDebtMonthlyPaymentKrw(debt: ProfileFormDebt): number {
   if (debt.repaymentType === "interestOnly") {
     return monthlyInterestPayment(balance, aprPct);
   }
-  return Math.round(amortizingMonthlyPayment(balance, aprPct, remainingMonths));
+  return roundKrw(amortizingMonthlyPayment(balance, aprPct, remainingMonths));
 }
 
 function toProfileDebt(row: ProfileFormDebt, index: number): ProfileV2Debt {
@@ -120,7 +121,7 @@ function buildEmergencyGoal(form: ProfileFormModel): ProfileV2Goal | null {
   return {
     id: "goal-emergency",
     name: "Emergency Fund",
-    targetAmount: Math.round(monthlyExpenses * emergencyMonths),
+    targetAmount: roundKrw(monthlyExpenses * emergencyMonths),
     currentAmount: Math.max(0, asFinite(form.liquidAssets)),
     targetMonth: 12,
     priority: 5,
@@ -134,7 +135,7 @@ function buildRetirementGoal(form: ProfileFormModel): ProfileV2Goal | null {
   const currentAge = clampInt(asFinite(form.currentAge, 35), 0, 100);
   const retirementAge = clampInt(asFinite(form.retirementAge, currentAge + 25), currentAge, 110);
   const months = Math.max(1, (retirementAge - currentAge) * 12);
-  const targetAmount = Math.round((monthlySpend * 12) / RETIREMENT_WITHDRAWAL_RATE);
+  const targetAmount = roundKrw((monthlySpend * 12) / RETIREMENT_WITHDRAWAL_RATE);
   return {
     id: "goal-retirement",
     name: "Retirement",
@@ -245,10 +246,10 @@ export function summarizeProfileForm(form: ProfileFormModel): ProfileFormSummary
   const monthlyIncome = Math.max(0, asFinite(form.monthlyIncomeNet));
   const monthlyExpenses = Math.max(0, asFinite(form.monthlyEssentialExpenses) + asFinite(form.monthlyDiscretionaryExpenses));
   const monthlyDebt = form.debts.reduce((sum, debt) => sum + estimateDebtMonthlyPaymentKrw(debt), 0);
-  const emergencyTargetKrw = Math.round(Math.max(0, asFinite(form.emergencyMonths)) * monthlyExpenses);
+  const emergencyTargetKrw = roundKrw(Math.max(0, asFinite(form.emergencyMonths)) * monthlyExpenses);
   const emergencyGapKrw = Math.max(0, emergencyTargetKrw - Math.max(0, asFinite(form.liquidAssets)));
   return {
-    monthlySurplusKrw: Math.round(monthlyIncome - monthlyExpenses),
+    monthlySurplusKrw: roundKrw(monthlyIncome - monthlyExpenses),
     debtServiceRatio: monthlyIncome > 0 ? monthlyDebt / monthlyIncome : (monthlyDebt > 0 ? 1 : 0),
     emergencyTargetKrw,
     emergencyGapKrw,

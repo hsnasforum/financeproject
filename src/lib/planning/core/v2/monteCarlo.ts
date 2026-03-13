@@ -1,3 +1,4 @@
+import { roundToDigits } from "../../calc/roundingPolicy";
 import { mulberry32, clamp } from "./random";
 import { buildStochasticParams, sampleMonthlyInflationRate, sampleMonthlyInvestReturnRate } from "./stochasticModel";
 import { type AssumptionsV2, type RiskTolerance } from "./scenarios";
@@ -210,7 +211,7 @@ function percentile(values: number[], p: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
   const index = (sorted.length - 1) * p;
-  const lower = Math.floor(index);
+  const lower = Math.trunc(index);
   const upper = Math.ceil(index);
   if (lower === upper) return sorted[lower];
   const weight = index - lower;
@@ -218,11 +219,11 @@ function percentile(values: number[], p: number): number {
 }
 
 function round6(value: number): number {
-  return Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000;
+  return roundToDigits(value, 6);
 }
 
 function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundToDigits(value, 2);
 }
 
 function clamp01(value: number): number {

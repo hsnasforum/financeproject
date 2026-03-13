@@ -155,6 +155,7 @@ export type PlanningRunRecord = {
     normalization?: ProfileNormalizationDisclosure;
     health?: {
       warningsCodes: string[];
+      warningCodes?: string[];
       criticalCount: number;
       snapshotStaleDays?: number;
     };
@@ -180,6 +181,7 @@ export type PlanningRunRecord = {
     simulate?: PlanningRunBlobRef & {
       engine?: EngineEnvelope;
       stage?: string;
+      healthWarnings?: unknown;
       financialStatus?: unknown;
       stageDecision?: unknown;
       summary?: Record<string, unknown>;

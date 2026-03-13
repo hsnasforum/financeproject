@@ -1,3 +1,4 @@
+import { roundKrw } from "../../calc";
 import { z } from "zod";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -9,10 +10,10 @@ function asString(value: unknown): string {
 }
 
 function asFiniteRoundedNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === "number" && Number.isFinite(value)) return roundKrw(value);
   if (typeof value === "string") {
     const parsed = Number(value.trim());
-    if (Number.isFinite(parsed)) return Math.round(parsed);
+    if (Number.isFinite(parsed)) return roundKrw(parsed);
   }
   return null;
 }

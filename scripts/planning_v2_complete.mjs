@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { tsImport } from "tsx/esm/api";
+import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
 
 const COMPLETE_STEPS = [
   "planning:v2:guard",
@@ -34,12 +35,12 @@ async function loadRedactText() {
   }
 }
 
-function runPnpmScript(script, cwd = process.cwd()) {
+function runPnpmScript(script, cwd = process.cwd(), options = {}) {
   return new Promise((resolve, reject) => {
     const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-    const child = spawn(command, [script], {
+    const child = spawn(command, [script, ...(options.args ?? [])], {
       cwd,
-      env: process.env,
+      env: options.env ?? process.env,
       stdio: "inherit",
     });
     child.on("error", reject);
@@ -51,6 +52,27 @@ export async function runComplete(options = {}) {
   const cwd = options.cwd || process.cwd();
   for (const script of COMPLETE_STEPS) {
     console.log(`[planning:v2:complete] run ${script}`);
+    if (script === "planning:v2:e2e:fast") {
+      const isolated = await createIsolatedPlanningV2E2EOptions(process.env, {
+        defaultPort: 3226,
+        preferredPort: process.env.PLANNING_FAST_E2E_PORT ?? process.env.PORT,
+        scanFrom: process.env.PLANNING_FAST_E2E_SCAN_FROM,
+        scanTo: process.env.PLANNING_FAST_E2E_SCAN_TO,
+        sandboxPrefix: "finance-planning-fast-e2e-",
+      });
+      console.log(
+        `[planning:v2:complete] isolated fast e2e port=${isolated.port} distDir=${isolated.distDir} reuseExistingServer=0 planningDataDir=${isolated.planningDataDir}`,
+      );
+      try {
+        const code = await runPnpmScript(script, cwd, { env: isolated.env });
+        if (code !== 0) {
+          throw new Error(`${script} failed with code ${code}`);
+        }
+      } finally {
+        await isolated.cleanup();
+      }
+      continue;
+    }
     const code = await runPnpmScript(script, cwd);
     if (code !== 0) {
       throw new Error(`${script} failed with code ${code}`);

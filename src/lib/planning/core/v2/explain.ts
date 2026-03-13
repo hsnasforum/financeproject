@@ -1,3 +1,4 @@
+import { roundToDigits } from "../../calc/roundingPolicy";
 import {
   type ExplainabilityDriverDelta,
   type ExplainabilityEntryV2,
@@ -11,7 +12,7 @@ import { REASON_CODE_MESSAGES_KO } from "./warningsCatalog.ko";
 export const REASON_CODE_MESSAGES: Record<ReasonCode, string> = REASON_CODE_MESSAGES_KO;
 
 function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundToDigits(value, 2);
 }
 
 function mergeMeta(

@@ -1,4 +1,5 @@
 import { type Account, type AccountTransaction, type TransferCandidate } from "../domain/types";
+import { roundKrw } from "@/lib/planning/calc/roundingPolicy";
 
 type IndexedTransaction = {
   index: number;
@@ -54,7 +55,7 @@ function compareIndexedTransactions(left: IndexedTransaction, right: IndexedTran
 }
 
 function buildTransferKey(tx: AccountTransaction): string {
-  const absAmount = Math.abs(Math.round(tx.amountKrw));
+  const absAmount = Math.abs(roundKrw(tx.amountKrw));
   return `${tx.date}|${absAmount}`;
 }
 
@@ -78,7 +79,7 @@ export function detectTransfers(input: DetectTransfersInput): DetectTransfersRes
     if (shouldValidateAccount && !accountSet.has(accountId)) continue;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(tx.date)) continue;
 
-    const rounded = Math.round(tx.amountKrw);
+    const rounded = roundKrw(tx.amountKrw);
     if (rounded === 0) continue;
 
     const key = buildTransferKey(tx);
