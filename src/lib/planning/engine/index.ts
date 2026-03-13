@@ -25,11 +25,24 @@ export interface EngineRunner<TCore> {
   runCore: (input: EngineInput, context: EngineContext) => TCore;
 }
 
+type EngineResponseContext = Pick<EngineContext, "status" | "decision">;
+
 export function createEngineEnvelope(context: Pick<EngineContext, "status" | "decision">) {
   return {
     stage: context.status.stage,
     financialStatus: context.status,
     stageDecision: context.decision,
+  };
+}
+
+export function attachEngineResponse<TData extends Record<string, unknown>>(
+  context: EngineResponseContext,
+  data: TData,
+) {
+  return {
+    ...data,
+    engine: createEngineEnvelope(context),
+    engineSchemaVersion: ENGINE_SCHEMA_VERSION,
   };
 }
 

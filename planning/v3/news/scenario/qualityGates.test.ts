@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { type DigestDay } from "../digest/contracts";
 import { noRecommendationText } from "../guard/noRecommendationText";
 import { computeScenarioQualityGates } from "./qualityGates";
 
 function makeDigest(input: {
   titles: string[];
   topicsByIndex: string[][];
-}) {
+}): DigestDay {
   return {
+    schemaVersion: 1,
     date: "2026-03-05",
     observation: "관찰",
     evidence: input.titles.map((title, index) => ({
@@ -18,7 +20,7 @@ function makeDigest(input: {
     })),
     watchlist: [],
     counterSignals: [],
-  } as const;
+  };
 }
 
 describe("scenario quality gates", () => {

@@ -6,6 +6,7 @@ import {
   resetAutoMergePolicyAction,
   saveAutoMergePolicyAction,
 } from "@/app/ops/auto-merge/policy/actions";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -64,6 +65,7 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
   const [updatedAt, setUpdatedAt] = useState(props.initialPolicy.updatedAt);
   const [updatedBy, setUpdatedBy] = useState(props.initialPolicy.updatedBy);
   const [errors, setErrors] = useState<string[]>([]);
+  const [notice, setNotice] = useState("");
   const [effective, setEffective] = useState<EffectiveState>({
     envEnabledFlag: props.envEnabledFlag,
     policyEnabled: props.initialPolicy.enabled,
@@ -111,11 +113,13 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
 
   function onSave() {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
+      setErrors(["Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요."]);
+      setNotice("");
       return;
     }
     const payload = buildPayload();
     setErrors([]);
+    setNotice("");
     startTransition(() => {
       void saveAutoMergePolicyAction({
         csrf: props.csrf,
@@ -124,26 +128,28 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
       }).then((result) => {
         if (!result.ok || !result.data) {
           setErrors(result.errors && result.errors.length > 0 ? result.errors : [result.error?.message ?? "정책 저장 실패"]);
-          window.alert(result.error?.message ?? "정책 저장에 실패했습니다.");
+          setNotice("");
           return;
         }
         applySavedPolicy(result.data, result.effective);
         setErrors([]);
-        window.alert("Auto-Merge 정책을 저장했습니다.");
+        setNotice("Auto-Merge 정책을 저장했습니다.");
       }).catch((error) => {
         const message = error instanceof Error ? error.message : "정책 저장 중 오류가 발생했습니다.";
         setErrors([message]);
-        window.alert(message);
+        setNotice("");
       });
     });
   }
 
   function onReset() {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
+      setErrors(["Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요."]);
+      setNotice("");
       return;
     }
     setErrors([]);
+    setNotice("");
     startTransition(() => {
       void resetAutoMergePolicyAction({
         csrf: props.csrf,
@@ -151,16 +157,16 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
       }).then((result) => {
         if (!result.ok || !result.data) {
           setErrors(result.errors && result.errors.length > 0 ? result.errors : [result.error?.message ?? "초기화 실패"]);
-          window.alert(result.error?.message ?? "기본값 초기화에 실패했습니다.");
+          setNotice("");
           return;
         }
         applySavedPolicy(result.data, result.effective);
         setErrors([]);
-        window.alert("기본 정책으로 초기화했습니다.");
+        setNotice("기본 정책으로 초기화했습니다.");
       }).catch((error) => {
         const message = error instanceof Error ? error.message : "초기화 중 오류가 발생했습니다.";
         setErrors([message]);
-        window.alert(message);
+        setNotice("");
       });
     });
   }
@@ -188,7 +194,11 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
         <p className="mt-1 text-sm text-slate-700">policy.enabled: <span className="font-semibold">{effective.policyEnabled ? "true" : "false"}</span></p>
         <p className="mt-1 text-sm text-slate-700">effective enabled(env AND policy): <span className="font-semibold">{effective.enabled ? "true" : "false"}</span></p>
         {!hasCsrf ? (
-          <p className="mt-2 text-sm font-semibold text-amber-700">Dev unlock/CSRF가 없어 저장은 차단됩니다.</p>
+          <DevUnlockShortcutMessage
+            className="mt-2 text-sm font-semibold text-amber-700"
+            linkClassName="text-amber-700"
+            message="Dev unlock/CSRF가 없어 저장은 차단됩니다."
+          />
         ) : null}
       </Card>
 
@@ -279,8 +289,17 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
         {errors.length > 0 ? (
           <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
             {errors.map((item) => (
-              <p key={item}>{item}</p>
+              <DevUnlockShortcutMessage
+                key={item}
+                message={item}
+                linkClassName="text-rose-700"
+              />
             ))}
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+            <p>{notice}</p>
           </div>
         ) : null}
 

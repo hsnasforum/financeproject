@@ -1,9 +1,17 @@
-export type OpsActionId =
-  | "ASSUMPTIONS_REFRESH"
-  | "RUNS_CLEANUP"
-  | "REPAIR_INDEX"
-  | "RUN_MIGRATIONS"
-  | "DELETE_RUN";
+export const OPS_ACTION_IDS = [
+  "ASSUMPTIONS_REFRESH",
+  "RUNS_CLEANUP",
+  "REPAIR_INDEX",
+  "RUN_MIGRATIONS",
+  "DELETE_RUN",
+] as const;
+
+export type OpsActionId = (typeof OPS_ACTION_IDS)[number];
+
+export function isOpsActionId(value: unknown): value is OpsActionId {
+  if (typeof value !== "string") return false;
+  return (OPS_ACTION_IDS as readonly string[]).includes(value);
+}
 
 export type OpsActionParams = {
   keepDays?: number;

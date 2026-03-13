@@ -4,11 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import {
+  reportHeroActionLinkClassName,
+  reportHeroAnchorLinkClassName,
+  reportHeroPrimaryActionClassName,
+  ReportHeroCard,
+  ReportHeroStatCard,
+  ReportHeroStatGrid,
+} from "@/components/ui/ReportTone";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { type ExposureProfile } from "@/lib/planning/v3/exposure/contracts";
+import { type ImpactResult, type ScenarioForImpact } from "@/lib/planning/v3/financeNews/contracts";
+import { computeImpact } from "@/lib/planning/v3/financeNews/impactModel";
 import { WeeklyPlanPanel } from "./WeeklyPlanPanel";
-import { computeImpact } from "../../../../../../planning/v3/financeNews/impactModel";
-import { type ImpactResult, type ScenarioForImpact } from "../../../../../../planning/v3/financeNews/contracts";
-import { type ExposureProfile } from "../../../../../../planning/v3/exposure/contracts";
 
 type NewsTodayClientProps = {
   csrf?: string;
@@ -283,6 +291,17 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
   const [advancedImpact, setAdvancedImpact] = useState<Record<string, boolean>>({});
   const [recovering, setRecovering] = useState(false);
   const [recoveryPreview, setRecoveryPreview] = useState<NonNullable<RecoveryResponse["data"]>["summary"] | null>(null);
+  const evidenceCount = data?.digest?.evidence?.length ?? 0;
+  const scenarioCount = data?.scenarios?.cards?.length ?? 0;
+  const counterSignalCount = data?.digest?.counterSignals?.length ?? 0;
+  const unresolvedWatchCount = watchlistRows.filter((row) => row.status === "unknown" || row.unknownReasonCode === "missing" || row.unknownReasonCode === "disabled").length;
+  const priorityMessage = !data
+    ? "먼저 수동 갱신으로 오늘 요약을 준비하세요."
+    : !profile
+      ? "내 상황 프로필을 연결하면 시나리오 영향이 더 정확해집니다."
+      : unresolvedWatchCount > 0
+        ? "상태가 unknown인 watch 항목부터 정리하는 편이 좋습니다."
+        : "오늘 핵심 시나리오를 확인한 뒤 저널에 대응 계획을 남기세요.";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -450,125 +469,126 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
     } finally {
       setRecovering(false);
     }
-  }, [csrf, load, recoveryPreview?.action, recoveryPreview?.title]);
+  }, [csrf, load, recoveryPreview?.action]);
 
   return (
     <PageShell>
       <div className="space-y-5">
-        <Card className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h1 className="text-xl font-black text-slate-900">Planning v3 News</h1>
-              <p className="text-sm text-slate-600">오늘 digest와 시나리오를 로컬에서 수동 갱신/확인합니다.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/planning/v3/news/trends" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">트렌드</Link>
-              <button
-                type="button"
-                onClick={() => void handleRefresh()}
-                disabled={refreshing}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {refreshing ? "갱신 중..." : "수동 갱신"}
-              </button>
-            </div>
+        <ReportHeroCard
+          kicker="Daily Brief"
+          title="오늘 재무 브리핑"
+          description="핵심 관찰과 내 상황 영향을 먼저 보고, 필요한 항목만 아래에서 자세히 확인하면 됩니다."
+          action={(
+            <>
+                <Link href="/planning/v3/news/trends" className={reportHeroActionLinkClassName}>
+                  트렌드
+                </Link>
+                <Link href="/planning/v3/journal" className={reportHeroActionLinkClassName}>
+                  저널
+                </Link>
+                <Link href={profile ? "/planning/v3/news/settings" : "/planning/v3/exposure"} className={reportHeroActionLinkClassName}>
+                  {profile ? "설정" : "내 상황 입력"}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => void handleRefresh()}
+                  disabled={refreshing}
+                  className={`${reportHeroPrimaryActionClassName} disabled:opacity-60`}
+                >
+                  {refreshing ? "갱신 중..." : "지금 갱신"}
+                </button>
+            </>
+          )}
+        >
+          <p className="text-sm font-semibold text-white/85">{priorityMessage}</p>
+          <ReportHeroStatGrid>
+            <ReportHeroStatCard
+              label="마지막 갱신"
+              value={formatDateTime(data?.lastRefreshedAt ?? null)}
+              description={asString(data?.digest?.date) || "오늘 기준일 미확인"}
+            />
+            <ReportHeroStatCard
+              label="근거와 시나리오"
+              value={`근거 ${evidenceCount}건 · 시나리오 ${scenarioCount}개`}
+              description="중요한 뉴스 근거와 해석 카드 수"
+            />
+            <ReportHeroStatCard
+              label="watch 상태"
+              value={`${watchlistRows.length}개 중 ${unresolvedWatchCount}개 점검 필요`}
+              description="unknown 또는 설정 누락 항목"
+            />
+            <ReportHeroStatCard
+              label="내 상황 연결"
+              value={profile ? "연결됨" : "미입력"}
+              description={profile ? "개인 영향 요약이 표시됩니다." : "프로필을 입력하면 영향 설명이 구체화됩니다."}
+            />
+          </ReportHeroStatGrid>
+
+          <div className="flex flex-wrap gap-2 text-xs">
+            <a href="#news-today-observation" className={reportHeroAnchorLinkClassName}>오늘 핵심</a>
+            <a href="#news-today-watchlist" className={reportHeroAnchorLinkClassName}>watchlist</a>
+            <a href="#news-today-scenarios" className={reportHeroAnchorLinkClassName}>시나리오</a>
+            <a href="#news-today-ops" className={reportHeroAnchorLinkClassName}>고급 작업</a>
           </div>
-          <p className="text-xs text-slate-500">
-            마지막 갱신 시각: {formatDateTime(data?.lastRefreshedAt ?? null)}
-          </p>
-          {notice ? <p className="text-xs font-semibold text-emerald-700">{notice}</p> : null}
-          {errorMessage ? <p className="text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
-        </Card>
+
+          {notice ? <p className="text-xs font-semibold text-emerald-300">{notice}</p> : null}
+          {errorMessage ? <p className="text-xs font-semibold text-rose-300">{errorMessage}</p> : null}
+        </ReportHeroCard>
 
         <WeeklyPlanPanel csrf={csrf} />
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">수동 복구</h2>
-          <p className="text-xs text-slate-600">
-            자동 삭제 없이 캐시/트렌드만 재구성합니다. 실행 전에 변경 요약을 먼저 확인해야 합니다.
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={recovering}
-              onClick={() => void requestRecoveryPreview("rebuild_caches")}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-            >
-              캐시 재구성 요약 보기
-            </button>
-            <button
-              type="button"
-              disabled={recovering}
-              onClick={() => void requestRecoveryPreview("recompute_trends")}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-            >
-              트렌드 재계산 요약 보기
-            </button>
-          </div>
+        <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card id="news-today-observation" className="space-y-3">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">오늘 핵심</h2>
+              <p className="text-xs text-slate-500">가장 먼저 읽을 한 줄 요약과, 근거가 되는 링크를 같이 봅니다.</p>
+            </div>
+            {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : <p className="text-sm leading-6 text-slate-800">{asString(data?.digest?.observation) || "데이터 없음"}</p>}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-semibold text-slate-700">반대 시그널</p>
+                <span className="text-xs text-slate-500">{counterSignalCount}건</span>
+              </div>
+              {!data?.digest?.counterSignals?.length ? (
+                <p className="mt-1 text-sm text-slate-600">반대 시그널 없음</p>
+              ) : (
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-800">
+                  {data.digest.counterSignals.map((row, index) => (
+                    <li key={`${row}-${index}`}>{asString(row)}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Card>
 
-          {recoveryPreview ? (
-            <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
-              <p className="text-xs font-bold text-amber-800">{asString(recoveryPreview.title) || "복구 요약"}</p>
-              <p className="text-xs text-amber-900">{asString(recoveryPreview.description) || "-"}</p>
-              <p className="text-xs text-amber-900">
-                기준 아이템 {recoveryPreview.itemCount ?? 0}건 · 대상 일수 {recoveryPreview.dailyDays ?? 0}일
-              </p>
-              <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-900">
-                {(recoveryPreview.notes ?? []).slice(0, 3).map((line, index) => (
-                  <li key={`recovery-note-${index}`}>{asString(line)}</li>
+          <Card className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-slate-900">근거 링크</h2>
+              <span className="text-xs text-slate-500">{evidenceCount}건</span>
+            </div>
+            {!data?.digest?.evidence?.length ? (
+              <p className="text-sm text-slate-600">근거 링크 없음</p>
+            ) : (
+              <ul className="space-y-2">
+                {data.digest.evidence.slice(0, 5).map((row, index) => (
+                  <li key={`${asString(row.url)}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+                    <a href={asString(row.url)} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline underline-offset-2">
+                      {asString(row.title) || asString(row.url) || "링크"}
+                    </a>
+                    <p className="mt-1 text-xs text-slate-500">{asString(row.sourceId)} · {formatDateTime(row.publishedAt)}</p>
+                  </li>
                 ))}
               </ul>
-              <p className="text-xs text-amber-900">
-                예상 변경 파일: {(recoveryPreview.writeTargets ?? []).slice(0, 3).join(" / ") || "-"}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={recovering}
-                  onClick={() => void runRecovery()}
-                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  {recovering ? "복구 실행 중..." : "요약 확인 후 실행"}
-                </button>
-                <button
-                  type="button"
-                  disabled={recovering}
-                  onClick={() => setRecoveryPreview(null)}
-                  className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 disabled:opacity-60"
-                >
-                  취소
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </Card>
+            )}
+          </Card>
+        </div>
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Observation</h2>
-          {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : <p className="text-sm text-slate-800">{asString(data?.digest?.observation) || "데이터 없음"}</p>}
-        </Card>
-
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Evidence (links)</h2>
-          {!data?.digest?.evidence?.length ? (
-            <p className="text-sm text-slate-600">근거 링크 없음</p>
-          ) : (
-            <ul className="space-y-2">
-              {data.digest.evidence.slice(0, 5).map((row, index) => (
-                <li key={`${asString(row.url)}-${index}`} className="text-sm text-slate-800">
-                  <a href={asString(row.url)} target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline underline-offset-2">
-                    {asString(row.title) || asString(row.url) || "링크"}
-                  </a>
-                  <span className="ml-2 text-xs text-slate-500">{asString(row.sourceId)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="space-y-3">
+        <Card id="news-today-watchlist" className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-slate-900">Watchlist</h2>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">watchlist</h2>
+              <p className="text-xs text-slate-500">오늘 점검이 필요한 지표만 먼저 보고, 문제 항목은 바로 설정 화면으로 이동합니다.</p>
+            </div>
             <button
               type="button"
               onClick={() => setWatchAdvanced((prev) => !prev)}
@@ -647,21 +667,14 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           )}
         </Card>
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Counter-signals</h2>
-          {!data?.digest?.counterSignals?.length ? (
-            <p className="text-sm text-slate-600">반대 시그널 없음</p>
-          ) : (
-            <ul className="list-disc space-y-1 pl-5 text-sm text-slate-800">
-              {data.digest.counterSignals.map((row, index) => (
-                <li key={`${row}-${index}`}>{asString(row)}</li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Scenarios</h2>
+        <Card id="news-today-scenarios" className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">시나리오 비교</h2>
+              <p className="text-xs text-slate-500">각 시나리오의 핵심 해석과 내 상황 영향 요약을 한 번에 비교합니다.</p>
+            </div>
+            <span className="text-xs text-slate-500">{scenarioCount}개</span>
+          </div>
           {!data?.scenarios?.cards?.length ? (
             <p className="text-sm text-slate-600">시나리오 없음</p>
           ) : (
@@ -753,6 +766,67 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
               ))}
             </div>
           )}
+        </Card>
+
+        <Card id="news-today-ops" className="space-y-3 border-amber-200 bg-amber-50/60">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">고급 작업</h2>
+            <p className="text-xs text-slate-700">일반 사용자는 거의 쓸 일이 없고, 데이터가 꼬였을 때만 캐시/트렌드 복구를 실행하면 됩니다.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={recovering}
+              onClick={() => void requestRecoveryPreview("rebuild_caches")}
+              className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
+            >
+              캐시 재구성 요약 보기
+            </button>
+            <button
+              type="button"
+              disabled={recovering}
+              onClick={() => void requestRecoveryPreview("recompute_trends")}
+              className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
+            >
+              트렌드 재계산 요약 보기
+            </button>
+          </div>
+
+          {recoveryPreview ? (
+            <div className="space-y-2 rounded-md border border-amber-200 bg-white p-3">
+              <p className="text-xs font-bold text-amber-800">{asString(recoveryPreview.title) || "복구 요약"}</p>
+              <p className="text-xs text-amber-900">{asString(recoveryPreview.description) || "-"}</p>
+              <p className="text-xs text-amber-900">
+                기준 아이템 {recoveryPreview.itemCount ?? 0}건 · 대상 일수 {recoveryPreview.dailyDays ?? 0}일
+              </p>
+              <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-900">
+                {(recoveryPreview.notes ?? []).slice(0, 3).map((line, index) => (
+                  <li key={`recovery-note-${index}`}>{asString(line)}</li>
+                ))}
+              </ul>
+              <p className="text-xs text-amber-900">
+                예상 변경 파일: {(recoveryPreview.writeTargets ?? []).slice(0, 3).join(" / ") || "-"}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={recovering}
+                  onClick={() => void runRecovery()}
+                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {recovering ? "복구 실행 중..." : "요약 확인 후 실행"}
+                </button>
+                <button
+                  type="button"
+                  disabled={recovering}
+                  onClick={() => setRecoveryPreview(null)}
+                  className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 disabled:opacity-60"
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          ) : null}
         </Card>
       </div>
     </PageShell>

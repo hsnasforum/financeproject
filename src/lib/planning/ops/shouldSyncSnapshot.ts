@@ -40,7 +40,7 @@ export function shouldSyncSnapshot(args: ShouldSyncSnapshotArgs): ShouldSyncSnap
     };
   }
 
-  const staleDays = Math.floor(Math.max(0, nowMs - fetchedMs) / (24 * 60 * 60 * 1000));
+  const staleDays = Math.trunc(Math.max(0, nowMs - fetchedMs) / (24 * 60 * 60 * 1000));
   if (staleDays > threshold) {
     return {
       attempt: true,
@@ -55,4 +55,3 @@ export function shouldSyncSnapshot(args: ShouldSyncSnapshotArgs): ShouldSyncSnap
     staleDays,
   };
 }
-

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { BodyActionLink, bodyActionLinkGroupClassName, BodyEmptyState, BodySectionHeading, BodyTableFrame, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -147,13 +147,13 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
       <div className="space-y-5">
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Summary</h1>
-          <div className="flex flex-wrap gap-3 text-xs font-semibold text-emerald-700">
-            <Link className="underline underline-offset-2" href="/planning/v3/batches">
+          <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href="/planning/v3/batches">
               배치 목록
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/profile/drafts">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/profile/drafts">
               Draft 목록
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
@@ -196,7 +196,7 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
                   <dd>{formatKrw(summary.totals.incomeKrw)} / {formatKrw(summary.totals.expenseKrw)} / {formatKrw(summary.totals.transferKrw)}</dd>
                 </div>
               </dl>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className={bodyDenseActionRowClassName}>
                 <Button
                   data-testid="v3-batch-create-draft"
                   disabled={createLoading}
@@ -218,8 +218,8 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
 
         {summary ? (
           <Card className="space-y-3">
-            <h2 className="text-sm font-bold text-slate-900">월별 요약</h2>
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <BodySectionHeading title="월별 요약" />
+            <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
                 <thead className="bg-slate-50">
                   <tr>
@@ -240,13 +240,13 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </BodyTableFrame>
           </Card>
         ) : null}
 
         {summary ? (
           <Card className="space-y-2">
-            <h2 className="text-sm font-bold text-slate-900">Top Expense Categories</h2>
+            <BodySectionHeading title="Top Expense Categories" />
             <ul className="space-y-1 text-sm text-slate-700">
               {summary.topExpenseCategories.map((row) => (
                 <li key={row.categoryId} className="flex items-center justify-between rounded border border-slate-200 px-2 py-1">
@@ -255,7 +255,7 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
                 </li>
               ))}
               {summary.topExpenseCategories.length < 1 ? (
-                <li className="text-slate-500">지출 카테고리 데이터가 없습니다.</li>
+                <li><BodyEmptyState className="px-3 py-4" description="아직 지출 카테고리 합계가 계산되지 않았습니다." title="지출 카테고리 데이터가 없습니다." /></li>
               ) : null}
             </ul>
           </Card>

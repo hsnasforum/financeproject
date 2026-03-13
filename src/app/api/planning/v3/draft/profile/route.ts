@@ -1,17 +1,15 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import { sanitizeRecordId } from "@/lib/planning/store/paths";
-import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
 import {
   buildProfileDraftEstimateFromCashflow,
   ProfileDraftFromCashflowInputError,
-} from "@/lib/planning/v3/service/draftFromCashflow";
+} from "@/lib/planning/v3/draft/service";
+import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
 import { listBatches, readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
 import { listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
 
@@ -34,7 +32,6 @@ function asBoolean(value: unknown): boolean {
 
 function withWriteGuard(request: Request, body: DraftProfileBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -60,9 +57,6 @@ function resolveBatchId(body: DraftProfileBody): string | null {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: DraftProfileBody = null;
   try {
     body = (await request.json()) as DraftProfileBody;

@@ -14,6 +14,11 @@ import {
 } from "../storage/journal";
 import { LIMITS, RAW_TIMELINE_SAMPLE_STEP_MONTHS, sampleByStride, takeTop } from "../v2/limits";
 import { loadCanonicalRun } from "../v2/loadCanonicalRun";
+import {
+  buildResultDtoV1FromRunRecord,
+  isResultDtoV1,
+} from "../v2/resultDto";
+import { backfillResultDtoDebtFromRaw } from "../v2/resultDtoDebtBackfill";
 import { RUN_SCHEMA_VERSION } from "../v2/schemaVersion";
 import {
   resolveProfilePartitionsDir,
@@ -80,6 +85,42 @@ export type RunIndexEntry = {
   };
   warningsCount?: number;
   criticalCount?: number;
+};
+
+export type LegacyRunBackfillSummary = {
+  totalRuns: number;
+  opsDoctorRuns: number;
+  userRuns: number;
+  legacyCandidates: number;
+  opsDoctorLegacyCandidates: number;
+  userLegacyCandidates: number;
+  resultDtoOnlyCandidates: number;
+  missingResultDtoCandidates: number;
+  missingEngineSchemaCandidates: number;
+  unreadableCandidates: number;
+};
+
+export type LegacyRunBackfillCandidateReason =
+  | "resultDtoOnly"
+  | "missingResultDto"
+  | "missingEngineSchema"
+  | "unreadableMeta";
+
+export type LegacyRunBackfillCandidate = {
+  id: string;
+  profileId: string;
+  createdAt: string;
+  title?: string;
+  runKind: "opsDoctor" | "user";
+  reason: LegacyRunBackfillCandidateReason;
+};
+
+export type LegacyRunBackfillResult = {
+  selected: number;
+  migrated: number;
+  skipped: number;
+  failed: number;
+  candidates: LegacyRunBackfillCandidate[];
 };
 
 type RunIndexFile = {
@@ -344,13 +385,18 @@ async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void
   await atomicWriteJson(filePath, payload);
 }
 
+function isRecoverableJsonReadError(error: unknown): boolean {
+  const nodeError = error as NodeJS.ErrnoException;
+  if (nodeError?.code === "ENOENT") return true;
+  return error instanceof SyntaxError;
+}
+
 async function readJsonFile(filePath: string): Promise<unknown | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
     return JSON.parse(raw) as unknown;
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return null;
+    if (isRecoverableJsonReadError(error)) return null;
     throw error;
   }
 }
@@ -376,6 +422,65 @@ function toMetaRecord(record: PlanningRunRecord): PlanningRunRecord {
     ...record,
     schemaVersion: RUN_SCHEMA_VERSION,
     outputs,
+  };
+}
+
+function ensureCanonicalResultDto(record: PlanningRunRecord): {
+  run: PlanningRunRecord;
+  migrated: boolean;
+} {
+  const existing = asRecord(record.outputs).resultDto;
+  if (isResultDtoV1(existing)) {
+    const migratedDebt = backfillResultDtoDebtFromRaw(existing);
+    if (!migratedDebt.migrated) {
+      return {
+        run: record,
+        migrated: false,
+      };
+    }
+    return {
+      run: {
+        ...record,
+        outputs: compactRunOutputs({
+          ...record.outputs,
+          resultDto: migratedDebt.resultDto,
+        }, { storeRawOutputs: true }),
+      },
+      migrated: true,
+    };
+  }
+
+  return {
+    run: {
+      ...record,
+      outputs: compactRunOutputs({
+        ...record.outputs,
+        resultDto: buildResultDtoV1FromRunRecord(record),
+      }, { storeRawOutputs: true }),
+    },
+    migrated: true,
+  };
+}
+
+function toFallbackSourceForResultDtoMigration(record: PlanningRunRecord): string {
+  const resultDto = asRecord(record.outputs).resultDto;
+  if (!isResultDtoV1(resultDto)) return "runStore/readRunMetaByPath/outputs.resultDto.rebuild";
+  const rawDebt = asRecord(asRecord(resultDto.raw).debt);
+  if (Object.keys(rawDebt).length > 0) {
+    return "runStore/readRunMetaByPath/outputs.resultDto.debtRawBackfill";
+  }
+  return "runStore/readRunMetaByPath/outputs.resultDto.normalize";
+}
+
+function ensureCanonicalResultDtoWithSource(record: PlanningRunRecord): {
+  run: PlanningRunRecord;
+  migrated: boolean;
+  source: string;
+} {
+  const migrated = ensureCanonicalResultDto(record);
+  return {
+    ...migrated,
+    source: toFallbackSourceForResultDtoMigration(record),
   };
 }
 
@@ -463,21 +568,64 @@ async function readRunMetaByPath(filePath: string): Promise<PlanningRunRecord | 
   if (!isRunRecord(parsed)) return null;
   try {
     const canonical = loadCanonicalRun(parsed);
-    const record = toMetaRecord(canonical.run);
-    const migration = migrateLegacyRunToEngineEnvelope(record);
-    if (migration.migrated) {
-      recordPlanningFallbackUsage("legacyRunEngineMigrationCount", {
-        source: `runStore/readRunMetaByPath/${migration.source ?? "unknown"}`,
+    const canonicalMeta = ensureCanonicalResultDtoWithSource(toMetaRecord(canonical.run));
+    const migration = migrateLegacyRunToEngineEnvelope(canonicalMeta.run);
+    if (canonicalMeta.migrated) {
+      recordPlanningFallbackUsage("legacyReportContractFallbackCount", {
+        source: canonicalMeta.source,
+        sourceKey: "compatRebuild",
         runId: migration.run.id,
       });
     }
-    if (decoded.rewriteToVault || migration.migrated) {
+    if (migration.migrated) {
+      recordPlanningFallbackUsage("legacyRunEngineMigrationCount", {
+        source: `runStore/readRunMetaByPath/${migration.source ?? "unknown"}`,
+        sourceKey: "legacyEngineFallback",
+        runId: migration.run.id,
+      });
+    }
+    if (decoded.rewriteToVault || canonicalMeta.migrated || migration.migrated) {
       await writeJsonAtomic(filePath, await toStoredPayload(migration.run));
     }
     return migration.run;
   } catch {
     return null;
   }
+}
+
+async function readRawRunMetaByPath(filePath: string): Promise<PlanningRunRecord | null> {
+  const loaded = await readJsonFile(filePath);
+  if (!loaded) return null;
+  const decoded = await fromStoredPayload(loaded);
+  const parsed = decoded.payload;
+  if (!isRunRecord(parsed)) return null;
+  try {
+    const canonical = loadCanonicalRun(parsed);
+    return toMetaRecord(canonical.run);
+  } catch {
+    return null;
+  }
+}
+
+function resolveBackfillRunKind(row: Pick<RunIndexEntry, "id" | "profileId">): "opsDoctor" | "user" {
+  return row.id.startsWith("ops-doctor-") || row.profileId === "ops-doctor"
+    ? "opsDoctor"
+    : "user";
+}
+
+function resolveLegacyCandidateReason(raw: PlanningRunRecord | null): LegacyRunBackfillCandidateReason | null {
+  if (!raw) return "unreadableMeta";
+
+  const hasEngine = isEngineEnvelopeLike(raw.outputs.engine);
+  const rawEngineSchemaVersion = Math.trunc(Number(raw.outputs.engineSchemaVersion));
+  const hasEngineSchema = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1;
+  const hasResultDto = raw.outputs.resultDto !== undefined;
+
+  if (hasEngine && hasEngineSchema) return null;
+  if (hasEngine && !hasEngineSchema) return "missingEngineSchema";
+  if (!hasEngine && hasResultDto) return "resultDtoOnly";
+  if (!hasEngine && !hasResultDto) return "missingResultDto";
+  return null;
 }
 
 async function findPartitionMetaPathByRunId(runId: string): Promise<string | null> {
@@ -931,6 +1079,130 @@ export async function getRun(id: string): Promise<PlanningRunRecord | null> {
   const indexRows = await readRunIndex();
   const hintedProfileId = indexRows.find((row) => row.id === safeId)?.profileId;
   return readRunMeta(safeId, hintedProfileId);
+}
+
+export async function summarizeLegacyRunBackfill(): Promise<LegacyRunBackfillSummary> {
+  assertServerOnly();
+  await ensureStartupMigrations();
+
+  const indexRows = await readRunIndex();
+  const summary: LegacyRunBackfillSummary = {
+    totalRuns: indexRows.length,
+    opsDoctorRuns: 0,
+    userRuns: 0,
+    legacyCandidates: 0,
+    opsDoctorLegacyCandidates: 0,
+    userLegacyCandidates: 0,
+    resultDtoOnlyCandidates: 0,
+    missingResultDtoCandidates: 0,
+    missingEngineSchemaCandidates: 0,
+    unreadableCandidates: 0,
+  };
+
+  for (const row of indexRows) {
+    const runKind = resolveBackfillRunKind(row);
+    if (runKind === "opsDoctor") {
+      summary.opsDoctorRuns += 1;
+    } else {
+      summary.userRuns += 1;
+    }
+
+    const paths = getRunPaths(row.id, row.profileId);
+    const raw = await readRawRunMetaByPath(paths.partitionMetaPath ?? paths.legacyMetaPath)
+      ?? await readRawRunMetaByPath(paths.legacyMetaPath)
+      ?? await readRawRunMetaByPath(paths.legacyFilePath);
+    const reason = resolveLegacyCandidateReason(raw);
+    if (reason) {
+      summary.legacyCandidates += 1;
+      if (runKind === "opsDoctor") summary.opsDoctorLegacyCandidates += 1;
+      else summary.userLegacyCandidates += 1;
+      if (reason === "resultDtoOnly") summary.resultDtoOnlyCandidates += 1;
+      if (reason === "missingResultDto") summary.missingResultDtoCandidates += 1;
+      if (reason === "missingEngineSchema") summary.missingEngineSchemaCandidates += 1;
+      if (reason === "unreadableMeta") summary.unreadableCandidates += 1;
+    }
+  }
+
+  return summary;
+}
+
+export async function listLegacyRunBackfillCandidates(options?: {
+  limit?: number;
+  includeOpsDoctor?: boolean;
+}): Promise<LegacyRunBackfillCandidate[]> {
+  assertServerOnly();
+  await ensureStartupMigrations();
+
+  const indexRows = await readRunIndex();
+  const out: LegacyRunBackfillCandidate[] = [];
+  for (const row of indexRows) {
+    const runKind = resolveBackfillRunKind(row);
+    if (runKind === "opsDoctor" && options?.includeOpsDoctor !== true) continue;
+
+    const paths = getRunPaths(row.id, row.profileId);
+    const raw = await readRawRunMetaByPath(paths.partitionMetaPath ?? paths.legacyMetaPath)
+      ?? await readRawRunMetaByPath(paths.legacyMetaPath)
+      ?? await readRawRunMetaByPath(paths.legacyFilePath);
+    const reason = resolveLegacyCandidateReason(raw);
+    if (!reason) continue;
+    out.push({
+      id: row.id,
+      profileId: row.profileId,
+      createdAt: row.createdAt,
+      ...(asString(row.title) ? { title: asString(row.title) } : {}),
+      runKind,
+      reason,
+    });
+  }
+
+  const limit = toSafeLimit(options?.limit, 100);
+  return sortByCreatedAtDesc(out).slice(0, limit);
+}
+
+export async function backfillLegacyRuns(options?: {
+  limit?: number;
+  includeOpsDoctor?: boolean;
+}): Promise<LegacyRunBackfillResult> {
+  assertServerOnly();
+  await ensureStartupMigrations();
+
+  const candidates = await listLegacyRunBackfillCandidates({
+    limit: options?.limit,
+    includeOpsDoctor: options?.includeOpsDoctor,
+  });
+
+  let migrated = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const candidate of candidates) {
+    if (candidate.reason === "unreadableMeta") {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      const loaded = await getRun(candidate.id);
+      const hasEngine = Boolean(loaded && isEngineEnvelopeLike(loaded.outputs.engine));
+      const rawEngineSchemaVersion = Math.trunc(Number(loaded?.outputs.engineSchemaVersion));
+      const hasEngineSchema = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1;
+      if (hasEngine && hasEngineSchema) {
+        migrated += 1;
+      } else {
+        failed += 1;
+      }
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return {
+    selected: candidates.length,
+    migrated,
+    skipped,
+    failed,
+    candidates,
+  };
 }
 
 export type UpdateRunPatch = Partial<Pick<

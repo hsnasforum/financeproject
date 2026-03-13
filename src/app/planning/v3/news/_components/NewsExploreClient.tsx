@@ -4,6 +4,7 @@ import Link from "next/link";
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { reportHeroActionLinkClassName, ReportHeroCard, ReportHeroStatCard, ReportHeroStatGrid } from "@/components/ui/ReportTone";
 import { WeeklyPlanPanel } from "./WeeklyPlanPanel";
 
 type BurstLevel = "all" | "상" | "중" | "하";
@@ -104,6 +105,22 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
+function burstLabel(value: BurstLevel): string {
+  if (value === "상") return "급증 강함";
+  if (value === "중") return "급증 보통";
+  if (value === "하") return "급증 약함";
+  return "전체";
+}
+
+function buildExploreLead(item: ExploreItem): string {
+  const parts = [
+    `${item.topicLabel} 흐름`,
+    `${item.sourceName}에서 확인`,
+    `${burstLabel(item.burstLevel)}`,
+  ];
+  return parts.join(" · ");
+}
+
 function safeDays(value: number): 7 | 14 | 30 {
   if (value === 7 || value === 14 || value === 30) return value;
   if (value <= 7) return 7;
@@ -180,6 +197,18 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
     if (loading) return "불러오는 중...";
     return `${total.toLocaleString("ko-KR")}건`;
   }, [loading, total]);
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (asString(applied.q)) count += 1;
+    if (asString(applied.topic)) count += 1;
+    if (asString(applied.source)) count += 1;
+    if (applied.burst !== "all") count += 1;
+    if (applied.days !== DEFAULT_FILTERS.days) count += 1;
+    if (asString(applied.minScore)) count += 1;
+    return count;
+  }, [applied]);
+  const topTopic = topics[0];
+  const topSource = sources[0];
 
   function submitFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -189,28 +218,37 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
   return (
     <PageShell>
       <div className="space-y-5">
-        <Card className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h1 className="text-xl font-black text-slate-900">Planning v3 News Explore</h1>
-              <p className="text-sm text-slate-600">토픽·기간·소스·버스트 필터로 과거 동향 재탐색</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/planning/v3/news" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
-                Digest로
+        <ReportHeroCard
+          kicker="Topic Explorer"
+          title="뉴스 탐색"
+          description="최근 이슈를 다시 훑어보면서 내게 중요한 토픽만 좁혀 보고, 많이 잡히는 흐름과 출처를 같은 기준으로 비교합니다."
+          action={(
+            <>
+              <Link href="/planning/v3/news" className={reportHeroActionLinkClassName}>
+                오늘 브리핑
               </Link>
-              <Link href="/planning/v3/news/trends" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
-                트렌드
+              <Link href="/planning/v3/news/trends" className={reportHeroActionLinkClassName}>
+                흐름 보기
               </Link>
-              <Link href="/planning/v3/news/alerts" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
-                알림함
+              <Link href="/planning/v3/news/alerts" className={reportHeroActionLinkClassName}>
+                중요 알림
               </Link>
-              <Link href="/planning/v3/news/settings" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+              <Link href="/planning/v3/news/settings" className={reportHeroActionLinkClassName}>
                 설정
               </Link>
-            </div>
-          </div>
-        </Card>
+            </>
+          )}
+        >
+          <ReportHeroStatGrid className="xl:grid-cols-3">
+            <ReportHeroStatCard label="검색 결과" value={resultLabel} description="현재 조건에 맞는 기사 수" />
+            <ReportHeroStatCard label="적용 필터" value={`${activeFilterCount}개`} description="키워드, 기간, 소스, 급증 정도 기준" />
+            <ReportHeroStatCard
+              label="많이 잡힌 흐름"
+              value={topTopic ? topTopic.topicLabel : "-"}
+              description={topSource ? `${topSource.sourceName}에서 많이 보인 기사` : "결과를 불러오면 자주 보인 흐름을 보여줍니다."}
+            />
+          </ReportHeroStatGrid>
+        </ReportHeroCard>
 
         <WeeklyPlanPanel csrf={csrf} />
 
@@ -302,7 +340,9 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
             </label>
 
             <div className="md:col-span-6 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
-              <p className="text-xs text-slate-500">검색 결과: {resultLabel}</p>
+              <p className="text-xs text-slate-500">
+                검색 결과: {resultLabel} · 최근 {applied.days}일 · 급증 정도 {burstLabel(applied.burst)}
+              </p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -327,28 +367,47 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
         </Card>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">검색 결과</h2>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">살펴볼 기사</h2>
+            <p className="text-xs text-slate-500">먼저 제목과 한 줄 해석을 보고, 필요할 때만 상세 근거를 펼쳐보세요.</p>
+          </div>
           {loading ? (
             <p className="text-sm text-slate-600">불러오는 중...</p>
           ) : items.length < 1 ? (
-            <p className="text-sm text-slate-600">조건에 맞는 항목이 없습니다.</p>
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">조건에 맞는 항목이 없습니다.</p>
+              <p className="mt-1 text-xs text-slate-600">필터를 줄이거나 최근 30일 기준으로 다시 보면 더 넓게 확인할 수 있습니다.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(DEFAULT_FILTERS);
+                    setApplied(DEFAULT_FILTERS);
+                  }}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white"
+                >
+                  필터 초기화
+                </button>
+                <Link href="/planning/v3/news/trends" className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white">
+                  최근 흐름 보기
+                </Link>
+              </div>
+            </div>
           ) : (
             <ul className="space-y-2">
               {items.map((item) => (
                 <li key={item.id} className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-xs text-slate-500">
-                    {item.topicLabel} · {item.sourceName} · 버스트 등급 {item.burstLevel} · 점수 {item.score.toFixed(2)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-600">근거: {item.rationale || "기본 점수 규칙 반영"}</p>
+                  <p className="text-xs font-semibold text-emerald-700">{buildExploreLead(item)}</p>
                   <a
                     href={item.url}
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                     className="mt-1 block text-sm font-semibold text-slate-900 underline-offset-2 hover:underline"
                   >
                     {item.title}
                   </a>
-                  <p className="mt-1 text-xs text-slate-500">{formatDateTime(item.publishedAt)}</p>
+                  <p className="mt-1 text-xs text-slate-600">{item.rationale || "최근 언급량과 토픽 연관도를 기준으로 먼저 볼 기사로 분류했습니다."}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatDateTime(item.publishedAt)} · 내부 점수 {item.score.toFixed(2)}</p>
                   <button
                     type="button"
                     onClick={() => setAdvanced((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}

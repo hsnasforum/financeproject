@@ -1,20 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
 import {
   RecoveryActionSchema,
   RecoveryExecutionSchema,
   RecoverySummarySchema,
   previewRecoveryAction,
   runRecoveryAction,
-} from "../../../../../../../planning/v3/news/recovery";
+} from "@/lib/planning/v3/news/recovery";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 export const runtime = "nodejs";
 
@@ -34,9 +32,6 @@ const RecoveryResponseSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: unknown = null;
   try {
     body = await request.json();
@@ -45,9 +40,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertCsrf(request, body as { csrf?: unknown } | null);
+    requireCsrf(request, body as { csrf?: unknown } | null, { allowWhenCookieMissing: true });
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {

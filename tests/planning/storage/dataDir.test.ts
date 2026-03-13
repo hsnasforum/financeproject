@@ -3,6 +3,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveDataDir, resolveOpsDataDir, resolvePlanningDataDir } from "../../../src/lib/planning/storage/dataDir";
 
+const env = process.env as Record<string, string | undefined>;
 const originalEnv = { ...process.env };
 
 describe("planning dataDir resolver", () => {
@@ -17,8 +18,8 @@ describe("planning dataDir resolver", () => {
   });
 
   it("uses repo-local .data in dev mode", () => {
-    process.env.NODE_ENV = "development";
-    delete process.env.PLANNING_DATA_DIR;
+    env.NODE_ENV = "development";
+    delete env.PLANNING_DATA_DIR;
     const cwd = "/tmp/planning-dev";
     const resolved = resolveDataDir({ cwd });
     expect(resolved).toBe(path.resolve(cwd, ".data"));
@@ -28,9 +29,9 @@ describe("planning dataDir resolver", () => {
 
   it("uses LOCALAPPDATA in production windows mode", () => {
     const cwd = "/tmp/planning-dev";
-    process.env.NODE_ENV = "production";
-    process.env.LOCALAPPDATA = "C:\\Users\\tester\\AppData\\Local";
-    process.env.PLANNING_APP_NAME = "Planning V2";
+    env.NODE_ENV = "production";
+    env.LOCALAPPDATA = "C:\\Users\\tester\\AppData\\Local";
+    env.PLANNING_APP_NAME = "Planning V2";
     const resolved = resolveDataDir({ cwd, platform: "win32" });
     const planningDir = path.resolve("C:\\Users\\tester\\AppData\\Local", "Planning V2", "vault");
     expect(resolvePlanningDataDir({ cwd, platform: "win32" })).toBe(planningDir);
@@ -38,9 +39,9 @@ describe("planning dataDir resolver", () => {
   });
 
   it("supports explicit PLANNING_DATA_DIR override", () => {
-    process.env.PLANNING_DATA_DIR = path.join(os.tmpdir(), "planning-data");
+    env.PLANNING_DATA_DIR = path.join(os.tmpdir(), "planning-data");
     const planningDir = resolvePlanningDataDir({ cwd: "/tmp/any" });
-    expect(planningDir).toBe(path.resolve(process.env.PLANNING_DATA_DIR));
+    expect(planningDir).toBe(path.resolve(env.PLANNING_DATA_DIR ?? ""));
     expect(resolveDataDir({ cwd: "/tmp/any" })).toBe(path.dirname(planningDir));
   });
 });

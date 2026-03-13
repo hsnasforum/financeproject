@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { IngestResultSchema, type IngestResult, type NewsSource, type RuntimeState, type TopicDailyStat } from "../contracts";
 import { fetchFeed } from "../ingest/fetchFeed";
 import { normalizeEntry } from "../ingest/normalizeEntry";
@@ -317,8 +318,15 @@ async function main(): Promise<void> {
   console.log(`[news:refresh] sources=${result.sourcesProcessed} fetched=${result.itemsFetched} new=${result.itemsNew} deduped=${result.itemsDeduped} errors=${result.errors.length}`);
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : "unknown_error";
-  console.error(`[news:refresh] failed: ${sanitizeV3LogMessage(message)}`);
-  process.exitCode = 1;
-});
+const isMain = (() => {
+  if (!process.argv[1]) return false;
+  return path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+})();
+
+if (isMain) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : "unknown_error";
+    console.error(`[news:refresh] failed: ${sanitizeV3LogMessage(message)}`);
+    process.exitCode = 1;
+  });
+}

@@ -389,7 +389,7 @@ export function SubscriptionClient({
                   {selected.address ? <><dt className="text-slate-500">공급위치</dt><dd>{selected.address}</dd></> : null}
                   {selected.totalHouseholds ? <><dt className="text-slate-500">모집세대수</dt><dd>{selected.totalHouseholds}</dd></> : null}
                   {selected.contact ? <><dt className="text-slate-500">문의처</dt><dd>{selected.contact}</dd></> : null}
-                  {selected.link ? <><dt className="text-slate-500">상세링크</dt><dd><a className="text-primary underline" href={selected.link} target="_blank" rel="noreferrer">공고 보기</a></dd></> : null}
+                  {selected.link ? <><dt className="text-slate-500">상세링크</dt><dd><a className="text-primary underline" href={selected.link} target="_blank" rel="noopener noreferrer">공고 보기</a></dd></> : null}
                 </dl>
               ) : null}
               {!detailLoading && selected.details && Object.keys(selected.details).length > 0 ? (

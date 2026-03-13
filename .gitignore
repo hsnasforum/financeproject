@@ -12,9 +12,12 @@
 
 # testing
 /coverage
+/test-results/
 
 # next.js
 /.next/
+/.next-*/
+.next-build-info.json
 /out/
 
 # production
@@ -44,9 +47,11 @@ next-env.d.ts
 
 tmp/api-samples/
 tmp/api-cache/
+tmp/codex-multi-agent/
 tmp/dart/
 tmp/finlife-fixtures/
 tmp/*.json
+
 
 # generic build/cache
 dist/
@@ -81,3 +86,7 @@ public/providers/*
 .data/planning/
 .data/planning-e2e/
 .data/planning_v3_drafts/
+work/local/
+work/*.tmp
+work/*.log
+work/test.js

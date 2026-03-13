@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { roundKrw } from "../../calc";
 import { atomicWriteJson } from "../../storage/atomicWrite";
 import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
@@ -33,7 +34,7 @@ function asString(value: unknown): string {
 
 function asNumber(value: unknown): number {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+  return Number.isFinite(parsed) ? roundKrw(parsed) : 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -103,14 +104,14 @@ function normalizeDraftPatch(value: unknown): Record<string, unknown> {
 function median(values: number[]): number {
   if (values.length < 1) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
+  const middle = Math.trunc(sorted.length / 2);
   if (sorted.length % 2 === 1) return sorted[middle] ?? 0;
-  return Math.round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
+  return roundKrw(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
 }
 
 function average(values: number[]): number {
   if (values.length < 1) return 0;
-  return Math.round(values.reduce((sum, n) => sum + n, 0) / values.length);
+  return roundKrw(values.reduce((sum, n) => sum + n, 0) / values.length);
 }
 
 function buildSummary(rows: V3DraftCashflowRow[], input?: V3DraftSummary): V3DraftSummary {

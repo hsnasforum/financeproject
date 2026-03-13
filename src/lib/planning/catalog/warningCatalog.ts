@@ -1,5 +1,5 @@
-import { REASON_CODES } from "../core/v2/types";
-import { REASON_CODE_MESSAGES_KO } from "../core/v2/warningsCatalog.ko";
+import { REASON_CODES } from "../v2/types";
+import { REASON_CODE_MESSAGES_KO } from "../v2/warningsCatalog.ko";
 import { WARNING_GLOSSARY_KO } from "../v2/insights/warningGlossary.ko";
 import { WARNING_SEVERITY_BY_CODE } from "../v2/report/warningsAggregate";
 import { renderCopyTemplate } from "./copyTemplates";

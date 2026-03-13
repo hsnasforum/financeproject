@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DevUnlockShortcutLink } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -101,6 +102,8 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
   const [overridesLoading, setOverridesLoading] = useState(false);
   const [overridesSaving, setOverridesSaving] = useState(false);
   const [overridesError, setOverridesError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
   const [profileOptions, setProfileOptions] = useState(initialProfiles);
   const [selectedProfileId, setSelectedProfileId] = useState(initialSelectedProfileId);
 
@@ -225,11 +228,12 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
 
   const saveOverrides = useCallback(async () => {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
+      setOverridesError("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
       return;
     }
     setOverridesSaving(true);
     setOverridesError("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/assumptions/overrides", {
         method: "PUT",
@@ -246,24 +250,27 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
         throw new Error(apiError.message);
       }
       setOverrides(Array.isArray(payload.items) ? payload.items : []);
-      window.alert(payload.message ?? "가정 오버라이드를 저장했습니다.");
+      setNotice(payload.message ?? "가정 오버라이드를 저장했습니다.");
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "오버라이드 저장에 실패했습니다.";
       setOverridesError(message);
-      window.alert(message);
     } finally {
       setOverridesSaving(false);
     }
   }, [hasCsrf, overrides, props.csrf, selectedProfileId]);
 
-  const resetOverrides = useCallback(async () => {
+  const requestResetOverrides = useCallback(() => {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
+      setOverridesError("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
       return;
     }
-    if (!window.confirm("저장된 가정 오버라이드를 모두 초기화할까요?")) return;
+    setConfirmResetOpen(true);
+  }, [hasCsrf]);
+
+  const resetOverrides = useCallback(async () => {
     setOverridesSaving(true);
     setOverridesError("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/assumptions/overrides/reset", {
         method: "POST",
@@ -279,23 +286,23 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
         throw new Error(apiError.message);
       }
       setOverrides([]);
-      window.alert(payload.message ?? "가정 오버라이드를 초기화했습니다.");
+      setNotice(payload.message ?? "가정 오버라이드를 초기화했습니다.");
     } catch (resetError) {
       const message = resetError instanceof Error ? resetError.message : "오버라이드 초기화에 실패했습니다.";
       setOverridesError(message);
-      window.alert(message);
     } finally {
       setOverridesSaving(false);
     }
-  }, [hasCsrf, props.csrf, selectedProfileId]);
+  }, [props.csrf, selectedProfileId]);
 
   const refreshNow = useCallback(async () => {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
+      setError("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
       return;
     }
 
     setSyncing(true);
+    setNotice("");
     try {
       const response = await fetch("/api/ops/assumptions/refresh", {
         method: "POST",
@@ -309,10 +316,10 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
         throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
       }
 
-      window.alert(payload.message ?? "가정 스냅샷 동기화를 완료했습니다.");
+      setNotice(payload.message ?? "가정 스냅샷 동기화를 완료했습니다.");
       await loadLatest();
     } catch (syncError) {
-      window.alert(syncError instanceof Error ? syncError.message : "가정 동기화 중 오류가 발생했습니다.");
+      setError(syncError instanceof Error ? syncError.message : "가정 동기화 중 오류가 발생했습니다.");
     } finally {
       setSyncing(false);
     }
@@ -381,13 +388,21 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
           </div>
         )}
       />
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          {notice}
+        </Card>
+      ) : null}
 
       <Card>
         <h2 className="text-base font-black text-slate-900">현재 스냅샷</h2>
         <p className="mt-2 text-sm text-slate-600">엔진은 네트워크를 호출하지 않고, 마지막 저장된 스냅샷만 사용합니다.</p>
 
         {!hasCsrf ? (
-          <p className="mt-3 text-sm font-semibold text-amber-700">Dev unlock/CSRF가 없어 조회/동기화가 차단됩니다.</p>
+          <p className="mt-3 text-sm font-semibold text-amber-700">
+            Dev unlock/CSRF가 없어 조회/동기화가 차단됩니다.{" "}
+            <DevUnlockShortcutLink className="text-amber-700" />
+          </p>
         ) : null}
 
         {error ? (
@@ -497,7 +512,7 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => void resetOverrides()}
+              onClick={requestResetOverrides}
               disabled={overridesSaving || overridesLoading || !hasCsrf}
             >
               초기화
@@ -593,6 +608,44 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
           <p className="mt-4 text-xs text-slate-500">저장된 오버라이드가 없습니다.</p>
         )}
       </Card>
+      {confirmResetOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ops-assumptions-reset-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <h3 id="ops-assumptions-reset-title" className="text-base font-black text-slate-900">오버라이드 초기화 확인</h3>
+            <p className="mt-2 text-sm text-slate-700">
+              저장된 가정 오버라이드를 모두 초기화합니다. 계속 진행할까요?
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmResetOpen(false)}
+                disabled={overridesSaving}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                disabled={overridesSaving}
+                onClick={() => {
+                  setConfirmResetOpen(false);
+                  void resetOverrides();
+                }}
+              >
+                초기화 진행
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

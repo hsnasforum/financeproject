@@ -1,4 +1,5 @@
 import { type ProfileV2 } from "../../v2/types";
+import { roundKrw, roundToDigits } from "../../calc";
 import {
   type CashflowDraftPatch,
   type DraftSplitMode,
@@ -26,9 +27,9 @@ type NormalizedSplitOptions = {
 function medianRounded(values: number[]): number {
   if (values.length < 1) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return Math.round(sorted[middle]);
-  return Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+  const middle = Math.trunc(sorted.length / 2);
+  if (sorted.length % 2 === 1) return roundKrw(sorted[middle]);
+  return roundKrw((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
 function toRecentMonths(input: MonthlyCashflow[]): MonthlyCashflow[] {
@@ -94,7 +95,7 @@ function buildEvidenceRows(input: {
 }): EvidenceRow[] {
   const sampleMonths = input.months.length;
   const splitAssumption = input.split.splitMode === "byRatio"
-    ? `split mode byRatio (fixed=${Math.round((input.split.fixedRatio ?? 0) * 100)}%, variable=${Math.round((input.split.variableRatio ?? 0) * 100)}%)`
+    ? `split mode byRatio (fixed=${roundToDigits((input.split.fixedRatio ?? 0) * 100, 0)}%, variable=${roundToDigits((input.split.variableRatio ?? 0) * 100, 0)}%)`
     : input.split.splitMode === "noSplit"
       ? "split mode noSplit (전체 지출을 재량지출로 처리)"
       : "split mode byCategory (rule-based categorization)";
@@ -179,14 +180,14 @@ export function buildDraftPatchFromCashflow(
   let suggestedMonthlyDiscretionarySpendKrw = 0;
 
   if (split.splitMode === "byRatio") {
-    suggestedMonthlyEssentialSpendKrw = Math.max(0, Math.round(medianOutflow * (split.fixedRatio ?? 0)));
-    suggestedMonthlyDiscretionarySpendKrw = Math.max(0, Math.round(medianOutflow * (split.variableRatio ?? 0)));
+    suggestedMonthlyEssentialSpendKrw = Math.max(0, roundKrw(medianOutflow * (split.fixedRatio ?? 0)));
+    suggestedMonthlyDiscretionarySpendKrw = Math.max(0, roundKrw(medianOutflow * (split.variableRatio ?? 0)));
   } else if (split.splitMode === "noSplit") {
     suggestedMonthlyEssentialSpendKrw = 0;
-    suggestedMonthlyDiscretionarySpendKrw = Math.max(0, Math.round(medianOutflow));
+    suggestedMonthlyDiscretionarySpendKrw = Math.max(0, roundKrw(medianOutflow));
   } else {
-    suggestedMonthlyEssentialSpendKrw = Math.max(0, Math.round(medianFixed));
-    suggestedMonthlyDiscretionarySpendKrw = Math.max(0, Math.round(medianVariable));
+    suggestedMonthlyEssentialSpendKrw = Math.max(0, roundKrw(medianFixed));
+    suggestedMonthlyDiscretionarySpendKrw = Math.max(0, roundKrw(medianVariable));
   }
 
   const draftPatch: CashflowDraftPatch = {

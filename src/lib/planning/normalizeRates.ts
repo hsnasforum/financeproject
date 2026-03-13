@@ -1,3 +1,5 @@
+import { roundToDigits } from "./calc/roundingPolicy";
+
 export class RateNormalizationError extends Error {
   field: string;
   value: number;
@@ -17,8 +19,7 @@ function assertFinite(value: number, field: string): void {
 }
 
 function roundTo(value: number, digits: number): number {
-  const factor = 10 ** digits;
-  return Math.round((value + Number.EPSILON) * factor) / factor;
+  return roundToDigits(value, digits);
 }
 
 /**

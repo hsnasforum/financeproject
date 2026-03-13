@@ -1,6 +1,6 @@
 # DART 룰 라벨 평가 리포트
 
-- 생성시각: 2026-03-01T03:54:47.330Z
+- 생성시각: 2026-03-12T08:48:06.660Z
 - rulesPath: config/dart-disclosure-rules.json
 - labelsPath: data/dart/labels.sample.csv
 - 샘플 수: 10

@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { buildReportVM } from "../../src/app/planning/reports/_lib/reportViewModel";
+import {
+  buildReportVM,
+  buildReportVMFromRun,
+} from "../../src/app/planning/reports/_lib/reportViewModel";
+import { buildResultDtoV1FromRunRecord } from "../../src/lib/planning/v2/resultDto";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 
 function sampleRunWithWarnings(warnings: unknown[]): PlanningRunRecord {
-  return {
+  const run: PlanningRunRecord = {
     version: 1,
     id: "run-1",
     profileId: "profile-1",
@@ -54,7 +58,32 @@ function sampleRunWithWarnings(warnings: unknown[]): PlanningRunRecord {
       ],
     },
     outputs: {
+      engineSchemaVersion: 1,
+      engine: {
+        stage: "DEBT",
+        financialStatus: {
+          stage: "DEBT",
+          trace: {
+            savingCapacity: 4_170_000,
+            savingRate: 0.59,
+            liquidAssets: 4_500_000,
+            debtBalance: 90_000_000,
+            emergencyFundTarget: 16_800_000,
+            emergencyFundGap: 12_300_000,
+            triggeredRules: [],
+          },
+        },
+        stageDecision: {
+          priority: "PAY_DEBT",
+          investmentAllowed: false,
+          warnings: [],
+        },
+      },
       simulate: {
+        ref: {
+          name: "simulate",
+          path: ".data/test/report-view-model/run-1/simulate.json",
+        },
         summary: {
           endNetWorthKrw: 10_000_000,
           worstCashKrw: -200_000,
@@ -90,6 +119,10 @@ function sampleRunWithWarnings(warnings: unknown[]): PlanningRunRecord {
         ],
       },
       actions: {
+        ref: {
+          name: "actions",
+          path: ".data/test/report-view-model/run-1/actions.json",
+        },
         actions: [
           {
             code: "FIX_NEGATIVE_CASHFLOW",
@@ -112,6 +145,10 @@ function sampleRunWithWarnings(warnings: unknown[]): PlanningRunRecord {
         ],
       },
       monteCarlo: {
+        ref: {
+          name: "monteCarlo",
+          path: ".data/test/report-view-model/run-1/monte-carlo.json",
+        },
         probabilities: {
           retirementDepletionBeforeEnd: 0.24,
         },
@@ -121,6 +158,10 @@ function sampleRunWithWarnings(warnings: unknown[]): PlanningRunRecord {
         notes: ["경로 수가 적으면 변동성이 커질 수 있습니다."],
       },
       debtStrategy: {
+        ref: {
+          name: "debtStrategy",
+          path: ".data/test/report-view-model/run-1/debt-strategy.json",
+        },
         summary: {
           debtServiceRatio: 0.45,
           totalMonthlyPaymentKrw: 800_000,
@@ -149,6 +190,8 @@ function sampleRunWithWarnings(warnings: unknown[]): PlanningRunRecord {
       },
     },
   };
+  run.outputs.resultDto = buildResultDtoV1FromRunRecord(run);
+  return run;
 }
 
 describe("buildReportVM", () => {
@@ -195,7 +238,22 @@ describe("buildReportVM", () => {
 
     expect(vm.summaryCards.endNetWorthKrw).toBe(10_000_000);
     expect(vm.summaryCards.dsrPct).toBe(45);
+    expect(vm.summaryCards.totalWarnings).toBe(5);
     expect(vm.topActions).toHaveLength(1);
+    expect(vm.assumptionsLines).toContain("기간: 36개월");
+    expect(vm.assumptionsLines).toContain("투자수익률 가정: 5.2%");
+    expect(vm.assumptionsLines).toContain("현금수익률 가정: 2.0%");
+    expect(vm.assumptionsLines).toContain("인출률 가정: 4.0%");
+    expect(vm.actionRows[0]?.title).toBe("현금흐름 우선 개선");
+    expect(vm.guide.warnings[0]?.code).toBe("NEGATIVE_CASHFLOW");
+    expect(vm.guide.goals[0]?.name).toBe("비상금");
+    expect(vm.guide.timelineSummaryRows).toHaveLength(3);
+    expect(vm.guide.badge.status).toBe("risk");
+    expect(vm.monteProbabilityRows[0]?.label).toBe("은퇴 자산 고갈 확률");
+    expect(vm.montePercentileRows[0]?.metric).toBe("endNetWorthKrw");
+    expect(vm.debtSummaryRows[0]?.name).toBe("주택담보대출");
+    expect(vm.debtSummary?.warnings[0]?.code).toBe("HIGH_DEBT_RATIO");
+    expect(vm.debtSummary?.meta.totalMonthlyPaymentKrw).toBe(800_000);
     expect(vm.topActions[0]?.candidates).toBeUndefined();
     expect(vm.reproducibility?.appliedOverrides).toHaveLength(1);
     expect(vm.reproducibility?.appliedOverrides[0]?.key).toBe("inflationPct");
@@ -203,6 +261,8 @@ describe("buildReportVM", () => {
     expect(vm.evidence?.summary.dsrPct?.formula).toContain("dsrPct");
     expect(vm.evidence?.summary.emergencyFundMonths?.formula).toContain("emergencyFundMonths");
     expect(vm.evidence?.items.map((item) => item.id)).toEqual(["monthlySurplus", "dsrPct", "emergency"]);
+    expect(vm.monthlyOperatingGuide?.currentSplit.map((item) => item.title)).toEqual(["생활비/고정운영", "대출 상환", "남는 돈"]);
+    expect(vm.monthlyOperatingGuide?.nextPlanTitle).toBe("남는 돈 운영안");
 
     const evidenceJson = JSON.stringify(vm.evidence ?? {});
     expect(evidenceJson).not.toContain("outputs");
@@ -229,5 +289,78 @@ describe("buildReportVM", () => {
     expect(unknown).toBeDefined();
     expect(unknown?.title).toBe("알 수 없는 경고(NO_SUCH_WARNING)");
     expect(unknown?.plainDescription.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("builds report VM from run through report contract path", () => {
+    const vm = buildReportVMFromRun(sampleRunWithWarnings([
+      {
+        reasonCode: "NEGATIVE_CASHFLOW",
+        severity: "critical",
+        message: "현금흐름 부족",
+        month: 1,
+        meta: { subjectKey: "cashflow" },
+      },
+    ]), {
+      id: "report-1",
+      runId: "run-1",
+      createdAt: "2026-03-01T00:00:00.000Z",
+    });
+
+    expect(vm.header.reportId).toBe("report-1");
+    expect(vm.header.runId).toBe("run-1");
+    expect(vm.contract?.engineSchemaVersion).toBe(1);
+    expect(vm.contract?.fallbacks).toEqual([]);
+    expect(vm.summaryCards.endNetWorthKrw).toBe(10_000_000);
+    expect(vm.warningAgg.some((row) => row.code === "NEGATIVE_CASHFLOW")).toBe(true);
+  });
+
+  it("falls back to engine trace when start timeline cashflow is zero", () => {
+    const run = sampleRunWithWarnings([]);
+    run.outputs.engine = {
+      ...(run.outputs.engine ?? {}),
+      financialStatus: {
+        ...(run.outputs.engine?.financialStatus ?? {}),
+        trace: {
+          ...(run.outputs.engine?.financialStatus?.trace ?? {}),
+          savingCapacity: 4_170_000,
+          emergencyFundTarget: 16_800_000,
+        },
+      },
+    } as PlanningRunRecord["outputs"]["engine"];
+    run.outputs.simulate = {
+      ...run.outputs.simulate,
+      ref: run.outputs.simulate?.ref ?? {
+        name: "simulate",
+        path: ".data/test/report-view-model/run-1/simulate.json",
+      },
+      keyTimelinePoints: [
+        { monthIndex: 0, row: { income: 0, expenses: 0, debtPayment: 800_000, operatingCashflow: 0, liquidAssets: 1_000, netWorth: 2_000, totalDebt: 500 } },
+        { monthIndex: 6, row: { income: 0, expenses: 0, debtPayment: 800_000, operatingCashflow: 0, liquidAssets: 1_050, netWorth: 2_100, totalDebt: 460 } },
+        { monthIndex: 12, row: { income: 0, expenses: 0, debtPayment: 800_000, operatingCashflow: 0, liquidAssets: 1_120, netWorth: 2_250, totalDebt: 420 } },
+      ],
+    } as PlanningRunRecord["outputs"]["simulate"];
+    run.outputs.debtStrategy = {
+      ...run.outputs.debtStrategy,
+      ref: run.outputs.debtStrategy?.ref ?? {
+        name: "debtStrategy",
+        path: ".data/test/report-view-model/run-1/debt-strategy.json",
+      },
+      summary: {
+        ...run.outputs.debtStrategy?.summary,
+        totalMonthlyPaymentKrw: 0,
+      },
+    } as PlanningRunRecord["outputs"]["debtStrategy"];
+    run.outputs.resultDto = buildResultDtoV1FromRunRecord(run);
+
+    const vm = buildReportVMFromRun(run, {
+      id: "report-fallback",
+      runId: run.id,
+      createdAt: run.createdAt,
+    });
+
+    expect(vm.summaryCards.monthlySurplusKrw).toBe(3_370_000);
+    expect(vm.summaryCards.totalMonthlyDebtPaymentKrw).toBe(800_000);
+    expect(vm.evidence?.summary.monthlySurplusKrw?.inputs.monthlyIncomeKrw).toBe(6_970_000);
+    expect(vm.evidence?.summary.monthlySurplusKrw?.inputs.monthlyExpensesKrw).toBe(2_800_000);
   });
 });

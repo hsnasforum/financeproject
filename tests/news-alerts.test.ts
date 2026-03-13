@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   evaluateAlertEvents,
   evaluateAndAppendAlertEvents,
+  readAlertEventState,
   readAlertEvents,
+  resolveAlertEventStatePath,
+  writeAlertEventState,
   writeAlertRuleOverrides,
 } from "../src/lib/news/alerts";
 
@@ -16,6 +19,9 @@ function writeJson(filePath: string, value: unknown): void {
 
 describe("news alerts", () => {
   const roots: string[] = [];
+  const env = process.env as Record<string, string | undefined>;
+  const originalNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+  const originalUserId = process.env.PLANNING_USER_ID;
 
   function createFixtureCwd(): string {
     const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-alerts-"));
@@ -106,6 +112,10 @@ describe("news alerts", () => {
     for (const root of roots.splice(0, roots.length)) {
       fs.rmSync(root, { recursive: true, force: true });
     }
+    if (typeof originalNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+    if (typeof originalUserId === "string") env.PLANNING_USER_ID = originalUserId;
+    else delete env.PLANNING_USER_ID;
   });
 
   it("evaluates topic burst + indicator rules and appends events idempotently", () => {
@@ -154,5 +164,43 @@ describe("news alerts", () => {
 
     expect(evaluated.events).toHaveLength(1);
     expect(evaluated.events[0]?.ruleId).toBe("fx_zscore_high");
+  });
+
+  it("migrates alert event state into planning user namespace when enabled", () => {
+    const cwd = createFixtureCwd();
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    env.PLANNING_USER_ID = "familyA";
+
+    const legacyPath = path.join(cwd, ".data", "alerts", "event-state.json");
+    writeJson(legacyPath, {
+      updatedAt: "2026-03-04T00:00:00.000Z",
+      items: [
+        {
+          id: "alert-1",
+          acknowledgedAt: "2026-03-04T00:10:00.000Z",
+        },
+      ],
+    });
+
+    const state = readAlertEventState(cwd);
+    const scopedPath = resolveAlertEventStatePath(cwd);
+
+    expect(state.items).toHaveLength(1);
+    expect(state.items[0]?.id).toBe("alert-1");
+    expect(scopedPath).toContain(path.join(".data", "planning", "users", "familyA", "news", "alerts", "event-state.json"));
+    expect(fs.existsSync(scopedPath)).toBe(true);
+
+    writeAlertEventState({
+      items: [
+        {
+          id: "alert-2",
+          hiddenAt: "2026-03-04T00:20:00.000Z",
+        },
+      ],
+    }, cwd);
+
+    const rewritten = readAlertEventState(cwd);
+    expect(rewritten.items).toHaveLength(1);
+    expect(rewritten.items[0]?.id).toBe("alert-2");
   });
 });

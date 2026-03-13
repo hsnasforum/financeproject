@@ -4,6 +4,7 @@ import { ExternalApiError, fetchExternal } from "@/lib/http/fetchExternal";
 import { setCooldown, shouldCooldown } from "@/lib/http/rateLimitCooldown";
 import { pushError } from "../../../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../../lib/observability/trace";
+import { resolveDartBaseUrl } from "@/lib/publicApis/dart/baseUrl";
 import { mapOpenDartStatus } from "@/lib/publicApis/dart/opendartErrors";
 
 export const runtime = "nodejs";
@@ -211,7 +212,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const base = (process.env.OPENDART_BASE_URL ?? "https://opendart.fss.or.kr").trim().replace(/\/+$/, "");
+  const base = resolveDartBaseUrl();
   const upstreamParams = new URLSearchParams({
     crtfc_key: apiKey,
     bgn_de: normalizedRange.from,

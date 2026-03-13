@@ -124,7 +124,7 @@ describe("planning v3 news local llm adapter", () => {
       scenarios,
       topItems: makeTopItems(),
       fetchImpl: fetchMock,
-      env: {},
+      env: { NODE_ENV: "test" } as NodeJS.ProcessEnv,
     });
 
     expect(result.applied).toBe(false);
@@ -142,10 +142,11 @@ describe("planning v3 news local llm adapter", () => {
       topItems: makeTopItems(),
       fetchImpl: fetchMock,
       env: {
+        NODE_ENV: "test",
         V3_NEWS_LOCAL_LLM_ENABLED: "1",
         V3_NEWS_LOCAL_LLM_MODEL: "local-model",
         V3_NEWS_LOCAL_LLM_BASE_URL: "https://example.com",
-      },
+      } as NodeJS.ProcessEnv,
     });
 
     expect(result.applied).toBe(false);
@@ -178,10 +179,11 @@ describe("planning v3 news local llm adapter", () => {
       topItems: makeTopItems(),
       fetchImpl: fetchMock,
       env: {
+        NODE_ENV: "test",
         V3_NEWS_LOCAL_LLM_ENABLED: "1",
         V3_NEWS_LOCAL_LLM_MODEL: "local-model",
         V3_NEWS_LOCAL_LLM_BASE_URL: "http://127.0.0.1:11434",
-      },
+      } as NodeJS.ProcessEnv,
     });
 
     expect(result.applied).toBe(true);
@@ -207,10 +209,11 @@ describe("planning v3 news local llm adapter", () => {
       topItems: makeTopItems(),
       fetchImpl: fetchMock,
       env: {
+        NODE_ENV: "test",
         V3_NEWS_LOCAL_LLM_ENABLED: "1",
         V3_NEWS_LOCAL_LLM_MODEL: "local-model",
         V3_NEWS_LOCAL_LLM_BASE_URL: "http://localhost:11434",
-      },
+      } as NodeJS.ProcessEnv,
     });
 
     expect(result.applied).toBe(false);
@@ -243,10 +246,11 @@ describe("planning v3 news local llm adapter", () => {
       topItems: makeTopItems(),
       fetchImpl: fetchMock,
       env: {
+        NODE_ENV: "test",
         V3_NEWS_LOCAL_LLM_ENABLED: "1",
         V3_NEWS_LOCAL_LLM_MODEL: "local-model",
         V3_NEWS_LOCAL_LLM_BASE_URL: "http://127.0.0.1:11434",
-      },
+      } as NodeJS.ProcessEnv,
     });
 
     expect(result.applied).toBe(true);

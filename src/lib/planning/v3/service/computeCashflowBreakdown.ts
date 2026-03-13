@@ -1,5 +1,6 @@
 import { type CategoryId, type MonthlyCashflowBreakdown } from "../domain/types";
 import { type CategorizedTransactionRow } from "../domain/types";
+import { roundKrw } from "../../calc";
 
 const CATEGORY_IDS: CategoryId[] = [
   "income",
@@ -52,7 +53,7 @@ export function computeCashflowBreakdown(transactions: CategorizedTransactionRow
     const ym = asMonth(tx.date);
     if (!ym) continue;
 
-    const amount = Math.round(Number(tx.amountKrw) || 0);
+    const amount = roundKrw(Number(tx.amountKrw) || 0);
     const magnitude = Math.abs(amount);
     const isTransfer = tx.kind === "transfer" || tx.transfer !== undefined || tx.categoryId === "transfer";
     const categoryId = isTransfer
@@ -85,7 +86,7 @@ export function computeCashflowBreakdown(transactions: CategorizedTransactionRow
       expenseKrw: row.expenseKrw,
       transferKrw: row.transferKrw,
       byCategory: CATEGORY_IDS.reduce((acc, categoryId) => {
-        acc[categoryId] = Math.round(row.byCategory[categoryId] || 0);
+        acc[categoryId] = roundKrw(row.byCategory[categoryId] || 0);
         return acc;
       }, emptyByCategory()),
     }));

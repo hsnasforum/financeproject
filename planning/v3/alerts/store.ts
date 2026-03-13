@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { AlertEventSchema, type AlertEvent } from "./contracts";
+import { resolveAlertsRootDir } from "./rootDir";
 import { parseWithV3Whitelist } from "../security/whitelist";
-
-const DEFAULT_ROOT = path.join(process.cwd(), ".data", "alerts");
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -14,15 +13,19 @@ function asNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function resolveAlertsDataDir(rootDir = DEFAULT_ROOT): string {
+function defaultRootDir(): string {
+  return resolveAlertsRootDir();
+}
+
+export function resolveAlertsDataDir(rootDir = defaultRootDir()): string {
   return rootDir;
 }
 
-export function resolveAlertEventsPath(rootDir = DEFAULT_ROOT): string {
+export function resolveAlertEventsPath(rootDir = defaultRootDir()): string {
   return path.join(resolveAlertsDataDir(rootDir), "events.jsonl");
 }
 
-function ensureDir(rootDir = DEFAULT_ROOT): void {
+function ensureDir(rootDir = defaultRootDir()): void {
   fs.mkdirSync(resolveAlertsDataDir(rootDir), { recursive: true });
 }
 
@@ -37,7 +40,7 @@ function readLine(line: string): AlertEvent | null {
   }
 }
 
-export function readAlertEvents(rootDir = DEFAULT_ROOT): AlertEvent[] {
+export function readAlertEvents(rootDir = defaultRootDir()): AlertEvent[] {
   const filePath = resolveAlertEventsPath(rootDir);
   if (!fs.existsSync(filePath)) return [];
 
@@ -67,7 +70,7 @@ export function appendAlertEvents(input: {
   rootDir?: string;
   dedupWindowMinutes?: number;
 }): { appended: number; skippedDuplicate: number; total: number } {
-  const rootDir = input.rootDir ?? DEFAULT_ROOT;
+  const rootDir = input.rootDir ?? defaultRootDir();
   const dedupWindowMinutes = Math.max(1, Math.min(24 * 60, Math.round(asNumber(input.dedupWindowMinutes, 180))));
   const dedupWindowMs = dedupWindowMinutes * 60 * 1000;
 
@@ -171,7 +174,7 @@ export function readRecentAlertEvents(input: {
   days?: number;
   nowIso?: string;
 } = {}): AlertEvent[] {
-  const rootDir = input.rootDir ?? DEFAULT_ROOT;
+  const rootDir = input.rootDir ?? defaultRootDir();
   const days = Math.max(1, Math.min(90, Math.round(asNumber(input.days, 14))));
   const nowIso = asString(input.nowIso) || new Date().toISOString();
   const todayKst = formatKstDay(nowIso);

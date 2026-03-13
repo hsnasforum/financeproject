@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -124,7 +125,11 @@ export function OpsDataQualityCard({ csrf }: OpsDataQualityCardProps) {
 
       {!hasCsrf ? (
         <Card className="mt-4 border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          Dev unlock/CSRF가 없어 data quality를 조회할 수 없습니다.
+          <DevUnlockShortcutMessage
+            className="font-semibold"
+            linkClassName="text-amber-900"
+            message="Dev unlock/CSRF가 없어 data quality를 조회할 수 없습니다."
+          />
         </Card>
       ) : null}
 

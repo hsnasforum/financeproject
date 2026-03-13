@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   AccountsStoreInputError,
   listAccounts,
   upsertAccount,
-} from "@/lib/planning/v3/store/accountsStore";
+} from "@/lib/planning/v3/accounts/store";
 
 type CreateBody = {
   accountId?: unknown;
@@ -28,7 +26,6 @@ function asString(value: unknown): string {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -50,7 +47,6 @@ function withReadGuard(request: Request): Response | null {
 
 function withWriteGuard(request: Request, body: CreateBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -70,9 +66,6 @@ function withWriteGuard(request: Request, body: CreateBody): Response | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -88,9 +81,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: CreateBody = null;
   try {
     body = (await request.json()) as CreateBody;

@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { getProfile } from "@/lib/planning/server/store/profileStore";
 import { sanitizeRecordId } from "@/lib/planning/store/paths";
 import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
 import {
   buildDraftPatchFromCashflow,
   type BuildDraftPatchFromCashflowOptions,
-} from "@/lib/planning/v3/service/buildDraftPatchFromCashflow";
+} from "@/lib/planning/v3/draft/service";
+import { getProfile } from "@/lib/planning/v3/profiles/store";
 import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
 
@@ -53,7 +51,6 @@ function asNumber(value: unknown): number {
 
 function withWriteGuard(request: Request, body: ApplyBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -169,9 +166,6 @@ function applyProfilePatch(base: ProfileV2, patch: {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: ApplyBody = null;
   try {
     body = (await request.json()) as ApplyBody;

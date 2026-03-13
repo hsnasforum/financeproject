@@ -1,4 +1,5 @@
 import { type ProfileV2 } from "./types";
+import { roundKrw, roundToDigits } from "../../calc/roundingPolicy";
 
 export type NormalizationPatchOp = {
   op: "replace";
@@ -18,7 +19,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 function formatMoney(value: number): string {
-  return `${Math.round(value).toLocaleString("ko-KR")}원`;
+  return `${roundKrw(value).toLocaleString("ko-KR")}원`;
 }
 
 function asObject(value: unknown): Record<string, unknown> {
@@ -39,7 +40,7 @@ export function suggestProfileNormalizations(profile: ProfileV2): NormalizationS
   const highMonthlyFlow = profile.monthlyIncomeNet >= 500_000 || totalExpenses >= 500_000;
 
   if (highMonthlyFlow && isFiniteNumber(profile.liquidAssets) && profile.liquidAssets > 0 && profile.liquidAssets < 10_000) {
-    const converted = Math.round(profile.liquidAssets * 10_000);
+    const converted = roundKrw(profile.liquidAssets * 10_000);
     suggestions.push({
       code: "UNIT_SUSPECTED_LIQUID_ASSETS",
       message: `유동자산이 만원 단위로 입력된 것으로 보입니다 (${formatMoney(profile.liquidAssets)} → ${formatMoney(converted)} 제안).`,
@@ -49,7 +50,7 @@ export function suggestProfileNormalizations(profile: ProfileV2): NormalizationS
   }
 
   if (highMonthlyFlow && isFiniteNumber(profile.investmentAssets) && profile.investmentAssets > 0 && profile.investmentAssets < 10_000) {
-    const converted = Math.round(profile.investmentAssets * 10_000);
+    const converted = roundKrw(profile.investmentAssets * 10_000);
     suggestions.push({
       code: "UNIT_SUSPECTED_INVESTMENT_ASSETS",
       message: `투자자산이 만원 단위로 입력된 것으로 보입니다 (${formatMoney(profile.investmentAssets)} → ${formatMoney(converted)} 제안).`,
@@ -68,7 +69,7 @@ export function suggestProfileNormalizations(profile: ProfileV2): NormalizationS
       suggestions.push({
         code: `APR_SCALE_SUSPECTED_${debtId}`,
         message: `${debtId} 금리가 0~1 범위입니다. 퍼센트(예: 7.5)로 입력하려던 값인지 확인하세요.`,
-        patch: [{ op: "replace", path: `/debts/${index}/aprPct`, value: Math.round(aprPct * 1000) / 10 }],
+        patch: [{ op: "replace", path: `/debts/${index}/aprPct`, value: roundToDigits(aprPct * 100, 1) }],
         severity: "info",
       });
     }

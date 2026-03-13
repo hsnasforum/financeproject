@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { BodyActionLink, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
-import { type DigestDay, type NewsScenarioPack } from "@/lib/news/types";
+import { type DigestDay } from "@/lib/planning/v3/news/digest";
+import { type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
 
 type NewsDigestClientProps = {
   csrf?: string;
@@ -481,22 +483,22 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
               <h1 className="text-xl font-black text-slate-900">Planning v3 News Digest</h1>
               <p className="text-sm text-slate-600">RSS 기반 로컬 뉴스 동향/시나리오 요약</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Link href="/planning/v3/news/trends" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+            <div className={bodyDenseActionRowClassName}>
+              <BodyActionLink href="/planning/v3/news/trends">
                 트렌드 보기
-              </Link>
-              <Link href="/planning/v3/news/explore" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/news/explore">
                 탐색
-              </Link>
-              <Link href="/planning/v3/news/alerts" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/news/alerts">
                 알림함
-              </Link>
-              <Link href="/planning/v3/journal" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/journal">
                 저널
-              </Link>
-              <Link href="/planning/v3/news/settings" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/news/settings">
                 설정
-              </Link>
+              </BodyActionLink>
               <button
                 type="button"
                 disabled={refreshing}
@@ -577,7 +579,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                         className="block max-w-full truncate text-emerald-700 underline underline-offset-2"
                         href={url}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         title={url}
                       >
                         {compactUrlLabel(url)}
@@ -619,7 +621,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                 <li key={`${item.url}-${item.publishedAt}`} className="rounded-lg border border-slate-200 p-3">
                   <p className="text-xs text-slate-500">{item.topicLabel} · {item.sourceName} · 점수 {item.score.toFixed(2)}</p>
                   <p className="mt-1 text-xs text-slate-600">근거: {asString(item.rationale) || "기본 점수 규칙 반영"}</p>
-                  <a href={item.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-slate-900 underline-offset-2 hover:underline">
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-slate-900 underline-offset-2 hover:underline">
                     {item.title}
                   </a>
                   <button

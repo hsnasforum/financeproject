@@ -2,6 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  BodyEmptyState,
+  BodyInset,
+  BodyTableFrame,
+  bodyChoiceRowClassName,
+  bodyDenseActionRowClassName,
+  bodyFieldClassName,
+} from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
@@ -153,25 +161,25 @@ export default function ProductsCatalogPage() {
           <div className="grid gap-3 md:grid-cols-4">
             <label className="text-sm">
               상품군
-              <select className="mt-1 h-10 w-full rounded-xl border border-border px-3" value={kind} onChange={(e) => setKind(e.target.value === "saving" ? "saving" : "deposit")}>
+              <select className={bodyFieldClassName} value={kind} onChange={(e) => setKind(e.target.value === "saving" ? "saving" : "deposit")}>
                 <option value="deposit">예금</option>
                 <option value="saving">적금</option>
               </select>
             </label>
             <label className="text-sm">
               기간(개월)
-              <input className="mt-1 h-10 w-full rounded-xl border border-border px-3" placeholder="예: 12" value={termMonths} onChange={(e) => setTermMonths(e.target.value)} />
+              <input className={bodyFieldClassName} placeholder="예: 12" value={termMonths} onChange={(e) => setTermMonths(e.target.value)} />
             </label>
             <label className="text-sm">
               최소 금리(%)
-              <input className="mt-1 h-10 w-full rounded-xl border border-border px-3" placeholder="예: 3.0" value={minRate} onChange={(e) => setMinRate(e.target.value)} />
+              <input className={bodyFieldClassName} placeholder="예: 3.0" value={minRate} onChange={(e) => setMinRate(e.target.value)} />
             </label>
             <label className="text-sm">
               검색어
-              <input className="mt-1 h-10 w-full rounded-xl border border-border px-3" placeholder="은행명/상품명" value={q} onChange={(e) => setQ(e.target.value)} />
+              <input className={bodyFieldClassName} placeholder="은행명/상품명" value={q} onChange={(e) => setQ(e.target.value)} />
             </label>
           </div>
-          <label className="mt-3 inline-flex items-center gap-2 text-xs text-slate-600">
+          <label className={`mt-3 ${bodyChoiceRowClassName}`}>
             <input
               type="checkbox"
               checked={includeSamplebank}
@@ -179,14 +187,14 @@ export default function ProductsCatalogPage() {
             />
             samplebank fixture 포함(디버그)
           </label>
-          <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+          <div className={`mt-3 text-xs text-slate-600 ${bodyDenseActionRowClassName}`}>
             <span>생성시각: {formatDateTime(generatedAt)}</span>
             <span>표시건수: {filteredRows.length.toLocaleString()}건</span>
             <span>원본누적: {rows.length.toLocaleString()}건</span>
           </div>
           {compareNotice ? <p className="mt-2 text-xs text-slate-600">{compareNotice}</p> : null}
           {error ? (
-            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>
+            <BodyInset className="mt-3 border-rose-200 bg-rose-50 text-sm text-rose-700">{error}</BodyInset>
           ) : null}
         </Card>
 
@@ -204,10 +212,10 @@ export default function ProductsCatalogPage() {
               <h2 className="mt-2 text-lg font-bold text-slate-900">{item.productName}</h2>
               <p className="text-sm text-slate-600">{item.providerName}</p>
               {item.summary ? <p className="mt-1 text-sm text-slate-600">{item.summary}</p> : null}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className={`mt-2 ${bodyDenseActionRowClassName}`}>
                 <Link
                   href={`/products/catalog/${encodeURIComponent(item.stableId)}`}
-                  className="inline-flex rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700"
+                  className="inline-flex rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
                 >
                   통합 상세
                 </Link>
@@ -217,14 +225,14 @@ export default function ProductsCatalogPage() {
                     const next = addCompareIdToStorage(item.stableId, compareStoreConfig.max);
                     setCompareNotice(`비교함에 담았습니다. (${next.length}/${compareStoreConfig.max})`);
                   }}
-                  className="inline-flex rounded-lg border border-emerald-300 px-3 py-1 text-xs font-semibold text-emerald-700"
+                  className="inline-flex rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
                 >
                   비교 담기
                 </button>
               </div>
 
               {(item.options ?? []).length > 0 ? (
-                <div className="mt-3 overflow-x-auto">
+                <BodyTableFrame className="mt-3">
                   <table className="min-w-[460px] text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
@@ -245,16 +253,23 @@ export default function ProductsCatalogPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </BodyTableFrame>
               ) : (
-                <p className="mt-3 text-xs text-slate-500">옵션 정보가 없습니다.</p>
+                <BodyEmptyState
+                  className="mt-3 border-none bg-slate-50/80"
+                  description="이 상품은 통합 카탈로그 기준으로 노출 가능한 옵션 상세가 아직 없습니다."
+                  title="옵션 정보가 없습니다."
+                />
               )}
             </Card>
           ))}
 
           {!loading && filteredRows.length === 0 && !error ? (
             <Card className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-sm text-slate-600">조건에 맞는 결과가 없습니다.</p>
+              <BodyEmptyState
+                description="기간, 최소 금리, 검색어를 조금 완화한 뒤 다시 조회해보세요."
+                title="조건에 맞는 결과가 없습니다."
+              />
             </Card>
           ) : null}
         </div>

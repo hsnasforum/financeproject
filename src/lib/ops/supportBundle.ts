@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { encodeZip, type ZipFileEntry } from "./backup/zipCodec";
+import { buildDataSourceImpactOperatorCardSummaries } from "../dataSources/impactHealth";
+import { buildDataSourceImpactBundleSummary, loadDataSourceImpactSnapshot } from "../dataSources/impactSnapshot";
 import { listOpsMetricEvents, summarizeOpsMetricEvents } from "./metricsLog";
 import { loadOpsPolicy } from "./opsPolicy";
 import { listOpsAuditEvents } from "./securityAuditLog";
@@ -372,15 +374,29 @@ function buildMetricsRecent(events: Array<{ type: string; at: string; meta?: Rec
   });
 }
 
+async function buildDataSourceImpactSummary() {
+  const snapshot = await loadDataSourceImpactSnapshot();
+  const bundleSummary = buildDataSourceImpactBundleSummary(snapshot);
+
+  return {
+    sources: bundleSummary.sources,
+    cards: buildDataSourceImpactOperatorCardSummaries({
+      impactHealthByCardId: bundleSummary.cards.healthSummaryByCardId,
+      impactReadOnlyByCardId: bundleSummary.cards.readOnlyHealthByCardId,
+    }),
+  };
+}
+
 export async function buildSupportBundle(input: SupportBundleBuildInput): Promise<SupportBundleOutput> {
   const now = input.now ?? new Date();
   const createdAt = now.toISOString();
   const stamp = createdAt.replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
 
-  const [migrationInspect, auditEvents, metricEvents] = await Promise.all([
+  const [migrationInspect, auditEvents, metricEvents, dataSourceImpactSummary] = await Promise.all([
     inspectPlanningMigrations(),
     listOpsAuditEvents({ limit: 400 }),
     listOpsMetricEvents({ limit: 1200 }),
+    buildDataSourceImpactSummary(),
   ]);
 
   const migrationState = await readMigrationStateCompact(getPlanningMigrationStatePath());
@@ -407,6 +423,7 @@ export async function buildSupportBundle(input: SupportBundleBuildInput): Promis
     "policy.json",
     "metrics_summary.json",
     "metrics_recent.json",
+    "data_source_impact_summary.json",
   ];
   if (audit.total > 0) includes.push("audit_summary.json");
   if (migrationState.stateExists) includes.push("migration_state.json");
@@ -458,6 +475,12 @@ export async function buildSupportBundle(input: SupportBundleBuildInput): Promis
     "metrics_recent.json": {
       createdAt,
       events: metricsRecent,
+    },
+    "data_source_impact_summary.json": {
+      createdAt,
+      source: "/settings/data-sources",
+      sources: dataSourceImpactSummary.sources,
+      cards: dataSourceImpactSummary.cards,
     },
   };
 

@@ -2,6 +2,18 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import {
+  BodyActionLink,
+  BodyEmptyState,
+  BodyInset,
+  BodySectionHeading,
+  BodyTableFrame,
+  bodyCompactFieldClassName,
+  bodyDenseActionRowClassName,
+  bodyInlineActionLinkClassName,
+  bodyMetaChipClassName,
+} from "@/components/ui/BodyTone";
+import { Button } from "@/components/ui/Button";
 import { downloadText } from "@/lib/browser/download";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 import {
@@ -217,90 +229,92 @@ export function RecommendHistoryClient({
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">추천 실행 히스토리</h1>
-            <p className="mt-1 text-sm text-slate-600">저장된 실행을 조회/삭제/내보내기하고, 2개 실행을 선택해 변경점을 비교합니다.</p>
-          </div>
-          <Link href="/recommend" className="inline-flex rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+          <BodySectionHeading
+            title="추천 실행 히스토리"
+            description={
+              <>
+                <span className="block text-sm text-slate-600">저장된 실행을 조회/삭제/내보내기하고, 2개 실행을 선택해 변경점을 비교합니다.</span>
+                <span className="mt-1 block text-xs text-amber-700">이 화면의 리포트 열기는 planning 공식 <code>/planning/reports</code> 경로를 사용합니다. legacy <code>/report</code> 는 명시적 opt-in일 때만 엽니다.</span>
+              </>
+            }
+          />
+          <BodyActionLink href="/recommend" className={bodyInlineActionLinkClassName}>
             추천으로 돌아가기
-          </Link>
+          </BodyActionLink>
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-          <button type="button" onClick={refresh} className="inline-flex rounded-md border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
+        <div className={`mt-4 text-xs ${bodyDenseActionRowClassName}`}>
+          <Button size="sm" type="button" variant="outline" onClick={refresh}>
             새로고침
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             onClick={clearAll}
             disabled={runs.length === 0}
-            className="inline-flex rounded-md border border-rose-300 px-3 py-1.5 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+            variant="outline"
+            className="border-rose-300 text-rose-700 hover:bg-rose-50"
           >
             전체 삭제
-          </button>
-          <span className="text-slate-500">저장된 실행: {runs.length} / 50</span>
+          </Button>
+          <span className={bodyMetaChipClassName}>저장된 실행: {runs.length} / 50</span>
         </div>
         {notice ? <p className="mt-2 text-xs text-slate-600">{notice}</p> : null}
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-slate-900">실행 목록</h2>
+        <article className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <BodySectionHeading title="실행 목록" />
           {runs.length === 0 ? (
-            <p className="mt-2 text-sm text-slate-600">저장된 실행이 없습니다. `/recommend`에서 먼저 저장해 주세요.</p>
+            <BodyEmptyState
+              className="mt-3"
+              description="`/recommend`에서 추천을 실행하고 저장하면 비교할 실행 기록이 여기에 쌓입니다."
+              title="저장된 실행이 없습니다."
+            />
           ) : (
             <ul className="mt-3 space-y-2">
               {runs.map((run) => {
                 const selected = selectedRunIds.includes(run.runId);
                 const active = activeRun?.runId === run.runId;
                 return (
-                  <li key={run.runId} className={`rounded-lg border p-3 ${active ? "border-slate-400 bg-slate-50" : "border-slate-200 bg-white"}`}>
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <li key={run.runId}>
+                    <BodyInset className={`p-3 ${active ? "border-slate-400" : "bg-white"}`}>
+                    <div className={`text-xs ${bodyDenseActionRowClassName}`}>
                       <label className="inline-flex items-center gap-2 text-slate-700">
                         <input type="checkbox" checked={selected} onChange={() => toggleRunSelection(run.runId)} />
                         비교 선택
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => setActiveRunId(run.runId)}
-                        className="inline-flex rounded-md border border-slate-300 px-2 py-1 font-semibold text-slate-700 hover:bg-slate-100"
-                      >
+                      <Button size="sm" type="button" onClick={() => setActiveRunId(run.runId)} variant="outline">
                         보기
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => exportOneJson(run)}
-                        className="inline-flex rounded-md border border-slate-300 px-2 py-1 font-semibold text-slate-700 hover:bg-slate-100"
-                      >
+                      </Button>
+                      <Button size="sm" type="button" onClick={() => exportOneJson(run)} variant="outline">
                         JSON
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => exportOneCsv(run)}
-                        className="inline-flex rounded-md border border-slate-300 px-2 py-1 font-semibold text-slate-700 hover:bg-slate-100"
-                      >
+                      </Button>
+                      <Button size="sm" type="button" onClick={() => exportOneCsv(run)} variant="outline">
                         CSV
-                      </button>
+                      </Button>
                       <Link
-                        href={`/report?runId=${encodeURIComponent(run.runId)}`}
+                        href={`/planning/reports?runId=${encodeURIComponent(run.runId)}`}
                         data-testid={active ? "history-open-report" : undefined}
-                        className="inline-flex rounded-md border border-emerald-300 px-2 py-1 font-semibold text-emerald-700 hover:bg-emerald-50"
+                        className={bodyInlineActionLinkClassName}
                       >
-                        리포트 열기
+                        planning 리포트
                       </Link>
-                      <button
+                      <Button
+                        size="sm"
                         type="button"
                         onClick={() => removeOne(run.runId)}
-                        className="inline-flex rounded-md border border-rose-300 px-2 py-1 font-semibold text-rose-700 hover:bg-rose-50"
+                        variant="outline"
+                        className="border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-700"
                       >
                         삭제
-                      </button>
+                      </Button>
                     </div>
                     <p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(run.savedAt)}</p>
                     <p className="text-xs text-slate-600">
                       {run.profile.purpose} / {run.profile.kind} / {run.items.length}건 / topN {run.profile.topN}
                     </p>
+                    </BodyInset>
                   </li>
                 );
               })}
@@ -308,10 +322,14 @@ export function RecommendHistoryClient({
           )}
         </article>
 
-        <article className="rounded-2xl border border-slate-200 bg-white p-5">
-          <h2 className="text-lg font-semibold text-slate-900">선택 실행</h2>
+        <article className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+          <BodySectionHeading title="선택 실행" />
           {!activeRun ? (
-            <p className="mt-2 text-sm text-slate-600">실행을 선택해 주세요.</p>
+            <BodyEmptyState
+              className="mt-3"
+              description="왼쪽 목록에서 저장된 실행 하나를 열면 상위 상품과 비교 담기 동작을 여기서 바로 이어갈 수 있습니다."
+              title="실행을 선택해 주세요."
+            />
           ) : (
             <>
               {openedFromQuery ? (
@@ -322,11 +340,11 @@ export function RecommendHistoryClient({
               <p className="mt-2 text-sm text-slate-700">
                 저장 시각: {formatDateTime(activeRun.savedAt)} / 항목 {activeRun.items.length}건
               </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              <div className={`mt-3 text-xs ${bodyDenseActionRowClassName}`}>
                 <label className="inline-flex items-center gap-2 text-slate-700">
                   비교 담기 개수
                   <select
-                    className="h-8 rounded-md border border-slate-300 px-2"
+                    className={bodyCompactFieldClassName}
                     value={compareTopN}
                     onChange={(e) => {
                       const next = Number(e.target.value);
@@ -338,16 +356,18 @@ export function RecommendHistoryClient({
                     <option value={4}>4개</option>
                   </select>
                 </label>
-                <button
+                <Button
+                  size="sm"
                   type="button"
                   onClick={() => addTopItemsToCompare(activeRun)}
                   disabled={activeRun.items.length < 2}
-                  className="inline-flex rounded-md border border-emerald-300 px-3 py-1.5 font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                  variant="outline"
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700"
                 >
                   상위 {compareTopN}개 비교 담기
-                </button>
+                </Button>
               </div>
-              <div className="mt-3 overflow-x-auto">
+              <BodyTableFrame className="mt-3">
                 <table className="min-w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-slate-600">
@@ -375,38 +395,42 @@ export function RecommendHistoryClient({
                       ))}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             </>
           )}
         </article>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h2 className="text-lg font-semibold text-slate-900">실행 비교 (2개 선택)</h2>
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+        <BodySectionHeading title="실행 비교 (2개 선택)" />
         {selectedRuns.length !== 2 || !diff ? (
-          <p className="mt-2 text-sm text-slate-600">목록에서 실행 2개를 선택하면 변경/신규/제외와 상위 변경 테이블을 볼 수 있습니다.</p>
+          <BodyEmptyState
+            className="mt-3"
+            description="목록에서 실행 2개를 선택하면 변경, 신규, 제외 항목과 상위 변경 테이블을 보여줍니다."
+            title="비교할 실행 2개를 선택해 주세요."
+          />
         ) : (
           <>
             <p className="mt-2 text-sm text-slate-700">
               기준: {formatDateTime(diff.previous.savedAt)} → {formatDateTime(diff.current.savedAt)}
             </p>
             <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <BodyInset className="text-sm">
                 <p className="font-semibold text-slate-900">변경</p>
                 <p className="mt-1 text-slate-700">{diff.changed.length}건</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              </BodyInset>
+              <BodyInset className="text-sm">
                 <p className="font-semibold text-slate-900">신규</p>
                 <p className="mt-1 text-slate-700">{diff.added.length}건</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              </BodyInset>
+              <BodyInset className="text-sm">
                 <p className="font-semibold text-slate-900">제외</p>
                 <p className="mt-1 text-slate-700">{diff.removed.length}건</p>
-              </div>
+              </BodyInset>
             </div>
 
             {diff.changed.length > 0 ? (
-              <div className="mt-4 overflow-x-auto">
+              <BodyTableFrame className="mt-4">
                 <p className="text-sm font-semibold text-slate-900">상위 변경 테이블</p>
                 <table className="mt-2 min-w-full text-sm">
                   <thead>
@@ -433,7 +457,7 @@ export function RecommendHistoryClient({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             ) : null}
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">

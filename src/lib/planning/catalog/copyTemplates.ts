@@ -1,3 +1,5 @@
+import { roundKrw } from "../calc/roundingPolicy";
+
 export type CopyTemplateId =
   | "warning.unknown.title"
   | "warning.unknown.description"
@@ -19,16 +21,16 @@ const COPY_TEMPLATES: Record<CopyTemplateId, string> = {
   "warning.unknown.description": "해당 경고 코드는 카탈로그에 없습니다. 원문 메시지와 입력값을 함께 점검하세요.",
   "warning.fallback.message": "{{code}} 경고가 감지되었습니다.",
   "verdict.GOOD.label": "양호",
-  "verdict.GOOD.headline": "현재 입력 기준 주요 지표는 안정 구간입니다. 정기 점검을 유지하세요.",
+  "verdict.GOOD.headline": "지금 구조는 비교적 안정적입니다. 정기 점검만 이어가면 됩니다.",
   "verdict.CAUTION.label": "주의",
-  "verdict.CAUTION.headline": "일부 지표가 주의 구간입니다. 상환/지출/목표 조정안을 비교하세요.",
+  "verdict.CAUTION.headline": "당장 위험하진 않지만, 몇 가지만 조정하면 훨씬 안정적으로 갈 수 있습니다.",
   "verdict.RISK.label": "위험",
-  "verdict.RISK.headline": "핵심 지표가 위험 구간입니다. 바로 조정 후 재실행이 필요합니다.",
+  "verdict.RISK.headline": "지금 구조로는 버거운 구간이 보여서, 우선순위 조정이 필요합니다.",
   "verdict.UNKNOWN.label": "확인 필요",
-  "verdict.UNKNOWN.headline": "판정 가능한 지표가 부족합니다. 프로필과 실행 결과를 먼저 확인하세요.",
+  "verdict.UNKNOWN.headline": "입력 정보가 부족해 아직 또렷한 판단을 내리기 어렵습니다.",
   "unit.percent": "{{value}}%",
-  "unit.krw": "{{value}} KRW",
-  "unit.months": "{{value}} months",
+  "unit.krw": "{{value}}원",
+  "unit.months": "{{value}}개월",
 };
 
 const PLACEHOLDER_PATTERN = /\{\{([a-zA-Z0-9_]+)\}\}/g;
@@ -65,7 +67,7 @@ export function formatPercentUnit(value: number, digits = 1): string {
 }
 
 export function formatKrwUnit(value: number): string {
-  const rounded = Number.isFinite(value) ? Math.round(value).toLocaleString("ko-KR") : "-";
+  const rounded = Number.isFinite(value) ? roundKrw(value).toLocaleString("ko-KR") : "-";
   return renderCopyTemplate("unit.krw", { value: rounded });
 }
 
@@ -77,4 +79,3 @@ export function formatMonthsUnit(value: number, digits = 1): string {
 export function templateIds(): CopyTemplateId[] {
   return Object.keys(COPY_TEMPLATES) as CopyTemplateId[];
 }
-

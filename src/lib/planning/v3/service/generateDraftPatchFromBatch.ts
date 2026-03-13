@@ -8,6 +8,7 @@ import {
 } from "../domain/types";
 import { type DraftProfileEvidence } from "../domain/draftTypes";
 import { DRAFT_PROFILE_POLICY, type DraftProfilePolicy } from "../policy/draftProfilePolicy";
+import { roundKrw } from "../../calc";
 import { applyAccountMappingOverrides } from "./applyAccountMappingOverrides";
 import { categorizeTransactions } from "./categorizeTransactions";
 import { computeCashflowBreakdown } from "./computeCashflowBreakdown";
@@ -69,15 +70,15 @@ function asString(value: unknown): string {
 function asRoundedInt(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  return Math.round(parsed);
+  return roundKrw(parsed);
 }
 
 function medianRounded(values: number[]): number {
   if (values.length < 1) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return Math.round(sorted[middle] ?? 0);
-  return Math.round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
+  const middle = Math.trunc(sorted.length / 2);
+  if (sorted.length % 2 === 1) return roundKrw(sorted[middle] ?? 0);
+  return roundKrw(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
 }
 
 function toStoredTransactions(batchId: string, rows: Array<{
@@ -179,7 +180,7 @@ function buildCategoryStats(ymStats: YmStat[], categories: CategoryId[]): Array<
   }
 
   return [...totals.entries()]
-    .map(([categoryId, totalKrw]) => ({ categoryId, totalKrw: Math.round(totalKrw) }))
+    .map(([categoryId, totalKrw]) => ({ categoryId, totalKrw: roundKrw(totalKrw) }))
     .filter((row) => row.totalKrw > 0)
     .sort((left, right) => {
       if (left.totalKrw !== right.totalKrw) return right.totalKrw - left.totalKrw;

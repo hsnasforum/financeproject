@@ -6,6 +6,17 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import {
+  BodyInset,
+  BodySectionHeading,
+  BodyStatusInset,
+  BodyTableFrame,
+  bodyCompactFieldClassName,
+  bodyDenseActionRowClassName,
+  bodyFieldClassName,
+  bodyInlineActionLinkClassName,
+  bodyMetaChipClassName,
+} from "@/components/ui/BodyTone";
+import {
   GOV24_HOUSEHOLD_TRAITS,
   GOV24_PERSONAL_TRAITS,
   type Gov24Gender,
@@ -299,15 +310,15 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
       <Container>
         <SectionHeader title="보조금24" subtitle="간편 찾기" />
         <Card>
-          <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-slate-600">
-            <span>동기화 상태: {syncing || syncState === "syncing" ? "동기화 중" : syncState === "ready" ? "준비됨" : "동기화 필요"}</span>
-            <span>스냅샷 {snapshotTotal ?? "?"}건</span>
-            <span>완주율 {completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
-            {syncPagesFetched !== null ? <span>페이지 {syncPagesFetched}/{syncEffectiveMaxPages ?? "?"}</span> : null}
-            {syncUniqueCount !== null ? <span>수집 {syncUniqueCount}건</span> : null}
-            {snapshotGeneratedAt ? <span>최근 갱신 {new Date(snapshotGeneratedAt).toLocaleString("ko-KR", { hour12: false })}</span> : null}
-            {syncMetaNote ? <span className="text-amber-700">{syncMetaNote}</span> : null}
-            {syncError ? <span className="text-red-700">동기화 실패: {syncError}</span> : null}
+          <div className={`mb-4 ${bodyDenseActionRowClassName}`}>
+            <span className={bodyMetaChipClassName}>
+              동기화 상태: {syncing || syncState === "syncing" ? "동기화 중" : syncState === "ready" ? "준비됨" : "동기화 필요"}
+            </span>
+            <span className={bodyMetaChipClassName}>스냅샷 {snapshotTotal ?? "?"}건</span>
+            <span className={bodyMetaChipClassName}>완주율 {completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
+            {syncPagesFetched !== null ? <span className={bodyMetaChipClassName}>페이지 {syncPagesFetched}/{syncEffectiveMaxPages ?? "?"}</span> : null}
+            {syncUniqueCount !== null ? <span className={bodyMetaChipClassName}>수집 {syncUniqueCount}건</span> : null}
+            {snapshotGeneratedAt ? <span className={bodyMetaChipClassName}>최근 갱신 {new Date(snapshotGeneratedAt).toLocaleString("ko-KR", { hour12: false })}</span> : null}
             {process.env.NODE_ENV !== "production" ? (
               <Button type="button" size="sm" variant="outline" onClick={() => void runManualSync()} disabled={syncing}>
                 {syncing ? "동기화 중..." : "동기화 실행"}
@@ -315,28 +326,44 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
             ) : null}
           </div>
 
-          {syncing ? <div className="rounded-xl border border-border bg-slate-50 p-6 text-sm text-slate-700">오픈 API 전체 데이터를 동기화 중입니다.</div> : null}
+          {syncMetaNote ? (
+            <BodyStatusInset className="mb-4 text-sm" tone="warning">
+              {syncMetaNote}
+            </BodyStatusInset>
+          ) : null}
+
+          {syncError ? (
+            <BodyStatusInset className="mb-4 text-sm" tone="danger">
+              동기화 실패: {syncError}
+            </BodyStatusInset>
+          ) : null}
+
+          {syncing ? (
+            <BodyStatusInset className="mb-4 p-6 text-sm" tone="default">
+              오픈 API 전체 데이터를 동기화 중입니다.
+            </BodyStatusInset>
+          ) : null}
 
           {step <= 6 ? (
             <div className="space-y-5">
-              <div className="text-sm font-semibold text-slate-800">STEP {step} / 6</div>
+              <span className={bodyMetaChipClassName}>STEP {step} / 6</span>
 
               {step === 1 ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">대상 선택</p>
+                <BodyInset className="space-y-3 bg-white">
+                  <BodySectionHeading title="대상 선택" />
                   <div className="grid gap-2 sm:grid-cols-3">
                     <Button type="button" variant={targetType === "individual" ? "primary" : "outline"} onClick={() => setTargetType("individual")}>개인/가구</Button>
                     <Button type="button" variant="outline" disabled>소상공인 (준비중)</Button>
                     <Button type="button" variant="outline" disabled>법인 (준비중)</Button>
                   </div>
-                </div>
+                </BodyInset>
               ) : null}
 
               {step === 2 ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">거주 지역</p>
+                <BodyInset className="space-y-3 bg-white">
+                  <BodySectionHeading title="거주 지역" />
                   <div className="grid gap-3 md:grid-cols-2">
-                    <div className="max-h-64 overflow-auto rounded-xl border border-border p-3">
+                    <BodyInset className="max-h-64 overflow-auto bg-white">
                       <div className="flex flex-wrap gap-2">
                         {SIDO_ADMIN_2025.map((sido) => (
                           <Button
@@ -353,8 +380,8 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                           </Button>
                         ))}
                       </div>
-                    </div>
-                    <div className="max-h-64 overflow-auto rounded-xl border border-border p-3">
+                    </BodyInset>
+                    <BodyInset className="max-h-64 overflow-auto bg-white">
                       <div className="flex flex-wrap gap-2">
                         {sigunguOptions.map((sigungu) => (
                           <Button
@@ -368,31 +395,36 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                           </Button>
                         ))}
                       </div>
-                    </div>
+                    </BodyInset>
                   </div>
-                </div>
+                </BodyInset>
               ) : null}
 
               {step === 3 ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">생년월일 / 성별</p>
+                <BodyInset className="space-y-3 bg-white">
+                  <BodySectionHeading title="생년월일 / 성별" />
                   <div className="flex flex-wrap gap-2">
-                    <input className="h-10 rounded-xl border border-border px-3" placeholder="YYYYMMDD" value={birthYmd} onChange={(e) => setBirthYmd(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))} />
+                    <input
+                      className={`${bodyFieldClassName.replace("mt-1 ", "")} h-10 w-auto min-w-44`}
+                      placeholder="YYYYMMDD"
+                      value={birthYmd}
+                      onChange={(e) => setBirthYmd(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
+                    />
                     <Button type="button" size="sm" variant={gender === "F" ? "primary" : "outline"} onClick={() => setGender("F")}>여성</Button>
                     <Button type="button" size="sm" variant={gender === "M" ? "primary" : "outline"} onClick={() => setGender("M")}>남성</Button>
                   </div>
-                </div>
+                </BodyInset>
               ) : null}
 
               {step === 4 ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">소득금액 구간</p>
+                <BodyInset className="space-y-3 bg-white">
+                  <BodySectionHeading title="소득금액 구간" />
                   <div className="grid gap-2 sm:grid-cols-2">
                     {INCOME_OPTIONS.map((entry) => (
                       <Button key={entry.value} type="button" variant={incomeBracket === entry.value ? "primary" : "outline"} onClick={() => setIncomeBracket(entry.value)}>{entry.label}</Button>
                     ))}
                   </div>
-                  <div className="overflow-x-auto rounded-xl border border-border">
+                  <BodyTableFrame>
                     <table className="min-w-full text-xs">
                       <thead className="bg-slate-50">
                         <tr>
@@ -413,30 +445,30 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                         ))}
                       </tbody>
                     </table>
-                  </div>
-                </div>
+                  </BodyTableFrame>
+                </BodyInset>
               ) : null}
 
               {step === 5 ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">개인 특성</p>
+                <BodyInset className="space-y-3 bg-white">
+                  <BodySectionHeading title="개인 특성" />
                   <div className="flex flex-wrap gap-2">
                     {GOV24_PERSONAL_TRAITS.map((trait) => (
                       <Button key={trait} type="button" size="sm" variant={personalTraits.includes(trait) ? "primary" : "outline"} onClick={() => toggleTrait(personalTraits, trait, setPersonalTraits)}>{trait}</Button>
                     ))}
                   </div>
-                </div>
+                </BodyInset>
               ) : null}
 
               {step === 6 ? (
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">가구 특성</p>
+                <BodyInset className="space-y-3 bg-white">
+                  <BodySectionHeading title="가구 특성" />
                   <div className="flex flex-wrap gap-2">
                     {GOV24_HOUSEHOLD_TRAITS.map((trait) => (
                       <Button key={trait} type="button" size="sm" variant={householdTraits.includes(trait) ? "primary" : "outline"} onClick={() => toggleTrait(householdTraits, trait, setHouseholdTraits)}>{trait}</Button>
                     ))}
                   </div>
-                </div>
+                </BodyInset>
               ) : null}
 
               <div className="flex gap-2">
@@ -458,32 +490,41 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
 
           {step === 7 ? (
             <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-slate-50 p-3">
-                <p className="text-sm font-semibold text-slate-800">조건 요약</p>
-                <p className="mt-1 text-xs text-slate-600">{summaryLine}</p>
+              <BodyInset>
+                <BodySectionHeading title="조건 요약" description={summaryLine} />
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <input className="h-9 rounded-xl border border-border px-3 text-sm" placeholder="결과 내 재검색(선택)" value={resultQuery} onChange={(e) => setResultQuery(e.target.value)} />
+                  <input
+                    className={`${bodyCompactFieldClassName} h-9 min-w-56`}
+                    placeholder="결과 내 재검색(선택)"
+                    value={resultQuery}
+                    onChange={(e) => setResultQuery(e.target.value)}
+                  />
                   <Button type="button" size="sm" onClick={() => void searchSimpleFind({ cursor: 0 })}>검색</Button>
                   <Button type="button" size="sm" variant="outline" onClick={() => { setStep(1); setItems([]); setTotalMatched(0); setNextCursor(null); }}>다시 찾기</Button>
                 </div>
-              </div>
+              </BodyInset>
 
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <span className="font-semibold text-slate-800">총 {totalMatched}건</span>
-                <select className="h-9 rounded-xl border border-border px-3 text-xs" value={orgTypeFilter} onChange={(e) => setOrgTypeFilter(e.target.value as Gov24OrgType)}>
+              <div className={`text-sm ${bodyDenseActionRowClassName}`}>
+                <span className={bodyMetaChipClassName}>총 {totalMatched}건</span>
+                <select className={`${bodyCompactFieldClassName} h-9 text-xs`} value={orgTypeFilter} onChange={(e) => setOrgTypeFilter(e.target.value as Gov24OrgType)}>
                   {ORG_FILTER_OPTIONS.map((entry) => (
                     <option key={entry.value} value={entry.value}>{entry.label} ({orgTypeCounts[entry.value] ?? 0})</option>
                   ))}
                 </select>
               </div>
 
-              {error ? <p className="text-sm text-red-700">{error}</p> : null}
+              {error ? (
+                <BodyStatusInset className="text-sm" tone="danger">
+                  {error}
+                </BodyStatusInset>
+              ) : null}
 
               <ul className="space-y-2">
                 {items.map((item) => {
                   const quickUrl = item.primaryApplyUrl;
                   return (
-                    <li key={item.id} className="rounded-xl border border-border bg-surface-muted p-3">
+                    <li key={item.id}>
+                      <BodyInset className="bg-white">
                       <div className="flex flex-wrap items-center gap-2">
                         {item.card?.badge ? <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-white">{item.card.badge}</span> : null}
                         {item.card?.department ? <span className="text-[11px] text-slate-500">관할: {item.card.department}</span> : null}
@@ -498,11 +539,12 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                       <div className="mt-2 flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => void openDetail(item)} disabled={detailLoading}>상세 보기</Button>
                         {quickUrl ? (
-                          <a className="inline-flex h-8 items-center rounded-xl border border-border px-2 text-xs" target="_blank" rel="noopener noreferrer" href={quickUrl}>
+                          <a className={bodyInlineActionLinkClassName} target="_blank" rel="noopener noreferrer" href={quickUrl}>
                             바로가기
                           </a>
                         ) : null}
                       </div>
+                      </BodyInset>
                     </li>
                   );
                 })}

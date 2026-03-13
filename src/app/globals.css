@@ -58,6 +58,80 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+.hero-card-stage {
+  perspective: 1600px;
+}
+
+.hero-card {
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.hero-card-back {
+  animation: hero-card-float-back 7.2s ease-in-out infinite;
+}
+
+.hero-card-mid {
+  animation: hero-card-float-mid 6.4s ease-in-out infinite;
+}
+
+.hero-card-front {
+  animation: hero-card-float-front 5.8s ease-in-out infinite;
+}
+
+.hero-card-stage:hover .hero-card-back {
+  transform: translate3d(-10px, 8px, -10px) rotate(-12deg) !important;
+}
+
+.hero-card-stage:hover .hero-card-mid {
+  transform: translate3d(-2px, -4px, 14px) rotate(-2deg) !important;
+}
+
+.hero-card-stage:hover .hero-card-front {
+  transform: translate3d(12px, -10px, 42px) rotate(2deg) !important;
+}
+
+@keyframes hero-card-float-back {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(-10deg);
+  }
+  50% {
+    transform: translate3d(-8px, -12px, 14px) rotate(-12deg);
+  }
+}
+
+@keyframes hero-card-float-mid {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(-4deg);
+  }
+  50% {
+    transform: translate3d(4px, -10px, 24px) rotate(-1deg);
+  }
+}
+
+@keyframes hero-card-float-front {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(10px, -14px, 48px) rotate(2deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-card-back,
+  .hero-card-mid,
+  .hero-card-front {
+    animation: none !important;
+  }
+
+  .hero-card-stage:hover .hero-card-back,
+  .hero-card-stage:hover .hero-card-mid,
+  .hero-card-stage:hover .hero-card-front {
+    transform: none !important;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

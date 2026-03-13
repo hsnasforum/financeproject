@@ -1,4 +1,5 @@
 import { type ProfileV2 } from "../v2/types";
+import { roundKrw } from "../calc/roundingPolicy";
 
 export type MaskLevel = "light" | "standard" | "strict";
 
@@ -12,9 +13,9 @@ function asMaskLevel(level: unknown): MaskLevel {
 }
 
 function bucketLabel(amount: number, level: MaskLevel): string {
-  const abs = Math.max(0, Math.round(amount));
+  const abs = Math.max(0, roundKrw(amount));
   if (level === "light") {
-    const rounded = Math.round(abs / 100_000) * 100_000;
+    const rounded = roundKrw(abs / 100_000) * 100_000;
     return `약 ${rounded.toLocaleString("ko-KR")}원`;
   }
   if (level === "strict") {
@@ -38,7 +39,7 @@ function bucketLabel(amount: number, level: MaskLevel): string {
   let lower = 0;
   for (const upper of bands) {
     if (abs < upper) {
-      return `${Math.round(lower / 10_000).toLocaleString("ko-KR")}만~${Math.round(upper / 10_000).toLocaleString("ko-KR")}만원`;
+      return `${roundKrw(lower / 10_000).toLocaleString("ko-KR")}만~${roundKrw(upper / 10_000).toLocaleString("ko-KR")}만원`;
     }
     lower = upper;
   }
@@ -46,13 +47,13 @@ function bucketLabel(amount: number, level: MaskLevel): string {
 }
 
 function maskAge(age: number, level: MaskLevel): string | number {
-  const safe = Math.max(0, Math.round(age));
+  const safe = Math.max(0, roundKrw(age));
   if (level === "light") return safe;
   if (level === "standard") {
-    const lower = Math.floor(safe / 5) * 5;
+    const lower = Math.trunc(safe / 5) * 5;
     return `${lower}~${lower + 4}세`;
   }
-  const lower = Math.floor(safe / 10) * 10;
+  const lower = Math.trunc(safe / 10) * 10;
   return `${lower}대`;
 }
 

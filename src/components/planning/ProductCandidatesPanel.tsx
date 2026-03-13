@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
+import { BodyEmptyState, BodyTableFrame, bodyChoiceRowClassName, bodyCompactFieldClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
 import { type NormalizedProduct } from "@/lib/finlife/types";
@@ -45,6 +46,7 @@ function parseGroupedNumberInput(value: string): number {
 }
 
 export default function ProductCandidatesPanel(props: ProductCandidatesPanelProps) {
+  const PAGE_SIZE = 5;
   const [tab, setTab] = useState<CandidateKind>("deposit");
   const [termMonths, setTermMonths] = useState<number>(12);
   const [usePrimeRate, setUsePrimeRate] = useState<boolean>(true);
@@ -65,6 +67,10 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
     saving: "",
   });
   const [drawerProduct, setDrawerProduct] = useState<NormalizedProduct | null>(null);
+  const [pageByKind, setPageByKind] = useState<Record<CandidateKind, number>>({
+    deposit: 1,
+    saving: 1,
+  });
 
   useEffect(() => {
     setDrawerProduct(null);
@@ -148,11 +154,23 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
   const amountValue = tab === "deposit" ? depositPrincipalWon : savingMonthlyPaymentWon;
   const isLoading = loadingByKind[tab];
   const error = errorByKind[tab];
+  const totalPages = Math.max(1, Math.ceil(candidateRows.length / PAGE_SIZE));
+  const currentPage = Math.min(pageByKind[tab], totalPages);
+  const pageRows = candidateRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const pageStart = candidateRows.length < 1 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = candidateRows.length < 1 ? 0 : Math.min(candidateRows.length, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    setPageByKind((prev) => ({ ...prev, [tab]: 1 }));
+  }, [depositPrincipalWon, savingMonthlyPaymentWon, sortKey, tab, taxRatePct, termMonths, usePrimeRate]);
 
   return (
     <Card className="space-y-3" data-testid="planning-candidates" id="candidates">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-bold text-slate-900">상품 후보 비교 (예금/적금)</h2>
+        <div>
+          <h2 className="text-base font-bold text-slate-900">실시간 상품 탐색 (예금/적금)</h2>
+          <p className="mt-1 text-xs text-slate-600">많은 후보를 한 번에 보여주지 않도록 5개씩 나눠서 표시합니다.</p>
+        </div>
         <div className="flex items-center gap-2">
           <button
             className={`rounded-lg border px-3 py-1 text-xs font-semibold ${tab === "deposit" ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-300 text-slate-700"}`}
@@ -203,7 +221,7 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
         <label className="text-xs font-semibold text-slate-600">
           {tab === "deposit" ? "예치금(원)" : "월 납입액(원)"}
           <input
-            className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-2 text-sm"
+            className={`${bodyCompactFieldClassName} mt-1 h-10 w-full`}
             data-testid="candidates-amount"
             inputMode="numeric"
             type="text"
@@ -219,7 +237,7 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
         <label className="text-xs font-semibold text-slate-600">
           정렬
           <select
-            className="mt-1 h-10 w-full rounded-lg border border-slate-300 px-2 text-sm"
+            className={`${bodyCompactFieldClassName} mt-1 h-10 w-full`}
             data-testid="candidates-sort"
             value={sortKey}
             onChange={(event) => setSortKey(event.target.value as CandidateSortKey)}
@@ -231,7 +249,7 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
           </select>
         </label>
 
-        <label className="col-span-2 flex items-end gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700">
+        <label className={`col-span-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 ${bodyChoiceRowClassName}`}>
           <input
             checked={usePrimeRate}
             type="checkbox"
@@ -245,47 +263,76 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
       {!isLoading && error ? <p className="text-sm text-rose-700">{error}</p> : null}
 
       {!isLoading && !error ? (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
-          <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="candidates-table">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-3 py-2 text-left">금융사</th>
-                <th className="px-3 py-2 text-left">상품명</th>
-                <th className="px-3 py-2 text-right">기간</th>
-                <th className="px-3 py-2 text-right">적용금리</th>
-                <th className="px-3 py-2 text-right">세후이자(추정)</th>
-                <th className="px-3 py-2 text-right">만기금액(추정)</th>
-                <th className="px-3 py-2 text-center">상세</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {candidateRows.length < 1 ? (
+        <div className="space-y-3">
+          <BodyTableFrame>
+            <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="candidates-table">
+              <thead className="bg-slate-50">
                 <tr>
-                  <td className="px-3 py-2 text-slate-600" colSpan={7}>
-                    표시할 후보가 없습니다.
-                  </td>
+                  <th className="px-3 py-2 text-left">금융사</th>
+                  <th className="px-3 py-2 text-left">상품명</th>
+                  <th className="px-3 py-2 text-right">기간</th>
+                  <th className="px-3 py-2 text-right">적용금리</th>
+                  <th className="px-3 py-2 text-right">세후이자(추정)</th>
+                  <th className="px-3 py-2 text-right">만기금액(추정)</th>
+                  <th className="px-3 py-2 text-center">상세</th>
                 </tr>
-              ) : candidateRows.map((row) => (
-                <tr key={`${tab}:${row.product.fin_prdt_cd}`}>
-                  <td className="px-3 py-2 text-slate-800">{row.providerName}</td>
-                  <td className="px-3 py-2 font-semibold text-slate-900">{row.productName}</td>
-                  <td className="px-3 py-2 text-right">{row.termMonths.toLocaleString("ko-KR")}개월</td>
-                  <td className="px-3 py-2 text-right">{formatPct("ko-KR", row.annualRatePct)}</td>
-                  <td className="px-3 py-2 text-right">{formatKrw("ko-KR", row.netInterestWon)}</td>
-                  <td className="px-3 py-2 text-right">{formatKrw("ko-KR", row.maturityWon)}</td>
-                  <td className="px-3 py-2 text-center">
-                    <button
-                      className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      type="button"
-                      onClick={() => setDrawerProduct(row.product)}
-                    >
-                      자세히
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {candidateRows.length < 1 ? (
+                  <tr>
+                    <td className="px-3 py-3" colSpan={7}>
+                      <BodyEmptyState className="px-3 py-4" description="현재 조건으로 계산 가능한 상품 후보가 없습니다." title="표시할 후보가 없습니다." />
+                    </td>
+                  </tr>
+                ) : pageRows.map((row) => (
+                  <tr key={`${tab}:${row.product.fin_prdt_cd}`}>
+                    <td className="px-3 py-2 text-slate-800">{row.providerName}</td>
+                    <td className="px-3 py-2 font-semibold text-slate-900">{row.productName}</td>
+                    <td className="px-3 py-2 text-right">{row.termMonths.toLocaleString("ko-KR")}개월</td>
+                    <td className="px-3 py-2 text-right">{formatPct("ko-KR", row.annualRatePct)}</td>
+                    <td className="px-3 py-2 text-right">{formatKrw("ko-KR", row.netInterestWon)}</td>
+                    <td className="px-3 py-2 text-right">{formatKrw("ko-KR", row.maturityWon)}</td>
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        type="button"
+                        onClick={() => setDrawerProduct(row.product)}
+                      >
+                        자세히
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </BodyTableFrame>
+
+          {candidateRows.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+              <p>
+                {pageStart}-{pageEnd} / {candidateRows.length}개
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={currentPage <= 1}
+                  type="button"
+                  onClick={() => setPageByKind((prev) => ({ ...prev, [tab]: Math.max(1, prev[tab] - 1) }))}
+                >
+                  이전 5개
+                </button>
+                <span>{currentPage} / {totalPages}</span>
+                <button
+                  className="rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={currentPage >= totalPages}
+                  type="button"
+                  onClick={() => setPageByKind((prev) => ({ ...prev, [tab]: Math.min(totalPages, prev[tab] + 1) }))}
+                >
+                  다음 5개
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

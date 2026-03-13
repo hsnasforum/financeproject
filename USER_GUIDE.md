@@ -90,6 +90,8 @@ Common cause:
 
 Check:
 - Use `http://localhost:3100` or `http://127.0.0.1:3100`.
+- WSL에서 dev 서버가 `Bind: host=::`로 시작되면 `http://[::1]:3100`도 같은 로컬 경로입니다.
+- Windows 브라우저에서 localhost forwarding이 막히면 터미널의 `Open (LAN)` URL을 사용합니다.
 - Trigger write actions from app UI (not cross-origin clients).
 
 ### B) News page shows no data

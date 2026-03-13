@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { readNewsDigestDay } from "@/lib/news/digestReader";
-import { type DigestDay, type DigestWatchItem } from "@/lib/news/types";
-import { computeTopicContradictions } from "../../../../../../../planning/v3/news/contradiction";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
-import { normalizeSeriesId } from "../../../../../../../planning/v3/indicators/aliases";
-import { loadEffectiveSeriesSpecs } from "../../../../../../../planning/v3/indicators/specOverrides";
-import { readSeriesObservations } from "../../../../../../../planning/v3/indicators/store";
+import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { normalizeSeriesId } from "@/lib/planning/v3/indicators/aliases";
+import { loadEffectiveSeriesSpecs } from "@/lib/planning/v3/indicators/specOverrides";
+import { readSeriesObservations } from "@/lib/planning/v3/indicators/store";
+import { computeTopicContradictions } from "@/lib/planning/v3/news/contradiction";
+import { readNewsDigestDay, type DigestDay, type DigestWatchItem } from "@/lib/planning/v3/news/digest";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -16,7 +14,7 @@ function asString(value: unknown): string {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -383,9 +381,6 @@ const DigestRouteSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

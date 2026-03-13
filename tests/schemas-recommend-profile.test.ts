@@ -6,6 +6,13 @@ import {
 } from "../src/lib/schemas/recommendProfile";
 
 describe("recommend profile schema", () => {
+  it("uses unified candidates as defaults", () => {
+    expect(defaults()).toMatchObject({
+      candidatePool: "unified",
+      candidateSources: ["finlife", "datago_kdb"],
+    });
+  });
+
   it("parses valid profile input", () => {
     const parsed = parseRecommendProfile({
       purpose: "emergency",
@@ -22,12 +29,19 @@ describe("recommend profile schema", () => {
         term: 0.25,
         liquidity: 0.15,
       },
+      planningContext: {
+        monthlyIncomeKrw: 4_200_000,
+        monthlyExpenseKrw: 2_700_000,
+        liquidAssetsKrw: 8_000_000,
+        debtBalanceKrw: 12_000_000,
+      },
     });
 
     expect(parsed.ok).toBe(true);
     expect(parsed.value.purpose).toBe("emergency");
     expect(parsed.value.topN).toBe(7);
     expect(parsed.value.candidateSources).toEqual(["finlife", "datago_kdb"]);
+    expect(parsed.value.planningContext?.monthlyIncomeKrw).toBe(4_200_000);
   });
 
   it("collects issues for invalid values", () => {
@@ -48,13 +62,17 @@ describe("recommend profile schema", () => {
   });
 
   it("parses query overrides with pool alias and candidate sources", () => {
-    const params = new URLSearchParams("purpose=seed-money&pool=unified&candidateSources=finlife,datago_kdb&topN=5");
+    const params = new URLSearchParams(
+      "purpose=seed-money&pool=unified&candidateSources=finlife,datago_kdb&topN=5&monthlyIncome=4100000&liquidAssetsKrw=9000000",
+    );
     const parsed = fromSearchParams(params);
 
     expect(parsed.ok).toBe(true);
     expect(parsed.value.purpose).toBe("seed-money");
     expect(parsed.value.candidatePool).toBe("unified");
     expect(parsed.value.candidateSources).toEqual(["finlife", "datago_kdb"]);
+    expect(parsed.value.planningContext?.monthlyIncomeKrw).toBe(4_100_000);
+    expect(parsed.value.planningContext?.liquidAssetsKrw).toBe(9_000_000);
 
     const merged = parseRecommendProfile({
       ...defaults(),

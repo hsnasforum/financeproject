@@ -1,35 +1,40 @@
-import {
-  createEngineEnvelope,
-  recordPlanningFallbackUsage,
-  runPlanningEngine,
-  type EngineEnvelope,
-  type FinancialStatus,
-  type Stage,
-  type StageDecision,
-} from "../engine";
+import { type EngineEnvelope } from "../engine";
 import { type PlanningRunRecord } from "../store/types";
 import {
-  buildResultDtoV1FromRunRecord,
   isResultDtoV1,
   type ResultDtoV1,
 } from "../v2/resultDto";
+import { backfillResultDtoDebtFromRaw } from "../v2/resultDtoDebtBackfill";
 
 export interface ReportInputContract {
   runId: string;
   resultDto: ResultDtoV1;
   engine: EngineEnvelope;
   engineSchemaVersion: number;
+  fallbacks: ReportContractFallbackSource[];
 }
 
-type BuildReportInputContractOptions = {
-  allowLegacyEngineFallback?: boolean;
-  allowLegacyResultDtoFallback?: boolean;
+export type ReportContractMode = "strict";
+export type ReportContractFallbackSource =
+  | "legacyEngineFallback"
+  | "legacyResultDtoFallback"
+  | "contractBuildFailureFallback";
+
+export type BuildReportInputContractOptions = {
+  mode?: ReportContractMode;
 };
 
-type ExtractedEngineEnvelope = {
-  engine: EngineEnvelope;
-  source: "outputs.engine" | "outputs.simulate.engine" | "outputs.simulate.legacy";
-};
+export function resolveReportContractMode(value: unknown): ReportContractMode {
+  void value;
+  return "strict";
+}
+
+export function getReportInputContractOptions(
+  mode: ReportContractMode = "strict",
+): BuildReportInputContractOptions {
+  void mode;
+  return { mode: "strict" };
+}
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -41,143 +46,65 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function isStage(value: unknown): value is Stage {
-  return value === "DEFICIT" || value === "DEBT" || value === "EMERGENCY" || value === "INVEST";
-}
-
-function isFinancialStatus(value: unknown): value is FinancialStatus {
-  const row = asRecord(value);
-  return isStage(row.stage) && Boolean(row.trace && typeof row.trace === "object" && !Array.isArray(row.trace));
-}
-
-function isStageDecision(value: unknown): value is StageDecision {
+function isEngineEnvelope(value: unknown): value is EngineEnvelope {
   const row = asRecord(value);
   return (
-    typeof row.priority === "string"
-    && typeof row.investmentAllowed === "boolean"
-    && Array.isArray(row.warnings)
+    typeof row === "object"
+    && row !== null
+    && typeof row.stage === "string"
+    && typeof row.financialStatus === "object"
+    && row.financialStatus !== null
+    && typeof row.stageDecision === "object"
+    && row.stageDecision !== null
   );
 }
 
-function isEngineEnvelope(value: unknown): value is EngineEnvelope {
-  const row = asRecord(value);
-  return isStage(row.stage) && isFinancialStatus(row.financialStatus) && isStageDecision(row.stageDecision);
-}
-
-function resolveResultDtoFromRun(
+export function resolveReportResultDtoFromRun(
   run: PlanningRunRecord,
-  allowLegacyResultDtoFallback: boolean,
-): ResultDtoV1 {
+  _options?: BuildReportInputContractOptions,
+): ResultDtoV1;
+export function resolveReportResultDtoFromRun(
+  run: PlanningRunRecord | null,
+  _options?: BuildReportInputContractOptions,
+): ResultDtoV1 | null;
+export function resolveReportResultDtoFromRun(
+  run: PlanningRunRecord | null,
+  options: BuildReportInputContractOptions = {},
+): ResultDtoV1 | null {
+  void options;
+  if (!run) return null;
   const rawResultDto = asRecord(run.outputs).resultDto;
-  if (isResultDtoV1(rawResultDto)) return rawResultDto;
-  if (!allowLegacyResultDtoFallback) {
+  if (!isResultDtoV1(rawResultDto)) {
     throw new Error("resultDto is missing in run outputs");
   }
-  return buildResultDtoV1FromRunRecord(run);
-}
-
-function extractEngineEnvelopeFromRun(run: PlanningRunRecord): ExtractedEngineEnvelope | null {
-  const outputs = asRecord(run.outputs);
-  if (isEngineEnvelope(outputs.engine)) {
-    return {
-      engine: outputs.engine,
-      source: "outputs.engine",
-    };
-  }
-
-  const simulate = asRecord(outputs.simulate);
-  if (isEngineEnvelope(simulate.engine)) {
-    return {
-      engine: simulate.engine,
-      source: "outputs.simulate.engine",
-    };
-  }
-
-  const legacyStage = simulate.stage;
-  const legacyFinancialStatus = simulate.financialStatus;
-  const legacyStageDecision = simulate.stageDecision;
-  if (isStage(legacyStage) && isFinancialStatus(legacyFinancialStatus) && isStageDecision(legacyStageDecision)) {
-    return {
-      engine: {
-        stage: legacyStage,
-        financialStatus: legacyFinancialStatus,
-        stageDecision: legacyStageDecision,
-      },
-      source: "outputs.simulate.legacy",
-    };
-  }
-  return null;
-}
-
-function buildLegacyEngineEnvelopeFromResultDto(resultDto: ResultDtoV1): EngineEnvelope {
-  const start = resultDto.timeline.points.find((point) => point.label === "start")
-    ?? resultDto.timeline.points[0];
-  const emergencyGoal = resultDto.goals.find((goal) => goal.type === "emergencyFund");
-  const monthlyExpense = asNumber(start?.expensesKrw) ?? 0;
-  const emergencyFundMonths = (
-    monthlyExpense > 0
-    && typeof asNumber(emergencyGoal?.targetKrw) === "number"
-  )
-    ? (asNumber(emergencyGoal?.targetKrw) as number) / monthlyExpense
-    : undefined;
-
-  const status = runPlanningEngine({
-    monthlyIncome: Math.max(0, asNumber(start?.incomeKrw) ?? 0),
-    monthlyExpense: Math.max(0, monthlyExpense),
-    liquidAssets: Math.max(0, asNumber(start?.cashKrw) ?? 0),
-    debtBalance: Math.max(0, asNumber(start?.totalDebtKrw) ?? 0),
-    ...(typeof emergencyFundMonths === "number" && Number.isFinite(emergencyFundMonths)
-      ? { emergencyFundMonths }
-      : {}),
-  });
-
-  return createEngineEnvelope({
-    status: status.status,
-    decision: status.decision,
-  });
+  return backfillResultDtoDebtFromRaw(rawResultDto).resultDto;
 }
 
 export function buildReportInputContractFromRun(
   run: PlanningRunRecord,
   options: BuildReportInputContractOptions = {},
 ): ReportInputContract {
-  const allowLegacyEngineFallback = options.allowLegacyEngineFallback !== false;
-  const allowLegacyResultDtoFallback = options.allowLegacyResultDtoFallback !== false;
-
-  const resultDto = resolveResultDtoFromRun(run, allowLegacyResultDtoFallback);
-  const extractedEngine = extractEngineEnvelopeFromRun(run);
-  const usedLegacyResultDtoFallback = !extractedEngine && allowLegacyEngineFallback;
-  const engine = extractedEngine?.engine
-    ?? (usedLegacyResultDtoFallback ? buildLegacyEngineEnvelopeFromResultDto(resultDto) : null);
-
-  if (engine && extractedEngine && extractedEngine.source !== "outputs.engine") {
-    recordPlanningFallbackUsage("legacyReportContractFallbackCount", {
-      source: `reportInput/${extractedEngine.source}`,
-      runId: run.id,
-    });
+  void options;
+  const resultDto = resolveReportResultDtoFromRun(run);
+  if (!resultDto) {
+    throw new Error("resultDto is missing in run outputs");
   }
-  if (engine && usedLegacyResultDtoFallback) {
-    recordPlanningFallbackUsage("legacyReportContractFallbackCount", {
-      source: "reportInput/resultDtoFallback",
-      runId: run.id,
-    });
+
+  const rawEngine = asRecord(run.outputs).engine;
+  if (!isEngineEnvelope(rawEngine)) {
+    throw new Error("engine envelope is missing in run outputs");
   }
 
   const rawEngineSchemaVersion = asNumber(asRecord(run.outputs).engineSchemaVersion);
   const engineSchemaVersion = typeof rawEngineSchemaVersion === "number" && rawEngineSchemaVersion >= 1
     ? Math.trunc(rawEngineSchemaVersion)
-    : extractedEngine
-      ? 1
-      : 0;
-
-  if (!engine) {
-    throw new Error("engine envelope is missing in run outputs");
-  }
+    : 1;
 
   return {
     runId: run.id,
     resultDto,
-    engine,
+    engine: rawEngine,
     engineSchemaVersion,
+    fallbacks: [],
   };
 }

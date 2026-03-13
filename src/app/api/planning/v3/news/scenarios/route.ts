@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { readNewsScenarioPack } from "@/lib/news/scenarioReader";
-import { readLatestDraftSummaryForStress } from "@/lib/news/stressContext";
-import { type NewsScenarioPack } from "@/lib/news/types";
-import { readExposureProfile } from "../../../../../../../planning/v3/exposure/store";
-import { computeImpact } from "../../../../../../../planning/v3/financeNews/impactModel";
-import { runStress } from "../../../../../../../planning/v3/financeNews/stressRunner";
-import { type IndicatorGrade } from "../../../../../../../planning/v3/financeNews/contracts";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
+import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { readExposureProfile } from "@/lib/planning/v3/exposure/store";
+import { type IndicatorGrade } from "@/lib/planning/v3/financeNews/contracts";
+import { computeImpact } from "@/lib/planning/v3/financeNews/impactModel";
+import { readLatestDraftSummaryForStress, readNewsScenarioPack, type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
+import { runStress } from "@/lib/planning/v3/financeNews/stressRunner";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 const ScenariosResponseSchema = z.object({
   ok: z.literal(true),
@@ -18,7 +15,7 @@ const ScenariosResponseSchema = z.object({
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -133,9 +130,6 @@ async function enrichScenarioPack(pack: NewsScenarioPack | null): Promise<NewsSc
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

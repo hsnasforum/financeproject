@@ -29,6 +29,7 @@ export async function fetchFixtureSeries(spec: SeriesSpec, _options: FetchSeries
     notes?: string;
   };
 }> {
+  void _options;
   const fixtureName = fixtureNameFromExternalId(spec.externalId);
   if (!fixtureName) {
     throw new ConnectorError("INPUT", `fixture_external_id_invalid:${spec.externalId}`);

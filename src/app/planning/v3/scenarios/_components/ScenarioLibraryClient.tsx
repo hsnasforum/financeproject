@@ -2,8 +2,16 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import {
+  reportHeroActionLinkClassName,
+  reportHeroPrimaryActionClassName,
+  ReportHeroCard,
+  ReportHeroStatCard,
+  ReportHeroStatGrid,
+} from "@/components/ui/ReportTone";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 
 type ScenarioLibraryClientProps = {
@@ -83,6 +91,7 @@ function rowsToDraft(rows: ScenarioRow[]): ScenarioDraftRow[] {
 export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -90,9 +99,11 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
   const [initialRowsJson, setInitialRowsJson] = useState("[]");
 
   const dirty = useMemo(() => JSON.stringify(draftRows) !== initialRowsJson, [draftRows, initialRowsJson]);
+  const enabledCount = useMemo(() => draftRows.filter((row) => row.enabled).length, [draftRows]);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     setError("");
     try {
       const response = await fetch("/api/planning/v3/scenarios/library", {
@@ -113,7 +124,7 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
       setDraftRows(nextRows);
       setInitialRowsJson(JSON.stringify(nextRows));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "시나리오 라이브러리를 불러오지 못했습니다.");
+      setLoadError(loadError instanceof Error ? loadError.message : "시나리오 라이브러리를 불러오지 못했습니다.");
       setUpdatedAt(null);
       setDraftRows([]);
       setInitialRowsJson("[]");
@@ -141,6 +152,29 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
   function setEnabled(index: number, value: boolean) {
     setDraftRows((prev) => prev.map((row, rowIndex) => (rowIndex === index ? { ...row, enabled: value } : row)));
   }
+
+  const saveStatusValue = loadError ? "확인 필요" : (dirty ? "변경 있음" : "저장됨");
+  const saveStatusDescription = loadError
+    ? "현재 오버라이드를 다시 불러와 동기화 상태를 확인해 주세요."
+    : (dirty ? "저장 버튼으로 반영" : "현재 오버라이드와 동기화");
+  const currentStatusValue = loading ? "불러오는 중" : (loadError ? "불러오기 실패" : "편집 가능");
+  const currentStatusDescription = loading
+    ? "라이브러리 상태를 확인하는 중입니다."
+    : loadError
+      ? "저장 상태를 확인하지 못했습니다. 잠시 후 다시 확인해 주세요."
+      : (saving ? "저장 처리 중" : "순서와 활성화를 조정할 수 있습니다.");
+  const templateCountValue = loading ? "확인 중" : (loadError ? "확인 필요" : `${draftRows.length}개`);
+  const templateCountDescription = loading
+    ? "시나리오 목록을 불러오는 중입니다."
+    : loadError
+      ? "현재 템플릿 수를 확인하지 못했습니다."
+      : "현재 불러온 시나리오 수";
+  const enabledCountValue = loading ? "확인 중" : (loadError ? "확인 필요" : `${enabledCount}개`);
+  const enabledCountDescription = loading
+    ? "활성 상태를 계산하는 중입니다."
+    : loadError
+      ? "활성 상태를 다시 불러와 확인해 주세요."
+      : "브리핑에 반영될 활성 상태";
 
   async function handleSave() {
     setSaving(true);
@@ -185,36 +219,44 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
   return (
     <PageShell>
       <div className="space-y-5">
-        <Card className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-xl font-black text-slate-900">Planning v3 시나리오 라이브러리</h1>
-              <p className="text-sm text-slate-600">SSOT 템플릿의 활성화와 순서를 로컬 오버라이드로 관리합니다.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Link href="/planning/v3/news" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">
+        <ReportHeroCard
+          kicker="Scenario Library"
+          title="시나리오 우선순위를 같은 규칙으로 관리합니다"
+          description="뉴스에서 쓰는 시나리오 템플릿의 활성화와 순서를 조정해, 브리핑과 저널에서 먼저 보여줄 흐름을 정리합니다."
+          action={(
+            <>
+              <Link href="/planning/v3/news" className={reportHeroActionLinkClassName}>
                 뉴스로 이동
               </Link>
               <button
                 type="button"
                 disabled={loading || saving || !dirty}
                 onClick={() => { void handleSave(); }}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className={`${reportHeroPrimaryActionClassName} disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 {saving ? "저장 중..." : "저장"}
               </button>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500">마지막 저장 시각: {formatDateTime(updatedAt)}</p>
-          <p className="text-xs text-slate-500">자동 저장은 비활성화되어 있으며, 저장 버튼으로만 반영됩니다.</p>
-          {notice ? <p className="text-xs font-semibold text-emerald-700">{notice}</p> : null}
-          {error ? <p className="text-xs font-semibold text-rose-700">{error}</p> : null}
-        </Card>
+            </>
+          )}
+        >
+          <p className="text-xs text-white/60">마지막 저장 시각: {formatDateTime(updatedAt)} · 자동 저장은 비활성화되어 있습니다.</p>
+          <ReportHeroStatGrid>
+            <ReportHeroStatCard label="전체 템플릿" value={templateCountValue} description={templateCountDescription} />
+            <ReportHeroStatCard label="활성 템플릿" value={enabledCountValue} description={enabledCountDescription} />
+            <ReportHeroStatCard label="저장 상태" value={saveStatusValue} description={saveStatusDescription} />
+            <ReportHeroStatCard label="현재 상태" value={currentStatusValue} description={currentStatusDescription} />
+          </ReportHeroStatGrid>
+          {notice ? <p className="text-xs font-semibold text-emerald-300">{notice}</p> : null}
+          {loadError ? <p className="text-xs font-semibold text-rose-300">{loadError}</p> : null}
+          {error ? <p className="text-xs font-semibold text-rose-300">{error}</p> : null}
+        </ReportHeroCard>
 
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">템플릿 목록</h2>
           {loading ? (
             <p className="text-sm text-slate-600">불러오는 중...</p>
+          ) : loadError ? (
+            <p className="text-sm text-slate-600">시나리오 라이브러리를 다시 불러오지 못했습니다.</p>
           ) : draftRows.length < 1 ? (
             <p className="text-sm text-slate-600">표시할 템플릿이 없습니다.</p>
           ) : (
@@ -247,22 +289,26 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex items-center gap-1">
-                          <button
+                          <Button
                             type="button"
-                            className="rounded border border-slate-300 px-2 py-0.5 text-xs disabled:opacity-40"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 rounded-lg px-2 text-xs"
                             disabled={index === 0}
                             onClick={() => moveRow(index, -1)}
                           >
                             위
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             type="button"
-                            className="rounded border border-slate-300 px-2 py-0.5 text-xs disabled:opacity-40"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 rounded-lg px-2 text-xs"
                             disabled={index >= draftRows.length - 1}
                             onClick={() => moveRow(index, 1)}
                           >
                             아래
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>

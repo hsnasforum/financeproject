@@ -1,4 +1,5 @@
 import { type AssumptionsSnapshot } from "./types";
+import { roundToDigits } from "../calc";
 import { type AssumptionsV2 } from "../v2/scenarios";
 import { type SimulationAssumptionsV2 } from "../v2/types";
 
@@ -7,7 +8,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 function normalizePct(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundToDigits(value, 2);
 }
 
 export function mapSnapshotToAssumptionsV2(

@@ -1,5 +1,6 @@
 import { lookupWarningGlossaryKo } from "./warningGlossary.ko";
 import { type ResultDtoV1 } from "../resultDto";
+import { roundKrw } from "../../calc/roundingPolicy";
 
 export type SummarizeRunDiffArgs = {
   base: ResultDtoV1;
@@ -25,7 +26,7 @@ function asNumber(value: unknown): number | undefined {
 
 function formatKrw(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-  return `₩${Math.round(value).toLocaleString("ko-KR")}`;
+  return `₩${roundKrw(value).toLocaleString("ko-KR")}`;
 }
 
 function normalizePct(value: unknown): number | undefined {

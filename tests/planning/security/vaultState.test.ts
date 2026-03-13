@@ -104,4 +104,15 @@ describe("vault state (master key wrapping)", () => {
     status = await getVaultStatus();
     expect(status.unlocked).toBe(false);
   });
+
+  it("treats corrupted config json as an unconfigured vault", async () => {
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
+    fs.writeFileSync(configPath, "{ invalid json", "utf-8");
+
+    const status = await getVaultStatus();
+
+    expect(status.configured).toBe(false);
+    expect(status.unlocked).toBe(false);
+    expect(status.autoLockMinutes).toBe(30);
+  });
 });

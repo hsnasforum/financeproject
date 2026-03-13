@@ -8,16 +8,27 @@ export function applyDepositProtectionPolicy(input: {
   matchedFinPrdtCdSet: Set<string>;
   bonus?: number;
 }): RecommendedItem[] {
-  const { items } = input;
-  void input.mode;
-  void input.matchedFinPrdtCdSet;
-  void input.bonus;
+  const { items, mode, matchedFinPrdtCdSet } = input;
+  const bonus = typeof input.bonus === "number" ? input.bonus : DEFAULT_DEPOSIT_PROTECTION_BONUS;
 
-  return items.map((item) => ({
-    ...item,
-    signals: {
-      ...(item.signals ?? {}),
-      depositProtection: "unknown",
-    },
-  }));
+  const withSignals = items.map((item) => {
+    const matched = matchedFinPrdtCdSet.has(item.finPrdtCd);
+    return {
+      ...item,
+      ...(mode === "prefer" && matched
+        ? { finalScore: item.finalScore + bonus }
+        : {}),
+      signals: {
+        ...(item.signals ?? {}),
+        depositProtection: matched ? "matched" : "unknown",
+      },
+    } satisfies RecommendedItem;
+  });
+
+  if (mode !== "require") {
+    return withSignals;
+  }
+
+  const requiredOnly = withSignals.filter((item) => item.signals?.depositProtection === "matched");
+  return requiredOnly;
 }

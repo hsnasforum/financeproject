@@ -1,9 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  BodyEmptyState,
+  BodyInset,
+  BodySectionHeading,
+  BodyStatusInset,
+  BodyTableFrame,
+  bodyChoiceRowClassName,
+  bodyCompactFieldClassName,
+  bodyFieldClassName,
+  bodyTextAreaClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -174,6 +185,23 @@ function extractApiError(payload: unknown): ApiError {
   };
 }
 
+function hasCustomMappingSelection(
+  mapping: MappingState,
+  inferred: CsvMappingInferResult | null,
+): boolean {
+  const current = toMappingPayload(mapping);
+  if (!inferred) return Object.keys(current).length > 0;
+
+  const suggested = toMappingPayload(applyInferredMapping(inferred));
+  const keys = new Set([...Object.keys(current), ...Object.keys(suggested)]);
+  for (const key of keys) {
+    if (asString(current[key as keyof CsvColumnMapping]) !== asString(suggested[key as keyof CsvColumnMapping])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isImportResult(payload: unknown): payload is ImportResult {
   if (!isRecord(payload)) return false;
   if (!Array.isArray(payload.cashflow) || !isRecord(payload.meta) || !isRecord(payload.draftPatch)) return false;
@@ -244,6 +272,12 @@ function buildCsrfQuery(): string {
   const csrf = readDevCsrfToken();
   if (!csrf) return "";
   return `?csrf=${encodeURIComponent(csrf)}`;
+}
+
+function buildImportDraftPath(): string {
+  const csrf = readDevCsrfToken();
+  if (!csrf) return "/api/planning/v3/import/csv";
+  return `/api/planning/v3/import/csv?csrf=${encodeURIComponent(csrf)}`;
 }
 
 export function ImportCsvClient() {
@@ -499,16 +533,18 @@ export function ImportCsvClient() {
     setSavedDraftId("");
 
     try {
-      const response = await fetch("/api/planning/v3/import/csv", {
+      const csrf = readDevCsrfToken();
+      const response = await fetch(buildImportDraftPath(), {
         method: "POST",
         credentials: "same-origin",
         headers: {
           "content-type": "application/json",
+          ...(csrf ? { "x-csrf-token": csrf } : {}),
         },
-        body: JSON.stringify(withDevCsrf({
+        body: JSON.stringify({
           csvText,
           mapping: mappingPayload,
-        })),
+        }),
       });
 
       const payload = await response.json().catch(() => null);
@@ -535,7 +571,7 @@ export function ImportCsvClient() {
           months: asNumber(payload.meta.months),
         },
         draftPatch: payload.draftPatch,
-        mappingUsed: isRecord(payload.mappingUsed) ? payload.mappingUsed as CsvColumnMapping : null,
+        mappingUsed: hasCustomMappingSelection(mapping, inferred) ? mappingPayload : null,
       });
     } catch {
       setApiError({ message: "CSV 가져오기에 실패했습니다.", details: [] });
@@ -639,11 +675,11 @@ export function ImportCsvClient() {
           <h1 className="text-xl font-black text-slate-900">Planning v3 CSV Import</h1>
           <p className="text-sm text-slate-600">CSV 헤더 추천 매핑 + 파싱 미리보기 진단으로 안전하게 초안을 생성합니다.</p>
 
-          <div className="space-y-2">
+          <BodyInset className="space-y-2">
             <label className="text-sm font-semibold text-slate-700" htmlFor="v3-import-file">CSV 파일</label>
             <input
               accept=".csv,text/csv"
-              className="block w-full text-sm"
+              className={bodyFieldClassName}
               data-testid="v3-csv-file"
               id="v3-import-file"
               onChange={(event) => {
@@ -667,18 +703,18 @@ export function ImportCsvClient() {
               >
                 {directImportLoading ? "배치 저장 중..." : "CSV 배치로 저장"}
               </Button>
-              <Link className="text-xs font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/transactions/batches">
+              <BodyActionLink className="text-xs" href="/planning/v3/transactions/batches">
                 배치 목록 보기
-              </Link>
+              </BodyActionLink>
             </div>
             {directImportStatus ? <p className="text-xs text-slate-600">{directImportStatus}</p> : null}
-            {directImportError ? <p className="text-xs font-semibold text-rose-700">{directImportError}</p> : null}
-          </div>
+            {directImportError ? <BodyStatusInset tone="danger">{directImportError}</BodyStatusInset> : null}
+          </BodyInset>
 
           <div className="space-y-2">
             <label className="text-sm font-semibold text-slate-700" htmlFor="v3-import-csv-text">CSV 텍스트</label>
             <textarea
-              className="min-h-48 w-full rounded-xl border border-slate-200 p-3 font-mono text-xs"
+              className={bodyTextAreaClassName}
               id="v3-import-csv-text"
               onChange={(event) => {
                 setCsvText(event.currentTarget.value);
@@ -695,9 +731,8 @@ export function ImportCsvClient() {
         </Card>
 
         <Card className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-bold text-slate-900">추천 매핑</h2>
-            {inferred ? (
+          <BodySectionHeading
+            action={inferred ? (
               <Button
                 data-testid="v3-mapping-suggest-apply"
                 onClick={() => {
@@ -710,7 +745,9 @@ export function ImportCsvClient() {
                 추천 매핑 적용
               </Button>
             ) : null}
-          </div>
+            description="헤더를 기준으로 날짜, 금액, 설명 컬럼을 먼저 맞춘 뒤 파싱 미리보기로 오류를 줄입니다."
+            title="추천 매핑"
+          />
 
           {inferred ? (
             <div className="flex flex-wrap gap-2 text-xs">
@@ -734,7 +771,7 @@ export function ImportCsvClient() {
             <label className="text-sm font-semibold text-slate-700">
               date
               <select
-                className="mt-1 block w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                className={bodyFieldClassName}
                 data-testid="v3-mapping-date"
                 onChange={(event) => {
                   const value = event.currentTarget.value;
@@ -752,7 +789,7 @@ export function ImportCsvClient() {
             <label className="text-sm font-semibold text-slate-700">
               desc (선택)
               <select
-                className="mt-1 block w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                className={bodyFieldClassName}
                 data-testid="v3-mapping-desc"
                 onChange={(event) => {
                   const value = event.currentTarget.value;
@@ -771,7 +808,7 @@ export function ImportCsvClient() {
           <fieldset className="space-y-3">
             <legend className="text-sm font-semibold text-slate-700">금액 모드</legend>
             <div className="flex flex-wrap items-center gap-4 text-sm text-slate-700">
-              <label className="inline-flex items-center gap-2">
+              <label className={bodyChoiceRowClassName}>
                 <input
                   checked={mapping.amountMode === "amount"}
                   name="amount-mode"
@@ -782,7 +819,7 @@ export function ImportCsvClient() {
                 />
                 금액 컬럼 1개
               </label>
-              <label className="inline-flex items-center gap-2">
+              <label className={bodyChoiceRowClassName}>
                 <input
                   checked={mapping.amountMode === "inout"}
                   name="amount-mode"
@@ -798,7 +835,7 @@ export function ImportCsvClient() {
             <label className="text-sm font-semibold text-slate-700">
               amount
               <select
-                className="mt-1 block w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                className={bodyFieldClassName}
                 data-testid="v3-mapping-amount"
                 disabled={mapping.amountMode !== "amount"}
                 onChange={(event) => {
@@ -818,7 +855,7 @@ export function ImportCsvClient() {
               <label className="text-sm font-semibold text-slate-700">
                 inflow
                 <select
-                  className="mt-1 block w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                  className={bodyFieldClassName}
                   data-testid="v3-mapping-inflow"
                   disabled={mapping.amountMode !== "inout"}
                   onChange={(event) => {
@@ -837,7 +874,7 @@ export function ImportCsvClient() {
               <label className="text-sm font-semibold text-slate-700">
                 outflow
                 <select
-                  className="mt-1 block w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                  className={bodyFieldClassName}
                   data-testid="v3-mapping-outflow"
                   disabled={mapping.amountMode !== "inout"}
                   onChange={(event) => {
@@ -855,20 +892,22 @@ export function ImportCsvClient() {
             </div>
           </fieldset>
 
-          <div className="rounded-xl border border-slate-200 p-3" data-testid="v3-mapping-errors">
+          <BodyInset data-testid="v3-mapping-errors">
             {mappingErrors.length > 0 || previewValidationErrors.length > 0 ? (
-              <ul className="list-disc space-y-1 pl-5 text-sm text-rose-700">
-                {mappingErrors.map((error, index) => (
-                  <li key={`local-${error.field}-${index}`}>{error.message}</li>
-                ))}
-                {previewValidationErrors.map((error, index) => (
-                  <li key={`server-${error.field}-${index}`}>{error.message}</li>
-                ))}
-              </ul>
+              <BodyStatusInset tone="danger">
+                <ul className="list-disc space-y-1 pl-5 text-sm">
+                  {mappingErrors.map((error, index) => (
+                    <li key={`local-${error.field}-${index}`}>{error.message}</li>
+                  ))}
+                  {previewValidationErrors.map((error, index) => (
+                    <li key={`server-${error.field}-${index}`}>{error.message}</li>
+                  ))}
+                </ul>
+              </BodyStatusInset>
             ) : (
-              <p className="text-sm text-emerald-700">매핑 검증을 통과했습니다.</p>
+              <BodyStatusInset tone="success">매핑 검증을 통과했습니다.</BodyStatusInset>
             )}
-          </div>
+          </BodyInset>
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -882,17 +921,17 @@ export function ImportCsvClient() {
             >
               {submitting ? "가져오는 중..." : "가져오기 실행"}
             </Button>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/drafts">
+            <BodyActionLink href="/planning/v3/drafts">
               초안 목록
-            </Link>
+            </BodyActionLink>
           </div>
         </Card>
 
         <Card className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900">미리보기</h2>
-            {previewLoading ? <span className="text-xs text-slate-500">갱신 중...</span> : null}
-          </div>
+          <BodySectionHeading
+            action={previewLoading ? <span className="text-xs text-slate-500">갱신 중...</span> : null}
+            title="미리보기"
+          />
 
           <div className="text-sm text-slate-700" data-testid="v3-csv-preview-stats">
             {previewStats
@@ -901,10 +940,10 @@ export function ImportCsvClient() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm font-semibold text-slate-700">
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
               저장 계좌
               <select
-                className="ml-2 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+                className={`${bodyCompactFieldClassName} min-w-52`}
                 disabled={accountLoading || accounts.length < 1}
                 onChange={(event) => {
                   setSelectedAccountId(event.currentTarget.value);
@@ -919,9 +958,9 @@ export function ImportCsvClient() {
                 ))}
               </select>
             </label>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/accounts">
+            <BodyActionLink href="/planning/v3/accounts">
               계좌 관리
-            </Link>
+            </BodyActionLink>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -943,29 +982,28 @@ export function ImportCsvClient() {
               </p>
             ) : null}
             {savedBatch ? (
-              <Link
-                className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                href={`/planning/v3/transactions/batches/${encodeURIComponent(savedBatch.id)}`}
-              >
+              <BodyActionLink href={`/planning/v3/transactions/batches/${encodeURIComponent(savedBatch.id)}`}>
                 배치 상세 보기
-              </Link>
+              </BodyActionLink>
             ) : null}
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/transactions">
+            <BodyActionLink href="/planning/v3/transactions">
               배치 목록
-            </Link>
+            </BodyActionLink>
           </div>
 
-          <div className="rounded-xl border border-slate-200 p-3" data-testid="v3-csv-preview-errors">
+          <BodyInset data-testid="v3-csv-preview-errors">
             {previewTopReasons.length > 0 ? (
-              <ul className="list-disc space-y-1 pl-5 text-sm text-rose-700">
-                {previewTopReasons.map((entry) => (
-                  <li key={entry}>{entry}</li>
-                ))}
-              </ul>
+              <BodyStatusInset tone="danger">
+                <ul className="list-disc space-y-1 pl-5 text-sm">
+                  {previewTopReasons.map((entry) => (
+                    <li key={entry}>{entry}</li>
+                  ))}
+                </ul>
+              </BodyStatusInset>
             ) : (
-              <p className="text-sm text-slate-600">실패 요약이 없습니다.</p>
+              <BodyEmptyState className="px-3 py-4" description="파싱 실패 상위 사유가 없으면 이 상태로 유지됩니다." title="실패 요약이 없습니다." />
             )}
-          </div>
+          </BodyInset>
 
           {previewWarnings.length > 0 ? (
             <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600">
@@ -975,7 +1013,7 @@ export function ImportCsvClient() {
             </ul>
           ) : null}
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <BodyTableFrame>
             <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-csv-preview-table">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
@@ -1006,7 +1044,7 @@ export function ImportCsvClient() {
                 )}
               </tbody>
             </table>
-          </div>
+          </BodyTableFrame>
         </Card>
 
         {apiError ? (
@@ -1025,7 +1063,10 @@ export function ImportCsvClient() {
         {result ? (
           <>
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">Import 결과</h2>
+              <BodySectionHeading
+                description="가져온 행 수와 집계 월 수를 확인한 뒤 초안을 저장하거나 다음 단계로 이동할 수 있습니다."
+                title="Import 결과"
+              />
               <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
                 <div><dt className="font-semibold">rows</dt><dd>{result.meta.rows.toLocaleString("ko-KR")}</dd></div>
                 <div><dt className="font-semibold">months</dt><dd>{result.meta.months.toLocaleString("ko-KR")}</dd></div>
@@ -1045,42 +1086,46 @@ export function ImportCsvClient() {
                   {saveDraftLoading ? "저장 중..." : "초안 저장"}
                 </Button>
                 {savedDraftId ? (
-                  <Link
-                    className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                    href="/planning/v3/drafts"
-                  >
+                  <BodyActionLink href="/planning/v3/drafts">
                     초안 목록 보기
-                  </Link>
+                  </BodyActionLink>
                 ) : null}
               </div>
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">월별 Cashflow</h2>
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
-                    <tr>
-                      <th className="px-3 py-2 text-left">YYYY-MM</th>
-                      <th className="px-3 py-2 text-right">income</th>
-                      <th className="px-3 py-2 text-right">expense</th>
-                      <th className="px-3 py-2 text-right">net</th>
-                      <th className="px-3 py-2 text-right">txCount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {result.cashflow.map((row) => (
-                      <tr key={row.ym}>
-                        <td className="px-3 py-2 font-semibold text-slate-900">{row.ym}</td>
-                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.incomeKrw)}</td>
-                        <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.expenseKrw)}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(row.netKrw)}</td>
-                        <td className="px-3 py-2 text-right text-slate-700">{row.txCount.toLocaleString("ko-KR")}</td>
+              <BodySectionHeading
+                description="월별 수입, 지출, 순유입을 먼저 확인해 초안 값이 과도하게 튀지 않는지 점검합니다."
+                title="월별 Cashflow"
+              />
+              {result.cashflow.length > 0 ? (
+                <BodyTableFrame>
+                  <table className="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                      <tr>
+                        <th className="px-3 py-2 text-left">YYYY-MM</th>
+                        <th className="px-3 py-2 text-right">income</th>
+                        <th className="px-3 py-2 text-right">expense</th>
+                        <th className="px-3 py-2 text-right">net</th>
+                        <th className="px-3 py-2 text-right">txCount</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {result.cashflow.map((row) => (
+                        <tr key={row.ym}>
+                          <td className="px-3 py-2 font-semibold text-slate-900">{row.ym}</td>
+                          <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.incomeKrw)}</td>
+                          <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.expenseKrw)}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(row.netKrw)}</td>
+                          <td className="px-3 py-2 text-right text-slate-700">{row.txCount.toLocaleString("ko-KR")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </BodyTableFrame>
+              ) : (
+                <BodyEmptyState description="가져온 데이터에서 월별 집계가 만들어지지 않았습니다." title="월별 Cashflow가 없습니다." />
+              )}
             </Card>
 
             <Card className="space-y-2">

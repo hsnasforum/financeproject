@@ -5,8 +5,7 @@ import { z } from "zod";
 import { normalizeSeriesId } from "../indicators/aliases";
 import { parseWithV3Whitelist } from "../security/whitelist";
 import { canonicalizeTopicId } from "./taxonomy";
-
-const DEFAULT_NEWS_ROOT = path.join(process.cwd(), ".data", "news");
+import { resolveNewsRootDir } from "./rootDir";
 
 const WeeklyPlanTokenSchema = z.string().trim().min(1).max(80).regex(/^[a-z0-9_:-]+$/i);
 
@@ -33,7 +32,7 @@ function assertServerOnly(): void {
   }
 }
 
-export function resolveWeeklyPlanPath(rootDir = DEFAULT_NEWS_ROOT): string {
+export function resolveWeeklyPlanPath(rootDir = resolveNewsRootDir()): string {
   return path.join(rootDir, "weekly_plan.json");
 }
 
@@ -134,7 +133,7 @@ export function normalizeWeeklyPlanInput(value: unknown): WeeklyPlanInput {
   };
 }
 
-export function readWeeklyPlan(rootDir = DEFAULT_NEWS_ROOT): WeeklyPlan | null {
+export function readWeeklyPlan(rootDir = resolveNewsRootDir()): WeeklyPlan | null {
   assertServerOnly();
   const filePath = resolveWeeklyPlanPath(rootDir);
   if (!fs.existsSync(filePath)) return null;
@@ -146,7 +145,7 @@ export function readWeeklyPlan(rootDir = DEFAULT_NEWS_ROOT): WeeklyPlan | null {
   }
 }
 
-export function writeWeeklyPlan(value: unknown, rootDir = DEFAULT_NEWS_ROOT): WeeklyPlan {
+export function writeWeeklyPlan(value: unknown, rootDir = resolveNewsRootDir()): WeeklyPlan {
   assertServerOnly();
   const normalizedInput = normalizeWeeklyPlanInput(value);
   const next = parseWithV3Whitelist(WeeklyPlanSchema, {

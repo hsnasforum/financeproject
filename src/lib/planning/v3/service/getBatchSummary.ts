@@ -1,4 +1,5 @@
 import { sanitizeRecordId } from "../../store/paths";
+import { roundKrw } from "../../calc";
 import { type BatchSummary } from "../domain/batchSummaryTypes";
 import { type CategoryId, type TxnOverride } from "../domain/types";
 import { type StoredTransaction } from "../domain/transactions";
@@ -38,7 +39,7 @@ function asString(value: unknown): string {
 function asNumber(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  return Math.round(parsed);
+  return roundKrw(parsed);
 }
 
 function normalizeBatchId(value: unknown): string {

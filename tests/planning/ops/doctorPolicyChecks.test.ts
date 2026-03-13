@@ -3,6 +3,7 @@ import {
   buildAssumptionsFreshnessDoctorCheck,
   buildMetricsDoctorChecks,
   buildRecentSuccessfulRunDoctorCheck,
+  buildSchedulerThresholdPolicyDoctorCheck,
   buildScheduledRunFailureDoctorCheck,
   computeStaleDays,
 } from "../../../src/lib/ops/doctorPolicyChecks";
@@ -144,5 +145,41 @@ describe("doctorPolicyChecks", () => {
     expect(check.status).toBe("WARN");
     expect(check.message).toContain("실패 3건");
     expect(check.details?.recentCodes).toEqual(expect.arrayContaining(["LOCKED", "STALE_ASSUMPTIONS"]));
+  });
+
+  it("warns when scheduler threshold policy file is invalid", () => {
+    const check = buildSchedulerThresholdPolicyDoctorCheck({
+      source: "default",
+      valid: false,
+      exists: true,
+      path: "/tmp/scheduler-policy.json",
+      errors: ["policy file contains invalid JSON"],
+      policy: {
+        warnConsecutiveFailures: 1,
+        riskConsecutiveFailures: 3,
+      },
+    });
+
+    expect(check.status).toBe("WARN");
+    expect(check.message).toContain("유효하지 않아");
+    expect(check.details?.errors).toEqual(expect.arrayContaining(["policy file contains invalid JSON"]));
+  });
+
+  it("passes when scheduler threshold policy file is valid", () => {
+    const check = buildSchedulerThresholdPolicyDoctorCheck({
+      source: "file",
+      valid: true,
+      exists: true,
+      path: "/tmp/scheduler-policy.json",
+      errors: [],
+      policy: {
+        warnConsecutiveFailures: 2,
+        riskConsecutiveFailures: 4,
+      },
+    });
+
+    expect(check.status).toBe("PASS");
+    expect(check.message).toContain("warn=2");
+    expect(check.message).toContain("risk=4");
   });
 });

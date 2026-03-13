@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import {
-  assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   deleteDraft,
   getDraft,
-} from "@/lib/planning/v3/drafts/draftStore";
+} from "@/lib/planning/v3/draft/store";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 
 type RouteContext = {
@@ -39,7 +37,7 @@ function pickCsrfToken(request: Request, body?: DeleteBody): string {
 
 function withReadGuard(request: Request): NextResponse | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -58,9 +56,8 @@ function withReadGuard(request: Request): NextResponse | null {
 
 function withWriteGuard(request: Request, body: DeleteBody): NextResponse | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertCsrf(request, { csrf: pickCsrfToken(request, body) });
+    requireCsrf(request, { csrf: pickCsrfToken(request, body) }, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -100,9 +97,6 @@ function summarizeDraft(cashflow: Array<{ incomeKrw: number; expenseKrw: number;
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -156,9 +150,6 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: DeleteBody = null;
   try {
     body = (await request.json()) as DeleteBody;

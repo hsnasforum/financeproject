@@ -13,22 +13,28 @@ const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 
 let root = "";
 
-function requestGet(pathname: string, host = LOCAL_HOST): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = false): Request {
+  const origin = `http://${host}`;
+  const headers = new Headers({ host });
+  if (withOriginHeaders) {
+    headers.set("origin", origin);
+    headers.set("referer", `${origin}/planning/v3/journal`);
+  }
+  return new Request(`${origin}${pathname}`, {
     method: "GET",
-    headers: { host },
+    headers,
   });
 }
 
-function requestPost(pathname: string, body: unknown, withAuth = true): Request {
+function requestPost(pathname: string, body: unknown, cookie = "dev_csrf=csrf-token"): Request {
   const headers = new Headers({
     host: LOCAL_HOST,
     origin: LOCAL_ORIGIN,
     referer: `${LOCAL_ORIGIN}/planning/v3/journal`,
     "content-type": "application/json",
   });
-  if (withAuth) {
-    headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
+  if (cookie) {
+    headers.set("cookie", cookie);
   }
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {
     method: "POST",
@@ -54,22 +60,23 @@ describe("planning v3 routines api", () => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("blocks non-local host for GET", async () => {
-    const response = await GET(requestGet("/api/planning/v3/routines/daily?date=2026-03-05", "example.com"));
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+  it("allows same-origin remote host GET", async () => {
+    const response = await GET(requestGet("/api/planning/v3/routines/daily?date=2026-03-05", "example.com", true));
+    const payload = await response.json() as { ok?: boolean; checklist?: { date?: string } };
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.checklist?.date).toBe("2026-03-05");
   });
 
-  it("requires csrf/auth for POST", async () => {
+  it("blocks csrf mismatch for POST when dev csrf cookie exists", async () => {
     const response = await POST(requestPost("/api/planning/v3/routines/daily", {
+      csrf: "csrf-body",
       checklist: { date: "2026-03-05", items: [] },
-    }, false));
+    }, "dev_csrf=csrf-cookie"));
     const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
     expect(response.status).toBe(403);
     expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("UNAUTHORIZED");
+    expect(payload.error?.code).toBe("CSRF_MISMATCH");
   });
 
   it("saves and reads checklist linked by date", async () => {
@@ -92,7 +99,7 @@ describe("planning v3 routines api", () => {
     expect(savedPayload.checklist?.date).toBe("2026-03-05");
     expect(savedPayload.checklist?.items?.find((row) => row.id === "refresh_news")?.checked).toBe(true);
 
-    const read = await GET(requestGet("/api/planning/v3/routines/daily?date=2026-03-05"));
+    const read = await GET(requestGet("/api/planning/v3/routines/daily?date=2026-03-05", LOCAL_HOST, true));
     const readPayload = await read.json() as {
       ok?: boolean;
       checklist?: { date?: string; savedAt?: string | null; items?: Array<{ id?: string; checked?: boolean }> };

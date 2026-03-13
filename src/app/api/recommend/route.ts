@@ -1,14 +1,8 @@
-import { prisma } from "@/lib/db/prisma";
-import { ensureProductBest } from "@/lib/finlife/best";
-import { type NormalizedProduct } from "@/lib/finlife/types";
 import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { pushTiming, timingsToDebugMap, type TimingEntry, withTiming } from "../../../lib/http/timing";
 import { applyDepositProtectionPolicy } from "@/lib/recommend/depositProtection";
-import { parseKdbRateAndTerm } from "@/lib/recommend/external/kdb";
 import { recommendCandidates, type RecommendCandidate } from "@/lib/recommend/score";
-import { toNormalizedOption } from "@/lib/recommend/selectOption";
 import {
-  type CandidatePool,
   type DepositProtectionMode,
   type UserRecommendProfile,
 } from "@/lib/recommend/types";
@@ -20,163 +14,31 @@ import { getUnifiedProducts } from "@/lib/sources/unified";
 import { pushError } from "../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../lib/observability/trace";
 
-const KDB_CANDIDATE_LIMIT = 500;
-
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return isObject(value) ? value : null;
-}
+function buildPlanningLinkageMeta(planningContext: UserRecommendProfile["planningContext"]) {
+  const metrics = [
+    planningContext?.monthlyIncomeKrw,
+    planningContext?.monthlyExpenseKrw,
+    planningContext?.liquidAssetsKrw,
+    planningContext?.debtBalanceKrw,
+  ];
+  const metricsCount = metrics.filter((value) => typeof value === "number" && Number.isFinite(value)).length;
 
-function parseKdbTermToSaveTrm(termMonths: number | null): string | undefined {
-  if (termMonths === null || !Number.isFinite(termMonths) || termMonths <= 0) return undefined;
-  return String(Math.trunc(termMonths));
-}
-
-async function loadLegacyFinlifeCandidates(kind: "deposit" | "saving") {
-  const unified = await getUnifiedProducts({
-    kind,
-    includeSources: ["finlife"],
-    sourceId: "finlife",
-    cursor: null,
-    q: null,
-    refresh: false,
-    onlyNew: false,
-    changedSince: null,
-    includeTimestamps: false,
-    limit: 1000,
-    sort: "name",
-    qMode: "contains",
-  });
-
-  const finPrdtCds = [...new Set(unified.items.map((item) => item.externalKey).filter(Boolean))];
-  if (finPrdtCds.length === 0) {
-    return {
-      candidates: [] as Array<{ sourceId: "finlife"; productId: number; finPrdtCd: string; product: NormalizedProduct; extraReasons: string[]; badges: string[] }>,
-      productIdToFinPrdtCd: new Map<number, string>(),
-    };
-  }
-
-  const rows = await prisma.product.findMany({
-    where: {
-      kind,
-      finPrdtCd: { in: finPrdtCds },
-    },
-    select: {
-      id: true,
-      finPrdtCd: true,
-      name: true,
-      raw: true,
-      provider: { select: { name: true } },
-      options: {
-        select: {
-          saveTrm: true,
-          intrRate: true,
-          intrRate2: true,
-          raw: true,
-        },
-      },
-    },
-  });
-
-  const productIdToFinPrdtCd = new Map<number, string>();
-  const candidates = rows.map((row) => {
-    productIdToFinPrdtCd.set(row.id, row.finPrdtCd);
-    const raw = (row.raw as Record<string, unknown> | null) ?? {};
-    const product = {
-      fin_prdt_cd: row.finPrdtCd,
-      fin_prdt_nm: typeof raw.fin_prdt_nm === "string" ? raw.fin_prdt_nm : (row.name ?? row.finPrdtCd),
-      kor_co_nm: typeof raw.kor_co_nm === "string" ? raw.kor_co_nm : (row.provider?.name ?? ""),
-      options: row.options.map((option) => toNormalizedOption({
-        saveTrm: option.saveTrm,
-        intrRate: option.intrRate,
-        intrRate2: option.intrRate2,
-        raw: asRecord(option.raw),
-      })),
-      raw,
-    };
-    ensureProductBest(product);
-
-    return {
-      sourceId: "finlife" as const,
-      productId: row.id,
-      finPrdtCd: row.finPrdtCd,
-      product,
-      extraReasons: [] as string[],
-      badges: ["FINLIFE"],
-    };
-  });
-
-  return { candidates, productIdToFinPrdtCd };
-}
-
-async function loadKdbCandidates(kind: "deposit" | "saving") {
-  const rows = await prisma.externalProduct.findMany({
-    where: {
-      sourceId: "datago_kdb",
-      kind,
-    },
-    orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
-    take: KDB_CANDIDATE_LIMIT,
-    select: {
-      externalKey: true,
-      providerNameRaw: true,
-      productNameRaw: true,
-      rawJson: true,
-    },
-  });
-
-  return rows
-    .map((row) => {
-      const raw = asRecord(row.rawJson) ?? {};
-      const parsed = parseKdbRateAndTerm({
-        hitIrtCndCone: typeof raw.hitIrtCndCone === "string" ? raw.hitIrtCndCone : undefined,
-        prdJinTrmCone: typeof raw.prdJinTrmCone === "string" ? raw.prdJinTrmCone : undefined,
-      });
-      if (parsed.options.length === 0) return null;
-
-      const options = parsed.options
-        .filter((opt) => typeof opt.ratePct === "number" && Number.isFinite(opt.ratePct))
-        .map((opt) => toNormalizedOption({
-          saveTrm: parseKdbTermToSaveTrm(opt.termMonths),
-          intrRate: opt.ratePct,
-          intrRate2: opt.ratePct,
-          raw: {
-            source: "datago_kdb",
-            evidence: opt.evidence,
-          },
-        }));
-      if (options.length === 0) return null;
-
-      const product = {
-        fin_prdt_cd: `KDB:${row.externalKey}`,
-        fin_prdt_nm: row.productNameRaw || "KDB 상품",
-        kor_co_nm: row.providerNameRaw || "한국산업은행(KDB)",
-        options,
-        raw,
-      };
-      ensureProductBest(product);
-
-      return {
-        sourceId: "datago_kdb" as const,
-        product,
-        extraReasons: [
-          "KDB 금리/기간은 원문 문자열 파싱 결과(가정 포함)입니다.",
-          ...parsed.notes,
-        ],
-        badges: ["KDB"],
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null);
+  return {
+    readiness: metricsCount === 0 ? "none" : metricsCount === metrics.length ? "ready" : "partial",
+    metricsCount,
+    stageInference: "disabled" as const,
+  };
 }
 
 async function loadUnifiedCandidates(input: {
   kind: "deposit" | "saving";
   profile: UserRecommendProfile;
 }): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
-  const sourceSet = new Set(input.profile.candidateSources ?? ["finlife"]);
+  const sourceSet = new Set(input.profile.candidateSources ?? ["finlife", "datago_kdb"]);
   if (sourceSet.size === 0) sourceSet.add("finlife");
 
   const includeSources: Array<"finlife" | "datago_kdb"> = [];
@@ -226,35 +88,11 @@ async function loadUnifiedCandidates(input: {
 async function getCandidates(input: {
   kind: "deposit" | "saving";
   profile: UserRecommendProfile;
-  candidatePool: CandidatePool;
 }): Promise<{ candidates: RecommendCandidate[]; matchedFinPrdtCdSet: Set<string> }> {
-  if (input.candidatePool === "unified") {
-    return loadUnifiedCandidates({
-      kind: input.kind,
-      profile: input.profile,
-    });
-  }
-
-  const includeFinlife = (input.profile.candidateSources ?? ["finlife"]).includes("finlife");
-  const includeKdb = (input.profile.candidateSources ?? ["finlife"]).includes("datago_kdb");
-
-  const finlifeLoaded = includeFinlife
-    ? await loadLegacyFinlifeCandidates(input.kind)
-    : { candidates: [] as Array<{ sourceId: "finlife"; productId: number; finPrdtCd: string; product: NormalizedProduct; extraReasons: string[]; badges: string[] }>, productIdToFinPrdtCd: new Map<number, string>() };
-  const kdbCandidates = includeKdb ? await loadKdbCandidates(input.kind) : [];
-
-  return {
-    candidates: [
-      ...finlifeLoaded.candidates.map((row) => ({
-        sourceId: row.sourceId,
-        product: row.product,
-        extraReasons: row.extraReasons,
-        badges: row.badges,
-      })),
-      ...kdbCandidates,
-    ],
-    matchedFinPrdtCdSet: new Set<string>(),
-  };
+  return loadUnifiedCandidates({
+    kind: input.kind,
+    profile: input.profile,
+  });
 }
 
 export async function POST(request: Request) {
@@ -309,12 +147,12 @@ export async function POST(request: Request) {
       }));
     }
     const profile: UserRecommendProfile = parsedProfile.value;
+    const planningLinkage = buildPlanningLinkageMeta(profile.planningContext);
 
-    const candidatePool = profile.candidatePool ?? "legacy";
+    const candidatePool = profile.candidatePool ?? "unified";
     const candidateResult = await withTiming("recommend.loadCandidates", () => getCandidates({
       kind: profile.kind,
       profile,
-      candidatePool,
     }));
     pushTiming(timings, candidateResult.timing);
     const candidateBundle = candidateResult.value;
@@ -327,8 +165,10 @@ export async function POST(request: Request) {
             topN: profile.topN,
             rateMode: profile.rateMode,
             candidatePool,
-            candidateSources: profile.candidateSources ?? ["finlife"],
+            candidateSources: profile.candidateSources ?? ["finlife", "datago_kdb"],
             depositProtection: profile.depositProtection ?? "any",
+            planningContext: profile.planningContext ?? null,
+            planningLinkage,
             weights: profile.weights,
             assumptions: {
               rateSelectionPolicy: "금리 선택 정책: 최고금리 우선(기본값)",
@@ -384,13 +224,15 @@ export async function POST(request: Request) {
           topN: profile.topN,
           rateMode: profile.rateMode,
           candidatePool,
-          candidateSources: profile.candidateSources ?? ["finlife"],
+          candidateSources: profile.candidateSources ?? ["finlife", "datago_kdb"],
           depositProtection: protectionMode,
+          planningContext: profile.planningContext ?? null,
+          planningLinkage,
           weights: recommendedBase.weights,
           assumptions: {
             ...recommendedBase.assumptions,
             kdbParsingPolicy: "KDB 금리/기간은 원문 문자열 파싱과 휴리스틱 가정(기간별 동일금리 가정 가능)에 기반합니다.",
-            depositProtectionPolicy: "보호 신호 필터(any/prefer/require)는 현재 비활성화 상태입니다.",
+            depositProtectionPolicy: "prefer는 보호 신호 상품에 가산점을 주고, require는 보호 신호 상품만 남깁니다.",
           },
           fallback: {
             mode: "LIVE",

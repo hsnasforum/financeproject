@@ -13,6 +13,9 @@ import {
 } from "./store";
 import { shiftKstDay, toKstDayKey } from "./trend";
 
+const env = process.env as Record<string, string | undefined>;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+
 describe("planning v3 news recovery", () => {
   const roots: string[] = [];
 
@@ -20,6 +23,8 @@ describe("planning v3 news recovery", () => {
     for (const root of roots.splice(0, roots.length)) {
       fs.rmSync(root, { recursive: true, force: true });
     }
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
   });
 
   it("builds preview summary for both actions", () => {
@@ -83,5 +88,24 @@ describe("planning v3 news recovery", () => {
 
     const trends30 = readTrendsCache(30, root);
     expect(trends30?.date).toBe(todayKst);
+  });
+
+  it("uses PLANNING_DATA_DIR when recovery runs without explicit rootDir", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-v3-recovery-env-default-"));
+    roots.push(root);
+    env.PLANNING_DATA_DIR = path.join(root, "planning");
+
+    upsertItems(FIXTURE_ITEMS, path.join(root, "news"));
+
+    const now = new Date(FIXTURE_NOW_ISO);
+    const result = runRecoveryAction("rebuild_caches", { now });
+
+    expect(result.wroteCount).toBeGreaterThanOrEqual(6);
+    expect(fs.existsSync(path.join(root, "news", "cache", "today.latest.json"))).toBe(true);
+    expect(readTodayCache()?.date).toBe(toKstDayKey(now));
+    expect(readScenariosCache()?.scenarios.cards.length).toBe(3);
+
+    const preview = previewRecoveryAction("recompute_trends", { now });
+    expect(preview.writeTargets.some((row) => row.includes("trends.7d.latest.json"))).toBe(true);
   });
 });

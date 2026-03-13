@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import { type StoredTransaction } from "@/lib/planning/v3/domain/transactions";
 import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
 import { categorizeTransactions } from "@/lib/planning/v3/service/categorizeTransactions";
@@ -28,7 +26,6 @@ function asString(value: unknown): string {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -95,9 +92,6 @@ function toStoredTransactions(batchId: string, rows: Array<{
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

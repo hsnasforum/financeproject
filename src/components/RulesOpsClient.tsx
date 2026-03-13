@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -551,7 +552,13 @@ export function RulesOpsClient() {
           ))}
         </div>
 
-        {error ? <p className="mt-4 text-sm font-semibold text-rose-600">{error}</p> : null}
+        {error ? (
+          <DevUnlockShortcutMessage
+            className="mt-4 text-sm font-semibold text-rose-600"
+            linkClassName="text-rose-600"
+            message={error}
+          />
+        ) : null}
         {notice ? <p className="mt-4 text-sm font-semibold text-emerald-700">{notice}</p> : null}
       </Card>
 
@@ -660,14 +667,14 @@ export function RulesOpsClient() {
         {dispatchMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700">{dispatchMessage}</p> : null}
         {dispatchRunUrl ? (
           <p className="mt-3 text-sm">
-            <a href={dispatchRunUrl} target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline">
+            <a href={dispatchRunUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
               Actions Run 링크 열기
             </a>
           </p>
         ) : null}
         {dispatchPrUrl ? (
           <p className="mt-2 text-sm">
-            <a href={dispatchPrUrl} target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline">
+            <a href={dispatchPrUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
               PR 열기{dispatchPrTitle ? `: ${dispatchPrTitle}` : ""}
             </a>
           </p>
@@ -696,7 +703,7 @@ export function RulesOpsClient() {
               ({prChecksCompleted}/{prChecksTotal}, failed {prChecksFailed})
             </span>
             {prChecksDetailsUrl ? (
-              <a href={prChecksDetailsUrl} target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline">
+              <a href={prChecksDetailsUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
                 checks 링크
               </a>
             ) : null}

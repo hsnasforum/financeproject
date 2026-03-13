@@ -1,23 +1,18 @@
 import {
-  assertLocalHost,
+  assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { buildReportInputContractFromRun } from "../../../../../../../lib/planning/reports/reportInputContract";
-import { renderStandaloneHtml } from "../../../../../../../lib/planning/reports/standaloneHtmlReport";
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
-import { buildInterpretationVM } from "../../../../../../../lib/planning/v2/insights/interpretationVm";
-import { toInterpretationInputFromReportVM } from "../../../../../../planning/reports/_lib/reportInterpretationAdapter";
-import { buildReportVMFromContract } from "../../../../../../planning/reports/_lib/reportViewModel";
+import { buildStandaloneReportArtifactsFromRun } from "../../../../../../planning/reports/_lib/standaloneReportArtifacts";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -27,10 +22,7 @@ function withLocalReadGuard(request: Request) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   const { id } = await context.params;
@@ -42,59 +34,10 @@ export async function GET(request: Request, context: RouteContext) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
 
-    const reportInput = buildReportInputContractFromRun(run, {
-      allowLegacyEngineFallback: true,
-      allowLegacyResultDtoFallback: true,
-    });
-    const vm = buildReportVMFromContract(reportInput, run, {
-      id: run.id,
-      createdAt: run.createdAt,
-      runId: run.id,
-    });
-    const interpretation = buildInterpretationVM(toInterpretationInputFromReportVM(vm));
-
     const viewMode = (url.searchParams.get("view") ?? "").trim().toLowerCase();
     const printView = viewMode === "print" || viewMode === "view";
-    const html = renderStandaloneHtml({
-      runId: run.id,
-      reportId: vm.header.reportId,
-      createdAt: vm.header.createdAt,
-      summaryCards: {
-        monthlySurplusKrw: vm.summaryCards.monthlySurplusKrw,
-        dsrPct: vm.summaryCards.dsrPct,
-        emergencyFundMonths: vm.summaryCards.emergencyFundMonths,
-        debtTotalKrw: vm.summaryCards.debtTotalKrw,
-      },
-      warnings: vm.warningAgg.slice(0, 20).map((warning) => ({
-        title: warning.title,
-        code: warning.code,
-        severityMax: warning.severityMax,
-        count: warning.count,
-        periodMinMax: warning.periodMinMax,
-        plainDescription: warning.plainDescription,
-      })),
-      goals: vm.goalsTable.slice(0, 20),
-      actions: vm.topActions.slice(0, 3).map((action) => ({
-        title: action.title,
-        summary: action.summary,
-        steps: action.steps.slice(0, 3),
-      })),
-      verdict: {
-        label: interpretation.verdict.label,
-        headline: interpretation.verdict.headline,
-      },
-      diagnostics: interpretation.diagnostics.slice(0, 3).map((diag) => ({
-        title: diag.title,
-        evidence: diag.evidence,
-        description: diag.description,
-        ...(diag.evidenceDetail ? { evidenceDetail: diag.evidenceDetail } : {}),
-      })),
+    const { html } = buildStandaloneReportArtifactsFromRun(run, {
       printView,
-      ...(vm.reproducibility
-        ? {
-          reproducibility: vm.reproducibility,
-        }
-        : {}),
     });
 
     const shouldDownload = url.searchParams.get("download") === "1";

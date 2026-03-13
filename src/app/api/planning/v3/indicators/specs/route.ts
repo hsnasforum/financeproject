@@ -1,25 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { SeriesSpecSchema } from "../../../../../../../planning/v3/indicators/contracts";
-import {
-  IndicatorCatalogRowSchema,
-  buildIndicatorCatalogRows,
-} from "../../../../../../../planning/v3/indicators/annotations";
+import { IndicatorCatalogRowSchema, buildIndicatorCatalogRows } from "@/lib/planning/v3/indicators/annotations";
+import { SeriesSpecSchema } from "@/lib/planning/v3/indicators/contracts";
 import {
   IndicatorSpecsImportApplyResultSchema,
   IndicatorSpecsImportPreviewSchema,
   applyImportSeriesSpecs,
   exportSeriesSpecList,
   previewImportSeriesSpecs,
-} from "../../../../../../../planning/v3/indicators/specOverrides";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
+} from "@/lib/planning/v3/indicators/specOverrides";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 const SpecsGetResponseSchema = z.object({
   ok: z.literal(true),
@@ -59,11 +54,7 @@ function toGuardResponse(error: unknown): Response {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
   } catch (error) {
     return toGuardResponse(error);
@@ -79,9 +70,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: unknown = null;
   try {
     body = await request.json();
@@ -90,9 +78,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertCsrf(request, body as { csrf?: unknown } | null);
+    requireCsrf(request, body as { csrf?: unknown } | null, { allowWhenCookieMissing: true });
   } catch (error) {
     return toGuardResponse(error);
   }

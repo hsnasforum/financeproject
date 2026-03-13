@@ -6,6 +6,15 @@ export function inferFixHrefByErrorCode(rawCode: unknown): string | undefined {
   const code = normalizeCode(rawCode);
   if (!code) return undefined;
 
+  if (
+    code === "UNAUTHORIZED"
+    || code === "CSRF"
+    || code === "CSRF_MISMATCH"
+    || code === "ORIGIN_MISMATCH"
+    || code === "LOCAL_ONLY"
+  ) {
+    return "/ops/rules";
+  }
   if (code === "LOCKED" || code === "VAULT_LOCKED" || code.startsWith("VAULT_UNLOCK_BACKOFF")) {
     return "/ops/security";
   }

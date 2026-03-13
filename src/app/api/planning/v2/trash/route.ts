@@ -1,11 +1,9 @@
 import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import { buildConfirmString, verifyConfirm } from "../../../../../lib/ops/confirm";
 import {
@@ -37,9 +35,9 @@ function parseTrashKind(value: unknown): PlanningTrashKind | "all" | null {
   return null;
 }
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -48,9 +46,8 @@ function withLocalReadGuard(request: Request) {
   }
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -94,10 +91,7 @@ async function hardDeleteTrashByKind(kind: PlanningTrashKind, id: string): Promi
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   try {
@@ -121,9 +115,6 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: DeleteTrashBody = null;
   try {
     body = (await request.json()) as DeleteTrashBody;
@@ -131,7 +122,7 @@ export async function DELETE(request: Request) {
     body = null;
   }
 
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   const parsedKind = parseTrashKind(body?.kind);

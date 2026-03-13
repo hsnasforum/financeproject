@@ -1,5 +1,6 @@
 import { answerQuestion, type PlanningQuestion } from "./qa";
 import { type PlanResultV2 } from "./types";
+import { roundKrw, roundToDigits } from "../../calc/roundingPolicy";
 import { LIMITS } from "../../v2/limits";
 import { aggregateWarnings, type AggregatedWarning } from "./report/warningsAggregate";
 
@@ -73,11 +74,11 @@ function asNumber(value: unknown): number | undefined {
 }
 
 function toMoney(value: number): string {
-  return `${Math.round(value).toLocaleString("ko-KR")}원`;
+  return `${roundKrw(value).toLocaleString("ko-KR")}원`;
 }
 
 function toPercent1(value: number): string {
-  return `${(Math.round((value + Number.EPSILON) * 10) / 10).toFixed(1)}%`;
+  return `${roundToDigits(value, 1).toFixed(1)}%`;
 }
 
 function sanitizeCell(value: string): string {
@@ -216,7 +217,7 @@ function goalStatusTableRows(plan: PlanResultV2): string[] {
   ];
   for (const goal of plan.goalStatus.slice(0, LIMITS.goalsTop)) {
     rows.push(
-      `| ${sanitizeCell(goal.name)} | ${goal.achieved ? "Y" : "N"} | ${goal.progressPct.toFixed(1)}% | ${Math.round(goal.shortfall).toLocaleString("ko-KR")} | ${goal.targetMonth} |`,
+      `| ${sanitizeCell(goal.name)} | ${goal.achieved ? "Y" : "N"} | ${goal.progressPct.toFixed(1)}% | ${roundKrw(goal.shortfall).toLocaleString("ko-KR")} | ${goal.targetMonth} |`,
     );
   }
   return rows;
@@ -280,7 +281,7 @@ function scenariosSummaryLines(scenarios: unknown): string[] {
     "| --- | ---: | ---: |",
   ];
   for (const row of rows.slice(0, 5)) {
-    lines.push(`| ${sanitizeCell(row.title)} | ${Math.round(row.endNetWorthDeltaKrw ?? 0).toLocaleString("ko-KR")} | ${Math.round(row.goalsAchievedDelta ?? 0)} |`);
+    lines.push(`| ${sanitizeCell(row.title)} | ${roundKrw(row.endNetWorthDeltaKrw ?? 0).toLocaleString("ko-KR")} | ${roundKrw(row.goalsAchievedDelta ?? 0)} |`);
   }
   return lines;
 }
@@ -299,7 +300,7 @@ function monteCarloSummaryLines(monteCarlo: unknown): string[] {
   }
   const endNetWorth = asRecord(percentiles.endNetWorthKrw);
   if (typeof endNetWorth.p10 === "number" || typeof endNetWorth.p50 === "number" || typeof endNetWorth.p90 === "number") {
-    lines.push(`- 말기 순자산 P10/P50/P90: ${Math.round(Number(endNetWorth.p10 ?? 0)).toLocaleString("ko-KR")} / ${Math.round(Number(endNetWorth.p50 ?? 0)).toLocaleString("ko-KR")} / ${Math.round(Number(endNetWorth.p90 ?? 0)).toLocaleString("ko-KR")}`);
+    lines.push(`- 말기 순자산 P10/P50/P90: ${roundKrw(Number(endNetWorth.p10 ?? 0)).toLocaleString("ko-KR")} / ${roundKrw(Number(endNetWorth.p50 ?? 0)).toLocaleString("ko-KR")} / ${roundKrw(Number(endNetWorth.p90 ?? 0)).toLocaleString("ko-KR")}`);
   }
   return lines.length > 0 ? lines : ["- Monte Carlo 요약 데이터가 없습니다."];
 }

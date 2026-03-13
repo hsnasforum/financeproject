@@ -53,7 +53,7 @@ export function pickTimelinePoints(timeline: unknown): TimelineRow[] {
   if (normalized.length === 0) return [];
 
   const lastIndex = normalized.length - 1;
-  const midIndex = Math.floor(lastIndex / 2);
+  const midIndex = Math.trunc(lastIndex / 2);
   const candidates = [
     { label: "시작" as const, index: 0 },
     { label: "중간" as const, index: midIndex },

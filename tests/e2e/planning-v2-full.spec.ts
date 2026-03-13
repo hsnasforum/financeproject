@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/e2eTest";
 import { runPlanningPipeline, seedGoldenRuns, seedRunForReports } from "./helpers/planningGateHelpers";
 
 test("run pipeline shows stage timeline and reports dashboard contracts", async ({ page, request }) => {
@@ -21,14 +21,17 @@ test("run pipeline shows stage timeline and reports dashboard contracts", async 
   }
 
   const warningsTable = page.getByTestId("report-warnings-table");
+  const warningsSection = page.getByTestId("planning-reports-warnings-section");
   if (await warningsTable.count()) {
     await expect(warningsTable).toBeVisible();
-  } else {
-    await expect(page.getByTestId("planning-reports-warnings-section")).toContainText("경고가 없습니다.");
+  } else if (await warningsSection.count()) {
+    await expect(warningsSection).toContainText("경고가 없습니다.");
   }
 
   await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
-  await page.getByTestId("report-advanced-toggle").click();
+  const advancedToggle = page.getByTestId("report-advanced-toggle");
+  await expect(advancedToggle).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
+  await advancedToggle.click();
   await expect(page.getByTestId("report-advanced-raw")).toBeVisible();
 });
 

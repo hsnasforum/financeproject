@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { BodyActionLink, BodyTableFrame, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -165,15 +165,15 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
           <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Center</h1>
           <p className="text-sm text-slate-600">배치 목록과 통계를 확인하고 바로 Profile 초안 생성으로 이어집니다.</p>
           <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-emerald-700">
-            <Link className="underline underline-offset-2" href="/planning/v3/transactions/batches">
+            <BodyActionLink href="/planning/v3/transactions/batches">
               Transaction Batches
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/import/csv">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/import/csv">
               CSV 업로드
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/profile/drafts">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/profile/drafts">
               Draft 목록
-            </Link>
+            </BodyActionLink>
           </div>
         </Card>
 
@@ -186,7 +186,7 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
           {loading ? <p className="text-sm text-slate-600">배치 목록을 불러오는 중...</p> : null}
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <BodyTableFrame>
             <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-batches-list">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                 <tr>
@@ -216,13 +216,10 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
                     <td className="px-3 py-2 text-right">{asNumber(row.stats?.unassignedCategory ?? 0)}</td>
                     <td className="px-3 py-2 text-right">{asNumber(row.stats?.transfers ?? 0)}</td>
                     <td className="px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          className="text-xs font-semibold text-emerald-700 underline underline-offset-2"
-                          href={`/planning/v3/batches/${encodeURIComponent(row.batchId)}`}
-                        >
+                      <div className={bodyDenseActionRowClassName}>
+                        <BodyActionLink href={`/planning/v3/batches/${encodeURIComponent(row.batchId)}`}>
                           요약 보기
-                        </Link>
+                        </BodyActionLink>
                         <Button
                           disabled={createLoadingBatchId === row.batchId}
                           onClick={() => {
@@ -240,7 +237,7 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
                 ))}
               </tbody>
             </table>
-          </div>
+          </BodyTableFrame>
         </Card>
       </div>
     </PageShell>

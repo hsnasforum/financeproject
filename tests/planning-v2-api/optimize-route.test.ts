@@ -108,6 +108,7 @@ describe("POST /api/planning/v2/optimize", () => {
       ok?: boolean;
       meta?: { snapshot?: { missing?: boolean } };
       data?: {
+        engineSchemaVersion?: number;
         engine?: {
           stage?: string;
           financialStatus?: { stage?: string };
@@ -123,9 +124,14 @@ describe("POST /api/planning/v2/optimize", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.meta?.snapshot?.missing).toBe(true);
+    expect(payload.data?.engineSchemaVersion).toBe(1);
     expect(payload.data?.engine?.stage).toBeDefined();
     expect(payload.data?.engine?.financialStatus?.stage).toBe(payload.data?.engine?.stage);
     expect(typeof payload.data?.engine?.stageDecision?.priority).toBe("string");
+    const data = payload.data as Record<string, unknown> | undefined;
+    expect(data?.stage).toBeUndefined();
+    expect(data?.financialStatus).toBeUndefined();
+    expect(data?.stageDecision).toBeUndefined();
     expect((payload.data?.candidates?.length ?? 0)).toBeGreaterThan(0);
     expect((payload.data?.candidates?.length ?? 0)).toBeLessThanOrEqual(2);
 

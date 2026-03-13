@@ -12,6 +12,8 @@ const originalNodeEnv = process.env.NODE_ENV;
 const originalAuditPath = process.env.PLANNING_OPS_AUDIT_PATH;
 const originalMetricsPath = process.env.PLANNING_OPS_METRICS_PATH;
 const originalMigrationStatePath = process.env.PLANNING_MIGRATION_STATE_PATH;
+const originalDartCorpCodesIndexPath = process.env.DART_CORPCODES_INDEX_PATH;
+const originalPlanningAssumptionsPath = process.env.PLANNING_ASSUMPTIONS_PATH;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -37,6 +39,8 @@ describe.sequential("ops support export route", () => {
     env.PLANNING_OPS_AUDIT_PATH = path.join(root, "ops", "audit", "events.ndjson");
     env.PLANNING_OPS_METRICS_PATH = path.join(root, "ops", "metrics", "events.ndjson");
     env.PLANNING_MIGRATION_STATE_PATH = path.join(root, "planning", "migrations", "migrationState.json");
+    env.DART_CORPCODES_INDEX_PATH = path.join(root, "dart", "corpCodes.index.json");
+    env.PLANNING_ASSUMPTIONS_PATH = path.join(root, "planning", "assumptions.latest.json");
 
     await appendOpsAuditEvent({
       eventType: "SUPPORT_TEST_EVENT",
@@ -76,6 +80,35 @@ describe.sequential("ops support export route", () => {
       }, null, 2)}\n`,
       "utf-8",
     );
+
+    await fs.promises.mkdir(path.dirname(env.DART_CORPCODES_INDEX_PATH), { recursive: true });
+    await fs.promises.writeFile(
+      env.DART_CORPCODES_INDEX_PATH,
+      `${JSON.stringify({
+        version: 1,
+        generatedAt: "2026-03-12T00:00:00.000Z",
+        count: 2,
+        items: [
+          { corpCode: "001", corpName: "테스트전자", normName: "테스트전자" },
+          { corpCode: "002", corpName: "테스트은행", normName: "테스트은행" },
+        ],
+      }, null, 2)}\n`,
+      "utf-8",
+    );
+
+    await fs.promises.mkdir(path.dirname(env.PLANNING_ASSUMPTIONS_PATH), { recursive: true });
+    await fs.promises.writeFile(
+      env.PLANNING_ASSUMPTIONS_PATH,
+      `${JSON.stringify({
+        version: 1,
+        asOf: "2026-03-11",
+        fetchedAt: "2026-03-12T01:00:00.000Z",
+        korea: {},
+        sources: [{ name: "ECOS", url: "https://example.com", fetchedAt: "2026-03-12T01:00:00.000Z" }],
+        warnings: [],
+      }, null, 2)}\n`,
+      "utf-8",
+    );
   });
 
   afterEach(() => {
@@ -90,6 +123,12 @@ describe.sequential("ops support export route", () => {
 
     if (typeof originalMigrationStatePath === "string") env.PLANNING_MIGRATION_STATE_PATH = originalMigrationStatePath;
     else delete env.PLANNING_MIGRATION_STATE_PATH;
+
+    if (typeof originalDartCorpCodesIndexPath === "string") env.DART_CORPCODES_INDEX_PATH = originalDartCorpCodesIndexPath;
+    else delete env.DART_CORPCODES_INDEX_PATH;
+
+    if (typeof originalPlanningAssumptionsPath === "string") env.PLANNING_ASSUMPTIONS_PATH = originalPlanningAssumptionsPath;
+    else delete env.PLANNING_ASSUMPTIONS_PATH;
 
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -117,6 +156,31 @@ describe.sequential("ops support export route", () => {
     expect(entries.has("audit_summary.json")).toBe(true);
     expect(entries.has("metrics_summary.json")).toBe(true);
     expect(entries.has("metrics_recent.json")).toBe(true);
+    expect(entries.has("data_source_impact_summary.json")).toBe(true);
+
+    const dataSourceImpactSummary = JSON.parse(entries.get("data_source_impact_summary.json")?.toString("utf-8") ?? "{}") as {
+      source?: string;
+      sources?: {
+        opendart?: { configured?: boolean; indexExists?: boolean; generatedAt?: string | null; count?: number | null };
+        planning?: { snapshotState?: string; asOf?: string | null; fetchedAt?: string | null };
+      };
+      cards?: Array<{ cardId?: string; readOnly?: { title?: string }; healthSummary?: { latestCheckedAt?: string | null } }>;
+    };
+    expect(dataSourceImpactSummary.source).toBe("/settings/data-sources");
+    expect(dataSourceImpactSummary.sources?.opendart).toMatchObject({
+      configured: false,
+      indexExists: true,
+      generatedAt: "2026-03-12T00:00:00.000Z",
+      count: 2,
+    });
+    expect(dataSourceImpactSummary.sources?.planning).toMatchObject({
+      snapshotState: "available",
+      asOf: "2026-03-11",
+      fetchedAt: "2026-03-12T01:00:00.000Z",
+    });
+    expect(dataSourceImpactSummary.cards?.map((card) => card.cardId)).toEqual(["dart", "planning"]);
+    expect(dataSourceImpactSummary.cards?.[0]?.readOnly?.title).toBe("운영 최신 기준");
+    expect(dataSourceImpactSummary.cards?.[1]?.healthSummary?.latestCheckedAt).toBe("2026-03-12T01:00:00.000Z");
 
     const merged = Buffer.concat([...entries.values()]).toString("utf-8");
     const leakPatterns = [

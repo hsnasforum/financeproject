@@ -128,6 +128,9 @@ export type ProfileDefaultsAppliedV2 = {
 export type ProfileV2 = {
   currentAge?: number;
   birthYear?: number;
+  gender?: "M" | "F";
+  sido?: string;
+  sigungu?: string;
   monthlyIncomeNet: number;
   monthlyEssentialExpenses: number;
   monthlyDiscretionaryExpenses: number;

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { BodyActionLink, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -82,6 +82,7 @@ export function RulesClient() {
   const [rows, setRows] = useState<RuleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState("");
 
@@ -94,6 +95,7 @@ export function RulesClient() {
 
   async function loadRules() {
     setLoading(true);
+    setLoadError("");
     try {
       const response = await fetch(`/api/planning/v3/categories/rules${buildCsrfQuery()}`, {
         cache: "no-store",
@@ -102,7 +104,7 @@ export function RulesClient() {
       const payload = await response.json().catch(() => null);
       if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
         setRows([]);
-        setMessage("룰 목록 조회에 실패했습니다.");
+        setLoadError("룰 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
         return;
       }
       setRows(payload.items.filter(isRuleRow).map((row) => ({
@@ -115,7 +117,7 @@ export function RulesClient() {
       })));
     } catch {
       setRows([]);
-      setMessage("룰 목록 조회에 실패했습니다.");
+      setLoadError("룰 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }
@@ -196,15 +198,16 @@ export function RulesClient() {
       <div className="space-y-5">
         <Card className="space-y-2">
           <h1 className="text-xl font-black text-slate-900">Planning v3 Category Rules</h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/transactions">
+          <div className={bodyDenseActionRowClassName}>
+            <BodyActionLink href="/planning/v3/transactions">
               배치 목록
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/accounts">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/accounts">
               계좌 관리
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-slate-700">{message}</p> : null}
+          {loadError ? <p className="text-sm font-semibold text-rose-700">{loadError}</p> : null}
         </Card>
 
         <Card className="space-y-3">
@@ -300,7 +303,11 @@ export function RulesClient() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {rows.length > 0 ? rows.map((row) => (
+                {loading ? (
+                  <tr>
+                    <td className="px-3 py-2 text-slate-500" colSpan={6}>룰 목록을 불러오는 중입니다.</td>
+                  </tr>
+                ) : rows.length > 0 ? rows.map((row) => (
                   <tr data-testid={`v3-rule-row-${row.id}`} key={row.id}>
                     <td className="px-3 py-2 font-mono text-xs text-slate-800">{row.id}</td>
                     <td className="px-3 py-2 text-slate-800">{row.categoryId}</td>
@@ -319,7 +326,11 @@ export function RulesClient() {
                       </Button>
                     </td>
                   </tr>
-                )) : (
+                )) : loadError ? (
+                  <tr>
+                    <td className="px-3 py-2 text-slate-500" colSpan={6}>룰 목록을 다시 불러오지 못했습니다.</td>
+                  </tr>
+                ) : (
                   <tr>
                     <td className="px-3 py-2 text-slate-500" colSpan={6}>룰이 없습니다.</td>
                   </tr>
@@ -332,4 +343,3 @@ export function RulesClient() {
     </PageShell>
   );
 }
-

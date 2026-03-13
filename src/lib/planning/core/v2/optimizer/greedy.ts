@@ -1,3 +1,4 @@
+import { roundKrw } from "../../../calc/roundingPolicy";
 import { mulberry32 } from "../random";
 import { toSimulationAssumptionsV2 } from "../scenarios";
 import { simulateMonthly } from "../simulateMonthly";
@@ -22,7 +23,7 @@ type CandidateEvaluation = {
 };
 
 function roundMoney(value: number): number {
-  return Math.round(value);
+  return roundKrw(value);
 }
 
 function clampInt(value: number, min: number, max: number): number {
@@ -62,7 +63,7 @@ function seededShuffle<T>(input: T[], seed?: number): T[] {
   const out = [...input];
   const rng = mulberry32(Math.trunc(seed as number) >>> 0);
   for (let index = out.length - 1; index > 0; index -= 1) {
-    const pick = Math.floor(rng() * (index + 1));
+    const pick = Math.trunc(rng() * (index + 1));
     [out[index], out[pick]] = [out[pick], out[index]];
   }
   return out;
@@ -153,7 +154,7 @@ function applyStrategyToProfile(
         const isLast = index === positiveDebts.length - 1;
         const extraShare = isLast
           ? strategy.extraDebtPaymentKrw - assigned
-          : Math.max(0, Math.round((strategy.extraDebtPaymentKrw * debt.balance) / Math.max(1, totalBalance)));
+          : Math.max(0, roundKrw((strategy.extraDebtPaymentKrw * debt.balance) / Math.max(1, totalBalance)));
         assigned += extraShare;
         debt.minimumPayment = Math.max(0, debt.minimumPayment) + extraShare;
       }

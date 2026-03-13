@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -45,6 +44,8 @@ export function ProductRowItem({
   onViewed,
 }: Props) {
   const [open, setOpen] = useState(false);
+  void unifiedDetailHref;
+  void compareLimit;
   const bestOption = product.best;
   const termLabel = bestOption?.save_trm ? formatGlossaryValue("save_trm", bestOption.save_trm) : "-";
 

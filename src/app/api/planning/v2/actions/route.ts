@@ -1,26 +1,24 @@
 import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import { getCache, recordCacheUsage, setCache } from "../../../../../lib/planning/server/cache/storage";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
+import {
+  buildEnginePayloadFromProfile,
+  resolveAssumptionsContextForProfile,
+  type PlanningAssumptionsContext,
+} from "../../../../../lib/planning/server/v2/toEngineInput";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
-import {
-  createEngineEnvelope,
-  ENGINE_SCHEMA_VERSION,
-  runPlanningEngine,
-} from "../../../../../lib/planning/engine";
 
 type ActionsRequestBody = {
   profile?: unknown;
@@ -36,7 +34,6 @@ type ActionsRequestBody = {
 const ACTIONS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const ACTIONS_PRODUCTS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const planningService = createPlanningService();
-type AssumptionsContext = Awaited<ReturnType<typeof planningService.resolveAssumptionsContext>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -113,9 +110,8 @@ function hasCsrfCookie(request: Request): boolean {
   return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -151,24 +147,7 @@ function summarizePlan(plan: SimulationResultV2) {
   };
 }
 
-function toEngineInput(profile: ProfileV2) {
-  const debtBalance = profile.debts.reduce((total, debt) => {
-    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
-  }, 0);
-
-  return {
-    monthlyIncome: profile.monthlyIncomeNet,
-    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
-    age: profile.currentAge,
-    liquidAssets: profile.liquidAssets,
-    debtBalance,
-  };
-}
-
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: ActionsRequestBody = null;
   try {
     body = (await request.json()) as ActionsRequestBody;
@@ -179,7 +158,7 @@ export async function POST(request: Request) {
   if (!isRecord(body)) {
     return fail("INPUT");
   }
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   let profile: ProfileV2;
@@ -210,31 +189,32 @@ export async function POST(request: Request) {
     return fail("INPUT", "서버 설정으로 includeProducts 기능이 비활성화되어 있습니다.", { status: 400 });
   }
 
-  let finalSimulationAssumptions: AssumptionsContext["simulationAssumptions"];
-  let baseAssumptions: AssumptionsContext["assumptions"];
-  let snapshotMeta: AssumptionsContext["snapshotMeta"];
-  let health: AssumptionsContext["health"];
-  let scenarioOverrideForCache: AssumptionsContext["scenarioOverrideForCache"];
+  let finalSimulationAssumptions: PlanningAssumptionsContext["simulationAssumptions"];
+  let baseAssumptions: PlanningAssumptionsContext["assumptions"];
+  let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
+  let health: PlanningAssumptionsContext["health"];
+  let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
   let snapshotId: string | undefined;
-  try {
-    const context = await planningService.resolveAssumptionsContext({
+  {
+    const resolvedContext = await resolveAssumptionsContextForProfile({
+      planningService,
       profile,
       riskTolerance,
       assumptionsOverridesRaw: assumptionsOverrides,
       requestedSnapshotId,
     });
-    finalSimulationAssumptions = context.simulationAssumptions;
-    baseAssumptions = context.assumptions;
-    snapshotMeta = context.snapshotMeta;
-    health = context.health;
-    scenarioOverrideForCache = context.scenarioOverrideForCache;
-    snapshotId = context.snapshotId;
-  } catch (error) {
-    const normalized = toPlanningError(error);
-    if (normalized.code === "SNAPSHOT_NOT_FOUND") {
-      return fail("SNAPSHOT_NOT_FOUND", undefined, { status: 400 });
+    if (!resolvedContext.ok) {
+      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+        return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+      }
+      return fail(resolvedContext.error.code, resolvedContext.error.message);
     }
-    return fail(normalized.code, normalized.message);
+    finalSimulationAssumptions = resolvedContext.context.simulationAssumptions;
+    baseAssumptions = resolvedContext.context.assumptions;
+    snapshotMeta = resolvedContext.context.snapshotMeta;
+    health = resolvedContext.context.health;
+    scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
+    snapshotId = resolvedContext.context.snapshotId;
   }
 
   const keyBundle = buildCacheKey({
@@ -253,11 +233,6 @@ export async function POST(request: Request) {
     riskTolerance,
   });
   const keyPrefix = keyBundle.key.slice(0, 8);
-  const engineResult = runPlanningEngine(toEngineInput(profile));
-  const engine = createEngineEnvelope({
-    status: engineResult.status,
-    decision: engineResult.decision,
-  });
 
   try {
     const cached = await getCache<{
@@ -270,12 +245,9 @@ export async function POST(request: Request) {
     }>("actions", keyBundle.key);
     if (cached) {
       await recordCacheUsage("actions", true).catch(() => undefined);
+      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
       return ok(
-        {
-          ...cached.data.data,
-          engine,
-          engineSchemaVersion: ENGINE_SCHEMA_VERSION,
-        },
+        data,
         {
           ...cached.data.meta,
           cache: {
@@ -310,13 +282,12 @@ export async function POST(request: Request) {
         health: health.summary,
       },
       data: {
-        engine,
-        engineSchemaVersion: ENGINE_SCHEMA_VERSION,
         planSummary: summarizePlan(plan),
         actions: actionsWithCandidates,
         healthWarnings: health.warnings,
       },
     };
+    payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
 
     const ttlMs = includeProducts ? ACTIONS_PRODUCTS_CACHE_TTL_MS : ACTIONS_CACHE_TTL_MS;
     await setCache({

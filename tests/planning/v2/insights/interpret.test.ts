@@ -16,7 +16,7 @@ describe("buildUserInsight", () => {
     });
 
     expect(insight.severity).toBe("risk");
-    expect(insight.headline).toContain("현금이 바닥");
+    expect(insight.headline).toContain("우선순위 조정");
   });
 
   it("returns warn when dsr is in warning range", () => {
@@ -58,7 +58,7 @@ describe("buildUserInsight", () => {
       goals: [],
     });
 
-    expect(insight.bullets.join(" ")).toContain("현금이 바닥나는 달이 있습니다");
+    expect(insight.bullets.join(" ")).toContain("현금이 바닥나는 달이 생길 수 있습니다");
   });
 
   it("includes fixed monte-carlo interpretation for depletion probability 0.32", () => {
@@ -119,7 +119,7 @@ describe("buildUserInsight", () => {
     });
 
     expect(insight.severity).toBe("warn");
-    expect(insight.bullets.join(" ")).toContain("스냅샷");
+    expect(insight.bullets.join(" ")).toContain("기준 데이터");
   });
 });
 

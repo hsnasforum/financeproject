@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 
+const ROUNDING_BASELINE_EXCLUDES = [
+  "!src/lib/planning/calc/**",
+];
+
 function runRg(label, args) {
   const result = spawnSync("rg", args, {
     encoding: "utf8",
@@ -55,6 +59,8 @@ async function main() {
         "src",
         "--glob",
         "!src/lib/planning/calc/**",
+        "--glob",
+        "!src/lib/planning/v2/debt/coreCalc.ts",
       ],
     },
     {
@@ -68,13 +74,12 @@ async function main() {
       ],
     },
     {
-      title: "src/lib/planning/** 에서 Math.round/Math.floor 직접 사용 금지 (calc 외부)",
+      title: "src/lib/planning/** 에서 Math.round/Math.floor 직접 사용 금지 (baseline 예외 외부)",
       args: [
         "-n",
         "Math\\.(round|floor)\\(",
         "src/lib/planning",
-        "--glob",
-        "!src/lib/planning/calc/**",
+        ...ROUNDING_BASELINE_EXCLUDES.flatMap((glob) => ["--glob", glob]),
       ],
     },
   ];

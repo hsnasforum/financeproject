@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { applyCleanupAction, dryRunCleanupAction } from "@/app/ops/planning-cleanup/actions";
+import { DevUnlockShortcutLink, isDevUnlockCsrfMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -50,6 +51,8 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
   const [target, setTarget] = useState<CleanupTarget>("all");
   const [planData, setPlanData] = useState<CleanupData | null>(null);
   const [confirmText, setConfirmText] = useState("");
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
   const [runningDryRun, startDryRun] = useTransition();
   const [runningApply, startApply] = useTransition();
 
@@ -69,23 +72,27 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
 
   function runDryRun(): void {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 없어 dry-run을 실행할 수 없습니다.");
+      setError("Dev unlock/CSRF가 없어 dry-run을 실행할 수 없습니다.");
       return;
     }
+    setError("");
+    setNotice("");
     startDryRun(async () => {
       const result = await dryRunCleanupAction({ target, csrf: props.csrf });
       if (!result.ok || !result.data) {
-        window.alert(result.message || "dry-run 실패");
+        setError(result.message || "dry-run 실패");
         return;
       }
       setPlanData(result.data);
       setConfirmText("");
-      window.alert(result.message || "dry-run 완료");
+      setNotice(result.message || "dry-run 완료");
     });
   }
 
   function runApply(): void {
     if (!canApply) return;
+    setError("");
+    setNotice("");
     startApply(async () => {
       const result = await applyCleanupAction({
         target,
@@ -93,13 +100,13 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
         confirmText,
       });
       if (!result.ok || !result.data) {
-        window.alert(result.message || "cleanup 적용 실패");
+        setError(result.message || "cleanup 적용 실패");
         if (result.data) setPlanData(result.data);
         return;
       }
       setPlanData(result.data);
       setConfirmText("");
-      window.alert(result.message || "cleanup 적용 완료");
+      setNotice(result.message || "cleanup 적용 완료");
     });
   }
 
@@ -119,6 +126,22 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
           </div>
         )}
       />
+      {error ? (
+        <Card className="mb-4 border border-rose-200 bg-rose-50 p-3 text-sm font-semibold text-rose-700">
+          {error}
+          {isDevUnlockCsrfMessage(error) ? (
+            <>
+              {" "}
+              <DevUnlockShortcutLink className="text-rose-700" />
+            </>
+          ) : null}
+        </Card>
+      ) : null}
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+          {notice}
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -126,7 +149,10 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
           <p className="mt-2 text-sm text-slate-600">dry-run 결과를 확인한 뒤 confirm 문구를 입력해 apply 하세요.</p>
 
           {!hasCsrf ? (
-            <p className="mt-3 text-xs font-semibold text-amber-700">Dev unlock/CSRF가 없어 실행 버튼이 비활성화됩니다.</p>
+            <p className="mt-3 text-xs font-semibold text-amber-700">
+              Dev unlock/CSRF가 없어 실행 버튼이 비활성화됩니다.{" "}
+              <DevUnlockShortcutLink className="text-amber-700" />
+            </p>
           ) : null}
 
           <label className="mt-4 block text-xs font-semibold text-slate-700" htmlFor="cleanup-target">대상</label>

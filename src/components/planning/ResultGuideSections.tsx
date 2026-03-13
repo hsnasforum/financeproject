@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BodyEmptyState, BodyInset, BodyTableFrame } from "@/components/ui/BodyTone";
 import { formatKrw } from "@/lib/planning/i18n/format";
 import { type Locale } from "@/lib/planning/i18n";
 import { LIMITS } from "@/lib/planning/v2/limits";
@@ -90,21 +91,21 @@ export function ResultGuideCard(props: ResultGuideCardProps) {
       </div>
 
       <div className="mt-3 grid gap-2 md:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <BodyInset className="px-3 py-2">
           <p className="text-[11px] text-slate-500">현금 최저</p>
           <p className="text-sm font-semibold text-slate-900">{formatKrw(props.locale, props.minCashKrw)}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        </BodyInset>
+        <BodyInset className="px-3 py-2">
           <p className="text-[11px] text-slate-500">목표 달성</p>
           <p className="text-sm font-semibold text-slate-900">{props.achievedGoals}/{props.totalGoals}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        </BodyInset>
+        <BodyInset className="px-3 py-2">
           <p className="text-[11px] text-slate-500">최대 DSR</p>
           <p className="text-sm font-semibold text-slate-900">{toDsrPct(props.maxDsr)}</p>
-        </div>
+        </BodyInset>
       </div>
 
-      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+      <BodyInset className="mt-3 px-3 py-2 text-xs text-slate-700">
         <p className="font-semibold text-slate-900">Top 3 액션</p>
         {props.topActions.length === 0 ? (
           <p className="mt-1">권장 액션이 없습니다. 목표와 경고 표를 먼저 확인하세요.</p>
@@ -115,7 +116,7 @@ export function ResultGuideCard(props: ResultGuideCardProps) {
             ))}
           </ol>
         )}
-      </div>
+      </BodyInset>
     </section>
   );
 }
@@ -130,11 +131,9 @@ export function WarningsTable(props: WarningsTableProps) {
       <h3 className="font-semibold text-slate-900">경고 요약</h3>
       <p>동일 경고 코드는 합쳐서 표시합니다. 반복 횟수와 발생 구간을 우선 확인하세요.</p>
       {props.warnings.length === 0 ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800">
-          경고가 없습니다. 현재 가정에서는 위험 신호가 관측되지 않았습니다.
-        </p>
+        <BodyEmptyState className="border-emerald-200 bg-emerald-50 px-3 py-4" description="현재 가정에서는 위험 신호가 관측되지 않았습니다." title="경고가 없습니다." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <BodyTableFrame>
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
@@ -157,10 +156,10 @@ export function WarningsTable(props: WarningsTableProps) {
               ))}
             </tbody>
           </table>
-        </div>
+        </BodyTableFrame>
       )}
       {props.warnings.length > LIMITS.warningsTop ? (
-        <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <BodyInset className="flex items-center justify-between px-3 py-2 text-xs text-slate-600">
           <span>{expanded ? `전체 ${props.warnings.length}개 표시 중` : `추가 ${omittedCount}개 경고가 생략되었습니다.`}</span>
           <button
             className="font-semibold text-emerald-700"
@@ -169,7 +168,7 @@ export function WarningsTable(props: WarningsTableProps) {
           >
             {expanded ? "접기" : "더 보기"}
           </button>
-        </div>
+        </BodyInset>
       ) : null}
     </section>
   );
@@ -181,9 +180,9 @@ export function GoalsTable(props: GoalsTableProps) {
       <h3 className="font-semibold text-slate-900">목표 상태</h3>
       <p>부족액이 큰 목표부터 조정하면 경고 완화 효과가 큽니다.</p>
       {props.goals.length === 0 ? (
-        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">등록된 목표가 없습니다.</p>
+        <BodyEmptyState className="px-3 py-4" description="먼저 목표를 추가하면 플랜 결과와 함께 달성 가능성을 비교할 수 있습니다." title="등록된 목표가 없습니다." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <BodyTableFrame>
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
@@ -208,7 +207,7 @@ export function GoalsTable(props: GoalsTableProps) {
               ))}
             </tbody>
           </table>
-        </div>
+        </BodyTableFrame>
       )}
     </section>
   );
@@ -220,9 +219,9 @@ export function TimelineSummaryTable(props: TimelineSummaryTableProps) {
       <h3 className="font-semibold text-slate-900">타임라인 3포인트 요약</h3>
       <p>시작/중간/마지막 지점을 비교하면 흐름 악화 구간을 빠르게 찾을 수 있습니다.</p>
       {props.rows.length === 0 ? (
-        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">타임라인 데이터가 없습니다.</p>
+        <BodyEmptyState className="px-3 py-4" description="simulate 결과가 있으면 시작, 중간, 마지막 구간의 핵심 포인트를 여기서 비교할 수 있습니다." title="타임라인 데이터가 없습니다." />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <BodyTableFrame>
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50">
               <tr>
@@ -249,7 +248,7 @@ export function TimelineSummaryTable(props: TimelineSummaryTableProps) {
               ))}
             </tbody>
           </table>
-        </div>
+        </BodyTableFrame>
       )}
     </section>
   );

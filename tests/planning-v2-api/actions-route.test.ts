@@ -123,6 +123,10 @@ describe("POST /api/planning/v2/actions", () => {
     expect(payload.ok).toBe(true);
     expect(payload.data?.engine?.stage).toBeTruthy();
     expect(payload.data?.engineSchemaVersion).toBe(1);
+    const data = payload.data as Record<string, unknown> | undefined;
+    expect(data?.stage).toBeUndefined();
+    expect(data?.financialStatus).toBeUndefined();
+    expect(data?.stageDecision).toBeUndefined();
     expect((payload.data?.actions ?? []).length).toBeGreaterThan(0);
     expect((payload.data?.actions ?? []).every((entry) => entry.candidates === undefined)).toBe(true);
     expect(vi.mocked(globalThis.fetch)).not.toHaveBeenCalled();
@@ -131,7 +135,7 @@ describe("POST /api/planning/v2/actions", () => {
   it("attaches finlife candidates when includeProducts=true", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
     fetchMock.mockImplementation(async (input) => {
-      const url = typeof input === "string" ? input : input.url;
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
       if (url.includes("/api/finlife/deposit")) {
         return new Response(JSON.stringify(makeFinlifePayload("deposit")), { status: 200 });
       }
@@ -166,7 +170,7 @@ describe("POST /api/planning/v2/actions", () => {
   it("enforces maxCandidatesPerAction upper bound in candidate list", async () => {
     const fetchMock = vi.mocked(globalThis.fetch);
     fetchMock.mockImplementation(async (input) => {
-      const url = typeof input === "string" ? input : input.url;
+      const url = typeof input === "string" ? input : input instanceof Request ? input.url : String(input);
       if (url.includes("/api/finlife/deposit")) {
         return new Response(JSON.stringify(makeFinlifePayload("deposit")), { status: 200 });
       }

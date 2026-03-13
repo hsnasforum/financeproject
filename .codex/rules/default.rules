@@ -1,0 +1,13 @@
+prefix_rule(
+  pattern = ["pnpm", ["test", "lint", "build", "verify", "e2e", "e2e:rc", "planning:v2:complete", "planning:v2:compat", "planning:v2:guard", "planning:v2:regress"]],
+  decision = "allow",
+  justification = "프로젝트 로컬 검증 명령 허용",
+  match = [
+    "pnpm test",
+    "pnpm lint",
+    "pnpm build",
+    "pnpm verify",
+    "pnpm e2e:rc",
+    "pnpm planning:v2:complete"
+  ]
+)

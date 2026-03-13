@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { readNewsTopicTrends } from "@/lib/news/trendReader";
-import { readNewsSearchIndex, searchNewsIndex, writeNewsSearchIndex, type NewsSearchFilters } from "@/lib/news/searchIndex";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
+import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import { readNewsSearchIndex, readNewsTopicTrends, searchNewsIndex, writeNewsSearchIndex, type NewsSearchFilters } from "@/lib/planning/v3/news/search";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -22,7 +20,7 @@ function toList(value: string | null): string[] {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -117,9 +115,6 @@ const SearchResponseSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

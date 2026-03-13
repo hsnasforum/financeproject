@@ -11,18 +11,42 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:5010";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const REMOTE_HOST = "example.com";
+const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+const EVIL_ORIGIN = "http://evil.com";
 
-function requestPost(pathname: string, body: unknown): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestPost(
+  pathname: string,
+  body: unknown,
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}${pathname}`, {
     method: "POST",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/profile/drafts`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/profile/drafts`,
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   });
+}
+
+async function expectOriginMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
 }
 
 function collectKeys(value: unknown, parent = ""): string[] {
@@ -167,5 +191,36 @@ describe("POST /api/planning/v3/profile/drafts/[id]/preflight", () => {
     expect(keys.includes("originalcsv")).toBe(false);
     expect(keys.includes("memo")).toBe(false);
   });
-});
 
+  it("allows same-origin remote host and still blocks cross-origin", async () => {
+    const sameOrigin = await preflightPOST(
+      requestPost(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}/preflight`,
+        { csrf: "test" },
+        { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    );
+    expect(sameOrigin.status).toBe(200);
+    const sameOriginPayload = await sameOrigin.json() as {
+      ok?: boolean;
+      data?: { summary?: { changedCount?: number } };
+    };
+    expect(sameOriginPayload.ok).toBe(true);
+    expect(sameOriginPayload.data?.summary?.changedCount).toBeGreaterThan(0);
+
+    await expectOriginMismatch(preflightPOST(
+      requestPost(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}/preflight`,
+        { csrf: "test" },
+        {
+          requestOrigin: REMOTE_ORIGIN,
+          host: REMOTE_HOST,
+          origin: EVIL_ORIGIN,
+          refererOrigin: EVIL_ORIGIN,
+        },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    ));
+  });
+});

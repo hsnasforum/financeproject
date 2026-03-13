@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/service/importCsvToBatch";
+import { ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/transactions/store";
 import { type CsvColumnMapping } from "@/lib/planning/v3/providers/csv/types";
 
 type ImportBody = {
@@ -26,7 +24,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function withWriteGuard(request: Request, body: ImportBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -67,9 +64,6 @@ function normalizeOptions(input: unknown): { accountId?: string; accountName?: s
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: ImportBody = null;
   try {
     body = (await request.json()) as ImportBody;

@@ -1,7 +1,8 @@
 import PlanningRunsClient from "@/components/PlanningRunsClient";
-import { getPlanningFeatureFlags } from "@/lib/planning/config";
 import { normalizeProfileId } from "@/lib/planning/profileScope";
 import { getDefaultProfileId } from "@/lib/planning/server/store/profileStore";
+
+export const dynamic = "force-dynamic";
 
 type PlanningRunsPageProps = {
   searchParams?: Promise<{
@@ -23,13 +24,23 @@ function pickProfileId(value: string | string[] | undefined): string {
 export default async function PlanningRunsPage({ searchParams }: PlanningRunsPageProps) {
   const resolvedSearchParams = await searchParams;
   const initialSelectedRunId = pickSelected(resolvedSearchParams?.selected);
-  const initialFilterProfileId = pickProfileId(resolvedSearchParams?.profileId) || (await getDefaultProfileId()) || "";
-  const featureFlags = getPlanningFeatureFlags();
+  const requestedProfileId = pickProfileId(resolvedSearchParams?.profileId);
+  const isDev = process.env.NODE_ENV !== "production";
+  if (isDev) {
+    return (
+      <PlanningRunsClient
+        initialSelectedRunId={initialSelectedRunId}
+        initialFilterProfileId={requestedProfileId}
+      />
+    );
+  }
+
+  const initialFilterProfileId = requestedProfileId
+    || (await getDefaultProfileId().catch(() => "")) || "";
   return (
     <PlanningRunsClient
       initialSelectedRunId={initialSelectedRunId}
       initialFilterProfileId={initialFilterProfileId}
-      pdfEnabled={featureFlags.pdfEnabled}
     />
   );
 }

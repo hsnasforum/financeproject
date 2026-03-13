@@ -7,9 +7,8 @@ import {
   type NewsNote,
   type NewsNoteTargetType,
 } from "./contracts";
+import { resolveNewsRootDir } from "./rootDir";
 import { parseWithV3Whitelist } from "../security/whitelist";
-
-const DEFAULT_NEWS_ROOT = path.join(process.cwd(), ".data", "news");
 
 const NoteIdSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{8,128}$/);
 
@@ -48,11 +47,11 @@ function safeNoteId(noteId: string): string {
   return NoteIdSchema.parse(noteId);
 }
 
-function notePath(noteId: string, rootDir = DEFAULT_NEWS_ROOT): string {
+function notePath(noteId: string, rootDir = resolveNewsRootDir()): string {
   return path.join(resolveNewsNotesDir(rootDir), `${safeNoteId(noteId)}.json`);
 }
 
-export function resolveNewsNotesDir(rootDir = DEFAULT_NEWS_ROOT): string {
+export function resolveNewsNotesDir(rootDir = resolveNewsRootDir()): string {
   return path.join(rootDir, "notes");
 }
 
@@ -76,7 +75,7 @@ function readNoteFile(filePath: string): NewsNoteRecord | null {
 export function listNewsNotes(input?: {
   targetType?: NewsNoteTargetType;
   targetId?: string;
-}, rootDir = DEFAULT_NEWS_ROOT): NewsNoteRecord[] {
+}, rootDir = resolveNewsRootDir()): NewsNoteRecord[] {
   const dir = resolveNewsNotesDir(rootDir);
   if (!fs.existsSync(dir)) return [];
 
@@ -109,7 +108,7 @@ export function createNewsNote(
     note: string;
     createdAt?: string;
   },
-  rootDir = DEFAULT_NEWS_ROOT,
+  rootDir = resolveNewsRootDir(),
 ): NewsNoteRecord {
   const parsed = CreateNewsNoteInputSchema.parse(input);
   const createdAt = parsed.createdAt ?? new Date().toISOString();
@@ -142,7 +141,7 @@ export function updateNewsNote(
     tags?: string[];
     note?: string;
   },
-  rootDir = DEFAULT_NEWS_ROOT,
+  rootDir = resolveNewsRootDir(),
 ): NewsNoteRecord | null {
   const filePath = notePath(noteId, rootDir);
   if (!fs.existsSync(filePath)) return null;
@@ -169,7 +168,7 @@ export function updateNewsNote(
   };
 }
 
-export function deleteNewsNote(noteId: string, rootDir = DEFAULT_NEWS_ROOT): boolean {
+export function deleteNewsNote(noteId: string, rootDir = resolveNewsRootDir()): boolean {
   const filePath = notePath(noteId, rootDir);
   if (!fs.existsSync(filePath)) return false;
   fs.unlinkSync(filePath);

@@ -12,7 +12,7 @@ const PROFILE: UserRecommendProfile = {
   rateMode: "max",
   topN: 5,
   candidateSources: ["finlife"],
-  candidatePool: "legacy",
+  candidatePool: "unified",
 };
 
 function legacyCandidates(): RecommendCandidate[] {
@@ -86,7 +86,7 @@ describe("recommend unified vs legacy", () => {
     });
     const unified = recommendCandidates({
       kind: "deposit",
-      profile: { ...PROFILE, candidatePool: "unified" },
+      profile: PROFILE,
       candidates: unifiedProductsToRecommendCandidates({
         items: unifiedItems(),
         profile: { preferredTerm: PROFILE.preferredTerm, rateMode: PROFILE.rateMode },

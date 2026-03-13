@@ -87,6 +87,7 @@ function buildEvidence(check: DoctorCheck): string | undefined {
 }
 
 export function buildDoctorIssues(checks: DoctorCheck[], _updatedAt = new Date().toISOString()): DoctorIssue[] {
+  void _updatedAt;
   return checks.map((check, index) => {
     const severity = toDoctorIssueSeverity(check.status);
     const evidence = buildEvidence(check);

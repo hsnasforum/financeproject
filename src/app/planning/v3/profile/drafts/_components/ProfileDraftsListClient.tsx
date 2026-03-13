@@ -1,8 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  bodyActionLinkGroupClassName,
+  BodyDialogSurface,
+  BodyTableFrame,
+  bodyDenseActionRowClassName,
+  bodyDialogActionsClassName,
+  bodyFieldClassName,
+  bodyLabelClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -112,6 +121,7 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
   const [loading, setLoading] = useState(!disableAutoLoad && initialRows.length < 1);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState("");
+  const [deleteTargetId, setDeleteTargetId] = useState("");
   const [draftBatchId, setDraftBatchId] = useState("");
   const [message, setMessage] = useState("");
 
@@ -178,8 +188,6 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
   async function handleDelete(draftId: string) {
     const normalized = asString(draftId);
     if (!normalized || deletingId) return;
-    const confirmed = window.confirm("이 초안을 삭제하시겠습니까?");
-    if (!confirmed) return;
 
     setDeletingId(normalized);
     setMessage("");
@@ -201,11 +209,19 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
         return;
       }
       await loadDrafts();
+      setDeleteTargetId("");
     } catch {
       setMessage("초안 삭제에 실패했습니다.");
     } finally {
       setDeletingId("");
     }
+  }
+
+  function openDeleteDialog(draftId: string): void {
+    if (deletingId) return;
+    const normalized = asString(draftId);
+    if (!normalized) return;
+    setDeleteTargetId(normalized);
   }
 
   return (
@@ -215,11 +231,11 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
           <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Drafts</h1>
           <p className="text-sm text-slate-600">배치 기반 초안을 로컬에 저장하고 review 할 수 있습니다.</p>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm font-semibold text-slate-700" htmlFor="v3-profile-draft-batch-id">
+            <label className={bodyLabelClassName} htmlFor="v3-profile-draft-batch-id">
               batchId
             </label>
             <input
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm sm:w-80"
+              className={`${bodyFieldClassName} sm:w-80`}
               id="v3-profile-draft-batch-id"
               onChange={(event) => {
                 setDraftBatchId(event.target.value);
@@ -248,13 +264,13 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
               새로고침
             </Button>
           </div>
-          <div className="flex flex-wrap gap-3 text-xs font-semibold text-emerald-700">
-            <Link className="underline underline-offset-2" href="/planning/v3/import/csv">
+          <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href="/planning/v3/import/csv">
               CSV 업로드
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/batches">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/batches">
               Batches
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
@@ -264,7 +280,7 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
           {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 profile draft가 없습니다.</p> : null}
 
           {rows.length > 0 ? (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-drafts-list">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                   <tr>
@@ -285,17 +301,14 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
                       <td className="px-3 py-2 text-right text-slate-800">{row.stats?.months ?? "-"}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{row.stats?.unassignedCount ?? "-"}</td>
                       <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <Link
-                            className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                            href={`/planning/v3/profile/drafts/${encodeURIComponent(row.draftId)}`}
-                          >
+                        <div className={bodyDenseActionRowClassName}>
+                          <BodyActionLink href={`/planning/v3/profile/drafts/${encodeURIComponent(row.draftId)}`}>
                             열기
-                          </Link>
+                          </BodyActionLink>
                           <Button
                             disabled={Boolean(deletingId)}
                             onClick={() => {
-                              void handleDelete(row.draftId);
+                              openDeleteDialog(row.draftId);
                             }}
                             size="sm"
                             type="button"
@@ -309,10 +322,44 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
                   ))}
                 </tbody>
               </table>
-            </div>
+            </BodyTableFrame>
           ) : null}
         </Card>
       </div>
+      {deleteTargetId ? (
+        <div
+          aria-labelledby="v3-profile-draft-delete-title"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+        >
+          <BodyDialogSurface>
+            <h2 className="text-base font-black text-slate-900" id="v3-profile-draft-delete-title">초안 삭제 확인</h2>
+            <p className="mt-2 text-sm text-slate-700">이 초안을 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.</p>
+            <div className={bodyDialogActionsClassName}>
+              <Button
+                disabled={Boolean(deletingId)}
+                onClick={() => setDeleteTargetId("")}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                취소
+              </Button>
+              <Button
+                disabled={Boolean(deletingId)}
+                onClick={() => {
+                  void handleDelete(deleteTargetId);
+                }}
+                size="sm"
+                type="button"
+              >
+                {deletingId ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
+          </BodyDialogSurface>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

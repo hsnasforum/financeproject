@@ -1,11 +1,10 @@
 # DART Rules Patch Diff (Dry Run)
 
-- generatedAt: 2026-03-01T03:54:50.265Z
+- generatedAt: 2026-03-12T08:47:58.296Z
 - rulesPath: config/dart-disclosure-rules.json
 - patchPath: tmp/dart/rules_patch.json
 - totalAdded: 0
 
-## contract
+## Changes
 
-- patterns: 8 -> 8
-- add: none
+- no changes

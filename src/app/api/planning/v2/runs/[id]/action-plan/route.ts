@@ -1,8 +1,7 @@
 import {
-  assertLocalHost,
+  assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../../lib/planning/api/response";
 import { ensureRunActionPlan } from "../../../../../../../lib/planning/server/store/runActionStore";
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
@@ -11,9 +10,9 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -23,10 +22,7 @@ function withLocalReadGuard(request: Request) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   const { id } = await context.params;

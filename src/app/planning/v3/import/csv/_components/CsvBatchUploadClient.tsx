@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { BodyActionLink, bodyActionLinkGroupClassName, bodyFieldClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
@@ -87,13 +87,13 @@ export function CsvBatchUploadClient() {
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 CSV Upload</h1>
           <p className="text-sm text-slate-600">CSV 파일을 배치로 저장한 뒤 요약 페이지로 이동합니다.</p>
-          <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-emerald-700">
-            <Link className="underline underline-offset-2" href="/planning/v3/batches">
+          <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href="/planning/v3/batches">
               Batch Center
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/profile/drafts">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/profile/drafts">
               Draft 목록
-            </Link>
+            </BodyActionLink>
           </div>
         </Card>
 
@@ -101,6 +101,7 @@ export function CsvBatchUploadClient() {
           <div className="flex flex-wrap items-center gap-2">
             <input
               accept=".csv,text/csv"
+              className={`${bodyFieldClassName} sm:w-96`}
               data-testid="v3-csv-file-input"
               onChange={(event) => {
                 setFile(event.currentTarget.files?.[0] ?? null);
@@ -130,4 +131,3 @@ export function CsvBatchUploadClient() {
     </PageShell>
   );
 }
-

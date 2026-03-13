@@ -3,10 +3,9 @@ import path from "node:path";
 import { z } from "zod";
 import { normalizeSeriesId } from "./aliases";
 import { IndicatorSourceSchema, SeriesSpecSchema, type SeriesSpec } from "./contracts";
+import { resolveIndicatorsRootDir } from "./rootDir";
 import { INDICATOR_SERIES_SPECS, INDICATOR_SOURCES } from "./specs";
 import { parseWithV3Whitelist } from "../security/whitelist";
-
-const DEFAULT_ROOT = path.join(process.cwd(), ".data", "indicators");
 
 const SpecOverridesSchema = z.object({
   schemaVersion: z.number().int().positive().optional(),
@@ -50,6 +49,10 @@ export const IndicatorSpecsImportApplyResultSchema = z.object({
 });
 export type IndicatorSpecsImportApplyResult = z.infer<typeof IndicatorSpecsImportApplyResultSchema>;
 
+function defaultRootDir(): string {
+  return resolveIndicatorsRootDir();
+}
+
 function defaultOverrides(): SpecOverrides {
   return {
     schemaVersion: 1,
@@ -58,11 +61,11 @@ function defaultOverrides(): SpecOverrides {
   };
 }
 
-export function resolveSpecOverridesPath(rootDir = DEFAULT_ROOT): string {
+export function resolveSpecOverridesPath(rootDir = defaultRootDir()): string {
   return path.join(rootDir, "specOverrides.json");
 }
 
-export function readSeriesSpecOverrides(rootDir = DEFAULT_ROOT): SpecOverrides {
+export function readSeriesSpecOverrides(rootDir = defaultRootDir()): SpecOverrides {
   const filePath = resolveSpecOverridesPath(rootDir);
   if (!fs.existsSync(filePath)) return defaultOverrides();
   try {
@@ -73,7 +76,7 @@ export function readSeriesSpecOverrides(rootDir = DEFAULT_ROOT): SpecOverrides {
   }
 }
 
-export function writeSeriesSpecOverrides(specs: SeriesSpec[], rootDir = DEFAULT_ROOT): SpecOverrides {
+export function writeSeriesSpecOverrides(specs: SeriesSpec[], rootDir = defaultRootDir()): SpecOverrides {
   const next = parseWithV3Whitelist(SpecOverridesSchema, {
     schemaVersion: 1,
     updatedAt: new Date().toISOString(),
@@ -97,7 +100,7 @@ function canonicalizeSpec(input: SeriesSpec): SeriesSpec {
   });
 }
 
-export function loadEffectiveSeriesSpecs(rootDir = DEFAULT_ROOT): SeriesSpec[] {
+export function loadEffectiveSeriesSpecs(rootDir = defaultRootDir()): SeriesSpec[] {
   const overrides = readSeriesSpecOverrides(rootDir);
   const map = new Map<string, SeriesSpec>();
   for (const row of INDICATOR_SERIES_SPECS) {
@@ -116,7 +119,7 @@ export function exportSeriesSpecList(rootDir?: string): SeriesSpec[] {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-function buildPreviewRows(items: unknown[], rootDir = DEFAULT_ROOT): IndicatorSpecsImportPreview {
+function buildPreviewRows(items: unknown[], rootDir = defaultRootDir()): IndicatorSpecsImportPreview {
   const sourceIds = new Set(INDICATOR_SOURCES.map((row) => IndicatorSourceSchema.parse(row).id));
   const issues: ImportIssue[] = [];
   const rows: PreviewRow[] = [];
@@ -177,11 +180,11 @@ function buildPreviewRows(items: unknown[], rootDir = DEFAULT_ROOT): IndicatorSp
   });
 }
 
-export function previewImportSeriesSpecs(items: unknown[], rootDir = DEFAULT_ROOT): IndicatorSpecsImportPreview {
+export function previewImportSeriesSpecs(items: unknown[], rootDir = defaultRootDir()): IndicatorSpecsImportPreview {
   return buildPreviewRows(items, rootDir);
 }
 
-export function applyImportSeriesSpecs(items: unknown[], rootDir = DEFAULT_ROOT): IndicatorSpecsImportApplyResult {
+export function applyImportSeriesSpecs(items: unknown[], rootDir = defaultRootDir()): IndicatorSpecsImportApplyResult {
   const preview = buildPreviewRows(items, rootDir);
   const current = readSeriesSpecOverrides(rootDir);
   const map = new Map<string, SeriesSpec>(

@@ -25,6 +25,36 @@
 - Ops (`src/app/ops`, `src/lib/ops`)
   - local-only + CSRF + audit + backup/restore + doctor
 
+## 공식 경로
+
+- 공식 계산 SSOT:
+  - `src/lib/planning/core/v2/*`
+- 공식 엔진 진입:
+  - `src/lib/planning/engine/*`
+  - `src/lib/planning/server/v2/toEngineInput.ts`
+- 공식 report 경로:
+  - `run -> resultDto -> ReportInputContract -> ReportVM`
+  - 구현 위치:
+    - `src/lib/planning/reports/reportInputContract.ts`
+    - `src/app/planning/reports/_lib/reportViewModel.ts`
+    - `src/app/api/planning/v2/runs/[id]/report/route.ts`
+    - `src/app/api/planning/reports/[runId]/export.html/route.ts`
+
+신규 계산/정책/리포트 해석은 위 경로에만 추가합니다.
+
+추가 금지 경로:
+
+- `src/lib/planner/*`
+- `src/app/report/*`
+- `src/components/ReportClient.tsx`
+- `src/app/recommend/*` 내부의 독자적 금융 상태 판정
+
+원칙:
+
+- UI는 `run.outputs.*`를 직접 재해석하기보다 `ResultDto` 또는 `ReportVM`을 소비한다.
+- `planner_last_snapshot_v1` 기반 경로는 legacy 전용으로 유지한다.
+- `recommend`는 planning stage 입력 계약이 확장되기 전까지 planning engine의 대체 판정을 만들지 않는다.
+
 ## Import 경계 규칙
 - `app/api/planning/v2/*`는 `src/lib/planning/server/*` 경로를 우선 사용합니다.
 - `use client` 파일은 `src/lib/planning/server/*` import를 금지합니다.
