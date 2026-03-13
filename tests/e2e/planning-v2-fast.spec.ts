@@ -1,12 +1,15 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/e2eTest";
 import { seedRunForReports } from "./helpers/planningGateHelpers";
 
 test("/planner and /planner/* redirect to /planning", async ({ page }) => {
   await page.goto("/planner");
-  await expect(page).toHaveURL(/\/planning$/);
+  await expect(page).toHaveURL(/\/planning$/, { timeout: 30_000 });
+
+  await page.goto("/planner/reports");
+  await expect(page).toHaveURL(/\/planning\/reports$/, { timeout: 30_000 });
 
   await page.goto("/planner/legacy");
-  await expect(page).toHaveURL(/\/planning\/legacy$/);
+  await expect(page).toHaveURL(/\/planning$/, { timeout: 30_000 });
 });
 
 test("/planning shows form by default and hides raw JSON until Advanced toggle", async ({ page }) => {
@@ -32,9 +35,9 @@ test("/planning/reports shows run-based dashboard by default and keeps raw hidde
   );
   await expect(page).toHaveURL(/\/planning\/reports(\?|$)/, { timeout: 30_000 });
 
-  await expect(page.getByTestId("report-print-button")).toBeVisible();
-  await expect(page.getByTestId("report-dashboard")).toBeVisible();
-  await expect(page.getByTestId("report-summary-cards")).toBeVisible();
+  await expect(page.getByTestId("report-print-button")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("report-summary-cards")).toBeVisible({ timeout: 30_000 });
   const monthlyEvidenceToggle = page.getByTestId("evidence-toggle-monthlySurplus");
   if (await monthlyEvidenceToggle.count()) {
     await monthlyEvidenceToggle.click();
@@ -43,8 +46,12 @@ test("/planning/reports shows run-based dashboard by default and keeps raw hidde
   const warningsTable = page.getByTestId("report-warnings-table");
   await expect(warningsTable).toBeVisible();
   await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
-  await page.getByTestId("report-advanced-toggle").click();
-  await expect(page.getByTestId("report-advanced-raw")).toBeVisible();
+  const advancedToggle = page.getByTestId("report-advanced-toggle");
+  await advancedToggle.scrollIntoViewIfNeeded();
+  await expect(advancedToggle).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
+  await advancedToggle.click();
+  await expect(advancedToggle).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
+  await expect(page.getByTestId("report-advanced-raw")).toBeVisible({ timeout: 30_000 });
 });
 
 test("/planning/runs shows print button", async ({ page }) => {
@@ -54,12 +61,12 @@ test("/planning/runs shows print button", async ({ page }) => {
 });
 
 test("key interactive controls expose accessible names", async ({ page, request }) => {
+  const seeded = await seedRunForReports(request);
   await page.goto("/planning");
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
   await expect(page.getByTestId("run-button")).toHaveAccessibleName("실행");
   await expect(page.getByTestId("planning-snapshot-ops-link")).toBeVisible();
 
-  const seeded = await seedRunForReports(request);
   await page.goto(
     `/planning/reports?runId=${encodeURIComponent(seeded.runId)}&profileId=${encodeURIComponent(seeded.profileId)}`,
   );

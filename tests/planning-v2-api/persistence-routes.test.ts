@@ -24,7 +24,7 @@ const originalAssumptionsHistoryDir = process.env.PLANNING_ASSUMPTIONS_HISTORY_D
 const originalAuditPath = process.env.AUDIT_LOG_PATH;
 
 const LOCAL_HOST = "localhost:3000";
-const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const REMOTE_HOST = "example.com";
 
 function sampleProfile() {
   return {
@@ -305,6 +305,8 @@ describe("planning v2 persistence routes", () => {
     expect(runCreatePayload.data?.outputs?.resultDto).toBeDefined();
     expect((runCreatePayload.data?.outputs?.simulate as { ref?: { name?: string } } | undefined)?.ref?.name).toBe("simulate");
     expect((runCreatePayload.data?.outputs?.actions as { ref?: { name?: string } } | undefined)?.ref?.name).toBe("actions");
+    expect((runCreatePayload.data?.outputs?.simulate as { ref?: { path?: string } } | undefined)?.ref?.path).toBeUndefined();
+    expect((runCreatePayload.data?.outputs?.actions as { ref?: { path?: string } } | undefined)?.ref?.path).toBeUndefined();
 
     const runId = String(runCreatePayload.data?.id ?? "");
 
@@ -497,28 +499,51 @@ describe("planning v2 persistence routes", () => {
     expect(deletePayload.error?.code).toBe("CONFIRM_MISMATCH");
   });
 
-  it("blocks non-local host requests", async () => {
-    const nonLocalGet = await profilesGET(buildGetRequest("/api/planning/v2/profiles", "example.com"));
-    const nonLocalGetPayload = await nonLocalGet.json() as {
+  it("allows same-origin reads and blocks cross-origin writes", async () => {
+    const sameOriginGet = await profilesGET(buildGetRequest("/api/planning/v2/profiles", REMOTE_HOST));
+    const sameOriginGetPayload = await sameOriginGet.json() as {
+      ok?: boolean;
+      data?: unknown;
+      error?: { code?: string };
+    };
+
+    expect(sameOriginGet.status).toBe(200);
+    expect(sameOriginGetPayload.ok).toBe(true);
+    expect(Array.isArray(sameOriginGetPayload.data)).toBe(true);
+
+    const crossOriginPost = await runsPOST(new Request(`http://${LOCAL_HOST}/api/planning/v2/runs`, {
+      method: "POST",
+      headers: {
+        host: LOCAL_HOST,
+        origin: `http://${REMOTE_HOST}`,
+        referer: `http://${REMOTE_HOST}/planning`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        profileId: "bad",
+        input: { horizonMonths: 12 },
+      }),
+    }));
+    const crossOriginPostPayload = await crossOriginPost.json() as {
       ok?: boolean;
       error?: { code?: string };
     };
 
-    expect(nonLocalGet.status).toBe(403);
-    expect(nonLocalGetPayload.ok).toBe(false);
-    expect(nonLocalGetPayload.error?.code).toBe("LOCAL_ONLY");
+    expect(crossOriginPost.status).toBe(403);
+    expect(crossOriginPostPayload.ok).toBe(false);
+    expect(crossOriginPostPayload.error?.code).toBe("ORIGIN_MISMATCH");
 
-    const nonLocalPost = await runsPOST(buildJsonRequest("POST", "/api/planning/v2/runs", {
+    const sameOriginRemotePost = await runsPOST(buildJsonRequest("POST", "/api/planning/v2/runs", {
       profileId: "bad",
       input: { horizonMonths: 12 },
-    }, "example.com"));
-    const nonLocalPostPayload = await nonLocalPost.json() as {
+    }, REMOTE_HOST));
+    const sameOriginRemotePostPayload = await sameOriginRemotePost.json() as {
       ok?: boolean;
       error?: { code?: string };
     };
 
-    expect(nonLocalPost.status).toBe(403);
-    expect(nonLocalPostPayload.ok).toBe(false);
-    expect(nonLocalPostPayload.error?.code).toBe("LOCAL_ONLY");
+    expect(sameOriginRemotePost.status).toBe(404);
+    expect(sameOriginRemotePostPayload.ok).toBe(false);
+    expect(sameOriginRemotePostPayload.error?.code).toBe("NO_DATA");
   });
 });

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { reportHeroActionLinkClassName, ReportHeroCard, ReportHeroStatCard, ReportHeroStatGrid } from "@/components/ui/ReportTone";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
 
 type Account = {
@@ -183,14 +184,37 @@ export function BalancesClient() {
   return (
     <PageShell>
       <div className="space-y-5">
+        <ReportHeroCard
+          kicker="Balance Timeline"
+          title="월별 잔액 흐름을 같은 기준으로 확인합니다"
+          description="거래 배치와 초기잔액을 연결해서 계좌별 opening, net, closing 변화를 월 단위 표로 확인합니다."
+          action={(
+            <>
+              <Link className={reportHeroActionLinkClassName} href="/planning/v3/accounts">
+                계좌 관리
+              </Link>
+              <Link className={reportHeroActionLinkClassName} href="/planning/v3/transactions/batches">
+                배치 목록
+              </Link>
+            </>
+          )}
+        >
+          <ReportHeroStatGrid>
+            <ReportHeroStatCard label="계좌 수" value={`${accounts.length}개`} description="타임라인에 매핑 가능한 계좌" />
+            <ReportHeroStatCard label="배치 수" value={`${batches.length}개`} description="조회 가능한 거래 배치" />
+            <ReportHeroStatCard label="선택 배치" value={selectedBatchId || "-"} description="현재 계산 기준 배치" />
+            <ReportHeroStatCard label="행 수" value={`${rows.length}개`} description={includeTransfers ? "transfer 포함 계산" : "transfer 제외 계산"} />
+          </ReportHeroStatGrid>
+          {message ? <p className="text-xs font-semibold text-rose-300">{message}</p> : null}
+        </ReportHeroCard>
+
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Monthly Balances</h1>
-          <p className="text-sm text-slate-600">배치 기준 거래와 초기잔액으로 계좌별 월별 잔액 타임라인을 계산합니다.</p>
+          <h2 className="text-sm font-bold text-slate-900">조회 조건</h2>
           <div className="flex flex-wrap items-center gap-3">
             <label className="text-sm font-semibold text-slate-700">
               배치 선택
               <select
-                className="ml-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                className="ml-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
                 onChange={(event) => {
                   setSelectedBatchId(event.currentTarget.value);
                 }}
@@ -204,7 +228,7 @@ export function BalancesClient() {
                 ))}
               </select>
             </label>
-            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+            <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
               <input
                 checked={includeTransfers}
                 onChange={(event) => {
@@ -214,12 +238,6 @@ export function BalancesClient() {
               />
               transfer 포함
             </label>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/accounts">
-              계좌 관리
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/transactions/batches">
-              배치 목록
-            </Link>
           </div>
         </Card>
 
@@ -234,7 +252,6 @@ export function BalancesClient() {
 
         <Card className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">월별 잔액 표</h2>
-          {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
           {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : null}
           {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">표시할 잔액 데이터가 없습니다.</p> : null}
 

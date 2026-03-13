@@ -11,9 +11,10 @@ describe("planning v3 csv parse", () => {
   it("normalizes dates, amount signs, and stays deterministic", () => {
     const csvText = loadFixture("sample.csv");
     const first = parseCsvTransactions(csvText);
-    const second = parseCsvTransactions(csvText);
+    const repeated = parseCsvTransactions(csvText);
 
     expect(first.errors).toEqual([]);
+    expect(repeated.transactions).toEqual(first.transactions);
     expect(first.stats).toEqual({ rows: 9, parsed: 9, skipped: 0 });
     expect(first.transactions[0]).toMatchObject({
       date: "2026-01-05",

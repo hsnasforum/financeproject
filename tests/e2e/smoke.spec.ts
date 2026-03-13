@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/e2eTest";
 
 test("dashboard renders", async ({ page }) => {
   await page.goto("/dashboard");

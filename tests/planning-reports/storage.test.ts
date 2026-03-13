@@ -87,6 +87,10 @@ describe("planning report storage", () => {
       },
       outputs: {
         simulate: {
+          ref: {
+            name: "simulate",
+            path: ".data/test/planning-reports-storage/report-run/simulate.json",
+          },
           summary: { endNetWorthKrw: 123_000_000 },
           warnings: [],
           goalsStatus: [],

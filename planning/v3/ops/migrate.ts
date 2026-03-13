@@ -286,7 +286,7 @@ function buildMigrationPlan(rootDir: string, now: Date): MigrationPlan {
         stepIds: step.stepIds,
         valid: true,
       });
-    } catch (error) {
+    } catch {
       pushIssue(issues, totals, {
         level: "error",
         code: "SCHEMA_INVALID",

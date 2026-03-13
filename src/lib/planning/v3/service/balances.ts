@@ -1,4 +1,5 @@
 import { type Account, type AccountTransaction, type MonthlyAccountBalance, type TxnOverride } from "../domain/types";
+import { roundKrw } from "../../calc";
 import { applyTxnOverrides } from "./applyOverrides";
 import { classifyTransactions } from "./classify";
 
@@ -56,7 +57,7 @@ export function computeMonthlyBalances(input: ComputeMonthlyBalancesInput): Mont
 
     const key = `${accountId}|${ym}`;
     const current = netByAccountMonth.get(key) ?? 0;
-    netByAccountMonth.set(key, current + Math.round(tx.amountKrw));
+    netByAccountMonth.set(key, current + roundKrw(tx.amountKrw));
   }
 
   const monthsByAccount = new Map<string, string[]>();
@@ -90,7 +91,7 @@ export function computeMonthlyBalances(input: ComputeMonthlyBalancesInput): Mont
     let running = hasStartingBalance ? Number(startingBalanceKrw) : 0;
 
     for (const ym of months) {
-      const netKrw = Math.round(netByAccountMonth.get(`${accountId}|${ym}`) ?? 0);
+      const netKrw = roundKrw(netByAccountMonth.get(`${accountId}|${ym}`) ?? 0);
       if (hasStartingBalance) {
         running += netKrw;
       }

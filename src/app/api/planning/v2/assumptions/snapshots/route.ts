@@ -5,11 +5,9 @@ import {
   loadLatestAssumptionsSnapshot,
 } from "../../../../../../lib/planning/assumptions/storage";
 import {
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
 
 type SnapshotItem = {
@@ -17,6 +15,12 @@ type SnapshotItem = {
   asOf?: string;
   fetchedAt?: string;
   staleDays?: number;
+  warningsCount?: number;
+  korea?: {
+    policyRatePct?: number;
+    cpiYoYPct?: number;
+    newDepositAvgPct?: number;
+  };
 };
 
 type LatestSnapshotItem = SnapshotItem & {
@@ -46,9 +50,21 @@ function computeStaleDays(fetchedAt: string | undefined, now: Date): number | un
   return Math.max(0, diff);
 }
 
-function withLocalReadGuard(request: Request) {
+function buildKoreaSummary(value: {
+  policyRatePct?: number;
+  cpiYoYPct?: number;
+  newDepositAvgPct?: number;
+}): SnapshotItem["korea"] | undefined {
+  const korea = {
+    ...(typeof value.policyRatePct === "number" ? { policyRatePct: value.policyRatePct } : {}),
+    ...(typeof value.cpiYoYPct === "number" ? { cpiYoYPct: value.cpiYoYPct } : {}),
+    ...(typeof value.newDepositAvgPct === "number" ? { newDepositAvgPct: value.newDepositAvgPct } : {}),
+  };
+  return Object.keys(korea).length > 0 ? korea : undefined;
+}
+
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     return null;
   } catch (error) {
@@ -59,10 +75,7 @@ function withLocalReadGuard(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   const { searchParams } = new URL(request.url);
@@ -82,6 +95,8 @@ export async function GET(request: Request) {
         ...(snapshot.asOf ? { asOf: snapshot.asOf } : {}),
         ...(snapshot.fetchedAt ? { fetchedAt: snapshot.fetchedAt } : {}),
         ...(typeof staleDays === "number" ? { staleDays } : {}),
+        warningsCount: Array.isArray(snapshot.warnings) ? snapshot.warnings.length : 0,
+        ...(buildKoreaSummary(snapshot.korea) ? { korea: buildKoreaSummary(snapshot.korea) } : {}),
       });
     }
 
@@ -102,6 +117,7 @@ export async function GET(request: Request) {
         ...(latestSnapshot.asOf ? { asOf: latestSnapshot.asOf } : {}),
         ...(latestSnapshot.fetchedAt ? { fetchedAt: latestSnapshot.fetchedAt } : {}),
         ...(typeof staleDays === "number" ? { staleDays } : {}),
+        ...(buildKoreaSummary(latestSnapshot.korea) ? { korea: buildKoreaSummary(latestSnapshot.korea) } : {}),
         warningsCount: Array.isArray(latestSnapshot.warnings) ? latestSnapshot.warnings.length : 0,
         sourcesCount: Array.isArray(latestSnapshot.sources) ? latestSnapshot.sources.length : 0,
       };

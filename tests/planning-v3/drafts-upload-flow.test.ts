@@ -42,7 +42,7 @@ describe("planning v3 drafts upload flow", () => {
       },
     ];
 
-    const fetchMock = vi.fn<[RequestInfo | URL, RequestInit?], Promise<Response>>()
+    const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({
         ok: true,
         cashflow: [
@@ -79,8 +79,10 @@ describe("planning v3 drafts upload flow", () => {
     const secondUrl = String(fetchMock.mock.calls[1]?.[0] ?? "");
     const thirdUrl = String(fetchMock.mock.calls[2]?.[0] ?? "");
     expect(firstUrl).toContain("/api/planning/v3/import/csv");
+    expect(firstUrl).toContain("csrf=csrf");
     expect(firstUrl).not.toContain("persist=");
     expect(String(firstInit?.headers && (firstInit.headers as Record<string, string>)["content-type"])).toBe("application/json");
+    expect(String(firstInit?.headers && (firstInit.headers as Record<string, string>)["x-csrf-token"])).toBe("csrf");
     expect(String(firstInit?.body ?? "")).toContain("\"csvText\"");
     expect(secondUrl).toContain("/api/planning/v3/drafts");
     expect(thirdUrl).toContain("/api/planning/v3/drafts");
@@ -88,7 +90,7 @@ describe("planning v3 drafts upload flow", () => {
 
   it("prefers payload.data.monthlyCashflow/meta/draftPatch", async () => {
     const fixture = readFixture("preview-data-shape.json");
-    const fetchMock = vi.fn<[RequestInfo | URL, RequestInit?], Promise<Response>>()
+    const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse(fixture));
 
     const preview = await fetchCsvDraftPreview(
@@ -111,14 +113,16 @@ describe("planning v3 drafts upload flow", () => {
     const firstUrl = String(fetchMock.mock.calls[0]?.[0] ?? "");
     const firstInit = fetchMock.mock.calls[0]?.[1];
     expect(firstUrl).toContain("/api/planning/v3/import/csv");
+    expect(firstUrl).toContain("csrf=csrf");
     expect(firstUrl).not.toContain("persist=");
     expect(String(firstInit?.headers && (firstInit.headers as Record<string, string>)["content-type"])).toBe("application/json");
+    expect(String(firstInit?.headers && (firstInit.headers as Record<string, string>)["x-csrf-token"])).toBe("csrf");
     expect(String(firstInit?.body ?? "")).toContain("\"csvText\"");
   });
 
   it("supports legacy top-level preview response shape from fixture", async () => {
     const fixture = readFixture("preview-legacy-shape.json");
-    const fetchMock = vi.fn<[RequestInfo | URL, RequestInit?], Promise<Response>>()
+    const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse(fixture));
 
     const preview = await fetchCsvDraftPreview(

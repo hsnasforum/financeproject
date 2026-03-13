@@ -10,22 +10,46 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:5120";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const REMOTE_HOST = "example.com";
+const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+const EVIL_ORIGIN = "http://evil.com";
 
-function requestMultipart(fileText?: string, fileName = "sample.csv"): Request {
+function requestMultipart(
+  fileText?: string,
+  fileName = "sample.csv",
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
   const form = new FormData();
   if (typeof fileText === "string") {
     form.append("file", new File([fileText], fileName, { type: "text/csv" }));
   }
   form.append("csrf", "test");
-  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/batches/import/csv`, {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}/api/planning/v3/batches/import/csv`, {
     method: "POST",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/import/csv`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/import/csv`,
     },
     body: form,
   });
+}
+
+async function expectOriginMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
 }
 
 function collectKeys(value: unknown, parent = ""): string[] {
@@ -140,5 +164,36 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     const secondPayload = await second.json() as { data?: { batchId?: string } };
     expect(firstPayload.data?.batchId).toBe(secondPayload.data?.batchId);
   });
-});
 
+  it("allows same-origin remote host and still blocks cross-origin", async () => {
+    const csvText = [
+      "date,amount,description",
+      "2026-03-01,1000,alpha",
+      "2026-03-02,-300,beta",
+    ].join("\n");
+
+    const sameOrigin = await importCsvPOST(requestMultipart(
+      csvText,
+      "remote.csv",
+      { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+    ));
+    expect(sameOrigin.status).toBe(201);
+    const sameOriginPayload = await sameOrigin.json() as {
+      ok?: boolean;
+      data?: { batchId?: string };
+    };
+    expect(sameOriginPayload.ok).toBe(true);
+    expect(typeof sameOriginPayload.data?.batchId).toBe("string");
+
+    await expectOriginMismatch(importCsvPOST(requestMultipart(
+      csvText,
+      "remote.csv",
+      {
+        requestOrigin: REMOTE_ORIGIN,
+        host: REMOTE_HOST,
+        origin: EVIL_ORIGIN,
+        refererOrigin: EVIL_ORIGIN,
+      },
+    )));
+  });
+});

@@ -1,19 +1,18 @@
 import {
-  assertLocalHost,
+  assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../../lib/dev/onlyDev";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
+import { resolveReportResultDtoFromRun } from "../../../../../../../lib/planning/reports/reportInputContract";
 import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
-import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../../../../../../../lib/planning/v2/resultDto";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -23,10 +22,7 @@ function withLocalReadGuard(request: Request) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   const { id } = await context.params;
@@ -36,10 +32,7 @@ export async function GET(request: Request, context: RouteContext) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
 
-    const outputs = run.outputs && typeof run.outputs === "object" ? run.outputs : {};
-    const resultDto = isResultDtoV1((outputs as Record<string, unknown>).resultDto)
-      ? (outputs as Record<string, unknown>).resultDto
-      : buildResultDtoV1FromRunRecord(run);
+    const resultDto = resolveReportResultDtoFromRun(run);
     const fileName = `planning-run-result-${run.id}.json`;
     return new Response(`${JSON.stringify(resultDto, null, 2)}\n`, {
       status: 200,

@@ -12,12 +12,13 @@ import {
   type PlanningRunActionStatus,
   type PlanningRunRecord,
 } from "./types";
+import { resolveReportResultDtoFromRun } from "../reports/reportInputContract";
 import { getRun } from "./runStore";
-import { buildResultDtoV1FromRunRecord, isResultDtoV1 } from "../v2/resultDto";
 import { buildInterpretationVM } from "../v2/insights/interpretationVm";
 import { resolveInterpretationActionHref } from "../v2/insights/actionLinks";
 import { type GoalRow } from "../v2/report/mapGoals";
 import { type ActionItemV2 } from "../v2/actions/types";
+import { roundKrw } from "../calc/roundingPolicy";
 
 const ACTION_PLAN_FILE = "action-plan.json";
 const ACTION_PROGRESS_FILE = "action-progress.json";
@@ -86,6 +87,12 @@ async function resolveActionProgressPath(runId: string): Promise<string> {
   return path.join(await resolveActionDir(runId), ACTION_PROGRESS_FILE);
 }
 
+function isRecoverableJsonReadError(error: unknown): boolean {
+  const nodeError = error as NodeJS.ErrnoException;
+  if (nodeError?.code === "ENOENT") return true;
+  return error instanceof SyntaxError;
+}
+
 async function readJsonFile(filePath: string): Promise<unknown | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
@@ -96,8 +103,7 @@ async function readJsonFile(filePath: string): Promise<unknown | null> {
     }
     return decoded.payload;
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return null;
+    if (isRecoverableJsonReadError(error)) return null;
     throw error;
   }
 }
@@ -169,9 +175,7 @@ function parseActionProgress(payload: unknown, runId: string): PlanningRunAction
 }
 
 function goalsFromResultDto(run: PlanningRunRecord): GoalRow[] {
-  const dto = isResultDtoV1(run.outputs.resultDto)
-    ? run.outputs.resultDto
-    : buildResultDtoV1FromRunRecord(run);
+  const dto = resolveReportResultDtoFromRun(run);
   return dto.goals.map((goal) => ({
     name: goal.title,
     targetAmount: Number(goal.targetKrw ?? 0),
@@ -188,9 +192,7 @@ function getActionItemsFromRun(run: PlanningRunRecord): ActionItemV2[] {
     ? run.outputs.actions.actions
     : [];
   if (runActions.length > 0) return runActions;
-  const dto = isResultDtoV1(run.outputs.resultDto)
-    ? run.outputs.resultDto
-    : buildResultDtoV1FromRunRecord(run);
+  const dto = resolveReportResultDtoFromRun(run);
   return dto.actions?.items ?? [];
 }
 
@@ -234,9 +236,7 @@ function buildActionPlanFromRun(run: PlanningRunRecord): PlanningRunActionPlan {
     };
   }
 
-  const dto = isResultDtoV1(run.outputs.resultDto)
-    ? run.outputs.resultDto
-    : buildResultDtoV1FromRunRecord(run);
+  const dto = resolveReportResultDtoFromRun(run);
   const monteCarloProbabilities = asRecord(dto.monteCarlo?.probabilities);
   const interpretation = buildInterpretationVM({
     summary: {
@@ -309,7 +309,7 @@ export function summarizeRunActionProgress(progress: PlanningRunActionProgress):
   const doing = progress.items.filter((item) => item.status === "doing").length;
   const todo = progress.items.filter((item) => item.status === "todo").length;
   const snoozed = progress.items.filter((item) => item.status === "snoozed").length;
-  const completionPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const completionPct = total > 0 ? roundKrw((done / total) * 100) : 0;
   return { total, done, doing, todo, snoozed, completionPct };
 }
 

@@ -242,6 +242,7 @@ export function createEcosConnector(deps: EcosConnectorDeps = {}): SeriesConnect
   return {
     sourceType: "ecos",
     async fetchSeries(spec: SeriesSpec, options: FetchSeriesOptions) {
+      void options;
       const apiKey = resolveApiKey(env);
       const parsedExternalId = parseEcosExternalId(spec.externalId);
       const url = buildEcosUrl(parsedExternalId, apiKey);

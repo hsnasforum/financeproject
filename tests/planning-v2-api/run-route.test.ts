@@ -201,12 +201,15 @@ describe("POST /api/planning/run + GET /api/planning/run[s]/:id", () => {
     const stageById = new Map((readPayload.data?.stages ?? []).map((stage) => [stage.id, stage.status]));
     if (stageById.get("simulate") === "SUCCESS") {
       expect(readPayload.data?.outputs?.simulate?.ref?.name).toBe("simulate");
+      expect((readPayload.data?.outputs?.simulate?.ref as { path?: string } | undefined)?.path).toBeUndefined();
     }
     if (stageById.get("scenarios") === "SUCCESS") {
       expect(readPayload.data?.outputs?.scenarios?.ref?.name).toBe("scenarios");
+      expect((readPayload.data?.outputs?.scenarios?.ref as { path?: string } | undefined)?.path).toBeUndefined();
     }
     if (stageById.get("actions") === "SUCCESS") {
       expect(readPayload.data?.outputs?.actions?.ref?.name).toBe("actions");
+      expect((readPayload.data?.outputs?.actions?.ref as { path?: string } | undefined)?.path).toBeUndefined();
     }
 
     const readPluralRes = await runsGET(

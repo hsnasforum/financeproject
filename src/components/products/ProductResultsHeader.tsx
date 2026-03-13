@@ -1,7 +1,6 @@
 "use client";
 
 import { Badge } from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
 
 type SortKey = "rateDesc" | "rateAsc" | "nameAsc" | "termAsc";
 type RatePreference = "higher" | "lower";

@@ -1,23 +1,17 @@
 import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { type DebtStrategyInput, type LiabilityV2, type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
+import { buildEnginePayloadFromProfile } from "../../../../../lib/planning/server/v2/toEngineInput";
 import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
 import { validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
 import { validateProfile } from "../../../../../lib/planning/v2/profileValidation";
-import {
-  createEngineEnvelope,
-  ENGINE_SCHEMA_VERSION,
-  runPlanningEngine,
-} from "../../../../../lib/planning/engine";
 
 type DebtStrategyRequestBody = {
   profile?: unknown;
@@ -165,27 +159,12 @@ function assertOfferLiabilityIdsMatch(offers: RefiOffer[], liabilities: Liabilit
   ]);
 }
 
-function toEngineInput(profile: ReturnType<typeof validateProfileV2>) {
-  const debtBalance = profile.debts.reduce((total, debt) => {
-    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
-  }, 0);
-
-  return {
-    monthlyIncome: profile.monthlyIncomeNet,
-    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
-    age: profile.currentAge,
-    liquidAssets: profile.liquidAssets,
-    debtBalance,
-  };
-}
-
 function hasCsrfCookie(request: Request): boolean {
   return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -204,9 +183,6 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: DebtStrategyRequestBody = null;
   try {
     body = (await request.json()) as DebtStrategyRequestBody;
@@ -217,35 +193,28 @@ export async function POST(request: Request) {
   if (!isRecord(body)) {
     return fail("INPUT");
   }
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   try {
     const profile = validateProfileV2(body.profile);
-    const engineResult = runPlanningEngine(toEngineInput(profile));
-    const engine = createEngineEnvelope({
-      status: engineResult.status,
-      decision: engineResult.decision,
-    });
     const offers = parseOffers(body.offers);
     const options = parseOptions(body.options);
     const liabilities = toLiabilitiesFromProfile(profile);
     assertOfferLiabilityIdsMatch(offers, liabilities);
 
-    const result = planningService.computeDebtStrategy({
-      liabilities,
-      monthlyIncomeKrw: engineResult.input.monthlyIncome,
-      offers,
-      options,
-      nowMonthIndex: 0,
-      horizonMonths: DEFAULT_REMAINING_MONTHS,
-    });
+    const { data } = buildEnginePayloadFromProfile(profile, (engineResult) => ({
+      ...planningService.computeDebtStrategy({
+        liabilities,
+        monthlyIncomeKrw: engineResult.input.monthlyIncome,
+        offers,
+        options,
+        nowMonthIndex: 0,
+        horizonMonths: DEFAULT_REMAINING_MONTHS,
+      }),
+    }));
 
-    return ok({
-      ...result,
-      engine,
-      engineSchemaVersion: ENGINE_SCHEMA_VERSION,
-    }, {
+    return ok(data, {
       generatedAt: new Date().toISOString(),
       snapshot: {
         missing: true,

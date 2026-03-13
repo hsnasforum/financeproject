@@ -15,11 +15,13 @@ import {
   buildAssumptionsFreshnessDoctorCheck,
   buildMetricsDoctorChecks,
   buildRecentSuccessfulRunDoctorCheck,
+  buildSchedulerThresholdPolicyDoctorCheck,
   buildScheduledRunFailureDoctorCheck,
 } from "../../../../lib/ops/doctorPolicyChecks";
 import { readRecent as readOpsMetricEvents } from "../../../../lib/ops/metrics/metricsStore";
 import { appendOpsMetricEvent } from "../../../../lib/ops/metricsLog";
 import { loadOpsPolicy } from "../../../../lib/ops/opsPolicy";
+import { inspectOpsSchedulerThresholdPolicy } from "../../../../lib/ops/scheduler/policy";
 import { buildExternalDataQualityDoctorChecks, runExternalDataQualityChecks } from "../../../../lib/ops/dataQuality";
 import { loadLatestAssumptionsSnapshot } from "../../../../lib/planning/server/assumptions/storage";
 import { listProfiles } from "../../../../lib/planning/server/store/profileStore";
@@ -81,6 +83,21 @@ async function checkRecentSuccessfulRun(): Promise<DoctorCheck> {
   return buildRecentSuccessfulRunDoctorCheck({
     runs,
     successRunWarnDays: policy.doctor.successRunWarnDays,
+  });
+}
+
+async function checkSchedulerThresholdPolicy(): Promise<DoctorCheck> {
+  const inspection = await inspectOpsSchedulerThresholdPolicy();
+  return buildSchedulerThresholdPolicyDoctorCheck({
+    source: inspection.source,
+    valid: inspection.valid,
+    exists: inspection.exists,
+    path: inspection.path,
+    errors: inspection.errors,
+    policy: {
+      warnConsecutiveFailures: inspection.policy.warnConsecutiveFailures,
+      riskConsecutiveFailures: inspection.policy.riskConsecutiveFailures,
+    },
   });
 }
 
@@ -336,6 +353,7 @@ export async function GET(request: Request) {
       await checkMigrations(),
       await checkAssumptions(),
       await checkRecentSuccessfulRun(),
+      await checkSchedulerThresholdPolicy(),
       ...metricChecks,
       ...dataQualityChecks,
       await checkProfileValidation(),

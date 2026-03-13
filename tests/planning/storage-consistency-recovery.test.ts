@@ -11,6 +11,7 @@ import {
 import { resetVaultRuntimeForTests } from "../../src/lib/planning/security/vaultState";
 import { resolveProfileRunMetaPath, resolveRunsIndexPath } from "../../src/lib/planning/store/paths";
 import { createProfile } from "../../src/lib/planning/store/profileStore";
+import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 import { createRun, readRunIndexEntries } from "../../src/lib/planning/store/runStore";
 
 const env = process.env as Record<string, string | undefined>;
@@ -123,10 +124,14 @@ describe.sequential("planning storage consistency/recovery", () => {
       },
       outputs: {
         simulate: {
+          ref: {
+            name: "simulate",
+            path: ".data/planning/runs/mismatch-run-1/simulate.json",
+          },
           summary: {
             monthlySurplusKrw: 500_000,
           },
-        },
+        } as unknown as PlanningRunRecord["outputs"]["simulate"],
       },
     }, { enforceRetention: false });
 

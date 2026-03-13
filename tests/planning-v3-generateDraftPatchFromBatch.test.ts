@@ -183,6 +183,6 @@ describe("generateDraftPatchFromBatch", () => {
 
   it("throws not-found error for missing batch id", async () => {
     await expect(generateDraftPatchFromBatch({ batchId: "b_missing_batch_id" }))
-      .rejects.toMatchObject<Partial<GenerateDraftPatchFromBatchError>>({ code: "NOT_FOUND" });
+      .rejects.toMatchObject({ code: "NOT_FOUND" } satisfies Partial<GenerateDraftPatchFromBatchError>);
   });
 });

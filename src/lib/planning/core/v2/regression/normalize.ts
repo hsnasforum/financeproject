@@ -1,3 +1,4 @@
+import { roundKrw, roundToDigits } from "../../../calc/roundingPolicy";
 import { type ActionItemV2 } from "../actions/types";
 import { type MonteCarloResult } from "../monteCarlo";
 import { type AssumptionsHealthSummary } from "../assumptionsHealth";
@@ -53,12 +54,12 @@ type NormalizeInput = {
 
 function roundMoney(value: number): number {
   if (!Number.isFinite(value)) return 0;
-  return Math.round(value);
+  return roundKrw(value);
 }
 
 function roundProbability(value: number): number {
   if (!Number.isFinite(value)) return 0;
-  return Math.round((value + Number.EPSILON) * 1000) / 1000;
+  return roundToDigits(value, 3);
 }
 
 function safeEndNetWorth(result: SimulationResultV2 | undefined): number {

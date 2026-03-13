@@ -87,7 +87,15 @@ import { POST } from "../src/app/api/recommend/route";
 type RecommendApiJson = {
   ok?: boolean;
   error?: { message?: string };
-  meta?: { kind?: string };
+  meta?: {
+    kind?: string;
+    planningContext?: Record<string, unknown> | null;
+    planningLinkage?: {
+      readiness?: string;
+      metricsCount?: number;
+      stageInference?: string;
+    };
+  };
   items?: Array<{ finalScore?: number; breakdown?: unknown[] }>;
   debug?: { candidateCount?: number };
   message?: string;
@@ -244,6 +252,10 @@ describe("POST /api/recommend", () => {
       liquidityPref: "mid",
       rateMode: "max",
       topN: 10,
+      planningContext: {
+        monthlyIncomeKrw: 4_500_000,
+        monthlyExpenseKrw: 2_600_000,
+      },
     });
 
     expect(status).toBe(200);
@@ -251,6 +263,18 @@ describe("POST /api/recommend", () => {
     expect(json).toHaveProperty("items");
     expect(Array.isArray(json.items)).toBe(true);
     expect(["deposit", "saving"]).toContain(json.meta?.kind);
+    expect(json.meta?.planningContext).toMatchObject({
+      monthlyIncomeKrw: 4_500_000,
+      monthlyExpenseKrw: 2_600_000,
+    });
+    expect(json.meta?.planningLinkage).toMatchObject({
+      readiness: "partial",
+      metricsCount: 2,
+      stageInference: "disabled",
+    });
+    expect(json).not.toHaveProperty("engine");
+    expect(json).not.toHaveProperty("stage");
+    expect(json).not.toHaveProperty("stageDecision");
 
     if ((json.items?.length ?? 0) > 0) {
       expect(typeof json.items?.[0]?.finalScore).toBe("number");
@@ -285,6 +309,55 @@ describe("POST /api/recommend", () => {
     expect(status).toBe(200);
     expect(Array.isArray(json.items)).toBe(true);
     expect((json.items ?? []).length).toBe(0);
+    expect(json.meta?.planningLinkage).toMatchObject({
+      readiness: "none",
+      metricsCount: 0,
+      stageInference: "disabled",
+    });
     expect(typeof json.message === "string" || json.debug?.candidateCount === 0).toBe(true);
+  });
+
+  it("returns planningLinkage ready when all planning metrics are present", async () => {
+    mocked.getUnifiedProducts.mockResolvedValue({
+      kind: "deposit",
+      sources: { finlife: { count: 0 } },
+      merged: [],
+      items: [],
+      pageInfo: {
+        hasMore: false,
+        nextCursor: null,
+        limit: 1000,
+        sourceId: "finlife",
+      },
+    });
+    mocked.externalProductFindMany.mockResolvedValue([]);
+
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+      planningContext: {
+        monthlyIncomeKrw: 4_500_000,
+        monthlyExpenseKrw: 2_600_000,
+        liquidAssetsKrw: 12_000_000,
+        debtBalanceKrw: 5_000_000,
+      },
+    });
+
+    expect(status).toBe(200);
+    expect(json.meta?.planningContext).toMatchObject({
+      monthlyIncomeKrw: 4_500_000,
+      monthlyExpenseKrw: 2_600_000,
+      liquidAssetsKrw: 12_000_000,
+      debtBalanceKrw: 5_000_000,
+    });
+    expect(json.meta?.planningLinkage).toMatchObject({
+      readiness: "ready",
+      metricsCount: 4,
+      stageInference: "disabled",
+    });
   });
 });

@@ -1,72 +1,241 @@
-"use client";
-
 import Link from "next/link";
-import Image from "next/image";
-import { useMemo } from "react";
-import { listSnapshots } from "@/lib/planner/storage";
+import { Container } from "@/components/ui/Container";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { ReportHeroCard } from "@/components/ui/ReportTone";
+import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
+import { appendProfileIdQuery } from "@/lib/planning/profileScope";
 
-export function HomePortalClient() {
-  const recent = useMemo(() => listSnapshots().slice(0, 3), []);
+export type HomePortalRunSummary = {
+  id: string;
+  profileId: string;
+  title: string;
+  createdAt: string;
+  horizonMonths: number;
+  policyId: string;
+  snapshotId?: string;
+  overallStatus?: "RUNNING" | "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
+};
+
+export type HomePortalFeaturedAction = {
+  badge: string;
+  title: string;
+  summary: string;
+  href: string;
+  basis?: string;
+  quickRuleDetail?: string;
+  quickRuleLabel?: string;
+};
+
+function statusLabel(status: HomePortalRunSummary["overallStatus"]): string {
+  if (status === "SUCCESS") return "성공";
+  if (status === "PARTIAL_SUCCESS") return "부분 성공";
+  if (status === "FAILED") return "실패";
+  if (status === "RUNNING") return "실행 중";
+  return "저장됨";
+}
+
+function formatDateLabel(value: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value.slice(0, 10);
+  return new Date(parsed).toLocaleDateString("ko-KR", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function HomePortalClient({
+  recentRuns,
+  featuredAction,
+}: {
+  recentRuns: HomePortalRunSummary[];
+  featuredAction?: HomePortalFeaturedAction | null;
+}) {
+  const recent = recentRuns;
+  const latestRun = recent[0] ?? null;
 
   return (
-    <Card className="relative overflow-hidden p-8 border-none shadow-lg shadow-slate-200/50 bg-white">
-      {/* Background Pattern Overlay */}
-      <div 
-        className="absolute inset-0 opacity-[0.03] pointer-events-none" 
-        style={{ backgroundImage: "url(/patterns/pattern-emerald-dots.png)", backgroundSize: "128px" }}
-      />
-
-      <div className="relative z-10">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight">최근 플래닝 스냅샷</h3>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Recently Saved Plans</p>
-          </div>
-          <Link href="/planning" className="group inline-flex items-center gap-2 text-sm font-bold text-emerald-600">
-            플래닝으로 이동
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
-          </Link>
-        </div>
-
-        {recent.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 bg-slate-50/50 rounded-[2rem] border border-dashed border-slate-200 backdrop-blur-sm">
-             <div className="relative mb-6">
-                <div className="absolute inset-0 bg-emerald-100/30 blur-3xl rounded-full" />
-                <Image src="/visuals/empty-finance.png" alt="" aria-hidden="true" width={180} height={180} className="relative w-[180px] h-auto object-contain drop-shadow-sm" />
-             </div>
-             <p className="text-base font-black text-slate-900">아직 저장된 스냅샷이 없습니다.</p>
-             <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-tight">저장된 데이터가 없어 추천을 시작할 수 없습니다</p>
-             <Link href="/planning" className="mt-8">
-                <Button variant="outline" className="rounded-full px-8 h-12 font-black border-slate-200 bg-white shadow-sm hover:border-emerald-200 hover:bg-emerald-50 transition-all">
-                  첫 플래닝 시작
-                </Button>
-             </Link>
-          </div>
-        ) : (
-        <div className="grid gap-3">
-          {recent.map((snap) => (
-            <div key={snap.id} className="group flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-5 hover:border-emerald-200 hover:shadow-md transition-all duration-300">
-              <div className="flex items-center gap-4">
-                 <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-emerald-50 group-hover:text-emerald-600 transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                 </div>
-                 <div>
-                    <p className="text-sm font-black text-slate-900 leading-none mb-1.5">{snap.input.goalName}</p>
-                    <p className="text-[11px] font-bold text-slate-400">
-                      {snap.createdAt.slice(0, 10)} · 월 저축 {Math.round(snap.metrics.monthlySaving).toLocaleString()}원
-                    </p>
-                 </div>
-              </div>
-              <Link href="/planning" className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-emerald-600 hover:text-white transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+    <section className="py-14">
+      <Container className="px-4 sm:px-6 lg:px-8">
+        <div className="space-y-6">
+          <ReportHeroCard
+            kicker={latestRun ? "Next Actions" : "Quick Start"}
+            title={latestRun ? "최근 플랜에서 바로 이어서 진행합니다" : "첫 플랜을 시작할 준비가 된 홈 화면"}
+            description={latestRun
+              ? `${latestRun.title} 기준으로 리포트, 재실행, 혜택 탐색까지 같은 흐름으로 이어갈 수 있습니다.`
+              : "처음이라면 플래닝, 상품 카탈로그, 혜택 탐색 중 가장 익숙한 경로부터 시작하면 됩니다."}
+          >
+            {latestRun && featuredAction ? (
+              <Link
+                className="block rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:bg-white/15"
+                href={featuredAction.href}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">TODAY</p>
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/75">
+                    {featuredAction.badge}
+                  </span>
+                  {featuredAction.quickRuleLabel ? (
+                    <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[11px] font-semibold text-emerald-200">
+                      quick rules · {featuredAction.quickRuleLabel}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">{featuredAction.title}</p>
+                <p className="mt-2 text-sm leading-6 text-white/75">{featuredAction.summary}</p>
+                {featuredAction.basis ? (
+                  <p className="mt-2 text-xs text-white/55">기준: {featuredAction.basis}</p>
+                ) : null}
+                {featuredAction.quickRuleDetail ? (
+                  <p className="mt-2 text-xs text-white/60">상태 읽기: {featuredAction.quickRuleDetail}</p>
+                ) : null}
+                <p className="mt-6 text-sm font-bold text-emerald-300">액션부터 보기</p>
               </Link>
+            ) : null}
+            <div className="grid gap-4 lg:grid-cols-3">
+            {latestRun ? (
+              <>
+                <Link
+                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(latestRun.id)}`, latestRun.profileId)}
+                  prefetch={devPlanningPrefetch("/planning/reports")}
+                >
+                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">NEXT 1</p>
+                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">최신 리포트 다시 보기</p>
+                  <p className="mt-2 text-sm leading-6 text-white/75">
+                    {latestRun.title} · {formatDateLabel(latestRun.createdAt)}
+                  </p>
+                  <p className="mt-6 text-sm font-bold text-emerald-300">리포트 열기</p>
+                </Link>
+                <Link
+                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  href={appendProfileIdQuery("/planning", latestRun.profileId)}
+                  prefetch={devPlanningPrefetch("/planning")}
+                >
+                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">NEXT 2</p>
+                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">같은 프로필로 다시 계산</p>
+                  <p className="mt-2 text-sm leading-6 text-white/75">
+                    저장된 조건을 이어 받아 수정 후 다시 실행합니다.
+                  </p>
+                  <p className="mt-6 text-sm font-bold text-emerald-300">플래닝 이어가기</p>
+                </Link>
+                <Link
+                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  href="/benefits"
+                >
+                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">NEXT 3</p>
+                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">혜택 후보까지 이어보기</p>
+                  <p className="mt-2 text-sm leading-6 text-white/75">
+                    플랜을 본 뒤 바로 생활 혜택과 지원 후보를 비교합니다.
+                  </p>
+                  <p className="mt-6 text-sm font-bold text-amber-300">혜택 탐색</p>
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  href="/planning"
+                  prefetch={devPlanningPrefetch("/planning")}
+                >
+                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">START 1</p>
+                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">첫 플랜 만들기</p>
+                  <p className="mt-2 text-sm leading-6 text-white/75">
+                    월수입, 지출, 자산만 입력해도 첫 결과를 볼 수 있습니다.
+                  </p>
+                  <p className="mt-6 text-sm font-bold text-emerald-300">플래닝 시작</p>
+                </Link>
+                <Link
+                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  href="/products/catalog"
+                >
+                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">START 2</p>
+                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">상품 흐름 먼저 익히기</p>
+                  <p className="mt-2 text-sm leading-6 text-white/75">
+                    예적금, 대출, 연금 카테고리를 먼저 훑고 비교 기준을 잡습니다.
+                  </p>
+                  <p className="mt-6 text-sm font-bold text-emerald-300">카탈로그 보기</p>
+                </Link>
+                <Link
+                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  href="/benefits"
+                >
+                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">START 3</p>
+                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">혜택 후보 먼저 보기</p>
+                  <p className="mt-2 text-sm leading-6 text-white/75">
+                    플랜 전에도 주거, 청년, 생활안정 관련 혜택을 바로 탐색할 수 있습니다.
+                  </p>
+                  <p className="mt-6 text-sm font-bold text-amber-300">혜택 보기</p>
+                </Link>
+              </>
+            )}
             </div>
-          ))}
+          </ReportHeroCard>
+
+          <Card className="space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-slate-400">최근 저장한 실행 기록</p>
+              <h2 className="mt-3 text-[2rem] font-black tracking-[-0.04em] text-slate-950">최근 플래닝 실행</h2>
+              {latestRun ? (
+                <p className="mt-2 text-sm text-slate-500">
+                  가장 최근 저장: {latestRun.title} · {formatDateLabel(latestRun.createdAt)} · {statusLabel(latestRun.overallStatus)}
+                </p>
+              ) : null}
+            </div>
+            <Link
+              className="text-sm font-bold text-[#4f8ef7]"
+              href="/planning"
+              prefetch={devPlanningPrefetch("/planning")}
+            >
+              플래닝으로 이동
+            </Link>
+            </div>
+
+            {recent.length === 0 ? (
+              <div className="rounded-[28px] border border-dashed border-slate-300 bg-[#f7f8fb] px-6 py-12 text-center">
+              <p className="text-lg font-black text-slate-950">아직 저장된 실행 기록이 없습니다.</p>
+              <p className="mt-2 text-sm text-slate-500">첫 플래닝 실행을 저장하면 이 영역에서 바로 리포트를 이어서 볼 수 있습니다.</p>
+              <Link
+                className="mt-6 inline-flex h-12 items-center rounded-xl bg-[#4f8ef7] px-6 text-sm font-extrabold text-white"
+                href="/planning"
+                prefetch={devPlanningPrefetch("/planning")}
+              >
+                첫 플래닝 시작
+              </Link>
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-3">
+              {recent.map((run) => (
+                <div className="rounded-[28px] border border-slate-200 bg-[#f9fbff] p-6" key={run.id}>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{run.createdAt.slice(0, 10)}</p>
+                  <p className="mt-4 text-lg font-black tracking-[-0.03em] text-slate-950">{run.title}</p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {statusLabel(run.overallStatus)} · {run.horizonMonths}개월 · {run.policyId} 정책
+                    {run.snapshotId ? ` · snapshot ${run.snapshotId}` : ""}
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <Link
+                      className="inline-flex text-sm font-bold text-[#4f8ef7]"
+                      href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(run.id)}`, run.profileId)}
+                      prefetch={devPlanningPrefetch("/planning/reports")}
+                    >
+                      리포트 보기
+                    </Link>
+                    <Link
+                      className="inline-flex text-sm font-bold text-slate-700"
+                      href={appendProfileIdQuery("/planning", run.profileId)}
+                      prefetch={devPlanningPrefetch("/planning")}
+                    >
+                      다시 실행
+                    </Link>
+                  </div>
+                </div>
+              ))}
+              </div>
+            )}
+          </Card>
         </div>
-      )}
-      </div>
-    </Card>
+      </Container>
+    </section>
   );
 }

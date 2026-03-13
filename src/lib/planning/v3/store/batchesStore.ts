@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { roundKrw } from "../../calc";
 import { atomicWriteFile, atomicWriteJson } from "../../storage/atomicWrite";
 import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
@@ -142,7 +143,7 @@ function normalizeStoredTransaction(value: unknown, batchId: string): StoredTran
     const date = asString(value.date);
     if (!SAFE_DATE_PATTERN.test(date)) return null;
 
-    const amountKrw = Math.round(Number(value.amountKrw));
+    const amountKrw = roundKrw(Number(value.amountKrw));
     if (!Number.isFinite(amountKrw)) return null;
 
     const accountId = asString(value.accountId);

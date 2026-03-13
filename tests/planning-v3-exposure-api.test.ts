@@ -13,22 +13,28 @@ const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 
 let root = "";
 
-function requestGet(pathname: string, host = LOCAL_HOST): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = false): Request {
+  const origin = `http://${host}`;
+  const headers = new Headers({ host });
+  if (withOriginHeaders) {
+    headers.set("origin", origin);
+    headers.set("referer", `${origin}/planning/v3/exposure`);
+  }
+  return new Request(`${origin}${pathname}`, {
     method: "GET",
-    headers: { host },
+    headers,
   });
 }
 
-function requestPost(body: unknown, withAuth = true): Request {
+function requestPost(body: unknown, cookie = "dev_csrf=csrf-token"): Request {
   const headers = new Headers({
     host: LOCAL_HOST,
     origin: LOCAL_ORIGIN,
     referer: `${LOCAL_ORIGIN}/planning/v3/exposure`,
     "content-type": "application/json",
   });
-  if (withAuth) {
-    headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
+  if (cookie) {
+    headers.set("cookie", cookie);
   }
   return new Request(`${LOCAL_ORIGIN}/api/planning/v3/exposure/profile`, {
     method: "POST",
@@ -54,16 +60,16 @@ describe("planning v3 exposure api", () => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("blocks non-local GET", async () => {
-    const response = await GET(requestGet("/api/planning/v3/exposure/profile", "example.com"));
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+  it("allows same-origin remote host GET", async () => {
+    const response = await GET(requestGet("/api/planning/v3/exposure/profile", "example.com", true));
+    const payload = await response.json() as { ok?: boolean; profile?: unknown };
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.profile).toBeNull();
   });
 
-  it("requires csrf on POST", async () => {
-    const response = await POST(requestPost({ profile: {} }, false));
+  it("blocks csrf mismatch on POST when dev csrf cookie exists", async () => {
+    const response = await POST(requestPost({ csrf: "csrf-body", profile: {} }, "dev_csrf=csrf-cookie"));
     const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
     expect(response.status).toBe(403);
     expect(payload.ok).toBe(false);
@@ -86,7 +92,7 @@ describe("planning v3 exposure api", () => {
     expect(saveJson.ok).toBe(true);
     expect(saveJson.profile?.debt?.rateType).toBe("variable");
 
-    const get = await GET(requestGet("/api/planning/v3/exposure/profile"));
+    const get = await GET(requestGet("/api/planning/v3/exposure/profile", LOCAL_HOST, true));
     const getJson = await get.json() as { ok?: boolean; profile?: { debt?: { hasDebt?: string } } | null };
     expect(get.status).toBe(200);
     expect(getJson.ok).toBe(true);

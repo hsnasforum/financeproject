@@ -1,10 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  BodyInset,
+  BodySectionHeading,
+  BodyTableFrame,
+  bodyChoiceRowClassName,
+  bodyCompactFieldClassName,
+  bodyDenseActionRowClassName,
+  bodyFieldClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -382,6 +391,18 @@ function buildAssumptions(
   return [...new Set(rows.filter((item) => item.length > 0))].slice(0, 20);
 }
 
+function buildOverrideRefreshMessage(label: string): string {
+  return `${label} 저장했습니다. 아래 카테고리 집계와 캐시플로우는 자동으로 다시 계산됩니다.`;
+}
+
+function isTransferRow(row: TransactionRow): boolean {
+  return row.kind === "transfer" || asString(row.transferGroupId).length > 0;
+}
+
+function getTransferOverrideButtonLabel(row: TransactionRow): string {
+  return isTransferRow(row) ? "일반으로 저장" : "이체로 저장";
+}
+
 export function TransactionBatchDetailClient({ id }: { id: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -411,6 +432,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
   const [txnOverrideMessage, setTxnOverrideMessage] = useState("");
   const [breakdownRows, setBreakdownRows] = useState<BreakdownRow[]>([]);
   const [categorizedLoading, setCategorizedLoading] = useState(false);
+  const [categorizedMessage, setCategorizedMessage] = useState("");
 
   const batchMonthRange = useMemo(() => {
     const months = (detail?.monthsSummary ?? [])
@@ -545,6 +567,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
 
     async function loadCategorized() {
       setCategorizedLoading(true);
+      setCategorizedMessage("");
       try {
         const response = await fetch(`/api/planning/v3/transactions/batches/${encodeURIComponent(id)}/categorized${buildCsrfQuery()}`, {
           cache: "no-store",
@@ -554,6 +577,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
         if (!response.ok || !isCategorizedResponse(payload)) {
           if (!disposed) {
             setBreakdownRows([]);
+            setCategorizedMessage("카테고리 집계를 다시 불러오지 못했습니다. 오버라이드 저장 후였다면 아래 월별 집계를 다시 확인해 주세요.");
           }
           return;
         }
@@ -597,7 +621,10 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
           })));
         }
       } catch {
-        if (!disposed) setBreakdownRows([]);
+        if (!disposed) {
+          setBreakdownRows([]);
+          setCategorizedMessage("카테고리 집계를 다시 불러오지 못했습니다. 오버라이드 저장 후였다면 아래 월별 집계를 다시 확인해 주세요.");
+        }
       } finally {
         if (!disposed) setCategorizedLoading(false);
       }
@@ -753,7 +780,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
       });
       setSelectedAccountId(appliedAccountId);
       setCashflowNonce((value) => value + 1);
-      setAccountMessage("배치 계좌를 연결했습니다.");
+      setAccountMessage("배치 계좌를 연결했습니다. 아래 캐시플로우는 자동으로 다시 계산됩니다.");
     } catch {
       setAccountMessage("배치 계좌 연결에 실패했습니다.");
     } finally {
@@ -873,7 +900,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
 
       if (payload.data.deleted === true) {
         setCashflowNonce((value) => value + 1);
-        setTxnOverrideMessage("거래 오버라이드를 초기화했습니다.");
+        setTxnOverrideMessage("거래 분류 오버라이드를 초기화했습니다. 아래 카테고리 집계와 캐시플로우는 자동으로 다시 계산됩니다.");
         return;
       }
 
@@ -904,7 +931,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
         };
       });
       setCashflowNonce((value) => value + 1);
-      setTxnOverrideMessage("거래 카테고리 오버라이드를 저장했습니다.");
+      setTxnOverrideMessage(buildOverrideRefreshMessage("거래 분류 오버라이드를"));
     } catch {
       setTxnOverrideMessage("거래 오버라이드 저장에 실패했습니다.");
     } finally {
@@ -942,7 +969,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
         return;
       }
       setCashflowNonce((value) => value + 1);
-      setTxnOverrideMessage("거래 계좌 매핑을 저장했습니다.");
+      setTxnOverrideMessage(buildOverrideRefreshMessage("거래 계좌 매핑을"));
     } catch {
       setTxnOverrideMessage("거래 계좌 매핑 저장에 실패했습니다.");
     } finally {
@@ -979,7 +1006,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
         return;
       }
       setCashflowNonce((value) => value + 1);
-      setTxnOverrideMessage("이체 판정을 저장했습니다.");
+      setTxnOverrideMessage(buildOverrideRefreshMessage("이체 판정을"));
     } catch {
       setTxnOverrideMessage("이체 판정 저장에 실패했습니다.");
     } finally {
@@ -994,18 +1021,18 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
           <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Detail</h1>
           <p className="text-sm text-slate-600">id: <span className="font-mono">{id}</span></p>
           <div className="flex flex-wrap items-center gap-2">
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/transactions">
+            <BodyActionLink href="/planning/v3/transactions">
               배치 목록
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/accounts">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/accounts">
               계좌 관리
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/categories/rules">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/categories/rules">
               카테고리 룰
-            </Link>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/import">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/import">
               CSV Import
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
@@ -1038,15 +1065,15 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">계좌 선택</h2>
-              <p className="text-xs text-slate-600">
-                배치 집계/초안 생성은 계좌(accountId)가 연결된 상태에서만 진행됩니다.
-              </p>
+              <BodySectionHeading
+                description="배치 집계와 초안 생성은 거래 배치에 연결된 계좌가 있어야 진행됩니다. 계좌를 연결하면 아래 캐시플로우를 자동으로 다시 계산합니다."
+                title="계좌 선택"
+              />
               <div className="flex flex-wrap items-end gap-2">
                 <label className="min-w-72 text-sm font-semibold text-slate-700">
                   거래 계좌
                   <select
-                    className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    className={bodyFieldClassName}
                     data-testid="v3-batch-account-select"
                     disabled={accountLoading || accounts.length < 1}
                     onChange={(event) => {
@@ -1072,11 +1099,11 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                   type="button"
                   variant="outline"
                 >
-                  {accountSaveLoading ? "적용 중..." : "이 배치에 적용"}
+                  {accountSaveLoading ? "연결 중..." : "이 배치에 연결"}
                 </Button>
-                <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/accounts">
+                <BodyActionLink href="/planning/v3/accounts">
                   계좌 관리
-                </Link>
+                </BodyActionLink>
               </div>
               <p className="text-sm text-slate-700" data-testid="v3-batch-account-selected">
                 선택 계좌: {selectedAccount ? `${selectedAccount.name} (${selectedAccount.id})` : "미선택"}
@@ -1085,7 +1112,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">Batch</h2>
+              <BodySectionHeading title="Batch" />
               <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
                 <div><dt className="font-semibold">createdAt</dt><dd>{formatDateTime(detail.batch.createdAt)}</dd></div>
                 <div><dt className="font-semibold">file</dt><dd>{detail.batch.fileName ?? "-"}</dd></div>
@@ -1098,8 +1125,8 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">Sample (Redacted)</h2>
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <BodySectionHeading title="Sample (Redacted)" />
+              <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                     <tr>
@@ -1128,26 +1155,28 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             </Card>
 
             <Card className="space-y-2" data-testid="v3-transfer-summary">
-              <h2 className="text-sm font-bold text-slate-900">이체/계좌 매핑 요약</h2>
-              <p className="text-sm text-slate-700">
-                transfers {transferOverview.transferCount.toLocaleString("ko-KR")}건 / unassigned {transferOverview.unassignedCount.toLocaleString("ko-KR")}건
-              </p>
-              <p className="text-xs text-slate-600">
-                expense(transfer 포함) {formatKrw(transferOverview.expenseInclTransfer)} / expense(transfer 제외) {formatKrw(transferOverview.expenseExclTransfer)}
-              </p>
+              <BodySectionHeading title="이체/계좌 매핑 요약" />
+              <BodyInset>
+                <p className="text-sm text-slate-700">
+                  transfers {transferOverview.transferCount.toLocaleString("ko-KR")}건 / unassigned {transferOverview.unassignedCount.toLocaleString("ko-KR")}건
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  expense(transfer 포함) {formatKrw(transferOverview.expenseInclTransfer)} / expense(transfer 제외) {formatKrw(transferOverview.expenseExclTransfer)}
+                </p>
+              </BodyInset>
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">거래 목록 (수동 분류 정정)</h2>
-              <p className="text-xs text-slate-600">
-                kind/category 정정값은 오버라이드로 저장되며, 월별 집계 계산에 즉시 반영됩니다.
-              </p>
+              <BodySectionHeading
+                description="거래 분류, 계좌 매핑, 이체 판정은 먼저 오버라이드로 저장됩니다. 아래 카테고리 집계와 캐시플로우는 저장 뒤 자동으로 다시 계산됩니다."
+                title="거래 목록 (수동 분류 정정)"
+              />
               {txnOverrideMessage ? <p className="text-sm font-semibold text-slate-700">{txnOverrideMessage}</p> : null}
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                     <tr>
@@ -1168,9 +1197,9 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                         <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.amountKrw)}</td>
                         <td className="px-3 py-2 text-slate-700">{asString(row.description) || "-"}</td>
                         <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
+                          <div className={bodyDenseActionRowClassName}>
                             <select
-                              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                              className={bodyCompactFieldClassName}
                               data-testid={`v3-txn-account-${row.txnId}`}
                               onChange={(event) => {
                                 const next = event.currentTarget.value;
@@ -1192,7 +1221,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                               type="button"
                               variant="outline"
                             >
-                              {txnAccountSavingId === row.txnId ? "저장 중..." : "저장"}
+                              {txnAccountSavingId === row.txnId ? "계좌 저장 중..." : "계좌 저장"}
                             </Button>
                           </div>
                         </td>
@@ -1210,12 +1239,12 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                           >
                             {txnTransferSavingId === row.txnId
                               ? "저장 중..."
-                              : (row.kind === "transfer" || asString(row.transferGroupId).length > 0 ? "이체" : "일반")}
+                              : getTransferOverrideButtonLabel(row)}
                           </Button>
                         </td>
                         <td className="px-3 py-2">
                           <select
-                            className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                            className={bodyCompactFieldClassName}
                             data-testid={`v3-txn-kind-${row.txnId}`}
                             onChange={(event) => {
                               const next = event.currentTarget.value as TransactionKindOverride;
@@ -1231,7 +1260,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                         </td>
                         <td className="px-3 py-2">
                           <select
-                            className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                            className={bodyCompactFieldClassName}
                             data-testid={`v3-txn-category-${row.txnId}`}
                             onChange={(event) => {
                               const next = event.currentTarget.value as TransactionCategory;
@@ -1255,7 +1284,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                             type="button"
                             variant="outline"
                           >
-                            {txnOverrideSavingId === row.txnId ? "저장 중..." : "저장"}
+                            {txnOverrideSavingId === row.txnId ? "분류 저장 중..." : "분류 저장"}
                           </Button>
                         </td>
                       </tr>
@@ -1266,14 +1295,17 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">카테고리 Breakdown (월별)</h2>
-              <p className="text-xs text-slate-600">카테고리 집계는 룰 기반 분류 + 거래별 오버라이드 결과를 반영합니다.</p>
+              <BodySectionHeading
+                description="카테고리 집계는 룰 기반 분류와 거래별 오버라이드 결과를 함께 반영합니다."
+                title="카테고리 Breakdown (월별)"
+              />
               {categorizedLoading ? <p className="text-sm text-slate-600">집계 갱신 중...</p> : null}
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
+              {categorizedMessage ? <p className="text-sm font-semibold text-rose-700">{categorizedMessage}</p> : null}
+              <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-breakdown-table">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                     <tr>
@@ -1306,12 +1338,12 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">월별 요약</h2>
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <BodySectionHeading title="월별 요약" />
+              <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                     <tr>
@@ -1338,15 +1370,15 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">계좌별 월별 Net (읽기 전용)</h2>
-              <p className="text-xs text-slate-600">
-                초기잔액을 입력하기 전에는 실제 잔액(balance)을 계산할 수 없습니다. 현재는 월별 순유입(net)만 표시합니다.
-              </p>
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <BodySectionHeading
+                description="초기잔액을 입력하기 전에는 실제 잔액을 계산할 수 없어, 현재는 계좌별 월 순유입만 보여줍니다."
+                title="계좌별 월별 Net (읽기 전용)"
+              />
+              <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                     <tr>
@@ -1373,7 +1405,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                     )}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             </Card>
 
             {cashflowLoading ? (
@@ -1391,8 +1423,8 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             {cashflow ? (
               <>
                 <Card className="space-y-3">
-                  <h2 className="text-sm font-bold text-slate-900">초안 생성 옵션</h2>
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <BodySectionHeading title="초안 생성 옵션" />
+                  <label className={bodyChoiceRowClassName}>
                     <input
                       checked={excludeTransfers}
                       data-testid="v3-toggle-exclude-transfers"
@@ -1404,7 +1436,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                     이체 제외
                   </label>
                   <div className="space-y-2 text-sm text-slate-700">
-                    <label className="flex items-center gap-2">
+                    <label className={bodyChoiceRowClassName}>
                       <input
                         checked={splitMode === "byCategory"}
                         data-testid="v3-splitmode-byCategory"
@@ -1416,7 +1448,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                       />
                       자동 분류 기반
                     </label>
-                    <label className="flex items-center gap-2">
+                    <label className={bodyChoiceRowClassName}>
                       <input
                         checked={splitMode === "byRatio"}
                         data-testid="v3-splitmode-byRatio"
@@ -1428,7 +1460,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                       />
                       수동 비율 입력
                     </label>
-                    <label className="flex items-center gap-2">
+                    <label className={bodyChoiceRowClassName}>
                       <input
                         checked={splitMode === "noSplit"}
                         data-testid="v3-splitmode-noSplit"
@@ -1447,7 +1479,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                       <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                         fixed %
                         <input
-                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          className={bodyFieldClassName}
                           data-testid="v3-ratio-fixed"
                           max={100}
                           min={0}
@@ -1464,7 +1496,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                       <label className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                         variable %
                         <input
-                          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                          className={bodyFieldClassName}
                           data-testid="v3-ratio-variable"
                           max={100}
                           min={0}
@@ -1518,8 +1550,8 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                 </Card>
 
                 <Card className="space-y-3" data-testid="v3-cashflow-table">
-                  <h2 className="text-sm font-bold text-slate-900">월별 캐시플로우 v2</h2>
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <BodySectionHeading title="월별 캐시플로우 v2" />
+                  <BodyTableFrame>
                     <table className="min-w-full divide-y divide-slate-200 text-sm">
                       <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                         <tr>
@@ -1552,11 +1584,11 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                         )}
                       </tbody>
                     </table>
-                  </div>
+                  </BodyTableFrame>
                 </Card>
 
                 <Card className="space-y-3" data-testid="v3-draftpatch-summary">
-                  <h2 className="text-sm font-bold text-slate-900">초안 패치 요약</h2>
+                  <BodySectionHeading title="초안 패치 요약" />
                   <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
                     <div><dt className="font-semibold">추천 월 소득</dt><dd>{formatKrw(asNumber(cashflow.draftPatch.suggestedMonthlyIncomeKrw))}</dd></div>
                     <div><dt className="font-semibold">추천 필수지출</dt><dd>{formatKrw(asNumber(cashflow.draftPatch.suggestedMonthlyEssentialSpendKrw))}</dd></div>
@@ -1582,7 +1614,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                 </Card>
 
                 <Card className="space-y-3">
-                  <h2 className="text-sm font-bold text-slate-900">Draft 리뷰</h2>
+                  <BodySectionHeading title="Draft 리뷰" />
                   <p className="text-sm text-slate-700">
                     현재 집계 결과로 v3 Draft를 생성한 뒤 리뷰 페이지에서 merged profile 미리보기 및 JSON export를 진행할 수 있습니다.
                   </p>

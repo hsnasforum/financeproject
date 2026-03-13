@@ -3,7 +3,8 @@
 ## 1) 환경 변수
 
 - `OPENDART_API_KEY`: OpenDART 인증키 (필수)
-- `OPENDART_BASE_URL`: 기본값 `https://opendart.fss.or.kr` (선택)
+- `OPENDART_BASE_URL`: 기본값 `https://opendart.fss.or.kr` (선택, 권장)
+- `OPENDART_API_URL`: legacy alias. 이미 `.env.local`에서 이 이름을 쓰고 있으면 그대로 동작합니다.
 - `DART_CORPCODES_INDEX_PATH`: corpCodes 인덱스 경로 (선택, 기본 `tmp/dart/corpCodes.index.json`)
 - `DART_INDEX_BUILD_TOKEN`: production에서 인덱스 빌드 보호 토큰 (선택)
 
@@ -38,6 +39,8 @@ pnpm dart:ensure-corpindex
 - 인덱스 상태: `/api/public/disclosure/corpcodes/status`
 - 인덱스 빌드: `POST /api/public/disclosure/corpcodes/build`
 - 설정 진단: `/settings/data-sources`에서 OPENDART 키/인덱스 상태(존재 여부, 경로, generatedAt, count) 확인
+- `/settings/data-sources` 운영 순서는 `docs/data-sources-settings-ops.md`를 기준으로 확인
+- `/public/dart`는 최근 성공 검색어를 브라우저 로컬 저장소에 보관하고, 다음 방문 때 빠르게 다시 검색할 수 있는 칩을 보여줍니다.
 
 개발 환경에서 인덱스가 없으면 `/public/dart` 화면에 `CORPCODES_INDEX_MISSING` payload와 자동 생성 버튼이 표시됩니다.
 

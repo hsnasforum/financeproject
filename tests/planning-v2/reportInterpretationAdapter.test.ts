@@ -5,6 +5,7 @@ import { type ReportVM } from "../../src/app/planning/reports/_lib/reportViewMod
 function fixtureVm(): ReportVM {
   return {
     header: { reportId: "report-1", createdAt: "2026-03-01T00:00:00.000Z", runId: "run-1" },
+    assumptionsLines: [],
     stage: { overallStatus: "PARTIAL_SUCCESS", byId: {} },
     snapshot: { id: "snap-1", staleDays: 80 },
     summaryCards: {
@@ -22,7 +23,25 @@ function fixtureVm(): ReportVM {
     warningAgg: [],
     goalsTable: [],
     topActions: [],
+    actionRows: [],
     timelinePoints: [],
+    guide: {
+      warnings: [],
+      goals: [],
+      timelineSummaryRows: [],
+      badge: {
+        status: "warn",
+        reason: "주의 구간",
+        minCashKrw: -150_000,
+        maxDsr: 0.42,
+        missedGoals: 1,
+        contributionSkippedCount: 0,
+      },
+    },
+    scenarioRows: [],
+    monteProbabilityRows: [],
+    montePercentileRows: [],
+    debtSummaryRows: [],
     insight: {
       summaryMetrics: {
         monthlySurplusKrw: 120_000,

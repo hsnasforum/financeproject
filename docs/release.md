@@ -8,20 +8,31 @@
 
 1. `pnpm test`
 2. `pnpm planning:v2:complete`
-3. `pnpm release:verify`
+3. `pnpm multi-agent:guard`
+4. `pnpm release:verify`
 
 `release:verify`는 다음을 순차 실행합니다.
 
-- `pnpm test`
+- `pnpm cleanup:next-artifacts -- --build-preflight`
 - `pnpm planning:v2:complete`
+- `pnpm multi-agent:guard`
 - 추가 게이트가 스크립트에 존재하면 실행:
   - `pnpm planning:v2:compat`
   - `pnpm planning:v2:regress`
+- `pnpm test`
+- advisory:
+  - `pnpm planning:ssot:check` (실패해도 WARN만 남고 required gate는 유지)
+- 시작 단계의 `cleanup:next-artifacts -- --build-preflight`는 stale `.next-build*`와 대응 tsconfig/build metadata를 정리하고, tracked isolated build 내부 `standalone/.data` shadow도 같이 지웁니다.
+- active build/prod/playwright runtime이 있으면 build-preflight용 `standalone/.data` 정리는 안전하게 skip 됩니다.
+- 내부 `planning:v2:e2e:fast`와 `planning:v2:e2e:full`은 기존 dev/e2e webServer를 재사용하지 않도록 전용 포트와 고유 dist dir로 격리 실행합니다.
+- `planning:v2:regress`는 전용 planning e2e data dir를 매번 새로 만들어 shared `.data/planning-e2e` 오염을 피합니다.
 
 선택:
 
 - `pnpm planning:v2:regress`
 - 서버 실행 후 `PLANNING_BASE_URL=http://localhost:3100 pnpm planning:v2:acceptance`
+- foreground build가 `143`으로 끊기는 환경이면 `pnpm build:detached`로 detached build 결과를 먼저 확인
+- shared `.next` 또는 dev server 충돌을 피하려면 `pnpm build`, `pnpm e2e:rc`, `pnpm release:verify`는 메인 단일 소유자로 순차 실행
 
 ## Prepare
 

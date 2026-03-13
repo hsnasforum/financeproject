@@ -62,11 +62,16 @@
   - Vault가 잠겨 있으면 두 명령 모두 즉시 실패(`code=LOCKED`, exit code 2)하며 `/ops/security` unlock이 필요합니다.
   - 실행 결과는 `/ops/metrics`의 `SCHEDULED_TASK` 이벤트로 기록됩니다.
 - 주간 운영(권장: 일요일 오전):
-  - `pnpm planning:v2:ops:run`
+  - `pnpm planning:v2:ops:safety:weekly`
   - 기본 순서: doctor -> 조건부 assumptions sync -> complete
-  - regress는 기본 비활성(시간 절약)
+  - legacy run 백필 후보를 함께 점검하며, 후보가 1건 이상이면 FAIL 처리합니다.
+- 운영 안전성 게이트(기본):
+  - `pnpm planning:v2:ops:safety`
+  - `ops:run` 실행 후 legacy run 백필 후보를 자동 점검합니다.
+  - 운영 기본 임계치: `legacy-fail-threshold=0` (후보 0건 유지)
+  - 즉시 백필 적용: `pnpm planning:v2:ops:safety -- --legacy-mode=apply --confirm="BACKFILL LEGACY RUNS"`
 - 격주/월간 또는 업데이트 후 운영:
-  - `pnpm planning:v2:ops:run:regress`
+  - `pnpm planning:v2:ops:safety:regress`
 - 보관 정책 정리:
   - `pnpm planning:v2:ops:prune --keep=50`
 - 마이그레이션 점검(선택):
@@ -136,15 +141,20 @@
 ### 스케줄러에 붙이는 방법(예시, Asia/Seoul)
 - Windows 작업 스케줄러:
   - Program/script: `cmd.exe`
-  - Add arguments: `/c cd /d C:\path\to\finance && pnpm planning:v2:ops:run`
+  - Add arguments: `/c cd /d C:\path\to\finance && pnpm planning:v2:ops:safety:weekly`
   - Trigger: 매주 1회(또는 매월 1회), 시간대 `Korea Standard Time`
 - macOS launchd(명령 예시):
-  - `cd /path/to/finance && pnpm planning:v2:ops:run`
+  - `cd /path/to/finance && pnpm planning:v2:ops:safety:weekly`
 - Linux cron(명령 예시):
   - `CRON_TZ=Asia/Seoul`
-  - `0 9 * * 1 cd /path/to/finance && pnpm planning:v2:ops:run >> .data/planning/ops/cron.log 2>&1`
+  - `0 9 * * 1 cd /path/to/finance && pnpm planning:v2:ops:safety:weekly >> .data/planning/ops/cron.log 2>&1`
 
 ## 운영 런북
+
+### Planning report P4 관찰 키트
+- 주간 보고 문안, P4 관찰 로그, fallback `source_key` 표준, strict-first PR 템플릿은 [planning-report-p4-observation-kit.md](./planning-report-p4-observation-kit.md)에 모아둡니다.
+- `/ops/metrics`의 Planning fallback usage는 총량 카드로 보고, source별 세부 분류는 summary API 또는 위 키트 기준으로 기록합니다.
+- 남은 legacy run 정리용 dry-run/apply는 `pnpm planning:v2:backfill-legacy-runs`를 사용합니다.
 
 ### 1) Snapshot 동기화/롤백
 1. `/ops/assumptions`에서 `Sync now` 실행

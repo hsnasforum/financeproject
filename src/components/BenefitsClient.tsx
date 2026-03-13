@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -111,28 +110,6 @@ function parseFlag(value: string | null, defaultValue = true): boolean {
   return true;
 }
 
-function categoryLabel(value: string): string {
-  if (value === "housing") return "주거";
-  if (value === "jeonse") return "전세";
-  if (value === "wolse") return "월세";
-  if (value === "childcare" || value === "family" || value === "birth") return "부양가족";
-  if (value === "youth") return "청년";
-  if (value === "job") return "일자리";
-  if (value === "education") return "교육";
-  if (value === "medical") return "의료";
-  return "전체";
-}
-
-function ageBandLabel(value: string): string {
-  if (!value || value === "all") return "전체";
-  return value;
-}
-
-function incomeBandLabel(value: string): string {
-  if (!value || value === "all") return "전체";
-  return value;
-}
-
 function extractShortcutFromApplyHow(serviceId: string, applyHow?: string): string | null {
   const raw = (applyHow ?? "").trim();
   if (!raw) return null;
@@ -164,12 +141,10 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   const [meta, setMeta] = useState<SearchMeta>({});
   const [totalMatched, setTotalMatched] = useState(0);
   const [nextCursor, setNextCursor] = useState<number | null>(null);
-  const [errorCode, setErrorCode] = useState("");
   const [selected, setSelected] = useState<BenefitItem | null>(null);
   const [detail, setDetail] = useState<{ conditions?: string[] } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [expandedHints, setExpandedHints] = useState<Record<string, boolean>>({});
-  const [plannerContext, setPlannerContext] = useState<PlannerBenefitsContext>({
+  const [, setPlannerContext] = useState<PlannerBenefitsContext>({
     category: "all",
     region: "전국",
     ageBand: "all",
@@ -181,29 +156,6 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
     () => (selected ? extractShortcutFromApplyHow(selected.id, selected.applyHow) : null),
     [selected],
   );
-
-  const summaryLines = useMemo(() => {
-    return [
-      `검색어 ${query.trim() || "-"} · 카테고리 ${categoryLabel(plannerContext.category)}`,
-      `지역 ${plannerContext.region} · 연령대 ${ageBandLabel(plannerContext.ageBand)} · 소득 ${incomeBandLabel(plannerContext.incomeBand)}`,
-      `적용 필터 주제 ${isTopicFilterBypassed(selectedTopics) ? "전체" : `${selectedTopics.length}개`} · 시도 ${sido || "전체"}`,
-    ];
-  }, [plannerContext.ageBand, plannerContext.category, plannerContext.incomeBand, plannerContext.region, query, selectedTopics, sido]);
-
-  const checklist = useMemo(() => {
-    const itemsList = [
-      "상세 보기에서 신청 자격·신청 방법을 확인한다.",
-      "조건이 과도하면 카테고리 또는 지역 필터를 완화해 다시 조회한다.",
-      "적용 가능한 혜택은 플래너 가정값(월 지출/목표)에 반영한다.",
-    ];
-    if (items.length === 0) {
-      itemsList.push("조회 0건이면 region=전국 또는 category=all로 재시도한다.");
-    }
-    if (error) {
-      itemsList.push("오류가 반복되면 데이터 소스 상태 페이지에서 연결 상태를 점검한다.");
-    }
-    return itemsList.slice(0, 6);
-  }, [error, items.length]);
 
   const topicBuckets = useMemo(() => {
     const counts = new Map<string, number>();
@@ -237,7 +189,6 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
     const normalizedTopics = isTopicFilterBypassed(state.topics) ? [] : state.topics;
     setLoading(true);
     setError("");
-    setErrorCode("");
     setMeta({});
     try {
       const params = new URLSearchParams();
@@ -264,7 +215,6 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       const res = await fetch(`/api/public/benefits/search?${params.toString()}`, { cache: "no-store", signal: controller.signal });
       const json = await res.json();
       if (!json?.ok) {
-        setErrorCode(typeof json?.error?.code === "string" ? json.error.code : "");
         setError(json?.error?.message ?? "혜택 조회 실패");
         return;
       }

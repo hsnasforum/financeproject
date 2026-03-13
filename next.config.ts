@@ -31,9 +31,20 @@ function detectWorkspaceRoot(startDir: string, maxDepth = 8): string {
 }
 
 const workspaceRoot = detectWorkspaceRoot(__dirname);
+const playwrightDistDir = process.env.PLAYWRIGHT_DIST_DIR?.trim();
+const playwrightTsconfigPath = process.env.PLAYWRIGHT_TSCONFIG_PATH?.trim();
+const useIsolatedDistDir = Boolean(playwrightDistDir && playwrightDistDir !== ".next");
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  allowedDevOrigins: ["127.0.0.1", "localhost", "::1", "[::1]"],
+  ...(playwrightDistDir ? { distDir: playwrightDistDir } : {}),
+  experimental: {
+    // [build-runtime] Next webpack build worker가 현재 저장소에서 compile 종료를 불안정하게 만들어 비활성화한다.
+    webpackBuildWorker: false,
+    ...(useIsolatedDistDir ? { lockDistDir: false } : {}),
+  },
+  ...(playwrightTsconfigPath ? { typescript: { tsconfigPath: playwrightTsconfigPath } } : {}),
   turbopack: {
     root: workspaceRoot,
   },

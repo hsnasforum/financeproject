@@ -1,12 +1,11 @@
 import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
-  assertLocalHost,
   requireCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
+import { sanitizeRunRecordForResponse } from "../../../../../lib/planning/api/runResponseSanitizer";
 import {
   findAssumptionsSnapshotId,
   loadAssumptionsSnapshotById,
@@ -40,7 +39,6 @@ import { getProfile } from "../../../../../lib/planning/server/store/profileStor
 import { createRun, getRun, listRuns } from "../../../../../lib/planning/server/store/runStore";
 import { ensureRunActionPlan, getRunActionProgress, summarizeRunActionProgress } from "../../../../../lib/planning/server/store/runActionStore";
 import { runStagePipeline } from "../../../../../lib/planning/v2/stagePipeline";
-import { buildResultDtoV1 } from "../../../../../lib/planning/v2/resultDto";
 import { preflightRun } from "../../../../../lib/planning/v2/preflight";
 import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
 import { loadCanonicalProfile } from "../../../../../lib/planning/v2/loadCanonicalProfile";
@@ -48,15 +46,11 @@ import { buildRunReproducibilityMeta } from "../../../../../lib/planning/v2/repr
 import { applyProfilePatch, type ScenarioPatch } from "../../../../../lib/planning/v2/profilePatch";
 import { applyScenario, validateScenario, type ScenarioMeta, type ScenarioPatch as LegacyScenarioPatch } from "../../../../../lib/planning/v2/scenario";
 import { DEFAULT_PLANNING_POLICY } from "../../../../../lib/planning/catalog/planningPolicy";
-import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2, type TimelineRowV2 } from "../../../../../lib/planning/server/v2/types";
+import { buildPlanningRunArtifacts } from "../../../../../lib/planning/server/v2/runArtifacts";
+import { PlanningV2ValidationError, type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths } from "../../../../../lib/planning/server/v2/validate";
 import { type LiabilityV2, type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
 import { type PlanningRunRecord, type PlanningRunStageResult } from "../../../../../lib/planning/store/types";
-import {
-  createEngineEnvelope,
-  ENGINE_SCHEMA_VERSION,
-  runPlanningEngine,
-} from "../../../../../lib/planning/engine";
 
 type RunsCreateBody = {
   profileId?: unknown;
@@ -94,9 +88,9 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -105,9 +99,8 @@ function withLocalReadGuard(request: Request) {
   }
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     requireCsrf(request, { csrf: csrfToken }, { allowWhenCookieMissing: true });
@@ -579,64 +572,6 @@ function buildSnapshotMeta(snapshot: SnapshotShape, snapshotId?: string) {
   };
 }
 
-function pickKeyTimelinePoints(rows: TimelineRowV2[]): Array<{ monthIndex: number; row: TimelineRowV2 }> {
-  if (rows.length === 0) return [];
-  const candidates = [0, 12, 24, rows.length - 1];
-  const seen = new Set<number>();
-  const out: Array<{ monthIndex: number; row: TimelineRowV2 }> = [];
-  for (const index of candidates) {
-    if (index < 0 || index >= rows.length || seen.has(index)) continue;
-    seen.add(index);
-    out.push({ monthIndex: index, row: rows[index] });
-  }
-  return out;
-}
-
-function summarizePlan(plan: SimulationResultV2) {
-  const first = plan.timeline[0];
-  const last = plan.timeline[plan.timeline.length - 1];
-  const worst = plan.timeline.reduce((min, row) => (row.liquidAssets < min.liquidAssets ? row : min), plan.timeline[0] ?? {
-    month: 1,
-    liquidAssets: 0,
-  });
-
-  return {
-    startNetWorthKrw: first?.netWorth ?? 0,
-    endNetWorthKrw: last?.netWorth ?? 0,
-    netWorthDeltaKrw: (last?.netWorth ?? 0) - (first?.netWorth ?? 0),
-    worstCashMonthIndex: Math.max(0, (worst?.month ?? 1) - 1),
-    worstCashKrw: worst?.liquidAssets ?? 0,
-    goalsAchievedCount: plan.goalStatus.filter((goal) => goal.achieved).length,
-    goalsMissedCount: plan.goalStatus.filter((goal) => !goal.achieved).length,
-    warningsCount: plan.warnings.length,
-  };
-}
-
-function toEngineInput(profile: ProfileV2) {
-  const debtBalance = profile.debts.reduce((total, debt) => {
-    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
-  }, 0);
-
-  return {
-    monthlyIncome: profile.monthlyIncomeNet,
-    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
-    age: profile.currentAge,
-    liquidAssets: profile.liquidAssets,
-    debtBalance,
-  };
-}
-
-function summarizeScenarioResult(result: SimulationResultV2) {
-  const summary = summarizePlan(result);
-  return {
-    endNetWorthKrw: summary.endNetWorthKrw,
-    worstCashMonthIndex: summary.worstCashMonthIndex,
-    worstCashKrw: summary.worstCashKrw,
-    goalsAchievedCount: summary.goalsAchievedCount,
-    warningsCount: summary.warningsCount,
-  };
-}
-
 function appendRunAudit(input: {
   event: "PLANNING_RUN_CREATE";
   route: string;
@@ -697,10 +632,7 @@ async function appendRunStageMetrics(input: {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   const url = new URL(request.url);
@@ -714,8 +646,9 @@ export async function GET(request: Request) {
       ...(limit !== null ? { limit: Number(limit) } : {}),
       ...(offset !== null ? { offset: Number(offset) } : {}),
     });
+    const sanitizedRuns = runs.map((run) => sanitizeRunRecordForResponse(run));
     const progressSummaryByRunId: Record<string, ReturnType<typeof summarizeRunActionProgress>> = {};
-    for (const run of runs) {
+    for (const run of sanitizedRuns) {
       try {
         const progress = await getRunActionProgress(run.id);
         if (!progress) continue;
@@ -724,7 +657,7 @@ export async function GET(request: Request) {
         continue;
       }
     }
-    return jsonOk({ data: runs, meta: { actionProgressSummaryByRunId: progressSummaryByRunId } });
+    return jsonOk({ data: sanitizedRuns, meta: { actionProgressSummaryByRunId: progressSummaryByRunId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
@@ -732,9 +665,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: RunsCreateBody = null;
   try {
     body = (await request.json()) as RunsCreateBody;
@@ -742,7 +672,7 @@ export async function POST(request: Request) {
     body = null;
   }
 
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   if (!isRecord(body) || !isRecord(body.input)) {
@@ -1228,84 +1158,16 @@ export async function POST(request: Request) {
       });
     }
 
-    const runEngineResult = runPlanningEngine(toEngineInput(canonicalProfile));
-    const runEngine = createEngineEnvelope({
-      status: runEngineResult.status,
-      decision: runEngineResult.decision,
-    });
-
-    const outputs = {
-      engineSchemaVersion: ENGINE_SCHEMA_VERSION,
-      engine: runEngine,
-      simulate: {
-        engine: runEngine,
-        summary: summarizePlan(simulatePlan),
-        warnings: simulatePlan.warnings.map((warning) => warning.reasonCode),
-        goalsStatus: simulatePlan.goalStatus,
-        keyTimelinePoints: pickKeyTimelinePoints(simulatePlan.timeline),
-      },
-      ...(scenariosOutput ? {
-        scenarios: {
-          table: [
-            {
-              id: "base",
-              title: "Base",
-              ...summarizeScenarioResult(scenariosOutput.base),
-            },
-            ...scenariosOutput.scenarios.map((entry) => ({
-              id: entry.spec.id,
-              title: entry.spec.title,
-              ...summarizeScenarioResult(entry.result),
-              diffVsBase: entry.diffVsBase.keyMetrics,
-            })),
-          ],
-          shortWhyByScenario: Object.fromEntries(
-            scenariosOutput.scenarios.map((entry) => [entry.spec.id, entry.diffVsBase.shortWhy]),
-          ),
-        },
-      } : {}),
-      ...(monteCarloOutput ? {
-        monteCarlo: {
-          probabilities: monteCarloOutput.probabilities,
-          percentiles: monteCarloOutput.percentiles,
-          notes: monteCarloOutput.notes,
-        },
-      } : {}),
-      ...(Array.isArray(actionsOutput) ? {
-        actions: {
-          actions: actionsOutput,
-        },
-      } : {}),
-      ...(debtStrategyOutput ? {
-        debtStrategy: {
-          summary: {
-            debtServiceRatio: debtStrategyOutput.meta.debtServiceRatio,
-            totalMonthlyPaymentKrw: debtStrategyOutput.meta.totalMonthlyPaymentKrw,
-            warningsCount: debtStrategyOutput.warnings.length,
-          },
-          warnings: debtStrategyOutput.warnings.map((warning) => ({
-            code: warning.code,
-            message: warning.message,
-          })),
-          summaries: debtStrategyOutput.summaries,
-          ...(debtStrategyOutput.refinance ? { refinance: debtStrategyOutput.refinance } : {}),
-          whatIf: debtStrategyOutput.whatIf,
-        },
-      } : {}),
-    };
-
-    const resultDto = buildResultDtoV1({
-      generatedAt: new Date().toISOString(),
+    const { outputs, resultDto } = buildPlanningRunArtifacts({
+      profile: canonicalProfile,
       policyId,
-      meta: {
-        snapshot: snapshotMeta,
-        health: health.summary,
-      },
-      simulate: outputs.simulate,
-      scenarios: outputs.scenarios,
-      monteCarlo: outputs.monteCarlo,
-      actions: outputs.actions,
-      debt: outputs.debtStrategy,
+      snapshotMeta,
+      healthSummary: health.summary,
+      simulatePlan,
+      scenariosOutput,
+      monteCarloOutput,
+      actionsOutput: Array.isArray(actionsOutput) ? actionsOutput : null,
+      debtStrategyOutput,
     });
     const reproducibility = buildRunReproducibilityMeta({
       profile: canonicalProfile,
@@ -1388,7 +1250,7 @@ export async function POST(request: Request) {
         overallStatus: pipeline.overallStatus,
         stages,
       },
-      data: created,
+      data: sanitizeRunRecordForResponse(created),
     }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 저장에 실패했습니다.";

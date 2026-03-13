@@ -28,7 +28,7 @@ describe("KDB recommend parsing", () => {
   });
 });
 
-describe("deposit protection policy (disabled)", () => {
+describe("deposit protection policy", () => {
   function item(input: Partial<RecommendedItem> & Pick<RecommendedItem, "finPrdtCd" | "sourceId">): RecommendedItem {
     return {
       sourceId: input.sourceId,
@@ -53,7 +53,7 @@ describe("deposit protection policy (disabled)", () => {
     };
   }
 
-  it("keeps scores unchanged and keeps all items", () => {
+  it("adds bonus to matched items in prefer mode", () => {
     const out = applyDepositProtectionPolicy({
       mode: "prefer",
       matchedFinPrdtCdSet: new Set(["A"]),
@@ -63,17 +63,18 @@ describe("deposit protection policy (disabled)", () => {
 
     expect(out.length).toBe(2);
     expect(out[0]?.finPrdtCd).toBe("A");
-    expect(out[0]?.finalScore).toBeCloseTo(0.5, 6);
-    expect(out[0]?.signals?.depositProtection).toBe("unknown");
+    expect(out[0]?.finalScore).toBeCloseTo(0.55, 6);
+    expect(out[0]?.signals?.depositProtection).toBe("matched");
+    expect(out[1]?.signals?.depositProtection).toBe("unknown");
   });
 
-  it("does not filter in require mode", () => {
+  it("filters unmatched items in require mode", () => {
     const out = applyDepositProtectionPolicy({
       mode: "require",
       matchedFinPrdtCdSet: new Set(["A"]),
       items: [item({ sourceId: "finlife", finPrdtCd: "A" }), item({ sourceId: "finlife", finPrdtCd: "B" }), item({ sourceId: "datago_kdb", finPrdtCd: "KDB:1" })],
     });
 
-    expect(out.map((row) => row.finPrdtCd)).toEqual(["A", "B", "KDB:1"]);
+    expect(out.map((row) => row.finPrdtCd)).toEqual(["A"]);
   });
 });

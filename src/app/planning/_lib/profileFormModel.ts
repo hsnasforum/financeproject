@@ -7,6 +7,7 @@ import {
   normalizeProfileWithReport,
   type NormalizationReport,
 } from "../../../lib/planning/v2/normalizationReport";
+import { isAllocationPolicyId } from "../../../lib/planning/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../lib/planning/v2/policy/types";
 
 export type ProfileFormDebt = {
@@ -31,6 +32,10 @@ export type ProfileFormGoal = {
 
 export type ProfileFormModel = {
   name: string;
+  birthYear?: number;
+  gender?: "M" | "F";
+  sido?: string;
+  sigungu?: string;
   monthlyIncomeNet: number;
   monthlyEssentialExpenses: number;
   monthlyDiscretionaryExpenses: number;
@@ -88,6 +93,10 @@ export type CanonicalProfileGoal = {
 };
 
 export type CanonicalProfile = {
+  birthYear?: number;
+  gender?: "M" | "F";
+  sido?: string;
+  sigungu?: string;
   monthlyIncomeNet: number;
   monthlyEssentialExpenses: number;
   monthlyDiscretionaryExpenses: number;
@@ -225,6 +234,10 @@ function normalizeEmergencyMonths(goal: ProfileFormGoal | null, monthlyExpenses:
 export function createDefaultProfileFormModel(name = "기본 프로필"): ProfileFormModel {
   return {
     name,
+    birthYear: undefined,
+    gender: undefined,
+    sido: "",
+    sigungu: "",
     monthlyIncomeNet: 4_200_000,
     monthlyEssentialExpenses: 1_600_000,
     monthlyDiscretionaryExpenses: 700_000,
@@ -276,6 +289,10 @@ export function fromProfileJson(json: unknown, name = "기본 프로필"): Profi
 
   return {
     name: name.trim() || defaults.name,
+    ...(typeof asNumber(row.birthYear) === "number" ? { birthYear: Math.max(1900, Math.trunc(asNumber(row.birthYear))) } : {}),
+    ...(asString(row.gender) === "M" || asString(row.gender) === "F" ? { gender: asString(row.gender) as "M" | "F" } : {}),
+    ...(asString(row.sido) ? { sido: asString(row.sido) } : {}),
+    ...(asString(row.sigungu) ? { sigungu: asString(row.sigungu) } : {}),
     monthlyIncomeNet: Math.max(0, asNumber(row.monthlyIncomeNet, defaults.monthlyIncomeNet)),
     monthlyEssentialExpenses: Math.max(0, asNumber(row.monthlyEssentialExpenses, defaults.monthlyEssentialExpenses)),
     monthlyDiscretionaryExpenses: Math.max(0, asNumber(row.monthlyDiscretionaryExpenses, defaults.monthlyDiscretionaryExpenses)),
@@ -350,46 +367,25 @@ export function summarizeProfileForm(form: ProfileFormModel): ProfileFormSummary
   };
 }
 
-function toCanonicalProfile(form: ProfileFormModel): CanonicalProfile {
-  return {
-    monthlyIncomeNet: Math.max(0, asNumber(form.monthlyIncomeNet)),
-    monthlyEssentialExpenses: Math.max(0, asNumber(form.monthlyEssentialExpenses)),
-    monthlyDiscretionaryExpenses: Math.max(0, asNumber(form.monthlyDiscretionaryExpenses)),
-    liquidAssets: Math.max(0, asNumber(form.liquidAssets)),
-    investmentAssets: Math.max(0, asNumber(form.investmentAssets)),
-    debts: form.debts.map((debt, index) => ({
-      id: asString(debt.id) || debtId(index),
-      name: asString(debt.name) || `부채 ${index + 1}`,
-      balance: Math.max(0, asNumber(debt.balance)),
-      aprPct: normalizeAprInputToPct(debt.aprPct),
-      minimumPayment: Math.max(0, asNumber(debt.monthlyPayment, estimateDebtMonthlyPaymentKrw(debt))),
-      remainingMonths: Math.max(1, clampInt(asNumber(debt.remainingMonths, 36), 1, 600)),
-      repaymentType: debt.repaymentType === "interestOnly" ? "interestOnly" : "amortizing",
-    })),
-    goals: form.goals.map((goal, index) => ({
-      id: asString(goal.id) || goalId(index),
-      name: asString(goal.name) || `목표 ${index + 1}`,
-      targetAmount: Math.max(0, asNumber(goal.targetAmount)),
-      currentAmount: Math.max(0, asNumber(goal.currentAmount)),
-      targetMonth: Math.max(1, clampInt(asNumber(goal.targetMonth, 12), 1, 1200)),
-      priority: Math.max(1, clampInt(asNumber(goal.priority, 3), 1, 10)),
-      minimumMonthlyContribution: Math.max(0, asNumber(goal.minimumMonthlyContribution)),
-    })),
-    ...(form.cashflow ? { cashflow: form.cashflow } : {}),
-    ...(form.defaultsApplied ? { defaultsApplied: form.defaultsApplied } : {}),
-  };
-}
-
 export function normalizeDraft(draft: FormDraft | unknown, name = "기본 프로필"): CanonicalProfile {
   return normalizeDraftWithDisclosure(draft, name).profile;
 }
 
+function resolveNormalizeDraftPolicyId(
+  nameOrPolicyId?: string | AllocationPolicyId,
+  policyId?: AllocationPolicyId,
+): AllocationPolicyId {
+  if (policyId) return policyId;
+  return isAllocationPolicyId(nameOrPolicyId) ? nameOrPolicyId : "balanced";
+}
+
 export function normalizeDraftWithDisclosure(
   draft: FormDraft | unknown,
-  _name = "기본 프로필",
-  policyId: AllocationPolicyId = "balanced",
+  nameOrPolicyId?: string | AllocationPolicyId,
+  policyId?: AllocationPolicyId,
 ): CanonicalProfileWithDisclosure {
   const row = asRecord(draft);
+  const resolvedPolicyId = resolveNormalizeDraftPolicyId(nameOrPolicyId, policyId);
   const debts = Array.isArray(row.debts)
     ? row.debts.map((entry) => {
       const debt = asRecord(entry);
@@ -406,7 +402,7 @@ export function normalizeDraftWithDisclosure(
     ...(debts ? { debts } : {}),
   };
   const canonical = loadCanonicalProfile(normalizedInput);
-  const report = normalizeProfileWithReport(normalizedInput, policyId).report;
+  const report = normalizeProfileWithReport(normalizedInput, resolvedPolicyId).report;
   return {
     profile: canonical.profile as CanonicalProfile,
     normalization: canonical.normalization,
@@ -481,6 +477,10 @@ export function deriveSummary(input: FormDraft | CanonicalProfile): ProfileFormS
 
 export function toProfileJson(form: ProfileFormModel): ProfileV2 {
   const canonicalInput = {
+    ...(typeof form.birthYear === "number" && Number.isFinite(form.birthYear) ? { birthYear: Math.trunc(form.birthYear) } : {}),
+    ...(form.gender ? { gender: form.gender } : {}),
+    ...(asString(form.sido) ? { sido: asString(form.sido) } : {}),
+    ...(asString(form.sigungu) ? { sigungu: asString(form.sigungu) } : {}),
     monthlyIncomeNet: Math.max(0, asNumber(form.monthlyIncomeNet)),
     monthlyEssentialExpenses: Math.max(0, asNumber(form.monthlyEssentialExpenses)),
     monthlyDiscretionaryExpenses: Math.max(0, asNumber(form.monthlyDiscretionaryExpenses)),
@@ -518,6 +518,76 @@ export function formToProfile(form: ProfileFormModel): ProfileV2 {
   return toProfileJson(form);
 }
 
+function prettyJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
+
+export type ProfileJsonEditorState = {
+  form: ProfileFormModel;
+  json: string;
+  jsonDraft: string;
+  jsonError: string;
+};
+
+export function buildProfileJsonEditorDraft(
+  form: ProfileFormModel,
+  name = "기본 프로필",
+): string {
+  const canonical = normalizeDraft(form as unknown as FormDraft, name);
+  return prettyJson(canonical);
+}
+
+export function buildProfileJsonEditorState(
+  form: ProfileFormModel,
+  name = "기본 프로필",
+): ProfileJsonEditorState {
+  const json = buildProfileJsonEditorDraft(form, name);
+  return {
+    form,
+    json,
+    jsonDraft: json,
+    jsonError: "",
+  };
+}
+
+export function hydrateProfileJsonEditorState(
+  profile: ProfileV2 | CanonicalProfile | unknown,
+  name = "기본 프로필",
+): ProfileJsonEditorState {
+  return buildProfileJsonEditorState(profileToForm(profile, name), name);
+}
+
+export function parseProfileJsonEditorDraft(
+  profileJsonText: string,
+  name = "기본 프로필",
+):
+  | {
+    ok: true;
+    form: ProfileFormModel;
+    json: string;
+    normalization: ProfileNormalizationDisclosure;
+  }
+  | {
+    ok: false;
+    error: string;
+  } {
+  const parsed = safeParseProfileJson(profileJsonText, name);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: parsed.error,
+    };
+  }
+
+  const form = profileToForm(parsed.profile, name);
+  return {
+    ok: true,
+    form,
+    json: prettyJson(formToProfile(form)),
+    normalization: parsed.normalization,
+  };
+}
+
 export function safeParseProfileJson(
   profileJsonText: string,
   name = "기본 프로필",
@@ -540,7 +610,7 @@ export function safeParseProfileJson(
   }
 
   try {
-  const canonical = normalizeDraftWithDisclosure(parsed as FormDraft, name);
+    const canonical = normalizeDraftWithDisclosure(parsed as FormDraft, name);
     const validation = validateProfile(canonical.profile);
     const profileErrors = validation.issues.filter((issue) => issue.severity === "error");
     if (profileErrors.length > 0) {
@@ -586,6 +656,15 @@ export function validateProfileForm(form: ProfileFormModel): ProfileFormValidati
       warnings.push(`UNIT_SUSPECTED: ${label} 값이 너무 작습니다. 단위를 확인하세요.`);
     }
   });
+
+  if (form.birthYear !== undefined) {
+    if (!Number.isFinite(form.birthYear) || form.birthYear < 1900 || form.birthYear > new Date().getFullYear()) {
+      errors.push("출생연도는 1900년부터 현재 연도 사이여야 합니다.");
+    }
+  }
+  if (form.sigungu?.trim() && !form.sido?.trim()) {
+    warnings.push("지역 상세(시군구)를 입력하려면 시/도도 함께 선택하는 편이 정확합니다.");
+  }
 
   form.debts.forEach((debt, index) => {
     const row = index + 1;

@@ -11,6 +11,7 @@ import {
 } from "./contracts";
 import { NEWS_SOURCES } from "./sources";
 import { NEWS_TOPICS, canonicalizeTopicId } from "./taxonomy";
+import { resolveNewsRootDir } from "./rootDir";
 import { parseWithV3Whitelist } from "../security/whitelist";
 
 const DEFAULT_SETTINGS: NewsSettings = {
@@ -20,8 +21,6 @@ const DEFAULT_SETTINGS: NewsSettings = {
   topics: [],
   customSources: [],
 };
-
-const DEFAULT_NEWS_ROOT = path.join(process.cwd(), ".data", "news");
 
 function dedupeKeywords(values: string[]): string[] {
   const seen = new Set<string>();
@@ -35,11 +34,11 @@ function dedupeKeywords(values: string[]): string[] {
   return out;
 }
 
-export function resolveNewsSettingsPath(rootDir = DEFAULT_NEWS_ROOT): string {
+export function resolveNewsSettingsPath(rootDir = resolveNewsRootDir()): string {
   return path.join(rootDir, "settings.json");
 }
 
-export function readNewsSettings(rootDir = DEFAULT_NEWS_ROOT): NewsSettings {
+export function readNewsSettings(rootDir = resolveNewsRootDir()): NewsSettings {
   const filePath = resolveNewsSettingsPath(rootDir);
   if (!fs.existsSync(filePath)) return DEFAULT_SETTINGS;
 
@@ -51,7 +50,7 @@ export function readNewsSettings(rootDir = DEFAULT_NEWS_ROOT): NewsSettings {
   }
 }
 
-export function writeNewsSettings(input: NewsSettings, rootDir = DEFAULT_NEWS_ROOT): NewsSettings {
+export function writeNewsSettings(input: NewsSettings, rootDir = resolveNewsRootDir()): NewsSettings {
   const next = parseWithV3Whitelist(NewsSettingsSchema, {
     schemaVersion: 1,
     ...input,
@@ -125,7 +124,7 @@ export function mergeTopicsWithOverrides(
   });
 }
 
-export function loadEffectiveNewsConfig(rootDir = DEFAULT_NEWS_ROOT): {
+export function loadEffectiveNewsConfig(rootDir = resolveNewsRootDir()): {
   settings: NewsSettings;
   sources: NewsSource[];
   topics: NewsTopic[];

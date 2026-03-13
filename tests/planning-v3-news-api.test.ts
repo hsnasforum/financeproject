@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -33,17 +34,32 @@ import { resolveNewsSettingsPath } from "../planning/v3/news/settings";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3100";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 
-const DIGEST_PATH = resolveNewsDigestDayJsonPath();
-const TRENDS_PATH = resolveNewsTrendsJsonPath();
-const SCENARIOS_PATH = resolveNewsScenarioJsonPath();
-const SETTINGS_PATH = resolveNewsSettingsPath();
-const DB_PATH = resolveNewsDbPath();
+function digestPath(): string {
+  return resolveNewsDigestDayJsonPath();
+}
 
-function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = false): Request {
+function trendsPath(): string {
+  return resolveNewsTrendsJsonPath();
+}
+
+function scenariosPath(): string {
+  return resolveNewsScenarioJsonPath();
+}
+
+function settingsPath(): string {
+  return resolveNewsSettingsPath();
+}
+
+function dbPath(): string {
+  return resolveNewsDbPath();
+}
+
+function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = true): Request {
   const origin = `http://${host}`;
   const headers = new Headers({ host });
   if (withOriginHeaders) {
@@ -53,15 +69,15 @@ function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = fal
   return new Request(`${origin}${pathname}`, { method: "GET", headers });
 }
 
-function requestPost(body: unknown, withAuth = true): Request {
+function requestPost(body: unknown, cookie = "dev_csrf=csrf-token"): Request {
   const headers = new Headers({
     host: LOCAL_HOST,
     origin: LOCAL_ORIGIN,
     referer: `${LOCAL_ORIGIN}/planning/v3/news`,
     "content-type": "application/json",
   });
-  if (withAuth) {
-    headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
+  if (cookie) {
+    headers.set("cookie", cookie);
   }
   return new Request(`${LOCAL_ORIGIN}/api/planning/v3/news/refresh`, {
     method: "POST",
@@ -70,15 +86,15 @@ function requestPost(body: unknown, withAuth = true): Request {
   });
 }
 
-function requestSettingsPost(body: unknown, withAuth = true): Request {
+function requestSettingsPost(body: unknown, cookie = "dev_csrf=csrf-token"): Request {
   const headers = new Headers({
     host: LOCAL_HOST,
     origin: LOCAL_ORIGIN,
     referer: `${LOCAL_ORIGIN}/planning/v3/news/settings`,
     "content-type": "application/json",
   });
-  if (withAuth) {
-    headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
+  if (cookie) {
+    headers.set("cookie", cookie);
   }
   return new Request(`${LOCAL_ORIGIN}/api/planning/v3/news/settings`, {
     method: "POST",
@@ -101,7 +117,11 @@ function restoreFile(filePath: string, backup: string | null): void {
 }
 
 describe("planning v3 news api", () => {
+  let root = "";
+
   beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-news-api-"));
+    env.PLANNING_DATA_DIR = path.join(root, "planning");
     env.NODE_ENV = "test";
     runNewsRefreshMock.mockReset();
     runNewsRefreshMock.mockResolvedValue({
@@ -116,21 +136,24 @@ describe("planning v3 news api", () => {
   afterEach(() => {
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
+    if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
   it("GET digest/scenarios returns null when artifacts are missing and trends remains readable", async () => {
-    const digestBackup = backupAndRemove(DIGEST_PATH);
-    const trendsBackup = backupAndRemove(TRENDS_PATH);
-    const scenariosBackup = backupAndRemove(SCENARIOS_PATH);
+    const digestBackup = backupAndRemove(digestPath());
+    const trendsBackup = backupAndRemove(trendsPath());
+    const scenariosBackup = backupAndRemove(scenariosPath());
 
     try {
-      const digest = await digestGET(requestGet("/api/planning/v3/news/digest"));
+      const digest = await digestGET(requestGet("/api/planning/v3/news/digest", LOCAL_HOST, true));
       const digestJson = await digest.json() as { ok?: boolean; data?: unknown };
       expect(digest.status).toBe(200);
       expect(digestJson.ok).toBe(true);
       expect(digestJson.data).toBeNull();
 
-      const trends = await trendsGET(requestGet("/api/planning/v3/news/trends?window=30"));
+      const trends = await trendsGET(requestGet("/api/planning/v3/news/trends?window=30", LOCAL_HOST, true));
       const trendsJson = await trends.json() as { ok?: boolean; windowDays?: number; data?: unknown };
       expect(trends.status).toBe(200);
       expect(trendsJson.ok).toBe(true);
@@ -139,23 +162,23 @@ describe("planning v3 news api", () => {
         expect(typeof trendsJson.data).toBe("object");
       }
 
-      const scenarios = await scenariosGET(requestGet("/api/planning/v3/news/scenarios"));
+      const scenarios = await scenariosGET(requestGet("/api/planning/v3/news/scenarios", LOCAL_HOST, true));
       const scenariosJson = await scenarios.json() as { ok?: boolean; data?: unknown };
       expect(scenarios.status).toBe(200);
       expect(scenariosJson.ok).toBe(true);
       expect(scenariosJson.data).toBeNull();
     } finally {
-      restoreFile(DIGEST_PATH, digestBackup);
-      restoreFile(TRENDS_PATH, trendsBackup);
-      restoreFile(SCENARIOS_PATH, scenariosBackup);
+      restoreFile(digestPath(), digestBackup);
+      restoreFile(trendsPath(), trendsBackup);
+      restoreFile(scenariosPath(), scenariosBackup);
     }
   });
 
   it("GET scenarios enriches personalImpact/stress fields", async () => {
-    const scenariosBackup = backupAndRemove(SCENARIOS_PATH);
+    const scenariosBackup = backupAndRemove(scenariosPath());
     try {
-      fs.mkdirSync(path.dirname(SCENARIOS_PATH), { recursive: true });
-      fs.writeFileSync(SCENARIOS_PATH, `${JSON.stringify({
+      fs.mkdirSync(path.dirname(scenariosPath()), { recursive: true });
+      fs.writeFileSync(scenariosPath(), `${JSON.stringify({
         generatedAt: "2026-03-04T00:00:00.000Z",
         input: {
           topTopicIds: ["rates", "fx"],
@@ -191,7 +214,7 @@ describe("planning v3 news api", () => {
         }],
       }, null, 2)}\n`, "utf-8");
 
-      const response = await scenariosGET(requestGet("/api/planning/v3/news/scenarios"));
+      const response = await scenariosGET(requestGet("/api/planning/v3/news/scenarios", LOCAL_HOST, true));
       const payload = await response.json() as {
         ok?: boolean;
         data?: {
@@ -203,39 +226,44 @@ describe("planning v3 news api", () => {
       expect(payload.data?.scenarios?.[0]?.personalImpact).toBeTruthy();
       expect(payload.data?.scenarios?.[0]?.stress).toBeTruthy();
     } finally {
-      restoreFile(SCENARIOS_PATH, scenariosBackup);
+      restoreFile(scenariosPath(), scenariosBackup);
     }
   });
 
-  it("GET routes block non-local host", async () => {
-    const response = await digestGET(requestGet("/api/planning/v3/news/digest", "example.com"));
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+  it("GET user-facing news routes allow same-origin remote host", async () => {
+    const digest = await digestGET(requestGet("/api/planning/v3/news/digest", "example.com", true));
+    const digestPayload = await digest.json() as { ok?: boolean };
+    expect(digest.status).toBe(200);
+    expect(digestPayload.ok).toBe(true);
+
+    const today = await todayGET(requestGet("/api/planning/v3/news/today", "example.com", true));
+    const todayPayload = await today.json() as { ok?: boolean };
+    expect(today.status).toBe(200);
+    expect(todayPayload.ok).toBe(true);
+
+    const scenarios = await scenariosGET(requestGet("/api/planning/v3/news/scenarios", "example.com", true));
+    const scenariosPayload = await scenarios.json() as { ok?: boolean };
+    expect(scenarios.status).toBe(200);
+    expect(scenariosPayload.ok).toBe(true);
+
+    const trends = await trendsGET(requestGet("/api/planning/v3/news/trends", "example.com", true));
+    const trendsPayload = await trends.json() as { ok?: boolean };
+    expect(trends.status).toBe(200);
+    expect(trendsPayload.ok).toBe(true);
   });
 
-  it("GET items blocks non-local host", async () => {
+  it("GET items allows same-origin remote host", async () => {
     const response = await itemsGET(requestGet("/api/planning/v3/news/items", "example.com"));
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
-  });
-
-  it("GET today blocks non-local host", async () => {
-    const response = await todayGET(requestGet("/api/planning/v3/news/today", "example.com"));
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+    const payload = await response.json() as { ok?: boolean };
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
   });
 
   it("GET digest response only exposes whitelisted metadata fields", async () => {
-    const digestBackup = backupAndRemove(DIGEST_PATH);
+    const digestBackup = backupAndRemove(digestPath());
     try {
-      fs.mkdirSync(path.dirname(DIGEST_PATH), { recursive: true });
-      fs.writeFileSync(DIGEST_PATH, `${JSON.stringify({
+      fs.mkdirSync(path.dirname(digestPath()), { recursive: true });
+      fs.writeFileSync(digestPath(), `${JSON.stringify({
         date: "2026-03-04",
         generatedAt: "2026-03-04T00:00:00.000Z",
         topItems: [
@@ -268,7 +296,7 @@ describe("planning v3 news api", () => {
         summary: { observation: "obs", evidenceLinks: [], watchVariables: [], counterSignals: [] },
       }, null, 2)}\n`, "utf-8");
 
-      const response = await digestGET(requestGet("/api/planning/v3/news/digest"));
+      const response = await digestGET(requestGet("/api/planning/v3/news/digest", LOCAL_HOST, true));
       const payload = await response.json() as {
         ok?: boolean;
         data?: { topItems?: Array<Record<string, unknown>> } | null;
@@ -284,19 +312,19 @@ describe("planning v3 news api", () => {
       expect(payload.topicContradictions?.[0]?.topicId).toBe("rates");
       expect(payload.topicContradictions?.[0]?.contradictionGrade).toBe("med");
     } finally {
-      restoreFile(DIGEST_PATH, digestBackup);
+      restoreFile(digestPath(), digestBackup);
     }
   });
 
   it("GET items supports keyword/topic/source/days/burst filters and hides raw fields", async () => {
-    const dbBackup = backupAndRemove(DB_PATH);
-    const trendsBackup = backupAndRemove(TRENDS_PATH);
+    const dbBackup = backupAndRemove(dbPath());
+    const trendsBackup = backupAndRemove(trendsPath());
     const nowIso = new Date().toISOString();
     const recentIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const oldIso = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
 
     try {
-      const db = openNewsDatabase(DB_PATH);
+      const db = openNewsDatabase(dbPath());
       try {
         const insert = db.prepare(`
           INSERT INTO news_items (
@@ -393,8 +421,8 @@ describe("planning v3 news api", () => {
         closeNewsDatabase(db);
       }
 
-      fs.mkdirSync(path.dirname(TRENDS_PATH), { recursive: true });
-      fs.writeFileSync(TRENDS_PATH, `${JSON.stringify({
+      fs.mkdirSync(path.dirname(trendsPath()), { recursive: true });
+      fs.writeFileSync(trendsPath(), `${JSON.stringify({
         generatedAt: nowIso,
         timezone: "Asia/Seoul",
         todayKst: "2026-03-04",
@@ -467,13 +495,13 @@ describe("planning v3 news api", () => {
       const topicFacet = payload.data?.topics?.find((row) => row.topicId === "rates");
       expect(topicFacet?.count).toBe(1);
     } finally {
-      restoreFile(DB_PATH, dbBackup);
-      restoreFile(TRENDS_PATH, trendsBackup);
+      restoreFile(dbPath(), dbBackup);
+      restoreFile(trendsPath(), trendsBackup);
     }
   });
 
-  it("POST refresh blocks when dev unlock/csrf context is missing", async () => {
-    const response = await refreshPOST(requestPost({ csrf: "csrf-token" }, false));
+  it("POST refresh blocks csrf mismatch when dev csrf cookie exists", async () => {
+    const response = await refreshPOST(requestPost({ csrf: "csrf-token" }, "dev_csrf=csrf-cookie"));
     const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
     expect(response.status).toBe(403);
     expect(payload.ok).toBe(false);
@@ -510,7 +538,7 @@ describe("planning v3 news api", () => {
   });
 
   it("GET settings blocks when same-origin headers are missing", async () => {
-    const response = await settingsGET(requestGet("/api/planning/v3/news/settings"));
+    const response = await settingsGET(requestGet("/api/planning/v3/news/settings", LOCAL_HOST, false));
     const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
     expect(response.status).toBe(403);
     expect(payload.ok).toBe(false);
@@ -518,7 +546,7 @@ describe("planning v3 news api", () => {
   });
 
   it("GET settings returns defaults/effective config on local same-origin request", async () => {
-    const backup = backupAndRemove(SETTINGS_PATH);
+    const backup = backupAndRemove(settingsPath());
     try {
       const response = await settingsGET(requestGet("/api/planning/v3/news/settings", LOCAL_HOST, true));
       const payload = await response.json() as {
@@ -533,17 +561,17 @@ describe("planning v3 news api", () => {
       expect((payload.data?.sources ?? []).length).toBeGreaterThan(0);
       expect((payload.data?.topics ?? []).length).toBeGreaterThan(0);
     } finally {
-      restoreFile(SETTINGS_PATH, backup);
+      restoreFile(settingsPath(), backup);
     }
   });
 
   it("POST settings writes local override file with csrf guard", async () => {
-    const backup = backupAndRemove(SETTINGS_PATH);
+    const backup = backupAndRemove(settingsPath());
     try {
       const denied = await settingsPOST(requestSettingsPost({
-        csrf: "csrf-token",
+        csrf: "csrf-body",
         sources: [{ id: "bok_press_all", enabled: false, weight: 0.9 }],
-      }, false));
+      }, "dev_csrf=csrf-cookie"));
       expect(denied.status).toBe(403);
 
       const allowed = await settingsPOST(requestSettingsPost({
@@ -554,9 +582,9 @@ describe("planning v3 news api", () => {
       const payload = await allowed.json() as { ok?: boolean };
       expect(allowed.status).toBe(200);
       expect(payload.ok).toBe(true);
-      expect(fs.existsSync(SETTINGS_PATH)).toBe(true);
+      expect(fs.existsSync(settingsPath())).toBe(true);
     } finally {
-      restoreFile(SETTINGS_PATH, backup);
+      restoreFile(settingsPath(), backup);
     }
   });
 });

@@ -1,8 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  bodyActionLinkGroupClassName,
+  BodyEmptyState,
+  BodyStatusInset,
+  BodySectionHeading,
+  BodyTableFrame,
+  bodyFieldClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
@@ -198,6 +206,22 @@ export function ProfileDraftDetailClient({
   const [preflight, setPreflight] = useState<PreflightResult | null>(initialPreflight);
   const [applyRunning, setApplyRunning] = useState(false);
   const [applyResult, setApplyResult] = useState("");
+  const normalizedSelectedProfileId = asString(selectedProfileId);
+  const normalizedPreflightTargetProfileId = asString(preflight?.targetProfileId);
+  const preflightMatchesSelection = Boolean(preflight) && normalizedPreflightTargetProfileId === normalizedSelectedProfileId;
+  const preflightHasErrors = (preflight?.errors.length ?? 0) > 0;
+  const applyBlocked = applyRunning || preflightRunning || !preflightMatchesSelection || preflightHasErrors;
+  const applyGuidance = !preflight
+    ? "프리플라이트를 먼저 실행하면 이 기준으로 적용 가능 여부가 정리됩니다."
+    : !preflightMatchesSelection
+      ? "기준 프로필이 바뀌어 프리플라이트를 다시 실행해야 합니다."
+      : preflightHasErrors
+        ? "오류가 있어 아직 적용할 수 없습니다."
+        : preflight.summary.changedCount < 1
+          ? "변경 항목이 없어도 새 프로필은 생성됩니다. 그대로 적용할지 다시 확인해 주세요."
+          : preflight.summary.warningCount > 0
+            ? "경고를 확인한 뒤 적용할 수 있습니다."
+            : "오류 없음. 이 기준으로 프로필 생성(초안 적용)을 진행할 수 있습니다.";
 
   const loadDetail = useCallback(async () => {
     if (disableAutoLoad) return;
@@ -286,6 +310,7 @@ export function ProfileDraftDetailClient({
     if (!draft || preflightRunning) return;
     setPreflightRunning(true);
     setMessage("");
+    setApplyResult("");
     try {
       const csrf = readDevCsrfToken();
       const response = await fetch(`/api/planning/v3/profile/drafts/${encodeURIComponent(id)}/preflight`, {
@@ -357,16 +382,16 @@ export function ProfileDraftDetailClient({
       <div className="space-y-5">
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Draft Detail</h1>
-          <div className="flex flex-wrap gap-3 text-xs font-semibold text-emerald-700">
-            <Link className="underline underline-offset-2" href="/planning/v3/profile/drafts">
+          <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href="/planning/v3/profile/drafts">
               Draft Center
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/batches">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/batches">
               Batches
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/import/csv">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/import/csv">
               CSV 업로드
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
@@ -380,7 +405,7 @@ export function ProfileDraftDetailClient({
         {draft ? (
           <>
             <Card className="space-y-3" data-testid="v3-draft-meta">
-              <h2 className="text-sm font-bold text-slate-900">Draft 메타</h2>
+              <BodySectionHeading title="Draft 메타" />
               <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
                 <div>
                   <dt className="font-semibold">draftId</dt>
@@ -427,14 +452,22 @@ export function ProfileDraftDetailClient({
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">Preflight (Diff Only)</h2>
+              <BodySectionHeading
+                description="기준 프로필을 선택해 적용 전에 오류, 경고, 변경 항목을 먼저 확인합니다."
+                title="Preflight (Diff Only)"
+              />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
                 <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-700">
                   기준 프로필 선택(읽기 전용)
                   <select
-                    className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    className={bodyFieldClassName}
                     data-testid="v3-draft-base-profile-picker"
-                    onChange={(event) => setSelectedProfileId(event.currentTarget.value)}
+                    onChange={(event) => {
+                      setSelectedProfileId(event.currentTarget.value);
+                      setPreflight(null);
+                      setApplyResult("");
+                      setMessage("");
+                    }}
                     value={selectedProfileId}
                   >
                     <option value="">선택 없음 (after-only)</option>
@@ -458,7 +491,7 @@ export function ProfileDraftDetailClient({
                 </Button>
                 <Button
                   data-testid="v3-draft-apply-profile"
-                  disabled={applyRunning || (preflight?.errors.length ?? 0) > 0}
+                  disabled={applyBlocked}
                   onClick={() => {
                     void applyProfileDraft();
                   }}
@@ -467,6 +500,12 @@ export function ProfileDraftDetailClient({
                   {applyRunning ? "프로필 생성 중..." : "프로필 생성(초안 적용)"}
                 </Button>
               </div>
+              <p
+                className={`text-xs font-semibold ${preflightMatchesSelection && !preflightHasErrors ? "text-slate-600" : "text-amber-700"}`}
+                data-testid="v3-draft-apply-guidance"
+              >
+                {applyGuidance}
+              </p>
               {applyResult ? (
                 <p
                   className={`text-sm font-semibold ${applyResult.includes("실패") ? "text-rose-700" : "text-emerald-700"}`}
@@ -477,8 +516,8 @@ export function ProfileDraftDetailClient({
               ) : null}
             </Card>
 
-            <Card data-testid="v3-preflight-summary">
-              <h2 className="text-sm font-bold text-slate-900">Summary</h2>
+            <Card className="space-y-3" data-testid="v3-preflight-summary">
+              <BodySectionHeading title="Summary" />
               {preflight ? (
                 <dl className="mt-2 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
                   <div>
@@ -499,67 +538,86 @@ export function ProfileDraftDetailClient({
                   </div>
                 </dl>
               ) : (
-                <p className="mt-2 text-sm text-slate-600">아직 프리플라이트를 실행하지 않았습니다.</p>
+                <BodyEmptyState
+                  description="프리플라이트를 실행하면 변경 수와 경고 수가 먼저 요약됩니다."
+                  title="아직 프리플라이트를 실행하지 않았습니다."
+                />
               )}
             </Card>
 
-            <Card data-testid="v3-preflight-errors">
-              <h2 className="text-sm font-bold text-slate-900">Errors</h2>
-              {preflight && preflight.errors.length > 0 ? (
-                <ul className="mt-2 space-y-1 text-xs text-rose-700">
-                  {preflight.errors.map((error, index) => (
-                    <li className="rounded border border-rose-200 bg-rose-50 px-2 py-1" key={`${error.path}:${index}`}>
-                      <span className="font-mono">{error.path}</span>: {error.message}
-                    </li>
-                  ))}
-                </ul>
+            <Card className="space-y-3" data-testid="v3-preflight-errors">
+              <BodySectionHeading title="Errors" />
+              {preflight ? (
+                preflight.errors.length > 0 ? (
+                  <ul className="space-y-2 text-xs text-rose-700">
+                    {preflight.errors.map((error, index) => (
+                      <li key={`${error.path}:${index}`}>
+                        <BodyStatusInset className="text-left" tone="danger">
+                          <span className="font-mono">{error.path}</span>: {error.message}
+                        </BodyStatusInset>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <BodyEmptyState description="현재 선택 기준으로는 적용을 막는 오류가 없습니다." title="에러 없음" />
+                )
               ) : (
-                <p className="mt-2 text-sm text-slate-600">에러 없음</p>
+                <BodyEmptyState description="프리플라이트를 실행하면 적용을 막는 오류가 이 영역에 정리됩니다." title="아직 프리플라이트를 실행하지 않았습니다." />
               )}
             </Card>
 
-            <Card data-testid="v3-preflight-warnings">
-              <h2 className="text-sm font-bold text-slate-900">Warnings</h2>
-              {preflight && preflight.warnings.length > 0 ? (
-                <ul className="mt-2 space-y-1 text-xs text-amber-700">
-                  {preflight.warnings.map((warning, index) => (
-                    <li className="rounded border border-amber-200 bg-amber-50 px-2 py-1" key={`${warning.code}:${index}`}>
-                      [{warning.code}] {warning.message}
-                    </li>
-                  ))}
-                </ul>
+            <Card className="space-y-3" data-testid="v3-preflight-warnings">
+              <BodySectionHeading title="Warnings" />
+              {preflight ? (
+                preflight.warnings.length > 0 ? (
+                  <ul className="space-y-2 text-xs text-amber-700">
+                    {preflight.warnings.map((warning, index) => (
+                      <li key={`${warning.code}:${index}`}>
+                        <BodyStatusInset className="text-left" tone="warning">
+                          [{warning.code}] {warning.message}
+                        </BodyStatusInset>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <BodyEmptyState description="현재 기준에서는 별도 확인이 필요한 경고가 없습니다." title="경고 없음" />
+                )
               ) : (
-                <p className="mt-2 text-sm text-slate-600">경고 없음</p>
+                <BodyEmptyState description="프리플라이트를 실행하면 검토가 필요한 경고가 이 영역에 정리됩니다." title="아직 프리플라이트를 실행하지 않았습니다." />
               )}
             </Card>
 
-            <Card data-testid="v3-preflight-changes">
-              <h2 className="text-sm font-bold text-slate-900">Changes</h2>
-              {preflight && preflight.changes.length > 0 ? (
-                <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        <th className="px-2 py-1 text-left">path</th>
-                        <th className="px-2 py-1 text-left">kind</th>
-                        <th className="px-2 py-1 text-left">before</th>
-                        <th className="px-2 py-1 text-left">after</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {preflight.changes.map((change, index) => (
-                        <tr key={`${change.path}:${index}`}>
-                          <td className="px-2 py-1 font-mono">{change.path}</td>
-                          <td className="px-2 py-1">{change.kind}</td>
-                          <td className="px-2 py-1 font-mono">{stringifyValue(change.before)}</td>
-                          <td className="px-2 py-1 font-mono">{stringifyValue(change.after)}</td>
+            <Card className="space-y-3" data-testid="v3-preflight-changes">
+              <BodySectionHeading title="Changes" />
+              {preflight ? (
+                preflight.changes.length > 0 ? (
+                  <BodyTableFrame>
+                    <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-2 py-1 text-left">path</th>
+                          <th className="px-2 py-1 text-left">kind</th>
+                          <th className="px-2 py-1 text-left">before</th>
+                          <th className="px-2 py-1 text-left">after</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {preflight.changes.map((change, index) => (
+                          <tr key={`${change.path}:${index}`}>
+                            <td className="px-2 py-1 font-mono">{change.path}</td>
+                            <td className="px-2 py-1">{change.kind}</td>
+                            <td className="px-2 py-1 font-mono">{stringifyValue(change.before)}</td>
+                            <td className="px-2 py-1 font-mono">{stringifyValue(change.after)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </BodyTableFrame>
+                ) : (
+                  <BodyEmptyState description="이번 초안은 선택한 기준 프로필 대비 바뀌는 항목이 없습니다." title="변경 항목이 없습니다." />
+                )
               ) : (
-                <p className="mt-2 text-sm text-slate-600">변경 항목이 없습니다.</p>
+                <BodyEmptyState description="프리플라이트를 실행하면 적용 시 바뀌는 항목이 이 영역에 정리됩니다." title="아직 프리플라이트를 실행하지 않았습니다." />
               )}
             </Card>
           </>

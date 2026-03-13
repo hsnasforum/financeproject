@@ -2,8 +2,11 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
+import { logPruneSummary, pruneRootTransientNextArtifacts } from "./next_artifact_prune.mjs";
+import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
 
 function parsePort(value, fallback = 3100) {
   const parsed = Number(value);
@@ -42,7 +45,8 @@ function hostCandidatesWithOverride(overrideHost, runtime) {
   if (cliHost) return [cliHost];
   const envHost = (process.env.DEV_HOST ?? "").trim();
   if (envHost) return [envHost];
-  if (runtime.isWSL || runtime.isDocker || runtime.isDevContainer) return ["0.0.0.0", "127.0.0.1"];
+  if (runtime.isWSL) return ["0.0.0.0", "127.0.0.1"];
+  if (runtime.isDocker || runtime.isDevContainer) return ["0.0.0.0", "127.0.0.1"];
   if (process.platform === "win32") return ["127.0.0.1", "0.0.0.0"];
   return ["127.0.0.1", "0.0.0.0"];
 }
@@ -50,6 +54,7 @@ function hostCandidatesWithOverride(overrideHost, runtime) {
 function parseCliArgs(argv) {
   let overrideHost;
   let overridePort;
+  let strictPort = false;
   const passthroughArgs = [];
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -69,24 +74,32 @@ function parseCliArgs(argv) {
       }
       continue;
     }
+    if (arg === "--strict-port") {
+      strictPort = true;
+      continue;
+    }
 
     passthroughArgs.push(arg);
   }
 
-  return { overrideHost, overridePort, passthroughArgs };
+  return { overrideHost, overridePort, strictPort, passthroughArgs };
 }
 
 function listLanIpv4Addresses(limit = 2) {
-  const netifs = os.networkInterfaces();
-  const out = [];
-  for (const addresses of Object.values(netifs)) {
-    for (const addr of addresses ?? []) {
-      if (!addr || addr.family !== "IPv4" || addr.internal) continue;
-      out.push(addr.address);
-      if (out.length >= limit) return out;
+  try {
+    const netifs = os.networkInterfaces();
+    const out = [];
+    for (const addresses of Object.values(netifs)) {
+      for (const addr of addresses ?? []) {
+        if (!addr || addr.family !== "IPv4" || addr.internal) continue;
+        out.push(addr.address);
+        if (out.length >= limit) return out;
+      }
     }
+    return out;
+  } catch {
+    return [];
   }
-  return out;
 }
 
 function canListen({ host, port, timeoutMs = 1200 }) {
@@ -117,6 +130,133 @@ function canListen({ host, port, timeoutMs = 1200 }) {
       done({ ok: true });
     });
   });
+}
+
+function resolveWindowsPath(posixPath) {
+  const converted = spawnSync("wslpath", ["-w", posixPath], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (converted.status !== 0) return null;
+  const value = (converted.stdout || "").trim();
+  return value || null;
+}
+
+export function parseBridgeAddressList(value) {
+  if (!value || value === "-") return [];
+  return value.split(",").map((entry) => entry.trim()).filter(Boolean);
+}
+
+export function parseWindowsBridgeStatusLine(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("STATUS ")) return null;
+
+  const match = /^STATUS\s+(READY|FAIL)\s+started=([^\s]+)\s+warnings=([^\s]+)$/.exec(trimmed);
+  if (!match) return null;
+
+  return {
+    status: match[1],
+    listeners: parseBridgeAddressList(match[2]),
+    warnings: parseBridgeAddressList(match[3]),
+  };
+}
+
+export function formatWindowsBridgeFailureReason(status) {
+  const warnings = status.warnings.length > 0 ? status.warnings.join(", ") : "unknown";
+  return `listen failed (${warnings})`;
+}
+
+function launchWindowsLocalhostBridge({ port, targetHost, targetPort }) {
+  const scriptPath = fileURLToPath(new URL("./windows_localhost_bridge.ps1", import.meta.url));
+  const windowsScriptPath = resolveWindowsPath(scriptPath);
+  if (!windowsScriptPath) {
+    return { child: null, ready: Promise.resolve({ ok: false, reason: "wslpath failed" }) };
+  }
+
+  const child = spawn("powershell.exe", [
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    windowsScriptPath,
+    "-ListenPort",
+    String(port),
+    "-TargetHost",
+    targetHost,
+    "-TargetPort",
+    String(targetPort),
+    "-ListenAddressesCsv",
+    "127.0.0.1",
+  ], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const ready = new Promise((resolve) => {
+    let settled = false;
+    let stderrBuffer = "";
+    let stdoutBuffer = "";
+    let stdoutRemainder = "";
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const flushStdoutLines = (flush = false) => {
+      const lines = stdoutRemainder.split(/\r?\n/);
+      stdoutRemainder = flush ? "" : (lines.pop() ?? "");
+
+      for (const line of lines) {
+        const parsed = parseWindowsBridgeStatusLine(line);
+        if (parsed) {
+          if (parsed.status === "READY") {
+            finish({ ok: true, listeners: parsed.listeners, warnings: parsed.warnings });
+          } else {
+            finish({
+              ok: false,
+              reason: formatWindowsBridgeFailureReason(parsed),
+              listeners: parsed.listeners,
+              warnings: parsed.warnings,
+            });
+          }
+          continue;
+        }
+
+        if (line.length > 0) {
+          process.stdout.write(`${line}\n`);
+        }
+      }
+    };
+    const timer = setTimeout(() => {
+      finish({ ok: false, reason: "startup timeout" });
+    }, 4000);
+
+    child.stdout?.on("data", (chunk) => {
+      const text = String(chunk);
+      stdoutBuffer += text;
+      stdoutRemainder += text;
+      flushStdoutLines();
+    });
+    child.stderr?.on("data", (chunk) => {
+      const text = String(chunk);
+      stderrBuffer += text;
+      if (settled) {
+        process.stderr.write(text);
+      }
+    });
+    child.once("exit", (code) => {
+      flushStdoutLines(true);
+      finish({
+        ok: false,
+        reason: stderrBuffer.trim() || stdoutBuffer.trim() || `bridge exited (${code ?? "unknown"})`,
+      });
+    });
+    child.once("error", (error) => {
+      finish({ ok: false, reason: error.message });
+    });
+  });
+
+  return { child, ready };
 }
 
 function parentDirs(startDir, limit = 8) {
@@ -166,9 +306,9 @@ function resolveNextBin(startDir) {
   return null;
 }
 
-async function pickHostPort({ overrideHost, overridePort, runtime }) {
+async function pickHostPort({ overrideHost, overridePort, runtime, strictPort = false }) {
   const startPort = parsePort(overridePort ?? process.env.PORT, 3100);
-  const maxOffset = 20;
+  const maxOffset = strictPort ? 0 : 20;
   const hosts = hostCandidatesWithOverride(overrideHost, runtime);
   let lastError = null;
 
@@ -177,6 +317,10 @@ async function pickHostPort({ overrideHost, overridePort, runtime }) {
       const port = startPort + offset;
       const listened = await canListen({ host, port });
       if (listened.ok) return { host, port };
+      if (listened.error && typeof listened.error === "object" && "code" in listened.error && listened.error.code === "EPERM") {
+        console.warn(`[next_dev_safe] port probe denied for ${host}:${port}; trying actual next bind`);
+        return { host, port };
+      }
       lastError = listened.error;
     }
   }
@@ -185,7 +329,7 @@ async function pickHostPort({ overrideHost, overridePort, runtime }) {
 
 async function main() {
   const runtime = detectRuntime();
-  const { overrideHost, overridePort, passthroughArgs } = parseCliArgs(process.argv.slice(2));
+  const { overrideHost, overridePort, strictPort, passthroughArgs } = parseCliArgs(process.argv.slice(2));
   const nextBin = resolveNextBin(process.cwd());
   if (!nextBin) {
     const workspaceRoot = detectWorkspaceRoot(process.cwd());
@@ -198,7 +342,16 @@ async function main() {
     }
     process.exit(2);
   }
-  const { host, port } = await pickHostPort({ overrideHost, overridePort, runtime });
+  const { host, port } = await pickHostPort({ overrideHost, overridePort, runtime, strictPort });
+
+  logPruneSummary(
+    "[next_dev_safe] root prune",
+    pruneRootTransientNextArtifacts({
+      cwd: process.cwd(),
+      preserveNames: [process.env.PLAYWRIGHT_DIST_DIR ?? "", `.next-host-${port}`],
+      ignorePids: [process.pid],
+    }),
+  );
 
   console.log(`Bind: host=${host} port=${port}`);
   if (host === "127.0.0.1" && (runtime.isWSL || runtime.isDocker || runtime.isDevContainer)) {
@@ -207,14 +360,39 @@ async function main() {
   }
   console.log(`Open (same env): http://127.0.0.1:${port}`);
   console.log(`Open (same env): http://localhost:${port}`);
-  if (host === "0.0.0.0") {
+  let windowsLocalhostBridge = null;
+  if (runtime.isWSL && host === "0.0.0.0") {
+    const windowsTargetHost = listLanIpv4Addresses(1)[0];
+    if (windowsTargetHost) {
+      const launched = launchWindowsLocalhostBridge({
+        port,
+        targetHost: windowsTargetHost,
+        targetPort: port,
+      });
+      windowsLocalhostBridge = launched.child;
+      const ready = await launched.ready;
+      if (ready.ok) {
+        console.log(`[next_dev_safe] Windows localhost bridge를 추가했습니다. localhost -> ${windowsTargetHost}:${port}`);
+        if (ready.warnings?.length) {
+          console.warn(`[next_dev_safe] Windows localhost bridge 일부 listen 주소는 건너뛰었습니다: ${ready.warnings.join(", ")}`);
+        }
+      } else {
+        console.warn(`[next_dev_safe] Windows localhost bridge disabled: ${ready.reason}`);
+      }
+    } else {
+      console.warn("[next_dev_safe] Windows localhost bridge disabled: WSL IPv4 주소를 찾지 못했습니다.");
+    }
+  } else if (host === "::") {
+    console.log(`Open (same env): http://[::1]:${port}`);
+  }
+  if (host === "0.0.0.0" || host === "::") {
     for (const ip of listLanIpv4Addresses(2)) {
       console.log(`Open (LAN): http://${ip}:${port}`);
     }
   }
 
   console.log(`[next_dev_safe] next bin: ${nextBin}`);
-  const env = { ...process.env };
+  const env = sanitizeInheritedColorEnv(process.env);
   delete env.HOSTNAME;
   delete env.PORT;
 
@@ -223,17 +401,51 @@ async function main() {
     env,
   });
 
+  const cleanupHelpers = () => {
+    try {
+      windowsLocalhostBridge?.kill();
+    } catch {
+      // ignore cleanup failures
+    }
+  };
+
   child.on("exit", (code, signal) => {
+    cleanupHelpers();
     if (signal) {
       process.kill(process.pid, signal);
       return;
     }
     process.exit(code ?? 1);
   });
+
+  process.once("SIGINT", () => {
+    cleanupHelpers();
+    try {
+      child.kill("SIGINT");
+    } catch {
+      process.exit(130);
+    }
+  });
+  process.once("SIGTERM", () => {
+    cleanupHelpers();
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      process.exit(143);
+    }
+  });
 }
 
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error("[next_dev_safe] failed to select host/port:", message);
-  process.exit(1);
-});
+const isDirectRun = (() => {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return path.resolve(entry) === fileURLToPath(import.meta.url);
+})();
+
+if (isDirectRun) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[next_dev_safe] failed to select host/port:", message);
+    process.exit(1);
+  });
+}

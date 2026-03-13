@@ -20,6 +20,9 @@ import {
   writeTrendsCache,
 } from "./index";
 
+const env = process.env as Record<string, string | undefined>;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+
 function makeItem(id: string): NewsItem {
   return {
     id,
@@ -37,6 +40,8 @@ describe("planning v3 news store", () => {
     for (const root of roots.splice(0, roots.length)) {
       fs.rmSync(root, { recursive: true, force: true });
     }
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
   });
 
   it("writes items and state in .data/news-compatible layout", () => {
@@ -87,6 +92,9 @@ describe("planning v3 news store", () => {
       count: 1,
       scoreSum: 1,
       sourceDiversity: 1,
+      baselineMean: 0,
+      baselineStddev: 0,
+      burstZ: 0,
       burstGrade: "Low",
     }], root);
     writeDailyStats("2026-03-04", [{
@@ -96,6 +104,9 @@ describe("planning v3 news store", () => {
       count: 2,
       scoreSum: 3,
       sourceDiversity: 0.5,
+      baselineMean: 1,
+      baselineStddev: 0,
+      burstZ: 1,
       burstGrade: "Med",
     }], root);
     const recent = readDailyStatsLastNDays({
@@ -212,5 +223,26 @@ describe("planning v3 news store", () => {
 
     const scenarios = readScenariosCache(root);
     expect(scenarios?.scenarios.cards).toHaveLength(3);
+  });
+
+  it("uses PLANNING_DATA_DIR for default root at call time", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-v3-env-default-"));
+    roots.push(root);
+    env.PLANNING_DATA_DIR = path.join(root, "planning");
+
+    expect(resolveItemsDir()).toBe(path.join(root, "news", "items"));
+    expect(resolveStatePath()).toBe(path.join(root, "news", "state.json"));
+
+    const state: RuntimeState = {
+      lastRunAt: "2026-03-05T09:00:00.000Z",
+      sources: {},
+    };
+
+    upsertItems([makeItem("env-default")]);
+    writeState(state);
+
+    expect(hasItem("env-default")).toBe(true);
+    expect(readState().lastRunAt).toBe("2026-03-05T09:00:00.000Z");
+    expect(fs.existsSync(path.join(root, "news", "items", "env-default.json"))).toBe(true);
   });
 });

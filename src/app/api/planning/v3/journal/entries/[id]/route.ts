@@ -1,17 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  assertCsrf,
-  assertDevUnlocked,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { getJournalEntry, updateJournalEntry } from "../../../../../../../../planning/v3/journal/store";
+import { getJournalEntry, updateJournalEntry } from "@/lib/planning/v3/journal/store";
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -30,10 +27,8 @@ function withReadGuard(request: Request): Response | null {
 
 function withWriteGuard(request: Request, body: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertDevUnlocked(request);
-    assertCsrf(request, body as { csrf?: unknown } | null);
+    requireCsrf(request, body as { csrf?: unknown } | null, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -55,9 +50,6 @@ function asString(value: unknown): string {
 }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -75,9 +67,6 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: unknown = null;
   try {
     body = await request.json();

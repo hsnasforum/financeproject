@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { DevUnlockShortcutLink } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -314,7 +315,8 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
 
       {!hasCsrf ? (
         <Card className="mb-4 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          Dev unlock/CSRF가 없어 doctor를 실행할 수 없습니다.
+          Dev unlock/CSRF가 없어 doctor를 실행할 수 없습니다.{" "}
+          <DevUnlockShortcutLink className="text-amber-900" />
         </Card>
       ) : null}
       {state === "MIGRATION_REQUIRED" ? (

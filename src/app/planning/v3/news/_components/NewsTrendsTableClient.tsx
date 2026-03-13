@@ -4,6 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import {
+  reportHeroActionLinkClassName,
+  reportHeroToggleButtonClassName,
+  ReportHeroCard,
+  ReportHeroStatCard,
+  ReportHeroStatGrid,
+} from "@/components/ui/ReportTone";
 import { WeeklyPlanPanel } from "./WeeklyPlanPanel";
 
 type NewsTrendsTableClientProps = {
@@ -60,6 +67,14 @@ function buildPolylinePoints(series: Array<{ count?: number }> | undefined): str
   }).join(" ");
 }
 
+function burstLabel(value: string): string {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === "high" || normalized === "상") return "급증 강함";
+  if (normalized === "medium" || normalized === "중") return "급증 보통";
+  if (normalized === "low" || normalized === "하") return "급증 약함";
+  return "안정";
+}
+
 export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
   const [windowDays, setWindowDays] = useState<7 | 30>(7);
   const [loading, setLoading] = useState(true);
@@ -93,45 +108,77 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
     void load(windowDays);
   }, [load, windowDays]);
 
+  const topicRows = data?.topics ?? [];
+  const burstCount = topicRows.filter((row) => {
+    const grade = asString(row.burstGrade).toLowerCase();
+    return grade === "high" || grade === "medium" || grade === "상" || grade === "중";
+  }).length;
+  const topTopic = topicRows[0];
+
   return (
     <PageShell>
       <div className="space-y-5">
-        <Card className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h1 className="text-xl font-black text-slate-900">Planning v3 News Trends</h1>
-              <p className="text-sm text-slate-600">토픽/기간 기준 동향 요약</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/planning/v3/news" className="text-sm font-semibold text-emerald-700 underline underline-offset-2">Digest</Link>
+        <ReportHeroCard
+          kicker="Trend Monitor"
+          title="최근 이슈 흐름"
+          description="지난 7일 또는 30일 동안 어떤 토픽의 언급이 늘었는지 같은 서식으로 비교해서, 먼저 볼 흐름을 빠르게 추립니다."
+          action={(
+            <>
+              <Link href="/planning/v3/news" className={reportHeroActionLinkClassName}>오늘 브리핑</Link>
+              <Link href="/planning/v3/news/explore" className={reportHeroActionLinkClassName}>뉴스 탐색</Link>
+              <Link href="/planning/v3/news/alerts" className={reportHeroActionLinkClassName}>중요 알림</Link>
               <button
                 type="button"
                 onClick={() => setWindowDays(7)}
-                className={`rounded-md px-3 py-1.5 text-sm font-semibold ${windowDays === 7 ? "bg-emerald-100 text-emerald-800" : "border border-slate-300 text-slate-700"}`}
+                className={reportHeroToggleButtonClassName(windowDays === 7)}
               >
                 7일
               </button>
               <button
                 type="button"
                 onClick={() => setWindowDays(30)}
-                className={`rounded-md px-3 py-1.5 text-sm font-semibold ${windowDays === 30 ? "bg-emerald-100 text-emerald-800" : "border border-slate-300 text-slate-700"}`}
+                className={reportHeroToggleButtonClassName(windowDays === 30)}
               >
                 30일
               </button>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500">기준일: {asString(data?.date) || "-"}</p>
-          {errorMessage ? <p className="text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
-        </Card>
+            </>
+          )}
+        >
+          <p className="text-xs text-white/60">기준일: {asString(data?.date) || "-"}</p>
+          <ReportHeroStatGrid className="xl:grid-cols-3">
+            <ReportHeroStatCard label="급증 흐름" value={loading ? "-" : `${burstCount}개`} description="지금 특히 빠르게 언급이 늘어난 토픽" />
+            <ReportHeroStatCard label="비교 토픽" value={loading ? "-" : `${topicRows.length}개`} description={`${windowDays}일 구간에서 비교한 토픽 수`} />
+            <ReportHeroStatCard label="먼저 볼 흐름" value={asString(topTopic?.topicLabel) || "-"} description="당일 기사 수가 가장 많은 토픽" />
+          </ReportHeroStatGrid>
+          {errorMessage ? <p className="text-xs font-semibold text-rose-300">{errorMessage}</p> : null}
+        </ReportHeroCard>
 
         <WeeklyPlanPanel csrf={csrf} />
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Topic Table</h2>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">토픽 비교표</h2>
+            <p className="text-xs text-slate-500">왼쪽부터 이름, 현재 기사 수, 급증 정도, 출처 분산, 최근 추이를 순서대로 보여줍니다.</p>
+          </div>
           {loading ? (
             <p className="text-sm text-slate-600">불러오는 중...</p>
           ) : !data?.topics?.length ? (
-            <p className="text-sm text-slate-600">데이터 없음</p>
+            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">비교할 데이터가 없습니다.</p>
+              <p className="mt-1 text-xs text-slate-600">기간을 바꾸거나 뉴스 탐색에서 더 넓은 조건으로 다시 찾아보세요.</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWindowDays(windowDays === 7 ? 30 : 7)}
+                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white"
+                >
+                  {windowDays === 7 ? "30일로 다시 보기" : "7일로 다시 보기"}
+                </button>
+                <Link href="/planning/v3/news/explore" className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white">
+                  뉴스 탐색으로 이동
+                </Link>
+              </div>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
@@ -147,9 +194,14 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
                 <tbody>
                   {data.topics.map((row, index) => (
                     <tr key={`${asString(row.topicId)}-${index}`} className="border-b border-slate-100 text-slate-800">
-                      <td className="px-2 py-2">{asString(row.topicLabel) || asString(row.topicId) || "-"}</td>
+                      <td className="px-2 py-2">
+                        <div className="space-y-1">
+                          <p className="font-semibold text-slate-900">{asString(row.topicLabel) || asString(row.topicId) || "-"}</p>
+                          <p className="text-[11px] text-slate-500">{burstLabel(asString(row.burstGrade))}</p>
+                        </div>
+                      </td>
                       <td className="px-2 py-2">{Number(row.count ?? 0).toLocaleString("ko-KR")}</td>
-                      <td className="px-2 py-2">{asString(row.burstGrade) || "Unknown"}</td>
+                      <td className="px-2 py-2">{burstLabel(asString(row.burstGrade))}</td>
                       <td className="px-2 py-2">{formatPercent(row.sourceDiversity)}</td>
                       <td className="px-2 py-2">
                         {!row.series?.length ? (

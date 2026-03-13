@@ -13,16 +13,20 @@ import {
   updateProfile,
 } from "../src/lib/planning/store/profileStore";
 import {
+  backfillLegacyRuns,
   createRun,
   deleteRun,
   getRun,
+  listLegacyRunBackfillCandidates,
   listRuns,
   restoreRunFromTrash,
+  summarizeLegacyRunBackfill,
 } from "../src/lib/planning/store/runStore";
 import {
   getPlanningFallbackUsageSnapshot,
   resetPlanningFallbackUsageSnapshot,
 } from "../src/lib/planning/engine";
+import { resolveRunsIndexPath } from "../src/lib/planning/store/paths";
 import { listPlanningTrash, purgePlanningTrashOlderThan } from "../src/lib/planning/store/trash";
 import { type PlanningRunRecord } from "../src/lib/planning/store/types";
 import { buildResultDtoV1 } from "../src/lib/planning/v2/resultDto";
@@ -44,6 +48,26 @@ function sampleProfile() {
     debts: [],
     goals: [],
   };
+}
+
+function simulateBlob(value: Omit<NonNullable<PlanningRunRecord["outputs"]["simulate"]>, "ref">): PlanningRunRecord["outputs"]["simulate"] {
+  return {
+    ref: {
+      name: "simulate",
+      path: ".data/test/planning-store/simulate.json",
+    },
+    ...value,
+  };
+}
+
+function rawSimulateBlob(value: Record<string, unknown>): PlanningRunRecord["outputs"]["simulate"] {
+  return {
+    ref: {
+      name: "simulate",
+      path: ".data/test/planning-store/simulate.json",
+    },
+    ...value,
+  } as unknown as PlanningRunRecord["outputs"]["simulate"];
 }
 
 describe("planning store", () => {
@@ -127,12 +151,12 @@ describe("planning store", () => {
           snapshot: { missing: true },
         },
         outputs: {
-          simulate: {
+          simulate: simulateBlob({
             summary: { endNetWorthKrw: i },
             warnings: [],
             goalsStatus: [],
             keyTimelinePoints: [],
-          },
+          }),
         },
       });
     }
@@ -159,6 +183,52 @@ describe("planning store", () => {
 
     const afterRestore = await getRun(target.id);
     expect(afterRestore?.id).toBe(target.id);
+  }, 15_000);
+
+  it("rebuilds the run index when the index json is truncated", async () => {
+    const profile = await createProfile({
+      name: "index recovery",
+      profile: sampleProfile(),
+    });
+
+    const created = await createRun({
+      profileId: profile.id,
+      title: "index-recovery-run",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: simulateBlob({
+          summary: { endNetWorthKrw: 1_200 },
+          warnings: [],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+        }),
+      },
+    });
+
+    fs.writeFileSync(resolveRunsIndexPath(), "{\n", "utf-8");
+
+    const runs = await listRuns({ profileId: profile.id, limit: 20 });
+    expect(runs.some((row) => row.id === created.id)).toBe(true);
+
+    const loaded = await getRun(created.id);
+    expect(loaded?.id).toBe(created.id);
+  });
+
+  it("recovers default profile resolution when profile meta files are truncated", async () => {
+    const created = await createProfile({
+      name: "profile-recovery",
+      profile: sampleProfile(),
+    });
+
+    fs.writeFileSync(path.join(root, "vault", "profiles.meta.json"), "{\n", "utf-8");
+    fs.writeFileSync(env.PLANNING_PROFILE_REGISTRY_PATH as string, "{\n", "utf-8");
+
+    const profiles = await listProfiles();
+    expect(profiles.some((row) => row.id === created.id)).toBe(true);
+
+    const defaultProfileId = await getDefaultProfileId();
+    expect(defaultProfileId).toBe(created.id);
   });
 
   it("isolates runs by profileId partition", async () => {
@@ -177,12 +247,12 @@ describe("planning store", () => {
       input: { horizonMonths: 12 },
       meta: { snapshot: { missing: true } },
       outputs: {
-        simulate: {
+        simulate: simulateBlob({
           summary: { endNetWorthKrw: 100 },
           warnings: [],
           goalsStatus: [],
           keyTimelinePoints: [],
-        },
+        }),
       },
     });
     await createRun({
@@ -191,12 +261,12 @@ describe("planning store", () => {
       input: { horizonMonths: 12 },
       meta: { snapshot: { missing: true } },
       outputs: {
-        simulate: {
+        simulate: simulateBlob({
           summary: { endNetWorthKrw: 200 },
           warnings: [],
           goalsStatus: [],
           keyTimelinePoints: [],
-        },
+        }),
       },
     });
 
@@ -261,12 +331,12 @@ describe("planning store", () => {
       input: { horizonMonths: 12 },
       meta: { snapshot: { missing: true } },
       outputs: {
-        simulate: {
+        simulate: simulateBlob({
           summary: { endNetWorthKrw: 1234 },
           warnings: [],
           goalsStatus: [],
           keyTimelinePoints: [],
-        },
+        }),
       },
     });
 
@@ -351,12 +421,245 @@ describe("planning store", () => {
     expect(firstRead?.outputs.engine).toBeDefined();
     expect(firstRead?.outputs.engineSchemaVersion).toBe(1);
     expect(afterFirst).toBeGreaterThanOrEqual(before);
+    expect(getPlanningFallbackUsageSnapshot().sourceBreakdown?.legacyRunEngineMigrationCount?.legacyEngineFallback).toBeGreaterThanOrEqual(1);
 
     const secondRead = await getRun(created.id);
     const afterSecond = getPlanningFallbackUsageSnapshot().legacyRunEngineMigrationCount;
     expect(secondRead?.outputs.engine).toBeDefined();
     expect(secondRead?.outputs.engineSchemaVersion).toBe(1);
     expect(afterSecond).toBe(afterFirst);
+  });
+
+  it("backfills legacy dto.debt fields from dto.raw.debt on read and persists", async () => {
+    resetPlanningFallbackUsageSnapshot();
+    const profile = await createProfile({
+      name: "debt backfill profile",
+      profile: sampleProfile(),
+    });
+
+    const resultDto = buildResultDtoV1({
+      generatedAt: "2026-03-05T00:00:00.000Z",
+      simulate: {
+        summary: {
+          endNetWorthKrw: 12_000_000,
+          worstCashKrw: 2_000_000,
+          worstCashMonthIndex: 1,
+          goalsAchievedCount: 0,
+          goalsMissedCount: 0,
+        },
+        warnings: [],
+        goalsStatus: [],
+        keyTimelinePoints: [],
+        timeline: [],
+      },
+      debt: {
+        summary: {
+          debtServiceRatio: 0.41,
+          totalMonthlyPaymentKrw: 555_000,
+        },
+        warnings: [
+          {
+            code: "HIGH_DEBT_RATIO",
+            message: "DSR이 높습니다.",
+          },
+        ],
+      },
+    });
+
+    const created = await createRun({
+      id: "legacy-debt-raw-only",
+      profileId: profile.id,
+      title: "legacy debt raw only",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        engineSchemaVersion: 1,
+        engine: {
+          stage: "DEBT",
+          financialStatus: {
+            stage: "DEBT",
+            trace: {
+              savingCapacity: 1_000_000,
+              savingRate: 0.25,
+              liquidAssets: 4_000_000,
+              debtBalance: 30_000_000,
+              emergencyFundTarget: 12_000_000,
+              emergencyFundGap: 8_000_000,
+              triggeredRules: ["debt_balance_positive"],
+            },
+          },
+          stageDecision: {
+            priority: "PAY_DEBT",
+            investmentAllowed: false,
+            warnings: ["부채 우선"],
+          },
+        },
+        resultDto,
+      },
+    }, { enforceRetention: false });
+
+    const runMetaPath = path.join(root, "vault", "profiles", profile.id, "runs", created.id, "run.json");
+    const runPayload = JSON.parse(fs.readFileSync(runMetaPath, "utf-8")) as PlanningRunRecord;
+    if (!runPayload.outputs.resultDto) throw new Error("test setup failed: resultDto missing");
+    runPayload.outputs.resultDto.debt = {
+      dsrPct: 41,
+    };
+    runPayload.outputs.resultDto.raw = {
+      ...(runPayload.outputs.resultDto.raw ?? {}),
+      debt: {
+        summary: {
+          debtServiceRatio: 0.41,
+          totalMonthlyPaymentKrw: 555_000,
+        },
+        warnings: [
+          {
+            code: "HIGH_DEBT_RATIO",
+            message: "DSR이 높습니다.",
+          },
+        ],
+      },
+    };
+    fs.writeFileSync(runMetaPath, `${JSON.stringify(runPayload, null, 2)}\n`, "utf-8");
+
+    const before = getPlanningFallbackUsageSnapshot().legacyReportContractFallbackCount;
+    const loaded = await getRun(created.id);
+    const afterFirst = getPlanningFallbackUsageSnapshot().legacyReportContractFallbackCount;
+
+    expect(loaded?.outputs.resultDto?.debt?.totalMonthlyPaymentKrw).toBe(555_000);
+    expect(loaded?.outputs.resultDto?.debt?.warnings?.[0]?.code).toBe("HIGH_DEBT_RATIO");
+    expect(afterFirst).toBeGreaterThanOrEqual(before);
+    expect(getPlanningFallbackUsageSnapshot().sourceBreakdown?.legacyReportContractFallbackCount?.compatRebuild).toBeGreaterThanOrEqual(1);
+
+    const loadedAgain = await getRun(created.id);
+    const afterSecond = getPlanningFallbackUsageSnapshot().legacyReportContractFallbackCount;
+    expect(loadedAgain?.outputs.resultDto?.debt?.totalMonthlyPaymentKrw).toBe(555_000);
+    expect(afterSecond).toBe(afterFirst);
+  });
+
+  it("summarizes and backfills legacy run candidates", async () => {
+    const profile = await createProfile({
+      name: "백필 테스트 프로필",
+      profile: sampleProfile(),
+    });
+
+    const resultDto = buildResultDtoV1({
+      generatedAt: "2026-03-05T00:00:00.000Z",
+      simulate: {
+        summary: {
+          startNetWorthKrw: 10_000_000,
+          endNetWorthKrw: 12_000_000,
+          worstCashKrw: 2_000_000,
+          worstCashMonthIndex: 3,
+          goalsAchievedCount: 1,
+          goalsMissedCount: 0,
+          warningsCount: 0,
+        },
+        warnings: [],
+        goalsStatus: [],
+        keyTimelinePoints: [],
+        timeline: [],
+      },
+    });
+
+    await createRun({
+      id: "backfill-user-run",
+      profileId: profile.id,
+      title: "legacy-resultdto-only",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: { resultDto },
+    }, { enforceRetention: false });
+
+    await createRun({
+      id: "backfill-missing-resultdto",
+      profileId: profile.id,
+      title: "legacy-missing-resultdto",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: rawSimulateBlob({
+          summary: {
+            endNetWorthKrw: 11_500_000,
+            worstCashKrw: 1_800_000,
+            worstCashMonthIndex: 2,
+          },
+          warnings: [],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+          timeline: [],
+        }),
+      },
+    }, { enforceRetention: false });
+
+    const runMetaPath = path.join(root, "vault", "profiles", profile.id, "runs", "backfill-user-run", "run.json");
+    const runPayload = JSON.parse(fs.readFileSync(runMetaPath, "utf-8")) as PlanningRunRecord;
+    runPayload.outputs = { resultDto };
+    fs.writeFileSync(runMetaPath, `${JSON.stringify(runPayload, null, 2)}\n`, "utf-8");
+
+    const before = await summarizeLegacyRunBackfill();
+    expect(before.legacyCandidates).toBeGreaterThanOrEqual(1);
+    expect(before.resultDtoOnlyCandidates).toBeGreaterThanOrEqual(1);
+    expect(before.missingResultDtoCandidates).toBeGreaterThanOrEqual(1);
+    expect(before.userLegacyCandidates).toBeGreaterThanOrEqual(1);
+
+    const candidates = await listLegacyRunBackfillCandidates();
+    expect(candidates.some((row) => row.id === "backfill-user-run" && row.reason === "resultDtoOnly")).toBe(true);
+    expect(candidates.some((row) => row.id === "backfill-missing-resultdto" && row.reason === "missingResultDto")).toBe(true);
+
+    const result = await backfillLegacyRuns();
+    expect(result.selected).toBeGreaterThanOrEqual(2);
+    expect(result.migrated).toBeGreaterThanOrEqual(2);
+
+    const loaded = await getRun("backfill-user-run");
+    expect(loaded?.outputs.engine).toBeDefined();
+    expect(loaded?.outputs.engineSchemaVersion).toBe(1);
+
+    const missingResultDtoLoaded = await getRun("backfill-missing-resultdto");
+    expect(missingResultDtoLoaded?.outputs.resultDto).toBeDefined();
+    expect(missingResultDtoLoaded?.outputs.engine).toBeDefined();
+    expect(missingResultDtoLoaded?.outputs.engineSchemaVersion).toBe(1);
+  });
+
+  it("hydrates missing resultDto into canonical run meta on read", async () => {
+    const profile = await createProfile({
+      name: "missing dto read migration",
+      profile: sampleProfile(),
+    });
+
+    const created = await createRun({
+      id: "read-missing-resultdto",
+      profileId: profile.id,
+      title: "missing result dto",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: rawSimulateBlob({
+          summary: {
+            endNetWorthKrw: 12_000_000,
+            worstCashKrw: 2_000_000,
+            worstCashMonthIndex: 1,
+          },
+          warnings: ["CONTRIBUTION_SKIPPED"],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+          timeline: [],
+        }),
+      },
+    }, { enforceRetention: false });
+
+    expect(created.outputs.resultDto).toBeUndefined();
+
+    const loaded = await getRun(created.id);
+
+    expect(loaded?.outputs.resultDto).toBeDefined();
+    expect(loaded?.outputs.engine).toBeDefined();
+    expect(loaded?.outputs.engineSchemaVersion).toBe(1);
+
+    const runMetaPath = path.join(root, "vault", "profiles", profile.id, "runs", created.id, "run.json");
+    const persisted = JSON.parse(fs.readFileSync(runMetaPath, "utf-8")) as PlanningRunRecord;
+    expect(persisted.outputs.resultDto).toBeDefined();
+    expect(persisted.outputs.engine).toBeDefined();
+    expect(persisted.outputs.engineSchemaVersion).toBe(1);
   });
 
   it("stores only resultDto by default and keeps compact raw outputs only when enabled", async () => {
@@ -382,12 +685,12 @@ describe("planning store", () => {
       meta: { snapshot: { missing: true } },
       outputs: {
         resultDto: resultDto as unknown as PlanningRunRecord["outputs"]["resultDto"],
-        simulate: {
+        simulate: simulateBlob({
           summary: { endNetWorthKrw: 1_000_000 },
           warnings: Array.from({ length: 100 }).map((_, idx) => `WARN_${idx + 1}`),
           goalsStatus: [],
           keyTimelinePoints: [],
-        },
+        }),
       },
     });
     const loadedDefault = await getRun(createdDefault.id);
@@ -403,13 +706,13 @@ describe("planning store", () => {
       meta: { snapshot: { missing: true } },
       outputs: {
         resultDto: resultDto as unknown as PlanningRunRecord["outputs"]["resultDto"],
-        simulate: {
+        simulate: rawSimulateBlob({
           summary: { endNetWorthKrw: 2_000_000 },
           warnings: Array.from({ length: 100 }).map((_, idx) => `WARN_${idx + 1}`),
           goalsStatus: [],
           keyTimelinePoints: [],
           traces: Array.from({ length: 100 }).map((_, idx) => ({ code: `TRACE_${idx + 1}`, message: "trace" })),
-        },
+        }),
       },
     }, { storeRawOutputs: true });
     const loadedRaw = await getRun(createdRaw.id);
@@ -455,12 +758,12 @@ describe("planning store", () => {
         snapshot: { missing: true },
       },
       outputs: {
-        simulate: {
+        simulate: simulateBlob({
           summary: { endNetWorthKrw: 1 },
           warnings: [],
           goalsStatus: [],
           keyTimelinePoints: [],
-        },
+        }),
       },
     });
 

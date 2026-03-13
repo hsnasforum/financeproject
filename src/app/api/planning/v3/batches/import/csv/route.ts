@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/service/importCsvToBatch";
-import { getBatchSummary } from "@/lib/planning/v3/service/getBatchSummary";
+import { getBatchSummary, ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/batches/store";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 
 function asString(value: unknown): string {
@@ -16,7 +13,6 @@ function asString(value: unknown): string {
 
 function withWriteGuard(request: Request, csrfValue: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrfValue) }, { allowWhenCookieMissing: true });
     return null;
@@ -62,9 +58,6 @@ async function readCsvPayload(request: Request): Promise<{ csvText: string; csrf
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const payload = await readCsvPayload(request);
   const guarded = withWriteGuard(request, payload.csrf);
   if (guarded) return guarded;
@@ -117,4 +110,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

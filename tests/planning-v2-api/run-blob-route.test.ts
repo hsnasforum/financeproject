@@ -133,12 +133,14 @@ describe("run blob endpoint", () => {
       ok?: boolean;
       data?: {
         summary?: Record<string, unknown>;
+        ref?: { path?: string };
       };
     };
 
     expect(blobRes.status).toBe(200);
     expect(blobPayload.ok).toBe(true);
     expect(blobPayload.data?.summary).toBeDefined();
+    expect(blobPayload.data?.ref?.path).toBeUndefined();
   });
 
   it("returns raw preview in chunks by default query without dumping full blob", async () => {
@@ -198,9 +200,20 @@ describe("run blob endpoint", () => {
     const gzippedBytes = Buffer.from(await gzipRes.arrayBuffer());
     const decoded = JSON.parse(gunzipSync(gzippedBytes).toString("utf-8")) as {
       ok?: boolean;
-      data?: unknown;
+      data?: {
+        run?: {
+          stages?: Array<{ outputRef?: { ref?: { path?: string } } }>;
+        };
+        outputs?: {
+          simulate?: { ref?: { path?: string } };
+        };
+      };
     };
     expect(decoded.ok).toBe(true);
     expect(decoded.data).toBeDefined();
+    expect((decoded.data?.outputs?.simulate?.ref?.path ?? undefined)).toBeUndefined();
+    expect(
+      (decoded.data?.run?.stages ?? []).every((stage) => stage.outputRef?.ref?.path === undefined),
+    ).toBe(true);
   });
 });

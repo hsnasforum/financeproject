@@ -1,7 +1,5 @@
 import { z } from "zod";
 import type { EngineEnvelope } from "../engine";
-import type { FinancialStatus, Stage, StageDecision } from "../engine";
-import { recordPlanningFallbackUsage } from "../engine";
 
 export const ApiErrorSchema = z.object({
   code: z.string(),
@@ -47,27 +45,6 @@ export interface PlanningApiEngineEnvelope {
   engine: PlanningEngineEnvelope;
 }
 
-export interface LegacyPlanningResponseFields {
-  /**
-   * @deprecated use engine.stage
-   */
-  stage?: Stage;
-  /**
-   * @deprecated use engine.financialStatus
-   */
-  financialStatus?: FinancialStatus;
-  /**
-   * @deprecated use engine.stageDecision
-   */
-  stageDecision?: StageDecision;
-}
-
-export type PlanningApiEngineCompatibleData = Partial<PlanningApiEngineEnvelope> & LegacyPlanningResponseFields;
-
-function hasLegacyEngineFields(data: PlanningApiEngineCompatibleData): data is Required<LegacyPlanningResponseFields> {
-  return Boolean(data.stage && data.financialStatus && data.stageDecision);
-}
-
 export type PlanningApiTypedResponse<TData> =
   | { ok: true; data: TData; meta?: PlanningApiMeta }
   | { ok: false; error: PlanningApiError; meta?: Record<string, unknown> };
@@ -99,22 +76,12 @@ export function parsePlanningV2Response<TData = unknown>(payload: unknown): Plan
   return parsed.data;
 }
 
-export function getEngineEnvelope<TData extends PlanningApiEngineCompatibleData>(response: TData): PlanningEngineEnvelope {
+export function getEngineEnvelope<TData extends Partial<PlanningApiEngineEnvelope>>(response: TData): PlanningEngineEnvelope {
   if (response.engine) return response.engine;
-  if (hasLegacyEngineFields(response)) {
-    recordPlanningFallbackUsage("legacyEnvelopeFallbackCount", {
-      source: "api/getEngineEnvelope",
-    });
-    return {
-      stage: response.stage,
-      financialStatus: response.financialStatus,
-      stageDecision: response.stageDecision,
-    };
-  }
   throw new Error("Missing engine envelope in planning API response");
 }
 
-export function normalizePlanningResponse<TData extends Record<string, unknown> & PlanningApiEngineCompatibleData>(
+export function normalizePlanningResponse<TData extends Record<string, unknown> & Partial<PlanningApiEngineEnvelope>>(
   response: TData,
 ): NormalizedPlanningResponse<TData> {
   const engine = getEngineEnvelope(response);

@@ -72,6 +72,7 @@ function buildScoreParts(
   now: Date,
   _topicBurstGrades?: Record<string, BurstGrade>,
 ): ScoreParts {
+  void _topicBurstGrades;
   return ScorePartsSchema.parse({
     sourceWeight: round3(sourceWeight),
     recency: recencyTier(item, now),

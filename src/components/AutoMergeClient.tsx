@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { mergePullRequestAction } from "@/app/ops/auto-merge/actions";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -218,6 +219,18 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
   const [armStatusByPr, setArmStatusByPr] = useState<Record<number, ArmStatus>>({});
   const [recheckPendingByPr, setRecheckPendingByPr] = useState<Record<number, boolean>>({});
   const [batchPending, setBatchPending] = useState<"ARM_ALL" | "DISARM_ALL" | "PRUNE" | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  const pushNotice = useCallback((message: string) => {
+    setNotice(message);
+    setError("");
+  }, []);
+
+  const pushError = useCallback((message: string) => {
+    setError(message);
+    setNotice("");
+  }, []);
 
   const hasCsrf = props.csrf.trim().length > 0;
   const baseIntervalMs = Math.max(5_000, Math.min(120_000, Math.trunc(props.armDefaultPollSeconds * 1000)));
@@ -282,12 +295,12 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     }
 
     if (notify && pruned.removedMissing.length > 0) {
-      window.alert(`ARM 항목 정리: 목록에서 사라진 PR(${pruned.removedMissing.join(", ")})을 해제했습니다.`);
+      pushNotice(`ARM 항목 정리: 목록에서 사라진 PR(${pruned.removedMissing.join(", ")})을 해제했습니다.`);
     }
     if (notify && pruned.removedShaMismatch.length > 0) {
-      window.alert(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
+      pushNotice(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
     }
-  }, [persistArmedState, props.candidates]);
+  }, [persistArmedState, props.candidates, pushNotice]);
 
   useEffect(() => {
     if (restoredRef.current) return;
@@ -344,9 +357,9 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     );
 
     if (pruned.removedShaMismatch.length > 0) {
-      window.alert(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
+      pushNotice(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
     }
-  }, [baseIntervalMs, props.candidates]);
+  }, [baseIntervalMs, props.candidates, pushNotice]);
 
   useEffect(() => {
     applyArmPrune(true);
@@ -366,7 +379,11 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
         expectedHeadSha: input.expectedHeadSha,
         confirmText: input.confirmText,
       });
-      window.alert(result.message);
+      if (result.ok) {
+        pushNotice(result.message);
+      } else {
+        pushError(result.message);
+      }
       if (result.ok && result.merged) {
         setConfirmByPr((prev) => ({
           ...prev,
@@ -392,11 +409,11 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
       mergeInFlightRef.current[input.candidate.number] = false;
       setPendingPr(null);
     }
-  }, [persistArmedState, router]);
+  }, [persistArmedState, pushError, pushNotice, router]);
 
   const runRecheckNow = useCallback(async (candidate: AutoMergeViewCandidate, expectedHeadSha: string) => {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
+      pushError("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
       return null;
     }
 
@@ -450,7 +467,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
         const last = lastErrorToastRef.current[candidate.number] || "";
         if (last !== fetched.errorMessage) {
           lastErrorToastRef.current[candidate.number] = fetched.errorMessage;
-          window.alert(`PR #${candidate.number} 재검증 오류: ${fetched.errorMessage}`);
+          pushError(`PR #${candidate.number} 재검증 오류: ${fetched.errorMessage}`);
         }
       } else {
         delete lastErrorToastRef.current[candidate.number];
@@ -460,7 +477,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     } finally {
       setRecheckPendingByPr((prev) => ({ ...prev, [candidate.number]: false }));
     }
-  }, [baseIntervalMs, hasCsrf, persistArmedState, props.csrf]);
+  }, [baseIntervalMs, hasCsrf, persistArmedState, props.csrf, pushError]);
 
   const runMergeWithPreflight = useCallback(async (input: {
     candidate: AutoMergeViewCandidate;
@@ -471,12 +488,12 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     if (!preflight) return;
 
     if (!preflight.eligible) {
-      window.alert(`현재 상태로는 병합할 수 없습니다. (${preflight.reasonCode}: ${preflight.reasonMessage})`);
+      pushError(`현재 상태로는 병합할 수 없습니다. (${preflight.reasonCode}: ${preflight.reasonMessage})`);
       return;
     }
 
     if (input.confirmText !== preflight.expectedConfirm) {
-      window.alert(`확인 문구가 일치하지 않습니다: ${preflight.expectedConfirm}`);
+      pushError(`확인 문구가 일치하지 않습니다: ${preflight.expectedConfirm}`);
       setArmByPr((prev) => {
         if (!prev[input.candidate.number]) return prev;
         const next = { ...prev };
@@ -493,24 +510,24 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
       expectedHeadSha: preflight.headSha || input.expectedHeadSha,
       confirmText: input.confirmText,
     });
-  }, [persistArmedState, runMerge, runRecheckNow]);
+  }, [persistArmedState, pushError, runMerge, runRecheckNow]);
 
   async function onMerge(candidate: AutoMergeViewCandidate) {
     const confirmText = confirmByPrRef.current[candidate.number] ?? "";
     const armEntry = armByPrRef.current[candidate.number];
 
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
+      pushError("Dev unlock/CSRF가 필요합니다. /ops/rules에서 unlock 후 다시 시도해 주세요.");
       return;
     }
 
     if (!props.autoMergeEnabled) {
-      window.alert("AUTO_MERGE_DISABLED: 현재 자동 병합 기능이 꺼져 있습니다.");
+      pushError("AUTO_MERGE_DISABLED: 현재 자동 병합 기능이 꺼져 있습니다.");
       return;
     }
 
     if (confirmText !== candidate.expectedConfirmText) {
-      window.alert(`확인 문구가 일치하지 않습니다: ${candidate.expectedConfirmText}`);
+      pushError(`확인 문구가 일치하지 않습니다: ${candidate.expectedConfirmText}`);
       return;
     }
 
@@ -520,7 +537,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
         expectedHeadSha: armEntry?.expectedHeadSha || candidate.headSha,
         confirmText,
       }).catch((error) => {
-        window.alert(error instanceof Error ? error.message : "Merge 실행 중 오류가 발생했습니다.");
+        pushError(error instanceof Error ? error.message : "Merge 실행 중 오류가 발생했습니다.");
       });
     });
   }
@@ -617,7 +634,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
           const last = lastErrorToastRef.current[target.prNumber] || "";
           if (last !== fetched.errorMessage) {
             lastErrorToastRef.current[target.prNumber] = fetched.errorMessage;
-            window.alert(`PR #${target.prNumber} ARM 상태 조회 오류: ${fetched.errorMessage}`);
+            pushError(`PR #${target.prNumber} ARM 상태 조회 오류: ${fetched.errorMessage}`);
           }
           continue;
         }
@@ -643,7 +660,17 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     } finally {
       pollingInFlightRef.current = false;
     }
-  }, [baseIntervalMs, candidatesByPr, hasCsrf, maxConcurrentPolls, persistArmedState, props.autoMergeEnabled, props.csrf, runMergeWithPreflight]);
+  }, [
+    baseIntervalMs,
+    candidatesByPr,
+    hasCsrf,
+    maxConcurrentPolls,
+    persistArmedState,
+    props.autoMergeEnabled,
+    props.csrf,
+    pushError,
+    runMergeWithPreflight,
+  ]);
 
   useEffect(() => {
     const armedCount = Object.keys(armByPr).length;
@@ -660,9 +687,9 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
   async function handleCopyExpected(value: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(value);
-      window.alert("확인 문구를 복사했습니다.");
+      pushNotice("확인 문구를 복사했습니다.");
     } catch {
-      window.alert("복사에 실패했습니다. 수동으로 복사해 주세요.");
+      pushError("복사에 실패했습니다. 수동으로 복사해 주세요.");
     }
   }
 
@@ -749,7 +776,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
         upsertArm(candidate, confirmValue);
         armedCount += 1;
       }
-      window.alert(`Batch ARM 완료: ${armedCount}건 적용, ${skipped}건 건너뜀(확인 문구/조건 미충족)`);
+      pushNotice(`Batch ARM 완료: ${armedCount}건 적용, ${skipped}건 건너뜀(확인 문구/조건 미충족)`);
     } finally {
       setBatchPending(null);
     }
@@ -777,7 +804,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
       });
       pollMetaRef.current = {};
       lastErrorToastRef.current = {};
-      window.alert("모든 ARM 대기를 해제했습니다.");
+      pushNotice("모든 ARM 대기를 해제했습니다.");
     } finally {
       setBatchPending(null);
     }
@@ -818,6 +845,20 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
           </div>
         )}
       />
+      {error ? (
+        <Card className="mb-4 border border-rose-200 bg-rose-50">
+          <DevUnlockShortcutMessage
+            className="text-sm font-semibold text-rose-700"
+            linkClassName="text-rose-700"
+            message={error}
+          />
+        </Card>
+      ) : null}
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50">
+          <p className="text-sm font-semibold text-emerald-700">{notice}</p>
+        </Card>
+      ) : null}
 
       <Card>
         <h2 className="text-base font-black text-slate-900">Policy</h2>
@@ -839,7 +880,11 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
           </p>
         ) : null}
         {!hasCsrf ? (
-          <p className="mt-3 text-sm font-semibold text-rose-600">Dev unlock/CSRF가 없습니다. /ops/rules에서 잠금 해제를 먼저 수행해 주세요.</p>
+          <DevUnlockShortcutMessage
+            className="mt-3 text-sm font-semibold text-rose-600"
+            linkClassName="text-rose-600"
+            message="Dev unlock/CSRF가 없습니다. /ops/rules에서 잠금 해제를 먼저 수행해 주세요."
+          />
         ) : null}
         {props.loadError ? (
           <p className="mt-3 text-sm font-semibold text-rose-600">{props.loadError}</p>
@@ -908,7 +953,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                 return (
                   <tr key={candidate.number} className="border-t border-slate-200 align-top">
                     <td className="px-3 py-2 text-slate-700">
-                      <a href={candidate.prUrl} target="_blank" rel="noreferrer" className="font-semibold text-emerald-700 underline">
+                      <a href={candidate.prUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
                         #{candidate.number} {candidate.title || "(no title)"}
                       </a>
                       <p className="mt-1 text-[11px] text-slate-500">
@@ -993,7 +1038,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                           const armed = armByPrRef.current[candidate.number];
                           if (armed && nextValue !== candidate.expectedConfirmText) {
                             removeArm(candidate.number);
-                            window.alert(`PR #${candidate.number}: confirm mismatch로 ARM이 해제되었습니다.`);
+                            pushNotice(`PR #${candidate.number}: confirm mismatch로 ARM이 해제되었습니다.`);
                           }
                         }}
                         placeholder={candidate.expectedConfirmText}
@@ -1009,7 +1054,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                               const checked = event.target.checked;
                               if (checked) {
                                 if (armReason) {
-                                  window.alert(`ARM 활성화 불가: ${armReason}`);
+                                  pushError(`ARM 활성화 불가: ${armReason}`);
                                   return;
                                 }
                                 upsertArm(candidate, confirmValue);

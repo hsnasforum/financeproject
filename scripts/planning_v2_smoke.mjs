@@ -15,11 +15,6 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function toInt(value, fallback) {
-  const parsed = Math.trunc(Number(value));
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
 function round(value) {
   return Math.round(Number(value) || 0);
 }

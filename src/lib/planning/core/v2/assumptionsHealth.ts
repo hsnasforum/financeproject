@@ -75,7 +75,7 @@ function daysSince(baseIso: string, nowIso?: string): number | undefined {
 
   const diffMs = nowTs - baseTs;
   if (!Number.isFinite(diffMs)) return undefined;
-  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+  return Math.max(0, Math.trunc(diffMs / (1000 * 60 * 60 * 24)));
 }
 
 function buildWarning(

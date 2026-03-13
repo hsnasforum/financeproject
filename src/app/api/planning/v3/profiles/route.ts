@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { listProfileMetas } from "@/lib/planning/server/store/profileStore";
-import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys, listProfileMetas } from "@/lib/planning/v3/profiles/store";
 
 type ProfileRow = {
   profileId: string;
@@ -29,7 +26,6 @@ function normalizeIsoOrEmpty(value: unknown): string {
 
 function withGuard(request: Request, csrfValue: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrfValue) }, { allowWhenCookieMissing: true });
     return null;
@@ -65,9 +61,6 @@ function sortProfileRows(rows: ProfileRow[]): ProfileRow[] {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const csrf = asString(new URL(request.url).searchParams.get("csrf"));
   const guarded = withGuard(request, csrf);
   if (guarded) return guarded;

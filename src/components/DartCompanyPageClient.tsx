@@ -6,7 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { buildDartCompanyHref, buildDartMonitorHref, buildDartSearchHref, normalizeDartCorpCode, normalizeDartCorpName, normalizeDartSearchQuery } from "@/lib/dart/query";
 import {
   addFavorite,
   clearRecent,
@@ -40,13 +42,39 @@ type CompanyResponse = {
   };
 };
 
+const DART_PENDING_COMPANY_HREF_STORAGE_KEY = "dart:pending-company-href";
+
 function normalizeCorpCode(value: string | null): string {
-  return (value ?? "").trim();
+  return normalizeDartCorpCode(value);
+}
+
+function normalizeHomepageUrl(value: string | undefined): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return "";
+  const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(withScheme);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function clearPendingCompanyHref(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(DART_PENDING_COMPANY_HREF_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures and continue navigation.
+  }
 }
 
 export function DartCompanyPageClient() {
   const searchParams = useSearchParams();
   const corpCode = normalizeCorpCode(searchParams.get("corpCode"));
+  const fromQuery = normalizeDartSearchQuery(searchParams.get("fromQuery"));
+  const requestedCorpName = normalizeDartCorpName(searchParams.get("corpName"));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [company, setCompany] = useState<CompanyView | null>(null);
@@ -68,7 +96,7 @@ export function DartCompanyPageClient() {
     async function run() {
       if (!corpCode) {
         setCompany(null);
-        setError("corpCode 쿼리가 필요합니다.");
+        setError("회사 정보가 선택되지 않았습니다. 검색 화면에서 회사를 다시 선택해 주세요.");
         return;
       }
 
@@ -80,7 +108,7 @@ export function DartCompanyPageClient() {
         if (!res.ok || !raw.ok) {
           if (!cancelled) {
             setCompany(null);
-            setError(raw.error?.message ?? "기업개황을 불러오지 못했습니다.");
+            setError(raw.error?.message ?? "기업개황을 불러오지 못했습니다. 잠시 후 다시 시도하거나 검색 화면으로 돌아가 다시 선택해 주세요.");
           }
           return;
         }
@@ -89,16 +117,22 @@ export function DartCompanyPageClient() {
         if (!cancelled) {
           setCompany(data);
           setFavoriteOn(isFavorite(corpCode));
+          if (data.corpName && isFavorite(corpCode)) {
+            addFavorite({
+              corpCode,
+              corpName: data.corpName,
+            });
+          }
           pushRecent({
             corpCode,
-            corpName: data.corpName,
+            corpName: data.corpName ?? requestedCorpName,
           });
           refreshLists();
         }
       } catch {
         if (!cancelled) {
           setCompany(null);
-          setError("기업개황을 불러오지 못했습니다.");
+          setError("기업개황을 불러오지 못했습니다. 잠시 후 다시 시도하거나 검색 화면으로 돌아가 다시 선택해 주세요.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -108,9 +142,16 @@ export function DartCompanyPageClient() {
     return () => {
       cancelled = true;
     };
-  }, [corpCode, refreshLists]);
+  }, [corpCode, refreshLists, requestedCorpName]);
 
-  const title = useMemo(() => company?.corpName ?? corpCode ?? "기업개황", [company?.corpName, corpCode]);
+  const title = useMemo(() => company?.corpName ?? requestedCorpName ?? corpCode ?? "기업개황", [company?.corpName, corpCode, requestedCorpName]);
+  const homepageHref = useMemo(() => normalizeHomepageUrl(company?.homepage), [company?.homepage]);
+  const searchBackHref = useMemo(() => buildDartSearchHref(fromQuery), [fromQuery]);
+  const monitorHref = useMemo(() => buildDartMonitorHref(corpCode, company?.corpName ?? requestedCorpName), [company?.corpName, corpCode, requestedCorpName]);
+  const monitorActionClassName = useMemo(
+    () => "inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-transparent bg-transparent px-4 text-xs font-bold text-slate-700 transition-all duration-300 hover:scale-[1.02] hover:bg-emerald-50 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 active:scale-95",
+    [],
+  );
 
   function toggleFavorite() {
     if (!corpCode) return;
@@ -120,11 +161,28 @@ export function DartCompanyPageClient() {
     } else {
       addFavorite({
         corpCode,
-        corpName: company?.corpName,
+        corpName: company?.corpName ?? requestedCorpName,
       });
       setFavoriteOn(true);
     }
     refreshLists();
+  }
+
+  function prepareMonitorNavigation() {
+    clearPendingCompanyHref();
+    if (!corpCode) return;
+    if (!favoriteOn) {
+      try {
+        addFavorite({
+          corpCode,
+          corpName: company?.corpName ?? requestedCorpName,
+        });
+        setFavoriteOn(true);
+        refreshLists();
+      } catch {
+        // Keep the monitor navigation even if favorites persistence fails.
+      }
+    }
   }
 
   return (
@@ -138,13 +196,56 @@ export function DartCompanyPageClient() {
 
         <Card>
           <div className="flex flex-wrap items-center gap-2">
-            <Link href="/public/dart" className="text-xs text-slate-600 underline underline-offset-2">검색으로 돌아가기</Link>
+            <Link
+              href={searchBackHref}
+              className="text-xs text-slate-600 underline underline-offset-2"
+              onClick={() => clearPendingCompanyHref()}
+            >
+              {fromQuery ? "검색 결과로 돌아가기" : "검색으로 돌아가기"}
+            </Link>
+            {corpCode ? (
+              <Link
+                href={monitorHref}
+                prefetch={false}
+                data-testid="dart-monitor-action"
+                className={monitorActionClassName}
+                onClick={() => prepareMonitorNavigation()}
+              >
+                {favoriteOn ? "공시 모니터링으로 보기" : "모니터링에 추가하고 보기"}
+              </Link>
+            ) : (
+              <Button
+                data-testid="dart-monitor-action"
+                size="sm"
+                variant="ghost"
+                disabled
+              >
+                공시 모니터링으로 보기
+              </Button>
+            )}
             <Button size="sm" onClick={toggleFavorite} disabled={!corpCode}>
               {favoriteOn ? "즐겨찾기 해제" : "즐겨찾기 추가"}
             </Button>
           </div>
+          {fromQuery ? (
+            <p className="mt-2 text-xs text-slate-500">
+              직전 검색어: <span className="font-semibold text-slate-700">{fromQuery}</span>
+            </p>
+          ) : null}
+          {!favoriteOn && corpCode ? (
+            <p className="mt-2 text-xs text-slate-500">
+              모니터링 탭은 즐겨찾기 기업 기준으로 묶어 보여줍니다. 버튼을 누르면 이 회사를 즐겨찾기에 담고 모니터링 탭으로 이동합니다.
+            </p>
+          ) : null}
           {loading ? <p className="mt-3 text-sm text-slate-600">기업개황 조회 중...</p> : null}
-          {error ? <p data-testid="dart-company-error" className="mt-3 text-sm text-rose-700">{error}</p> : null}
+          {error ? (
+            <EmptyState
+              title={corpCode ? "기업 정보를 불러오지 못했습니다" : "회사 선택이 필요합니다"}
+              description={error}
+              icon="search"
+              className="mt-4 rounded-2xl border-slate-200 bg-slate-50/80 p-8"
+            />
+          ) : null}
 
           {!loading && !error && company ? (
             <dl className="mt-3 grid grid-cols-1 gap-2 text-sm">
@@ -153,7 +254,16 @@ export function DartCompanyPageClient() {
               <div><dt className="text-slate-500">종목코드</dt><dd>{company.stockCode ?? "-"}</dd></div>
               <div><dt className="text-slate-500">대표자</dt><dd>{company.ceo ?? "-"}</dd></div>
               <div><dt className="text-slate-500">업종코드</dt><dd>{company.industry ?? "-"}</dd></div>
-              <div><dt className="text-slate-500">홈페이지</dt><dd>{company.homepage ?? "-"}</dd></div>
+              <div>
+                <dt className="text-slate-500">홈페이지</dt>
+                <dd>
+                  {homepageHref ? (
+                    <a href={homepageHref} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline underline-offset-2">
+                      {company.homepage ?? homepageHref}
+                    </a>
+                  ) : (company.homepage ?? "-")}
+                </dd>
+              </div>
               <div><dt className="text-slate-500">주소</dt><dd>{company.address ?? "-"}</dd></div>
               <div><dt className="text-slate-500">출처</dt><dd>{company.source ?? "-"}</dd></div>
             </dl>
@@ -172,10 +282,10 @@ export function DartCompanyPageClient() {
               <ul className="mt-2 space-y-2">
                 {favorites.map((item) => (
                   <li key={item.corpCode} className="rounded-xl border border-border bg-surface-muted p-2">
-                    <Link href={`/public/dart/company?corpCode=${encodeURIComponent(item.corpCode)}`} className="block">
-                      <p className="text-sm font-medium text-slate-900">{item.corpName ?? item.corpCode}</p>
-                      <p className="text-xs text-slate-600">{item.corpCode}</p>
-                    </Link>
+                      <Link href={buildDartCompanyHref(item.corpCode, undefined, item.corpName)} className="block">
+                        <p className="text-sm font-medium text-slate-900">{item.corpName ?? item.corpCode}</p>
+                        <p className="text-xs text-slate-600">{item.corpCode}</p>
+                      </Link>
                   </li>
                 ))}
               </ul>
@@ -195,10 +305,10 @@ export function DartCompanyPageClient() {
               <ul className="mt-2 space-y-2">
                 {recent.map((item) => (
                   <li key={item.corpCode} className="rounded-xl border border-border bg-surface-muted p-2">
-                    <Link href={`/public/dart/company?corpCode=${encodeURIComponent(item.corpCode)}`} className="block">
-                      <p className="text-sm font-medium text-slate-900">{item.corpName ?? item.corpCode}</p>
-                      <p className="text-xs text-slate-600">{item.corpCode}</p>
-                    </Link>
+                      <Link href={buildDartCompanyHref(item.corpCode, undefined, item.corpName)} className="block">
+                        <p className="text-sm font-medium text-slate-900">{item.corpName ?? item.corpCode}</p>
+                        <p className="text-xs text-slate-600">{item.corpCode}</p>
+                      </Link>
                   </li>
                 ))}
               </ul>

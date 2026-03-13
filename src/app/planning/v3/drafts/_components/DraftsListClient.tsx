@@ -1,8 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  BodyDialogSurface,
+  BodyInset,
+  BodyTableFrame,
+  bodyDenseActionRowClassName,
+  bodyDialogActionsClassName,
+  bodyFieldClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
@@ -13,6 +21,12 @@ import {
   type DraftUploadListItem,
   type DraftUploadPreview,
 } from "./draftsUploadFlow";
+
+type Props = {
+  initialRows?: DraftUploadListItem[];
+  disableAutoLoad?: boolean;
+  initialDeleteTargetId?: string;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -39,11 +53,16 @@ function pickPatchNumber(value: unknown): number {
   return Math.round(Number(value) || 0);
 }
 
-export function DraftsListClient() {
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<DraftUploadListItem[]>([]);
+export function DraftsListClient({
+  initialRows = [],
+  disableAutoLoad = false,
+  initialDeleteTargetId = "",
+}: Props) {
+  const [loading, setLoading] = useState(!disableAutoLoad && initialRows.length < 1);
+  const [rows, setRows] = useState<DraftUploadListItem[]>(initialRows);
   const [message, setMessage] = useState("");
   const [deletingId, setDeletingId] = useState("");
+  const [deleteTargetId, setDeleteTargetId] = useState(initialDeleteTargetId);
 
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -69,8 +88,9 @@ export function DraftsListClient() {
   }, [csrfToken]);
 
   useEffect(() => {
+    if (disableAutoLoad) return;
     void loadDrafts();
-  }, [loadDrafts]);
+  }, [disableAutoLoad, loadDrafts]);
 
   async function handleImportPreview() {
     if (!file || importing) return;
@@ -108,8 +128,12 @@ export function DraftsListClient() {
     }
   }
 
+  function openDeleteDialog(id: string): void {
+    if (deletingId) return;
+    setDeleteTargetId(id);
+  }
+
   async function handleDelete(id: string) {
-    if (!window.confirm("이 초안을 삭제할까요?")) return;
     setDeletingId(id);
     setMessage("");
 
@@ -129,6 +153,7 @@ export function DraftsListClient() {
         return;
       }
       await loadDrafts();
+      setDeleteTargetId("");
     } catch {
       setMessage("초안 삭제에 실패했습니다.");
     } finally {
@@ -143,12 +168,12 @@ export function DraftsListClient() {
           <h1 className="text-xl font-black text-slate-900">Planning v3 Drafts</h1>
           <p className="text-sm text-slate-600">CSV 업로드 후 draft 미리보기를 확인하고, 저장 버튼으로 로컬에 보관합니다.</p>
 
-          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <BodyInset className="space-y-2">
             <p className="text-sm font-semibold text-slate-800">CSV 업로드</p>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 accept=".csv,text/csv,text/plain"
-                className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm sm:w-96"
+                className={`${bodyFieldClassName} sm:w-96`}
                 data-testid="v3-csv-upload-input"
                 onChange={(event) => {
                   const picked = event.target.files?.[0] ?? null;
@@ -182,7 +207,7 @@ export function DraftsListClient() {
             </div>
 
             {preview ? (
-              <div className="rounded-md border border-emerald-200 bg-white p-2 text-xs text-slate-700" data-testid="v3-csv-draft-preview">
+              <div className="rounded-lg border border-emerald-200 bg-white p-2 text-xs text-slate-700" data-testid="v3-csv-draft-preview">
                 <p>rows: {preview.draftSummary.rows.toLocaleString("ko-KR")}</p>
                 <p>columns: {preview.draftSummary.columns.toLocaleString("ko-KR")}</p>
                 <p>months: {preview.meta.months.toLocaleString("ko-KR")}</p>
@@ -197,14 +222,11 @@ export function DraftsListClient() {
             ) : null}
 
             {selectedDraftId ? (
-              <Link
-                className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                href={`/planning/v3/drafts/${encodeURIComponent(selectedDraftId)}`}
-              >
+              <BodyActionLink href={`/planning/v3/drafts/${encodeURIComponent(selectedDraftId)}`}>
                 새로 저장한 Draft 열기
-              </Link>
+              </BodyActionLink>
             ) : null}
-          </div>
+          </BodyInset>
 
           <div className="flex items-center gap-2">
             <Button
@@ -217,9 +239,9 @@ export function DraftsListClient() {
             >
               새로고침
             </Button>
-            <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/drafts/profile">
+            <BodyActionLink href="/planning/v3/drafts/profile">
               Profile 초안 생성
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
@@ -229,7 +251,7 @@ export function DraftsListClient() {
           {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 초안이 없습니다.</p> : null}
 
           {rows.length > 0 ? (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-drafts-list">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
                   <tr>
@@ -256,18 +278,15 @@ export function DraftsListClient() {
                       <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.summary.medianExpenseKrw))}</td>
                       <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(asNumber(row.summary.avgNetKrw))}</td>
                       <td className="px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            className="text-sm font-semibold text-emerald-700 underline underline-offset-2"
-                            href={`/planning/v3/drafts/${encodeURIComponent(row.id)}`}
-                          >
+                        <div className={bodyDenseActionRowClassName}>
+                          <BodyActionLink href={`/planning/v3/drafts/${encodeURIComponent(row.id)}`}>
                             상세
-                          </Link>
+                          </BodyActionLink>
                           <Button
                             data-testid={`v3-draft-delete-${row.id}`}
                             disabled={deletingId === row.id}
                             onClick={() => {
-                              void handleDelete(row.id);
+                              openDeleteDialog(row.id);
                             }}
                             size="sm"
                             type="button"
@@ -281,10 +300,44 @@ export function DraftsListClient() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </BodyTableFrame>
           ) : null}
         </Card>
       </div>
+      {deleteTargetId ? (
+        <div
+          aria-labelledby="v3-draft-delete-title"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+        >
+          <BodyDialogSurface data-testid="v3-draft-delete-dialog">
+            <h2 className="text-base font-black text-slate-900" id="v3-draft-delete-title">초안 삭제 확인</h2>
+            <p className="mt-2 text-sm text-slate-700">이 초안을 삭제할까요? 삭제 후 복구할 수 없습니다.</p>
+            <div className={bodyDialogActionsClassName}>
+              <Button
+                disabled={Boolean(deletingId)}
+                onClick={() => setDeleteTargetId("")}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                취소
+              </Button>
+              <Button
+                disabled={Boolean(deletingId)}
+                onClick={() => {
+                  void handleDelete(deleteTargetId);
+                }}
+                size="sm"
+                type="button"
+              >
+                {deletingId ? "삭제 중..." : "삭제"}
+              </Button>
+            </div>
+          </BodyDialogSurface>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

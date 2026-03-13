@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { BodyActionLink, BodyInset, BodySectionHeading, bodyFieldClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -68,6 +68,13 @@ type PreviewResponse = {
     notes: string[];
   };
   evidence?: EvidenceRow[];
+};
+
+type Props = {
+  id: string;
+  initialDraft?: DraftDetail | null;
+  initialProfiles?: ProfileMeta[];
+  disableAutoLoad?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -187,11 +194,16 @@ function renderEvidenceInputs(inputs: Record<string, number | string>): string {
   return entries.join(", ") || "-";
 }
 
-export function DraftDetailClient({ id }: { id: string }) {
-  const [loading, setLoading] = useState(true);
+export function DraftDetailClient({
+  id,
+  initialDraft = null,
+  initialProfiles = [],
+  disableAutoLoad = false,
+}: Props) {
+  const [loading, setLoading] = useState(initialDraft === null && !disableAutoLoad);
   const [message, setMessage] = useState("");
-  const [draft, setDraft] = useState<DraftDetail | null>(null);
-  const [profiles, setProfiles] = useState<ProfileMeta[]>([]);
+  const [draft, setDraft] = useState<DraftDetail | null>(initialDraft);
+  const [profiles, setProfiles] = useState<ProfileMeta[]>(initialProfiles);
   const [selectedProfileId, setSelectedProfileId] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [mergedProfile, setMergedProfile] = useState<Record<string, unknown> | null>(null);
@@ -216,6 +228,7 @@ export function DraftDetailClient({ id }: { id: string }) {
   const dsrEstimate = estimateDsrPct(mergedProfile);
 
   useEffect(() => {
+    if (disableAutoLoad) return;
     let disposed = false;
 
     async function load() {
@@ -277,7 +290,7 @@ export function DraftDetailClient({ id }: { id: string }) {
     return () => {
       disposed = true;
     };
-  }, [id]);
+  }, [disableAutoLoad, id]);
 
   async function requestMergedPreview(): Promise<PreviewResponse | null> {
     setPreviewLoading(true);
@@ -342,9 +355,9 @@ export function DraftDetailClient({ id }: { id: string }) {
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 Draft Review</h1>
           <div className="text-sm text-slate-600">id: <span className="font-mono">{id}</span></div>
-          <Link className="text-sm font-semibold text-emerald-700 underline underline-offset-2" href="/planning/v3/drafts">
+          <BodyActionLink href="/planning/v3/drafts">
             목록으로 돌아가기
-          </Link>
+          </BodyActionLink>
           {message ? <p className="text-sm font-semibold text-slate-700">{message}</p> : null}
         </Card>
 
@@ -357,7 +370,7 @@ export function DraftDetailClient({ id }: { id: string }) {
         {draft ? (
           <>
             <Card className="space-y-3" data-testid="v3-draft-summary">
-              <h2 className="text-sm font-bold text-slate-900">초안 요약</h2>
+              <BodySectionHeading title="초안 요약" />
               <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
                 <div><dt className="font-semibold">createdAt</dt><dd>{formatDateTime(draft.createdAt)}</dd></div>
                 <div><dt className="font-semibold">months</dt><dd>{draft.source.months ?? "-"}</dd></div>
@@ -372,12 +385,15 @@ export function DraftDetailClient({ id }: { id: string }) {
             </Card>
 
             <Card className="space-y-3">
-              <h2 className="text-sm font-bold text-slate-900">Merged Profile 미리보기</h2>
+              <BodySectionHeading
+                description="기준 프로필을 선택해 이번 초안이 실제 프로필에 어떻게 반영되는지 먼저 확인할 수 있습니다."
+                title="Merged Profile 미리보기"
+              />
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="text-sm font-semibold text-slate-700">
                   기준 프로필(선택)
                   <select
-                    className="mt-1 block w-full rounded-lg border border-slate-200 px-2 py-2 text-sm"
+                    className={bodyFieldClassName}
                     onChange={(event) => {
                       setSelectedProfileId(event.currentTarget.value);
                       setMergedProfile(null);
@@ -419,7 +435,7 @@ export function DraftDetailClient({ id }: { id: string }) {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-slate-200 p-3" data-testid="v3-draft-diff">
+              <BodyInset data-testid="v3-draft-diff">
                 {diffSummary ? (
                   <div className="space-y-3 text-sm text-slate-700">
                     <div>
@@ -450,7 +466,7 @@ export function DraftDetailClient({ id }: { id: string }) {
                 ) : (
                   <p className="text-sm text-slate-600">미리보기를 실행하면 변경 요약이 표시됩니다.</p>
                 )}
-              </div>
+              </BodyInset>
 
               {evidence.length > 0 ? (
                 <div className="space-y-2">

@@ -9,11 +9,15 @@ import {
   getSnapshotFreshness,
   SNAPSHOT_STALE_CAUTION_DAYS,
 } from "../_lib/formatSnapshotLabel";
+import { copySnapshotIdToClipboard } from "../_lib/snapshotClipboard";
+import {
+  buildSnapshotPickerSelectValue,
+  getSnapshotDetailsToggleLabel,
+  parseSnapshotPickerSelectValue,
+  resolveSnapshotPickerSelectedItem,
+} from "../_lib/snapshotPickerModel";
+import { type SnapshotSelection } from "../_lib/snapshotSelection";
 import { type SnapshotListItem } from "../_lib/snapshotList";
-
-export type SnapshotSelection =
-  | { mode: "latest" }
-  | { mode: "history"; id: string };
 
 type SnapshotPickerProps = {
   items: { latest?: SnapshotListItem; history: SnapshotListItem[] };
@@ -22,17 +26,11 @@ type SnapshotPickerProps = {
   advancedEnabled?: boolean;
 };
 
-function selectedSnapshot(
-  items: { latest?: SnapshotListItem; history: SnapshotListItem[] },
-  value: SnapshotSelection,
-): SnapshotListItem | undefined {
-  if (value.mode === "latest") return items.latest;
-  return items.history.find((item) => item.id === value.id);
-}
-
 export default function SnapshotPicker(props: SnapshotPickerProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const selected = useMemo(() => selectedSnapshot(props.items, props.value), [props.items, props.value]);
+  const [copyMessage, setCopyMessage] = useState("");
+  const [copyError, setCopyError] = useState(false);
+  const selected = useMemo(() => resolveSnapshotPickerSelectedItem(props.items, props.value), [props.items, props.value]);
   const selectedStaleDays = typeof selected?.staleDays === "number" && Number.isFinite(selected.staleDays)
     ? Math.max(0, Math.trunc(selected.staleDays))
     : undefined;
@@ -47,20 +45,13 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
     return selectedStaleDays >= SNAPSHOT_STALE_CAUTION_DAYS ? `Stale ${selectedStaleDays}d` : "Fresh";
   })();
 
-  const selectValue = props.value.mode === "latest" ? "latest" : `history:${props.value.id}`;
+  const selectValue = buildSnapshotPickerSelectValue(props.value);
 
   async function copySnapshotId(): Promise<void> {
-    if (props.value.mode !== "history") return;
-    try {
-      if (!navigator?.clipboard?.writeText) {
-        window.alert("클립보드 복사를 지원하지 않는 환경입니다.");
-        return;
-      }
-      await navigator.clipboard.writeText(props.value.id);
-      window.alert("snapshotId를 복사했습니다.");
-    } catch {
-      window.alert("snapshotId 복사에 실패했습니다.");
-    }
+    const result = await copySnapshotIdToClipboard(props.value, globalThis.navigator?.clipboard);
+    if (!result) return;
+    setCopyError(result.error);
+    setCopyMessage(result.message);
   }
 
   return (
@@ -73,14 +64,8 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
           data-testid="planning-snapshot-select"
           value={selectValue}
           onChange={(event) => {
-            const raw = event.target.value;
-            if (raw === "latest") {
-              props.onChange({ mode: "latest" });
-              return;
-            }
-            if (raw.startsWith("history:")) {
-              props.onChange({ mode: "history", id: raw.slice("history:".length) });
-            }
+            const next = parseSnapshotPickerSelectValue(event.target.value);
+            if (next) props.onChange(next);
           }}
         >
           <option value="latest">
@@ -124,7 +109,7 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
             size="sm"
             variant="outline"
           >
-            {detailsOpen ? "Details 닫기" : "Details"}
+            {getSnapshotDetailsToggleLabel(detailsOpen)}
           </Button>
         ) : null}
         <Button
@@ -149,6 +134,9 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
           /ops/assumptions/history
         </Link>
       </div>
+      {copyMessage ? (
+        <p className={`text-xs font-semibold ${copyError ? "text-rose-700" : "text-emerald-700"}`}>{copyMessage}</p>
+      ) : null}
 
       {props.advancedEnabled && detailsOpen ? (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" id="snapshot-details-panel">

@@ -1,7 +1,8 @@
 import type { FinancialStatus, StageDecision } from "./types";
+import { roundKrw } from "../calc/roundingPolicy";
 
 function formatWon(value: number): string {
-  return new Intl.NumberFormat("ko-KR").format(Math.round(value));
+  return new Intl.NumberFormat("ko-KR").format(roundKrw(value));
 }
 
 export function buildStageDecision(status: FinancialStatus): StageDecision {

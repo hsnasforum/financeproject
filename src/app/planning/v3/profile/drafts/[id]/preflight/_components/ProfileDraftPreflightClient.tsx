@@ -1,8 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  bodyActionLinkGroupClassName,
+  BodyEmptyState,
+  BodyStatusInset,
+  BodySectionHeading,
+  BodyTableFrame,
+  bodyFieldClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
@@ -44,10 +52,6 @@ type PreflightResponse = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function isPreflightResponse(value: unknown): value is PreflightResponse {
@@ -117,37 +121,41 @@ export function ProfileDraftPreflightClient({ id, initialProfileId = "" }: Props
       <div className="space-y-5">
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Draft Preflight (Diff Only)</h1>
-          <div className="flex flex-wrap gap-3 text-xs font-semibold text-emerald-700">
-            <Link className="underline underline-offset-2" href={`/planning/v3/profile/drafts/${encodeURIComponent(id)}`}>
+          <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href={`/planning/v3/profile/drafts/${encodeURIComponent(id)}`}>
               초안 상세
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/profile/drafts">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/profile/drafts">
               초안 목록
-            </Link>
+            </BodyActionLink>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-700">
               프로필 선택
               <input
-                className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                className={bodyFieldClassName}
                 placeholder="profileId (선택)"
                 value={profileId}
-                onChange={(event) => setProfileId(event.target.value)}
+                onChange={(event) => {
+                  setProfileId(event.target.value);
+                  setResult(null);
+                  setMessage("");
+                }}
               />
             </label>
             <Button type="button" onClick={() => { void runPreflight(); }} disabled={running}>
               {running ? "실행 중..." : "프리플라이트 실행"}
             </Button>
-            <Link className="text-xs font-semibold text-slate-600 underline underline-offset-2" href={queryHref}>
+            <BodyActionLink className="text-xs text-slate-600" href={queryHref}>
               URL 반영
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
 
         {result ? (
-          <Card data-testid="v3-preflight-summary">
-            <h2 className="text-sm font-bold text-slate-900">Summary</h2>
+          <Card className="space-y-3" data-testid="v3-preflight-summary">
+            <BodySectionHeading title="Summary" />
             <dl className="mt-2 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
               <div>
                 <dt className="font-semibold">targetProfileId</dt>
@@ -173,70 +181,83 @@ export function ProfileDraftPreflightClient({ id, initialProfileId = "" }: Props
           </Card>
         ) : null}
 
-        <Card data-testid="v3-preflight-errors">
-          <h2 className="text-sm font-bold text-slate-900">Errors / Warnings</h2>
+        <Card className="space-y-3" data-testid="v3-preflight-errors">
+          <BodySectionHeading
+            description="적용을 막는 오류와, 적용 전에 확인만 하면 되는 경고를 같이 보여줍니다."
+            title="Errors / Warnings"
+          />
           {result ? (
-            <div className="mt-2 space-y-3 text-xs">
+            <div className="space-y-3 text-xs">
               {result.errors.length > 0 ? (
-                <ul className="space-y-1 text-rose-700">
+                <ul className="space-y-2 text-rose-700">
                   {result.errors.map((error, index) => (
-                    <li key={`${error.path}:${index}`} className="rounded border border-rose-200 bg-rose-50 px-2 py-1">
-                      <span className="font-mono">{error.path}</span>: {error.message}
+                    <li key={`${error.path}:${index}`}>
+                      <BodyStatusInset className="text-left" tone="danger">
+                        <span className="font-mono">{error.path}</span>: {error.message}
+                      </BodyStatusInset>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-slate-600">에러 없음</p>
+                <BodyEmptyState description="현재 선택 기준으로는 적용을 막는 오류가 없습니다." title="에러 없음" />
               )}
 
               {result.warnings.length > 0 ? (
-                <ul className="space-y-1 text-amber-700">
+                <ul className="space-y-2 text-amber-700">
                   {result.warnings.map((warning, index) => (
-                    <li key={`${warning.code}:${index}`} className="rounded border border-amber-200 bg-amber-50 px-2 py-1">
-                      [{warning.code}] {warning.message}
+                    <li key={`${warning.code}:${index}`}>
+                      <BodyStatusInset className="text-left" tone="warning">
+                        [{warning.code}] {warning.message}
+                      </BodyStatusInset>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-slate-600">경고 없음</p>
+                <BodyEmptyState description="지금 기준에서는 따로 확인할 경고가 없습니다." title="경고 없음" />
               )}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-slate-600">아직 실행되지 않았습니다.</p>
+            <BodyEmptyState description="프리플라이트를 실행하면 오류와 경고가 이 영역에 정리됩니다." title="아직 실행되지 않았습니다." />
           )}
         </Card>
 
-        <Card data-testid="v3-preflight-changes">
-          <h2 className="text-sm font-bold text-slate-900">Changes</h2>
+        <Card className="space-y-3" data-testid="v3-preflight-changes">
+          <BodySectionHeading
+            description="적용 시 바뀌는 항목을 before/after 기준으로 비교합니다."
+            title="Changes"
+          />
           {result ? (
-            <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200">
-              <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-2 py-1 text-left">path</th>
-                    <th className="px-2 py-1 text-left">kind</th>
-                    <th className="px-2 py-1 text-left">before</th>
-                    <th className="px-2 py-1 text-left">after</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {result.changes.map((change, index) => (
-                    <tr key={`${change.path}:${index}`}>
-                      <td className="px-2 py-1 font-mono">{change.path}</td>
-                      <td className="px-2 py-1">{change.kind}</td>
-                      <td className="px-2 py-1 font-mono">{stringifyValue(change.before)}</td>
-                      <td className="px-2 py-1 font-mono">{stringifyValue(change.after)}</td>
+            result.changes.length > 0 ? (
+              <BodyTableFrame>
+                <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-2 py-1 text-left">path</th>
+                      <th className="px-2 py-1 text-left">kind</th>
+                      <th className="px-2 py-1 text-left">before</th>
+                      <th className="px-2 py-1 text-left">after</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {result.changes.map((change, index) => (
+                      <tr key={`${change.path}:${index}`}>
+                        <td className="px-2 py-1 font-mono">{change.path}</td>
+                        <td className="px-2 py-1">{change.kind}</td>
+                        <td className="px-2 py-1 font-mono">{stringifyValue(change.before)}</td>
+                        <td className="px-2 py-1 font-mono">{stringifyValue(change.after)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </BodyTableFrame>
+            ) : (
+              <BodyEmptyState description="이번 초안은 선택한 기준 프로필 대비 바뀌는 항목이 없습니다." title="변경 항목이 없습니다." />
+            )
           ) : (
-            <p className="mt-2 text-sm text-slate-600">아직 실행되지 않았습니다.</p>
+            <BodyEmptyState description="프리플라이트를 실행하면 변경 후보가 표로 정리됩니다." title="아직 실행되지 않았습니다." />
           )}
         </Card>
       </div>
     </PageShell>
   );
 }
-

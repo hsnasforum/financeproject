@@ -149,7 +149,7 @@ describe("planning feedback create-issue api", () => {
     expect(payload.data?.link?.githubIssue?.number).toBe(987);
     expect(payload.data?.link?.githubIssue?.url).toBe("https://github.com/owner/repo/issues/987");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(String(fetchMock.mock.calls[0]?.[0] ?? "")).toContain("/issues");
+    expect(String(((fetchMock.mock.calls as unknown) as Array<[RequestInfo | URL, RequestInit?]>)[0]?.[0] ?? "")).toContain("/issues");
 
     const stored = await getFeedback(feedback.id);
     expect(stored?.link?.githubIssue?.number).toBe(987);

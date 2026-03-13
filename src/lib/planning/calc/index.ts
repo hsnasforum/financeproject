@@ -11,7 +11,7 @@ export {
   normalizeAprPct,
   simulateAmortizingPayoff,
   summarizeDebt,
-} from "../core/v2/debt/calc";
+} from "../v2/debt/coreCalc";
 export {
   buildAmortizationSchedule,
   buildEqualPaymentSchedule,

@@ -4,9 +4,13 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import CandidateComparisonSection from "@/app/planning/reports/_components/CandidateComparisonSection";
 import ReportAdvancedRaw from "@/app/planning/reports/_components/ReportAdvancedRaw";
+import ReportBenefitsSection from "@/app/planning/reports/_components/ReportBenefitsSection";
 import ReportDashboard from "@/app/planning/reports/_components/ReportDashboard";
+import ReportRecommendationsSection from "@/app/planning/reports/_components/ReportRecommendationsSection";
 import { toInterpretationInputFromReportVM } from "@/app/planning/reports/_lib/reportInterpretationAdapter";
-import { buildReportVM } from "@/app/planning/reports/_lib/reportViewModel";
+import { buildPlanningBenefitSignals } from "@/app/planning/reports/_lib/recommendationSignals";
+import { buildReportVMFromRun, safeBuildReportVMFromRun } from "@/app/planning/reports/_lib/reportViewModel";
+import { BENEFIT_TOPICS } from "@/lib/publicApis/benefitsTopics";
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -15,11 +19,12 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
-import { formatDate } from "@/lib/planning/i18n/format";
+import { formatDate, formatKrw, formatPct } from "@/lib/planning/i18n/format";
 import { appendProfileIdQuery } from "@/lib/planning/profileScope";
 import { type PlanningRunRecord } from "@/lib/planning/store/types";
-import { computeRunDelta } from "@/lib/planning/v2/scenario";
+import { computeRunDelta, type RunDeltaMetric } from "@/lib/planning/v2/scenario";
 
 type ReportDetail = {
   id: string;
@@ -42,6 +47,8 @@ type Props = {
   id: string;
 };
 
+type DetailTabId = "overview" | "interpretation" | "offers" | "comparison" | "advanced";
+
 type BaselineRunOption = {
   id: string;
   title?: string;
@@ -58,6 +65,73 @@ type RawBlobPreview = {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function formatCompactKrw(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return new Intl.NumberFormat("ko-KR", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatDeltaMetricValue(metric: RunDeltaMetric, value: number): string {
+  if (metric.key === "dsrPct") return formatPct("ko-KR", value);
+  if (metric.key === "emergencyFundMonths") return `${Math.round(value * 10) / 10}개월`;
+  if (
+    metric.key === "monthlySurplusKrw"
+    || metric.key === "endNetWorthKrw"
+    || metric.key === "worstCashKrw"
+  ) {
+    return formatKrw("ko-KR", value);
+  }
+  return value.toLocaleString("ko-KR");
+}
+
+function deltaTone(metric: RunDeltaMetric): {
+  positive: string;
+  negative: string;
+  neutral: string;
+  rowPositive: string;
+  rowNegative: string;
+  rowNeutral: string;
+} {
+  const positiveIsGood = metric.key === "monthlySurplusKrw"
+    || metric.key === "emergencyFundMonths"
+    || metric.key === "endNetWorthKrw"
+    || metric.key === "worstCashKrw";
+  if (positiveIsGood) {
+    return {
+      positive: "text-emerald-200",
+      negative: "text-rose-200",
+      neutral: "text-white/85",
+      rowPositive: "bg-emerald-500/10",
+      rowNegative: "bg-rose-500/10",
+      rowNeutral: "",
+    };
+  }
+  return {
+    positive: "text-rose-200",
+    negative: "text-emerald-200",
+    neutral: "text-white/85",
+    rowPositive: "bg-rose-500/10",
+    rowNegative: "bg-emerald-500/10",
+    rowNeutral: "",
+  };
+}
+
+function deltaClassName(metric: RunDeltaMetric): string {
+  const tone = deltaTone(metric);
+  if (metric.delta > 0) return tone.positive;
+  if (metric.delta < 0) return tone.negative;
+  return tone.neutral;
+}
+
+function deltaRowClassName(metric: RunDeltaMetric): string {
+  const tone = deltaTone(metric);
+  if (metric.delta > 0) return tone.rowPositive;
+  if (metric.delta < 0) return tone.rowNegative;
+  return tone.rowNeutral;
 }
 
 function statusBadge(input: {
@@ -104,7 +178,7 @@ export default function PlanningReportDetailClient({ id }: Props) {
   const [run, setRun] = useState<PlanningRunRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<DetailTabId>("overview");
   const [resolvedRunId, setResolvedRunId] = useState("");
   const [advancedRawRunPreview, setAdvancedRawRunPreview] = useState<RawBlobPreview | null>(null);
   const [advancedRawLoading, setAdvancedRawLoading] = useState(false);
@@ -125,6 +199,7 @@ export default function PlanningReportDetailClient({ id }: Props) {
       setReport(null);
       setRun(null);
       setResolvedRunId("");
+      setActiveTab("overview");
       setAdvancedRawRunPreview(null);
       setAdvancedRawLoading(false);
       setAdvancedRawError("");
@@ -156,7 +231,6 @@ export default function PlanningReportDetailClient({ id }: Props) {
         setReport(reportPayload.data);
         const fallbackRunId = asString(reportPayload.data.runId);
         if (!fallbackRunId) {
-          setError("이 리포트는 연결된 실행 기록(runId)이 없습니다.");
           return;
         }
         const fallbackRunRes = await fetch(`/api/planning/v2/runs/${encodeURIComponent(fallbackRunId)}`, { cache: "no-store" });
@@ -184,7 +258,7 @@ export default function PlanningReportDetailClient({ id }: Props) {
 
   useEffect(() => {
     setCompareMode(Boolean(run?.scenario || run?.input?.scenario));
-  }, [run?.id]);
+  }, [run?.id, run?.input?.scenario, run?.scenario]);
 
   useEffect(() => {
     let active = true;
@@ -192,7 +266,7 @@ export default function PlanningReportDetailClient({ id }: Props) {
     async function loadAdvancedRawPreview(mode: "reset" | "append"): Promise<void> {
       const fallbackRunId = run?.id || asString(report?.runId);
       const runId = resolvedRunId || fallbackRunId;
-      if (!advancedOpen) return;
+      if (activeTab !== "advanced") return;
       if (!runId) return;
       if (advancedRawLoading) return;
       if (!runId || runId === "-") return;
@@ -250,13 +324,13 @@ export default function PlanningReportDetailClient({ id }: Props) {
       }
     }
 
-    if (advancedOpen && advancedRawRunPreview === null) {
+    if (activeTab === "advanced" && advancedRawRunPreview === null) {
       void loadAdvancedRawPreview("reset");
     }
     return () => {
       active = false;
     };
-  }, [advancedOpen, advancedRawLoading, advancedRawRunPreview, report?.runId, resolvedRunId, run?.id]);
+  }, [activeTab, advancedRawLoading, advancedRawRunPreview, report?.runId, resolvedRunId, run?.id]);
 
   async function handleLoadMoreAdvancedRaw(): Promise<void> {
     const fallbackRunId = run?.id || asString(report?.runId);
@@ -300,6 +374,11 @@ export default function PlanningReportDetailClient({ id }: Props) {
     } finally {
       setAdvancedRawLoading(false);
     }
+  }
+
+  function handleRetryAdvancedRaw(): void {
+    setAdvancedRawError("");
+    setAdvancedRawRunPreview(null);
   }
 
   useEffect(() => {
@@ -388,42 +467,172 @@ export default function PlanningReportDetailClient({ id }: Props) {
   }, [baselineRunId, compareMode]);
 
   const vm = useMemo(
-    () => buildReportVM(run, report ?? { id }),
+    () => safeBuildReportVMFromRun(run, report ?? { id }),
     [id, report, run],
   );
+  const vmData = useMemo(
+    () => vm.vm ?? buildReportVMFromRun(null, report ?? { id }),
+    [id, report, vm.vm],
+  );
+  const vmError = vm.error;
   const baselineVm = useMemo(
     () => baselineRun
-      ? buildReportVM(baselineRun, { id: baselineRun.id, runId: baselineRun.id, createdAt: baselineRun.createdAt })
-      : null,
+      ? safeBuildReportVMFromRun(baselineRun, { id: baselineRun.id, runId: baselineRun.id, createdAt: baselineRun.createdAt })
+      : { vm: null, error: null },
     [baselineRun],
   );
+  const baselineVmData = baselineVm.vm;
   const runDelta = useMemo(
-    () => (baselineVm ? computeRunDelta(baselineVm, vm) : null),
-    [baselineVm, vm],
+    () => (baselineVmData && vmData ? computeRunDelta(baselineVmData, vmData) : null),
+    [baselineVmData, vmData],
   );
   const interpretationInput = useMemo(
-    () => toInterpretationInputFromReportVM(vm),
-    [vm],
+    () => toInterpretationInputFromReportVM(vmData),
+    [vmData],
   );
   const badge = useMemo(
     () => statusBadge({
-      worstCashKrw: vm.summaryCards.worstCashKrw,
-      criticalWarnings: vm.summaryCards.criticalWarnings,
-      dsrPct: vm.summaryCards.dsrPct,
-      totalWarnings: vm.summaryCards.totalWarnings,
-      goalsAchieved: vm.summaryCards.goalsAchieved,
+      worstCashKrw: vmData.summaryCards.worstCashKrw,
+      criticalWarnings: vmData.summaryCards.criticalWarnings,
+      dsrPct: vmData.summaryCards.dsrPct,
+      totalWarnings: vmData.summaryCards.totalWarnings,
+      goalsAchieved: vmData.summaryCards.goalsAchieved,
     }),
-    [vm.summaryCards],
+    [vmData.summaryCards],
   );
-  const simulateStage = vm.stage.byId.simulate;
+  const simulateStage = vmData.stage.byId.simulate;
   const canRenderInterpretability = !simulateStage || simulateStage.status === "SUCCESS";
+  const advancedOpen = activeTab === "advanced";
   const selectedProfileId = run?.profileId ?? "";
   const planningHref = appendProfileIdQuery("/planning", selectedProfileId);
   const runsHref = appendProfileIdQuery("/planning/runs", selectedProfileId);
   const reportsHubHref = appendProfileIdQuery("/planning/reports", selectedProfileId);
-  const reportRunId = resolvedRunId || vm.header.runId;
-  const htmlExportBaseHref = `/api/planning/reports/${encodeURIComponent(reportRunId)}/export.html`;
-  const printViewHref = `${htmlExportBaseHref}?view=print`;
+  const reportRunId = resolvedRunId || vmData.header.runId;
+  const tabOptions = useMemo(() => {
+    const recommendationLabel = reportRunId ? "제안" : "혜택";
+    return [
+      { id: "overview", label: "요약" },
+      { id: "interpretation", label: "해석" },
+      { id: "offers", label: recommendationLabel },
+      { id: "comparison", label: compareMode ? "비교" : "상품 비교" },
+      { id: "advanced", label: "고급" },
+    ] satisfies Array<{ id: DetailTabId; label: string }>;
+  }, [compareMode, reportRunId]);
+  const activeTabMeta = useMemo(() => {
+    if (activeTab === "interpretation") {
+      return {
+        title: "결과 해석",
+        description: "위험 신호와 다음 행동을 먼저 읽는 탭입니다.",
+      };
+    }
+    if (activeTab === "offers") {
+      return {
+        title: "추천과 혜택",
+        description: "현재 결과에서 바로 이어서 볼 상품과 혜택만 모았습니다.",
+      };
+    }
+    if (activeTab === "comparison") {
+      return {
+        title: "비교와 후보",
+        description: "기준 실행 변화와 상품 비교표를 따로 볼 수 있습니다.",
+      };
+    }
+    if (activeTab === "advanced") {
+      return {
+        title: "고급 보기",
+        description: "재현성 정보와 원문 데이터를 확인하는 탭입니다.",
+      };
+    }
+    return {
+      title: "결과 요약",
+      description: "핵심 지표와 경고, 목표 상태를 먼저 확인하는 탭입니다.",
+    };
+  }, [activeTab]);
+  const headerStats = useMemo(() => {
+    if (activeTab === "interpretation") {
+      return [
+        { label: "치명 경고", value: `${vmData.summaryCards.criticalWarnings ?? 0}건` },
+        { label: "다음 액션", value: `${vmData.actionRows.length}개` },
+        { label: "DSR", value: typeof vmData.summaryCards.dsrPct === "number" ? formatPct("ko-KR", vmData.summaryCards.dsrPct) : "-" },
+      ];
+    }
+    if (activeTab === "offers") {
+      return [
+        { label: "상품 후보", value: reportRunId ? "연결됨" : "없음" },
+        { label: "혜택 주제", value: `${Math.min(5, vmData.actionRows.length + 1)}개` },
+        { label: "프로필", value: run?.profileId ? "연결됨" : "없음" },
+      ];
+    }
+    if (activeTab === "comparison") {
+      return [
+        { label: "비교 모드", value: compareMode ? "켜짐" : "꺼짐" },
+        { label: "기준 실행", value: baselineRunId ? baselineRunId.slice(0, 8) : "-" },
+        { label: "후보 비교", value: resolvedRunId || vmData.header.runId ? "가능" : "없음" },
+      ];
+    }
+    if (activeTab === "advanced") {
+      return [
+        { label: "engine schema", value: String(vmData.contract?.engineSchemaVersion ?? "-") },
+        { label: "fallback", value: vmData.contract?.fallbacks.length ? `${vmData.contract.fallbacks.length}개` : "없음" },
+        { label: "run", value: (resolvedRunId || vmData.header.runId).slice(0, 8) || "-" },
+      ];
+    }
+    return [
+      { label: "말기 순자산", value: formatCompactKrw(vmData.summaryCards.endNetWorthKrw) },
+      { label: "최저 현금", value: formatCompactKrw(vmData.summaryCards.worstCashKrw) },
+      { label: "목표 달성", value: vmData.summaryCards.goalsAchieved ?? "-" },
+    ];
+  }, [
+    activeTab,
+    baselineRunId,
+    compareMode,
+    reportRunId,
+    resolvedRunId,
+    run?.profileId,
+    vmData.actionRows.length,
+    vmData.contract?.engineSchemaVersion,
+    vmData.contract?.fallbacks.length,
+    vmData.header.runId,
+    vmData.summaryCards.criticalWarnings,
+    vmData.summaryCards.dsrPct,
+    vmData.summaryCards.endNetWorthKrw,
+    vmData.summaryCards.goalsAchieved,
+    vmData.summaryCards.worstCashKrw,
+  ]);
+  const comparisonHighlights = useMemo(() => {
+    if (!runDelta) return [];
+    const preferredOrder: RunDeltaMetric["key"][] = ["endNetWorthKrw", "monthlySurplusKrw", "worstCashKrw"];
+    return preferredOrder
+      .map((key) => runDelta.metrics.find((metric) => metric.key === key))
+      .filter((metric): metric is RunDeltaMetric => Boolean(metric))
+      .map((metric) => ({
+        ...metric,
+        deltaLabel: `${metric.delta >= 0 ? "+" : ""}${formatDeltaMetricValue(metric, metric.delta)}`,
+      }));
+  }, [runDelta]);
+  const leadAction = vmData.actionRows[0] ?? null;
+  const offersSummary = useMemo(() => {
+    const topWarning = vmData.warningAgg[0];
+    const openGoal = vmData.goalsTable.find((goal) => goal.achieved !== true);
+    const benefitSignals = buildPlanningBenefitSignals(vmData, run?.profileId ? {
+      currentAge: undefined,
+      birthYear: undefined,
+      gender: undefined,
+      sido: undefined,
+      sigungu: undefined,
+    } : undefined);
+    return {
+      headline: leadAction
+        ? `${leadAction.title}에 맞춰 상품과 혜택 우선순위를 묶었습니다.`
+        : "현재 결과에 맞는 상품과 혜택 후보를 함께 정리했습니다.",
+      lines: [
+        topWarning ? `가장 큰 신호는 '${topWarning.title}' 입니다.` : "현재 경고 흐름을 먼저 반영했습니다.",
+        openGoal ? `미달 목표 '${openGoal.name}' 기준으로 다음 선택지를 좁혔습니다.` : "주요 목표 상태를 기준으로 후보를 정리했습니다.",
+        `혜택은 ${benefitSignals.topics.length}개 주제를 중심으로 모았습니다.`,
+      ],
+      topics: benefitSignals.topics,
+    };
+  }, [leadAction, run?.profileId, vmData]);
 
   return (
     <PageShell>
@@ -443,6 +652,41 @@ export default function PlanningReportDetailClient({ id }: Props) {
         <LoadingState title="리포트를 불러오는 중입니다" testId="planning-reports-loading-state" />
       ) : error ? (
         <ErrorState message={error} testId="planning-reports-error-state" />
+      ) : !run && report ? (
+        <div className="space-y-5" data-testid="planning-reports-manual-detail-root">
+          <Card className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span>id: {report.id}</span>
+              <span>·</span>
+              <span>createdAt: {formatDate("ko-KR", report.createdAt)}</span>
+              <span>·</span>
+              <span>manual report</span>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              연결된 실행 기록이 없는 수동 리포트입니다. run 기반 대시보드와 비교 기능은 비활성화되지만, 마크다운 원문과 다운로드는 계속 볼 수 있습니다.
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a
+                className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 no-underline hover:bg-slate-50"
+                href={`/api/planning/v2/reports/${encodeURIComponent(report.id)}/download`}
+              >
+                마크다운 다운로드
+              </a>
+              <Link
+                className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 no-underline hover:bg-slate-50"
+                href={reportsHubHref}
+              >
+                리포트 허브
+              </Link>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">원본 Markdown</p>
+              <pre className="mt-3 max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-2xl bg-slate-950 p-4 text-xs leading-relaxed text-slate-100">
+                {report.markdown}
+              </pre>
+            </div>
+          </Card>
+        </div>
       ) : !run ? (
         <EmptyState
           title="표시할 리포트 데이터가 없습니다"
@@ -451,184 +695,306 @@ export default function PlanningReportDetailClient({ id }: Props) {
         />
       ) : (
         <div className="space-y-5" data-testid="planning-reports-detail-root">
-          <Card className="space-y-4 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm text-slate-700">
-                <p><span className="font-semibold text-slate-900">id</span>: {vm.header.reportId}</p>
-                <p><span className="font-semibold text-slate-900">createdAt</span>: {formatDate("ko-KR", vm.header.createdAt)}</p>
-                <p><span className="font-semibold text-slate-900">runId</span>: {vm.header.runId}</p>
+          {vmError ? (
+            <ErrorState message={`선택한 실행의 리포트를 구성하지 못했습니다. ${vmError}`} />
+          ) : null}
+          <Card className="overflow-hidden border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-xl">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">Report Overview</p>
+                <h2 className="mt-2 text-2xl font-black tracking-tight text-white">결과 리포트 프레임</h2>
+                <p className="mt-2 text-sm leading-6 text-white/75">{badge.reason}</p>
               </div>
               <span className={`rounded-full border px-3 py-1 text-xs font-bold ${badge.className}`}>
                 상태: {badge.label}
               </span>
             </div>
 
-            <p className="text-xs text-slate-600">{badge.reason}</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
+                <p className="text-[11px] text-white/55">report id</p>
+                <p className="mt-1 break-all text-sm font-bold text-white">{vmData.header.reportId}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
+                <p className="text-[11px] text-white/55">created at</p>
+                <p className="mt-1 text-sm font-bold text-white">{formatDate("ko-KR", vmData.header.createdAt)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
+                <p className="text-[11px] text-white/55">run id</p>
+                <p className="mt-1 break-all text-sm font-bold text-white">{vmData.header.runId}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur">
+                <p className="text-[11px] text-white/55">engine schema</p>
+                <p className="mt-1 text-sm font-bold text-white">{vmData.contract?.engineSchemaVersion ?? "-"}</p>
+                {vmData.contract?.fallbacks.length ? (
+                  <p className="mt-2 text-[11px] text-white/60">{vmData.contract.fallbacks.join(", ")}</p>
+                ) : null}
+              </div>
+            </div>
 
-            <div className="flex flex-wrap gap-2">
-              <a
-                aria-label="리포트 보기"
-                className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                href={`/api/planning/v2/runs/${encodeURIComponent(reportRunId)}/report`}
-                rel="noreferrer"
-                target="_blank"
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                aria-label="리포트 허브"
+                className="inline-flex items-center rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15"
+                href={reportsHubHref}
               >
-                리포트 보기
-              </a>
-              <a
-                aria-label="리포트 HTML 다운로드"
-                className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-indigo-700 hover:bg-slate-50"
-                href={`/api/planning/v2/runs/${encodeURIComponent(reportRunId)}/report?download=1`}
-              >
-                다운로드(HTML)
-              </a>
-              <a
-                aria-label="리포트 HTML export"
-                className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-slate-50"
-                href={htmlExportBaseHref}
-              >
-                Export HTML
-              </a>
-              <a
-                aria-label="Open print view"
-                className="inline-flex items-center rounded-xl border border-slate-300 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-slate-50"
-                href={printViewHref}
-                rel="noreferrer"
-                target="_blank"
-              >
-                Open print view
-              </a>
+                리포트 허브
+              </Link>
               <Button
-                aria-controls="planning-reports-advanced-panel"
-                aria-expanded={advancedOpen}
+                className="inline-flex items-center rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15"
+                onClick={() => window.print()}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                브라우저 인쇄
+              </Button>
+              <Button
                 data-testid="planning-reports-advanced-toggle"
-                onClick={() => setAdvancedOpen((prev) => !prev)}
+                onClick={() => setActiveTab((prev) => (prev === "advanced" ? "overview" : "advanced"))}
                 size="sm"
-                variant="outline"
+                variant="ghost"
+                className="inline-flex items-center rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15"
               >
-                {advancedOpen ? "고급 보기 닫기" : "고급 보기"}
+                {advancedOpen ? "요약으로 돌아가기" : "고급 보기"}
               </Button>
             </div>
           </Card>
 
-          {canRenderInterpretability ? (
-            <InterpretabilityGuideCard
-              aggregatedWarnings={interpretationInput.aggregatedWarnings}
-              goals={interpretationInput.goals}
-              summaryMetrics={interpretationInput.summary}
-              outcomes={interpretationInput.outcomes}
-              summaryEvidence={interpretationInput.summaryEvidence}
-            />
-          ) : (
-            <Card className="p-5 text-sm text-slate-700">
-              해석 가이드는 simulate 단계 성공 시에만 표시됩니다.
-            </Card>
-          )}
-
-          <ReportDashboard vm={vm} />
-
-          <Card className="space-y-3 p-5">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-base font-bold text-slate-900">기준 실행 대비 비교 (What-if)</h2>
-              <Button
-                data-testid="compare-toggle"
-                onClick={() => setCompareMode((prev) => !prev)}
-                size="sm"
-                variant={compareMode ? "primary" : "outline"}
-              >
-                {compareMode ? "비교 끄기" : "비교 켜기"}
-              </Button>
-            </div>
-            {compareMode ? (
-              <>
-                <select
-                  className="h-9 rounded-lg border border-slate-300 px-2 text-sm"
-                  data-testid="baseline-selector"
-                  value={baselineRunId}
-                  onChange={(event) => setBaselineRunId(event.target.value)}
-                >
-                  <option value="">기준 실행 선택</option>
-                  {baselineOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.title ? `${option.title} · ` : ""}{option.id.slice(0, 8)} · {formatDate("ko-KR", option.createdAt)}
-                    </option>
-                  ))}
-                </select>
-                {baselineLoading ? <LoadingState title="기준 실행 비교를 준비하는 중입니다" /> : null}
-                {baselineError ? <ErrorState message={baselineError} /> : null}
-                {!baselineLoading && !baselineError && runDelta ? (
-                  <div className="space-y-3" data-testid="delta-cards">
-                    <div className="overflow-x-auto rounded-xl border border-slate-200">
-                      <table className="min-w-full divide-y divide-slate-200 text-sm">
-                        <thead className="bg-slate-50">
-                          <tr>
-                            <th className="px-3 py-2 text-left">지표</th>
-                            <th className="px-3 py-2 text-right">기준</th>
-                            <th className="px-3 py-2 text-right">시나리오</th>
-                            <th className="px-3 py-2 text-right">변화</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {runDelta.metrics.map((metric) => (
-                            <tr key={metric.key}>
-                              <td className="px-3 py-2 font-semibold text-slate-900">{metric.label}</td>
-                              <td className="px-3 py-2 text-right">{metric.baseline.toLocaleString("ko-KR")}</td>
-                              <td className="px-3 py-2 text-right">{metric.scenario.toLocaleString("ko-KR")}</td>
-                              <td className="px-3 py-2 text-right">
-                                {metric.delta.toLocaleString("ko-KR")}
-                                {" "}
-                                <span className="text-[11px] text-slate-500">({metric.delta >= 0 ? "증가" : "감소"})</span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="text-xs text-slate-600">
-                      경고 코드 변화: +{runDelta.warnings.added.length} / -{runDelta.warnings.removed.length}
-                      {" · "}
-                      목표 달성 수 변화: {runDelta.goals.achievedDelta >= 0 ? "+" : ""}{runDelta.goals.achievedDelta}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-600">기준 실행을 선택하면 변화량을 표시합니다.</p>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-slate-600">비교 모드를 켜면 기준 실행 대비 변화량을 볼 수 있습니다.</p>
-            )}
-          </Card>
-
-          {resolvedRunId || vm.header.runId ? (
-            <CandidateComparisonSection runId={resolvedRunId || vm.header.runId} />
-          ) : null}
-
-          {advancedOpen ? (
-            <div className="space-y-2" id="planning-reports-advanced-panel">
-              {advancedRawLoading ? (
-                <LoadingState title="고급 원문을 불러오는 중입니다" />
-              ) : null}
-              {advancedRawError ? (
-                <ErrorState message={advancedRawError} />
-              ) : null}
-              <ReportAdvancedRaw
-                reproducibility={vm.reproducibility}
-                raw={{
-                  ...(vm.raw?.reportMarkdown ? { reportMarkdown: vm.raw.reportMarkdown } : {}),
-                  ...(advancedRawRunPreview !== null
-                    ? {
-                      runJsonPreview: {
-                        ...advancedRawRunPreview,
-                        loading: advancedRawLoading,
-                        ...(advancedRawError ? { error: advancedRawError } : {}),
-                      },
-                    }
-                    : {}),
-                }}
-                onLoadMoreRunJson={() => void handleLoadMoreAdvancedRaw()}
+          <div className="space-y-4">
+            <div className="sticky top-3 z-10 rounded-3xl border border-white/10 bg-gradient-to-r from-slate-950/95 via-slate-900/95 to-slate-800/95 p-3 shadow-xl backdrop-blur">
+              <SegmentedTabs
+                activeTab={activeTab}
+                className="w-full md:w-full"
+                onChange={(tabId) => setActiveTab(tabId as DetailTabId)}
+                options={tabOptions}
+                tone="dark"
               />
+              <div className="mt-3 grid gap-3 px-1 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <div>
+                  <p className="text-sm font-bold text-white">{activeTabMeta.title}</p>
+                  <p className="text-xs text-white/65">{activeTabMeta.description}</p>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    {headerStats.map((item) => (
+                      <div className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 backdrop-blur" key={`${activeTab}-${item.label}`}>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/50">{item.label}</p>
+                        <p className="mt-1 text-sm font-bold text-white">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-wrap content-start gap-2 lg:max-w-[220px] lg:justify-end">
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/75">경고 {vmData.warningAgg.length}</span>
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/75">액션 {vmData.actionRows.length}</span>
+                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/75">목표 {vmData.goalsTable.length}</span>
+                </div>
+              </div>
             </div>
-          ) : null}
+
+            {activeTab === "overview" ? (
+              <div className="space-y-5">
+                <ReportDashboard vm={vmData} />
+              </div>
+            ) : null}
+
+            {activeTab === "interpretation" ? (
+              canRenderInterpretability ? (
+                <InterpretabilityGuideCard
+                  aggregatedWarnings={interpretationInput.aggregatedWarnings}
+                  goals={interpretationInput.goals}
+                  monthlyOperatingGuide={vmData.monthlyOperatingGuide}
+                  summaryMetrics={interpretationInput.summary}
+                  outcomes={interpretationInput.outcomes}
+                  summaryEvidence={interpretationInput.summaryEvidence}
+                />
+              ) : (
+                <Card className="border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-sm text-white/80">
+                  해석 가이드는 simulate 단계 성공 시에만 표시됩니다.
+                </Card>
+              )
+            ) : null}
+
+            {activeTab === "offers" ? (
+              <div className="space-y-5">
+                <Card className="overflow-hidden border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-xl">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="max-w-2xl">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">Why These</p>
+                      <h2 className="mt-2 text-xl font-black tracking-tight text-white">{offersSummary.headline}</h2>
+                      <div className="mt-3 space-y-1.5 text-sm text-white/78">
+                        {offersSummary.lines.map((line) => (
+                          <p key={line}>{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex max-w-sm flex-wrap gap-2">
+                      {offersSummary.topics.length > 0 ? offersSummary.topics.map((topic) => (
+                        <span
+                          className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white"
+                          key={`offer-topic-${topic}`}
+                        >
+                          {BENEFIT_TOPICS[topic].label}
+                        </span>
+                      )) : (
+                        <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/80">
+                          범용 후보 중심
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+                {reportRunId ? (
+                  <ReportRecommendationsSection runId={reportRunId} vm={vmData} />
+                ) : null}
+                <ReportBenefitsSection profileId={run?.profileId} vm={vmData} />
+              </div>
+            ) : null}
+
+            {activeTab === "comparison" ? (
+              <div className="space-y-5">
+                <Card className="space-y-3 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-5 text-white shadow-xl">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">What-if Compare</p>
+                      <h2 className="mt-1 text-base font-bold text-white">기준 실행 대비 비교</h2>
+                    </div>
+                    <Button
+                      data-testid="compare-toggle"
+                      onClick={() => setCompareMode((prev) => !prev)}
+                      size="sm"
+                      variant="ghost"
+                      className="rounded-xl border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/15"
+                    >
+                      {compareMode ? "비교 끄기" : "비교 켜기"}
+                    </Button>
+                  </div>
+                  {compareMode ? (
+                    <>
+                      <select
+                        className="h-9 rounded-xl border border-white/10 bg-white/10 px-3 text-sm text-white"
+                        data-testid="baseline-selector"
+                        value={baselineRunId}
+                        onChange={(event) => setBaselineRunId(event.target.value)}
+                      >
+                        <option value="">기준 실행 선택</option>
+                        {baselineOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.title ? `${option.title} · ` : ""}{option.id.slice(0, 8)} · {formatDate("ko-KR", option.createdAt)}
+                          </option>
+                        ))}
+                      </select>
+                      {baselineLoading ? <LoadingState title="기준 실행 비교를 준비하는 중입니다" /> : null}
+                      {baselineError ? <ErrorState message={baselineError} /> : null}
+                      {!baselineLoading && !baselineError && runDelta ? (
+                        <div className="space-y-3" data-testid="delta-cards">
+                          {comparisonHighlights.length > 0 ? (
+                            <div className="grid gap-3 md:grid-cols-3">
+                              {comparisonHighlights.map((metric) => (
+                                <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur" key={`highlight-${metric.key}`}>
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55">{metric.label}</p>
+                                  <p className={`mt-2 text-lg font-black ${metric.delta >= 0 ? "text-emerald-200" : "text-rose-200"}`}>
+                                    {metric.deltaLabel}
+                                  </p>
+                                  <p className="mt-1 text-xs text-white/65">
+                                    기준 {formatDeltaMetricValue(metric, metric.baseline)}
+                                    {" -> "}
+                                    시나리오 {formatDeltaMetricValue(metric, metric.scenario)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/5">
+                            <table className="min-w-full divide-y divide-white/10 text-sm text-white">
+                              <thead className="bg-white/10">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">지표</th>
+                                  <th className="px-3 py-2 text-right">기준</th>
+                                  <th className="px-3 py-2 text-right">시나리오</th>
+                                  <th className="px-3 py-2 text-right">변화</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/10">
+                                {runDelta.metrics.map((metric) => (
+                                  <tr className={deltaRowClassName(metric)} key={metric.key}>
+                                    <td className="px-3 py-2 font-semibold text-white">{metric.label}</td>
+                                    <td className="px-3 py-2 text-right text-white/70">{formatDeltaMetricValue(metric, metric.baseline)}</td>
+                                    <td className="px-3 py-2 text-right text-white">{formatDeltaMetricValue(metric, metric.scenario)}</td>
+                                    <td className={`px-3 py-2 text-right font-bold ${deltaClassName(metric)}`}>
+                                      {metric.delta >= 0 ? "+" : ""}{formatDeltaMetricValue(metric, metric.delta)}
+                                      {" "}
+                                      <span className="text-[11px] text-white/55">({metric.delta >= 0 ? "증가" : "감소"})</span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          <p className="text-xs text-white/70">
+                            경고 코드 변화: +{runDelta.warnings.added.length} / -{runDelta.warnings.removed.length}
+                            {" · "}
+                            목표 달성 수 변화: {runDelta.goals.achievedDelta >= 0 ? "+" : ""}{runDelta.goals.achievedDelta}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-white/70">기준 실행을 선택하면 변화량을 표시합니다.</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-xs text-white/70">비교 모드를 켜면 기준 실행 대비 변화량을 볼 수 있습니다.</p>
+                  )}
+                </Card>
+
+                {resolvedRunId || vmData.header.runId ? (
+                  <CandidateComparisonSection runId={resolvedRunId || vmData.header.runId} />
+                ) : null}
+              </div>
+            ) : null}
+
+            {advancedOpen ? (
+              <div className="space-y-2" id="planning-reports-advanced-panel">
+                {advancedRawLoading ? (
+                  <LoadingState
+                    title="고급 탭 데이터를 준비하고 있습니다"
+                    description="이 영역은 재현성/원문/디버깅 확인용입니다."
+                  />
+                ) : null}
+                {advancedRawError ? (
+                  <div className="space-y-2">
+                    <ErrorState message={advancedRawError} />
+                    <Button
+                      className="w-fit"
+                      onClick={handleRetryAdvancedRaw}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      다시 시도
+                    </Button>
+                  </div>
+                ) : null}
+                <Card className="rounded-3xl border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-xs text-white/70">
+                  이 탭은 사용자용 결과 해석보다 재현성, 원문, 디버깅 확인에 초점을 둡니다.
+                </Card>
+                <ReportAdvancedRaw
+                  reproducibility={vmData.reproducibility}
+                  raw={{
+                    ...(vmData.raw?.reportMarkdown ? { reportMarkdown: vmData.raw.reportMarkdown } : {}),
+                    ...(advancedRawRunPreview !== null
+                      ? {
+                        runJsonPreview: {
+                          ...advancedRawRunPreview,
+                          loading: advancedRawLoading,
+                          ...(advancedRawError ? { error: advancedRawError } : {}),
+                        },
+                      }
+                      : {}),
+                  }}
+                  onLoadMoreRunJson={() => void handleLoadMoreAdvancedRaw()}
+                />
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </PageShell>

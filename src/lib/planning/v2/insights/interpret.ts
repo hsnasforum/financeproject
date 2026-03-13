@@ -1,6 +1,5 @@
 import { lookupWarningGlossaryKo } from "./warningGlossary.ko";
 import { type ActionItemV2 } from "../actions/types";
-import { type AggregatedWarning } from "../report/aggregateWarnings";
 import { type GoalRow } from "../report/mapGoals";
 
 export type UserInsight = {
@@ -87,18 +86,18 @@ function buildCashBullet(summary: BuildUserInsightArgs["summary"]): string {
   const monthlyExpenses = asNumber(summary.monthlyExpensesKrw);
 
   if (typeof worstCash !== "number") {
-    return "현금 여유 정보를 충분히 확인하지 못해 보수적으로 해석했습니다.";
+    return "현금 흐름 정보가 부족해 보수적으로 해석했습니다.";
   }
 
   if (worstCash <= 0) {
-    return "현금이 바닥나는 달이 있습니다.";
+    return "지금 구조대로면 현금이 바닥나는 달이 생길 수 있습니다.";
   }
 
   if (typeof monthlyExpenses === "number" && monthlyExpenses > 0 && worstCash <= monthlyExpenses * 0.5) {
-    return "현금 여유가 낮아 돌발 지출에 취약합니다.";
+    return "현금 여유가 크지 않아 갑작스러운 지출에 취약할 수 있습니다.";
   }
 
-  return "현금 여유가 있어 단기 지출 변동에 대응할 여지가 있습니다.";
+  return "현금 완충 여력이 있어 단기 지출 변동을 버틸 수 있는 편입니다.";
 }
 
 function buildDsrBullet(summary: BuildUserInsightArgs["summary"]): string {
@@ -107,9 +106,9 @@ function buildDsrBullet(summary: BuildUserInsightArgs["summary"]): string {
     return "DSR 정보가 충분하지 않아 부채 탭에서 월 상환 부담을 함께 확인하세요.";
   }
 
-  if (dsrPct >= 60) return `DSR ${dsrPct.toFixed(1)}%로 부채 상환 부담이 매우 커서 계획이 쉽게 흔들릴 수 있습니다.`;
-  if (dsrPct >= 40) return `DSR ${dsrPct.toFixed(1)}%로 부채 상환 부담이 커서 지출 변동에 민감합니다.`;
-  return `DSR ${dsrPct.toFixed(1)}%로 부채 상환 부담이 비교적 낮습니다.`;
+  if (dsrPct >= 60) return `대출 상환 비중이 ${dsrPct.toFixed(1)}%로 높아 계획이 쉽게 흔들릴 수 있습니다.`;
+  if (dsrPct >= 40) return `대출 상환 비중이 ${dsrPct.toFixed(1)}%로 적지 않아 지출 변동에 민감합니다.`;
+  return `대출 상환 비중은 ${dsrPct.toFixed(1)}%로 비교적 관리 가능한 수준입니다.`;
 }
 
 function buildMonteCarloBullet(mcDepletionProb?: number): { score: number; text: string } | null {
@@ -118,20 +117,20 @@ function buildMonteCarloBullet(mcDepletionProb?: number): { score: number; text:
   if (mcDepletionProb >= 0.3) {
     return {
       score: 5,
-      text: "고갈 가능성이 꽤 있어(대략 3~4번 중 1번) 안전마진이 부족할 수 있습니다.",
+      text: "보수적으로 보면 3~4번 중 1번 정도는 자금이 먼저 마를 수 있어 안전마진이 부족합니다.",
     };
   }
 
   if (mcDepletionProb >= 0.1) {
     return {
       score: 3,
-      text: "고갈 가능성이 있어 보수 시나리오 확인이 필요합니다.",
+      text: "변동성을 고려하면 자금이 모자랄 가능성이 있어 보수 시나리오 확인이 필요합니다.",
     };
   }
 
   return {
     score: 1,
-    text: "고갈 가능성은 낮지만 보장이 아닙니다.",
+    text: "현재 기준 고갈 가능성은 낮지만 확정적인 보장은 아닙니다.",
   };
 }
 
@@ -148,7 +147,7 @@ function buildThirdBullet(args: {
   if (args.goalsMissed) {
     candidates.push({
       score: 4,
-      text: "일부 목표가 기한 내 미달 상태여서 목표월·월적립액 현실화가 필요합니다.",
+      text: "일부 목표는 지금 속도로는 늦어질 수 있어 목표 시점이나 적립액 조정이 필요합니다.",
     });
   }
 
@@ -160,31 +159,31 @@ function buildThirdBullet(args: {
   if (args.hasRetirementWarning) {
     candidates.push({
       score: 4,
-      text: "은퇴 구간 목표치 부족 신호가 있어 인출률/적립전략 점검이 필요합니다.",
+      text: "은퇴 구간에서 부족 신호가 보여 적립 전략을 다시 보는 편이 좋습니다.",
     });
   }
 
   if (args.snapshotMissing) {
     candidates.push({
       score: 5,
-      text: "최신 스냅샷이 없어 기본 가정으로 계산되었습니다. 동기화 후 재실행을 권장합니다.",
+      text: "최신 기준 데이터가 없어 기본값으로 계산했습니다. 동기화 후 다시 보는 편이 정확합니다.",
     });
   } else if (args.snapshotVeryStale) {
     candidates.push({
       score: 3,
-      text: "가정 스냅샷이 오래되어 최신 금리/물가 상황이 충분히 반영되지 않았을 수 있습니다.",
+      text: "기준 데이터가 조금 오래돼 최근 금리·물가 상황이 덜 반영됐을 수 있습니다.",
     });
   }
 
   if (args.totalWarnings >= 8) {
     candidates.push({
       score: 2,
-      text: `반복 경고가 ${args.totalWarnings}건으로 누적되어 보수적 조정이 필요합니다.`,
+      text: `주의 신호가 ${args.totalWarnings}건 쌓여 있어 보수적으로 조정하는 편이 좋습니다.`,
     });
   }
 
   if (candidates.length === 0) {
-    return "큰 위험 신호는 크지 않지만 입력값이 바뀌면 결과도 달라질 수 있습니다.";
+    return "큰 위험 신호는 작지만, 입력값이 바뀌면 결과도 달라질 수 있습니다.";
   }
 
   candidates.sort((a, b) => b.score - a.score);
@@ -259,10 +258,10 @@ export function buildUserInsight(args: BuildUserInsightArgs): UserInsight {
       : "ok";
 
   const headline = severity === "risk"
-    ? "현금이 바닥나는 구간이 있어 계획이 쉽게 흔들립니다."
+    ? "지금 구조로는 버거운 시점이 보여서 우선순위 조정이 필요합니다."
     : severity === "warn"
-      ? "부채/목표 중 일부가 부담이어서 안전마진이 부족할 수 있습니다."
-      : "현재 입력 기준으로는 큰 위험 신호는 크지 않습니다.";
+      ? "몇 가지만 조정하면 훨씬 안정적으로 갈 수 있는 상태입니다."
+      : "현재 기준으로는 큰 위험 신호 없이 비교적 안정적인 흐름입니다.";
 
   const bullets = [
     buildCashBullet(args.summary),

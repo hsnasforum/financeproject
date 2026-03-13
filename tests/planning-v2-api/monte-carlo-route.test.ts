@@ -69,6 +69,8 @@ describe("POST /api/planning/v2/monte-carlo", () => {
       data?: {
         baseAssumptionsUsed?: { inflationPct?: number; investReturnPct?: number };
         monteCarlo?: { meta?: { paths?: number; seed?: number } };
+        engineSchemaVersion?: number;
+        engine?: { stage?: string };
       };
     };
 
@@ -79,6 +81,8 @@ describe("POST /api/planning/v2/monte-carlo", () => {
     expect(payload.data?.baseAssumptionsUsed?.investReturnPct).toBe(5);
     expect(payload.data?.monteCarlo?.meta?.paths).toBe(60);
     expect(payload.data?.monteCarlo?.meta?.seed).toBe(1);
+    expect(payload.data?.engineSchemaVersion).toBe(1);
+    expect(payload.data?.engine?.stage).toBeTruthy();
   });
 
   it("injects snapshot and prioritizes override assumptions", async () => {

@@ -32,12 +32,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-let droppedDraftPayloadWarningCount = 0;
-
 function recordDroppedDraftPayloadWarnings(count: number): void {
-  if (count > 0) {
-    droppedDraftPayloadWarningCount += count;
-  }
+  void count;
 }
 
 function ensureServerOnly(): void {

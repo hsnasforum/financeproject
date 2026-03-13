@@ -28,6 +28,7 @@ describe("buildResultDtoV1", () => {
       debt: {
         meta: {
           debtServiceRatio: 0.58,
+          totalMonthlyPaymentKrw: 910_000,
         },
         warnings: [{ code: "HIGH_DEBT_RATIO", message: "DSR 주의" }],
       },
@@ -39,6 +40,9 @@ describe("buildResultDtoV1", () => {
     expect(dto.summary.worstCashMonthIndex).toBe(1);
     expect(dto.summary.dsrPct).toBe(58);
     expect(dto.summary.goalsAchieved).toEqual({ achieved: 1, total: 2 });
+    expect(dto.debt?.dsrPct).toBe(58);
+    expect(dto.debt?.totalMonthlyPaymentKrw).toBe(910_000);
+    expect(dto.debt?.warnings?.[0]).toEqual({ code: "HIGH_DEBT_RATIO", message: "DSR 주의" });
   });
 
   it("always returns aggregated warnings when warnings exist", () => {

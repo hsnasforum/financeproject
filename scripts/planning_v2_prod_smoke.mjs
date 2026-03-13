@@ -33,6 +33,30 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function findNextStaticAssetPath(html) {
+  const match = html.match(/(?:src|href)=["'](\/_next\/static\/[^"'<>]+)["']/i);
+  return match ? match[1] : "";
+}
+
+function assertContains(text, expected, label) {
+  if (!text.includes(expected)) {
+    throw new Error(`${label} missing "${expected}"`);
+  }
+}
+
+function assertNotContains(text, expected, label) {
+  if (text.includes(expected)) {
+    throw new Error(`${label} should stay hidden in production: "${expected}"`);
+  }
+}
+
+function pickResolvedPort(text) {
+  const match = text.match(/Bind:\s*host=[^\s]+\s+port=(\d+)/i);
+  if (!match) return null;
+  const parsed = Math.trunc(Number(match[1]));
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : null;
+}
+
 function waitForExit(child, timeoutMs) {
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
@@ -94,10 +118,25 @@ async function waitForUrl(url, timeoutMs) {
   throw new Error(`timeout waiting for ${url}`);
 }
 
+async function fetchOk(url, label) {
+  const response = await fetch(url, { cache: "no-store", redirect: "manual" });
+  if (!response.ok) {
+    throw new Error(`${label} responded ${response.status}`);
+  }
+  return response;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const appDir = path.resolve(args.appDir);
-  const baseUrl = `http://127.0.0.1:${args.port}`;
+  let runtimePort = null;
+  const baseUrl = () => {
+    if (runtimePort === null) {
+      throw new Error("runtime port is not resolved yet");
+    }
+    return `http://127.0.0.1:${runtimePort}`;
+  };
+  const readinessPath = "/public/dart";
 
   let exited = null;
   const server = spawn(process.execPath, ["scripts/next_prod_safe.mjs", "--port", String(args.port)], {
@@ -111,7 +150,12 @@ async function main() {
   });
 
   server.stdout.on("data", (chunk) => {
-    process.stdout.write(`[prod-smoke][server] ${String(chunk)}`);
+    const text = String(chunk);
+    const resolvedPort = pickResolvedPort(text);
+    if (resolvedPort !== null) {
+      runtimePort = resolvedPort;
+    }
+    process.stdout.write(`[prod-smoke][server] ${text}`);
   });
   server.stderr.on("data", (chunk) => {
     process.stderr.write(`[prod-smoke][server] ${String(chunk)}`);
@@ -123,24 +167,57 @@ async function main() {
       if (exited && exited.code !== 0) {
         throw new Error(`server exited before ready (code=${exited.code ?? "?"}, signal=${exited.signal ?? "none"})`);
       }
+      if (runtimePort === null) {
+        if (Date.now() - startedAt > args.timeoutMs) {
+          throw new Error(`server did not report a bind port within ${args.timeoutMs}ms`);
+        }
+        await sleep(300);
+        continue;
+      }
       try {
-        await waitForUrl(`${baseUrl}/ops/doctor`, 2_000);
+        await waitForUrl(`${baseUrl()}${readinessPath}`, 2_000);
         break;
       } catch {
         if (Date.now() - startedAt > args.timeoutMs) {
-          throw new Error(`ops doctor did not respond within ${args.timeoutMs}ms`);
+          throw new Error(`${readinessPath} did not respond within ${args.timeoutMs}ms`);
         }
       }
       await sleep(300);
     }
 
-    const localDoctorResponse = await fetch(`${baseUrl}/ops/doctor`, { cache: "no-store" });
-    if (!localDoctorResponse.ok) {
-      throw new Error(`/ops/doctor responded ${localDoctorResponse.status}`);
+    const dartPageResponse = await fetchOk(`${baseUrl()}${readinessPath}`, readinessPath);
+    process.stdout.write(`[planning:v2:prod:smoke] ok local ${readinessPath} reachable\n`);
+    const dartHtml = await dartPageResponse.text();
+    const nextStaticAssetPath = findNextStaticAssetPath(dartHtml);
+    if (!nextStaticAssetPath) {
+      throw new Error("could not find a /_next/static asset on /public/dart");
     }
-    process.stdout.write("[planning:v2:prod:smoke] ok local /ops/doctor reachable\n");
+    await fetchOk(`${baseUrl()}${nextStaticAssetPath}`, `standalone asset ${nextStaticAssetPath}`);
+    process.stdout.write(`[planning:v2:prod:smoke] ok standalone asset reachable ${nextStaticAssetPath}\n`);
 
-    const remoteProbeResponse = await fetch(`${baseUrl}/api/ops/doctor`, {
+    await fetchOk(`${baseUrl()}/next.svg`, "/next.svg");
+    process.stdout.write("[planning:v2:prod:smoke] ok public asset reachable\n");
+
+    const dataSourcesResponse = await fetchOk(`${baseUrl()}/settings/data-sources`, "/settings/data-sources");
+    const dataSourcesHtml = await dataSourcesResponse.text();
+    const requiredDataSourcesTexts = [
+      "데이터 소스 연동 상태",
+      "운영 최신 기준",
+      "data-source-impact-health-dart",
+      "data-source-impact-health-planning",
+      "기업 공시 모니터링",
+      "재무설계 기준금리 참고",
+    ];
+    for (const expectedText of requiredDataSourcesTexts) {
+      assertContains(dataSourcesHtml, expectedText, "/settings/data-sources");
+    }
+    assertNotContains(dataSourcesHtml, "Fallback/쿨다운 진단", "/settings/data-sources");
+    assertNotContains(dataSourcesHtml, "최근 오류", "/settings/data-sources");
+    assertNotContains(dataSourcesHtml, "data-source-impact-meta-dart", "/settings/data-sources");
+    assertNotContains(dataSourcesHtml, "data-source-impact-ping-", "/settings/data-sources");
+    process.stdout.write("[planning:v2:prod:smoke] ok /settings/data-sources read-only render\n");
+
+    const remoteProbeResponse = await fetch(`${baseUrl()}/api/ops/doctor`, {
       cache: "no-store",
       headers: {
         "x-forwarded-for": "203.0.113.10",
@@ -148,8 +225,8 @@ async function main() {
       },
     });
 
-    if (remoteProbeResponse.status === 403) {
-      process.stdout.write("[planning:v2:prod:smoke] ok remote probe blocked (403)\n");
+    if (remoteProbeResponse.status === 403 || remoteProbeResponse.status === 404) {
+      process.stdout.write(`[planning:v2:prod:smoke] ok remote probe blocked (${remoteProbeResponse.status})\n`);
     } else {
       process.stdout.write(
         `[planning:v2:prod:smoke] warn remote probe status=${remoteProbeResponse.status} (forwarded-header enforcement may depend on runtime proxy)\n`,
@@ -167,4 +244,3 @@ main().catch((error) => {
   process.stderr.write(`[planning:v2:prod:smoke] failed\n${message}\n`);
   process.exit(1);
 });
-

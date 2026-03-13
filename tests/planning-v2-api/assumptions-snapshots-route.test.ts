@@ -63,7 +63,10 @@ describe("GET /api/planning/v2/assumptions/snapshots", () => {
           version: 1,
           asOf: "2026-03-14",
           fetchedAt: "2026-03-14T09:00:00.000Z",
-          korea: {},
+          korea: {
+            policyRatePct: 2.75,
+            cpiYoYPct: 2.1,
+          },
           sources: [{ name: "src", url: "https://example.com", fetchedAt: "2026-03-14T09:00:00.000Z" }],
           warnings: [],
         };
@@ -73,7 +76,9 @@ describe("GET /api/planning/v2/assumptions/snapshots", () => {
           version: 1,
           asOf: "2026-02-10",
           fetchedAt: "2026-02-10T09:00:00.000Z",
-          korea: {},
+          korea: {
+            newDepositAvgPct: 3.05,
+          },
           sources: [{ name: "src", url: "https://example.com", fetchedAt: "2026-02-10T09:00:00.000Z" }],
           warnings: ["STALE_RATE"],
         };
@@ -84,7 +89,10 @@ describe("GET /api/planning/v2/assumptions/snapshots", () => {
       version: 1,
       asOf: "2026-03-14",
       fetchedAt: "2026-03-14T09:00:00.000Z",
-      korea: {},
+      korea: {
+        policyRatePct: 2.75,
+        cpiYoYPct: 2.1,
+      },
       sources: [
         { name: "s1", url: "https://example.com/1", fetchedAt: "2026-03-14T09:00:00.000Z" },
         { name: "s2", url: "https://example.com/2", fetchedAt: "2026-03-14T09:00:00.000Z" },
@@ -102,8 +110,19 @@ describe("GET /api/planning/v2/assumptions/snapshots", () => {
           staleDays?: number;
           warningsCount?: number;
           sourcesCount?: number;
+          korea?: {
+            policyRatePct?: number;
+            cpiYoYPct?: number;
+          };
         };
-        items?: Array<{ id?: string; staleDays?: number }>;
+        items?: Array<{
+          id?: string;
+          staleDays?: number;
+          warningsCount?: number;
+          korea?: {
+            newDepositAvgPct?: number;
+          };
+        }>;
       };
     };
 
@@ -112,9 +131,14 @@ describe("GET /api/planning/v2/assumptions/snapshots", () => {
     expect(payload.data?.latest?.id).toBe("snap-new");
     expect(payload.data?.latest?.warningsCount).toBe(1);
     expect(payload.data?.latest?.sourcesCount).toBe(2);
+    expect(payload.data?.latest?.korea?.policyRatePct).toBe(2.75);
+    expect(payload.data?.latest?.korea?.cpiYoYPct).toBe(2.1);
     expect(typeof payload.data?.latest?.staleDays).toBe("number");
     expect((payload.data?.latest?.staleDays ?? -1) >= 0).toBe(true);
     expect(payload.data?.items?.map((item) => item.id)).toEqual(["snap-new", "snap-old"]);
     expect((payload.data?.items ?? []).every((item) => typeof item.staleDays === "number" && item.staleDays >= 0)).toBe(true);
+    expect(payload.data?.items?.[0]?.warningsCount).toBe(0);
+    expect(payload.data?.items?.[1]?.warningsCount).toBe(1);
+    expect(payload.data?.items?.[1]?.korea?.newDepositAvgPct).toBe(3.05);
   });
 });

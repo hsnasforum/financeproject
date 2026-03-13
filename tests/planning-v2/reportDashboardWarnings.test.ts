@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aggregateReportWarningsFromRun } from "../../src/app/planning/reports/_lib/dashboardWarnings";
-import { REASON_CODE_MESSAGES_KO, debtStrategyWarningMessage } from "../../src/lib/planning/core/v2/warningsCatalog.ko";
+import { REASON_CODE_MESSAGES_KO, debtStrategyWarningMessage } from "../../src/lib/planning/v2/warningsCatalog.ko";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 
 function buildRun(input?: Partial<PlanningRunRecord>): PlanningRunRecord {
@@ -33,9 +33,17 @@ describe("aggregateReportWarningsFromRun", () => {
       },
       outputs: {
         simulate: {
+          ref: {
+            name: "simulate",
+            path: ".data/test/report-dashboard-warnings/run-1/simulate.json",
+          },
           warnings: ["NEGATIVE_CASHFLOW", "NEGATIVE_CASHFLOW"],
         },
         debtStrategy: {
+          ref: {
+            name: "debtStrategy",
+            path: ".data/test/report-dashboard-warnings/run-1/debt-strategy.json",
+          },
           warnings: [
             { code: "DSR_HIGH_WARN", message: "raw message ignored" },
           ],
@@ -65,6 +73,10 @@ describe("aggregateReportWarningsFromRun", () => {
     const run = buildRun({
       outputs: {
         simulate: {
+          ref: {
+            name: "simulate",
+            path: ".data/test/report-dashboard-warnings/run-1/simulate.json",
+          },
           warnings: ["UNKNOWN_CUSTOM_WARNING"],
         },
       },
@@ -75,4 +87,3 @@ describe("aggregateReportWarningsFromRun", () => {
     expect(rows[0]?.message).toBe("알 수 없는 경고 (UNKNOWN_CUSTOM_WARNING)");
   });
 });
-

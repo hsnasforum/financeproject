@@ -1,6 +1,7 @@
 import { amortizingMonthlyPayment, monthlyRateFromAprPct, normalizeAprPct } from "./debt/calc";
 import { type ProfileCashflowV2, type ProfileV2, type ProfileV2Debt, type ProfileV2Goal } from "./types";
 import { validateProfileV2 } from "./validate";
+import { roundKrw } from "../calc/roundingPolicy";
 
 export type NormalizeResult = {
   ok: boolean;
@@ -34,7 +35,7 @@ function safeNumber(value: number | undefined, fallback = 0): number {
 }
 
 function roundMoney(value: number): number {
-  return Math.round(value);
+  return roundKrw(value);
 }
 
 function nextId(prefix: string, index: number): string {
@@ -317,6 +318,9 @@ export function normalizeProfileInput(input: unknown): NormalizeResult {
   const canonicalCandidate: ProfileV2 = {
     ...(typeof asNumber(source.currentAge) === "number" ? { currentAge: Math.max(0, Math.trunc(safeNumber(asNumber(source.currentAge), 0))) } : {}),
     ...(typeof asNumber(source.birthYear) === "number" ? { birthYear: Math.max(1900, Math.trunc(safeNumber(asNumber(source.birthYear), 1900))) } : {}),
+    ...(asString(source.gender) ? { gender: asString(source.gender).toUpperCase() as ProfileV2["gender"] } : {}),
+    ...(asString(source.sido) ? { sido: asString(source.sido) } : {}),
+    ...(asString(source.sigungu) ? { sigungu: asString(source.sigungu) } : {}),
     monthlyIncomeNet,
     monthlyEssentialExpenses,
     monthlyDiscretionaryExpenses,

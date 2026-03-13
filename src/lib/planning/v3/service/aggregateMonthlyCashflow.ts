@@ -1,4 +1,5 @@
 import { type Account, type AccountTransaction, type MonthlyCashflow, type TxnOverride } from "../domain/types";
+import { roundKrw } from "../../calc";
 import { applyTxnOverrides } from "./applyOverrides";
 import { classifyTransactions } from "./classify";
 
@@ -87,7 +88,7 @@ export function aggregateMonthlyCashflow(
       unknownOutflowCount: 0,
     };
 
-    const amount = Number.isFinite(tx.amountKrw) ? Math.round(tx.amountKrw) : 0;
+    const amount = Number.isFinite(tx.amountKrw) ? roundKrw(tx.amountKrw) : 0;
     const kind = tx.kind ?? (amount > 0 ? "income" : "expense");
 
     if (kind === "transfer") {
@@ -128,25 +129,25 @@ export function aggregateMonthlyCashflow(
 
       return {
         month: row.month,
-        inflowKrw: Math.round(row.incomeKrw),
-        outflowKrw: Math.round(Math.abs(row.expenseKrw)),
-        netKrw: Math.round(includeTransfers ? netWithTransfers : netWithoutTransfers),
-        fixedOutflowKrw: Math.round(row.fixedOutflowKrw),
-        variableOutflowKrw: Math.round(row.variableOutflowKrw),
-        transferNetKrw: Math.round(transferNetKrw),
-        ...(row.transferInKrw !== 0 ? { transferInKrw: Math.round(row.transferInKrw) } : {}),
-        ...(row.transferOutKrw !== 0 ? { transferOutKrw: Math.round(row.transferOutKrw) } : {}),
+        inflowKrw: roundKrw(row.incomeKrw),
+        outflowKrw: roundKrw(Math.abs(row.expenseKrw)),
+        netKrw: roundKrw(includeTransfers ? netWithTransfers : netWithoutTransfers),
+        fixedOutflowKrw: roundKrw(row.fixedOutflowKrw),
+        variableOutflowKrw: roundKrw(row.variableOutflowKrw),
+        transferNetKrw: roundKrw(transferNetKrw),
+        ...(row.transferInKrw !== 0 ? { transferInKrw: roundKrw(row.transferInKrw) } : {}),
+        ...(row.transferOutKrw !== 0 ? { transferOutKrw: roundKrw(row.transferOutKrw) } : {}),
         totals: {
-          incomeKrw: Math.round(row.incomeKrw),
-          expenseKrw: Math.round(row.expenseKrw),
-          transferInKrw: Math.round(row.transferInKrw),
-          transferOutKrw: Math.round(row.transferOutKrw),
-          netKrw: Math.round(netWithTransfers),
+          incomeKrw: roundKrw(row.incomeKrw),
+          expenseKrw: roundKrw(row.expenseKrw),
+          transferInKrw: roundKrw(row.transferInKrw),
+          transferOutKrw: roundKrw(row.transferOutKrw),
+          netKrw: roundKrw(netWithTransfers),
         },
         ...(includeTransfers ? { includeTransfers: true } : {}),
         ym: row.month,
-        incomeKrw: Math.round(row.incomeKrw),
-        expenseKrw: Math.round(row.expenseKrw),
+        incomeKrw: roundKrw(row.incomeKrw),
+        expenseKrw: roundKrw(row.expenseKrw),
         txCount: row.txCount,
         ...(row.maxDay >= row.minDay ? { daysCovered: (row.maxDay - row.minDay + 1) } : {}),
         ...(notes.length > 0 ? { notes } : {}),

@@ -63,6 +63,18 @@ describe("metricsStore", () => {
     expect(files.filter((name) => name.startsWith("metrics") && name.endsWith(".ndjson")).length).toBeLessThanOrEqual(3);
   });
 
+  it("readRecent only reads rotation files that actually exist", async () => {
+    await fs.mkdir(root, { recursive: true });
+    await fs.writeFile(path.join(root, "metrics.ndjson"), `${JSON.stringify({ at: "2026-03-12T00:00:00.000Z", type: "RUN_STAGE", stage: "simulate" })}\n`, "utf-8");
+    await fs.writeFile(path.join(root, "metrics.2.ndjson"), `${JSON.stringify({ at: "2026-03-11T00:00:00.000Z", type: "RUN_PIPELINE", status: "FAILED" })}\n`, "utf-8");
+
+    const rows = await readRecent({ limit: 10 });
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.at).toBe("2026-03-12T00:00:00.000Z");
+    expect(rows[1]?.at).toBe("2026-03-11T00:00:00.000Z");
+  });
+
   it("does not write obvious secret patterns", async () => {
     await appendEvent({
       type: "ASSUMPTIONS_REFRESH",

@@ -110,7 +110,37 @@ describe("GET /api/planning/v2/runs/[id]/report", () => {
     expect(html).toContain("Executive Summary");
     expect(html).toContain("10초 판정");
     expect(html).toContain("Warnings");
-    expect(html).toContain("Action Plan");
+    expect(html).toContain("Top Actions");
     expect(html).not.toContain(".data");
+  });
+
+  it("supports strict contract mode for canonical runs", async () => {
+    const createProfileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "strict report profile",
+      profile: profileFixture(),
+    }));
+    const createProfilePayload = await createProfileResponse.json() as { data?: { id?: string } };
+    const profileId = String(createProfilePayload.data?.id ?? "");
+    expect(profileId).toBeTruthy();
+
+    const runCreateResponse = await runsPOST(buildJsonRequest("POST", "/api/planning/v2/runs", {
+      profileId,
+      title: "strict report run",
+      input: {
+        horizonMonths: 24,
+        includeProducts: false,
+      },
+    }));
+    const runCreatePayload = await runCreateResponse.json() as { data?: { id?: string } };
+    const runId = String(runCreatePayload.data?.id ?? "");
+    expect(runId).toBeTruthy();
+
+    const response = await runReportGET(
+      buildGetRequest(`/api/planning/v2/runs/${runId}/report?contract=strict`),
+      { params: Promise.resolve({ id: runId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
   });
 });

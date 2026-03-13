@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   TransactionStoreInputError,
   updateBatchAccount,
@@ -26,7 +24,6 @@ function asString(value: unknown): string {
 
 function withWriteGuard(request: Request, body: Body): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -50,9 +47,6 @@ function isInvalidIdError(error: unknown): boolean {
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: Body = null;
   try {
     body = (await request.json()) as Body;

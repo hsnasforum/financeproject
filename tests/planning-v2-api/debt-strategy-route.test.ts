@@ -66,6 +66,10 @@ describe("POST /api/planning/v2/debt-strategy", () => {
     expect(payload.ok).toBe(true);
     expect(payload.data?.engine?.stage).toBeTruthy();
     expect(payload.data?.engineSchemaVersion).toBe(1);
+    const data = payload.data as Record<string, unknown> | undefined;
+    expect(data?.stage).toBeUndefined();
+    expect(data?.financialStatus).toBeUndefined();
+    expect(data?.stageDecision).toBeUndefined();
     expect(payload.data?.meta?.debtServiceRatio).toBeGreaterThan(0);
     expect(payload.data?.meta?.totalMonthlyPaymentKrw).toBeGreaterThan(0);
     expect((payload.data?.summaries ?? []).length).toBe(1);

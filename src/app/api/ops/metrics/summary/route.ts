@@ -8,6 +8,7 @@ import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { summarize } from "@/lib/ops/metrics/metricsStore";
 import { getPlanningFallbackUsageSnapshot } from "@/lib/planning/engine";
+import { summarizeLegacyRunBackfill } from "@/lib/planning/store/runStore";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -52,9 +53,10 @@ export async function GET(request: Request) {
   const rangeHours = parseRange(searchParams.get("range"));
 
   try {
-    const [last24h, last7d] = await Promise.all([
+    const [last24h, last7d, legacyRunBackfill] = await Promise.all([
       summarize({ rangeHours: 24 }),
       summarize({ rangeHours: 168 }),
+      summarizeLegacyRunBackfill(),
     ]);
     const fallbackSnapshot = getPlanningFallbackUsageSnapshot();
     const planningFallbacks = {
@@ -62,6 +64,8 @@ export async function GET(request: Request) {
       reportContractFallbackCount: fallbackSnapshot.legacyReportContractFallbackCount,
       runEngineMigrationCount: fallbackSnapshot.legacyRunEngineMigrationCount,
       ...(fallbackSnapshot.lastEventAt ? { lastEventAt: fallbackSnapshot.lastEventAt } : {}),
+      ...(fallbackSnapshot.sourceBreakdown ? { sourceBreakdown: fallbackSnapshot.sourceBreakdown } : {}),
+      ...(fallbackSnapshot.recentEvents?.length ? { recentEvents: fallbackSnapshot.recentEvents } : {}),
     };
     const requested = rangeHours === 168 ? last7d : last24h;
 
@@ -72,6 +76,7 @@ export async function GET(request: Request) {
         last24h,
         last7d,
         planningFallbacks,
+        legacyRunBackfill,
       },
       meta: {
         range: rangeHours === 168 ? "7d" : "24h",

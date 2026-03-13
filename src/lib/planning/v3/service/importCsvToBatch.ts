@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { type ImportBatchMeta, type StoredTransaction } from "../domain/transactions";
+import { roundKrw } from "../../calc/roundingPolicy";
 import { parseCsvTransactions } from "../providers/csv/csvProvider";
 import { detectEncodingIssue, normalizeNewlines, parseCsvText, stripUtf8Bom } from "../providers/csv/csvParse";
 import { inferCsvMapping } from "../providers/csv/inferMapping";
@@ -128,7 +129,7 @@ function buildDeterministicTxnId(input: {
 }): string {
   const descNorm = normalizeDescriptionForTxnId(input.description);
   const accountId = asString(input.accountId);
-  const canonical = `${input.batchId}|${input.dateIso}|${Math.round(input.amountKrw)}|${descNorm}|${accountId}|KRW`;
+  const canonical = `${input.batchId}|${input.dateIso}|${roundKrw(input.amountKrw)}|${descNorm}|${accountId}|KRW`;
   return sha256(canonical).slice(0, 16);
 }
 

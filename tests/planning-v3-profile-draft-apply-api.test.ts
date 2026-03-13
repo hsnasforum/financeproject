@@ -11,18 +11,42 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4120";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const REMOTE_HOST = "example.com";
+const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+const EVIL_ORIGIN = "http://evil.com";
 
-function requestPost(pathname: string, body: unknown): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestPost(
+  pathname: string,
+  body: unknown,
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}${pathname}`, {
     method: "POST",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/profile/drafts`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/profile/drafts`,
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   });
+}
+
+async function expectOriginMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
 }
 
 function writeDraft(root: string, id: string, patch: Record<string, unknown>) {
@@ -188,5 +212,46 @@ describe("POST /api/planning/v3/profile/drafts/[id]/apply", () => {
     expect(baseAfter?.profile.monthlyIncomeNet).toBe(2_000_000);
     expect(baseAfter?.profile.monthlyEssentialExpenses).toBe(1_000_000);
     expect(baseAfter?.profile.monthlyDiscretionaryExpenses).toBe(300_000);
+  });
+
+  it("allows same-origin remote host and still blocks cross-origin", async () => {
+    const draftId = "d_apply_remote_host";
+    writeDraft(root, draftId, {
+      monthlyIncomeNet: 3_000_000,
+      monthlyEssentialExpenses: 1_200_000,
+      monthlyDiscretionaryExpenses: 450_000,
+      assumptions: ["remote host"],
+      monthsConsidered: 3,
+    });
+
+    const sameOrigin = await applyPOST(
+      requestPost(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}/apply`,
+        { csrf: "test" },
+        { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    );
+    expect(sameOrigin.status).toBe(200);
+    const sameOriginPayload = await sameOrigin.json() as {
+      ok?: boolean;
+      data?: { profileId?: string };
+    };
+    expect(sameOriginPayload.ok).toBe(true);
+    expect(typeof sameOriginPayload.data?.profileId).toBe("string");
+
+    await expectOriginMismatch(applyPOST(
+      requestPost(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}/apply`,
+        { csrf: "test" },
+        {
+          requestOrigin: REMOTE_ORIGIN,
+          host: REMOTE_HOST,
+          origin: EVIL_ORIGIN,
+          refererOrigin: EVIL_ORIGIN,
+        },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    ));
   });
 });

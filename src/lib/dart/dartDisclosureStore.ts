@@ -12,10 +12,15 @@ export type DisclosureMonitorSettings = {
   pageCount: number;
 };
 
+export type DisclosureMonitorView = {
+  focusMode: "all" | "pending" | "unchecked";
+};
+
 export type DisclosureMonitorState = {
   seenReceiptNos: Record<string, string[]>;
   lastCheckedAt: Record<string, string>;
   settings: DisclosureMonitorSettings;
+  view: DisclosureMonitorView;
 };
 
 export type DisclosureLikeItem = {
@@ -58,6 +63,12 @@ function defaultSettings(): DisclosureMonitorSettings {
   };
 }
 
+function defaultView(): DisclosureMonitorView {
+  return {
+    focusMode: "all",
+  };
+}
+
 function safeSettings(input: unknown): DisclosureMonitorSettings {
   if (!input || typeof input !== "object") return defaultSettings();
   const value = input as Record<string, unknown>;
@@ -76,11 +87,24 @@ function safeSettings(input: unknown): DisclosureMonitorSettings {
   };
 }
 
+function safeView(input: unknown): DisclosureMonitorView {
+  if (!input || typeof input !== "object") return defaultView();
+  const value = input as Record<string, unknown>;
+  const focusMode = value.focusMode;
+  if (focusMode === "pending" || focusMode === "unchecked" || focusMode === "all") {
+    return { focusMode };
+  }
+  return {
+    focusMode: value.showPendingOnly === true ? "pending" : "all",
+  };
+}
+
 function emptyState(): DisclosureMonitorState {
   return {
     seenReceiptNos: {},
     lastCheckedAt: {},
     settings: defaultSettings(),
+    view: defaultView(),
   };
 }
 
@@ -125,6 +149,7 @@ function parseState(raw: string | null): DisclosureMonitorState {
       seenReceiptNos,
       lastCheckedAt,
       settings: safeSettings(value.settings),
+      view: safeView(value.view),
     };
   } catch {
     return emptyState();
@@ -183,6 +208,10 @@ export function getDisclosureSettings(storage?: StorageLike): DisclosureMonitorS
   return readState(storage).settings;
 }
 
+export function getDisclosureMonitorView(storage?: StorageLike): DisclosureMonitorView {
+  return readState(storage).view;
+}
+
 export function setDisclosureSettings(
   patch: Partial<DisclosureMonitorSettings>,
   storage?: StorageLike,
@@ -197,6 +226,22 @@ export function setDisclosureSettings(
     settings: nextSettings,
   }, storage);
   return nextSettings;
+}
+
+export function setDisclosureMonitorView(
+  patch: Partial<DisclosureMonitorView>,
+  storage?: StorageLike,
+): DisclosureMonitorView {
+  const state = readState(storage);
+  const nextView = safeView({
+    ...state.view,
+    ...patch,
+  });
+  writeState({
+    ...state,
+    view: nextView,
+  }, storage);
+  return nextView;
 }
 
 export function diffNew<T extends DisclosureLikeItem>(

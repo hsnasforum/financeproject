@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -384,7 +385,13 @@ export function LabelingClient() {
           </label>
         </div>
 
-        {error ? <p className="mt-3 text-sm font-semibold text-rose-600">{error}</p> : null}
+        {error ? (
+          <DevUnlockShortcutMessage
+            className="mt-3 text-sm font-semibold text-rose-600"
+            linkClassName="text-rose-600"
+            message={error}
+          />
+        ) : null}
         {notice ? <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p> : null}
       </Card>
 

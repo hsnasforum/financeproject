@@ -1,22 +1,24 @@
 import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import { getCache, recordCacheUsage, setCache } from "../../../../../lib/planning/server/cache/storage";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
+import {
+  buildEnginePayloadFromProfile,
+  resolveAssumptionsContextForProfile,
+  type PlanningAssumptionsContext,
+} from "../../../../../lib/planning/server/v2/toEngineInput";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
 import { type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import { createEngineEnvelope, runPlanningEngine } from "../../../../../lib/planning/engine";
 
 type SimulateRequestBody = {
   profile?: unknown;
@@ -29,7 +31,6 @@ type SimulateRequestBody = {
 
 const SIMULATE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const planningService = createPlanningService();
-type AssumptionsContext = Awaited<ReturnType<typeof planningService.resolveAssumptionsContext>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -90,9 +91,8 @@ function hasCsrfCookie(request: Request): boolean {
   return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -110,24 +110,7 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   }
 }
 
-function toEngineInput(profile: ProfileV2) {
-  const debtBalance = profile.debts.reduce((total, debt) => {
-    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
-  }, 0);
-
-  return {
-    monthlyIncome: profile.monthlyIncomeNet,
-    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
-    age: profile.currentAge,
-    liquidAssets: profile.liquidAssets,
-    debtBalance,
-  };
-}
-
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: SimulateRequestBody = null;
   try {
     body = (await request.json()) as SimulateRequestBody;
@@ -138,7 +121,7 @@ export async function POST(request: Request) {
   if (!isRecord(body)) {
     return fail("INPUT");
   }
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   let profile: ProfileV2;
@@ -163,36 +146,37 @@ export async function POST(request: Request) {
     return fail("INPUT");
   }
 
-  let finalAssumptions: AssumptionsContext["simulationAssumptions"];
-  let baseAssumptions: AssumptionsContext["assumptions"];
-  let snapshotMeta: AssumptionsContext["snapshotMeta"];
+  let finalAssumptions: PlanningAssumptionsContext["simulationAssumptions"];
+  let baseAssumptions: PlanningAssumptionsContext["assumptions"];
+  let snapshotMeta: PlanningAssumptionsContext["snapshotMeta"];
   let snapshotId: string | undefined;
-  let health: AssumptionsContext["health"];
-  let scenarioOverrideForCache: AssumptionsContext["scenarioOverrideForCache"];
-  let taxPensionExplain: AssumptionsContext["taxPensionExplain"];
-  try {
-    const context = await planningService.resolveAssumptionsContext({
+  let health: PlanningAssumptionsContext["health"];
+  let scenarioOverrideForCache: PlanningAssumptionsContext["scenarioOverrideForCache"];
+  let taxPensionExplain: PlanningAssumptionsContext["taxPensionExplain"];
+  {
+    const resolvedContext = await resolveAssumptionsContextForProfile({
+      planningService,
       profile,
       riskTolerance,
       assumptionsOverridesRaw: assumptionsOverrides,
       requestedSnapshotId,
     });
-    finalAssumptions = context.simulationAssumptions;
-    baseAssumptions = context.assumptions;
-    snapshotMeta = context.snapshotMeta;
-    snapshotId = context.snapshotId;
-    health = context.health;
-    scenarioOverrideForCache = context.scenarioOverrideForCache;
-    taxPensionExplain = context.taxPensionExplain;
-  } catch (error) {
-    const normalized = toPlanningError(error);
-    if (normalized.code === "SNAPSHOT_NOT_FOUND") {
-      return fail("SNAPSHOT_NOT_FOUND", "snapshotId를 찾을 수 없습니다. latest 또는 /ops/assumptions 목록에서 선택하세요.", {
-        status: 400,
-        ...(requestedSnapshotId ? { issues: [`snapshotId: '${requestedSnapshotId}' not found`] } : {}),
-      });
+    if (!resolvedContext.ok) {
+      if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+        return fail("SNAPSHOT_NOT_FOUND", "snapshotId를 찾을 수 없습니다. latest 또는 /ops/assumptions 목록에서 선택하세요.", {
+          status: resolvedContext.error.status,
+          ...(requestedSnapshotId ? { issues: [`snapshotId: '${requestedSnapshotId}' not found`] } : {}),
+        });
+      }
+      return fail(resolvedContext.error.code, resolvedContext.error.message);
     }
-    return fail(normalized.code, normalized.message);
+    finalAssumptions = resolvedContext.context.simulationAssumptions;
+    baseAssumptions = resolvedContext.context.assumptions;
+    snapshotMeta = resolvedContext.context.snapshotMeta;
+    snapshotId = resolvedContext.context.snapshotId;
+    health = resolvedContext.context.health;
+    scenarioOverrideForCache = resolvedContext.context.scenarioOverrideForCache;
+    taxPensionExplain = resolvedContext.context.taxPensionExplain;
   }
 
   const keyBundle = buildCacheKey({
@@ -221,19 +205,9 @@ export async function POST(request: Request) {
     }>("simulate", keyBundle.key);
     if (cached) {
       await recordCacheUsage("simulate", true).catch(() => undefined);
-      const cachedEngineResult = runPlanningEngine(toEngineInput(profile));
-      const engine = createEngineEnvelope({
-        status: cachedEngineResult.status,
-        decision: cachedEngineResult.decision,
-      });
+      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
       return ok(
-        {
-          ...cached.data.data,
-          engine,
-          stage: engine.stage,
-          financialStatus: engine.financialStatus,
-          stageDecision: engine.stageDecision,
-        },
+        data,
         {
           ...cached.data.meta,
           cache: {
@@ -245,24 +219,19 @@ export async function POST(request: Request) {
     }
     await recordCacheUsage("simulate", false).catch(() => undefined);
 
-    const engineResult = runPlanningEngine(toEngineInput(profile), {
-      runCore: () => planningService.simulate(profile, finalAssumptions, horizonMonths, { policyId }),
-    });
-    const result = engineResult.core;
-    const engine = createEngineEnvelope({
-      status: engineResult.status,
-      decision: engineResult.decision,
-    });
-    const payload = {
-      data: {
-        ...result,
-        engine,
-        stage: engine.stage,
-        financialStatus: engine.financialStatus,
-        stageDecision: engine.stageDecision,
+    const { data } = buildEnginePayloadFromProfile(
+      profile,
+      (engineResult) => ({
+        ...engineResult.core,
         healthWarnings: health.warnings,
         precisionNotes: taxPensionExplain.notes,
+      }),
+      {
+        runCore: () => planningService.simulate(profile, finalAssumptions, horizonMonths, { policyId }),
       },
+    );
+    const payload = {
+      data,
       meta: {
         generatedAt: new Date().toISOString(),
         snapshot: snapshotMeta,

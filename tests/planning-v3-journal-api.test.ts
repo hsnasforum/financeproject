@@ -14,22 +14,28 @@ const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 
 let root = "";
 
-function requestGet(pathname: string, host = LOCAL_HOST): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = false): Request {
+  const origin = `http://${host}`;
+  const headers = new Headers({ host });
+  if (withOriginHeaders) {
+    headers.set("origin", origin);
+    headers.set("referer", `${origin}/planning/v3/journal`);
+  }
+  return new Request(`${origin}${pathname}`, {
     method: "GET",
-    headers: { host },
+    headers,
   });
 }
 
-function requestPost(pathname: string, body: unknown, withAuth = true): Request {
+function requestPost(pathname: string, body: unknown, cookie = "dev_csrf=csrf-token"): Request {
   const headers = new Headers({
     host: LOCAL_HOST,
     origin: LOCAL_ORIGIN,
     referer: `${LOCAL_ORIGIN}/planning/v3/journal`,
     "content-type": "application/json",
   });
-  if (withAuth) {
-    headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
+  if (cookie) {
+    headers.set("cookie", cookie);
   }
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {
     method: "POST",
@@ -38,15 +44,15 @@ function requestPost(pathname: string, body: unknown, withAuth = true): Request 
   });
 }
 
-function requestPut(pathname: string, body: unknown, withAuth = true): Request {
+function requestPut(pathname: string, body: unknown, cookie = "dev_csrf=csrf-token"): Request {
   const headers = new Headers({
     host: LOCAL_HOST,
     origin: LOCAL_ORIGIN,
     referer: `${LOCAL_ORIGIN}/planning/v3/journal`,
     "content-type": "application/json",
   });
-  if (withAuth) {
-    headers.set("cookie", "dev_action=1; dev_csrf=csrf-token");
+  if (cookie) {
+    headers.set("cookie", cookie);
   }
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {
     method: "PUT",
@@ -72,24 +78,25 @@ describe("planning v3 journal api", () => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("blocks non-local host for GET", async () => {
-    const response = await listGET(requestGet("/api/planning/v3/journal/entries", "example.com"));
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+  it("allows same-origin remote host GET", async () => {
+    const response = await listGET(requestGet("/api/planning/v3/journal/entries", "example.com", true));
+    const payload = await response.json() as { ok?: boolean; entries?: unknown[] };
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.entries).toEqual([]);
   });
 
-  it("requires csrf/auth for POST", async () => {
+  it("blocks csrf mismatch for POST when dev csrf cookie exists", async () => {
     const response = await listPOST(requestPost("/api/planning/v3/journal/entries", {
+      csrf: "csrf-body",
       entry: {
         date: "2026-03-04",
       },
-    }, false));
+    }, "dev_csrf=csrf-cookie"));
     const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
     expect(response.status).toBe(403);
     expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("UNAUTHORIZED");
+    expect(payload.error?.code).toBe("CSRF_MISMATCH");
   });
 
   it("stores and updates impact snapshot links", async () => {
@@ -127,7 +134,7 @@ describe("planning v3 journal api", () => {
     const entryId = createPayload.entry?.id;
     expect(typeof entryId).toBe("string");
 
-    const list = await listGET(requestGet("/api/planning/v3/journal/entries"));
+    const list = await listGET(requestGet("/api/planning/v3/journal/entries", LOCAL_HOST, true));
     const listPayload = await list.json() as {
       ok?: boolean;
       entries?: Array<{ linkedScenarioIds?: string[]; watchSeriesIds?: string[]; impactSnapshot?: unknown[] }>;
@@ -138,7 +145,7 @@ describe("planning v3 journal api", () => {
     expect(listPayload.entries?.[0]?.watchSeriesIds).toContain("kr_base_rate");
     expect(listPayload.entries?.[0]?.impactSnapshot?.length).toBe(1);
 
-    const getOne = await itemGET(requestGet(`/api/planning/v3/journal/entries/${entryId}`), {
+    const getOne = await itemGET(requestGet(`/api/planning/v3/journal/entries/${entryId}`, LOCAL_HOST, true), {
       params: Promise.resolve({ id: String(entryId) }),
     });
     const getOnePayload = await getOne.json() as { ok?: boolean; entry?: { linkedScenarioIds?: string[] } };

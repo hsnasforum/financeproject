@@ -14,18 +14,41 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4600";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const REMOTE_HOST = "example.com";
+const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+const EVIL_ORIGIN = "http://evil.com";
 
-function requestJson(body: unknown): Request {
-  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/draft/profile`, {
+function requestJson(
+  body: unknown,
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}/api/planning/v3/draft/profile`, {
     method: "POST",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/drafts/profile`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/drafts/profile`,
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   });
+}
+
+async function expectOriginMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
 }
 
 describe("POST /api/planning/v3/draft/profile", () => {
@@ -208,5 +231,56 @@ describe("POST /api/planning/v3/draft/profile", () => {
 
     expect(includedPayload.patch?.monthlyIncomeNet).toBe(overriddenPayload.patch?.monthlyIncomeNet);
     expect(includedPayload.patch?.monthlyEssentialExpenses).toBe(overriddenPayload.patch?.monthlyEssentialExpenses);
+  });
+
+  it("allows same-origin remote host and still blocks cross-origin", async () => {
+    const batch = await appendBatchFromCsv({
+      accountId,
+      csvText: [
+        "date,amount,description",
+        "2026-01-01,2100000,급여",
+        "2026-01-02,-500000,월세",
+        "2026-02-01,2200000,급여",
+        "2026-02-02,-510000,월세",
+        "2026-03-01,2300000,급여",
+        "2026-03-02,-520000,월세",
+      ].join("\n"),
+      mapping: {
+        dateKey: "date",
+        amountKey: "amount",
+        descKey: "description",
+      },
+      fileName: "remote-host.csv",
+    });
+
+    const sameOrigin = await draftProfilePOST(requestJson(
+      {
+        csrf: "test",
+        source: "csv",
+        batchId: batch.batch.id,
+      },
+      { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+    ));
+    expect(sameOrigin.status).toBe(200);
+    const sameOriginPayload = await sameOrigin.json() as {
+      ok?: boolean;
+      batchId?: string;
+    };
+    expect(sameOriginPayload.ok).toBe(true);
+    expect(sameOriginPayload.batchId).toBe(batch.batch.id);
+
+    await expectOriginMismatch(draftProfilePOST(requestJson(
+      {
+        csrf: "test",
+        source: "csv",
+        batchId: batch.batch.id,
+      },
+      {
+        requestOrigin: REMOTE_ORIGIN,
+        host: REMOTE_HOST,
+        origin: EVIL_ORIGIN,
+        refererOrigin: EVIL_ORIGIN,
+      },
+    )));
   });
 });

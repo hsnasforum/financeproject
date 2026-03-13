@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 import { resolveClientApiError } from "@/lib/http/clientApiError";
@@ -76,6 +77,7 @@ export function OpsPlanningFeedbackClient() {
   const [selectedId, setSelectedId] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState("");
   const [triageStatus, setTriageStatus] = useState<PlanningFeedbackStatus>("new");
   const [triagePriority, setTriagePriority] = useState<PlanningFeedbackPriority>("p2");
   const [triageTags, setTriageTags] = useState("");
@@ -87,7 +89,7 @@ export function OpsPlanningFeedbackClient() {
     setCsrf(readDevCsrfToken());
   }, []);
 
-  async function loadList(currentCsrf: string): Promise<void> {
+  const loadList = useCallback(async (currentCsrf: string): Promise<void> => {
     setLoading(true);
     setError("");
     try {
@@ -107,12 +109,12 @@ export function OpsPlanningFeedbackClient() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedId]);
 
   useEffect(() => {
     if (!csrf) return;
     void loadList(csrf);
-  }, [csrf]);
+  }, [csrf, loadList]);
 
   const filteredRows = useMemo(() => rows.filter((row) => {
     if (statusFilter !== "all" && row.triage.status !== statusFilter) return false;
@@ -130,6 +132,10 @@ export function OpsPlanningFeedbackClient() {
     () => filteredRows.find((row) => row.id === selectedId) ?? filteredRows[0] ?? null,
     [filteredRows, selectedId],
   );
+  const confirmDeleteTarget = useMemo(
+    () => rows.find((row) => row.id === confirmDeleteId) ?? null,
+    [confirmDeleteId, rows],
+  );
 
   useEffect(() => {
     if (!selected) return;
@@ -139,7 +145,7 @@ export function OpsPlanningFeedbackClient() {
     setTriageTags((selected.triage.tags ?? []).join(", "));
     setTriageDue(selected.triage.due ?? "");
     setIssueConfirmText("");
-  }, [selected?.id]);
+  }, [selected]);
 
   async function refreshAndSelect(id?: string): Promise<void> {
     if (!csrf) return;
@@ -179,16 +185,18 @@ export function OpsPlanningFeedbackClient() {
     }
   }
 
-  async function deleteSelected(): Promise<void> {
+  function requestDeleteSelected(): void {
     if (!selected || !csrf) return;
-    const ok = window.confirm(`피드백 ${selected.id}를 삭제할까요?`);
-    if (!ok) return;
+    setConfirmDeleteId(selected.id);
+  }
 
+  async function deleteSelected(feedbackId: string): Promise<void> {
+    if (!feedbackId || !csrf) return;
     setDeleting(true);
     setError("");
     setNotice("");
     try {
-      const response = await fetch(`/api/ops/feedback/planning/${encodeURIComponent(selected.id)}`, {
+      const response = await fetch(`/api/ops/feedback/planning/${encodeURIComponent(feedbackId)}`, {
         method: "DELETE",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(withDevCsrf({})),
@@ -201,6 +209,7 @@ export function OpsPlanningFeedbackClient() {
       setNotice("삭제 완료");
       setSelectedId("");
       await refreshAndSelect();
+      setConfirmDeleteId("");
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "삭제에 실패했습니다.");
     } finally {
@@ -283,12 +292,22 @@ export function OpsPlanningFeedbackClient() {
 
       {!csrf ? (
         <Card className="mb-6 border border-amber-200 bg-amber-50 text-sm text-amber-800">
-          Dev unlock/CSRF 토큰이 없어 목록 조회/수정이 차단됩니다. 먼저 Dev unlock을 완료하세요.
+          <DevUnlockShortcutMessage
+            className="font-semibold"
+            linkClassName="text-amber-800"
+            message="Dev unlock/CSRF 토큰이 없어 목록 조회/수정이 차단됩니다. 먼저 Dev unlock을 완료하세요."
+          />
         </Card>
       ) : null}
 
       {notice ? <p className="mb-3 text-sm font-semibold text-emerald-700">{notice}</p> : null}
-      {error ? <p className="mb-3 text-sm font-semibold text-rose-700">{error}</p> : null}
+      {error ? (
+        <DevUnlockShortcutMessage
+          className="mb-3 text-sm font-semibold text-rose-700"
+          linkClassName="text-rose-700"
+          message={error}
+        />
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -418,7 +437,7 @@ export function OpsPlanningFeedbackClient() {
                 <p>reportId: {asString(selected.context.reportId) || "-"}</p>
                 <p>health: critical={typeof selected.context.health?.criticalCount === "number" ? selected.context.health.criticalCount : "-"}, warnings={selected.context.health?.warningsCodes?.join(", ") || "-"}</p>
                 <p>linked issue: {selected.link?.githubIssue?.url ? (
-                  <a className="font-semibold text-emerald-700 underline" href={selected.link.githubIssue.url} rel="noreferrer" target="_blank">
+                  <a className="font-semibold text-emerald-700 underline" href={selected.link.githubIssue.url} rel="noopener noreferrer" target="_blank">
                     #{selected.link.githubIssue.number}
                   </a>
                 ) : "-"}</p>
@@ -450,7 +469,7 @@ export function OpsPlanningFeedbackClient() {
                 >
                   {selected.link?.githubIssue?.url ? "Issue 연결됨" : (creatingIssue ? "생성 중..." : "Create GitHub Issue")}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => void deleteSelected()} disabled={saving || deleting}>
+                <Button size="sm" variant="ghost" onClick={requestDeleteSelected} disabled={saving || deleting}>
                   {deleting ? "삭제 중..." : "삭제"}
                 </Button>
               </div>
@@ -458,6 +477,49 @@ export function OpsPlanningFeedbackClient() {
           )}
         </Card>
       </div>
+      {confirmDeleteTarget ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ops-feedback-delete-title"
+        >
+          <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <h3 id="ops-feedback-delete-title" className="text-base font-black text-slate-900">피드백 삭제 확인</h3>
+            <p className="mt-2 text-sm text-slate-700">
+              피드백 항목을 삭제합니다. 계속 진행할까요?
+            </p>
+            <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
+              id: <span className="font-semibold">{confirmDeleteTarget.id}</span>
+              <br />
+              title: <span className="font-semibold">{confirmDeleteTarget.content.title}</span>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmDeleteId("")}
+                disabled={deleting}
+              >
+                취소
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="primary"
+                disabled={deleting}
+                onClick={() => {
+                  const feedbackId = confirmDeleteTarget.id;
+                  void deleteSelected(feedbackId);
+                }}
+              >
+                삭제 진행
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </PageShell>
   );
 }

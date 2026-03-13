@@ -2,6 +2,7 @@ import { buildUserInsight } from "../insights/interpret";
 import { LIMITS } from "../limits";
 import { summarizeRunDiff } from "../insights/whyChanged";
 import { type ResultDtoV1 } from "../resultDto";
+import { roundKrw } from "../../calc/roundingPolicy";
 
 type RenderHtmlReportOptions = {
   title?: string;
@@ -50,7 +51,7 @@ function formatDateTime(value: string | undefined, locale: "ko-KR"): string {
 
 function formatKrw(value: number | undefined, locale: "ko-KR"): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
-  return `₩${Math.round(value).toLocaleString(locale)}`;
+  return `₩${roundKrw(value).toLocaleString(locale)}`;
 }
 
 function formatPct(value: number | undefined): string {

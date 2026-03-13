@@ -1,5 +1,6 @@
 import { type AccountTransaction } from "../../domain/types";
 import { buildTxnId, normalizeDescriptionForTxnId } from "../../service/txnId";
+import { roundKrw } from "../../../calc/roundingPolicy";
 import {
   detectEncodingIssue,
   normalizeNewlines,
@@ -176,7 +177,7 @@ export function normalizeAmount(raw: string): number | null {
   if (!Number.isFinite(parsed)) return null;
 
   const signed = (negativeByParen || negativeByTrailing) ? -Math.abs(parsed) : parsed;
-  return Math.round(signed);
+  return roundKrw(signed);
 }
 
 function normalizeAmountByType(amount: number, rawType?: string): number {

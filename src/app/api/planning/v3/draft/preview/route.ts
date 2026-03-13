@@ -1,18 +1,16 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { getProfile } from "@/lib/planning/server/store/profileStore";
 import { loadCanonicalProfile } from "@/lib/planning/v2/loadCanonicalProfile";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
+import { applyDraftToProfile } from "@/lib/planning/v3/draft/service";
+import { getLegacyDraft, getPreviewDraft } from "@/lib/planning/v3/draft/store";
 import { type V3DraftRecord } from "@/lib/planning/v3/domain/draft";
 import { type EvidenceRow } from "@/lib/planning/v3/domain/types";
-import { applyDraftToProfile } from "@/lib/planning/v3/service/applyDraftToProfile";
-import { getDraft } from "@/lib/planning/v3/store/draftStore";
+import { getProfile } from "@/lib/planning/v3/profiles/store";
 
 type PreviewBody = {
   draftPatch?: unknown;
@@ -37,7 +35,6 @@ function isInvalidIdError(error: unknown): boolean {
 
 function withWriteGuard(request: Request, body: PreviewBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -79,6 +76,44 @@ function toInlineDraft(patch: Record<string, unknown>, draftId?: string): V3Draf
   };
 }
 
+function toPreviewDraft(input: {
+  id: string;
+  createdAt: string;
+  source?: {
+    kind?: "csv";
+    filename?: string;
+    rows?: number;
+    months?: number;
+  };
+  meta?: {
+    rowsParsed?: number;
+  };
+  monthlyCashflow: Array<{
+    ym: string;
+    incomeKrw: number;
+    expenseKrw: number;
+    netKrw: number;
+    txCount?: number;
+  }>;
+  draftPatch: Record<string, unknown>;
+}): V3DraftRecord {
+  return {
+    id: input.id,
+    createdAt: input.createdAt,
+    source: {
+      kind: "csv",
+      ...(asString(input.source?.filename) ? { filename: asString(input.source?.filename) } : {}),
+      ...(Number.isFinite(Number(input.meta?.rowsParsed)) ? { rows: Math.max(0, Math.trunc(Number(input.meta?.rowsParsed))) } : {}),
+      ...(Number.isFinite(Number(input.source?.months))
+        ? { months: Math.max(0, Math.trunc(Number(input.source?.months))) }
+        : { months: input.monthlyCashflow.length }),
+    },
+    cashflow: input.monthlyCashflow,
+    draftPatch: input.draftPatch,
+    summary: {},
+  };
+}
+
 function normalizeEvidenceRows(input: unknown): EvidenceRow[] {
   if (!Array.isArray(input)) return [];
   const rows: EvidenceRow[] = [];
@@ -110,9 +145,6 @@ function normalizeEvidenceRows(input: unknown): EvidenceRow[] {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: PreviewBody = null;
   try {
     body = (await request.json()) as PreviewBody;
@@ -137,7 +169,13 @@ export async function POST(request: Request) {
     if (hasInlinePatch) {
       draft = toInlineDraft(body?.draftPatch as Record<string, unknown>, draftId || undefined);
     } else {
-      draft = await getDraft(draftId);
+      draft = await getPreviewDraft(draftId);
+      if (!draft) {
+        const legacyDraft = await getLegacyDraft(draftId);
+        if (legacyDraft) {
+          draft = toPreviewDraft(legacyDraft);
+        }
+      }
       if (!draft) {
         return NextResponse.json(
           { ok: false, error: { code: "NO_DATA", message: "초안을 찾을 수 없습니다." } },

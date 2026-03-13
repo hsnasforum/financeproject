@@ -74,14 +74,16 @@ export function normalizeForEngineRates<TDebt extends DebtAprPctInput, TOffer ex
 } {
   return {
     debts: (input.debts ?? []).map((debt) => {
-      const { aprPct: _aprPct, ...rest } = debt;
+      const { aprPct, ...rest } = debt;
+      void aprPct;
       return {
         ...rest,
         apr: toEngineRateBoundary(debt.aprPct).decimal,
       };
     }),
     offers: (input.offers ?? []).map((offer) => {
-      const { newAprPct: _newAprPct, ...rest } = offer;
+      const { newAprPct, ...rest } = offer;
+      void newAprPct;
       return {
         ...rest,
         newApr: toEngineRateBoundary(offer.newAprPct, "newAprPct").decimal,
@@ -94,14 +96,16 @@ export function toEngineProfile<TProfile extends CanonicalProfileInput>(profile:
   debts: Array<Omit<NonNullable<TProfile["debts"]>[number], "aprPct"> & { apr: number }>;
 } {
   const debts = (profile.debts ?? []).map((debt) => {
-    const { aprPct: _aprPct, ...rest } = debt as CanonicalDebtAprInput & Record<string, unknown>;
+    const { aprPct, ...rest } = debt as CanonicalDebtAprInput & Record<string, unknown>;
+    void aprPct;
     return {
       ...rest,
       apr: toEngineRateBoundary(resolveAprPctInput(debt), "aprPct").decimal,
     };
   }) as Array<Omit<NonNullable<TProfile["debts"]>[number], "aprPct"> & { apr: number }>;
 
-  const { debts: _ignoredDebts, ...restProfile } = profile;
+  const { debts: ignoredDebts, ...restProfile } = profile;
+  void ignoredDebts;
   return {
     ...(restProfile as Omit<TProfile, "debts">),
     debts,
