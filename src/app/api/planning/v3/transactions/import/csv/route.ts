@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { appendBatchFromCsv, TransactionStoreInputError } from "@/lib/planning/v3/service/transactionStore";
+import { appendBatchFromCsv, TransactionStoreInputError } from "@/lib/planning/v3/transactions/store";
 
 type ImportBody = {
   csvText?: unknown;
@@ -26,7 +24,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function withWriteGuard(request: Request, body: ImportBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -59,9 +56,6 @@ function normalizeMapping(input: unknown): Record<string, string> | undefined {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: ImportBody = null;
   try {
     body = (await request.json()) as ImportBody;

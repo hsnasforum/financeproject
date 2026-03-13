@@ -2,22 +2,19 @@ import { getPlanningFeatureFlags } from "../../../../../lib/planning/config";
 import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { generateCandidatePlans } from "../../../../../lib/planning/server/v2/optimizer/greedy";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
+import {
+  buildEnginePayloadFromProfile,
+  resolveAssumptionsContextForProfile,
+} from "../../../../../lib/planning/server/v2/toEngineInput";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
-import {
-  createEngineEnvelope,
-  ENGINE_SCHEMA_VERSION,
-  runPlanningEngine,
-} from "../../../../../lib/planning/engine";
 
 type OptimizeRequestBody = {
   profile?: unknown;
@@ -212,9 +209,8 @@ function hasCsrfCookie(request: Request): boolean {
   return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -232,24 +228,7 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   }
 }
 
-function toEngineInput(profile: ProfileV2) {
-  const debtBalance = profile.debts.reduce((total, debt) => {
-    return total + (Number.isFinite(debt.balance) ? debt.balance : 0);
-  }, 0);
-
-  return {
-    monthlyIncome: profile.monthlyIncomeNet,
-    monthlyExpense: profile.monthlyEssentialExpenses + profile.monthlyDiscretionaryExpenses,
-    age: profile.currentAge,
-    liquidAssets: profile.liquidAssets,
-    debtBalance,
-  };
-}
-
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   if (!getPlanningFeatureFlags().optimizerEnabled) {
     return fail("DISABLED", "Optimizer is disabled", { status: 403 });
   }
@@ -264,7 +243,7 @@ export async function POST(request: Request) {
   if (!isRecord(body)) {
     return fail("INPUT");
   }
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   let profile: ProfileV2;
@@ -296,43 +275,46 @@ export async function POST(request: Request) {
     return fail("INPUT");
   }
 
+  const resolvedContext = await resolveAssumptionsContextForProfile({
+    planningService,
+    profile,
+    riskTolerance,
+    assumptionsOverridesRaw: assumptionsOverrides,
+    requestedSnapshotId,
+  });
+  if (!resolvedContext.ok) {
+    if (resolvedContext.error.code === "SNAPSHOT_NOT_FOUND") {
+      return fail("SNAPSHOT_NOT_FOUND", undefined, { status: resolvedContext.error.status });
+    }
+    return fail(resolvedContext.error.code, resolvedContext.error.message);
+  }
+
   try {
-    const context = await planningService.resolveAssumptionsContext({
+    const context = resolvedContext.context;
+    const { data } = buildEnginePayloadFromProfile(
       profile,
-      riskTolerance,
-      assumptionsOverridesRaw: assumptionsOverrides,
-      requestedSnapshotId,
-    });
-
-    const engineResult = runPlanningEngine(toEngineInput(profile), {
-      runCore: () => generateCandidatePlans({
-        profile,
-        horizonMonths,
-        baseAssumptions: context.assumptions,
-        constraints,
-        knobs,
-        search,
+      (engineResult) => ({
+        candidates: engineResult.core,
       }),
-    });
-    const engine = createEngineEnvelope({
-      status: engineResult.status,
-      decision: engineResult.decision,
-    });
+      {
+        runCore: () => generateCandidatePlans({
+          profile,
+          horizonMonths,
+          baseAssumptions: context.assumptions,
+          constraints,
+          knobs,
+          search,
+        }),
+      },
+    );
 
-    return ok({
-      engine,
-      engineSchemaVersion: ENGINE_SCHEMA_VERSION,
-      candidates: engineResult.core,
-    }, {
+    return ok(data, {
       generatedAt: new Date().toISOString(),
       snapshot: context.snapshotMeta,
       health: context.health.summary,
     });
   } catch (error) {
     const normalized = toPlanningError(error);
-    if (normalized.code === "SNAPSHOT_NOT_FOUND") {
-      return fail("SNAPSHOT_NOT_FOUND", undefined, { status: 400 });
-    }
     return fail(normalized.code, normalized.message);
   }
 }

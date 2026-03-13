@@ -1,20 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  assertCsrf,
-  assertDevUnlocked,
-  assertLocalHost,
   assertSameOrigin,
+  requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   loadEffectiveAlertRules,
   readAlertRuleOverrides,
   readAlertRulesConfig,
   writeAlertRuleOverrides,
-} from "@/lib/news/alerts";
-import { parseWithV3Whitelist } from "../../../../../../../../planning/v3/security/whitelist";
+} from "@/lib/planning/v3/news/alerts";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 const RuleOverrideInputSchema = z.object({
   id: z.string().trim().min(1),
@@ -40,6 +37,7 @@ const SaveBodySchema = z.object({
 const RulesGetResponseSchema = z.object({
   ok: z.literal(true),
   data: z.object({
+    updatedAt: z.string().datetime().nullable(),
     defaults: z.unknown(),
     overrides: z.unknown(),
     effective: z.unknown(),
@@ -49,6 +47,7 @@ const RulesGetResponseSchema = z.object({
 const RulesPostResponseSchema = z.object({
   ok: z.literal(true),
   data: z.object({
+    updatedAt: z.string().datetime().nullable(),
     overrides: z.unknown(),
     effective: z.unknown(),
   }),
@@ -56,7 +55,6 @@ const RulesPostResponseSchema = z.object({
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     return null;
   } catch (error) {
@@ -76,10 +74,8 @@ function withReadGuard(request: Request): Response | null {
 
 function withWriteGuard(request: Request, body: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
-    assertDevUnlocked(request);
-    assertCsrf(request, body as { csrf?: unknown } | null);
+    requireCsrf(request, body as { csrf?: unknown } | null, { allowWhenCookieMissing: true });
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -97,9 +93,6 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -110,6 +103,7 @@ export async function GET(request: Request) {
   const payload = parseWithV3Whitelist(RulesGetResponseSchema, {
     ok: true,
     data: {
+      updatedAt: overrides.updatedAt ?? null,
       defaults,
       overrides,
       effective,
@@ -119,9 +113,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: unknown = null;
   try {
     body = await request.json();
@@ -146,6 +137,7 @@ export async function POST(request: Request) {
   const payload = parseWithV3Whitelist(RulesPostResponseSchema, {
     ok: true,
     data: {
+      updatedAt: written.updatedAt ?? null,
       overrides: written,
       effective,
     },

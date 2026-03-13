@@ -44,6 +44,7 @@
 
 - 기본 모드: `private-local`
 - v2는 local-only 정책 유지
+- v3 사용자 화면(`planning/v3/*`)이 직접 호출하는 API는 same-origin + CSRF를 기본 경계로 유지하고, local-only는 ops/admin 또는 명시적 내부 경로에만 둡니다.
 - `public` 모드는 정책 정의만 존재하며, 실제 완화는 별도 보안 검토 후 적용
 
 ## 호환성 원칙

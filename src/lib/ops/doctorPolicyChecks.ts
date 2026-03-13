@@ -18,6 +18,18 @@ export type DoctorMetricLike = {
   meta?: unknown;
 };
 
+export type SchedulerThresholdPolicyHealthLike = {
+  source: "file" | "default";
+  valid: boolean;
+  exists: boolean;
+  path: string;
+  errors: string[];
+  policy: {
+    warnConsecutiveFailures: number;
+    riskConsecutiveFailures: number;
+  };
+};
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -97,12 +109,6 @@ function isFailureMetricEvent(event: DoctorMetricLike): boolean {
   const meta = isRecord(event.meta) ? event.meta : {};
   const status = asString(meta.status).toUpperCase();
   return status === "FAILED" || status === "ERROR" || status === "FAIL";
-}
-
-function isAssumptionsRefreshFailure(event: DoctorMetricLike): boolean {
-  const type = asString(event.type).toUpperCase();
-  if (type !== "ASSUMPTIONS_REFRESH") return false;
-  return isFailureMetricEvent(event);
 }
 
 function getDurationMs(event: DoctorMetricLike): number | undefined {
@@ -385,6 +391,58 @@ export function buildScheduledRunFailureDoctorCheck(input: {
       warnThreshold: input.failureWarnCount,
       latestFailureAt: latestFailureAt || null,
       recentCodes,
+    },
+  };
+}
+
+export function buildSchedulerThresholdPolicyDoctorCheck(input: SchedulerThresholdPolicyHealthLike): DoctorCheck {
+  if (!input.valid) {
+    return {
+      id: "scheduler-threshold-policy",
+      title: "Scheduler threshold policy",
+      status: "WARN",
+      message: "scheduler 임계치 정책 파일이 유효하지 않아 ENV 기본값으로 동작 중입니다.",
+      fixHref: "/ops",
+      details: {
+        source: input.source,
+        exists: input.exists,
+        path: input.path,
+        errors: input.errors,
+        warnConsecutiveFailures: input.policy.warnConsecutiveFailures,
+        riskConsecutiveFailures: input.policy.riskConsecutiveFailures,
+      },
+    };
+  }
+
+  if (input.source === "file") {
+    return {
+      id: "scheduler-threshold-policy",
+      title: "Scheduler threshold policy",
+      status: "PASS",
+      message: `scheduler 임계치 정책 파일 적용 중 (warn=${input.policy.warnConsecutiveFailures}, risk=${input.policy.riskConsecutiveFailures})`,
+      fixHref: "/ops",
+      details: {
+        source: input.source,
+        exists: input.exists,
+        path: input.path,
+        warnConsecutiveFailures: input.policy.warnConsecutiveFailures,
+        riskConsecutiveFailures: input.policy.riskConsecutiveFailures,
+      },
+    };
+  }
+
+  return {
+    id: "scheduler-threshold-policy",
+    title: "Scheduler threshold policy",
+    status: "PASS",
+    message: `scheduler 정책 파일 없이 ENV 기본값 사용 중 (warn=${input.policy.warnConsecutiveFailures}, risk=${input.policy.riskConsecutiveFailures})`,
+    fixHref: "/ops",
+    details: {
+      source: input.source,
+      exists: input.exists,
+      path: input.path,
+      warnConsecutiveFailures: input.policy.warnConsecutiveFailures,
+      riskConsecutiveFailures: input.policy.riskConsecutiveFailures,
     },
   };
 }

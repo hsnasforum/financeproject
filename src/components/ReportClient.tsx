@@ -1,9 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  Gov24ServiceDetailModal,
+  type Gov24ServiceDetailData,
+} from "@/components/Gov24ServiceDetailModal";
 import { downloadText } from "@/lib/browser/download";
+import { extractApplyLinks } from "@/lib/gov24/applyLinks";
 import { getRun, listRuns, type SavedRecommendRun } from "@/lib/recommend/savedRunsStore";
+import { scoreBenefits, type ScoredBenefit } from "@/lib/recommend/scoreBenefits";
+import { BENEFIT_TOPICS, type BenefitTopicKey } from "@/lib/publicApis/benefitsTopics";
+import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
 import type { DailyBrief } from "@/lib/dart/dailyBriefBuilder";
 import {
   buildReportModel,
@@ -12,9 +20,6 @@ import {
   toMarkdown,
   type PlannerLastSnapshot,
 } from "@/lib/report/reportBuilder";
-import { PageShell } from "@/components/ui/PageShell";
-import { PageHeader } from "@/components/ui/PageHeader";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { AssumptionsCallout } from "@/components/ui/AssumptionsCallout";
@@ -85,18 +90,75 @@ function digestLevel(item: {
   return (item.representativeLevel ?? item.classification?.level ?? "low").toUpperCase();
 }
 
-function digestScore(item: {
-  representativeScore?: number;
-  classification?: { score?: number };
-}): number {
-  return item.representativeScore ?? item.classification?.score ?? 0;
-}
-
 function digestTitle(item: {
   representativeTitle?: string;
   reportName?: string;
 }): string {
   return item.representativeTitle ?? item.reportName ?? "(제목 없음)";
+}
+
+function containsAny(text: string, needles: string[]): boolean {
+  return needles.some((needle) => text.includes(needle));
+}
+
+function deriveLegacyBenefitTopics(snapshot: PlannerLastSnapshot | null): BenefitTopicKey[] {
+  if (!snapshot) return ["housing", "job"];
+  const corpus = [
+    ...snapshot.input.goals.map((goal) => goal.name),
+    ...snapshot.result.actions.map((action) => `${action.title} ${action.action} ${action.reason}`),
+    ...snapshot.result.warnings,
+  ].join(" ").toLowerCase();
+
+  const topics: BenefitTopicKey[] = [];
+  if (containsAny(corpus, ["주거", "주택", "청약", "집"])) topics.push("housing");
+  if (containsAny(corpus, ["전세", "임차", "보증금"])) {
+    topics.push("housing");
+    topics.push("jeonse");
+  }
+  if (containsAny(corpus, ["월세", "임대료", "주거급여"])) {
+    topics.push("housing");
+    topics.push("wolse");
+  }
+  if (containsAny(corpus, ["청년", "사회초년", "청년도약", "청년내일"])) topics.push("youth");
+  if (containsAny(corpus, ["취업", "구직", "실업", "직업훈련"])) topics.push("job");
+  if (containsAny(corpus, ["교육", "학자금", "등록금"])) topics.push("education");
+  if (containsAny(corpus, ["의료", "건강", "병원", "치료"])) topics.push("medical");
+  if (containsAny(corpus, ["출산", "육아", "양육", "임신"])) topics.push("birth");
+  return topics.length > 0 ? [...new Set(topics)] : ["housing", "job"];
+}
+
+function deriveLegacyBenefitQuery(snapshot: PlannerLastSnapshot | null): string {
+  if (!snapshot) return "";
+  const goalName = snapshot.input.goals[0]?.name?.trim() ?? "";
+  if (goalName.length > 0) return goalName;
+  const actionTitle = snapshot.result.actions[0]?.title?.trim() ?? "";
+  return actionTitle;
+}
+
+function benefitRegionLabel(item: BenefitCandidate): string {
+  if (item.region.scope === "REGIONAL") {
+    if (item.region.sido && item.region.sigungu) return `${item.region.sido} ${item.region.sigungu}`;
+    if (item.region.sido) return item.region.sido;
+    return "지역형";
+  }
+  if (item.region.scope === "NATIONWIDE") return "전국";
+  return "지역 미상";
+}
+
+function resolveBenefitCtas(item: BenefitCandidate): {
+  applyUrl: string | null;
+} {
+  const { links } = extractApplyLinks({
+    serviceId: item.id,
+    applyHow: item.applyHow,
+    link: item.link,
+    title: item.title,
+    orgName: item.org,
+  });
+  const applyLink = links.find((entry) => entry.label.includes("온라인신청"));
+  return {
+    applyUrl: applyLink?.url ?? null,
+  };
 }
 
 export function ReportClient({
@@ -110,6 +172,13 @@ export function ReportClient({
 }) {
   const [includeDisclosuresFromDigest, setIncludeDisclosuresFromDigest] = useState(false);
   const [includeDailyBrief, setIncludeDailyBrief] = useState(false);
+  const [recommendationPage, setRecommendationPage] = useState(1);
+  const [benefitsLoading, setBenefitsLoading] = useState(false);
+  const [benefitsError, setBenefitsError] = useState("");
+  const [benefitItems, setBenefitItems] = useState<BenefitCandidate[]>([]);
+  const [benefitDetailData, setBenefitDetailData] = useState<Gov24ServiceDetailData | null>(null);
+  const [benefitDetailLoadingId, setBenefitDetailLoadingId] = useState("");
+  const [benefitDetailError, setBenefitDetailError] = useState("");
   const hydrated = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -156,6 +225,18 @@ export function ReportClient({
     if (!hydrated || typeof window === "undefined") return null;
     return parsePlannerSnapshot(window.localStorage.getItem(PLANNER_LAST_SNAPSHOT_KEY));
   }, [hydrated]);
+  const benefitTopics = useMemo(() => deriveLegacyBenefitTopics(plannerSnapshot), [plannerSnapshot]);
+  const benefitQuery = useMemo(() => deriveLegacyBenefitQuery(plannerSnapshot), [plannerSnapshot]);
+  const scoredBenefits = useMemo<ScoredBenefit[]>(
+    () => scoreBenefits(benefitItems, {
+      topics: benefitTopics,
+      query: benefitQuery,
+      includeNationwide: true,
+      includeUnknown: true,
+      topN: 5,
+    }),
+    [benefitItems, benefitQuery, benefitTopics],
+  );
 
   const digestHasData = useMemo(() => {
     const top = Array.isArray(disclosureDigest?.topHighlights) ? disclosureDigest.topHighlights : [];
@@ -175,6 +256,92 @@ export function ReportClient({
     disclosuresError: digestError || null,
   }), [plannerSnapshot, savedRun, includeDisclosuresFromDigest, disclosureDigest, digestError]);
 
+  useEffect(() => {
+    setRecommendationPage(1);
+  }, [savedRun?.runId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadBenefits(): Promise<void> {
+      if (!plannerSnapshot) {
+        setBenefitItems([]);
+        setBenefitsError("");
+        setBenefitsLoading(false);
+        return;
+      }
+
+      const params = new URLSearchParams();
+      params.set("pageSize", "20");
+      params.set("includeFacets", "0");
+      params.set("includeNationwide", "1");
+      params.set("includeUnknown", "1");
+      if (benefitTopics.length > 0) params.set("topics", benefitTopics.join(","));
+      if (benefitQuery) params.set("query", benefitQuery);
+
+      setBenefitsLoading(true);
+      setBenefitsError("");
+      try {
+        const response = await fetch(`/api/public/benefits/search?${params.toString()}`, { cache: "no-store" });
+        const json = await response.json().catch(() => null) as { ok?: boolean; data?: { items?: BenefitCandidate[] }; error?: { message?: string } } | null;
+        if (!active) return;
+        if (!response.ok || !json?.ok) {
+          setBenefitItems([]);
+          setBenefitsError(json?.error?.message ?? "혜택 후보를 불러오지 못했습니다.");
+          return;
+        }
+        setBenefitItems(Array.isArray(json.data?.items) ? json.data.items : []);
+      } catch (error) {
+        if (!active) return;
+        setBenefitItems([]);
+        setBenefitsError(error instanceof Error ? error.message : "혜택 후보를 불러오지 못했습니다.");
+      } finally {
+        if (active) setBenefitsLoading(false);
+      }
+    }
+
+    void loadBenefits();
+    return () => {
+      active = false;
+    };
+  }, [benefitQuery, benefitTopics, plannerSnapshot]);
+
+  const recommendationPageSize = 5;
+  const recommendationItems = reportModel.recommendation.run?.items ?? [];
+  const recommendationTotalPages = Math.max(1, Math.ceil(recommendationItems.length / recommendationPageSize));
+  const recommendationCurrentPage = Math.min(recommendationPage, recommendationTotalPages);
+  const recommendationPageItems = recommendationItems.slice(
+    (recommendationCurrentPage - 1) * recommendationPageSize,
+    recommendationCurrentPage * recommendationPageSize,
+  );
+  const recommendationStart = recommendationItems.length < 1 ? 0 : (recommendationCurrentPage - 1) * recommendationPageSize + 1;
+  const recommendationEnd = recommendationItems.length < 1 ? 0 : Math.min(recommendationItems.length, recommendationCurrentPage * recommendationPageSize);
+
+  async function openBenefitDetail(serviceId: string): Promise<void> {
+    const safeServiceId = serviceId.trim();
+    if (!safeServiceId) return;
+    setBenefitDetailLoadingId(safeServiceId);
+    setBenefitDetailError("");
+    try {
+      const response = await fetch(`/api/gov24/detail?svcId=${encodeURIComponent(safeServiceId)}`, {
+        cache: "no-store",
+      });
+      const body = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        data?: Gov24ServiceDetailData;
+        error?: { message?: string };
+      } | null;
+      if (!response.ok || !body?.ok || !body.data) {
+        throw new Error(body?.error?.message ?? "혜택 상세를 불러오지 못했습니다.");
+      }
+      setBenefitDetailData(body.data);
+    } catch (error) {
+      setBenefitDetailError(error instanceof Error ? error.message : "혜택 상세를 불러오지 못했습니다.");
+    } finally {
+      setBenefitDetailLoadingId("");
+    }
+  }
+
   function exportMarkdown() {
     const content = toMarkdown(reportModel);
     const name = reportModel.overview.runId ?? "no-run";
@@ -191,9 +358,16 @@ export function ReportClient({
     <div data-testid="report-root" className="report-root bg-surface-muted min-h-screen">
       <div className="mx-auto w-full max-w-6xl px-4 py-8 md:py-12 space-y-6">
         <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
+          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
+            <p className="font-bold">Legacy report route</p>
+            <p className="mt-1">
+              이 화면은 `planner_last_snapshot_v1` 및 추천 저장 결과를 사용하는 legacy `/report` 입니다.
+              planning 공식 리포트는 <Link className="font-semibold underline underline-offset-2" href="/planning/reports">/planning/reports</Link> 경로를 사용합니다.
+            </p>
+          </div>
           <div className="no-print flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8 border-b border-border/50 pb-6">
             <div>
-              <Badge variant="outline" className="mb-3 text-[10px] uppercase tracking-widest text-primary border-primary/30 bg-primary/5">Financial Report</Badge>
+              <Badge variant="outline" className="mb-3 text-[10px] uppercase tracking-widest text-amber-700 border-amber-300 bg-amber-100/70">Legacy Report</Badge>
               <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">재무설계 & 추천 종합 리포트</h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -374,7 +548,7 @@ export function ReportClient({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {reportModel.recommendation.run.items.map((item) => (
+                    {recommendationPageItems.map((item) => (
                       <tr key={item.unifiedId} className="hover:bg-slate-50 transition-colors">
                         <td className="py-4 px-5 text-center">
                           <span className={cn(
@@ -411,8 +585,127 @@ export function ReportClient({
                   </tbody>
                 </table>
               </div>
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-muted px-4 py-3 text-xs text-slate-700">
+                <p>
+                  총 <span className="font-bold">{recommendationItems.length}</span>개 중
+                  {" "}
+                  <span className="font-bold">{recommendationStart}-{recommendationEnd}</span>개 표시
+                  {" · "}
+                  페이지 <span className="font-bold">{recommendationCurrentPage}</span>/<span className="font-bold">{recommendationTotalPages}</span>
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRecommendationPage((prev) => Math.max(1, prev - 1))}
+                    disabled={recommendationCurrentPage <= 1}
+                    className="rounded-full"
+                  >
+                    이전 5개
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRecommendationPage((prev) => Math.min(recommendationTotalPages, prev + 1))}
+                    disabled={recommendationCurrentPage >= recommendationTotalPages}
+                    className="rounded-full"
+                  >
+                    다음 5개
+                  </Button>
+                </div>
+              </div>
             </>
           )}
+        </section>
+
+        <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
+          <div className="flex items-center gap-3 mb-8">
+             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+             </div>
+             <h2 className="text-xl font-black text-slate-900 tracking-tight">보조금24 · 정부지원 혜택</h2>
+          </div>
+
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6 text-sm text-primary font-medium">
+            현재 플래너 목표/액션에서 추론한 주제:
+            {" "}
+            <strong>{benefitTopics.map((topic) => BENEFIT_TOPICS[topic].label).join(", ")}</strong>
+            {benefitQuery ? ` · 검색어 보조: "${benefitQuery}"` : ""}
+          </div>
+
+          {benefitsLoading ? (
+            <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
+              <p className="text-sm font-bold text-slate-500">혜택 후보를 불러오는 중입니다.</p>
+            </div>
+          ) : benefitsError ? (
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-sm font-bold">
+              {benefitsError}
+            </div>
+          ) : scoredBenefits.length < 1 ? (
+            <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
+              <p className="text-sm font-bold text-slate-500">현재 조건에서 바로 보여줄 혜택 후보가 없습니다. `/benefits`에서 범위를 넓혀 확인해 주세요.</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-4">
+              {scoredBenefits.map((row, index) => (
+                <article key={row.item.id} className="rounded-2xl border border-border bg-surface-muted p-5 hover:bg-surface hover:shadow-sm transition-all">
+                  {(() => {
+                    const ctas = resolveBenefitCtas(row.item);
+                    const isDetailLoading = benefitDetailLoadingId === row.item.id;
+                    return (
+                      <>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Top {index + 1} · Gov24</p>
+                      <h3 className="mt-1 text-base font-black text-slate-900">{row.item.title}</h3>
+                      <p className="mt-1 text-[11px] text-slate-500">{row.item.org ?? "기관 정보 미상"}</p>
+                    </div>
+                    <Badge variant="outline" className="bg-white text-[10px] font-bold tabular-nums">
+                      {row.explain.finalPoints.toFixed(1)}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Badge variant="secondary" className="bg-white text-slate-600 border-none text-[10px] font-bold">{benefitRegionLabel(row.item)}</Badge>
+                    {(row.explain.matched.topics.length > 0 ? row.explain.matched.topics : ["주제 일반"]).map((topic) => (
+                      <Badge key={`${row.item.id}-${topic}`} variant="secondary" className="bg-white text-slate-600 border-none text-[10px] font-bold">{topic}</Badge>
+                    ))}
+                  </div>
+
+                  <p className="mt-4 text-sm font-bold text-slate-700 leading-relaxed">{row.explain.why.summary}</p>
+                  <p className="mt-2 text-xs text-slate-600 leading-relaxed">{row.item.summary}</p>
+                  {row.item.applyHow ? (
+                    <p className="mt-2 text-[11px] text-slate-500">신청방법: {row.item.applyHow}</p>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      disabled={isDetailLoading}
+                      onClick={() => void openBenefitDetail(row.item.id)}
+                    >
+                      {isDetailLoading ? "불러오는 중..." : "내용 상세보기"}
+                    </Button>
+                    {ctas.applyUrl ? (
+                      <a href={ctas.applyUrl} rel="noopener noreferrer" target="_blank">
+                        <Button variant="ghost" size="sm" className="rounded-full">신청하기</Button>
+                      </a>
+                    ) : null}
+                  </div>
+                      </>
+                    );
+                  })()}
+                </article>
+              ))}
+            </div>
+          )}
+          {benefitDetailError ? (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+              {benefitDetailError}
+            </div>
+          ) : null}
         </section>
 
         {includeDailyBrief ? (
@@ -570,6 +863,7 @@ export function ReportClient({
           </div>
         ) : null}
       </div>
+      {benefitDetailData ? <Gov24ServiceDetailModal data={benefitDetailData} onClose={() => setBenefitDetailData(null)} /> : null}
     </div>
   );
 }

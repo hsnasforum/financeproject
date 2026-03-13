@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import type { FeedbackPriority, FeedbackStatus } from "@/lib/feedback/feedbackStore";
 import { parseOpsAction } from "@/lib/ops/opsTicketParser";
 
@@ -79,6 +80,7 @@ function riskBadgeClass(risk: "LOW" | "MEDIUM" | "HIGH"): string {
 export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgendaBarProps) {
   const isDevEnv = process.env.NODE_ENV !== "production";
   const [opsStates, setOpsStates] = useState<Record<string, OpsState>>({});
+  const [chainConfirmById, setChainConfirmById] = useState<Record<string, string>>({});
 
   const opsIds = useMemo(() => new Set(agenda.opsTop.map((item) => item.id)), [agenda.opsTop]);
   const urgentPool: Array<AgendaItem & { reason: "overdue" | "today" | "nodue" }> = [
@@ -228,8 +230,8 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
       let confirmText = "";
       if (plan.risk === "HIGH") {
         const expected = `RUN ${action.id}`;
-        const typed = window.prompt(`HIGH 위험 체인입니다. 다음 문구를 정확히 입력하세요:\n${expected}`, expected);
-        if ((typed ?? "").trim() !== expected) {
+        const typed = (chainConfirmById[item.id] ?? "").trim();
+        if (typed !== expected) {
           setOpsStates((prev) => ({
             ...prev,
             [item.id]: {
@@ -278,7 +280,7 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
         },
       }));
     }
-  }, [isDevEnv, requestChainPlan]);
+  }, [chainConfirmById, isDevEnv, requestChainPlan]);
 
   return (
     <section className="sticky top-0 z-40 mb-6">
@@ -360,10 +362,28 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
                           {state.plan.risk}
                         </span>
                         <p className="mt-1 text-[10px] text-slate-700">steps: {state.plan.steps.join(" -> ")}</p>
+                        {state.plan.risk === "HIGH" && action?.kind === "CHAIN" ? (
+                          <div className="mt-2">
+                            <p className="text-[10px] font-semibold text-rose-700">확인 문구: RUN {action.id}</p>
+                            <input
+                              className="mt-1 h-8 w-full rounded-md border border-rose-300 bg-white px-2 text-[11px]"
+                              placeholder={`RUN ${action.id}`}
+                              value={chainConfirmById[item.id] ?? ""}
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                setChainConfirmById((prev) => ({ ...prev, [item.id]: nextValue }));
+                              }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                     {state?.message ? (
-                      <p className="mt-1 text-[11px] font-semibold text-slate-700">{state.message}</p>
+                      <DevUnlockShortcutMessage
+                        className="mt-1 text-[11px] font-semibold text-slate-700"
+                        linkClassName="text-slate-700"
+                        message={state.message}
+                      />
                     ) : null}
                   </li>
                 );

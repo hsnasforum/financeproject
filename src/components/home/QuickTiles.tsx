@@ -1,52 +1,40 @@
 import Link from "next/link";
-import Image from "next/image";
+import { Container } from "@/components/ui/Container";
+import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
 
-type QuickLink = {
-  label: string;
-  description: string;
-  href: string;
-  icon: string;
-};
-
-const coreLinks: QuickLink[] = [
-  { label: "대시보드", description: "통합 현황 확인", href: "/dashboard", icon: "/icons/ic-dashboard.png" },
-  { label: "플래닝", description: "액션 중심 계획", href: "/planning", icon: "/icons/ic-planner.png" },
-  { label: "추천", description: "조건 기반 추천", href: "/recommend", icon: "/icons/ic-recommend.png" },
-  { label: "공시(DART)", description: "기업 공시 탐색", href: "/public/dart", icon: "/icons/ic-dart.png" },
-  { label: "데이터 소스", description: "연동 상태 관리", href: "/settings/data-sources", icon: "/icons/ic-datasource.png" },
+const categoryTiles = [
+  { title: "예적금", description: "금리 비교 후 바로 플랜에 연결", href: "/products/saving", accent: "bg-[linear-gradient(145deg,#edf6ff_0%,#d8ebff_100%)]", code: "SV" },
+  { title: "혜택", description: "보조금24 기반 후보를 빠르게 확인", href: "/benefits", accent: "bg-[linear-gradient(145deg,#eefcf6_0%,#d9f7ea_100%)]", code: "BF" },
+  { title: "리포트", description: "이번 달 액션과 위험 신호 정리", href: "/planning/reports", accent: "bg-[linear-gradient(145deg,#f4f8ff_0%,#e7f0ff_100%)]", code: "RP" },
+  { title: "대시보드", description: "최근 플랜과 데이터 상태를 한 번에 확인", href: "/dashboard", accent: "bg-[linear-gradient(145deg,#fff4ea_0%,#ffe7d1_100%)]", code: "DB" },
 ];
 
 export function QuickTiles() {
   return (
-    <section className="mt-12">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-black tracking-tight text-slate-900">핵심 바로가기</h2>
-          <p className="text-sm text-slate-500">자주 이용하는 핵심 기능을 빠르게 호출하세요.</p>
+    <section className="bg-white py-14">
+      <Container className="px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <p className="text-[15px] font-medium text-slate-400">MMD 핵심 기능</p>
         </div>
-      </div>
-      
-      <div className="mt-6 flex gap-4 overflow-x-auto pb-4 no-scrollbar md:grid md:grid-cols-5 md:overflow-visible md:pb-0">
-        {coreLinks.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="group flex min-w-[160px] flex-col items-center rounded-3xl border border-slate-100 bg-white p-6 text-center shadow-card transition-all hover:-translate-y-1 hover:border-emerald-200 hover:shadow-card-hover md:min-w-0"
-          >
-            <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 transition-colors group-hover:bg-emerald-50">
-              <Image 
-                src={item.icon} 
-                alt={item.label} 
-                width={32} 
-                height={32} 
-                className="transition-transform group-hover:scale-110"
-              />
-            </div>
-            <p className="mt-4 text-sm font-bold text-slate-900">{item.label}</p>
-            <p className="mt-1 text-[11px] text-slate-400 group-hover:text-slate-500">{item.description}</p>
-          </Link>
-        ))}
-      </div>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {categoryTiles.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              prefetch={devPlanningPrefetch(item.href)}
+              className="group rounded-[28px] border border-slate-200 bg-white p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_22px_44px_rgba(15,23,42,0.08)]"
+            >
+              <div className={`flex h-16 w-16 items-center justify-center rounded-[22px] ${item.accent}`}>
+                <span className="text-lg font-black text-slate-900">{item.code}</span>
+              </div>
+              <h3 className="mt-5 text-xl font-black tracking-[-0.03em] text-slate-950">{item.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+              <p className="mt-6 text-sm font-bold text-[#2383e2]">바로 이동</p>
+            </Link>
+          ))}
+        </div>
+      </Container>
     </section>
   );
 }

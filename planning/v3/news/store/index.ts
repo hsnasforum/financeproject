@@ -14,9 +14,8 @@ import {
 import { DigestDaySchema, type DigestDay } from "../digest/contracts";
 import { ScenarioPackSchema, type ScenarioPack } from "../scenario/contracts";
 import { parseWithV3Whitelist } from "../../security/whitelist";
+import { resolveNewsRootDir } from "../rootDir";
 import { shiftKstDay } from "../trend";
-
-const DEFAULT_ROOT = path.join(process.cwd(), ".data", "news");
 
 const EMPTY_STATE: RuntimeState = {
   schemaVersion: 1,
@@ -24,63 +23,67 @@ const EMPTY_STATE: RuntimeState = {
   sources: {},
 };
 
-export function resolveNewsRoot(rootDir = DEFAULT_ROOT): string {
+function defaultRootDir(): string {
+  return resolveNewsRootDir();
+}
+
+export function resolveNewsRoot(rootDir = defaultRootDir()): string {
   return rootDir;
 }
 
-export function resolveItemsDir(rootDir = DEFAULT_ROOT): string {
+export function resolveItemsDir(rootDir = defaultRootDir()): string {
   return path.join(resolveNewsRoot(rootDir), "items");
 }
 
-export function resolveStatePath(rootDir = DEFAULT_ROOT): string {
+export function resolveStatePath(rootDir = defaultRootDir()): string {
   return path.join(resolveNewsRoot(rootDir), "state.json");
 }
 
-export function resolveDailyDir(rootDir = DEFAULT_ROOT): string {
+export function resolveDailyDir(rootDir = defaultRootDir()): string {
   return path.join(resolveNewsRoot(rootDir), "daily");
 }
 
-export function resolveCacheDir(rootDir = DEFAULT_ROOT): string {
+export function resolveCacheDir(rootDir = defaultRootDir()): string {
   return path.join(resolveNewsRoot(rootDir), "cache");
 }
 
-export function resolveDailyStatsPath(dateKst: string, rootDir = DEFAULT_ROOT): string {
+export function resolveDailyStatsPath(dateKst: string, rootDir = defaultRootDir()): string {
   return path.join(resolveDailyDir(rootDir), `${dateKst}.json`);
 }
 
-export function resolveDigestPath(rootDir = DEFAULT_ROOT): string {
+export function resolveDigestPath(rootDir = defaultRootDir()): string {
   return path.join(resolveNewsRoot(rootDir), "digest.latest.json");
 }
 
-export function resolveTodayCachePath(rootDir = DEFAULT_ROOT): string {
+export function resolveTodayCachePath(rootDir = defaultRootDir()): string {
   return path.join(resolveCacheDir(rootDir), "today.latest.json");
 }
 
-export function resolveTrendsCachePath(windowDays: 7 | 30, rootDir = DEFAULT_ROOT): string {
+export function resolveTrendsCachePath(windowDays: 7 | 30, rootDir = defaultRootDir()): string {
   return path.join(resolveCacheDir(rootDir), `trends.${windowDays}d.latest.json`);
 }
 
-export function resolveScenariosCachePath(rootDir = DEFAULT_ROOT): string {
+export function resolveScenariosCachePath(rootDir = defaultRootDir()): string {
   return path.join(resolveCacheDir(rootDir), "scenarios.latest.json");
 }
 
-function ensureStoreDirs(rootDir = DEFAULT_ROOT): void {
+function ensureStoreDirs(rootDir = defaultRootDir()): void {
   fs.mkdirSync(resolveItemsDir(rootDir), { recursive: true });
   fs.mkdirSync(resolveDailyDir(rootDir), { recursive: true });
   fs.mkdirSync(resolveCacheDir(rootDir), { recursive: true });
 }
 
-function resolveItemPath(id: string, rootDir = DEFAULT_ROOT): string {
+function resolveItemPath(id: string, rootDir = defaultRootDir()): string {
   return path.join(resolveItemsDir(rootDir), `${id}.json`);
 }
 
-export function hasItem(id: string, rootDir = DEFAULT_ROOT): boolean {
+export function hasItem(id: string, rootDir = defaultRootDir()): boolean {
   const cleanId = id.trim();
   if (!cleanId) return false;
   return fs.existsSync(resolveItemPath(cleanId, rootDir));
 }
 
-export function readState(rootDir = DEFAULT_ROOT): RuntimeState {
+export function readState(rootDir = defaultRootDir()): RuntimeState {
   const filePath = resolveStatePath(rootDir);
   if (!fs.existsSync(filePath)) {
     return EMPTY_STATE;
@@ -94,7 +97,7 @@ export function readState(rootDir = DEFAULT_ROOT): RuntimeState {
   }
 }
 
-export function writeState(state: RuntimeState, rootDir = DEFAULT_ROOT): void {
+export function writeState(state: RuntimeState, rootDir = defaultRootDir()): void {
   ensureStoreDirs(rootDir);
   const validated = parseWithV3Whitelist(RuntimeStateSchema, {
     ...state,
@@ -106,7 +109,7 @@ export function writeState(state: RuntimeState, rootDir = DEFAULT_ROOT): void {
   fs.writeFileSync(resolveStatePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
-export function upsertItems(items: NewsItem[], rootDir = DEFAULT_ROOT): { itemsNew: number; itemsDeduped: number } {
+export function upsertItems(items: NewsItem[], rootDir = defaultRootDir()): { itemsNew: number; itemsDeduped: number } {
   ensureStoreDirs(rootDir);
 
   let itemsNew = 0;
@@ -138,7 +141,7 @@ export function upsertItems(items: NewsItem[], rootDir = DEFAULT_ROOT): { itemsN
   return { itemsNew, itemsDeduped };
 }
 
-export function readAllItems(rootDir = DEFAULT_ROOT): NewsItem[] {
+export function readAllItems(rootDir = defaultRootDir()): NewsItem[] {
   const itemsDir = resolveItemsDir(rootDir);
   if (!fs.existsSync(itemsDir)) return [];
 
@@ -159,7 +162,7 @@ export function readAllItems(rootDir = DEFAULT_ROOT): NewsItem[] {
   return out;
 }
 
-export function writeDailyStats(dateKst: string, stats: TopicDailyStat[], rootDir = DEFAULT_ROOT): void {
+export function writeDailyStats(dateKst: string, stats: TopicDailyStat[], rootDir = defaultRootDir()): void {
   ensureStoreDirs(rootDir);
   const validated = stats.map((row) => parseWithV3Whitelist(TopicDailyStatSchema, row, {
     scope: "persistence",
@@ -169,7 +172,7 @@ export function writeDailyStats(dateKst: string, stats: TopicDailyStat[], rootDi
   fs.writeFileSync(filePath, `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
-export function readDailyStats(dateKst: string, rootDir = DEFAULT_ROOT): TopicDailyStat[] {
+export function readDailyStats(dateKst: string, rootDir = defaultRootDir()): TopicDailyStat[] {
   const filePath = resolveDailyStatsPath(dateKst, rootDir);
   if (!fs.existsSync(filePath)) return [];
   try {
@@ -195,7 +198,7 @@ export function readDailyStatsLastNDays(input: {
   return out;
 }
 
-export function writeDigest(digest: DailyDigest, rootDir = DEFAULT_ROOT): void {
+export function writeDigest(digest: DailyDigest, rootDir = defaultRootDir()): void {
   ensureStoreDirs(rootDir);
   const validated = parseWithV3Whitelist(DailyDigestSchema, {
     ...digest,
@@ -252,7 +255,7 @@ export function writeTodayCache(
     digest: DigestDay;
     scenarios: ScenarioPack;
   },
-  rootDir = DEFAULT_ROOT,
+  rootDir = defaultRootDir(),
 ): void {
   ensureStoreDirs(rootDir);
   const validated = parseWithV3Whitelist(TodayCacheSchema, {
@@ -265,7 +268,7 @@ export function writeTodayCache(
   fs.writeFileSync(resolveTodayCachePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
-export function readTodayCache(rootDir = DEFAULT_ROOT): TodayCache | null {
+export function readTodayCache(rootDir = defaultRootDir()): TodayCache | null {
   const filePath = resolveTodayCachePath(rootDir);
   if (!fs.existsSync(filePath)) return null;
   try {
@@ -283,7 +286,7 @@ export function writeTrendsCache(
     windowDays: 7 | 30;
     topics: TrendCacheTopic[];
   },
-  rootDir = DEFAULT_ROOT,
+  rootDir = defaultRootDir(),
 ): void {
   ensureStoreDirs(rootDir);
   const validated = parseWithV3Whitelist(TrendsCacheSchema, {
@@ -296,7 +299,7 @@ export function writeTrendsCache(
   fs.writeFileSync(resolveTrendsCachePath(validated.windowDays, rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
-export function readTrendsCache(windowDays: 7 | 30, rootDir = DEFAULT_ROOT): TrendsCache | null {
+export function readTrendsCache(windowDays: 7 | 30, rootDir = defaultRootDir()): TrendsCache | null {
   const filePath = resolveTrendsCachePath(windowDays, rootDir);
   if (!fs.existsSync(filePath)) return null;
   try {
@@ -313,7 +316,7 @@ export function writeScenariosCache(
     lastRefreshedAt: string | null;
     scenarios: ScenarioPack;
   },
-  rootDir = DEFAULT_ROOT,
+  rootDir = defaultRootDir(),
 ): void {
   ensureStoreDirs(rootDir);
   const validated = parseWithV3Whitelist(ScenariosCacheSchema, {
@@ -326,7 +329,7 @@ export function writeScenariosCache(
   fs.writeFileSync(resolveScenariosCachePath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
-export function readScenariosCache(rootDir = DEFAULT_ROOT): ScenariosCache | null {
+export function readScenariosCache(rootDir = defaultRootDir()): ScenariosCache | null {
   const filePath = resolveScenariosCachePath(rootDir);
   if (!fs.existsSync(filePath)) return null;
   try {

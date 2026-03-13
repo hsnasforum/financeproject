@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { assertLocalHost, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { parseWithV3Whitelist } from "../../../../../../../planning/v3/security/whitelist";
-import { readTodayCache } from "../../../../../../../planning/v3/news/store";
+import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { readTodayCache } from "@/lib/planning/v3/news/store";
+import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 export const runtime = "nodejs";
 
@@ -19,7 +18,7 @@ const TodayApiSchema = z.object({
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -37,9 +36,6 @@ function withReadGuard(request: Request): Response | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

@@ -5,10 +5,16 @@ multi_agent = true
 
 [skills]
 
+# 상시 필요: 구현/검증 라운드에서 기본으로 붙는 스킬
 [[skills.config]]
 path = "/home/xpdlqj/code/finance/.codex/skills/planning-gate-selector/SKILL.md"
 enabled = true
 
+[[skills.config]]
+path = "/home/xpdlqj/code/finance/.codex/skills/work-log-closeout/SKILL.md"
+enabled = true
+
+# 조건부 필요: 작업 축이 맞을 때만 추가하는 스킬
 [[skills.config]]
 path = "/home/xpdlqj/code/finance/.codex/skills/route-ssot-check/SKILL.md"
 enabled = true
@@ -17,8 +23,9 @@ enabled = true
 path = "/home/xpdlqj/code/finance/.codex/skills/dart-data-source-hardening/SKILL.md"
 enabled = true
 
+# 메타: 어떤 스킬을 붙일지 정리할 때 사용하는 스킬
 [[skills.config]]
-path = "/home/xpdlqj/code/finance/.codex/skills/work-log-closeout/SKILL.md"
+path = "/home/xpdlqj/code/finance/.codex/skills/finance-skill-routing/SKILL.md"
 enabled = true
 
 [agents]

@@ -38,9 +38,16 @@ function nowMs(): number {
 }
 
 function resolveBaseUrl(): string {
-  return (process.env.E2E_BASE_URL || process.env.PLANNING_BASE_URL || `http://localhost:${process.env.PORT || "3100"}`)
-    .trim()
-    .replace(/\/+$/, "");
+  const configured = (
+    process.env.E2E_EXTERNAL_BASE_URL
+    || process.env.BASE_URL
+    || process.env.E2E_BASE_URL
+    || process.env.PLANNING_BASE_URL
+    || ""
+  ).trim().replace(/\/+$/, "");
+  if (configured) return configured;
+  const port = (process.env.PORT || "3126").trim() || "3126";
+  return `http://127.0.0.1:${port}`;
 }
 
 function asString(value: unknown): string {
@@ -62,9 +69,24 @@ function isRunStartResponse(url: string): boolean {
   }
 }
 
+type DevGuardState = {
+  csrf: string;
+  unlocked: boolean;
+};
+
+async function readDevGuardState(request: APIRequestContext): Promise<DevGuardState> {
+  const storageState = await request.storageState().catch(() => null);
+  const cookies = Array.isArray(storageState?.cookies) ? storageState.cookies : [];
+  const csrf = cookies.find((cookie) => cookie.name === "dev_csrf")?.value?.trim() ?? "";
+  const unlocked = cookies.some((cookie) => cookie.name === "dev_action" && cookie.value === "1");
+  return { csrf, unlocked };
+}
+
 async function ensureMigrationsReady(request: APIRequestContext): Promise<void> {
   const baseUrl = resolveBaseUrl();
-  await request.get("/api/ops/doctor?action=RUN_MIGRATIONS", {
+  const guard = await readDevGuardState(request);
+  if (!guard.unlocked || !guard.csrf) return;
+  await request.get(`/api/ops/doctor?action=RUN_MIGRATIONS&csrf=${encodeURIComponent(guard.csrf)}`, {
     headers: {
       origin: baseUrl,
       referer: `${baseUrl}/ops/doctor`,
@@ -103,6 +125,7 @@ export async function loadGoldenFixtures(): Promise<GoldenRunFixture[]> {
 async function seedRunWithFixture(request: APIRequestContext, fixture: GoldenRunFixture): Promise<{ runId: string; profileId: string }> {
   await ensureMigrationsReady(request);
   const baseUrl = resolveBaseUrl();
+  const guard = await readDevGuardState(request);
   const profileRes = await request.post("/api/planning/v2/profiles", {
     headers: {
       origin: baseUrl,
@@ -112,6 +135,7 @@ async function seedRunWithFixture(request: APIRequestContext, fixture: GoldenRun
     data: {
       name: fixture.name,
       profile: fixture.profile,
+      ...(guard.csrf ? { csrf: guard.csrf } : {}),
     },
   });
   const profileJson = (await profileRes.json().catch(() => null)) as { ok?: boolean; data?: { id?: string } } | null;
@@ -130,6 +154,7 @@ async function seedRunWithFixture(request: APIRequestContext, fixture: GoldenRun
       profileId,
       title: `Golden Replay ${fixture.id}`,
       input: fixture.runInput ?? DEFAULT_RUN_INPUT,
+      ...(guard.csrf ? { csrf: guard.csrf } : {}),
     },
   });
   const runJson = (await runRes.json().catch(() => null)) as { ok?: boolean; data?: { id?: string } } | null;
@@ -248,9 +273,9 @@ async function resolvePendingSuggestions(page: Page): Promise<boolean> {
 export async function ensureRunButtonEnabled(page: Page): Promise<void> {
   await alignDebtIdForOffers(page);
 
-  const loadSampleButton = page.getByRole("button", { name: "샘플 프로필 불러오기" });
-  if (await loadSampleButton.count()) {
-    await loadSampleButton.click();
+  const loadSampleButtons = page.getByRole("button", { name: "샘플 프로필 불러오기" });
+  if (await loadSampleButtons.count()) {
+    await loadSampleButtons.first().click();
     await page.waitForTimeout(300);
     await alignDebtIdForOffers(page);
   }

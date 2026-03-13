@@ -252,13 +252,13 @@ export function buildInterpretationVM(
       id: "monthly-surplus",
       severity,
       rank: diagRank(severity),
-      title: "월 잉여 현금",
+      title: "매달 남는 돈",
       evidence: formatKrwUnit(monthlySurplusKrw),
       description: severity === "risk"
-        ? "월 단위 적자가 발생해 현금 고갈 위험이 큽니다."
+        ? "지금 구조대로면 매달 돈이 부족해져 예비자금이 빠르게 줄 수 있습니다."
         : severity === "caution"
-          ? "월 잉여가 0원 수준으로 작은 변동에도 취약합니다."
-          : "월 단위 흑자 구조를 유지하고 있습니다.",
+          ? "남는 돈이 많지 않아 작은 지출 변화에도 흔들릴 수 있습니다."
+          : "매달 남는 돈이 있어 계획을 이어갈 여지가 있습니다.",
       ...(input.summaryEvidence?.monthlySurplusKrw ? { evidenceDetail: input.summaryEvidence.monthlySurplusKrw } : {}),
       ...(evidenceByDiagId.get("monthly-surplus") ? { evidenceItem: evidenceByDiagId.get("monthly-surplus") } : {}),
     });
@@ -274,13 +274,13 @@ export function buildInterpretationVM(
       id: "dsr",
       severity,
       rank: diagRank(severity),
-      title: "부채부담률(DSR)",
+      title: "대출 상환 부담",
       evidence: formatPercentUnit(dsrPct, 1),
       description: severity === "risk"
-        ? `DSR이 ${policy.dsr.riskPct}% 이상이라 상환 부담이 큽니다.`
+        ? "대출 갚는 비중이 커서 다른 목표까지 함께 챙기기 어려운 상태입니다."
         : severity === "caution"
-          ? `DSR이 ${policy.dsr.cautionPct}% 이상이라 지출 변동에 민감합니다.`
-          : "DSR이 안정 구간에 있습니다.",
+          ? "상환 부담이 적지 않아 지출이 늘면 압박이 커질 수 있습니다."
+          : "대출 상환 부담은 관리 가능한 수준입니다.",
       ...(input.summaryEvidence?.dsrPct ? { evidenceDetail: input.summaryEvidence.dsrPct } : {}),
       ...(evidenceByDiagId.get("dsr") ? { evidenceItem: evidenceByDiagId.get("dsr") } : {}),
     });
@@ -296,13 +296,13 @@ export function buildInterpretationVM(
       id: "emergency-fund",
       severity,
       rank: diagRank(severity),
-      title: "비상금 커버",
+      title: "버틸 수 있는 기간",
       evidence: formatMonthsUnit(emergencyFundMonths, 1),
       description: severity === "risk"
-        ? `비상금이 ${policy.emergencyFundMonths.risk}개월 미만입니다.`
+        ? "비상금이 짧아 예상 밖 지출이 생기면 바로 타격을 받을 수 있습니다."
         : severity === "caution"
-          ? `비상금이 권장 ${policy.emergencyFundMonths.caution}개월 미만입니다.`
-          : "비상금 커버가 권장 구간에 있습니다.",
+          ? "조금만 더 쌓아두면 훨씬 안정적으로 버틸 수 있습니다."
+          : "예상치 못한 상황을 버틸 완충 여력이 있는 편입니다.",
       ...(input.summaryEvidence?.emergencyFundMonths ? { evidenceDetail: input.summaryEvidence.emergencyFundMonths } : {}),
       ...(evidenceByDiagId.get("emergency-fund") ? { evidenceItem: evidenceByDiagId.get("emergency-fund") } : {}),
     });
@@ -314,11 +314,11 @@ export function buildInterpretationVM(
       id: "worst-cash",
       severity,
       rank: diagRank(severity),
-      title: "최저 현금",
+      title: "가장 빠듯한 달",
       evidence: formatKrwUnit(worstCashKrw),
       description: severity === "risk"
-        ? "시뮬레이션 기간 중 현금이 0 이하로 내려갑니다."
-        : "현금이 0 이하로 내려가지 않습니다.",
+        ? "시뮬레이션상 어느 시점엔 통장 잔액이 바닥날 수 있습니다."
+        : "계획 기간 동안 현금이 완전히 마르지는 않는 흐름입니다.",
     });
   }
 
@@ -332,13 +332,13 @@ export function buildInterpretationVM(
       id: "warnings",
       severity,
       rank: diagRank(severity),
-      title: "집계 경고",
+      title: "주의 신호",
       evidence: `${warningCount}건 (치명 ${criticalWarningCount}건)`,
       description: severity === "risk"
-        ? "치명 경고가 포함되어 즉시 조치가 필요합니다."
+        ? "강한 경고가 섞여 있어 우선순위를 바로 조정하는 편이 좋습니다."
         : severity === "caution"
-          ? "경고가 누적되어 계획 안정성이 낮아질 수 있습니다."
-          : "경고 수가 제한적입니다.",
+          ? "주의 신호가 쌓이고 있어 계획이 예상보다 흔들릴 수 있습니다."
+          : "현재는 경고가 많지 않습니다.",
     });
   }
 
@@ -351,9 +351,9 @@ export function buildInterpretationVM(
       id: "goals",
       severity: "caution",
       rank: diagRank("caution"),
-      title: "목표 달성",
+      title: "목표 진행률",
       evidence: `${achieved}/${total}`,
-      description: "일부 목표가 미달 상태입니다. 목표월/적립액 조정이 필요합니다.",
+      description: "일부 목표는 지금 속도로는 기한 내 달성이 어려워 보입니다.",
     });
   }
 
@@ -367,13 +367,13 @@ export function buildInterpretationVM(
       id: "monte-carlo",
       severity,
       rank: diagRank(severity),
-      title: "은퇴 자산 고갈 확률",
+      title: "은퇴 자산 버팀력",
       evidence: formatPercentUnit(depletionPct, 1),
       description: severity === "risk"
-        ? "고갈 확률이 높아 보수적 조정이 필요합니다."
+        ? "변동성을 감안하면 은퇴 자금이 예상보다 빨리 줄 가능성이 있습니다."
         : severity === "caution"
-          ? "고갈 확률이 있어 대안 시나리오 비교가 필요합니다."
-          : "고갈 확률은 낮은 편이지만 보장은 아닙니다.",
+          ? "낙관 시나리오만 보지 말고 보수 시나리오도 같이 봐야 합니다."
+          : "현재 기준으로는 비교적 버틸 힘이 있는 편입니다.",
     });
   }
 
@@ -387,15 +387,15 @@ export function buildInterpretationVM(
       id: "snapshot",
       severity,
       rank: diagRank(severity),
-      title: "가정 스냅샷 최신성",
+      title: "기준 데이터 최신성",
       evidence: snapshotMissing ? "missing" : `${Math.max(0, Math.trunc(staleDays ?? 0))}일`,
       description: snapshotMissing
-        ? "스냅샷이 없어 기본 가정으로 계산되었습니다."
+        ? "최신 기준 데이터가 없어 기본값으로 계산했습니다."
         : severity === "risk"
-          ? `스냅샷 staleDays가 ${policy.snapshot.staleRiskDays}일을 초과했습니다.`
+          ? "기준 데이터가 꽤 오래돼 현재 시장 상황과 차이가 날 수 있습니다."
           : severity === "caution"
-            ? `스냅샷 staleDays가 ${policy.snapshot.staleCautionDays}일을 초과했습니다.`
-            : "스냅샷 최신성은 양호합니다.",
+            ? "기준 데이터가 조금 오래돼 최근 금리나 물가가 덜 반영됐을 수 있습니다."
+            : "기준 데이터는 비교적 최신입니다.",
     });
   }
 
@@ -555,7 +555,15 @@ export function buildInterpretationVM(
       label: verdictLabel(verdict),
       headline: verdictHeadline(verdict),
     },
-    diagnostics: diagnostics.slice(0, 3).map(({ rank: _rank, ...diag }) => diag),
+    diagnostics: diagnostics.slice(0, 3).map((diag) => ({
+      id: diag.id,
+      severity: diag.severity,
+      title: diag.title,
+      evidence: diag.evidence,
+      description: diag.description,
+      ...(diag.evidenceDetail ? { evidenceDetail: diag.evidenceDetail } : {}),
+      ...(diag.evidenceItem ? { evidenceItem: diag.evidenceItem } : {}),
+    })),
     warnings,
     nextActions,
   };

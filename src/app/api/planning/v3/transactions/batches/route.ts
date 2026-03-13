@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
-import { listBatches as listLegacyBatches } from "@/lib/planning/v3/service/transactionStore";
-import { listBatches as listStoredBatches } from "@/lib/planning/v3/store/batchesStore";
-import { type ImportBatchMeta } from "@/lib/planning/v3/domain/transactions";
+import {
+  type ImportBatchMeta,
+  listLegacyBatches,
+  listStoredBatches,
+} from "@/lib/planning/v3/transactions/store";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -65,7 +65,6 @@ function sortByCreatedAtDesc(items: ImportBatchMeta[]): ImportBatchMeta[] {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -86,9 +85,6 @@ function withReadGuard(request: Request): Response | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 

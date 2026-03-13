@@ -34,7 +34,7 @@ describe("planning v3 indicators fred connector", () => {
     }), { status: 200 }));
     const connector = createFredConnector({
       fetchImpl: fetchMock as unknown as typeof fetch,
-      env: { FRED_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", FRED_API_KEY: "test-key" } as NodeJS.ProcessEnv,
     });
 
     const result = await connector.fetchSeries(SPEC, makeOptions());
@@ -48,7 +48,7 @@ describe("planning v3 indicators fred connector", () => {
   it("throws INPUT when key is missing", async () => {
     const connector = createFredConnector({
       fetchImpl: vi.fn() as unknown as typeof fetch,
-      env: {} as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test" } as NodeJS.ProcessEnv,
     });
 
     await expect(connector.fetchSeries(SPEC, makeOptions())).rejects.toMatchObject({
@@ -66,7 +66,7 @@ describe("planning v3 indicators fred connector", () => {
     const sleepMock = vi.fn(async () => {});
     const connector = createFredConnector({
       fetchImpl: fetchMock as unknown as typeof fetch,
-      env: { FRED_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", FRED_API_KEY: "test-key" } as NodeJS.ProcessEnv,
       sleep: sleepMock,
       rateLimitRetries: 2,
       rateLimitBackoffMs: 100,
@@ -82,7 +82,7 @@ describe("planning v3 indicators fred connector", () => {
     const fetchMock = vi.fn(async () => new Response("", { status: 429 }));
     const connector = createFredConnector({
       fetchImpl: fetchMock as unknown as typeof fetch,
-      env: { FRED_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", FRED_API_KEY: "test-key" } as NodeJS.ProcessEnv,
       sleep: async () => {},
       rateLimitRetries: 1,
       rateLimitBackoffMs: 1,

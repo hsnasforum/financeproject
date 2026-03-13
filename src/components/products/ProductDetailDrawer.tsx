@@ -2,6 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyDialogSurface,
+  BodyEmptyState,
+  BodyInset,
+  BodySectionHeading,
+  BodyTableFrame,
+  bodyFieldClassName,
+} from "@/components/ui/BodyTone";
 import { calcDeposit, calcSaving } from "@/lib/planning/calc";
 import { FINLIFE_FIELD_CONFIG } from "@/lib/finlife/fieldConfig";
 import { buildConsumerNotes, formatGlossaryValue, getKindSummary } from "@/lib/finlife/glossary";
@@ -80,32 +88,42 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/45 md:items-center" role="dialog" aria-modal="true">
-      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-t-2xl bg-white p-5 md:rounded-2xl md:p-6">
+      <BodyDialogSurface className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-t-2xl p-5 md:rounded-2xl md:p-6">
         <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs text-slate-500">{product.kor_co_nm ?? "-"}</p>
-            <h3 className="text-lg font-semibold text-slate-900">{product.fin_prdt_nm ?? "상품 상세"}</h3>
-            <p className="mt-1 text-xs text-slate-600">{summary}</p>
+          <div className="min-w-0">
+            <BodySectionHeading
+              title={product.fin_prdt_nm ?? "상품 상세"}
+              description={
+                <>
+                  <span className="block text-xs text-slate-500">{product.kor_co_nm ?? "-"}</span>
+                  <span className="mt-1 block text-xs text-slate-600">{summary}</span>
+                </>
+              }
+            />
           </div>
           <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>닫기</Button>
         </div>
 
-        <details open className="rounded-xl border border-slate-200 p-3">
+        <details open className="rounded-xl border border-slate-200 bg-white p-3">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">상품 안내</summary>
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {presentBySpecs(kind, product.raw, config?.productFields).map((entry) => (
-              <div key={`overview-${entry.label}`} className="rounded border border-slate-100 bg-slate-50 p-2">
+              <BodyInset className="rounded-lg border-slate-100 bg-slate-50 p-2" key={`overview-${entry.label}`}>
                 <p className="text-[11px] font-semibold text-slate-600">{entry.label}</p>
                 <p className="text-xs text-slate-800">{entry.valueText}</p>
-              </div>
+              </BodyInset>
             ))}
           </div>
         </details>
 
-        <details className="mt-3 rounded-xl border border-slate-200 p-3">
+        <details className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">우대조건/유의사항</summary>
           {notes.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">공시된 우대조건/유의사항 정보가 없습니다.</p>
+            <BodyEmptyState
+              className="mt-3"
+              title="공시된 우대조건/유의사항 정보가 없습니다"
+              description="추가 공시 정보가 있으면 이 영역에 함께 보여드립니다."
+            />
           ) : (
             <ul className="mt-2 space-y-1 text-xs text-slate-700">
               {notes.map((note) => (
@@ -115,10 +133,14 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
           )}
         </details>
 
-        <details open className="mt-3 rounded-xl border border-slate-200 p-3">
+        <details open className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
           <summary className="cursor-pointer text-sm font-semibold text-slate-800">금리/옵션(기간별)</summary>
           {product.options.length === 0 ? (
-            <p className="mt-2 text-xs text-slate-500">옵션 정보가 제공되지 않았습니다(공시 데이터 기준).</p>
+            <BodyEmptyState
+              className="mt-3"
+              title="옵션 정보가 제공되지 않았습니다"
+              description="공시 데이터에 기간별 옵션이 없어서 기본 상품 정보만 보여드립니다."
+            />
           ) : (
             <div className="mt-2 space-y-3">
               <div className="flex flex-wrap gap-2">
@@ -127,14 +149,14 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                     key={`${product.fin_prdt_cd}-opt-chip-${index}`}
                     type="button"
                     onClick={() => setSelectedOptionIndex(index)}
-                    className={`rounded-full border px-3 py-1 text-xs ${selectedOptionIndex === index ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600"}`}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${selectedOptionIndex === index ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"}`}
                   >
                     {option.save_trm ? formatGlossaryValue("save_trm", option.save_trm) : `옵션 ${index + 1}`}
                   </button>
                 ))}
               </div>
 
-              <div className="overflow-x-auto">
+              <BodyTableFrame>
                 <table className="min-w-full text-left text-xs">
                   <thead className="text-slate-500">
                     <tr>
@@ -168,13 +190,13 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                     })}
                   </tbody>
                 </table>
-              </div>
+              </BodyTableFrame>
             </div>
           )}
         </details>
 
         {(kind === "deposit" || kind === "saving") && selectedOption ? (
-          <details open className="mt-3 rounded-xl border border-slate-200 p-3">
+          <details open className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
             <summary className="cursor-pointer text-sm font-semibold text-slate-800">금리 계산기</summary>
             <p className="mt-1 text-xs text-slate-500">
               가정값(기본 세율 15.4%) 기반 예상치입니다. 실제 수령액은 이자 지급 방식/세율/우대조건 충족 여부에 따라 달라질 수 있습니다.
@@ -182,22 +204,22 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
 
             <div className="mt-2 grid gap-2 sm:grid-cols-4">
               {kind === "deposit" ? (
-                <label className="text-xs">예치금(원)
-                  <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2" value={amountWon} onChange={(e) => setAmountWon(Number(e.target.value.replace(/[^0-9]/g, "")) || 0)} />
+                <label className="text-xs font-semibold text-slate-700">예치금(원)
+                  <input className={bodyFieldClassName} value={amountWon} onChange={(e) => setAmountWon(Number(e.target.value.replace(/[^0-9]/g, "")) || 0)} />
                 </label>
               ) : (
-                <label className="text-xs">월 납입액(원)
-                  <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2" value={savingMonthlyWon} onChange={(e) => setSavingMonthlyWon(Number(e.target.value.replace(/[^0-9]/g, "")) || 0)} />
+                <label className="text-xs font-semibold text-slate-700">월 납입액(원)
+                  <input className={bodyFieldClassName} value={savingMonthlyWon} onChange={(e) => setSavingMonthlyWon(Number(e.target.value.replace(/[^0-9]/g, "")) || 0)} />
                 </label>
               )}
-              <label className="text-xs">기간
-                <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2" value={formatGlossaryValue("save_trm", String(parseTerm(selectedOption)))} readOnly />
+              <label className="text-xs font-semibold text-slate-700">기간
+                <input className={bodyFieldClassName} value={formatGlossaryValue("save_trm", String(parseTerm(selectedOption)))} readOnly />
               </label>
-              <label className="text-xs">세율(%)
-                <input className="mt-1 h-9 w-full rounded border border-slate-300 px-2" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} />
+              <label className="text-xs font-semibold text-slate-700">세율(%)
+                <input className={bodyFieldClassName} value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} />
               </label>
-              <label className="text-xs">금리기준
-                <select className="mt-1 h-9 w-full rounded border border-slate-300 px-2" value={usePrimeRate ? "prime" : "base"} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
+              <label className="text-xs font-semibold text-slate-700">금리기준
+                <select className={bodyFieldClassName} value={usePrimeRate ? "prime" : "base"} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
                   <option value="base">기본금리</option>
                   <option value="prime">최고금리</option>
                 </select>
@@ -206,16 +228,16 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
 
             {calc ? (
               <div className="mt-3 grid gap-2 sm:grid-cols-2 text-xs">
-                <p>원금/납입원금: <span className="font-semibold">{formatKrwWithEok(calc.principalWon)}</span></p>
-                <p>세전이자: <span className="font-semibold">{formatKrwWithEok(calc.grossInterestWon)}</span></p>
-                <p>이자과세: <span className="font-semibold">{formatKrwWithEok(calc.taxWon)}</span></p>
-                <p>세후이자: <span className="font-semibold">{formatKrwWithEok(calc.netInterestWon)}</span></p>
-                <p className="sm:col-span-2">세후수령액(예상): <span className="font-semibold text-emerald-700">{formatKrwWithEok(calc.maturityWon)}</span></p>
+                <BodyInset className="rounded-lg bg-slate-50 px-3 py-2">원금/납입원금: <span className="font-semibold">{formatKrwWithEok(calc.principalWon)}</span></BodyInset>
+                <BodyInset className="rounded-lg bg-slate-50 px-3 py-2">세전이자: <span className="font-semibold">{formatKrwWithEok(calc.grossInterestWon)}</span></BodyInset>
+                <BodyInset className="rounded-lg bg-slate-50 px-3 py-2">이자과세: <span className="font-semibold">{formatKrwWithEok(calc.taxWon)}</span></BodyInset>
+                <BodyInset className="rounded-lg bg-slate-50 px-3 py-2">세후이자: <span className="font-semibold">{formatKrwWithEok(calc.netInterestWon)}</span></BodyInset>
+                <BodyInset className="rounded-lg bg-emerald-50 px-3 py-2 sm:col-span-2">세후수령액(예상): <span className="font-semibold text-emerald-700">{formatKrwWithEok(calc.maturityWon)}</span></BodyInset>
               </div>
             ) : null}
           </details>
         ) : null}
-      </div>
+      </BodyDialogSurface>
     </div>
   );
 }

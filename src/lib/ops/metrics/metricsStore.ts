@@ -238,6 +238,28 @@ async function readFromFile(filePath: string): Promise<MetricsEvent[]> {
     .filter((row): row is MetricsEvent => row !== null);
 }
 
+async function listReadableMetricFiles(filePath: string): Promise<string[]> {
+  const dir = path.dirname(filePath);
+  const base = path.basename(filePath);
+  const ext = path.extname(filePath);
+  const stem = ext ? base.slice(0, -ext.length) : base;
+
+  const entries = await fs.readdir(dir).catch(() => [] as string[]);
+  const rotated = entries
+    .map((name) => {
+      const matched = ext
+        ? name.match(new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.(\\d+)${ext.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`))
+        : name.match(new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.(\\d+)$`));
+      if (!matched) return null;
+      return { name, index: Number(matched[1]) };
+    })
+    .filter((row): row is { name: string; index: number } => row !== null && Number.isFinite(row.index))
+    .sort((a, b) => a.index - b.index)
+    .map((row) => path.join(dir, row.name));
+
+  return [filePath, ...rotated];
+}
+
 function toSummary(events: MetricsEvent[], rangeHours: number, now = new Date()): MetricsSummary {
   const nowMs = now.getTime();
   const fromMs = nowMs - rangeHours * 60 * 60 * 1000;
@@ -339,11 +361,7 @@ export async function appendEvent(event: Partial<MetricsEvent> & { type: Metrics
 
 export async function readRecent(options?: MetricsReadOptions): Promise<MetricsEvent[]> {
   const filePath = resolveMetricsPath();
-  const rotationCount = resolveRotationCount();
-  const files = [
-    filePath,
-    ...Array.from({ length: rotationCount }, (_, index) => toRotatedPath(filePath, index + 1)),
-  ];
+  const files = await listReadableMetricFiles(filePath);
 
   const rows = (await Promise.all(files.map((candidate) => readFromFile(candidate)))).flat();
   const sorted = rows.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));

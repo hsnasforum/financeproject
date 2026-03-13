@@ -106,6 +106,12 @@ async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void
   await atomicWriteJson(filePath, payload);
 }
 
+function isRecoverableJsonReadError(error: unknown): boolean {
+  const nodeError = error as NodeJS.ErrnoException;
+  if (nodeError?.code === "ENOENT") return true;
+  return error instanceof SyntaxError;
+}
+
 async function readSnapshotFile(filePath: string): Promise<AssumptionsSnapshot | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
@@ -122,8 +128,7 @@ async function readSnapshotFile(filePath: string): Promise<AssumptionsSnapshot |
     }
     return snapshot;
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return null;
+    if (isRecoverableJsonReadError(error)) return null;
     throw error;
   }
 }

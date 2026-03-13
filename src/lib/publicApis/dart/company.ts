@@ -1,7 +1,6 @@
 import { mapOpenDartStatus } from "@/lib/publicApis/dart/opendartErrors";
+import { resolveDartBaseUrl } from "@/lib/publicApis/dart/baseUrl";
 import { type DartApiErrorCode, type DartApiResult, type DartCompany } from "@/lib/publicApis/dart/types";
-
-const DEFAULT_DART_BASE_URL = "https://opendart.fss.or.kr";
 
 function isCorpCode(value: string): boolean {
   return /^\d{8}$/.test(value);
@@ -18,8 +17,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getBaseUrl(): string {
-  const raw = (process.env.OPENDART_BASE_URL ?? DEFAULT_DART_BASE_URL).trim();
-  return raw.endsWith("/") ? raw.slice(0, -1) : raw;
+  return resolveDartBaseUrl();
 }
 
 function toError(code: DartApiErrorCode, message: string): DartApiResult<DartCompany> {

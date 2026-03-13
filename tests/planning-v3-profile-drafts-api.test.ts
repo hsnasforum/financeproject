@@ -13,42 +13,100 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4990";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const REMOTE_HOST = "example.com";
+const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+const EVIL_ORIGIN = "http://evil.com";
 
-function requestPost(body: unknown): Request {
-  return new Request(`${LOCAL_ORIGIN}/api/planning/v3/profile/drafts`, {
+function requestPost(
+  body: unknown,
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}/api/planning/v3/profile/drafts`, {
     method: "POST",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/profile/drafts`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/profile/drafts`,
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   });
 }
 
-function requestGet(pathname: string): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestGet(
+  pathname: string,
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}${pathname}`, {
     method: "GET",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/profile/drafts`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/profile/drafts`,
     },
   });
 }
 
-function requestDelete(pathname: string, body: unknown): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestDelete(
+  pathname: string,
+  body: unknown,
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+    cookie?: string;
+  },
+): Request {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}${pathname}`, {
     method: "DELETE",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/profile/drafts`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/profile/drafts`,
+      ...(options?.cookie ? { cookie: options.cookie } : {}),
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   });
+}
+
+async function expectOriginMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
+}
+
+async function expectCsrfMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("CSRF_MISMATCH");
 }
 
 function collectKeys(value: unknown, parent = ""): string[] {
@@ -197,6 +255,22 @@ describe("planning v3 profile drafts API", () => {
     expect(payload.error?.code).toBe("NO_DATA");
   });
 
+  it("DELETE requires csrf in body and does not accept query fallback", async () => {
+    const created = await draftsPOST(requestPost({ csrf: "test", batchId }));
+    const createdPayload = await created.json() as { data?: { id?: string } };
+    const draftId = String(createdPayload.data?.id ?? "");
+    expect(draftId).toBeTruthy();
+
+    await expectCsrfMismatch(draftDetailDELETE(
+      requestDelete(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}?csrf=test`,
+        {},
+        { cookie: "dev_csrf=test" },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    ));
+  });
+
   it("returns 500 when stored draft includes forbidden keys", async () => {
     const forbiddenId = "d_forbidden_payload";
     const draftsDir = path.join(root, "planning-v3", "drafts");
@@ -219,5 +293,68 @@ describe("planning v3 profile drafts API", () => {
     const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INTERNAL");
+  });
+
+  it("allows same-origin remote host across profile draft routes and still blocks cross-origin", async () => {
+    const created = await draftsPOST(requestPost(
+      { csrf: "test", batchId },
+      { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+    ));
+    expect(created.status).toBe(200);
+    const createdPayload = await created.json() as { ok?: boolean; data?: { id?: string } };
+    expect(createdPayload.ok).toBe(true);
+    const draftId = String(createdPayload.data?.id ?? "");
+    expect(draftId).toBeTruthy();
+
+    const listResponse = await draftsGET(
+      requestGet("/api/planning/v3/profile/drafts?csrf=test", { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST }),
+    );
+    expect(listResponse.status).toBe(200);
+    const listPayload = await listResponse.json() as { ok?: boolean; data?: Array<{ draftId?: string }> };
+    expect(listPayload.ok).toBe(true);
+    expect((listPayload.data ?? []).some((row) => row.draftId === draftId)).toBe(true);
+
+    const detailResponse = await draftDetailGET(
+      requestGet(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}?csrf=test`,
+        { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    );
+    expect(detailResponse.status).toBe(200);
+
+    const deleteResponse = await draftDetailDELETE(
+      requestDelete(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}`,
+        { csrf: "test" },
+        { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    );
+    expect(deleteResponse.status).toBe(200);
+
+    await expectOriginMismatch(draftsGET(requestGet(
+      "/api/planning/v3/profile/drafts?csrf=test",
+      { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST, origin: EVIL_ORIGIN, refererOrigin: EVIL_ORIGIN },
+    )));
+    await expectOriginMismatch(draftsPOST(requestPost(
+      { csrf: "test", batchId },
+      { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST, origin: EVIL_ORIGIN, refererOrigin: EVIL_ORIGIN },
+    )));
+    await expectOriginMismatch(draftDetailGET(
+      requestGet(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}?csrf=test`,
+        { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST, origin: EVIL_ORIGIN, refererOrigin: EVIL_ORIGIN },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    ));
+    await expectOriginMismatch(draftDetailDELETE(
+      requestDelete(
+        `/api/planning/v3/profile/drafts/${encodeURIComponent(draftId)}`,
+        { csrf: "test" },
+        { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST, origin: EVIL_ORIGIN, refererOrigin: EVIL_ORIGIN },
+      ),
+      { params: Promise.resolve({ id: draftId }) },
+    ));
   });
 });

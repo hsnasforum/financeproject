@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { type DigestDay } from "./digest/contracts";
 import { noRecommendationText } from "./guard/noRecommendationText";
 import { buildScenarios } from "./scenario";
 import { TOPIC_SCENARIO_TEMPLATES } from "./scenario/templates";
 
-function makeDigest() {
+function makeDigest(): DigestDay {
   return {
+    schemaVersion: 1,
     date: "2026-03-04",
     observation: "관찰: 금리 토픽 강도가 확대되는 흐름이 관찰됩니다.",
     evidence: [
@@ -32,7 +34,7 @@ function makeDigest() {
     ],
     watchlist: ["기준금리", "USDKRW"],
     counterSignals: ["토픽 집중도가 분산되면 현재 관찰은 약화될 수 있습니다."],
-  } as const;
+  };
 }
 
 function makeTrends() {

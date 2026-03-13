@@ -45,7 +45,7 @@ describe("planning v3 indicators kosis connector", () => {
 
   it("returns INPUT when key is missing", async () => {
     const connector = createKosisConnector({
-      env: {} as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test" } as NodeJS.ProcessEnv,
       fetchImpl: vi.fn() as unknown as typeof fetch,
     });
     await expect(connector.fetchSeries(SPEC, makeOptions())).rejects.toMatchObject({
@@ -66,7 +66,7 @@ describe("planning v3 indicators kosis connector", () => {
     }));
 
     const connector = createKosisConnector({
-      env: { KOSIS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", KOSIS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
       fetchImpl: fetchMock as unknown as typeof fetch,
     });
 
@@ -94,7 +94,7 @@ describe("planning v3 indicators kosis connector", () => {
       }));
     const sleepMock = vi.fn(async () => {});
     const connector = createKosisConnector({
-      env: { KOSIS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
+      env: { NODE_ENV: "test", KOSIS_API_KEY: "test-key" } as NodeJS.ProcessEnv,
       fetchImpl: fetchMock as unknown as typeof fetch,
       sleep: sleepMock,
       limitRetries: 2,

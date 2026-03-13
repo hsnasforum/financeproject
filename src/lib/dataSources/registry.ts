@@ -14,11 +14,17 @@ export type DataSourceDef = {
   status: () => DataSourceStatus;
 };
 
+function hasEnv(key: string): boolean {
+  return Boolean((process.env[key] ?? "").trim());
+}
+
 function buildStatus(requirements: DataSourceDef["env"]): DataSourceStatus {
-  const missing = requirements
-    .filter((entry) => !entry.optional)
-    .filter((entry) => !(process.env[entry.key] ?? "").trim())
+  const required = requirements.filter((entry) => !entry.optional);
+  const optional = requirements.filter((entry) => entry.optional);
+  const missing = required
+    .filter((entry) => !hasEnv(entry.key))
     .map((entry) => entry.key);
+  const configuredOptional = optional.filter((entry) => hasEnv(entry.key));
 
   if (missing.length > 0) {
     return {
@@ -28,8 +34,25 @@ function buildStatus(requirements: DataSourceDef["env"]): DataSourceStatus {
     };
   }
 
+  if (required.length === 0 && optional.length > 0 && configuredOptional.length === 0) {
+    return {
+      state: "missing",
+      message: `선택 ENV 미설정: ${optional.map((entry) => entry.key).join(", ")}`,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   return {
     state: "configured",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function buildKeyConfiguredStatus(keys: string[], message: string): DataSourceStatus {
+  const configured = keys.some((key) => hasEnv(key));
+  return {
+    state: configured ? "configured" : "missing",
+    message: configured ? undefined : message,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -119,6 +142,7 @@ export const DATA_SOURCES: DataSourceDef[] = [
       { key: "NPS_PENSION_API_KEY", label: "NPS API Key", optional: true },
       { key: "NPS_PENSION_API_URL", label: "NPS API URL", optional: true },
     ],
+    status: () => buildKeyConfiguredStatus(["NPS_PENSION_API_KEY"], "선택 ENV 미설정: NPS_PENSION_API_KEY"),
   }),
   defineDataSource({
     id: "FSS_INSURANCE",
@@ -128,6 +152,7 @@ export const DATA_SOURCES: DataSourceDef[] = [
       { key: "FSS_INSURANCE_API_KEY", label: "FSS INSURANCE API Key", optional: true },
       { key: "FSS_INSURANCE_API_URL", label: "FSS INSURANCE API URL", optional: true },
     ],
+    status: () => buildKeyConfiguredStatus(["FSS_INSURANCE_API_KEY"], "선택 ENV 미설정: FSS_INSURANCE_API_KEY"),
   }),
   defineDataSource({
     id: "FSC_RETIRE_PENSION",
@@ -137,6 +162,7 @@ export const DATA_SOURCES: DataSourceDef[] = [
       { key: "FSC_RETIRE_PENSION_API_KEY", label: "FSC RETIRE API Key", optional: true },
       { key: "FSC_RETIRE_PENSION_API_URL", label: "FSC RETIRE API URL", optional: true },
     ],
+    status: () => buildKeyConfiguredStatus(["FSC_RETIRE_PENSION_API_KEY"], "선택 ENV 미설정: FSC_RETIRE_PENSION_API_KEY"),
   }),
   defineDataSource({
     id: "KDB_RETIRE_GUARANTEE_RATE",
@@ -146,6 +172,7 @@ export const DATA_SOURCES: DataSourceDef[] = [
       { key: "KDB_RETIRE_GUARANTEE_API_KEY", label: "KDB RETIRE API Key", optional: true },
       { key: "KDB_RETIRE_GUARANTEE_API_URL", label: "KDB RETIRE API URL", optional: true },
     ],
+    status: () => buildKeyConfiguredStatus(["KDB_RETIRE_GUARANTEE_API_KEY"], "선택 ENV 미설정: KDB_RETIRE_GUARANTEE_API_KEY"),
   }),
   defineDataSource({
     id: "FSC_FIN_COMPANY_INFO",
@@ -155,6 +182,7 @@ export const DATA_SOURCES: DataSourceDef[] = [
       { key: "FSC_FINCOMPANY_API_KEY", label: "FSC FINCOMPANY API Key", optional: true },
       { key: "FSC_FINCOMPANY_API_URL", label: "FSC FINCOMPANY API URL", optional: true },
     ],
+    status: () => buildKeyConfiguredStatus(["FSC_FINCOMPANY_API_KEY"], "선택 ENV 미설정: FSC_FINCOMPANY_API_KEY"),
   }),
   defineDataSource({
     id: "BOK_ECOS",
@@ -164,6 +192,25 @@ export const DATA_SOURCES: DataSourceDef[] = [
       { key: "BOK_ECOS_API_KEY", label: "BOK ECOS API Key", optional: true },
       { key: "BOK_ECOS_API_URL", label: "BOK ECOS API URL", optional: true },
     ],
+    status: () => buildKeyConfiguredStatus(["BOK_ECOS_API_KEY", "ECOS_API_KEY"], "선택 ENV 미설정: BOK_ECOS_API_KEY"),
+  }),
+  defineDataSource({
+    id: "FRED",
+    label: "FRED 거시지표",
+    priority: "P1",
+    env: [
+      { key: "FRED_API_KEY", label: "FRED API Key", optional: true },
+    ],
+    status: () => buildKeyConfiguredStatus(["FRED_API_KEY"], "선택 ENV 미설정: FRED_API_KEY"),
+  }),
+  defineDataSource({
+    id: "KOSIS",
+    label: "국가통계포털 KOSIS",
+    priority: "P1",
+    env: [
+      { key: "KOSIS_API_KEY", label: "KOSIS API Key", optional: true },
+    ],
+    status: () => buildKeyConfiguredStatus(["KOSIS_API_KEY"], "선택 ENV 미설정: KOSIS_API_KEY"),
   }),
 ];
 

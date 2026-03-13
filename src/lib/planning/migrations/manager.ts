@@ -122,6 +122,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isRecoverableMigrationStateReadError(error: unknown): boolean {
+  const nodeError = error as NodeJS.ErrnoException;
+  if (nodeError?.code === "ENOENT") return true;
+  return error instanceof SyntaxError;
+}
+
 function toNormalizedState(raw: unknown): PlanningMigrationState {
   if (!isRecord(raw)) return createInitialState();
   const version = Math.trunc(Number(raw.version));
@@ -184,8 +190,7 @@ async function readMigrationState(baseDir?: string): Promise<PlanningMigrationSt
     const raw = await fs.readFile(filePath, "utf-8");
     return toNormalizedState(JSON.parse(raw) as unknown);
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") {
+    if (isRecoverableMigrationStateReadError(error)) {
       return createInitialState();
     }
     throw error;

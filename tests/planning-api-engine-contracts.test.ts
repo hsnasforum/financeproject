@@ -32,20 +32,19 @@ function sampleEngine() {
 }
 
 describe("planning api engine contracts", () => {
-  it("increments legacy envelope fallback counter when top-level fields are used", () => {
+  it("requires engine envelope instead of legacy top-level fields", () => {
     resetPlanningFallbackUsageSnapshot();
     const before = getPlanningFallbackUsageSnapshot();
 
     const engine = sampleEngine();
-    const resolved = getEngineEnvelope({
+    expect(() => getEngineEnvelope({
       stage: engine.stage,
       financialStatus: engine.financialStatus,
       stageDecision: engine.stageDecision,
-    });
+    } as Parameters<typeof getEngineEnvelope>[0])).toThrow("Missing engine envelope");
     const after = getPlanningFallbackUsageSnapshot();
 
-    expect(resolved.stage).toBe("DEBT");
-    expect(after.legacyEnvelopeFallbackCount).toBe(before.legacyEnvelopeFallbackCount + 1);
+    expect(after.legacyEnvelopeFallbackCount).toBe(before.legacyEnvelopeFallbackCount);
   });
 
   it("prefers engine envelope when present", () => {
@@ -62,23 +61,20 @@ describe("planning api engine contracts", () => {
         investmentAllowed: true,
         warnings: [],
       },
-    });
+    } as Parameters<typeof getEngineEnvelope>[0]);
 
     expect(resolved).toBe(engine);
   });
 
-  it("falls back to legacy top-level fields when engine is missing", () => {
+  it("throws when engine envelope is missing", () => {
     resetPlanningFallbackUsageSnapshot();
     const engine = sampleEngine();
-    const resolved = getEngineEnvelope({
+    expect(() => getEngineEnvelope({
       stage: engine.stage,
       financialStatus: engine.financialStatus,
       stageDecision: engine.stageDecision,
-    });
-
-    expect(resolved.stage).toBe("DEBT");
-    expect(resolved.stageDecision.priority).toBe("PAY_DEBT");
-    expect(getPlanningFallbackUsageSnapshot().legacyEnvelopeFallbackCount).toBe(1);
+    } as Parameters<typeof getEngineEnvelope>[0])).toThrow("Missing engine envelope");
+    expect(getPlanningFallbackUsageSnapshot().legacyEnvelopeFallbackCount).toBe(0);
   });
 
   it("throws when neither engine nor legacy fields exist", () => {
@@ -86,11 +82,10 @@ describe("planning api engine contracts", () => {
   });
 
   it("normalizes response with engine and schema version defaults", () => {
+    const engine = sampleEngine();
     const normalized = normalizePlanningResponse({
       planSummary: { endNetWorthKrw: 100_000_000 },
-      stage: "DEBT" as const,
-      financialStatus: sampleEngine().financialStatus,
-      stageDecision: sampleEngine().stageDecision,
+      engine,
     });
 
     expect(normalized.engine.stage).toBe("DEBT");

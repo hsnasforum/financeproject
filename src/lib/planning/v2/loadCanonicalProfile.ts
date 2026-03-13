@@ -1,10 +1,10 @@
-import { PlanningV2ValidationError } from "../core/v2/types";
-import { validateProfileV2 } from "../core/v2/validate";
 import { normalizeAprPct, normalizeNewAprPct } from "../normalizeRates";
 import { type ProfileV2 } from "./types";
+import { PlanningV2ValidationError } from "./types";
 import { normalizeProfileInput } from "./profileNormalize";
 import { validateProfile as validateOfferMapping } from "./profileValidation";
 import { PROFILE_SCHEMA_VERSION } from "./schemaVersion";
+import { validateProfileV2 } from "./validate";
 import {
   buildProfileNormalizationDisclosure,
   type DisclosureFixInput,

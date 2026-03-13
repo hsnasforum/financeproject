@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import type { ChainId, FixChainRisk } from "@/lib/diagnostics/fixChains";
@@ -608,9 +609,11 @@ export function DoctorSummaryCard() {
                 ) : null}
                 {fixState && !fixState.running ? (
                   <div className="mt-2 rounded-md border border-slate-200 bg-white p-2">
-                    <p className={`text-[11px] font-semibold ${fixState.ok ? "text-emerald-700" : "text-rose-700"}`}>
-                      {fixState.message}
-                    </p>
+                    <DevUnlockShortcutMessage
+                      className={`text-[11px] font-semibold ${fixState.ok ? "text-emerald-700" : "text-rose-700"}`}
+                      linkClassName={fixState.ok ? "text-emerald-700" : "text-rose-700"}
+                      message={fixState.message}
+                    />
                     {fixState.stdoutTail ? (
                       <pre className="mt-1 whitespace-pre-wrap text-[10px] text-slate-600">{fixState.stdoutTail}</pre>
                     ) : null}
@@ -706,9 +709,11 @@ export function DoctorSummaryCard() {
                   </div>
                 ) : null}
                 {!state.running && state.message ? (
-                  <p className={`mt-2 text-[11px] font-semibold ${resultTextClass(state.ok)}`}>
-                    {chainLabel(chainId)}: {state.message}
-                  </p>
+                  <DevUnlockShortcutMessage
+                    className={`mt-2 text-[11px] font-semibold ${resultTextClass(state.ok)}`}
+                    linkClassName={state.ok ? "text-emerald-700" : "text-rose-700"}
+                    message={`${chainLabel(chainId)}: ${state.message}`}
+                  />
                 ) : null}
                 {state.steps.length > 0 ? (
                   <ChainStepsTable steps={state.steps} />
@@ -787,9 +792,11 @@ export function DoctorSummaryCard() {
                   </div>
                 ) : null}
                 {!state.running && state.message ? (
-                  <p className={`mt-2 text-[11px] font-semibold ${resultTextClass(state.ok)}`}>
-                    {state.message}
-                  </p>
+                  <DevUnlockShortcutMessage
+                    className={`mt-2 text-[11px] font-semibold ${resultTextClass(state.ok)}`}
+                    linkClassName={state.ok ? "text-emerald-700" : "text-rose-700"}
+                    message={state.message}
+                  />
                 ) : null}
                 {state.steps.length > 0 ? (
                   <ChainStepsTable steps={state.steps} />
@@ -898,9 +905,11 @@ export function DoctorSummaryCard() {
                                     if (!state || state.running) return null;
                                     return (
                                       <div key={`${stateKey}:result`} className="mt-2 rounded-md border border-slate-200 bg-white p-2">
-                                        <p className={`text-[11px] font-semibold ${state.ok ? "text-emerald-700" : "text-rose-700"}`}>
-                                          {state.message}
-                                        </p>
+                                        <DevUnlockShortcutMessage
+                                          className={`text-[11px] font-semibold ${state.ok ? "text-emerald-700" : "text-rose-700"}`}
+                                          linkClassName={state.ok ? "text-emerald-700" : "text-rose-700"}
+                                          message={state.message}
+                                        />
                                         {state.stdoutTail ? (
                                           <pre className="mt-1 whitespace-pre-wrap text-[10px] text-slate-700">{state.stdoutTail}</pre>
                                         ) : null}

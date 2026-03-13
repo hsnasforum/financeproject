@@ -31,18 +31,6 @@ function readProtocol(request: Request): string {
   ).trim().toLowerCase() || "http";
 }
 
-function hostToHostname(host: string): string {
-  const value = host.trim().toLowerCase();
-  if (!value) return "";
-  if (value.startsWith("[")) {
-    const bracketEnd = value.indexOf("]");
-    if (bracketEnd > 0) return value.slice(1, bracketEnd);
-  }
-  const firstColon = value.indexOf(":");
-  if (firstColon < 0) return value;
-  return value.slice(0, firstColon);
-}
-
 function parseCookies(cookieHeader: string): Record<string, string> {
   if (!cookieHeader.trim()) return {};
   return cookieHeader.split(";").reduce<Record<string, string>>((acc, token) => {

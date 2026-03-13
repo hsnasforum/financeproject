@@ -195,6 +195,7 @@ export function createKosisConnector(deps: KosisConnectorDeps = {}): SeriesConne
   return {
     sourceType: "kosis",
     async fetchSeries(spec: SeriesSpec, _options: FetchSeriesOptions) {
+      void _options;
       const apiKey = resolveApiKey(env);
       const parts = parseKosisExternalId(spec.externalId);
       const url = buildKosisUrl(parts, apiKey);

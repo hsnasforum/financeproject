@@ -1,11 +1,9 @@
 import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import { type PlanningTrashKind } from "../../../../../../lib/planning/server/store/trash";
@@ -34,9 +32,8 @@ function parseTrashKind(value: unknown): PlanningTrashKind | null {
   return null;
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -80,9 +77,6 @@ async function restoreTrashByKind(kind: PlanningTrashKind, id: string): Promise<
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: RestoreTrashBody = null;
   try {
     body = (await request.json()) as RestoreTrashBody;
@@ -90,7 +84,7 @@ export async function POST(request: Request) {
     body = null;
   }
 
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   const kind = parseTrashKind(body?.kind);

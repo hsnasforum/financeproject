@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   AccountMappingOverridesStoreInputError,
   upsertAccountMappingOverride,
@@ -24,7 +22,6 @@ function asString(value: unknown): string {
 
 function withWriteGuard(request: Request, csrf: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -44,9 +41,6 @@ function withWriteGuard(request: Request, csrf: unknown): Response | null {
 }
 
 export async function PATCH(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: PatchBody = null;
   try {
     body = (await request.json()) as PatchBody;

@@ -81,6 +81,6 @@ describe("migrateProfileRecord", () => {
     expect(result.changed).toBe(true);
     expect(result.warnings.some((warning) => warning.includes("DUPLICATE_FIELD_MISMATCH"))).toBe(true);
     expect(result.data?.profile.monthlyIncomeNet).toBe(4_500_000);
-    expect((result.data?.profile.debts?.[0] as { aprPct?: number } | undefined)?.aprPct).toBeCloseTo(5.4, 8);
+    expect(((result.data?.profile.debts as Array<{ aprPct?: number }> | undefined)?.[0])?.aprPct).toBeCloseTo(5.4, 8);
   });
 });

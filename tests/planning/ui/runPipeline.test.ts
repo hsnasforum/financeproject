@@ -37,21 +37,6 @@ function withEngine(data: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
-function withLegacyEngineFields(data: Record<string, unknown>): Record<string, unknown> {
-  const engineData = withEngine({});
-  const engine = engineData.engine as {
-    stage: string;
-    financialStatus: Record<string, unknown>;
-    stageDecision: Record<string, unknown>;
-  };
-  return {
-    ...data,
-    stage: engine.stage,
-    financialStatus: engine.financialStatus,
-    stageDecision: engine.stageDecision,
-  };
-}
-
 function buildBaseArgs(fetchFn: typeof fetch) {
   return {
     profile: {
@@ -239,19 +224,19 @@ describe("planning runPipeline", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("normalizes legacy simulate response fields into engine envelope", async () => {
+  it("fails when simulate response misses engine envelope", async () => {
     const fetchMock = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse({
         ok: true,
-        data: withLegacyEngineFields({
+        data: {
           summary: {
             endNetWorth: 100,
           },
-        }),
+        },
         meta: {},
       }));
 
-    const result = await executeRunPipeline({
+    await expect(executeRunPipeline({
       ...buildBaseArgs(fetchMock),
       toggles: {
         scenarios: false,
@@ -259,9 +244,8 @@ describe("planning runPipeline", () => {
         actions: false,
         debt: false,
       },
-    });
-
-    expect(result.simulate?.engine.stage).toBe("DEBT");
-    expect(result.simulate?.engineSchemaVersion).toBe(1);
+    })).rejects.toMatchObject({
+      stepId: "simulate",
+    } satisfies Partial<RunPipelineFatalError>);
   });
 });

@@ -28,7 +28,7 @@ export default async function PlanningPage({ searchParams }: PlanningPageProps) 
   const csrf = cookieStore.get("dev_csrf")?.value ?? "";
   const resolvedSearchParams = await searchParams;
   const locale = resolvePlanningLocale(pickLang(resolvedSearchParams?.lang), process.env.PLANNING_LOCALE);
-  const snapshotItems = await loadSnapshotListForPlanning(20);
+  const snapshotItems = await loadSnapshotListForPlanning(20).catch(() => ({ history: [] }));
   const initialSelectedProfileId = pickProfileId(resolvedSearchParams?.profileId);
   return (
     <PlanningWorkspaceClient

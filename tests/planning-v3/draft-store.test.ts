@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createDraft, deleteDraft, getDraft, listDrafts } from "../../src/lib/planning/v3/drafts/draftStore";
+import { createDraft, deleteDraft, getDraft, listDrafts } from "../../src/lib/planning/v3/draft/store";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;

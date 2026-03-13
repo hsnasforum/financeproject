@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   CategoryRulesStoreInputError,
   listRules,
   upsertRule,
-} from "@/lib/planning/v3/store/categoryRulesStore";
+} from "@/lib/planning/v3/categories/store";
 
 type RuleBody = {
   id?: unknown;
@@ -28,7 +26,6 @@ function asString(value: unknown): string {
 
 function withReadGuard(request: Request): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrf = asString(new URL(request.url).searchParams.get("csrf"));
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -50,7 +47,6 @@ function withReadGuard(request: Request): Response | null {
 
 function withWriteGuard(request: Request, csrf: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -70,9 +66,6 @@ function withWriteGuard(request: Request, csrf: unknown): Response | null {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
@@ -88,9 +81,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: RuleBody = null;
   try {
     body = (await request.json()) as RuleBody;
@@ -131,4 +121,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

@@ -140,6 +140,12 @@ function isV2Config(config: VaultConfig): config is VaultConfigV2 {
   return (config as VaultConfigV2).vaultVersion === 2;
 }
 
+function isRecoverableConfigReadError(error: unknown): boolean {
+  const nodeError = error as NodeJS.ErrnoException;
+  if (nodeError?.code === "ENOENT") return true;
+  return error instanceof SyntaxError;
+}
+
 function parseConfig(raw: unknown): VaultConfig | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const row = raw as Record<string, unknown>;
@@ -196,8 +202,7 @@ async function readConfigFile(): Promise<{ config: VaultConfig | null; sourcePat
       sourcePath: target,
     };
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code !== "ENOENT") throw error;
+    if (!isRecoverableConfigReadError(error)) throw error;
   }
 
   const legacy = resolveLegacyConfigPath();
@@ -209,8 +214,7 @@ async function readConfigFile(): Promise<{ config: VaultConfig | null; sourcePat
       sourcePath: legacy,
     };
   } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") {
+    if (isRecoverableConfigReadError(error)) {
       return { config: null, sourcePath: null };
     }
     throw error;

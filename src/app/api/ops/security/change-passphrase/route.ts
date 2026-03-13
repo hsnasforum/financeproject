@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
-import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
+import { toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { consumeVaultCsrfOrThrow } from "../../../../../lib/planning/security/vaultCsrf";
 import { changeVaultPassphrase } from "../../../../../lib/planning/security/vaultState";

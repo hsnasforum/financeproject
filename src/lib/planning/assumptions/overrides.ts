@@ -1,4 +1,5 @@
 import { type AssumptionsV2 } from "../v2/scenarios";
+import { roundToDigits } from "../calc";
 import { z } from "zod";
 
 export const ASSUMPTIONS_OVERRIDE_KEYS = [
@@ -60,7 +61,7 @@ function normalizePctValue(value: unknown): number | null {
   if (!isFiniteNumber(value)) return null;
   if (value === 0) return 0;
   const pct = Math.abs(value) <= 1 ? value * 100 : value;
-  return Math.round((pct + Number.EPSILON) * 1_000_000) / 1_000_000;
+  return roundToDigits(pct, 6);
 }
 
 function normalizeEntry(

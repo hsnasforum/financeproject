@@ -53,7 +53,7 @@ describe("GET /api/planning/v2/runs/[id]/report.pdf", () => {
     expect(payload.error?.code).toBe("DISABLED");
   });
 
-  it("enforces local-only guard", async () => {
+  it("allows same-origin remote requests and still honors feature flags", async () => {
     env.PLANNING_PDF_ENABLED = "false";
     const response = await runReportPdfGET(
       buildGetRequest("/api/planning/v2/runs/sample-run/report.pdf", REMOTE_HOST),
@@ -65,7 +65,29 @@ describe("GET /api/planning/v2/runs/[id]/report.pdf", () => {
     };
     expect(response.status).toBe(403);
     expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+    expect(payload.error?.code).toBe("DISABLED");
+  });
+
+  it("blocks cross-origin requests", async () => {
+    env.PLANNING_PDF_ENABLED = "false";
+    const response = await runReportPdfGET(
+      new Request(`${LOCAL_ORIGIN}/api/planning/v2/runs/sample-run/report.pdf`, {
+        method: "GET",
+        headers: {
+          host: LOCAL_HOST,
+          origin: REMOTE_ORIGIN,
+          referer: `${REMOTE_ORIGIN}/planning/runs`,
+        },
+      }),
+      { params: Promise.resolve({ id: "sample-run" }) },
+    );
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: { code?: string };
+    };
+    expect(response.status).toBe(403);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
   });
 
   it("enforces csrf when csrf cookie exists", async () => {

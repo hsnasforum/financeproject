@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PlanningV2ValidationError } from "../../../src/lib/planning/core/v2/types";
+import { PlanningV2ValidationError } from "../../../src/lib/planning/v2/types";
 import { applyProfilePatch, type ScenarioPatch } from "../../../src/lib/planning/v2/profilePatch";
 import { type ProfileV2 } from "../../../src/lib/planning/v2/types";
 
@@ -57,4 +57,3 @@ describe("applyProfilePatch", () => {
     ])).toThrowError(PlanningV2ValidationError);
   });
 });
-

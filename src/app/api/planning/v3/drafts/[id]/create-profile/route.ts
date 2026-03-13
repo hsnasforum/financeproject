@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -22,7 +20,6 @@ function asString(value: unknown): string {
 
 function withWriteGuard(request: Request, body: CreateProfileBody): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(body?.csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -42,9 +39,6 @@ function withWriteGuard(request: Request, body: CreateProfileBody): Response | n
 }
 
 export async function POST(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: CreateProfileBody = null;
   try {
     body = (await request.json()) as CreateProfileBody;

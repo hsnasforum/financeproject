@@ -1,4 +1,5 @@
 import { type EvidenceItem } from "../v2/insights/evidence";
+import { roundToDigits } from "../calc";
 import { type CandidateKind } from "../reports/productCandidates";
 
 export type BuildCandidatesEvidenceParams = {
@@ -23,7 +24,7 @@ function roundPercent(value: unknown): number {
   const parsed = asFiniteNumber(value, 0);
   if (parsed <= 0) return 0;
   if (parsed >= 100) return 100;
-  return Math.round(parsed * 100) / 100;
+  return roundToDigits(parsed, 2);
 }
 
 function roundMonths(value: unknown): number {

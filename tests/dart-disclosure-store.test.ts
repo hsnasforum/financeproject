@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   dartDisclosureStoreConfig,
   diffNew,
+  getDisclosureMonitorView,
   getDisclosureSettings,
   getLastCheckedAt,
   listSeenReceiptNos,
   markSeen,
+  setDisclosureMonitorView,
   setDisclosureSettings,
   type DisclosureLikeItem,
 } from "../src/lib/dart/dartDisclosureStore";
@@ -98,5 +100,37 @@ describe("dartDisclosureStore", () => {
 
     const restored = getDisclosureSettings(storage);
     expect(restored).toEqual(next);
+  });
+
+  it("persists monitor view preferences separately from api filter settings", () => {
+    const storage = createStorage();
+
+    expect(getDisclosureMonitorView(storage)).toEqual({ focusMode: "all" });
+
+    const nextView = setDisclosureMonitorView({ focusMode: "unchecked" }, storage);
+    expect(nextView).toEqual({ focusMode: "unchecked" });
+    expect(getDisclosureMonitorView(storage)).toEqual({ focusMode: "unchecked" });
+
+    expect(getDisclosureSettings(storage)).toEqual({
+      finalOnly: true,
+      pageCount: 20,
+    });
+  });
+
+  it("keeps legacy showPendingOnly view state readable", () => {
+    const storage = createStorage();
+    storage.setItem("dart_disclosure_store_v1", JSON.stringify({
+      seenReceiptNos: {},
+      lastCheckedAt: {},
+      settings: {
+        finalOnly: true,
+        pageCount: 20,
+      },
+      view: {
+        showPendingOnly: true,
+      },
+    }));
+
+    expect(getDisclosureMonitorView(storage)).toEqual({ focusMode: "pending" });
   });
 });

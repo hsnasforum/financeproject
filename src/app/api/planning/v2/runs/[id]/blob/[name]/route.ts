@@ -1,9 +1,8 @@
 import {
-  assertLocalHost,
+  assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "../../../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../../../lib/planning/api/response";
 import { sanitizeRunBlobForResponse } from "../../../../../../../../lib/planning/api/runResponseSanitizer";
 import { getRunBlob } from "../../../../../../../../lib/planning/server/store/runStore";
@@ -55,9 +54,9 @@ function jsonResponseWithOptionalGzip(request: Request, payload: unknown): Respo
   });
 }
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     const url = new URL(request.url);
     const csrf = (url.searchParams.get("csrf") ?? "").trim();
     requireCsrf(request, { csrf }, { allowWhenCookieMissing: true });
@@ -70,10 +69,7 @@ function withLocalReadGuard(request: Request) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  const guardFailure = withLocalReadGuard(request);
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   const { id, name } = await context.params;

@@ -1,11 +1,9 @@
 import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
 import {
-  assertLocalHost,
   requireCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
 import { sanitizeRunRecordForResponse } from "../../../../../../lib/planning/api/runResponseSanitizer";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
@@ -29,9 +27,9 @@ type RunActionPatchBody = {
   note?: unknown;
 };
 
-function withLocalReadGuard(request: Request) {
+function withReadGuard(request: Request) {
   try {
-    assertLocalHost(request);
+    assertSameOrigin(request);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -40,9 +38,8 @@ function withLocalReadGuard(request: Request) {
   }
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     requireCsrf(request, { csrf: csrfToken }, { allowWhenCookieMissing: true });
@@ -113,11 +110,22 @@ function parseActionStatus(value: unknown): PlanningRunActionStatus | undefined 
   return undefined;
 }
 
-export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
+function logActionCenterHydrationFailure(runId: string, error: unknown) {
+  console.error("[planning/runs/:id] failed to hydrate action center", {
+    runId,
+    message: error instanceof Error ? error.message : String(error),
+  });
+}
 
-  const guardFailure = withLocalReadGuard(request);
+function logActionCenterPersistFailure(runId: string, error: unknown) {
+  console.error("[planning/runs/:id] failed to persist hydrated action center", {
+    runId,
+    message: error instanceof Error ? error.message : String(error),
+  });
+}
+
+export async function GET(request: Request, context: RouteContext) {
+  const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
 
   const { id } = await context.params;
@@ -126,24 +134,31 @@ export async function GET(request: Request, context: RouteContext) {
     if (!run) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
     }
-    const plan = await ensureRunActionPlan(run);
-    const progress = await getRunActionProgress(run.id);
-    const runWithActionCenter = progress
-      ? {
-        ...run,
-        actionCenter: {
-          plan,
-          progress,
-        },
+    let runWithActionCenter = run;
+    try {
+      const plan = run.actionCenter?.plan ?? await ensureRunActionPlan(run);
+      const progress = run.actionCenter?.progress ?? await getRunActionProgress(run.id);
+      if (progress) {
+        runWithActionCenter = {
+          ...run,
+          actionCenter: {
+            plan,
+            progress,
+          },
+        };
+        if (!run.actionCenter?.plan || !run.actionCenter?.progress) {
+          await updateRun(run.id, {
+            actionCenter: {
+              plan,
+              progress,
+            },
+          }).catch((error) => {
+            logActionCenterPersistFailure(run.id, error);
+          });
+        }
       }
-      : run;
-    if (progress) {
-      await updateRun(run.id, {
-        actionCenter: {
-          plan,
-          progress,
-        },
-      });
+    } catch (error) {
+      logActionCenterHydrationFailure(run.id, error);
     }
     return jsonOk({ data: sanitizeRunRecordForResponse(runWithActionCenter) });
   } catch (error) {
@@ -153,9 +168,6 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: RunActionPatchBody | null = null;
   try {
     body = (await request.json()) as RunActionPatchBody;
@@ -163,7 +175,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     body = null;
   }
 
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   const actionKey = asString(body?.actionKey);
@@ -217,9 +229,6 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: { csrf?: unknown; confirmText?: unknown } | null = null;
   try {
     body = (await request.json()) as { csrf?: unknown } | null;
@@ -227,7 +236,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     body = null;
   }
 
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   const { id } = await context.params;

@@ -1,8 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import {
+  BodyActionLink,
+  bodyActionLinkGroupClassName,
+  bodyDenseActionRowClassName,
+  BodySectionHeading,
+  BodyTableFrame,
+  bodyFieldClassName,
+} from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
@@ -171,7 +178,7 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
               batchId
             </label>
             <input
-              className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm sm:w-96"
+              className={`${bodyFieldClassName} sm:w-96`}
               id="v3-draft-batch-id"
               onChange={(event) => {
                 setBatchId(event.target.value);
@@ -190,23 +197,23 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
               {loading ? "생성 중..." : "초안 생성"}
             </Button>
           </div>
-          <div className="flex flex-wrap gap-3 text-xs font-semibold text-emerald-700">
-            <Link className="underline underline-offset-2" href="/planning/v3/profile/drafts">
+          <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href="/planning/v3/profile/drafts">
               저장된 profile drafts
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/transactions/batches">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/transactions/batches">
               배치 목록
-            </Link>
-            <Link className="underline underline-offset-2" href="/planning/v3/drafts/profile">
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/drafts/profile">
               기존 draft 생성 화면
-            </Link>
+            </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
 
         {summary ? (
           <Card className="space-y-3" data-testid="v3-draft-summary">
-            <h2 className="text-sm font-bold text-slate-900">요약 (transfer 제외)</h2>
+            <BodySectionHeading title="요약 (transfer 제외)" />
             <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
               <div>
                 <dt className="font-semibold">월 소득 (median)</dt>
@@ -226,7 +233,7 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
               </div>
             </dl>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className={bodyDenseActionRowClassName}>
               <Button
                 data-testid="v3-draft-download"
                 onClick={handleDownload}
@@ -247,7 +254,7 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
             <details>
               <summary className="cursor-pointer text-sm font-semibold text-slate-700">Evidence 요약</summary>
               <div className="mt-3 space-y-4">
-                <div className="overflow-x-auto">
+                <BodyTableFrame>
                   <table className="min-w-full border-collapse text-xs text-slate-700">
                     <thead>
                       <tr className="border-b border-slate-200">
@@ -272,7 +279,7 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                </BodyTableFrame>
 
                 <p className="text-xs text-slate-600">
                   rule coverage: override {result.data.evidence.ruleCoverage.override} /

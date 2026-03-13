@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/e2eTest";
 
 test("dart search shows missing-index guidance", async ({ page }) => {
   const strictMissing = process.env.DART_E2E_EXPECT_MISSING === "1";

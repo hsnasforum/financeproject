@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
-import { NewsTrendsTableClient } from "../_components/NewsTrendsTableClient";
+import { NewsTrendsClient } from "../_components/NewsTrendsClient";
 
 export default async function PlanningV3NewsTrendsPage() {
   const cookieStore = await cookies();
   const csrf = cookieStore.get("dev_csrf")?.value ?? "";
-  return <NewsTrendsTableClient csrf={csrf} />;
+  return <NewsTrendsClient csrf={csrf} />;
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DevUnlockShortcutLink, isDevUnlockCsrfMessage } from "@/components/DevUnlockShortcutLink";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -63,6 +64,7 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
   const [loading, setLoading] = useState(true);
   const [purging, setPurging] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [errorFixHref, setErrorFixHref] = useState("");
   const [stats, setStats] = useState<StatsPayload["data"] | null>(null);
 
@@ -101,11 +103,14 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
 
   const purgeCache = useCallback(async () => {
     if (!hasCsrf) {
-      window.alert("Dev unlock/CSRF가 필요합니다.");
+      setError("Dev unlock/CSRF가 필요합니다.");
       return;
     }
 
     setPurging(true);
+    setError("");
+    setErrorFixHref("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/planning-cache/purge", {
         method: "POST",
@@ -115,13 +120,14 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
       const payload = (await response.json().catch(() => null)) as PurgePayload | null;
       if (!response.ok || !payload?.ok) {
         const apiError = resolveClientApiError(payload, "만료 캐시 정리에 실패했습니다.");
+        setErrorFixHref(apiError.fixHref ?? "");
         throw new Error(`${apiError.message}${apiError.fixHref ? ` (${apiError.fixHref})` : ""}`);
       }
 
-      window.alert(payload.message ?? `정리 완료: ${toNum(payload.data?.purged)}건`);
+      setNotice(payload.message ?? `정리 완료: ${toNum(payload.data?.purged)}건`);
       await loadStats();
     } catch (purgeError) {
-      window.alert(purgeError instanceof Error ? purgeError.message : "만료 캐시 정리 중 오류가 발생했습니다.");
+      setError(purgeError instanceof Error ? purgeError.message : "만료 캐시 정리 중 오류가 발생했습니다.");
     } finally {
       setPurging(false);
     }
@@ -175,12 +181,23 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
           {" "}범위를 초과하면 요청을 거부합니다.
         </p>
       </Card>
+      {notice ? (
+        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+          {notice}
+        </Card>
+      ) : null}
 
       {error ? (
         <Card>
           <p className="text-sm font-semibold text-rose-600">
             {error}
             {errorFixHref ? <> <Link href={errorFixHref} className="underline">{errorFixHref}</Link></> : null}
+            {!errorFixHref && isDevUnlockCsrfMessage(error) ? (
+              <>
+                {" "}
+                <DevUnlockShortcutLink className="text-rose-600" />
+              </>
+            ) : null}
           </p>
         </Card>
       ) : null}

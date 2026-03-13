@@ -39,8 +39,7 @@ describe("planning catalog SSOT", () => {
     }
 
     expect(formatPercentUnit(4.8)).toContain("%");
-    expect(formatKrwUnit(5_100_000)).toContain("KRW");
-    expect(formatMonthsUnit(12)).toContain("months");
+    expect(formatKrwUnit(5_100_000)).toContain("원");
+    expect(formatMonthsUnit(12)).toContain("개월");
   });
 });
-

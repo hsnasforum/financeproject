@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   AccountsStoreInputError,
   deleteAccount,
   updateAccount,
-} from "@/lib/planning/v3/store/accountsStore";
+} from "@/lib/planning/v3/accounts/store";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -34,7 +32,6 @@ function asString(value: unknown): string {
 
 function withWriteGuard(request: Request, csrf: unknown): Response | null {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     requireCsrf(request, { csrf: asString(csrf) }, { allowWhenCookieMissing: true });
     return null;
@@ -58,9 +55,6 @@ function isInvalidIdError(error: unknown): boolean {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: PatchBody = null;
   try {
     body = (await request.json()) as PatchBody;
@@ -102,9 +96,6 @@ export async function PATCH(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: DeleteBody = null;
   try {
     body = (await request.json()) as DeleteBody;

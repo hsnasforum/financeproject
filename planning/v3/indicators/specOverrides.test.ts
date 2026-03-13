@@ -12,6 +12,9 @@ import {
 } from "./specOverrides";
 import { readState } from "./store";
 
+const env = process.env as Record<string, string | undefined>;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+
 describe("planning v3 indicators spec overrides", () => {
   const roots: string[] = [];
 
@@ -19,6 +22,8 @@ describe("planning v3 indicators spec overrides", () => {
     for (const root of roots.splice(0, roots.length)) {
       fs.rmSync(root, { recursive: true, force: true });
     }
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
   });
 
   it("exports effective series specs", () => {
@@ -87,5 +92,35 @@ describe("planning v3 indicators spec overrides", () => {
     const result = await runIndicatorsRefresh({ rootDir: root, retry: { maxAttempts: 1 } });
     expect(result.seriesProcessed).toBe(loadEffectiveSeriesSpecs(root).filter((row) => row.enabled !== false).length);
     expect(readState(root).series.kr_custom_series).toBeTruthy();
+  });
+
+  it("uses PLANNING_DATA_DIR for default override root at call time", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-ind-v3-spec-env-"));
+    roots.push(root);
+    env.PLANNING_DATA_DIR = path.join(root, "planning");
+
+    const preview = previewImportSeriesSpecs([{
+      id: "kr_env_series",
+      sourceId: "fixture",
+      externalId: "fixture://kr_env_series",
+      name: "KR Env Series",
+      frequency: "M",
+      transform: "none",
+      enabled: true,
+    }]);
+    expect(preview.createCount).toBe(1);
+
+    const applied = applyImportSeriesSpecs([{
+      id: "kr_env_series",
+      sourceId: "fixture",
+      externalId: "fixture://kr_env_series",
+      name: "KR Env Series",
+      frequency: "M",
+      transform: "none",
+      enabled: true,
+    }]);
+    expect(applied.overridesCount).toBe(1);
+    expect(fs.existsSync(path.join(root, "indicators", "specOverrides.json"))).toBe(true);
+    expect(loadEffectiveSeriesSpecs().some((row) => row.id === "kr_env_series")).toBe(true);
   });
 });

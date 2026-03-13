@@ -143,6 +143,6 @@ describe("buildInterpretationVM", () => {
     expect(monthlyDiag?.evidenceDetail?.formula).toContain("monthlySurplusKrw");
     expect(monthlyDiag?.evidenceDetail?.inputs.monthlyIncomeKrw).toBe(3_200_000);
     expect(monthlyDiag?.evidenceItem?.id).toBe("monthlySurplus-diag");
-    expect(monthlyDiag?.evidenceItem?.inputs.some((entry) => entry.value.includes("원"))).toBe(true);
+    expect(monthlyDiag?.evidenceItem?.inputs.some((entry) => typeof entry.value === "string" && entry.value.includes("원"))).toBe(true);
   });
 });

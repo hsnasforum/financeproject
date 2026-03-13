@@ -1,8 +1,5 @@
-import {
-  buildResultDtoV1FromRunRecord,
-  isResultDtoV1,
-  type ResultDtoV1,
-} from "../../../../lib/planning/v2/resultDto";
+import { resolveReportResultDtoFromRun } from "./reportViewModel";
+import { type ResultDtoV1 } from "../../../../lib/planning/v2/resultDto";
 import { type PlanningRunRecord } from "../../../../lib/planning/store/types";
 
 export type RunReportHubRow = {
@@ -36,10 +33,7 @@ function asNumber(value: unknown): number | undefined {
 }
 
 function toResultDto(run: PlanningRunRecord): ResultDtoV1 {
-  const outputs = asRecord(run.outputs);
-  const rawDto = outputs.resultDto;
-  if (isResultDtoV1(rawDto)) return rawDto;
-  return buildResultDtoV1FromRunRecord(run);
+  return resolveReportResultDtoFromRun(run);
 }
 
 function normalizePct(raw: number | undefined): number | undefined {

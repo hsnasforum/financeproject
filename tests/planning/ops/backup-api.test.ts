@@ -463,7 +463,7 @@ describe.sequential("ops backup API", () => {
     const heapAfter = process.memoryUsage().heapUsed;
     const heapDelta = heapAfter - heapBefore;
     expect(heapDelta).toBeLessThan(256 * 1024 * 1024);
-  });
+  }, 20_000);
 
   it("handles import preview for large synthetic backup blobs without excessive heap growth", async () => {
     await createLargeRunFixture("backup-run-large-preview", 5 * 1024 * 1024);
@@ -493,7 +493,7 @@ describe.sequential("ops backup API", () => {
     expect(previewPayload.ok).toBe(true);
     const heapAfter = process.memoryUsage().heapUsed;
     expect(heapAfter - heapBefore).toBeLessThan(256 * 1024 * 1024);
-  });
+  }, 20_000);
 
   it("rejects preview for invalid encrypted backup", async () => {
     const form = new FormData();

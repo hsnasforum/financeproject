@@ -46,6 +46,49 @@ function warningToFixMessage(code: string): string {
   return "입력값을 안전한 범위로 보정했습니다.";
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asString(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
+}
+
+export function parseProfileNormalizationDisclosure(value: unknown): ProfileNormalizationDisclosure | null {
+  const row = asRecord(value);
+  const defaultsApplied = asArray(row.defaultsApplied)
+    .map((entry) => asString(entry))
+    .filter((entry) => entry.length > 0);
+  const fixesApplied = asArray(row.fixesApplied)
+    .map((entry) => {
+      const fix = asRecord(entry);
+      const path = asString(fix.path);
+      const message = asString(fix.message);
+      if (!path || !message) return null;
+      return {
+        path,
+        ...(fix.from !== undefined ? { from: fix.from } : {}),
+        ...(fix.to !== undefined ? { to: fix.to } : {}),
+        message,
+      };
+    })
+    .filter((entry): entry is ProfileNormalizationDisclosure["fixesApplied"][number] => entry !== null);
+
+  if (defaultsApplied.length < 1 && fixesApplied.length < 1) return null;
+  return {
+    defaultsApplied,
+    fixesApplied,
+  };
+}
+
 export function buildProfileNormalizationDisclosure(
   normalized: NormalizeResultLike,
   canonicalProfile: ProfileV2,

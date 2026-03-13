@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { downloadText } from "@/lib/browser/download";
+import { DevUnlockShortcutMessage } from "@/components/DevUnlockShortcutLink";
 import { buildIssueMarkdown } from "@/lib/feedback/issueTemplate";
 import { isOpsTicket, parseOpsAction } from "@/lib/ops/opsTicketParser";
 import { Button } from "@/components/ui/Button";
@@ -171,6 +172,7 @@ export function FeedbackDetailClient({ id }: Props) {
   const [opsRunning, setOpsRunning] = useState(false);
   const [opsPlanLoading, setOpsPlanLoading] = useState(false);
   const [opsMessage, setOpsMessage] = useState("");
+  const [opsConfirmText, setOpsConfirmText] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -198,6 +200,7 @@ export function FeedbackDetailClient({ id }: Props) {
         setTasks(Array.isArray(payload.data.tasks) ? payload.data.tasks : []);
         setOpsPlan(null);
         setOpsMessage("");
+        setOpsConfirmText("");
       } catch (loadError) {
         if (!active) return;
         setItem(null);
@@ -360,6 +363,9 @@ export function FeedbackDetailClient({ id }: Props) {
     try {
       const plan = await requestChainPlan(opsAction.id, csrf);
       setOpsPlan(plan);
+      if (plan.risk !== "HIGH") {
+        setOpsConfirmText("");
+      }
       setOpsMessage(`체인 계획 확인 완료 (risk=${plan.risk}, steps=${plan.steps.length})`);
     } catch (error) {
       setOpsMessage(error instanceof Error ? error.message : "복구 계획 조회 중 오류가 발생했습니다.");
@@ -406,8 +412,8 @@ export function FeedbackDetailClient({ id }: Props) {
       let confirmText = "";
       if (plan.risk === "HIGH") {
         const expected = `RUN ${opsAction.id}`;
-        const typed = window.prompt(`HIGH 위험 체인입니다. 다음 문구를 정확히 입력하세요:\n${expected}`, expected);
-        if ((typed ?? "").trim() !== expected) {
+        const typed = opsConfirmText.trim();
+        if (typed !== expected) {
           setOpsMessage(`확인 문구 불일치로 실행이 중단되었습니다. (${expected})`);
           return;
         }
@@ -531,10 +537,26 @@ export function FeedbackDetailClient({ id }: Props) {
                       {opsPlan.risk}
                     </span>
                     <p className="mt-1 text-[11px] text-slate-700">steps: {opsPlan.steps.join(" -> ")}</p>
+                    {opsAction?.kind === "CHAIN" && opsPlan.risk === "HIGH" ? (
+                      <div className="mt-2">
+                        <p className="text-[11px] font-semibold text-rose-700">확인 문구: RUN {opsAction.id}</p>
+                        <input
+                          className="mt-1 h-9 w-full rounded-md border border-rose-300 px-3 text-sm"
+                          placeholder={`RUN ${opsAction.id}`}
+                          value={opsConfirmText}
+                          onChange={(event) => setOpsConfirmText(event.target.value)}
+                          disabled={opsRunning}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {opsMessage ? (
-                  <p className="mt-2 text-[11px] font-semibold text-slate-700">{opsMessage}</p>
+                  <DevUnlockShortcutMessage
+                    className="mt-2 text-[11px] font-semibold text-slate-700"
+                    linkClassName="text-slate-700"
+                    message={opsMessage}
+                  />
                 ) : null}
               </div>
             ) : null}

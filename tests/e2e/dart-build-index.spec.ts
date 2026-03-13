@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./helpers/e2eTest";
 
 test("dart missing index -> build button creates index -> search results appear", async ({ page }) => {
   const strictMissing = process.env.DART_E2E_EXPECT_MISSING === "1";

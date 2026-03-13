@@ -1,8 +1,7 @@
 import fs from "node:fs/promises";
-import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { buildPortCandidates, choosePort } from "./start_local_port.mjs";
+import { buildPortCandidates } from "./start_local_port.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -12,17 +11,6 @@ function toPort(value, fallback) {
   const parsed = Math.trunc(Number(value));
   if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) return fallback;
   return parsed;
-}
-
-async function canBindLoopbackPort(port) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.unref();
-    server.once("error", () => resolve(false));
-    server.listen({ host: "127.0.0.1", port }, () => {
-      server.close(() => resolve(true));
-    });
-  });
 }
 
 function hasExplicitPlanningStorage(env) {
@@ -44,7 +32,15 @@ export async function createIsolatedPlanningV2E2EOptions(baseEnv = process.env, 
     scanFrom,
     scanTo,
   });
-  const port = await choosePort(candidates, canBindLoopbackPort);
+  const explicitPreferredPort = asString(options.preferredPort ?? baseEnv.PORT);
+  const hasPinnedPort = explicitPreferredPort.length > 0;
+  const fallbackCandidates = hasPinnedPort ? candidates : candidates.slice(1);
+  const portIndex = fallbackCandidates.length > 0
+    ? Math.abs((process.pid + Date.now()) % fallbackCandidates.length)
+    : 0;
+  const port = hasPinnedPort
+    ? preferredPort
+    : (fallbackCandidates[portIndex] ?? candidates[0] ?? 0);
   if (!port) {
     throw new Error(`isolated planning e2e port unavailable (preferred=${preferredPort})`);
   }

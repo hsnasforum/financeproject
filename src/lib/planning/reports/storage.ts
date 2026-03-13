@@ -10,8 +10,9 @@ import {
   restoreFileFromTrash,
 } from "../store/trash";
 import {
-  buildResultDtoV1FromRunRecord,
-  isResultDtoV1,
+  resolveReportResultDtoFromRun,
+} from "./reportInputContract";
+import {
   toMarkdownFromResultDto,
 } from "../v2/resultDto";
 
@@ -232,10 +233,7 @@ export async function createReportFromRun(runId: string): Promise<{ id: string }
   const metaPath = metaPathById(reportId);
   const createdAt = new Date().toISOString();
 
-  const rawResultDto = isRecord(run.outputs) ? run.outputs.resultDto : undefined;
-  const resultDto = isResultDtoV1(rawResultDto)
-    ? rawResultDto
-    : buildResultDtoV1FromRunRecord(run);
+  const resultDto = resolveReportResultDtoFromRun(run);
   const markdown = toMarkdownFromResultDto(resultDto, {
     title: run.title || `Planning Report (${run.id})`,
     reportId,

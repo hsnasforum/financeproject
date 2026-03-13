@@ -14,10 +14,10 @@ PR-A 이후 남아있는 fallback 경로를 제거해 planning 계약을 `engine
 
 대상 변경:
 
-- [ ] planning 클라이언트 helper fallback 제거
-- [ ] API 응답 정규화 fallback 제거
-- [ ] report legacy fallback 제거
-- [ ] 관련 테스트/fixture를 단일 계약 기준으로 정리
+- [x] planning 클라이언트 helper fallback 제거
+- [x] API 응답 정규화 fallback 제거
+- [x] report legacy fallback 제거
+- [x] 관련 테스트/fixture를 단일 계약 기준으로 정리
 
 ## 비범위
 
@@ -30,27 +30,27 @@ PR-A 이후 남아있는 fallback 경로를 제거해 planning 계약을 `engine
 
 ## 클라이언트 변경 체크리스트
 
-- [ ] `getEngineEnvelope()`가 fallback 없이 `data.engine`만 사용
-- [ ] `normalizePlanningResponse()`에서 legacy shape 흡수 제거
-- [ ] stale cache 처리 분기에서 legacy 필드 의존 제거
+- [x] `getEngineEnvelope()`가 fallback 없이 `data.engine`만 사용
+- [x] `normalizePlanningResponse()`에서 legacy shape 흡수 제거
+- [x] stale cache 처리 분기에서 legacy 필드 의존 제거
 - [ ] 화면(stage/action/debt/report)에서 `engine.*`만 참조
 
 ## report 변경 체크리스트
 
-- [ ] report route가 `ReportInputContract`를 기본 경로로 사용
+- [x] report route가 `ReportInputContract`를 기본 경로로 사용
 - [ ] report builder/viewModel이 contract 입력만 소비
-- [ ] legacy run fallback 제거 또는 명시적 차단 처리
+- [x] legacy run fallback 제거 또는 명시적 차단 처리
 - [ ] planning/simulate/report 동일 run 결과 일치 확인
 
 ## 테스트/fixture 체크리스트
 
-- [ ] fallback 관련 테스트를 제거 또는 단일 계약 검증으로 전환
-- [ ] exact match 테스트는 새 계약 기준으로 정리
-- [ ] `planning:v2:engine:guard` 통과
-- [ ] `planner:deprecated:guard` 통과
-- [ ] `typecheck:planning` 통과
-- [ ] 관련 vitest 통과
-- [ ] 관련 eslint 통과
+- [x] fallback 관련 테스트를 제거 또는 단일 계약 검증으로 전환
+- [x] exact match 테스트는 새 계약 기준으로 정리
+- [x] `planning:v2:engine:guard` 통과
+- [x] `planner:deprecated:guard` 통과
+- [x] `typecheck:planning` 통과
+- [x] 관련 vitest 통과
+- [x] 관련 eslint 통과
 
 ## 운영 게이트 확인
 
@@ -74,20 +74,44 @@ PR-A 이후 남아있는 fallback 경로를 제거해 planning 계약을 `engine
 
 ## PR 완료 기준
 
-- [ ] planning 클라이언트/리포트에서 fallback 경로 제거 완료
-- [ ] 단일 계약(`engine` + `engineSchemaVersion`)만 사용
-- [ ] 테스트/fixture 정리 완료
+- [x] planning 클라이언트/리포트에서 fallback 경로 제거 완료
+- [x] 단일 계약(`engine` + `engineSchemaVersion`)만 사용
+- [x] 테스트/fixture 정리 완료
 - [ ] 운영 모니터링 이상 없음
 
-## PR 메타 텍스트
+## PR 본문 템플릿
 
 ### PR 제목
 
-`refactor(planning): remove client and report fallback paths after engine contract rollout`
+`planning: remove client/report fallback and clean up related fixtures and tests after P4 observation`
 
-### PR 설명 첫 문단
+### PR 설명
 
-This PR removes client-side and report fallback paths that were temporarily kept for rollout safety. After PR-A stabilized the API shape, planning now consumes only the official `engine` + `engineSchemaVersion` contract across client and report flows.
+`planning-compatibility-exit.md` 기준으로 PR-B를 수행한다.
+
+이번 PR은 P4 관찰 종료 이후 client/report fallback을 제거하고, 이에 맞는 fixture 및 test를 정리하는 데 한정한다.
+
+PR-A에서 서버 응답 및 캐시 응답의 legacy top-level 필드 제거가 적용되었고, 본 PR에서는 더 이상 필요하지 않은 클라이언트 fallback 경로를 제거한다.
+
+이번 PR에는 서버 응답 계약 변경이나 추가 호환성 게이트 변경을 포함하지 않는다.
+
+관련 fixture 및 test는 fallback 제거 이후의 기대 동작에 맞게 정리한다.
+
+### 검증
+
+- client/report 경로에서 fallback 없이 정상 동작 확인
+- 관련 fixture 정리 반영 확인
+- 관련 test 갱신 및 통과 확인
+- 필요 시 `pnpm typecheck:planning` 실행 결과 기록
+- 필요 시 planning/report 주요 경로 수동 확인 결과 기록
+
+### 운영 게이트
+
+본 PR은 `runbook.md`의 planning fallback 관찰(P4) 기준 충족 이후에만 진행한다.
+
+staging 3일, production 7일 관찰 중 치명 이슈가 없음을 전제로 한다.
+
+배포 후 `/ops/metrics`, planning 주요 화면, report 경로를 최종 확인한다.
 
 ## 실행 순서 요약
 
@@ -97,6 +121,31 @@ This PR removes client-side and report fallback paths that were temporarily kept
 
 ## 검증 실행 기록
 
-- [ ] 코드 변경 포함: `pnpm test`, `pnpm lint`, 필요 시 `pnpm build` 실행
-- [ ] 문서 변경만 포함: 테스트/빌드 미실행 사유를 PR 본문에 명시
-  - 예시 문구: `Docs-only change. Runtime code paths are unchanged, so test/build were not re-run.`
+- 실행 명령:
+  - `pnpm -C finance test` (full suite)
+  - `pnpm -C finance release:verify`
+  - `pnpm -C finance test tests/planning/components/interpretationGuide.test.tsx tests/planning/reports/reportDashboardOverrides.test.tsx tests/planning-v2/reportInputContract.test.ts tests/planning-v2/reportViewModel.test.ts tests/planning-v2-api/report-contract-mode-route.test.ts tests/schemas-recommend-profile.test.ts tests/saved-runs-store.test.ts tests/recommend-unified-vs-legacy.test.ts`
+  - `pnpm -C finance test tests/recommend-api.test.ts tests/schemas-recommend-profile.test.ts tests/saved-runs-store.test.ts`
+  - `pnpm -C finance test tests/planning-v2-api/simulate-route.test.ts tests/planning-v2-api/actions-route.test.ts tests/planning-v2-api/scenarios-route.test.ts tests/planning-v2-api/monte-carlo-route.test.ts tests/planning-v2-api/runs-report-route.test.ts tests/planning-v2-api/reports-export-html-route.test.ts tests/planning-v2-api/runs-report-pdf-route.test.ts`
+  - `pnpm -C finance planning:v2:engine:guard`
+  - `pnpm -C finance planner:deprecated:guard`
+  - `pnpm -C finance typecheck:planning`
+  - `pnpm -C finance planning:v2:guard`
+  - `pnpm -C finance planning:v2:compat`
+  - `pnpm -C finance planning:v2:regress`
+  - `pnpm -C finance exec eslint src/lib/planning/reports/reportInputContract.ts src/app/api/planning/v2/simulate/route.ts src/app/api/planning/v2/actions/route.ts src/app/api/planning/v2/scenarios/route.ts src/app/api/planning/v2/monte-carlo/route.ts src/app/api/recommend/route.ts src/app/recommend/page.tsx src/components/PlanningReportDetailClient.tsx src/components/PlanningReportsClient.tsx src/components/PlanningReportsDashboardClient.tsx src/components/PlanningReportsPrototypeClient.tsx src/components/PlanningRunsClient.tsx src/components/PlanningWorkspaceClient.tsx src/app/planning/reports/_lib/reportViewModel.ts src/app/planning/reports/_components/ReportDashboard.tsx`
+- 실행 결과:
+  - `pnpm test` full suite PASS (`579 files / 1593 tests`).
+  - `release:verify` PASS (`planning:ssot:check` advisory는 WARN 기록, required gate 영향 없음).
+  - 위 vitest 대상군은 모두 PASS.
+  - `planning:v2:engine:guard`, `planner:deprecated:guard`, `typecheck:planning`, `planning:v2:guard`, `planning:v2:compat`, `planning:v2:regress` PASS.
+  - 관련 ESLint는 warning만 존재하고 error 0으로 PASS(exit 0).
+- 미실행 항목:
+  - eslint 전체
+- 미실행 사유:
+  - 전체 eslint는 기존 브랜치 전역 warning 정리가 필요하여, 이번 변경 영향 파일 기준으로 우선 검증 수행.
+- 추가 확인 사항:
+  - `/report`는 `/planning/reports`로 강제 리다이렉트.
+  - report contract는 strict-only(`outputs.resultDto`, `outputs.engine`)로 고정.
+- 현재 상태 한 줄 정리:
+  - PR-B 핵심 fallback 제거와 주요 게이트(guard/typecheck/compat/regress) 검증까지 완료.

@@ -12,8 +12,8 @@
 
 - [ ] `pnpm test`
 - [ ] `pnpm planning:v2:complete`
+- [ ] `pnpm multi-agent:guard`
 - [ ] `pnpm release:verify` 실행 및 PASS 확인
-- [ ] 멀티 에이전트 설정/프롬프트/skill/운영 규칙 변경 시 `pnpm multi-agent:guard` PASS 확인
 - [ ] `pnpm planning:v2:freeze:guard` 결과가 `v2 core change`면 추가 리뷰 메모 작성
 - [ ] `v2 core change`일 때 리뷰 문맥에 `[v2-core-change]` 태그 추가
 

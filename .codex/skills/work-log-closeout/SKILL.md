@@ -5,7 +5,7 @@ description: Create or update a Finance Project /work closeout note after a chan
 
 # Work Log Closeout
 
-Use this skill to write a repository-consistent `/work/YYYY-MM-DD-<slug>.md` note after a round of changes.
+Use this skill to write a repository-consistent `/work/<month>/<day>/YYYY-MM-DD-<slug>.md` note after a round of changes.
 
 ## Inputs
 
@@ -18,6 +18,10 @@ Use this skill to write a repository-consistent `/work/YYYY-MM-DD-<slug>.md` not
 ## Required workflow
 
 1. Gather only executed facts.
+   - today's folder path: `work/<month>/<day>/`
+   - create the folder first if it does not exist
+   - read the newest note in today's folder before writing
+   - if there is no note for today, read the newest note from the previous day
    - changed files
    - commands actually run
    - outcomes actually observed
@@ -25,13 +29,13 @@ Use this skill to write a repository-consistent `/work/YYYY-MM-DD-<slug>.md` not
 3. Use a short slug tied to the work theme.
 4. If route, verification policy, security rule, or operator flow changed, mention related docs updated or still pending.
 5. Never claim an unrun test or build was completed.
-6. If one or more skills were actually used, add a short `사용 skill` section with skill name and why it mattered.
+6. Always keep a short `사용 skill` section. If skills were used, list each name and why it mattered; otherwise write `- 없음`.
 
 ## Recommended structure
 
 - 제목: `# YYYY-MM-DD <작업명>`
 - `## 변경 파일`
-- `## 사용 skill` (only when applicable)
+- `## 사용 skill` (always include; write `- 없음` when no skill was used)
 - `## 변경 이유`
 - `## 핵심 변경`
 - `## 검증`
@@ -43,6 +47,7 @@ Use this skill to write a repository-consistent `/work/YYYY-MM-DD-<slug>.md` not
 - Keep `핵심 변경` to about 3 to 6 flat bullets
 - Include exact commands in `검증`
 - Include only skills that were actually used, not merely available in the session
+- Keep the `## 사용 skill` section even when no skill was used, and write `- 없음`
 - If something is blocked, mark it clearly and say why
 - If the change affects docs/current-screens, release gates, or ops rules, say so explicitly
 
@@ -58,4 +63,4 @@ Use this skill to write a repository-consistent `/work/YYYY-MM-DD-<slug>.md` not
 ## Output format
 
 - completed note content only when the user asks for the file body
-- otherwise: filename suggestion, summary bullets, and missing facts still needed
+- otherwise: filename suggestion under `work/<month>/<day>/`, summary bullets, and missing facts still needed

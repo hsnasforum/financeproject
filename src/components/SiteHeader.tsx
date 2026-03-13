@@ -2,103 +2,73 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { HelpDialog } from "@/components/HelpDialog";
-import { Container } from "@/components/ui/Container";
-import { Button } from "@/components/ui/Button";
-import { uiTextKo } from "@/lib/uiText.ko";
 import { BrandLogo } from "@/components/brand/BrandLogo";
+import { Container } from "@/components/ui/Container";
+import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
 import { cn } from "@/lib/utils";
-import { buildTodoSummary } from "@/lib/feedback/todoSummary";
 
-const navItems = [
-  { href: "/planning", label: uiTextKo.nav.planner },
-  { href: "/planning/runs", label: "실행 기록" },
+type NavItem = {
+  href: string;
+  label: string;
+  match: "exact" | "prefix";
+  excludePrefixes?: string[];
+};
+
+const primaryNavItems: NavItem[] = [
+  { href: "/dashboard", label: "브리핑", match: "prefix" },
+  { href: "/planning", label: "플래닝", match: "prefix", excludePrefixes: ["/planning/reports", "/planning/runs"] },
+  { href: "/planning/reports", label: "리포트", match: "prefix" },
+  { href: "/benefits", label: "혜택", match: "prefix" },
 ];
 
-type HeaderFeedbackItem = {
-  id: string;
-  status: "OPEN" | "DOING" | "DONE";
-  priority: "P0" | "P1" | "P2" | "P3";
-  dueDate: string | null;
-  createdAt: string;
-  message: string;
-};
+const secondaryNavItems: NavItem[] = [
+  { href: "/recommend", label: "추천", match: "prefix" },
+  { href: "/products/catalog", label: "상품 탐색", match: "prefix" },
+  { href: "/planning/runs", label: "실행 기록", match: "prefix" },
+];
 
-type FeedbackListPayload = {
-  ok?: boolean;
-  data?: HeaderFeedbackItem[];
-};
+const adminNavItems: NavItem[] = [
+  { href: "/ops", label: "Ops", match: "prefix" },
+];
+
+const mobileNavItems = [...primaryNavItems, ...secondaryNavItems];
+
+function isNavActive(pathname: string, item: NavItem): boolean {
+  if (item.excludePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
+    return false;
+  }
+  if (item.match === "exact") {
+    return pathname === item.href;
+  }
+  return pathname.startsWith(item.href);
+}
+
+function isOpsLikePath(pathname: string): boolean {
+  return pathname.startsWith("/ops") || pathname.startsWith("/dev") || pathname.startsWith("/debug");
+}
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const isDevEnv = process.env.NODE_ENV !== "production";
-  const [todoCounts, setTodoCounts] = useState<{ overdue: number; todayHigh: number } | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    async function loadTodoCounts() {
-      try {
-        const response = await fetch("/api/feedback/list?limit=200", { cache: "no-store" });
-        const payload = (await response.json()) as FeedbackListPayload;
-        if (!active) return;
-        if (!response.ok || !payload.ok || !Array.isArray(payload.data)) {
-          setTodoCounts(null);
-          return;
-        }
-        const summary = buildTodoSummary(payload.data);
-        setTodoCounts({
-          overdue: summary.overdueCount,
-          todayHigh: summary.todayHighCount,
-        });
-      } catch {
-        if (active) {
-          setTodoCounts(null);
-        }
-      }
-    }
-    void loadTodoCounts();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const badges = useMemo(() => {
-    if (!todoCounts) return [];
-    const next: Array<{ key: string; label: string; tone: "overdue" | "today" }> = [];
-    if (todoCounts.overdue > 0) {
-      next.push({ key: "overdue", label: `마감 ${todoCounts.overdue}`, tone: "overdue" });
-    }
-    if (todoCounts.todayHigh > 0) {
-      next.push({ key: "today", label: `오늘 ${todoCounts.todayHigh}`, tone: "today" });
-    }
-    return next;
-  }, [todoCounts]);
-
-  const navItemsWithOps = useMemo(
-    () => (isDevEnv ? [...navItems, { href: "/ops", label: "Ops" }] : navItems),
-    [isDevEnv],
-  );
+  const isAdminMenuActive = adminNavItems.some((item) => isNavActive(pathname, item));
+  const showAdminStrip = isOpsLikePath(pathname);
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-surface/80 backdrop-blur-xl transition-all duration-300">
-      <Container>
-        <div className="flex h-16 items-center justify-between gap-8">
-          <div className="flex items-center gap-10">
-            <BrandLogo />
-
-            <nav className="hidden md:flex items-center gap-1 bg-surface-muted/50 p-1 rounded-full">
-              {navItemsWithOps.map((item) => {
-                const isActive = pathname.startsWith(item.href);
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
+      <Container className="px-4 sm:px-6 lg:px-8">
+        <div className="hidden h-[88px] items-center justify-between gap-8 lg:flex">
+          <BrandLogo />
+          <div className="flex flex-1 items-center justify-end gap-6">
+            <nav className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50/80 p-2">
+              {primaryNavItems.map((item) => {
+                const isActive = isNavActive(pathname, item);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
+                    prefetch={devPlanningPrefetch(item.href)}
                     className={cn(
-                      "rounded-full px-5 py-2 text-sm font-bold transition-all duration-300",
-                      isActive 
-                        ? "bg-surface text-primary shadow-sm" 
-                        : "text-slate-500 hover:text-slate-900"
+                      "rounded-full px-4 py-2 text-[14px] font-extrabold tracking-[-0.02em] text-slate-700 transition-colors hover:text-emerald-700",
+                      isActive ? "bg-white text-emerald-700 shadow-sm" : "",
                     )}
                   >
                     {item.label}
@@ -106,56 +76,98 @@ export function SiteHeader() {
                 );
               })}
             </nav>
-          </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden lg:flex items-center">
-              <form action="/products/catalog" method="GET" className="relative group">
-                <input
-                  name="q"
-                  className="h-10 w-64 rounded-full border-none bg-surface-muted pl-4 pr-10 text-xs font-semibold text-slate-900 outline-none transition-all duration-300 focus:w-80 focus:bg-surface focus:ring-2 focus:ring-primary/20 focus:shadow-sm"
-                  placeholder="금융상품, 기업, 혜택 검색"
-                />
-                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                </button>
-              </form>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              {badges.length > 0 ? (
-                <Link
-                  href="/feedback/list?status=OPEN"
-                  className="hidden md:inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-bold text-slate-700 hover:border-slate-300"
-                >
-                  {badges.map((badge) => (
-                    <span
-                      key={badge.key}
-                      className={cn(
-                        "rounded-full px-2 py-0.5",
-                        badge.tone === "overdue"
-                          ? "bg-rose-100 text-rose-700"
-                          : "bg-amber-100 text-amber-700",
-                      )}
-                    >
-                      {badge.label}
-                    </span>
-                  ))}
-                </Link>
-              ) : null}
-              <HelpDialog />
-              <div className="h-4 w-px bg-border mx-1 hidden md:block" />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="rounded-full h-10 w-10 p-0 text-slate-400 hover:text-primary hover:bg-surface-muted"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-              </Button>
-            </div>
+            <nav className="flex items-center gap-2">
+              {secondaryNavItems.map((item) => {
+                const isActive = isNavActive(pathname, item);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    prefetch={devPlanningPrefetch(item.href)}
+                    className={cn(
+                      "rounded-full border border-transparent px-3 py-2 text-[13px] font-bold text-slate-600 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900",
+                      isActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "",
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <Link
+              className="inline-flex h-11 items-center rounded-full bg-emerald-600 px-5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(5,150,105,0.18)] transition-transform hover:-translate-y-0.5"
+              href="/planning"
+              prefetch={devPlanningPrefetch("/planning")}
+            >
+              플래닝 시작
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex h-16 items-center justify-between gap-4 lg:hidden">
+          <BrandLogo />
+          <div className="flex items-center gap-2">
+            <Link
+              className="inline-flex h-10 items-center rounded-full border border-slate-200 px-4 text-sm font-bold text-slate-700"
+              href="/benefits"
+            >
+              혜택
+            </Link>
+            <Link
+              className="inline-flex h-10 items-center rounded-full bg-emerald-600 px-4 text-sm font-bold text-white"
+              href="/planning"
+              prefetch={devPlanningPrefetch("/planning")}
+            >
+              플래닝
+            </Link>
           </div>
         </div>
       </Container>
+
+      <div className="border-t border-slate-100 bg-white lg:hidden">
+        <Container className="overflow-x-auto py-3 no-scrollbar">
+          <nav className="flex min-w-max items-center gap-4">
+            {mobileNavItems.map((item) => (
+              <Link
+                key={`${item.href}:${item.label}`}
+                href={item.href}
+                prefetch={devPlanningPrefetch(item.href)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 whitespace-nowrap text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 hover:text-emerald-600",
+                  isNavActive(pathname, item) ? "bg-emerald-50 text-emerald-600" : "",
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        </Container>
+      </div>
+
+      {showAdminStrip ? (
+        <div className="border-t border-amber-100 bg-amber-50">
+          <Container className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 text-xs sm:px-6 lg:px-8">
+            <p className="font-semibold text-amber-900">운영 화면</p>
+            <nav className="flex items-center gap-2">
+              {adminNavItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "rounded-full px-3 py-1 font-bold text-amber-900/80 transition-colors hover:bg-white/70",
+                    isNavActive(pathname, item) ? "bg-white text-amber-900 shadow-sm" : "",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {isAdminMenuActive ? <span className="text-amber-700">현재 운영 경로</span> : null}
+            </nav>
+          </Container>
+        </div>
+      ) : null}
     </header>
   );
 }

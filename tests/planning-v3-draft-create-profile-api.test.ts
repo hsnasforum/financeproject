@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as createProfilePOST } from "../src/app/api/planning/v3/drafts/[id]/create-profile/route";
 import { createProfile, listProfileMetas } from "../src/lib/planning/store/profileStore";
-import { createDraft } from "../src/lib/planning/v3/store/draftStore";
+import { createDraft } from "../src/lib/planning/v3/drafts/draftStore";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -12,18 +12,42 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3500";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const REMOTE_HOST = "example.com";
+const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+const EVIL_ORIGIN = "http://evil.com";
 
-function requestJson(pathName: string, body: unknown): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathName}`, {
+function requestJson(
+  pathName: string,
+  body: unknown,
+  options?: {
+    requestOrigin?: string;
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
+  const requestOrigin = options?.requestOrigin ?? LOCAL_ORIGIN;
+  const host = options?.host ?? new URL(requestOrigin).host;
+  const origin = options?.origin ?? requestOrigin;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${requestOrigin}${pathName}`, {
     method: "POST",
     headers: {
-      host: LOCAL_HOST,
-      origin: LOCAL_ORIGIN,
-      referer: `${LOCAL_ORIGIN}/planning/v3/drafts`,
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/drafts`,
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   });
+}
+
+async function expectOriginMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
 }
 
 describe("POST /api/planning/v3/drafts/[id]/create-profile", () => {
@@ -87,5 +111,46 @@ describe("POST /api/planning/v3/drafts/[id]/create-profile", () => {
 
     const metas = await listProfileMetas();
     expect(metas.some((row) => row.profileId !== base.id)).toBe(false);
+  });
+
+  it("allows same-origin remote host and still blocks cross-origin", async () => {
+    const draft = await createDraft({
+      source: { kind: "csv", filename: "remote-create-profile.csv" },
+      monthlyCashflow: [
+        { ym: "2026-03", incomeKrw: 3_300_000, expenseKrw: -2_000_000, netKrw: 1_300_000, txCount: 2 },
+      ],
+      draftPatch: {
+        monthlyIncomeNet: 3_300_000,
+        monthlyEssentialExpenses: 1_400_000,
+        monthlyDiscretionaryExpenses: 600_000,
+      },
+    });
+
+    const sameOriginResponse = await createProfilePOST(
+      requestJson(
+        `/api/planning/v3/drafts/${draft.id}/create-profile`,
+        { csrf: "test", baseProfileId: "base-id" },
+        { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
+      ),
+      { params: Promise.resolve({ id: draft.id }) },
+    );
+    expect(sameOriginResponse.status).toBe(409);
+    const sameOriginPayload = await sameOriginResponse.json() as { ok?: boolean; error?: { code?: string } };
+    expect(sameOriginPayload.ok).toBe(false);
+    expect(sameOriginPayload.error?.code).toBe("EXPORT_ONLY");
+
+    await expectOriginMismatch(createProfilePOST(
+      requestJson(
+        `/api/planning/v3/drafts/${draft.id}/create-profile`,
+        { csrf: "test", baseProfileId: "base-id" },
+        {
+          requestOrigin: REMOTE_ORIGIN,
+          host: REMOTE_HOST,
+          origin: EVIL_ORIGIN,
+          refererOrigin: EVIL_ORIGIN,
+        },
+      ),
+      { params: Promise.resolve({ id: draft.id }) },
+    ));
   });
 });

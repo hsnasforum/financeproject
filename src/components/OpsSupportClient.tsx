@@ -81,7 +81,7 @@ export function OpsSupportClient({ csrf }: OpsSupportClientProps) {
         <Card>
           <h2 className="text-base font-black text-slate-900">진단 번들 내보내기</h2>
           <p className="mt-2 text-sm text-slate-700">
-            doctor/migration/policy/audit/metrics 요약만 포함한 zip을 생성합니다.
+            doctor/migration/policy/audit/metrics와 data-sources 카드 기준 요약만 포함한 zip을 생성합니다.
           </p>
           <div className="mt-4">
             <Button
@@ -109,6 +109,7 @@ export function OpsSupportClient({ csrf }: OpsSupportClientProps) {
                 <li>Migration 상태 요약</li>
                 <li>Planning/Ops 정책 스냅샷</li>
                 <li>최근 Audit 이벤트 요약</li>
+                <li>data-sources 카드 기준 요약</li>
                 <li>최근 Metrics 이벤트/윈도우 요약</li>
               </ul>
             </div>

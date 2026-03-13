@@ -91,6 +91,17 @@ function findMatches(patternSource, files) {
   return matches;
 }
 
+function listTargetBlankTags(content) {
+  return content.match(/<[A-Za-z][^>]*target="_blank"[^>]*>/gs) ?? [];
+}
+
+function hasSafeRel(tag) {
+  const relMatch = tag.match(/rel\s*=\s*["']([^"']+)["']/);
+  if (!relMatch) return false;
+  const relValue = relMatch[1] ?? "";
+  return /\bnoopener\b/.test(relValue) && /\bnoreferrer\b/.test(relValue);
+}
+
 function parseRipgrepArgs(args) {
   let pattern = "";
   let excludeTests = false;
@@ -227,6 +238,37 @@ try {
 } catch (error) {
   failed = true;
   console.error("[sec:check] FAIL client-env-secret-leak");
+  console.error(error instanceof Error ? error.message : String(error));
+}
+
+try {
+  const collected = collectFilesFromTargets(["src"], true);
+  if (!collected.ok) {
+    failed = true;
+    console.error("[sec:check] FAIL target-blank-safe-rel");
+    console.error(collected.error);
+  } else {
+    const violations = [];
+    for (const filePath of collected.files) {
+      const absolute = path.resolve(REPO_ROOT, filePath);
+      const content = readFileSync(absolute, "utf8");
+      const tags = listTargetBlankTags(content);
+      for (const tag of tags) {
+        if (hasSafeRel(tag)) continue;
+        violations.push(`${filePath}::${tag.replace(/\s+/g, " ").trim()}`);
+      }
+    }
+    if (violations.length > 0) {
+      failed = true;
+      console.error("[sec:check] FAIL target-blank-safe-rel");
+      console.error(violations.join("\n"));
+    } else {
+      console.log("[sec:check] PASS target-blank-safe-rel");
+    }
+  }
+} catch (error) {
+  failed = true;
+  console.error("[sec:check] FAIL target-blank-safe-rel");
   console.error(error instanceof Error ? error.message : String(error));
 }
 

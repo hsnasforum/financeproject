@@ -1,7 +1,8 @@
 import { type PlanningRunRecord } from "../store/types";
 
 function sanitizeNamedRef<T extends { name: string; path?: string; sizeBytes?: number }>(ref: T): Omit<T, "path"> {
-  const { path: _path, ...rest } = ref;
+  const { path, ...rest } = ref;
+  void path;
   return rest;
 }
 

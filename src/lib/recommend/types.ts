@@ -2,7 +2,7 @@ import { type UnifiedSourceId } from "@/lib/sources/types";
 
 export type RecommendKind = "deposit" | "saving";
 export type CandidateSource = "finlife" | "datago_kdb";
-export type CandidatePool = "legacy" | "unified";
+export type CandidatePool = "unified";
 export type DepositProtectionMode = "any" | "prefer" | "require";
 
 export type RateMode = "max" | "base" | "simple";
@@ -17,6 +17,13 @@ export type RecommendWeights = {
   liquidity: number;
 };
 
+export type RecommendPlanningContext = {
+  monthlyIncomeKrw?: number;
+  monthlyExpenseKrw?: number;
+  liquidAssetsKrw?: number;
+  debtBalanceKrw?: number;
+};
+
 export type UserRecommendProfile = {
   purpose: RecommendPurpose;
   kind: RecommendKind;
@@ -28,6 +35,7 @@ export type UserRecommendProfile = {
   candidateSources?: CandidateSource[];
   candidatePool?: CandidatePool;
   depositProtection?: DepositProtectionMode;
+  planningContext?: RecommendPlanningContext;
 };
 
 export type ContributionKey = "rate" | "term" | "liquidity";

@@ -272,38 +272,44 @@ function pickTimelineRows(rows: TimelineRow[]): Array<{ monthIndex: number; row:
   return picked;
 }
 
-function parseInputs(profileJson: string, horizonMonths: string, overridesJson: string): {
+type ParsedInputs = {
   profile: unknown;
   horizonMonths: number;
   assumptions: unknown;
-} | null {
+};
+
+type ParseInputsResult =
+  | { ok: true; value: ParsedInputs }
+  | { ok: false; error: string };
+
+function parseInputs(profileJson: string, horizonMonths: string, overridesJson: string): ParseInputsResult {
   let parsedProfile: unknown;
   let parsedOverrides: unknown;
 
   try {
     parsedProfile = JSON.parse(profileJson);
   } catch {
-    window.alert("프로필 JSON 파싱에 실패했습니다.");
-    return null;
+    return { ok: false, error: "프로필 JSON 파싱에 실패했습니다." };
   }
 
   try {
     parsedOverrides = overridesJson.trim() ? JSON.parse(overridesJson) : {};
   } catch {
-    window.alert("assumptions override JSON 파싱에 실패했습니다.");
-    return null;
+    return { ok: false, error: "assumptions override JSON 파싱에 실패했습니다." };
   }
 
   const parsedHorizon = Number.parseInt(horizonMonths, 10);
   if (!Number.isFinite(parsedHorizon)) {
-    window.alert("horizonMonths는 숫자여야 합니다.");
-    return null;
+    return { ok: false, error: "horizonMonths는 숫자여야 합니다." };
   }
 
   return {
-    profile: parsedProfile,
-    horizonMonths: parsedHorizon,
-    assumptions: parsedOverrides,
+    ok: true,
+    value: {
+      profile: parsedProfile,
+      horizonMonths: parsedHorizon,
+      assumptions: parsedOverrides,
+    },
   };
 }
 
@@ -327,6 +333,18 @@ export default function DebugPlanningV2Client() {
   const [debtExtraPaymentKrw, setDebtExtraPaymentKrw] = useState("0");
   const [debtOffersJson, setDebtOffersJson] = useState(DEFAULT_DEBT_OFFERS_JSON);
   const [debtResponse, setDebtResponse] = useState<DebtStrategyApiPayload | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+
+  function pushNotice(message: string): void {
+    setNotice(message);
+    setError("");
+  }
+
+  function pushError(message: string): void {
+    setError(message);
+    setNotice("");
+  }
 
   useEffect(() => {
     const suppressPerfTimestampError = (event: ErrorEvent) => {
@@ -371,10 +389,16 @@ export default function DebugPlanningV2Client() {
   }, [scenariosResponse?.data?.base, scenariosResponse?.data?.scenarios]);
 
   async function runSimulation(): Promise<void> {
-    const parsed = parseInputs(profileJson, horizonMonths, overridesJson);
-    if (!parsed) return;
+    const parsedResult = parseInputs(profileJson, horizonMonths, overridesJson);
+    if (!parsedResult.ok) {
+      pushError(parsedResult.error);
+      return;
+    }
+    const parsed = parsedResult.value;
 
     setLoading(true);
+    setError("");
+    setNotice("");
     try {
       const res = await fetch("/api/planning/v2/simulate", {
         method: "POST",
@@ -385,13 +409,13 @@ export default function DebugPlanningV2Client() {
       const payload = (await res.json().catch(() => null)) as SimulateApiPayload | null;
       if (!payload || typeof payload !== "object") {
         setResponse(null);
-        window.alert("응답 파싱에 실패했습니다.");
+        pushError("응답 파싱에 실패했습니다.");
         return;
       }
 
       if (!res.ok || !payload.ok) {
         setResponse(payload);
-        window.alert(payload.error?.message ?? "시뮬레이션 실패");
+        pushError(payload.error?.message ?? "시뮬레이션 실패");
         return;
       }
       const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
@@ -400,20 +424,26 @@ export default function DebugPlanningV2Client() {
         data: normalized.data as unknown as SimulateApiPayload["data"],
       });
 
-      window.alert("시뮬레이션을 완료했습니다.");
+      pushNotice("시뮬레이션을 완료했습니다.");
     } catch (error) {
       setResponse(null);
-      window.alert(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
+      pushError(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
   }
 
   async function runScenarios(): Promise<void> {
-    const parsed = parseInputs(profileJson, horizonMonths, overridesJson);
-    if (!parsed) return;
+    const parsedResult = parseInputs(profileJson, horizonMonths, overridesJson);
+    if (!parsedResult.ok) {
+      pushError(parsedResult.error);
+      return;
+    }
+    const parsed = parsedResult.value;
 
     setScenarioLoading(true);
+    setError("");
+    setNotice("");
     try {
       const res = await fetch("/api/planning/v2/scenarios", {
         method: "POST",
@@ -424,13 +454,13 @@ export default function DebugPlanningV2Client() {
       const payload = (await res.json().catch(() => null)) as ScenariosApiPayload | null;
       if (!payload || typeof payload !== "object") {
         setScenariosResponse(null);
-        window.alert("시나리오 응답 파싱에 실패했습니다.");
+        pushError("시나리오 응답 파싱에 실패했습니다.");
         return;
       }
 
       if (!res.ok || !payload.ok) {
         setScenariosResponse(payload);
-        window.alert(payload.error?.message ?? "시나리오 실행 실패");
+        pushError(payload.error?.message ?? "시나리오 실행 실패");
         return;
       }
       const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
@@ -439,31 +469,37 @@ export default function DebugPlanningV2Client() {
         data: normalized.data as unknown as ScenariosApiPayload["data"],
       });
 
-      window.alert("시나리오 실행을 완료했습니다.");
+      pushNotice("시나리오 실행을 완료했습니다.");
     } catch (error) {
       setScenariosResponse(null);
-      window.alert(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
+      pushError(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
     } finally {
       setScenarioLoading(false);
     }
   }
 
   async function runMonteCarlo(): Promise<void> {
-    const parsed = parseInputs(profileJson, horizonMonths, overridesJson);
-    if (!parsed) return;
+    const parsedResult = parseInputs(profileJson, horizonMonths, overridesJson);
+    if (!parsedResult.ok) {
+      pushError(parsedResult.error);
+      return;
+    }
+    const parsed = parsedResult.value;
 
     const paths = Number.parseInt(monteCarloPaths, 10);
     const seed = Number.parseInt(monteCarloSeed, 10);
     if (!Number.isFinite(paths) || paths < 1) {
-      window.alert("paths는 1 이상의 숫자여야 합니다.");
+      pushError("paths는 1 이상의 숫자여야 합니다.");
       return;
     }
     if (!Number.isFinite(seed)) {
-      window.alert("seed는 숫자여야 합니다.");
+      pushError("seed는 숫자여야 합니다.");
       return;
     }
 
     setMonteCarloLoading(true);
+    setError("");
+    setNotice("");
     try {
       const res = await fetch("/api/planning/v2/monte-carlo", {
         method: "POST",
@@ -480,37 +516,43 @@ export default function DebugPlanningV2Client() {
       const payload = (await res.json().catch(() => null)) as MonteCarloApiPayload | null;
       if (!payload || typeof payload !== "object") {
         setMonteCarloResponse(null);
-        window.alert("Monte Carlo 응답 파싱에 실패했습니다.");
+        pushError("Monte Carlo 응답 파싱에 실패했습니다.");
         return;
       }
 
       setMonteCarloResponse(payload);
 
       if (!res.ok || !payload.ok) {
-        window.alert(payload.error?.message ?? "Monte Carlo 실행 실패");
+        pushError(payload.error?.message ?? "Monte Carlo 실행 실패");
         return;
       }
 
-      window.alert("Monte Carlo 실행을 완료했습니다.");
+      pushNotice("Monte Carlo 실행을 완료했습니다.");
     } catch (error) {
       setMonteCarloResponse(null);
-      window.alert(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
+      pushError(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
     } finally {
       setMonteCarloLoading(false);
     }
   }
 
   async function runActions(): Promise<void> {
-    const parsed = parseInputs(profileJson, horizonMonths, overridesJson);
-    if (!parsed) return;
+    const parsedResult = parseInputs(profileJson, horizonMonths, overridesJson);
+    if (!parsedResult.ok) {
+      pushError(parsedResult.error);
+      return;
+    }
+    const parsed = parsedResult.value;
 
     const maxCandidates = Number.parseInt(actionsMaxCandidates, 10);
     if (!Number.isFinite(maxCandidates) || maxCandidates < 1 || maxCandidates > 20) {
-      window.alert("maxCandidatesPerAction은 1~20 범위여야 합니다.");
+      pushError("maxCandidatesPerAction은 1~20 범위여야 합니다.");
       return;
     }
 
     setActionsLoading(true);
+    setError("");
+    setNotice("");
     try {
       const res = await fetch("/api/planning/v2/actions", {
         method: "POST",
@@ -525,13 +567,13 @@ export default function DebugPlanningV2Client() {
       const payload = (await res.json().catch(() => null)) as ActionsApiPayload | null;
       if (!payload || typeof payload !== "object") {
         setActionsResponse(null);
-        window.alert("Actions 응답 파싱에 실패했습니다.");
+        pushError("Actions 응답 파싱에 실패했습니다.");
         return;
       }
 
       if (!res.ok || !payload.ok) {
         setActionsResponse(payload);
-        window.alert(payload.error?.message ?? "Actions 생성 실패");
+        pushError(payload.error?.message ?? "Actions 생성 실패");
         return;
       }
       const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
@@ -540,36 +582,42 @@ export default function DebugPlanningV2Client() {
         data: normalized.data as unknown as ActionsApiPayload["data"],
       });
 
-      window.alert("Action plan 생성을 완료했습니다.");
+      pushNotice("Action plan 생성을 완료했습니다.");
     } catch (error) {
       setActionsResponse(null);
-      window.alert(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
+      pushError(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
     } finally {
       setActionsLoading(false);
     }
   }
 
   async function runDebtAnalysis(): Promise<void> {
-    const parsed = parseInputs(profileJson, horizonMonths, overridesJson);
-    if (!parsed) return;
+    const parsedResult = parseInputs(profileJson, horizonMonths, overridesJson);
+    if (!parsedResult.ok) {
+      pushError(parsedResult.error);
+      return;
+    }
+    const parsed = parsedResult.value;
 
     let offers: unknown = [];
     if (debtOffersJson.trim().length > 0) {
       try {
         offers = JSON.parse(debtOffersJson);
       } catch {
-        window.alert("Debt offers JSON 파싱에 실패했습니다.");
+        pushError("Debt offers JSON 파싱에 실패했습니다.");
         return;
       }
     }
 
     const extraPaymentKrw = Number.parseInt(debtExtraPaymentKrw, 10);
     if (!Number.isFinite(extraPaymentKrw) || extraPaymentKrw < 0) {
-      window.alert("extraPaymentKrw는 0 이상의 숫자여야 합니다.");
+      pushError("extraPaymentKrw는 0 이상의 숫자여야 합니다.");
       return;
     }
 
     setDebtLoading(true);
+    setError("");
+    setNotice("");
     try {
       const res = await fetch("/api/planning/v2/debt-strategy", {
         method: "POST",
@@ -586,13 +634,13 @@ export default function DebugPlanningV2Client() {
       const payload = (await res.json().catch(() => null)) as DebtStrategyApiPayload | null;
       if (!payload || typeof payload !== "object") {
         setDebtResponse(null);
-        window.alert("Debt strategy 응답 파싱에 실패했습니다.");
+        pushError("Debt strategy 응답 파싱에 실패했습니다.");
         return;
       }
 
       if (!res.ok || !payload.ok) {
         setDebtResponse(payload);
-        window.alert(payload.error?.message ?? "Debt strategy 분석 실패");
+        pushError(payload.error?.message ?? "Debt strategy 분석 실패");
         return;
       }
       const normalized = normalizePlanningResponse((payload.data ?? {}) as Record<string, unknown>);
@@ -601,10 +649,10 @@ export default function DebugPlanningV2Client() {
         data: normalized.data as unknown as DebtStrategyApiPayload["data"],
       });
 
-      window.alert("Debt strategy 분석을 완료했습니다.");
+      pushNotice("Debt strategy 분석을 완료했습니다.");
     } catch (error) {
       setDebtResponse(null);
-      window.alert(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
+      pushError(error instanceof Error ? error.message : "요청 중 오류가 발생했습니다.");
     } finally {
       setDebtLoading(false);
     }
@@ -618,6 +666,16 @@ export default function DebugPlanningV2Client() {
       />
 
       <Card className="space-y-4">
+        {error ? (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+            {error}
+          </p>
+        ) : null}
+        {notice ? (
+          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+            {notice}
+          </p>
+        ) : null}
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-2 text-sm">
             <span className="font-semibold text-slate-800">Profile JSON</span>

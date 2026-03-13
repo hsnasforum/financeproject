@@ -1,28 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { uiTextKo } from "@/lib/uiText.ko";
 
 export function BrandLogo() {
   return (
-    <Link href="/" className="flex items-center gap-3 group" aria-label="핀라이프 홈">
-      <div className="relative">
-        <div className="absolute inset-0 bg-emerald-100 blur-lg rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-        <Image
-          src="/brand/logo-icon.png"
-          alt=""
-          aria-hidden="true"
-          width={36}
-          height={36}
-          className="relative h-9 w-9 object-contain transition-transform duration-500 group-hover:scale-110 group-hover:rotate-[10deg]"
-        />
+    <Link href="/" className="flex items-center gap-3 group" aria-label="MMD 홈">
+      <div className="relative flex h-11 w-11 items-center justify-center rounded-[16px] bg-[linear-gradient(145deg,#36b5ff_0%,#1ec8a5_100%)] shadow-[0_12px_24px_rgba(22,163,197,0.22)] transition-transform duration-500 group-hover:scale-105">
+        <div className="absolute inset-[7px] rounded-[12px] bg-white/18" />
+        <div className="relative flex items-center gap-1">
+          <span className="block h-3.5 w-3.5 rounded-full bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.12)]" />
+          <span className="block h-2.5 w-2.5 rounded-full bg-[#083344]/85" />
+        </div>
       </div>
       <div className="flex flex-col">
-        <span className="text-base font-black leading-none tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">
-          {uiTextKo.app.brand}
+        <span className="text-[17px] font-black leading-none tracking-[-0.05em] text-slate-900 transition-colors group-hover:text-emerald-600">
+          MMD
         </span>
-        <span className="text-[9px] text-slate-400 font-black tracking-[0.2em] mt-1 uppercase">AI Navigator</span>
+        <span className="mt-1 text-[9px] font-black tracking-[0.16em] text-slate-400 uppercase">
+          My Money Design
+        </span>
       </div>
     </Link>
   );

@@ -1,30 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isLocalRequest } from "./src/lib/dev/localRequest";
-
-const LEGACY_PLANNER_PREFIX = "/planner";
-const PLANNING_PREFIX = "/planning";
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function buildContentSecurityPolicy(): string {
+  const isProduction = process.env.NODE_ENV === "production";
+  const scriptSrc = ["'self'", "'unsafe-inline'", "blob:"];
+  if (!isProduction) {
+    scriptSrc.push("'unsafe-eval'");
+  }
+
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    "form-action 'self'",
+    `script-src ${scriptSrc.join(" ")}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' ws: wss: http: https:",
+  ].join("; ");
+}
 
 function withSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set("x-content-type-options", "nosniff");
   response.headers.set("referrer-policy", "strict-origin-when-cross-origin");
   response.headers.set("x-frame-options", "DENY");
-  response.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
-  response.headers.set(
-    "content-security-policy",
-    [
-      "default-src 'self'",
-      "base-uri 'self'",
-      "object-src 'none'",
-      "frame-ancestors 'none'",
-      "form-action 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob:",
-      "font-src 'self' data:",
-      "connect-src 'self' ws: wss: http: https:",
-    ].join("; "),
-  );
+  response.headers.set("cross-origin-opener-policy", "same-origin");
+  response.headers.set("cross-origin-resource-policy", "same-site");
+  response.headers.set("origin-agent-cluster", "?1");
+  response.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
+  response.headers.set("content-security-policy", buildContentSecurityPolicy());
   return response;
 }
 
@@ -58,13 +65,6 @@ function blockResponse(request: NextRequest): NextResponse {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (pathname.startsWith(LEGACY_PLANNER_PREFIX)) {
-    const suffix = pathname.slice(LEGACY_PLANNER_PREFIX.length);
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = suffix ? `${PLANNING_PREFIX}${suffix}` : PLANNING_PREFIX;
-    return withSecurityHeaders(NextResponse.redirect(redirectUrl, 307));
-  }
 
   const needsLocalOnly = isOpsPath(pathname) || isPlanningMutationPath(pathname, request.method);
   if (needsLocalOnly && !isLocalRequest(request)) {

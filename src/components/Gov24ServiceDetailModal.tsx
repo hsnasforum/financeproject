@@ -7,7 +7,7 @@ import { type EligibilityItem } from "@/lib/gov24/eligibilityNormalize";
 import { safeExternalUrl } from "@/lib/url/safeExternalUrl";
 import { type ApplyLink } from "@/lib/gov24/applyLinks";
 
-type DetailData = {
+export type Gov24ServiceDetailData = {
   id: string;
   title: string;
   org?: string;
@@ -40,13 +40,13 @@ const TAB_LABELS: Record<TabKey, string> = {
   contact: "접수·문의",
 };
 
-const SOURCE_LABEL: Record<DetailData["source"], string> = {
+const SOURCE_LABEL: Record<Gov24ServiceDetailData["source"], string> = {
   official: "공식 연동",
   openapi: "오픈API",
   fallback: "Fallback",
 };
 
-export function Gov24ServiceDetailModal({ data, onClose }: { data: DetailData; onClose: () => void }) {
+export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceDetailData; onClose: () => void }) {
   const [tab, setTab] = useState<TabKey>("overview");
   const lines = useMemo(() => dedupeConsecutiveLines(data.tabs[tab] ?? []), [data.tabs, tab]);
   const targetItems = useMemo(() => data.supportTarget?.items ?? [], [data.supportTarget?.items]);

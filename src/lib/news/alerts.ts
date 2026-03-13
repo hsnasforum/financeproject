@@ -12,6 +12,11 @@ import {
   readRecentAlertEvents as readRecentAlertEventsV3,
   resolveAlertEventsPath as resolveAlertEventsPathV3,
 } from "../../../planning/v3/alerts/store";
+import {
+  getPlanningUserDir,
+  isPlanningNamespaceEnabled,
+  resolvePlanningUserId,
+} from "../planning/store/namespace.ts";
 import { resolveDataDir } from "../planning/storage/dataDir.ts";
 import { readIndicatorSeriesSnapshots } from "../indicators/query.ts";
 import { type Observation, type SeriesSnapshot } from "../indicators/types.ts";
@@ -115,6 +120,21 @@ const AlertEventSchema = z.object({
 
 export type AlertEvent = z.infer<typeof AlertEventSchema>;
 
+const AlertEventStateItemSchema = z.object({
+  id: z.string().trim().min(1),
+  acknowledgedAt: z.string().datetime().optional(),
+  hiddenAt: z.string().datetime().optional(),
+});
+
+const AlertEventStateStoreSchema = z.object({
+  updatedAt: z.string().datetime().optional(),
+  items: z.array(AlertEventStateItemSchema).default([]),
+});
+
+export type AlertEventStateItem = z.infer<typeof AlertEventStateItemSchema>;
+export type AlertEventStateStore = z.infer<typeof AlertEventStateStoreSchema>;
+export type AlertEventStateAction = "ack" | "unack" | "hide" | "unhide";
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -200,6 +220,10 @@ function readAlertEventLine(line: string): AlertEvent | null {
   }
 }
 
+void formatKstDay;
+void shiftKstDay;
+void readAlertEventLine;
+
 function defaultRulesConfig(): z.infer<typeof AlertRulesConfigSchema> {
   return {
     version: 1,
@@ -215,6 +239,13 @@ function defaultOverrides(): z.infer<typeof AlertRuleOverridesSchema> {
   };
 }
 
+function defaultAlertEventStateStore(): AlertEventStateStore {
+  return {
+    updatedAt: undefined,
+    items: [],
+  };
+}
+
 export function resolveAlertsDataDir(cwd = process.cwd()): string {
   return path.join(resolveDataDir({ cwd }), "alerts");
 }
@@ -223,12 +254,112 @@ export function resolveAlertEventsPath(cwd = process.cwd()): string {
   return resolveAlertEventsPathV3(resolveAlertsDataDir(cwd));
 }
 
+function resolveLegacyAlertEventStatePath(cwd = process.cwd()): string {
+  return path.join(resolveAlertsDataDir(cwd), "event-state.json");
+}
+
+function resolveScopedAlertEventStatePath(cwd = process.cwd()): string {
+  if (!isPlanningNamespaceEnabled()) return resolveLegacyAlertEventStatePath(cwd);
+  const userId = resolvePlanningUserId();
+  return path.join(getPlanningUserDir(userId, cwd), "news", "alerts", "event-state.json");
+}
+
+export function resolveAlertEventStatePath(cwd = process.cwd()): string {
+  return resolveScopedAlertEventStatePath(cwd);
+}
+
 export function resolveAlertRulesOverridePath(cwd = process.cwd()): string {
   return path.join(resolveAlertsDataDir(cwd), "rules.override.json");
 }
 
 export function resolveAlertRulesConfigPath(cwd = process.cwd()): string {
   return path.join(cwd, "config", "news-alert-rules.json");
+}
+
+function normalizeAlertEventStateItems(items: AlertEventStateItem[]): AlertEventStateItem[] {
+  const byId = new Map<string, AlertEventStateItem>();
+  for (const row of items) {
+    const parsed = AlertEventStateItemSchema.parse(row);
+    const normalized = AlertEventStateItemSchema.parse({
+      id: parsed.id,
+      ...(parsed.acknowledgedAt ? { acknowledgedAt: parsed.acknowledgedAt } : {}),
+      ...(parsed.hiddenAt ? { hiddenAt: parsed.hiddenAt } : {}),
+    });
+    if (!normalized.acknowledgedAt && !normalized.hiddenAt) {
+      byId.delete(normalized.id);
+      continue;
+    }
+    byId.set(normalized.id, normalized);
+  }
+  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function readAlertEventState(cwd = process.cwd()): AlertEventStateStore {
+  const primaryPath = resolveAlertEventStatePath(cwd);
+  const legacyPath = resolveLegacyAlertEventStatePath(cwd);
+  const candidates = primaryPath === legacyPath ? [primaryPath] : [primaryPath, legacyPath];
+
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue;
+    const parsed = readJson(filePath, defaultAlertEventStateStore());
+    const validated = AlertEventStateStoreSchema.safeParse(parsed);
+    if (!validated.success) continue;
+
+    const normalized = {
+      updatedAt: validated.data.updatedAt,
+      items: normalizeAlertEventStateItems(validated.data.items),
+    };
+
+    if (filePath !== primaryPath) {
+      writeAlertEventState({ items: normalized.items }, cwd);
+    }
+    return normalized;
+  }
+
+  return defaultAlertEventStateStore();
+}
+
+export function writeAlertEventState(input: {
+  items: AlertEventStateItem[];
+}, cwd = process.cwd()): AlertEventStateStore {
+  const next = AlertEventStateStoreSchema.parse({
+    updatedAt: new Date().toISOString(),
+    items: normalizeAlertEventStateItems(input.items),
+  });
+
+  const filePath = resolveAlertEventStatePath(cwd);
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(next, null, 2)}\n`, "utf-8");
+  return next;
+}
+
+export function updateAlertEventState(input: {
+  action: AlertEventStateAction;
+  id: string;
+}, cwd = process.cwd()): AlertEventStateStore {
+  const id = asString(input.id);
+  if (!id) {
+    return readAlertEventState(cwd);
+  }
+
+  const current = readAlertEventState(cwd);
+  const byId = new Map(current.items.map((row) => [row.id, { ...row }]));
+  const next = byId.get(id) ?? { id };
+  const nowIso = new Date().toISOString();
+
+  if (input.action === "ack") next.acknowledgedAt = nowIso;
+  if (input.action === "unack") delete next.acknowledgedAt;
+  if (input.action === "hide") next.hiddenAt = nowIso;
+  if (input.action === "unhide") delete next.hiddenAt;
+
+  if (!next.acknowledgedAt && !next.hiddenAt) {
+    byId.delete(id);
+  } else {
+    byId.set(id, AlertEventStateItemSchema.parse(next));
+  }
+
+  return writeAlertEventState({ items: [...byId.values()] }, cwd);
 }
 
 export function readAlertRulesConfig(cwd = process.cwd()): z.infer<typeof AlertRulesConfigSchema> {
@@ -498,6 +629,9 @@ function evaluateIndicatorRule(input: {
     valueText,
   })];
 }
+
+void evaluateTopicBurstRule;
+void evaluateIndicatorRule;
 
 export function evaluateAlertEvents(input: {
   cwd?: string;

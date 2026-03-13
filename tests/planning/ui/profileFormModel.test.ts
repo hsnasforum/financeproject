@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { PlanningV2ValidationError } from "../../../src/lib/planning/core/v2/types";
+import { PlanningV2ValidationError } from "../../../src/lib/planning/v2/types";
 import {
+  buildProfileJsonEditorState,
+  buildProfileJsonEditorDraft,
   createDefaultProfileFormModel,
   deriveSummary,
   formToProfile,
   fromProfileJson,
+  hydrateProfileJsonEditorState,
   normalizeDraft,
   normalizeDraftWithDisclosure,
+  parseProfileJsonEditorDraft,
   profileToForm,
   safeParseProfileJson,
   toProfileJson,
@@ -60,6 +64,10 @@ describe("planning profileFormModel", () => {
 
   it("supports profileToForm/formToProfile helper roundtrip", () => {
     const profile = {
+      birthYear: 1994,
+      gender: "F" as const,
+      sido: "서울특별시",
+      sigungu: "마포구",
       monthlyIncomeNet: 4_800_000,
       monthlyEssentialExpenses: 1_700_000,
       monthlyDiscretionaryExpenses: 900_000,
@@ -81,6 +89,10 @@ describe("planning profileFormModel", () => {
 
     const form = profileToForm(profile, "헬퍼");
     const roundtripProfile = formToProfile(form);
+    expect(roundtripProfile.birthYear).toBe(1994);
+    expect(roundtripProfile.gender).toBe("F");
+    expect(roundtripProfile.sido).toBe("서울특별시");
+    expect(roundtripProfile.sigungu).toBe("마포구");
     expect(roundtripProfile.monthlyIncomeNet).toBe(profile.monthlyIncomeNet);
     expect(roundtripProfile.debts[0]?.id).toBe("loan-helper-1");
     expect(roundtripProfile.debts[0]?.aprPct).toBeCloseTo(5.1, 6);
@@ -207,6 +219,112 @@ describe("planning profileFormModel", () => {
     expect(result.error).toContain("파싱 실패");
   });
 
+  it("builds canonical profile json editor draft from form", () => {
+    const form = createDefaultProfileFormModel("에디터");
+    form.debts = [
+      {
+        id: "loan-editor-1",
+        name: "편집기 대출",
+        balance: 18_000_000,
+        monthlyPayment: 310_000,
+        aprPct: 4.9,
+        remainingMonths: 72,
+        repaymentType: "amortizing",
+      },
+    ];
+
+    const draft = buildProfileJsonEditorDraft(form, "에디터");
+    const parsed = JSON.parse(draft) as {
+      monthlyIncomeNet?: number;
+      debts?: Array<{ id?: string; minimumPayment?: number; aprPct?: number }>;
+    };
+
+    expect(parsed.monthlyIncomeNet).toBe(4_200_000);
+    expect(parsed.debts?.[0]).toMatchObject({
+      id: "loan-editor-1",
+      minimumPayment: 310_000,
+      aprPct: 4.9,
+    });
+  });
+
+  it("builds synced profile editor state from form", () => {
+    const form = createDefaultProfileFormModel("상태");
+    form.monthlyIncomeNet = 5_300_000;
+
+    const state = buildProfileJsonEditorState(form, "상태");
+    const parsed = JSON.parse(state.json) as { monthlyIncomeNet?: number };
+
+    expect(state.form).toBe(form);
+    expect(state.jsonDraft).toBe(state.json);
+    expect(state.jsonError).toBe("");
+    expect(parsed.monthlyIncomeNet).toBe(5_300_000);
+  });
+
+  it("hydrates profile editor state from raw profile input", () => {
+    const state = hydrateProfileJsonEditorState({
+      monthlyIncomeNet: 4_900_000,
+      monthlyEssentialExpenses: 1_800_000,
+      monthlyDiscretionaryExpenses: 700_000,
+      liquidAssets: 2_400_000,
+      investmentAssets: 6_100_000,
+      debts: [],
+      goals: [],
+    }, "하이드레이트");
+
+    expect(state.form.monthlyIncomeNet).toBe(4_900_000);
+    expect(state.jsonDraft).toBe(state.json);
+    expect(state.jsonError).toBe("");
+    expect(JSON.parse(state.json)).toMatchObject({
+      monthlyIncomeNet: 4_900_000,
+      monthlyEssentialExpenses: 1_800_000,
+    });
+  });
+
+  it("parses profile json editor draft into form, canonical json, and normalization", () => {
+    const parsed = parseProfileJsonEditorDraft(JSON.stringify({
+      monthlyIncomeNet: 3_000_000,
+      monthlyEssentialExpenses: 1_000_000,
+      monthlyDiscretionaryExpenses: 500_000,
+      liquidAssets: 1_000_000,
+      investmentAssets: 0,
+      debts: [
+        {
+          id: "loan-editor-parse-1",
+          name: "Loan",
+          balance: 10_000_000,
+          aprPct: 0.075,
+          minimumPayment: 200_000,
+          remainingMonths: 60,
+          repaymentType: "amortizing",
+        },
+      ],
+      goals: [],
+    }), "에디터");
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.form.debts[0]?.aprPct).toBeCloseTo(7.5, 6);
+    expect(JSON.parse(parsed.json)).toMatchObject({
+      monthlyIncomeNet: 3_000_000,
+      debts: [
+        {
+          id: "loan-editor-parse-1",
+          aprPct: 7.5,
+        },
+      ],
+    });
+    expect(parsed.normalization.fixesApplied.some((item) => item.path === "/debts/0/aprPct")).toBe(true);
+  });
+
+  it("returns profile editor parse error on invalid json", () => {
+    const result = parseProfileJsonEditorDraft("{invalid-json", "에디터");
+
+    expect(result).toEqual({
+      ok: false,
+      error: "프로필 JSON 파싱 실패: 형식을 확인하세요.",
+    });
+  });
+
   it("form edits round-trip through profile json parser with valid shape", () => {
     const form = createDefaultProfileFormModel("라운드트립");
     form.monthlyIncomeNet = 5_600_000;
@@ -303,7 +421,7 @@ describe("planning profileFormModel", () => {
           name: "레거시 대출",
           balance: 20_000_000,
           apr: 0.048,
-          monthlyPayment: 300_000,
+          minimumPayment: 300_000,
           remainingMonths: 72,
           repaymentType: "amortizing",
         },
@@ -327,7 +445,7 @@ describe("planning profileFormModel", () => {
           name: "레거시 대출",
           balance: 20_000_000,
           aprPct: 0.048,
-          monthlyPayment: 300_000,
+          minimumPayment: 300_000,
           remainingMonths: 72,
           repaymentType: "amortizing",
         },
@@ -393,7 +511,7 @@ describe("planning profileFormModel", () => {
           name: "대출1",
           balance: 20_000_000,
           aprPct: 4.8,
-          monthlyPayment: 300_000,
+          minimumPayment: 300_000,
           remainingMonths: 72,
           repaymentType: "amortizing",
         },
@@ -402,7 +520,7 @@ describe("planning profileFormModel", () => {
           name: "대출2",
           balance: 8_000_000,
           aprPct: 6.1,
-          monthlyPayment: 150_000,
+          minimumPayment: 150_000,
           remainingMonths: 48,
           repaymentType: "amortizing",
         },

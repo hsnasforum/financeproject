@@ -90,7 +90,7 @@ function toMs(iso: string | undefined): number | undefined {
 }
 
 function daysBetween(nowMs: number, pastMs: number): number {
-  return Math.floor(Math.max(0, nowMs - pastMs) / (24 * 60 * 60 * 1000));
+  return Math.trunc(Math.max(0, nowMs - pastMs) / (24 * 60 * 60 * 1000));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

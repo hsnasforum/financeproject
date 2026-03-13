@@ -1,8 +1,13 @@
+import { normalizeDartSearchQuery } from "./query";
+
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const FAVORITES_KEY = "dart_favorites_v1";
 const RECENT_KEY = "dart_recent_v1";
+const RECENT_SEARCHES_KEY = "dart_recent_searches_v1";
 const RECENT_MAX = 20;
+const RECENT_SEARCHES_MAX = 8;
+export const DART_FAVORITES_UPDATED_EVENT = "dart:favorites-updated";
 
 export type DartFavorite = {
   corpCode: string;
@@ -14,6 +19,11 @@ export type DartRecent = {
   corpCode: string;
   corpName?: string;
   viewedAt: string;
+};
+
+export type DartRecentSearch = {
+  query: string;
+  searchedAt: string;
 };
 
 type DartCompanyRef = {
@@ -100,10 +110,40 @@ function parseRecent(raw: string | null): DartRecent[] {
   }
 }
 
+function parseRecentSearches(raw: string | null): DartRecentSearch[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const out: DartRecentSearch[] = [];
+    const seen = new Set<string>();
+    for (const row of parsed) {
+      if (!row || typeof row !== "object") continue;
+      const item = row as Record<string, unknown>;
+      const query = normalizeDartSearchQuery(item.query);
+      if (!query || seen.has(query)) continue;
+      seen.add(query);
+      out.push({
+        query,
+        searchedAt: normalizeDate(item.searchedAt),
+      });
+      if (out.length >= RECENT_SEARCHES_MAX) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function writeFavorites(items: DartFavorite[], storage?: StorageLike): DartFavorite[] {
   const resolved = resolveStorage(storage);
   if (!resolved) return items;
   resolved.setItem(FAVORITES_KEY, JSON.stringify(items));
+  if (inBrowser()) {
+    window.dispatchEvent(new CustomEvent(DART_FAVORITES_UPDATED_EVENT, {
+      detail: { count: items.length },
+    }));
+  }
   return items;
 }
 
@@ -111,6 +151,13 @@ function writeRecent(items: DartRecent[], storage?: StorageLike): DartRecent[] {
   const resolved = resolveStorage(storage);
   if (!resolved) return items;
   resolved.setItem(RECENT_KEY, JSON.stringify(items));
+  return items;
+}
+
+function writeRecentSearches(items: DartRecentSearch[], storage?: StorageLike): DartRecentSearch[] {
+  const resolved = resolveStorage(storage);
+  if (!resolved) return items;
+  resolved.setItem(RECENT_SEARCHES_KEY, JSON.stringify(items));
   return items;
 }
 
@@ -188,8 +235,36 @@ export function clearRecent(storage?: StorageLike): void {
   resolved.removeItem(RECENT_KEY);
 }
 
+export function listRecentSearches(storage?: StorageLike): DartRecentSearch[] {
+  const resolved = resolveStorage(storage);
+  if (!resolved) return [];
+  return parseRecentSearches(resolved.getItem(RECENT_SEARCHES_KEY));
+}
+
+export function pushRecentSearch(query: string, storage?: StorageLike): DartRecentSearch[] {
+  const normalized = normalizeDartSearchQuery(query);
+  if (!normalized) return listRecentSearches(storage);
+  const now = new Date().toISOString();
+  const next = [
+    {
+      query: normalized,
+      searchedAt: now,
+    } satisfies DartRecentSearch,
+    ...listRecentSearches(storage).filter((item) => item.query !== normalized),
+  ].slice(0, RECENT_SEARCHES_MAX);
+  return writeRecentSearches(next, storage);
+}
+
+export function clearRecentSearches(storage?: StorageLike): void {
+  const resolved = resolveStorage(storage);
+  if (!resolved) return;
+  resolved.removeItem(RECENT_SEARCHES_KEY);
+}
+
 export const dartStoreConfig = {
   favoritesKey: FAVORITES_KEY,
   recentKey: RECENT_KEY,
+  recentSearchesKey: RECENT_SEARCHES_KEY,
   recentMax: RECENT_MAX,
+  recentSearchesMax: RECENT_SEARCHES_MAX,
 };

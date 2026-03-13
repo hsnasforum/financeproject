@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as alertsGET, POST as alertsPOST } from "../src/app/api/planning/v3/news/alerts/route";
@@ -6,27 +7,59 @@ import { resolveAlertEventStatePath, resolveAlertEventsPath } from "../src/lib/n
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3100";
-const EVENTS_PATH = resolveAlertEventsPath();
-const EVENT_STATE_PATH = resolveAlertEventStatePath();
+const REMOTE_HOST = "example.com";
+const EVIL_ORIGIN = "http://evil.com";
 
-function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = false): Request {
-  const origin = `http://${host}`;
-  const headers = new Headers({ host });
-  if (withOriginHeaders) {
-    headers.set("origin", origin);
-    headers.set("referer", `${origin}/planning/v3/news/alerts`);
-  }
-  return new Request(`${origin}${pathname}`, { method: "GET", headers });
+function eventsPath(): string {
+  return resolveAlertEventsPath();
 }
 
-function requestPost(pathname: string, body: Record<string, unknown>, host = LOCAL_HOST, csrf = "csrf-token"): Request {
-  const origin = `http://${host}`;
+function eventStatePath(): string {
+  return resolveAlertEventStatePath();
+}
+
+function requestGet(
+  pathname: string,
+  options?: {
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+  },
+): Request {
+  const host = options?.host ?? LOCAL_HOST;
+  const origin = options?.origin ?? `http://${host}`;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  return new Request(`${origin}${pathname}`, {
+    method: "GET",
+    headers: {
+      host,
+      origin,
+      referer: `${refererOrigin}/planning/v3/news/alerts`,
+    },
+  });
+}
+
+function requestPost(
+  pathname: string,
+  body: Record<string, unknown>,
+  options?: {
+    host?: string;
+    origin?: string;
+    refererOrigin?: string;
+    csrf?: string;
+  },
+): Request {
+  const host = options?.host ?? LOCAL_HOST;
+  const origin = options?.origin ?? `http://${host}`;
+  const refererOrigin = options?.refererOrigin ?? origin;
+  const csrf = options?.csrf ?? "csrf-token";
   const headers = new Headers({
     host,
     origin,
-    referer: `${origin}/planning/v3/news/alerts`,
+    referer: `${refererOrigin}/planning/v3/news/alerts`,
     cookie: `dev_action=1; dev_csrf=${csrf}`,
     "content-type": "application/json",
   });
@@ -50,18 +83,33 @@ function restoreFile(filePath: string, backup: string | null): void {
   fs.writeFileSync(filePath, backup, "utf-8");
 }
 
+async function expectOriginMismatch(response: Response | Promise<Response>) {
+  const resolved = await response;
+  expect(resolved.status).toBe(403);
+  const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
+  expect(payload.ok).toBe(false);
+  expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
+}
+
 describe("planning v3 news alerts api", () => {
+  let root = "";
+
   beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-news-alerts-api-"));
     env.NODE_ENV = "test";
+    env.PLANNING_DATA_DIR = path.join(root, "planning");
   });
 
   afterEach(() => {
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
+    fs.rmSync(root, { recursive: true, force: true });
   });
 
   it("allows same-origin remote host", async () => {
-    const response = await alertsGET(requestGet("/api/planning/v3/news/alerts", "example.com", true));
+    const response = await alertsGET(requestGet("/api/planning/v3/news/alerts", { host: REMOTE_HOST }));
     const payload = await response.json() as { ok?: boolean; data?: { total?: number } };
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
@@ -69,11 +117,13 @@ describe("planning v3 news alerts api", () => {
   });
 
   it("returns grouped alert events for recent days", async () => {
-    const backup = backupAndRemove(EVENTS_PATH);
-    const stateBackup = backupAndRemove(EVENT_STATE_PATH);
+    const alertsPath = eventsPath();
+    const statePath = eventStatePath();
+    const backup = backupAndRemove(alertsPath);
+    const stateBackup = backupAndRemove(statePath);
     try {
-      fs.mkdirSync(path.dirname(EVENTS_PATH), { recursive: true });
-      fs.writeFileSync(EVENTS_PATH, [
+      fs.mkdirSync(path.dirname(alertsPath), { recursive: true });
+      fs.writeFileSync(alertsPath, [
         JSON.stringify({
           id: "a1",
           createdAt: "2026-03-04T01:00:00.000Z",
@@ -104,7 +154,7 @@ describe("planning v3 news alerts api", () => {
         }),
       ].join("\n") + "\n", "utf-8");
 
-      const response = await alertsGET(requestGet("/api/planning/v3/news/alerts?days=30", LOCAL_HOST, true));
+      const response = await alertsGET(requestGet("/api/planning/v3/news/alerts?days=30"));
       const payload = await response.json() as {
         ok?: boolean;
         data?: {
@@ -139,17 +189,19 @@ describe("planning v3 news alerts api", () => {
         hiddenAt: null,
       });
     } finally {
-      restoreFile(EVENTS_PATH, backup);
-      restoreFile(EVENT_STATE_PATH, stateBackup);
+      restoreFile(alertsPath, backup);
+      restoreFile(statePath, stateBackup);
     }
   });
 
-  it("persists acknowledged and hidden alert state", async () => {
-    const eventsBackup = backupAndRemove(EVENTS_PATH);
-    const stateBackup = backupAndRemove(EVENT_STATE_PATH);
+  it("persists acknowledged and hidden alert state under env-aware root", async () => {
+    const alertsPath = eventsPath();
+    const statePath = eventStatePath();
+    const eventsBackup = backupAndRemove(alertsPath);
+    const stateBackup = backupAndRemove(statePath);
     try {
-      fs.mkdirSync(path.dirname(EVENTS_PATH), { recursive: true });
-      fs.writeFileSync(EVENTS_PATH, [
+      fs.mkdirSync(path.dirname(alertsPath), { recursive: true });
+      fs.writeFileSync(alertsPath, [
         JSON.stringify({
           id: "a1",
           createdAt: "2026-03-04T01:00:00.000Z",
@@ -205,7 +257,7 @@ describe("planning v3 news alerts api", () => {
       expect(hidePayload.data?.summary?.acknowledgedTotal).toBe(0);
       expect(typeof hidePayload.data?.groups?.[0]?.events?.[0]?.state?.hiddenAt).toBe("string");
 
-      const getResponse = await alertsGET(requestGet("/api/planning/v3/news/alerts?days=30", LOCAL_HOST, true));
+      const getResponse = await alertsGET(requestGet("/api/planning/v3/news/alerts?days=30"));
       const getPayload = await getResponse.json() as {
         ok?: boolean;
         data?: {
@@ -217,9 +269,23 @@ describe("planning v3 news alerts api", () => {
       expect(getPayload.ok).toBe(true);
       expect(typeof getPayload.data?.groups?.[0]?.events?.[0]?.state?.acknowledgedAt).toBe("string");
       expect(typeof getPayload.data?.groups?.[0]?.events?.[0]?.state?.hiddenAt).toBe("string");
+      expect(statePath.startsWith(root)).toBe(true);
+      expect(fs.existsSync(statePath)).toBe(true);
     } finally {
-      restoreFile(EVENTS_PATH, eventsBackup);
-      restoreFile(EVENT_STATE_PATH, stateBackup);
+      restoreFile(alertsPath, eventsBackup);
+      restoreFile(statePath, stateBackup);
     }
+  });
+
+  it("blocks cross-origin GET/POST", async () => {
+    await expectOriginMismatch(alertsGET(requestGet(
+      "/api/planning/v3/news/alerts",
+      { host: REMOTE_HOST, origin: EVIL_ORIGIN, refererOrigin: EVIL_ORIGIN },
+    )));
+    await expectOriginMismatch(alertsPOST(requestPost(
+      "/api/planning/v3/news/alerts",
+      { id: "a1", action: "ack", days: 30 },
+      { host: REMOTE_HOST, origin: EVIL_ORIGIN, refererOrigin: EVIL_ORIGIN },
+    )));
   });
 });

@@ -1,6 +1,5 @@
 import { type DartApiError } from "@/lib/publicApis/dart/types";
-
-const DEFAULT_DART_BASE = "https://opendart.fss.or.kr";
+import { resolveDartBaseUrl } from "@/lib/publicApis/dart/baseUrl";
 
 export class DartError extends Error {
   readonly info: DartApiError;
@@ -23,9 +22,7 @@ export function getDartApiKey(): string {
 }
 
 function getDartBaseUrl(): string {
-  const raw = (process.env.OPENDART_BASE_URL ?? DEFAULT_DART_BASE).trim();
-  const base = raw.endsWith("/") ? raw.slice(0, -1) : raw;
-  return `${base}/api`;
+  return `${resolveDartBaseUrl()}/api`;
 }
 
 export async function fetchDartJson(path: string, params: Record<string, string>, timeoutMs = 10_000): Promise<unknown> {

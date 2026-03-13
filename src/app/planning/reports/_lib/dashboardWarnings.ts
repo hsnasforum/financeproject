@@ -3,7 +3,7 @@ import {
   assumptionsHealthMessage,
   debtStrategyWarningMessage,
   type AssumptionsHealthWarningCode,
-} from "../../../../lib/planning/core/v2/warningsCatalog.ko";
+} from "@/lib/planning/v2/warningsCatalog.ko";
 import { type PlanningRunRecord } from "../../../../lib/planning/store/types";
 
 export type ReportDashboardWarningRow = {
@@ -105,4 +105,3 @@ export function aggregateReportWarningsFromRun(run: PlanningRunRecord | null): R
     return left.code.localeCompare(right.code);
   });
 }
-

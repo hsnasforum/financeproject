@@ -60,8 +60,10 @@ pnpm dev
 ```
 
 브라우저 접속:
-- 터미널에 출력된 로컬 URL/포트 사용
-- 예: `http://localhost:3100` (환경에 따라 다를 수 있음)
+- 터미널에 출력된 `Open (same env)` 또는 `Open (LAN)` URL을 그대로 사용
+- 기본 예: `http://localhost:3100`
+- WSL에서는 `pnpm dev`가 `0.0.0.0` + Windows `127.0.0.1` localhost bridge 조합을 기본으로 쓰므로 `http://localhost:3100`를 우선 사용
+- Windows 브라우저에서 localhost forwarding이 안 되면 같은 출력의 `Open (LAN)` URL로 접속
 
 ## E) 동기화 (선택)
 
@@ -81,6 +83,15 @@ pnpm planning:assumptions:sync
 ```bash
 pnpm planning:v2:complete
 ```
+
+release/RC E2E만 먼저 확인할 때:
+
+```bash
+pnpm e2e:rc
+```
+
+- dev Playwright는 기본적으로 `E2E_DISABLE_DEV_HMR=1`로 `/_next/webpack-hmr` websocket을 막아 HMR reload 노이즈를 테스트 경로에서 분리합니다.
+- dev HMR flake를 다시 재현해야 하면 `pnpm e2e:rc:dev-hmr`로 실행합니다.
 
 2) 서버 실행 상태에서 acceptance:
 

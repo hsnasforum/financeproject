@@ -44,6 +44,28 @@ describe("isLocalRequest", () => {
     expect(isLocalRequest(request)).toBe(false);
   });
 
+  it("allows WSL bridge ip when running inside WSL", () => {
+    const request = makeRequestLike(
+      "http://localhost:3000/ops",
+      {
+        host: "localhost:3000",
+        "x-forwarded-for": "172.20.128.1",
+      },
+    );
+    expect(isLocalRequest(request, { ...process.env, WSL_DISTRO_NAME: "Ubuntu" })).toBe(true);
+  });
+
+  it("blocks WSL bridge ip outside WSL env", () => {
+    const request = makeRequestLike(
+      "http://localhost:3000/ops",
+      {
+        host: "localhost:3000",
+        "x-forwarded-for": "172.20.128.1",
+      },
+    );
+    expect(isLocalRequest(request, { ...process.env, WSL_DISTRO_NAME: "", WSL_INTEROP: "" })).toBe(false);
+  });
+
   it("allows when ALLOW_REMOTE=true override is set", () => {
     const request = makeRequestLike("https://example.com/ops", { host: "example.com" });
     expect(isLocalRequest(request, { ...process.env, ALLOW_REMOTE: "true" })).toBe(true);

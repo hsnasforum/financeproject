@@ -1,7 +1,7 @@
 # Planning v2 Release Notes (1.0.3)
 
 - Version: `1.0.3`
-- Date: `2026-03-02`
+- Date: `2026-03-07`
 
 ## Done Definition 요약
 - `/planning`에서 프로필 생성/편집/삭제가 가능하다.
@@ -35,11 +35,11 @@
 
 ## 실행 커맨드
 - `pnpm release:prepare -- --version=x.y.z` (버전 bump + changelog 스텁 갱신)
-- `pnpm release:verify` (CI 필수 게이트 단축 실행: `pnpm test` + `pnpm planning:v2:complete` + `pnpm planning:v2:compat`)
-- `pnpm test`
-- `pnpm planning:v2:regress`
-- `pnpm planning:v2:smoke`
-- `pnpm planning:v2:guard`
+- `pnpm planning:v2:seed`
+- `PLANNING_BASE_URL=http://localhost:3100 pnpm planning:v2:smoke:http`
+- `PLANNING_BASE_URL=http://localhost:3100 pnpm planning:v2:acceptance`
+- `pnpm planning:v2:release:notes`
+- `pnpm planning:v2:release:evidence`
 
 ## 완성 확인 (3단계)
 - pnpm planning:v2:complete

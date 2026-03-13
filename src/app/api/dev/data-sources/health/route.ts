@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { loadDataSourceImpactSnapshot } from "@/lib/dataSources/impactSnapshot";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { shouldCooldown } from "@/lib/http/rateLimitCooldown";
 import { listProviders } from "@/lib/providers/registry";
-import { getCorpIndexStatus } from "@/lib/publicApis/dart/corpIndex";
 
 type SourceHealthRow = {
   sourceKey: string;
@@ -16,6 +16,8 @@ export async function GET() {
   const blocked = onlyDev();
   if (blocked) return blocked;
 
+  const impactSnapshot = await loadDataSourceImpactSnapshot();
+
   const rows: SourceHealthRow[] = listProviders().map((provider) => {
     const sourceKey = provider.cooldownKey ?? provider.id;
     return {
@@ -26,21 +28,21 @@ export async function GET() {
       lastSnapshotGeneratedAt: provider.lastSnapshotGeneratedAt?.() ?? null,
     };
   });
-  const openDartConfigured = Boolean((process.env.OPENDART_API_KEY ?? "").trim());
-  const openDartIndexStatus = getCorpIndexStatus();
   rows.push({
     sourceKey: "opendart",
-    configured: openDartConfigured,
-    replayEnabled: openDartIndexStatus.exists,
+    configured: impactSnapshot.openDartConfigured,
+    replayEnabled: impactSnapshot.openDartIndexStatus.exists,
     cooldownNextRetryAt: null,
-    lastSnapshotGeneratedAt: openDartIndexStatus.meta?.generatedAt ?? null,
+    lastSnapshotGeneratedAt: impactSnapshot.openDartIndexStatus.meta?.generatedAt ?? null,
   });
 
   return NextResponse.json({
     ok: true,
     data: rows,
     meta: {
-      opendartConfigured: openDartConfigured,
+      opendartConfigured: impactSnapshot.openDartConfigured,
+      impactHealthByCardId: impactSnapshot.impactHealthByCardId,
+      impactReadOnlyByCardId: impactSnapshot.impactReadOnlyByCardId,
     },
     fetchedAt: new Date().toISOString(),
   });

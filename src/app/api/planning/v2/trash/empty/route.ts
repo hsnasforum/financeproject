@@ -1,11 +1,9 @@
 import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
-  assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import {
@@ -33,9 +31,8 @@ function parseTrashKind(value: unknown): PlanningTrashKind | "all" {
   return "all";
 }
 
-function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) {
+function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertLocalHost(request);
     assertSameOrigin(request);
     const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
     if (hasCsrfCookie(request) && csrfToken) {
@@ -73,9 +70,6 @@ function appendTrashPurgeAudit(input: {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   let body: EmptyTrashBody = null;
   try {
     body = (await request.json()) as EmptyTrashBody;
@@ -83,7 +77,7 @@ export async function POST(request: Request) {
     body = null;
   }
 
-  const guardFailure = withLocalWriteGuard(request, body);
+  const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
   const kind = parseTrashKind(body?.kind);

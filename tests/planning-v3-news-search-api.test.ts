@@ -11,14 +11,18 @@ const originalNodeEnv = env.NODE_ENV;
 const originalPlanningDataDir = env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3100";
-const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
-
 let root = "";
 
-function requestGet(pathname: string, host = LOCAL_HOST): Request {
-  return new Request(`${LOCAL_ORIGIN}${pathname}`, {
+function requestGet(pathname: string, host = LOCAL_HOST, withOriginHeaders = false): Request {
+  const origin = `http://${host}`;
+  const headers = new Headers({ host });
+  if (withOriginHeaders) {
+    headers.set("origin", origin);
+    headers.set("referer", `${origin}/planning/v3/news/explore`);
+  }
+  return new Request(`${origin}${pathname}`, {
     method: "GET",
-    headers: { host },
+    headers,
   });
 }
 
@@ -85,16 +89,16 @@ describe("planning v3 news search api", () => {
     if (root) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("blocks non-local host", async () => {
-    const response = await GET(requestGet("/api/planning/v3/news/search", "example.com"));
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
-    expect(response.status).toBe(403);
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("LOCAL_ONLY");
+  it("allows same-origin remote host", async () => {
+    const response = await GET(requestGet("/api/planning/v3/news/search", "example.com", true));
+    const payload = await response.json() as { ok?: boolean; data?: { total?: number } };
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.total).toBeGreaterThanOrEqual(0);
   });
 
   it("filters and ranks deterministically", async () => {
-    const response = await GET(requestGet("/api/planning/v3/news/search?q=%EA%B8%B0%EC%A4%80%EA%B8%88%EB%A6%AC&topics=rates&sources=bok_press_all&minScore=1.9&days=30&limit=10"));
+    const response = await GET(requestGet("/api/planning/v3/news/search?q=%EA%B8%B0%EC%A4%80%EA%B8%88%EB%A6%AC&topics=rates&sources=bok_press_all&minScore=1.9&days=30&limit=10", LOCAL_HOST, true));
     const payload = await response.json() as {
       ok?: boolean;
       data?: {

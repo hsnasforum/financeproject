@@ -135,8 +135,8 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     expect(response.headers.get("content-type")).toContain("text/html");
     expect(html).toContain("Executive Summary");
     expect(html).toContain("Warnings");
-    expect(html).toContain("Goals");
-    expect(html).toContain("Action Plan");
+    expect(html).toContain("목표 진행상황");
+    expect(html).toContain("Top Actions");
     expect(html).toContain("계산 근거");
     expect(html).toContain("Applied overrides");
     expect(html).toContain("inflationPct=2.7");
@@ -162,5 +162,18 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toContain("inline;");
     expect(html).toContain("window.print()");
+  });
+
+  it("supports strict contract mode for canonical exported runs", async () => {
+    const runId = await createRunForExport();
+    const response = await exportHtmlGET(
+      buildGetRequest(`/api/planning/reports/${runId}/export.html?contract=strict`),
+      { params: Promise.resolve({ runId }) },
+    );
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(html).toContain("Executive Summary");
   });
 });

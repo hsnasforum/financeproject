@@ -6,7 +6,7 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
-import { mergeBatches, TransactionStoreInputError } from "@/lib/planning/v3/service/transactionStore";
+import { mergeBatches, TransactionStoreInputError } from "@/lib/planning/v3/transactions/store";
 
 type MergeBody = {
   fromBatchId?: unknown;
