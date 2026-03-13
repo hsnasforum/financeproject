@@ -6,14 +6,24 @@ P97-60 완료 이후 정상 운영 전환용 점검표입니다.
 ## 운영 주기 고정
 
 ### 주간 (권장: 일요일 오전)
-- [ ] `pnpm planning:v2:ops:run`
+- [ ] `pnpm planning:v2:ops:safety:weekly`
 - [ ] 최근 ops 리포트(`.data/planning/ops/reports`) FAIL 유무 확인
 - [ ] `/ops/assumptions`에서 latest snapshot 상태 확인
+- [ ] safety 리포트의 `legacyCandidates=0` 확인
 
 ### 격주/월간
-- [ ] `pnpm planning:v2:ops:run:regress`
+- [ ] `pnpm planning:v2:ops:safety:regress`
 - [ ] `pnpm planning:v2:ops:prune --keep=50`
 - [ ] `pnpm planning:v2:migrate:dry` (스키마 변경 가능성 점검)
+
+## SSOT 게이트
+
+- [ ] `pnpm planning:ssot:check`
+- [ ] `pnpm planning:current-screens:guard`
+- [ ] 멀티 에이전트 설정/프롬프트/skill 변경이 있으면 `pnpm multi-agent:guard`
+- [ ] `planning:ssot:check`는 현재 `src/lib/planning/calc/**`만 직접 rounding 허용으로 본다.
+- [ ] `src/lib/planning/**`에서 신규 `Math.round`/`Math.floor`가 필요하면 먼저 `roundKrw`, `roundToDigits`, `Math.trunc` 대체 가능 여부를 확인한다.
+- [ ] route 문서 정합성은 `docs/current-screens.md`와 `planning:current-screens:guard` 기준으로 유지한다.
 
 ## 스냅샷 신선도 점검 (45/120일 기준)
 - [ ] `staleDays > 45`: 경고로 보고 sync 필요 여부 검토
@@ -27,7 +37,7 @@ P97-60 완료 이후 정상 운영 전환용 점검표입니다.
 - [ ] 정리 전 복구 지점(restore point) 생성
 
 ## 회귀 실패 대응 (중요 원칙)
-- [ ] `pnpm planning:v2:ops:run:regress` 실패 시 원인(diff) 먼저 분석
+- [ ] `pnpm planning:v2:ops:safety:regress` 실패 시 원인(diff) 먼저 분석
 - [ ] 코드 수정/원인 확인 없이 baseline 업데이트 금지
 - [ ] 필요 시 롤백 후 재검증
 - [ ] 장애 보고는 `docs/planning-v2-bug-report-template.md` 양식 사용
@@ -47,11 +57,10 @@ P97-60 완료 이후 정상 운영 전환용 점검표입니다.
 ### 업그레이드 후
 - [ ] `pnpm planning:v2:acceptance`
 - [ ] `pnpm planning:v2:complete`
-- [ ] 필요 시 `pnpm planning:v2:ops:run:regress`
+- [ ] 필요 시 `pnpm planning:v2:ops:safety:regress`
 
 ## 로컬 알람 템플릿
 - 스케줄러/OS별 실패 알림 템플릿: `docs/planning-v2-scheduler.md`
 - 최소 기준:
-  - [ ] ops:run 실패 시 OS 알림 또는 이벤트 로그 기록
+  - [ ] ops safety weekly 실패 시 OS 알림 또는 이벤트 로그 기록
   - [ ] 알림에 실행 시각/명령/로그 위치 포함
-

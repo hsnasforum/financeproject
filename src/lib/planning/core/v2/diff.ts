@@ -1,3 +1,4 @@
+import { roundToDigits } from "../../calc/roundingPolicy";
 import { type SimulationResultV2 } from "./types";
 
 export type ScenarioDiff = {
@@ -17,7 +18,7 @@ type WorstCash = {
 };
 
 function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundToDigits(value, 2);
 }
 
 function fmtSignedPct(value: number): string {

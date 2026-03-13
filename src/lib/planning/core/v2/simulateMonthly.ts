@@ -1,3 +1,4 @@
+import { roundToDigits } from "../../calc/roundingPolicy";
 import {
   type DecisionTrace,
   type GoalStatusV2,
@@ -35,7 +36,7 @@ const HIGH_DEBT_SERVICE_RATIO_THRESHOLD = 0.4;
 const RETIREMENT_WITHDRAWAL_RATE = 0.04;
 
 function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
+  return roundToDigits(value, 2);
 }
 
 function toMonthlyRate(annualRate: number): number {

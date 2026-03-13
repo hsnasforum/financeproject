@@ -11,6 +11,7 @@ import { inferCsvMapping } from "../providers/csv/inferMapping";
 import { maskPreviewDescription, previewCsv, type CsvPreviewRow } from "../providers/csv/previewCsv";
 import { type CsvColumnMapping } from "../providers/csv/types";
 import { validateCsvMapping } from "../providers/csv/validateMapping";
+import { roundKrw } from "@/lib/planning/calc/roundingPolicy";
 import { dedupeTransactions } from "./dedupe";
 import { buildTxnId, isTxnId, normalizeDescriptionForTxnId } from "./txnId";
 
@@ -242,7 +243,7 @@ function normalizeTransactionRecord(value: unknown): V3TransactionRecord | null 
       batchId,
       createdAt,
       date,
-      amountKrw: Math.round(amountKrw),
+      amountKrw: roundKrw(amountKrw),
       ...(accountId ? { accountId: sanitizeRecordId(accountId) } : {}),
       ...(description ? { description } : {}),
       source,
@@ -433,7 +434,7 @@ function summarizeAccountMonthlyNet(records: AccountTransaction[]): Array<{
       netKrw: 0,
       txCount: 0,
     };
-    current.netKrw += Number.isFinite(record.amountKrw) ? Math.round(record.amountKrw) : 0;
+    current.netKrw += Number.isFinite(record.amountKrw) ? roundKrw(record.amountKrw) : 0;
     current.txCount += 1;
     grouped.set(key, current);
   }

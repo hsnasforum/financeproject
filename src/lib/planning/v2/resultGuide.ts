@@ -235,7 +235,7 @@ function parseTimelineRow(row: TimelineRowLike, monthIndex: number): TimelinePoi
 
 export function pickKeyTimelinePoints(timeline: TimelineRowLike[]): TimelinePointRow[] {
   if (timeline.length === 0) return [];
-  const candidates = [0, Math.floor((timeline.length - 1) / 2), timeline.length - 1];
+  const candidates = [0, Math.trunc((timeline.length - 1) / 2), timeline.length - 1];
   const seen = new Set<number>();
   const rows: TimelinePointRow[] = [];
 

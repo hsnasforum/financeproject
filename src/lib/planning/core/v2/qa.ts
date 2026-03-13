@@ -1,4 +1,5 @@
 import { type PlanResultV2 } from "./types";
+import { roundKrw } from "../../calc/roundingPolicy";
 
 export type PlanningQuestion =
   | "WHY_GOAL_MISSED"
@@ -11,7 +12,7 @@ function uniqCodes(codes: string[]): string[] {
 }
 
 function toMoney(value: number): string {
-  return `${Math.round(value).toLocaleString("ko-KR")}원`;
+  return `${roundKrw(value).toLocaleString("ko-KR")}원`;
 }
 
 function findWorstCash(plan: PlanResultV2): { monthIndex: number; liquidAssets: number } | null {

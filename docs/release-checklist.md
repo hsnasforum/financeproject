@@ -2,6 +2,7 @@
 
 ## 사전 확인
 - `pnpm verify` 통과
+- 멀티 에이전트 설정/프롬프트/skill 변경이 있으면 `pnpm multi-agent:guard` 통과
 - `pnpm build` 통과
 - `pnpm e2e` 통과
 - 문서 3종 최신화 확인

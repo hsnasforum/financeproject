@@ -1,0 +1,62 @@
+#:schema https://developers.openai.com/codex/config-schema.json
+
+[features]
+multi_agent = true
+
+[skills]
+
+[[skills.config]]
+path = "/home/xpdlqj/code/finance/.codex/skills/planning-gate-selector/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = "/home/xpdlqj/code/finance/.codex/skills/route-ssot-check/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = "/home/xpdlqj/code/finance/.codex/skills/dart-data-source-hardening/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = "/home/xpdlqj/code/finance/.codex/skills/work-log-closeout/SKILL.md"
+enabled = true
+
+[agents]
+# 이 파일은 Codex native 멀티 에이전트 설정이다.
+# CLI tmux 러너 역할 프롬프트는 `scripts/prompts/multi-agent/*.md`를 사용하며,
+# 이름 체계는 `lead / planner / researcher / implementer / reviewer / validator / documenter`다.
+max_threads = 4
+max_depth = 1
+job_max_runtime_seconds = 1800
+
+[agents.manager]
+description = "작업 분류, 서브에이전트 오케스트레이션, 최종 결과 취합"
+config_file = "agents/manager.toml"
+
+[agents.analyzer]
+description = "영향 경로 조사, DART/공공데이터 연동 리스크 분석"
+config_file = "agents/analyzer.toml"
+
+[agents.planner]
+description = "기능 요구사항 정리, 최소 범위 설계, 영향 경로/검증 기준 정의"
+config_file = "agents/planner.toml"
+
+[agents.developer]
+description = "App Router 및 로직 수정, UI/에러 예외 처리 구현"
+config_file = "agents/developer.toml"
+
+[agents.reviewer]
+description = "변경분 정적 리뷰, 회귀 위험/누락 케이스/테스트 공백 점검"
+config_file = "agents/reviewer.toml"
+
+[agents.tester]
+description = "pnpm 기반 테스트, 린트, 빌드 및 도메인 검증 수행"
+config_file = "agents/tester.toml"
+
+[agents.documenter]
+description = "/work 작업 로그 작성 및 사용자/운영자 기준 문서화"
+config_file = "agents/documenter.toml"
+
+[agents.researcher]
+description = "최신 API, 공공데이터, DART, 금리/세제/시장지표 조사"
+config_file = "agents/researcher.toml"

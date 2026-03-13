@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
+import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
 
 const CORPUS_DIR = path.join("tests", "planning-v2", "regression", "corpus");
 const BASELINE_DIR = path.join("tests", "planning-v2", "regression", "baseline");
@@ -563,9 +564,31 @@ async function runRegression() {
   }
 
   const externalBaseUrl = asString(process.env.PLANNING_BASE_URL);
-  const e2eExitCode = await runPnpmScript("planning:v2:e2e:full", cwd, externalBaseUrl ? { E2E_BASE_URL: externalBaseUrl } : {});
-  if (e2eExitCode !== 0) {
-    throw new Error(`planning:v2:e2e:full failed with code ${e2eExitCode}`);
+  if (externalBaseUrl) {
+    const e2eExitCode = await runPnpmScript("planning:v2:e2e:full", cwd, { E2E_BASE_URL: externalBaseUrl });
+    if (e2eExitCode !== 0) {
+      throw new Error(`planning:v2:e2e:full failed with code ${e2eExitCode}`);
+    }
+    return;
+  }
+
+  const isolated = await createIsolatedPlanningV2E2EOptions(process.env, {
+    defaultPort: 3326,
+    preferredPort: process.env.PLANNING_FULL_E2E_PORT ?? process.env.PORT,
+    scanFrom: process.env.PLANNING_FULL_E2E_SCAN_FROM,
+    scanTo: process.env.PLANNING_FULL_E2E_SCAN_TO,
+    sandboxPrefix: "finance-planning-full-e2e-",
+  });
+  console.log(
+    `[planning:v2:regress] isolated full e2e port=${isolated.port} distDir=${isolated.distDir} reuseExistingServer=0 planningDataDir=${isolated.planningDataDir}`,
+  );
+  try {
+    const e2eExitCode = await runPnpmScript("planning:v2:e2e:full", cwd, isolated.env);
+    if (e2eExitCode !== 0) {
+      throw new Error(`planning:v2:e2e:full failed with code ${e2eExitCode}`);
+    }
+  } finally {
+    await isolated.cleanup();
   }
 }
 

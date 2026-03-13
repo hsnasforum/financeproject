@@ -1,4 +1,5 @@
 import { type DraftSplitMode, type MonthlyCashflow, type ProfileV2DraftPatch } from "../domain/types";
+import { roundToDigits } from "../../calc";
 import {
   buildDraftPatchFromCashflow,
   type BuildDraftPatchFromCashflowOptions,
@@ -10,7 +11,7 @@ function assumptionsFromEvidence(
   variableRatio: number | undefined,
 ): string[] {
   const splitAssumption = splitMode === "byRatio"
-    ? `split mode byRatio (fixed=${Math.round((fixedRatio ?? 0) * 100)}%, variable=${Math.round((variableRatio ?? 0) * 100)}%)`
+    ? `split mode byRatio (fixed=${roundToDigits((fixedRatio ?? 0) * 100, 0)}%, variable=${roundToDigits((variableRatio ?? 0) * 100, 0)}%)`
     : splitMode === "noSplit"
       ? "split mode noSplit (total spend is discretionary)"
       : "split mode byCategory (rule-based categorization)";

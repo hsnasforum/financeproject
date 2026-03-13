@@ -1,5 +1,6 @@
 import { loadCanonicalProfile } from "../../v2/loadCanonicalProfile";
 import { type ProfileV2 } from "../../v2/types";
+import { roundKrw } from "../../calc";
 import { type V3DraftRecord } from "../domain/draft";
 
 type ApplyDraftToProfileInput = {
@@ -22,7 +23,7 @@ function asString(value: unknown): string {
 function asNumber(value: unknown): number | null {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
-  return Math.round(parsed);
+  return roundKrw(parsed);
 }
 
 function collectAssumptions(patch: Record<string, unknown>): string[] {
@@ -74,4 +75,3 @@ export function applyDraftToProfile(input: ApplyDraftToProfileInput): ApplyDraft
     },
   };
 }
-

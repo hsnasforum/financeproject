@@ -1,5 +1,6 @@
 import { createProfile, getProfile } from "../../store/profileStore";
 import { sanitizeRecordId } from "../../store/paths";
+import { roundKrw } from "../../calc";
 import { loadCanonicalProfile } from "../../v2/loadCanonicalProfile";
 import { type ProfileV2, PlanningV2ValidationError, type ValidationIssueV2 } from "../../v2/types";
 import { validateProfileV2 } from "../../v2/validate";
@@ -62,7 +63,7 @@ function toRoundedNumber(value: unknown, field: MonthlyField): number | undefine
   if (!Number.isFinite(parsed)) {
     throw new ApplyDraftPatchToProfileError("INPUT", `${field} 값이 올바른 숫자가 아닙니다.`);
   }
-  return Math.round(parsed);
+  return roundKrw(parsed);
 }
 
 function normalizeMonthlyPatch(draftPatch: unknown): MonthlyPatch {

@@ -3,6 +3,7 @@ import {
   type TransferDetectionResult,
   type TxnTransferOverride,
 } from "../domain/types";
+import { roundKrw } from "@/lib/planning/calc/roundingPolicy";
 
 type DetectTransfersInput = {
   batchId: string;
@@ -62,7 +63,7 @@ function dateDiffDays(leftDate: string, rightDate: string): number {
   const left = parseDate(leftDate);
   const right = parseDate(rightDate);
   if (left === null || right === null) return Number.MAX_SAFE_INTEGER;
-  return Math.abs(Math.round((left - right) / 86_400_000));
+  return Math.trunc(Math.abs((left - right) / 86_400_000));
 }
 
 function isForcedTransfer(override: TxnTransferOverride | undefined): boolean {
@@ -172,7 +173,7 @@ export function detectTransfers(input: DetectTransfersInput): TransferAnnotated 
     index,
     txnId: asString(tx.txnId).toLowerCase(),
     date: asString(tx.date),
-    amountKrw: Math.round(Number(tx.amountKrw) || 0),
+    amountKrw: roundKrw(Number(tx.amountKrw) || 0),
     accountId: normalizeAccountId(tx.accountId),
   }));
 

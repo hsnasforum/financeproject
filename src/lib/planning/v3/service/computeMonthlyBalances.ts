@@ -1,5 +1,6 @@
 import { type MonthlyAccountBalanceTimeline, type OpeningBalance, type TxnOverride } from "../domain/types";
 import { type StoredTransaction } from "../domain/transactions";
+import { roundKrw } from "../../calc";
 import { applyTxnOverrides } from "./applyOverrides";
 import { classifyTransactions } from "./classify";
 
@@ -25,7 +26,7 @@ function isYearMonth(value: string): boolean {
 
 function asRoundedInt(value: unknown): number {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.round(parsed) : 0;
+  return Number.isFinite(parsed) ? roundKrw(parsed) : 0;
 }
 
 function sortTransactionsDeterministic(rows: StoredTransaction[]): StoredTransaction[] {

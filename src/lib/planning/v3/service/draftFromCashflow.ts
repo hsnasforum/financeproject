@@ -1,3 +1,4 @@
+import { roundKrw } from "../../calc";
 import { type MonthlyCashflow, type ProfileV2DraftPatch } from "../domain/types";
 
 export type ProfileDraftEvidence = {
@@ -46,7 +47,7 @@ type NormalizedMonthRow = {
 function asNumber(value: unknown): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
-  return Math.round(parsed);
+  return roundKrw(parsed);
 }
 
 function asYearMonth(value: unknown): string {
@@ -58,9 +59,9 @@ function asYearMonth(value: unknown): string {
 function medianRounded(values: number[]): number {
   if (values.length < 1) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return Math.round(sorted[middle] ?? 0);
-  return Math.round(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
+  const middle = Math.trunc(sorted.length / 2);
+  if (sorted.length % 2 === 1) return roundKrw(sorted[middle] ?? 0);
+  return roundKrw(((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2);
 }
 
 function clampWindow(value: unknown, fallback: number, min: number, max: number): number {
@@ -121,7 +122,7 @@ export function buildProfileDraftEstimateFromCashflow(
   const incomeMedianKrw = medianRounded(months.map((row) => row.incomeKrw));
   const fixedMedianKrw = medianRounded(months.map((row) => row.fixedOutflowKrw));
   const variableMedianKrw = medianRounded(months.map((row) => row.variableOutflowKrw));
-  const emergencyFundTargetKrw = Math.max(0, Math.round(fixedMedianKrw * 3));
+  const emergencyFundTargetKrw = Math.max(0, roundKrw(fixedMedianKrw * 3));
 
   const assumptions = [
     `income estimate uses median of recent ${months.length} months`,
