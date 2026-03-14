@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SearchPill } from "@/components/ui/SearchPill";
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/Container";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -236,12 +237,14 @@ export function InvestCompaniesClient() {
               }}
             >
               <div className="flex-1 min-w-[240px]">
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">회사명 검색</label>
-                <input
-                  className="mt-2 block h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">회사명 검색</label>
+                <SearchPill
+                  className="mt-2 h-10 w-full"
                   value={queryInput}
                   onChange={(event) => setQueryInput(event.target.value)}
+                  onClear={() => setQueryInput("")}
                   placeholder="예: 삼성전자, 현대자동차"
+                  isLoading={searchLoading}
                 />
               </div>
               <div>
