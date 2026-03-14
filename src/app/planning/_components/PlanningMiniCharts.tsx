@@ -118,6 +118,7 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
                   width={280}
                   height={64}
                   fillOpacity={0.08}
+                  formatValue={(val) => formatKrw(locale, val)}
                 />
               </div>
 
