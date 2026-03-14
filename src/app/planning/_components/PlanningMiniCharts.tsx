@@ -157,28 +157,58 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
         <div className="flex items-center justify-between px-2">
           <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">상세 수치 (Sampled)</p>
         </div>
-        <BodyTableFrame>
-          <table className="min-w-full divide-y divide-slate-100">
-            <thead className="bg-slate-50">
-              <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                <th className="px-6 py-4 text-left">월 (Index)</th>
-                <th className="px-6 py-4 text-right">순자산</th>
-                <th className="px-6 py-4 text-right">현금</th>
-                <th className="px-6 py-4 text-right">총부채</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 bg-white">
-              {tablePoints.map((point) => (
-                <tr className="group/row hover:bg-slate-50/50 transition-colors" key={point.monthIndex}>
-                  <td className="px-6 py-4 text-xs font-black text-slate-400 tabular-nums">M{point.monthIndex + 1}</td>
-                  <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-emerald-600 transition-colors">{formatKrw(locale, point.netWorthKrw)}</td>
-                  <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-sky-600 transition-colors">{formatKrw(locale, point.cashKrw)}</td>
-                  <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-amber-600 transition-colors">{formatKrw(locale, point.totalDebtKrw)}</td>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block">
+          <BodyTableFrame>
+            <table className="min-w-full divide-y divide-slate-100">
+              <thead className="bg-slate-50">
+                <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="px-6 py-4 text-left">월 (Index)</th>
+                  <th className="px-6 py-4 text-right">순자산</th>
+                  <th className="px-6 py-4 text-right">현금</th>
+                  <th className="px-6 py-4 text-right">총부채</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </BodyTableFrame>
+              </thead>
+              <tbody className="divide-y divide-slate-50 bg-white">
+                {tablePoints.map((point) => (
+                  <tr className="group/row hover:bg-slate-50/50 transition-colors" key={point.monthIndex}>
+                    <td className="px-6 py-4 text-xs font-black text-slate-400 tabular-nums">M{point.monthIndex + 1}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-emerald-600 transition-colors">{formatKrw(locale, point.netWorthKrw)}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-sky-600 transition-colors">{formatKrw(locale, point.cashKrw)}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-amber-600 transition-colors">{formatKrw(locale, point.totalDebtKrw)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </BodyTableFrame>
+        </div>
+
+        {/* Mobile View: Card List */}
+        <div className="grid gap-3 md:hidden">
+          {tablePoints.map((point) => (
+            <div className="rounded-3xl border border-slate-200/60 bg-white p-5 shadow-sm active:bg-slate-50 transition-colors" key={point.monthIndex}>
+              <div className="mb-4 flex items-center justify-between border-b border-slate-50 pb-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">시점</p>
+                <p className="text-sm font-black text-slate-900 tabular-nums">M{point.monthIndex + 1}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">순자산</p>
+                  <p className="text-[11px] font-bold text-emerald-600 tabular-nums">{formatKrw(locale, point.netWorthKrw)}</p>
+                </div>
+                <div className="border-x border-slate-100 px-1">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">현금</p>
+                  <p className="text-[11px] font-bold text-sky-600 tabular-nums">{formatKrw(locale, point.cashKrw)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">총부채</p>
+                  <p className="text-[11px] font-bold text-amber-600 tabular-nums">{formatKrw(locale, point.totalDebtKrw)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
