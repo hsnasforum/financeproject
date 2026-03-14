@@ -35,11 +35,11 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center rounded-[2.5rem] border border-dashed border-slate-200 bg-slate-50/50 p-12 text-center",
+        "flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-slate-200/80 bg-slate-50/50 p-12 text-center",
         className
       )}
     >
-      <div className="relative mb-6 h-40 w-40 overflow-hidden rounded-3xl">
+      <div className="relative mb-8 h-48 w-48 overflow-hidden rounded-[2rem]">
         {shouldRenderIcon ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -51,9 +51,9 @@ export function EmptyState({
           />
         ) : null}
       </div>
-      <h3 className="text-xl font-bold tracking-tight text-slate-900">{title}</h3>
+      <h3 className="text-xl font-black tracking-tight text-slate-900">{title}</h3>
       {description && (
-        <p className="mt-2 max-w-xs text-sm leading-relaxed text-slate-500">
+        <p className="mt-2 max-w-xs text-sm font-bold leading-relaxed text-slate-500">
           {description}
         </p>
       )}
@@ -61,7 +61,7 @@ export function EmptyState({
         <Button
           variant="outline"
           onClick={onAction}
-          className="mt-8 rounded-full bg-white px-8"
+          className="mt-8 rounded-2xl bg-white px-8 h-12 text-sm font-black shadow-sm"
         >
           {actionLabel}
         </Button>
