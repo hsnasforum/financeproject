@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { resolveActionCatalogById } from "@/lib/planning/catalog/actionCatalog";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 import {
   reportHeroActionLinkClassName,
   reportHeroMetaChipClassName,
@@ -557,50 +559,50 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
         </ReportHeroCard>
 
         <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">최근 플랜</h2>
-                <p className="text-sm text-slate-500">저장된 실행을 기준으로 결과를 다시 열고 비교합니다.</p>
-              </div>
-              <Link
-                href="/planning/runs"
-                prefetch={devPlanningPrefetch("/planning/runs")}
-                className="text-sm font-bold text-emerald-700"
-              >
-                전체 보기
-              </Link>
-            </div>
+          <Card className="p-6 space-y-6">
+            <SubSectionHeader
+              title="최근 플랜"
+              description="저장된 실행을 기준으로 결과를 다시 열고 비교합니다."
+              action={
+                <Link
+                  href="/planning/runs"
+                  prefetch={devPlanningPrefetch("/planning/runs")}
+                  className="text-sm font-bold text-emerald-700 hover:underline"
+                >
+                  전체 보기
+                </Link>
+              }
+            />
             {loading && state.runs.length < 1 ? (
-              <p className="text-sm text-slate-500">최근 실행을 불러오는 중입니다.</p>
+              <p className="text-sm text-slate-500 italic">최근 실행을 불러오는 중입니다.</p>
             ) : state.runs.length < 1 ? (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
-                <p className="text-sm font-semibold text-slate-900">저장된 실행이 아직 없습니다.</p>
-                <p className="mt-2 text-sm text-slate-500">플래닝을 한 번 저장하면 이곳에서 리포트와 재실행으로 바로 이어집니다.</p>
+              <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50/50 px-5 py-12 text-center">
+                <p className="text-sm font-bold text-slate-900">저장된 실행이 아직 없습니다.</p>
+                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">플래닝을 한 번 저장하면 이곳에서 리포트와 재실행으로 바로 이어집니다.</p>
               </div>
             ) : (
-              <div className="grid gap-3 lg:grid-cols-3">
+              <div className="grid gap-4 lg:grid-cols-3">
                 {state.runs.slice(0, 3).map((run) => {
                   const summary = runSummary(run);
                   return (
-                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4" key={run.id}>
-                      <p className="text-[11px] font-black tracking-[0.14em] text-slate-400">{formatDate(run.createdAt)}</p>
-                      <p className="mt-3 text-base font-black tracking-[-0.03em] text-slate-950">{truncate(run.title || "플래닝 실행", 24)}</p>
-                      <p className="mt-2 text-sm text-slate-600">{formatRunStatus(run.overallStatus)} · {run.input?.horizonMonths ?? "-"}개월</p>
-                      <div className="mt-4 space-y-1 text-xs text-slate-600">
-                        <p>말기 순자산 {formatKrw(summary.endNetWorthKrw)}</p>
-                        <p>최저 현금 {formatKrw(summary.worstCashKrw)}</p>
+                    <div className="rounded-3xl border border-slate-100 bg-slate-50 p-5 transition-all hover:border-emerald-100 hover:bg-emerald-50/30" key={run.id}>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{formatDate(run.createdAt)}</p>
+                      <p className="mt-3 text-base font-black tracking-tight text-slate-900">{truncate(run.title || "플래닝 실행", 24)}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{formatRunStatus(run.overallStatus)} · {run.input?.horizonMonths ?? "-"}개월</p>
+                      <div className="mt-4 space-y-1.5 text-xs font-medium text-slate-600">
+                        <p className="flex justify-between"><span>말기 순자산</span> <span className="font-bold text-slate-900">{formatKrw(summary.endNetWorthKrw)}</span></p>
+                        <p className="flex justify-between"><span>최저 현금</span> <span className="font-bold text-slate-900">{formatKrw(summary.worstCashKrw)}</span></p>
                       </div>
-                      <div className="mt-5 flex flex-wrap gap-3">
+                      <div className="mt-5 flex items-center gap-4">
                         <Link
-                          className="text-sm font-bold text-emerald-700"
+                          className="text-xs font-bold text-emerald-600 hover:underline"
                           href={`/planning/reports?runId=${encodeURIComponent(run.id)}`}
                           prefetch={devPlanningPrefetch("/planning/reports")}
                         >
-                          리포트
+                          리포트 →
                         </Link>
                         <Link
-                          className="text-sm font-bold text-slate-700"
+                          className="text-xs font-bold text-slate-400 hover:text-slate-900"
                           href={`/planning?profileId=${encodeURIComponent(run.profileId)}`}
                           prefetch={devPlanningPrefetch("/planning")}
                         >
@@ -614,37 +616,37 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             )}
           </Card>
 
-          <Card className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">플랜 액션과 비교 후보</h2>
-                <p className="text-sm text-slate-500">최근 실행에 저장된 액션과 후보 비교 정보를 다시 이어봅니다.</p>
-              </div>
-              <Link
-                href={latestRun ? latestRunReportHref : "/recommend"}
-                prefetch={devPlanningPrefetch(latestRun ? latestRunReportHref : "/recommend")}
-                className="text-sm font-bold text-emerald-700"
-              >
-                {latestRun ? "리포트로 이동" : "추천 허브"}
-              </Link>
-            </div>
+          <Card className="p-6 space-y-6">
+            <SubSectionHeader
+              title="플랜 액션과 비교 후보"
+              description="최근 실행에 저장된 액션과 후보 비교 정보를 다시 이어봅니다."
+              action={
+                <Link
+                  href={latestRun ? latestRunReportHref : "/recommend"}
+                  prefetch={devPlanningPrefetch(latestRun ? latestRunReportHref : "/recommend")}
+                  className="text-sm font-bold text-emerald-700 hover:underline"
+                >
+                  {latestRun ? "리포트로 이동" : "추천 허브"}
+                </Link>
+              }
+            />
             {latestRun && (latestActions.length > 0 || latestCandidates.length > 0) ? (
               <div className="space-y-4">
                 {latestActions.length > 0 ? (
                   <div className="space-y-3">
                     {latestActions.map((action) => (
-                      <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4" key={action.code || action.title}>
+                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4" key={action.code || action.title}>
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-black text-slate-900">{action.title}</p>
-                            <p className="mt-2 text-sm text-slate-600">{action.summary}</p>
+                            <p className="mt-1 text-xs font-medium text-slate-500 leading-relaxed">{action.summary}</p>
                           </div>
-                          <Link className="text-sm font-bold text-emerald-700" href={action.href}>바로 보기</Link>
+                          <Link className="text-xs font-bold text-emerald-600 hover:underline" href={action.href}>바로 보기</Link>
                         </div>
                         {action.steps.length > 0 ? (
-                          <div className="mt-3 space-y-1 text-xs text-slate-600">
+                          <div className="mt-3 space-y-1 text-[11px] font-bold text-slate-400 uppercase tracking-tight">
                             {action.steps.slice(0, 2).map((step) => (
-                              <p key={`${action.code}:${step}`}>- {step}</p>
+                              <p key={`${action.code}:${step}`}>• {step}</p>
                             ))}
                           </div>
                         ) : null}
@@ -656,24 +658,24 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 {latestCandidates.length > 0 ? (
                   <div className="grid gap-3">
                     {latestCandidates.map((candidate) => (
-                      <div className="rounded-[20px] border border-slate-200 bg-white p-4" key={candidate.id}>
+                      <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm" key={candidate.id}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-black text-slate-900">{candidate.productName}</p>
-                            <p className="mt-1 text-xs text-slate-500">
+                            <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                               {candidate.providerName} · {candidate.termMonths ? `${candidate.termMonths}개월` : "기간 확인 필요"}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs font-semibold text-slate-500">금리 범위</p>
-                            <p className="text-sm font-black text-emerald-700">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">금리</p>
+                            <p className="text-sm font-black text-emerald-600 tabular-nums">
                               {candidate.rateMaxPct && candidate.rateMaxPct > (candidate.rateMinPct ?? 0)
                                 ? `${formatPct(candidate.rateMinPct)} ~ ${formatPct(candidate.rateMaxPct)}`
                                 : formatPct(candidate.rateMinPct)}
                             </p>
                           </div>
                         </div>
-                        <p className="mt-3 text-xs leading-5 text-slate-600">
+                        <p className="mt-3 text-[11px] font-medium leading-relaxed text-slate-500 italic">
                           {truncate(candidate.whyThis[0] || candidate.notes[0] || "상세 조건은 리포트와 상품 탐색 화면에서 함께 확인하세요.", 96)}
                         </p>
                       </div>
@@ -682,96 +684,98 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 ) : null}
               </div>
             ) : (
-              <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 px-5 py-8 text-center">
-                <p className="text-sm font-semibold text-slate-900">실행 후 저장된 액션과 비교 후보가 이곳에 이어집니다.</p>
-                <p className="mt-2 text-sm text-slate-500">먼저 플랜을 저장하거나 추천 허브와 상품 탐색에서 직접 비교를 시작할 수 있습니다.</p>
+              <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50/50 px-5 py-12 text-center">
+                <p className="text-sm font-bold text-slate-900">저장된 액션과 후보가 없습니다.</p>
+                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">먼저 플랜을 저장하거나 추천 허브에서 직접 비교를 시작할 수 있습니다.</p>
               </div>
             )}
           </Card>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <Card className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">혜택 바로보기</h2>
-                <p className="text-sm text-slate-500">보조금24 탐색 API를 기준으로 최근 후보를 빠르게 확인합니다.</p>
-              </div>
-              <Link href="/benefits" className="text-sm font-bold text-emerald-700">혜택 전체 보기</Link>
-            </div>
+          <Card className="p-6 space-y-6">
+            <SubSectionHeader
+              title="혜택 바로보기"
+              description="보조금24 탐색 API 기반 최근 후보"
+              action={<Link href="/benefits" className="text-sm font-bold text-emerald-700 hover:underline">전체 보기</Link>}
+            />
             {state.benefits.length > 0 ? (
               <div className="space-y-3">
                 {state.benefits.map((item) => (
-                  <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4" key={item.serviceId || item.title}>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4" key={item.serviceId || item.title}>
                     <p className="text-sm font-black text-slate-900">{item.title}</p>
-                    <p className="mt-1 text-xs text-slate-500">{item.org || "주관 기관 확인 필요"}</p>
-                    <p className="mt-3 text-xs leading-5 text-slate-600">{truncate(item.summary || "혜택 상세는 혜택 화면에서 확인하세요.", 96)}</p>
+                    <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.org || "주관 기관 확인 필요"}</p>
+                    <p className="mt-3 text-xs font-medium leading-relaxed text-slate-500 line-clamp-2">{item.summary || "혜택 상세는 혜택 화면에서 확인하세요."}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">혜택 후보를 아직 불러오지 못했습니다. 혜택 화면에서 직접 탐색할 수 있습니다.</p>
+              <p className="text-sm text-slate-400 italic">혜택 정보를 불러오지 못했습니다.</p>
             )}
           </Card>
 
           <div className="grid gap-6">
-            <Card className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-black text-slate-900">환율과 생활 도구</h2>
-                  <p className="text-sm text-slate-500">공식 환율 API와 계산 도구를 바로 이어 씁니다.</p>
-                </div>
-                <Link href="/tools/fx" className="text-sm font-bold text-emerald-700">FX 도구 열기</Link>
-              </div>
+            <Card className="p-6 space-y-6">
+              <SubSectionHeader
+                title="환율과 생활 도구"
+                description="공식 환율 API와 계산 도구"
+                action={<Link href="/tools/fx" className="text-sm font-bold text-emerald-700 hover:underline">FX 도구 열기</Link>}
+              />
               <div className="grid gap-3 md:grid-cols-3">
                 {state.fxItems.map((item) => (
-                  <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4" key={item.currency}>
-                    <p className="text-xs font-semibold text-slate-500">{item.currency} {item.amount.toLocaleString("ko-KR")}</p>
-                    <p className="mt-2 text-lg font-black text-slate-900">{formatKrw(item.krw)}</p>
-                    <p className="mt-1 text-xs text-slate-500">{typeof item.rate === "number" ? `1 ${item.currency} = ${item.rate.toLocaleString("ko-KR")}원` : "환율 대기"}</p>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4" key={item.currency}>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{item.currency} {item.amount.toLocaleString("ko-KR")}</p>
+                    <p className="mt-2 text-lg font-black text-slate-900 tabular-nums">{formatKrw(item.krw)}</p>
+                    <p className="mt-1 text-[10px] font-medium text-slate-400">1 {item.currency} = {typeof item.rate === "number" ? item.rate.toLocaleString("ko-KR") : "-"}원</p>
                   </div>
                 ))}
               </div>
-              <div className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                <p className="font-semibold text-slate-900">기준 환율</p>
-                <p className="mt-2">USD 1 = {state.exchangeUsdRate ? `${state.exchangeUsdRate.toLocaleString("ko-KR")}원` : "-"}</p>
-                <p className="mt-1 text-xs text-slate-500">기준일 {state.exchangeAsOf || "-"}</p>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">기준 환율</p>
+                  <p className="text-sm font-black text-slate-900">USD 1 = {state.exchangeUsdRate ? `${state.exchangeUsdRate.toLocaleString("ko-KR")}원` : "-"}</p>
+                </div>
+                <p className="text-[10px] font-bold text-slate-300">기준일 {state.exchangeAsOf || "-"}</p>
               </div>
             </Card>
 
-            <Card className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-black text-slate-900">데이터 연결 상태</h2>
-                  <p className="text-sm text-slate-500">현재 프로젝트가 활용 중인 주요 데이터 소스를 한 번에 점검합니다.</p>
-                </div>
-                <Link href="/settings/data-sources" className="text-sm font-bold text-emerald-700">데이터 소스 설정</Link>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="p-6 space-y-6">
+              <SubSectionHeader
+                title="데이터 연결 상태"
+                description="활용 중인 주요 데이터 소스 점검"
+                action={<Link href="/settings/data-sources" className="text-sm font-bold text-emerald-700 hover:underline">설정 이동</Link>}
+              />
+              <div className="grid gap-4 lg:grid-cols-2">
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">필수 ENV 연동</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 px-1">필수 ENV 연동</p>
                   {state.dataSources.filter((row) => row.priority === "P0").map((row) => (
-                    <div className="flex items-start justify-between gap-3 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3" key={row.id}>
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3" key={row.id}>
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{row.label}</p>
-                        {row.status?.message ? <p className="mt-1 text-xs text-slate-500">{row.status.message}</p> : null}
+                        <p className="text-xs font-bold text-slate-900">{row.label}</p>
+                        {row.status?.message ? <p className="mt-0.5 text-[10px] font-medium text-slate-400 line-clamp-1">{row.status.message}</p> : null}
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${row.status?.state === "configured" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                        {row.status?.state === "configured" ? "연결됨" : "확인 필요"}
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-tight",
+                        row.status?.state === "configured" ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                      )}>
+                        {row.status?.state === "configured" ? "ACTIVE" : "CHECK"}
                       </span>
                     </div>
                   ))}
                 </div>
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">상품/소스 freshness</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400 px-1">상품/소스 Freshness</p>
                   {state.sourceStatuses.map((row) => (
-                    <div className="flex items-start justify-between gap-3 rounded-[18px] border border-slate-200 bg-slate-50 px-4 py-3" key={`${row.sourceId}:${row.kind}`}>
+                    <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3" key={`${row.sourceId}:${row.kind}`}>
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{row.sourceId} · {row.kind}</p>
-                        <p className="mt-1 text-xs text-slate-500">{row.counts.toLocaleString("ko-KR")}건 · {formatDateTime(row.lastSyncedAt || "")}</p>
+                        <p className="text-xs font-bold text-slate-900">{row.sourceId} · {row.kind}</p>
+                        <p className="mt-0.5 text-[10px] font-medium text-slate-400">{row.counts.toLocaleString("ko-KR")}건 · {formatDateTime(row.lastSyncedAt || "")}</p>
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${row.isFresh ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                        {row.isFresh ? "최신" : "갱신 필요"}
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-tight",
+                        row.isFresh ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"
+                      )}>
+                        {row.isFresh ? "FRESH" : "SYNC"}
                       </span>
                     </div>
                   ))}
@@ -782,51 +786,47 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <Card className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">바로 이동</h2>
-                <p className="text-sm text-slate-500">현재 프로젝트에서 바로 활용할 수 있는 핵심 기능입니다.</p>
-              </div>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <Card className="p-6 space-y-6">
+            <SubSectionHeader
+              title="바로 이동"
+              description="현재 프로젝트의 핵심 기능 바로가기"
+            />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               {[
                 { href: "/planning", title: "플래닝", description: "내 돈 흐름 기준 액션 계산" },
-                { href: "/planning/reports", title: "리포트", description: "저장 결과를 공식 리포트로 확인" },
-                { href: "/recommend", title: "추천 허브", description: "조건별 상품/혜택 비교 시작" },
-                { href: "/products/catalog", title: "상품 탐색", description: "예적금·대출 카탈로그 탐색" },
-                { href: "/public/dart", title: "공시 탐색", description: "기업 공시와 공공 데이터 확인" },
+                { href: "/planning/reports", title: "리포트", description: "저장된 공식 리포트 확인" },
+                { href: "/recommend", title: "추천 허브", description: "상품/혜택 비교 시작" },
+                { href: "/products/catalog", title: "상품 탐색", description: "금융 상품 카탈로그" },
+                { href: "/public/dart", title: "공시 탐색", description: "기업 공시 데이터 확인" },
               ].map((item) => (
-                <Link className="rounded-[20px] border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:shadow-sm" href={item.href} key={item.href}>
-                  <p className="text-base font-black text-slate-900">{item.title}</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+                <Link className="group rounded-3xl border border-slate-100 bg-slate-50 p-5 transition-all hover:-translate-y-1 hover:border-emerald-200 hover:bg-emerald-50/20" href={item.href} key={item.href}>
+                  <p className="text-base font-black text-slate-900 group-hover:text-emerald-700">{item.title}</p>
+                  <p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">{item.description}</p>
                 </Link>
               ))}
             </div>
           </Card>
 
-          <Card className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-black text-slate-900">최근 피드백</h2>
-                <p className="text-sm text-slate-500">사용자 메모와 개선 요청 흐름도 같이 확인합니다.</p>
-              </div>
-              <Link href="/feedback/list" className="text-sm font-bold text-emerald-700">전체 보기</Link>
-            </div>
+          <Card className="p-6 space-y-6">
+            <SubSectionHeader
+              title="최근 피드백"
+              description="사용자 메모와 개선 요청 흐름"
+              action={<Link href="/feedback/list" className="text-sm font-bold text-emerald-700 hover:underline">전체 보기</Link>}
+            />
             {state.feedback.length > 0 ? (
               <div className="space-y-3">
                 {state.feedback.slice(0, 4).map((item) => (
-                  <Link className="block rounded-[20px] border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:shadow-sm" href={`/feedback/${encodeURIComponent(item.id)}`} key={item.id}>
+                  <Link className="block rounded-2xl border border-slate-100 bg-slate-50 p-4 transition-all hover:border-emerald-100 hover:bg-emerald-50/20" href={`/feedback/${encodeURIComponent(item.id)}`} key={item.id}>
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{item.category || "feedback"}</p>
-                      <p className="text-xs text-slate-400">{formatDate(item.createdAt)}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{item.category || "feedback"}</p>
+                      <p className="text-[10px] font-bold text-slate-300">{formatDate(item.createdAt)}</p>
                     </div>
-                    <p className="mt-2 text-sm font-semibold leading-6 text-slate-900">{truncate(item.message, 72)}</p>
+                    <p className="mt-2 text-sm font-bold text-slate-700 line-clamp-2 leading-relaxed">{truncate(item.message, 72)}</p>
                   </Link>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">최근 피드백이 아직 없습니다.</p>
+              <p className="text-sm text-slate-400 italic">최근 피드백이 아직 없습니다.</p>
             )}
           </Card>
         </section>
