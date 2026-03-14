@@ -9,6 +9,9 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 import PlanningMiniCharts from "@/app/planning/_components/PlanningMiniCharts";
 import SnapshotPicker from "@/app/planning/_components/SnapshotPicker";
 import {
@@ -102,19 +105,14 @@ import {
 import {
   BodyActionLink,
   BodyDialogSurface,
-  BodyEmptyState,
   BodyInset,
-  BodySectionHeading,
   BodyStatusInset,
   BodyTableFrame,
   bodyChoiceRowClassName,
-  bodyActionLinkClassName,
   bodyCompactFieldClassName,
-  bodyDenseActionRowClassName,
   bodyDialogActionsClassName,
   bodyFieldClassName,
   bodyLabelClassName,
-  bodyMetaChipClassName,
   bodyTextAreaClassName,
 } from "@/components/ui/BodyTone";
 import EvidencePanel from "@/components/planning/EvidencePanel";
@@ -670,14 +668,6 @@ function formatStepStateKo(state: StepStatus["state"]): string {
   return "생략";
 }
 
-function stepStateClass(state: StepStatus["state"]): string {
-  if (state === "SUCCESS") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (state === "FAILED") return "border-rose-200 bg-rose-50 text-rose-700";
-  if (state === "SKIPPED") return "border-amber-200 bg-amber-50 text-amber-700";
-  if (state === "RUNNING") return "border-sky-200 bg-sky-50 text-sky-700";
-  return "border-slate-200 bg-slate-50 text-slate-600";
-}
-
 function quickStartProgressToneClassName(state: WorkspaceQuickStartProgressState): string {
   if (state === "done") return "border-emerald-200 bg-emerald-50 text-emerald-700";
   if (state === "current") return "border-sky-200 bg-sky-50 text-sky-700";
@@ -847,14 +837,6 @@ export function PlanningWorkspaceClient({
     () => appendProfileIdQuery("/planning/runs", selectedProfileId),
     [selectedProfileId],
   );
-  const runsLinkProfileState = useMemo(
-    () => (loadingProfiles ? "loading" : selectedProfileId.trim().length > 0 ? "selected" : "empty"),
-    [loadingProfiles, selectedProfileId],
-  );
-  const runsLinkReady = useMemo(
-    () => runsPageHref.includes("/planning/runs"),
-    [runsPageHref],
-  );
   const selectedBenefitSidoCode = useMemo(
     () => SIDO_ADMIN_2025.find((entry) => entry.name === (profileForm.sido ?? ""))?.code ?? "",
     [profileForm.sido],
@@ -931,10 +913,6 @@ export function PlanningWorkspaceClient({
       label: debt.name.trim() || `부채 ${index + 1}`,
     })).filter((row) => row.id.length > 0),
     [profileForm.debts],
-  );
-  const debtOfferInvalidIds = useMemo(
-    () => validateDebtOfferLiabilityIds(debtOfferRows, profileForm.debts),
-    [debtOfferRows, profileForm.debts],
   );
   const availableBaselineRuns = useMemo(
     () => baselineRuns.filter((run) => run.overallStatus === "SUCCESS" || run.overallStatus === "PARTIAL_SUCCESS"),
@@ -2515,11 +2493,11 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
         title={t(locale, "PLANNING_TITLE")}
         description={t(locale, "PLANNING_DESC")}
         action={(
-          <div className={bodyDenseActionRowClassName}>
-            <label className={`flex items-center gap-2 text-xs ${bodyLabelClassName}`}>
-              프로필
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">프로필</span>
               <select
-                className={bodyCompactFieldClassName}
+                className="bg-transparent text-xs font-bold outline-none cursor-pointer text-slate-700"
                 value={selectedProfileId}
                 onChange={(event) => setSelectedProfileId(event.target.value)}
               >
@@ -2528,55 +2506,53 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                   <option key={profile.id} value={profile.id}>{profile.name}</option>
                 ))}
               </select>
-            </label>
+            </div>
             <Button
               size="sm"
-              type="button"
               variant="outline"
+              className="rounded-full font-bold h-9 bg-white"
               onClick={() => setFeedbackModalOpen(true)}
             >
-              피드백 보내기
+              피드백
             </Button>
-            <a
-              className={bodyActionLinkClassName}
-              data-profile-state={runsLinkProfileState}
-              data-ready={runsLinkReady ? "true" : "false"}
-              data-testid="planning-runs-link"
+            <Link
               href={runsPageHref}
-              onClick={(event) => {
-                if (event.defaultPrevented) return;
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-                event.preventDefault();
-                window.location.assign(runsPageHref);
-              }}
+              className="inline-flex items-center h-9 px-4 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
             >
               실행 기록
-            </a>
-            <BodyActionLink href={reportsPageHref} prefetch={false}>리포트</BodyActionLink>
+            </Link>
+            <Link
+              href={reportsPageHref}
+              className="inline-flex items-center h-9 px-4 rounded-full bg-emerald-600 text-xs font-bold text-white hover:bg-emerald-700 transition-colors"
+            >
+              리포트
+            </Link>
           </div>
         )}
       />
 
-      {feedbackToast ? (
-        <BodyStatusInset className="mb-4 py-3 text-sm font-semibold" tone="success">
-          {feedbackToast}
-        </BodyStatusInset>
-      ) : null}
-      {workspaceError ? (
-        <BodyStatusInset className="mb-4 py-3 text-sm font-semibold whitespace-pre-line" tone="danger">
-          {workspaceError}
-        </BodyStatusInset>
-      ) : null}
-      {workspaceNotice ? (
-        <BodyStatusInset className="mb-4 py-3 text-sm font-semibold whitespace-pre-line" tone="default">
-          {workspaceNotice}
-        </BodyStatusInset>
-      ) : null}
+      <div className="space-y-4 mb-8">
+        {feedbackToast && (
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-sm font-bold text-emerald-800 animate-in fade-in slide-in-from-top-2">
+            {feedbackToast}
+          </div>
+        )}
+        {workspaceError && (
+          <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-sm font-bold text-rose-800 whitespace-pre-line animate-in fade-in slide-in-from-top-2">
+            {workspaceError}
+          </div>
+        )}
+        {workspaceNotice && (
+          <div className="p-4 rounded-2xl bg-slate-100 border border-slate-200 text-sm font-bold text-slate-800 whitespace-pre-line">
+            {workspaceNotice}
+          </div>
+        )}
 
-      <BodyStatusInset className="mb-6" tone="warning">
-        <p className="text-sm font-semibold text-amber-900">{t(locale, "DISCLAIMER_TITLE")}</p>
-        <p className="mt-1 text-xs text-amber-800">{t(locale, "DISCLAIMER_BODY")}</p>
-      </BodyStatusInset>
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+          <p className="text-sm font-bold text-amber-900">{t(locale, "DISCLAIMER_TITLE")}</p>
+          <p className="mt-1 text-xs text-amber-800/80 leading-relaxed">{t(locale, "DISCLAIMER_BODY")}</p>
+        </div>
+      </div>
 
       {beginnerMode ? (
         <PlanningQuickStartGate
@@ -2592,97 +2568,92 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
         />
       ) : null}
 
-      <Card className={`mb-6 border ${quickStartVm.tone}`} data-testid="planning-workspace-quickstart-card">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">간단 진행</p>
-            <h2 className="mt-2 text-lg font-black tracking-tight text-slate-950">{quickStartVm.title}</h2>
-            <p className="mt-2 text-sm text-slate-700">{quickStartVm.description}</p>
-            <div className={`mt-3 text-xs text-slate-600 ${bodyDenseActionRowClassName}`}>
-              <span className={bodyMetaChipClassName}>
-                프로필 {selectedProfile ? selectedProfile.name : "미선택"}
-              </span>
-              <span className={bodyMetaChipClassName}>
-                스냅샷 {selectedSnapshotItem?.id ?? "latest"}
-              </span>
-              <span className={bodyMetaChipClassName}>
-                사전 점검 {preflightHasBlockers ? `차단 ${preflightBlockIssues.length}` : preflightWarnIssues.length > 0 ? `경고 ${preflightWarnIssues.length}` : "정상"}
-              </span>
-              <span className={bodyMetaChipClassName}>
-                최근 저장 {savedRun ? formatRunOverallStatusKo(savedRun.overallStatus) : "없음"}
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {profiles.length < 1 ? (
-              <Button disabled={savingProfile || running || savingRun} onClick={loadSampleProfileAction} variant="primary">
-                샘플 프로필 불러오기
-              </Button>
-            ) : null}
-            {selectedProfileId && !quickStartVm.beginnerStepRunDone && !quickStartVm.runStatusReviewRequired ? (
-              <Button
-                data-testid="planning-quickstart-run-cta"
-                disabled={running || preflightHasBlockers}
-                id="planning-quickstart-run-cta"
-                onClick={() => void runPlanAction()}
-                variant="primary"
-              >
-                {running ? "실행 중..." : "첫 실행 시작"}
-              </Button>
-            ) : null}
-            {selectedProfileId && quickStartVm.beginnerStepRunDone && !quickStartVm.beginnerStepSaveDone ? (
-              <Button
-                aria-describedby={saveButtonDescribedBy}
-                data-testid="planning-quickstart-save-run-button"
-                disabled={savingRun || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
-                id="planning-quickstart-save-run-button"
-                onClick={() => void saveRunAction()}
-                variant="primary"
-              >
-                {savingRun ? "저장 중..." : "결과 저장"}
-              </Button>
-            ) : null}
-            <Link href={runsPageHref}>
-              <Button
-                data-testid="planning-quickstart-runs-link"
-                id="planning-quickstart-runs-link"
-                variant={quickStartVm.runStatusReviewRequired ? "primary" : "outline"}
-              >
-                실행 내역
-              </Button>
-            </Link>
-            {quickStartVm.beginnerStepSaveDone ? (
-              <Link href={quickStartVm.selectedRunReportHref}>
-                <Button data-testid="planning-quickstart-report-button" id="planning-quickstart-report-button" variant="outline">리포트</Button>
+      <Card className={cn("mb-8 border border-slate-200/60 p-8", quickStartVm.tone)} data-testid="planning-workspace-quickstart-card">
+        <SubSectionHeader
+          title={quickStartVm.title}
+          description={quickStartVm.description}
+          action={
+            <div className="flex flex-wrap gap-2">
+              {profiles.length < 1 ? (
+                <Button disabled={savingProfile || running || savingRun} onClick={loadSampleProfileAction} variant="primary" className="rounded-xl font-bold">
+                  샘플 불러오기
+                </Button>
+              ) : null}
+              {selectedProfileId && !quickStartVm.beginnerStepRunDone && !quickStartVm.runStatusReviewRequired ? (
+                <Button
+                  data-testid="planning-quickstart-run-cta"
+                  disabled={running || preflightHasBlockers}
+                  id="planning-quickstart-run-cta"
+                  onClick={() => void runPlanAction()}
+                  variant="primary"
+                  className="rounded-xl font-bold px-6"
+                >
+                  {running ? "실행 중..." : "첫 실행 시작"}
+                </Button>
+              ) : null}
+              {selectedProfileId && quickStartVm.beginnerStepRunDone && !quickStartVm.beginnerStepSaveDone ? (
+                <Button
+                  aria-describedby={saveButtonDescribedBy}
+                  data-testid="planning-quickstart-save-run-button"
+                  disabled={savingRun || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
+                  id="planning-quickstart-save-run-button"
+                  onClick={() => void saveRunAction()}
+                  variant="primary"
+                  className="rounded-xl font-bold px-6"
+                >
+                  {savingRun ? "저장 중..." : "결과 저장"}
+                </Button>
+              ) : null}
+              <Link href={runsPageHref}>
+                <Button
+                  data-testid="planning-quickstart-runs-link"
+                  id="planning-quickstart-runs-link"
+                  variant={quickStartVm.runStatusReviewRequired ? "primary" : "outline"}
+                  className="rounded-xl font-bold"
+                >
+                  실행 내역
+                </Button>
               </Link>
-            ) : (
-              <Button disabled title="실행 결과를 저장하면 리포트를 열 수 있습니다." variant="outline">리포트는 저장 후</Button>
-            )}
-          </div>
+              {quickStartVm.beginnerStepSaveDone ? (
+                <Link href={quickStartVm.selectedRunReportHref}>
+                  <Button data-testid="planning-quickstart-report-button" id="planning-quickstart-report-button" variant="outline" className="rounded-xl font-bold bg-white">리포트</Button>
+                </Link>
+              ) : (
+                <Button disabled title="실행 결과를 저장하면 리포트를 열 수 있습니다." variant="outline" className="rounded-xl font-bold opacity-50">리포트 대기</Button>
+              )}
+            </div>
+          }
+        />
+
+        <div className="mt-6 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <span className="bg-slate-900/5 px-2 py-1 rounded-md">프로필: {selectedProfile ? selectedProfile.name : "미선택"}</span>
+          <span className="bg-slate-900/5 px-2 py-1 rounded-md">스냅샷: {selectedSnapshotItem?.id ?? "latest"}</span>
+          <span className="bg-slate-900/5 px-2 py-1 rounded-md">점검: {preflightHasBlockers ? `차단 ${preflightBlockIssues.length}` : preflightWarnIssues.length > 0 ? `경고 ${preflightWarnIssues.length}` : "정상"}</span>
+          {savedRun && <span className="bg-emerald-500/10 text-emerald-600 px-2 py-1 rounded-md">최근 저장: {formatRunOverallStatusKo(savedRun.overallStatus)}</span>}
         </div>
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <BodyInset className="bg-white/90 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">월 잉여금</p>
-              <p className="mt-1 text-base font-black text-slate-950">{formatKrw(locale, liveSummary.monthlySurplus)}</p>
-              <p className="mt-1 text-xs text-slate-600">실수령에서 필수/선택지출을 뺀 값</p>
-            </BodyInset>
-            <BodyInset className="bg-white/90 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">비상금 버팀력</p>
-              <p className="mt-1 text-base font-black text-slate-950">{beginnerEmergencyMonths}개월</p>
-              <p className="mt-1 text-xs text-slate-600">6개월 목표 대비 부족액 {formatKrw(locale, liveSummary.emergencyGapKrw)}</p>
-            </BodyInset>
-            <BodyInset className="bg-white/90 px-4 py-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">부채 부담</p>
-              <p className="mt-1 text-base font-black text-slate-950">{profileForm.debts.length}건</p>
-              <p className="mt-1 text-xs text-slate-600">월 상환 {formatKrw(locale, liveSummary.totalMonthlyDebtPayment)} · DSR {formatPct(locale, liveSummary.dsrPct)}</p>
-            </BodyInset>
-            <BodyInset className="bg-white/90 px-4 py-3" data-testid="planning-workspace-quickstart-status">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">완료 상태</p>
-              <p className="mt-1 text-base font-black text-slate-950">{quickStartVm.completedSummary}</p>
-              <p className="mt-2 text-xs font-semibold text-slate-600">다음 단계 · {quickStartVm.nextStepSummary}</p>
-            </BodyInset>
+        <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">월 잉여금</p>
+            <p className="text-xl font-black text-slate-900 tabular-nums">{formatKrw(locale, liveSummary.monthlySurplus)}</p>
+            <p className="mt-2 text-[10px] font-medium text-slate-500 leading-relaxed italic">실수령 - (필수+선택지출)</p>
           </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">비상금 버팀력</p>
+            <p className="text-xl font-black text-slate-900 tabular-nums">{beginnerEmergencyMonths}개월</p>
+            <p className="mt-2 text-[10px] font-medium text-slate-500 leading-relaxed italic">부족액 {formatKrw(locale, liveSummary.emergencyGapKrw)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">부채 부담</p>
+            <p className="text-xl font-black text-slate-900 tabular-nums">{profileForm.debts.length}건</p>
+            <p className="mt-2 text-[10px] font-medium text-slate-500 leading-relaxed italic">DSR {formatPct(locale, liveSummary.dsrPct)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm" data-testid="planning-workspace-quickstart-status">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">진행 상태</p>
+            <p className="text-xl font-black text-emerald-600 tracking-tight">{quickStartVm.completedSummary}</p>
+            <p className="mt-2 text-[10px] font-bold text-slate-500 leading-relaxed italic">다음 · {quickStartVm.nextStepSummary}</p>
+          </div>
+        </div>
       </Card>
 
       <Card className="mb-6">
@@ -2717,7 +2688,6 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <ProfileV2Form modeLabel={beginnerMode ? "초보자 모드" : "고급 모드"}>
-
           {loadingProfiles && profiles.length < 1 ? (
             <LoadingState
               title="프로필 목록을 불러오는 중입니다"
@@ -2739,49 +2709,47 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             <EmptyState
               actionLabel="샘플 프로필 불러오기"
               description="저장된 프로필이 없습니다. 샘플을 불러온 뒤 저장해서 시작할 수 있습니다."
-              icon="data"
               onAction={loadSampleProfileAction}
               title="저장된 프로필이 없습니다"
             />
           ) : null}
 
-          <label className={`block text-xs ${bodyLabelClassName}`}>
-            프로필 선택
-            <select
-              className={bodyFieldClassName}
-              aria-label="프로필 선택"
-              value={selectedProfileId}
-              onChange={(event) => setSelectedProfileId(event.target.value)}
-            >
-              {profiles.length === 0 ? <option value="">저장된 프로필 없음</option> : null}
-              {profiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>{profile.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className={`block text-xs ${bodyLabelClassName}`}>
-            프로필 이름
-            <input
-              className={bodyFieldClassName}
-              value={profileName}
-              onChange={(event) => {
-                setProfileName(event.target.value);
-                updateProfileField("name", event.target.value);
-              }}
-            />
-          </label>
-
-          <BodyInset className="space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-slate-700">혜택 추천용 기본 조건</p>
-              <p className="mt-1 text-[11px] text-slate-500">출생연도, 성별, 지역을 입력하면 보조금24 추천 범위를 더 좁힐 수 있습니다.</p>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">프로필 선택</span>
+              <select
+                className="bg-transparent text-sm font-bold outline-none cursor-pointer flex-1"
+                aria-label="프로필 선택"
+                value={selectedProfileId}
+                onChange={(event) => setSelectedProfileId(event.target.value)}
+              >
+                {profiles.length === 0 ? <option value="">저장된 프로필 없음</option> : null}
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>{profile.name}</option>
+                ))}
+              </select>
             </div>
+
+            <label className={`block text-xs ${bodyLabelClassName}`}>
+              프로필 이름
+              <input
+                className={cn(bodyFieldClassName, "rounded-xl font-bold h-11 border-slate-200 focus:border-emerald-500 focus:ring-emerald-100")}
+                value={profileName}
+                onChange={(event) => {
+                  setProfileName(event.target.value);
+                  updateProfileField("name", event.target.value);
+                }}
+              />
+            </label>
+          </div>
+
+          <div className="rounded-[2rem] bg-slate-50/50 border border-slate-100 p-6 space-y-6">
+            <SubSectionHeader title="혜택 추천용 기본 조건" titleClassName="text-sm" description="출생연도, 성별, 지역을 입력하여 추천 범위를 좁힙니다." />
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 출생연도
                 <input
-                  className={bodyFieldClassName}
+                  className={cn(bodyFieldClassName, "rounded-xl h-10 border-slate-200")}
                   inputMode="numeric"
                   placeholder="예: 1994"
                   type="text"
@@ -2795,7 +2763,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 성별
                 <select
-                  className={bodyFieldClassName}
+                  className={cn(bodyFieldClassName, "rounded-xl h-10 border-slate-200")}
                   value={profileForm.gender ?? ""}
                   onChange={(event) => {
                     const next = event.target.value;
@@ -2810,7 +2778,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 시/도
                 <select
-                  className={bodyFieldClassName}
+                  className={cn(bodyFieldClassName, "rounded-xl h-10 border-slate-200")}
                   value={profileForm.sido ?? ""}
                   onChange={(event) => {
                     const nextSido = event.target.value;
@@ -2830,7 +2798,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 시/군/구
                 <select
-                  className={bodyFieldClassName}
+                  className={cn(bodyFieldClassName, "rounded-xl h-10 border-slate-200")}
                   disabled={!profileForm.sido}
                   value={profileForm.sigungu ?? ""}
                   onChange={(event) => updateProfileField("sigungu", event.target.value || "")}
@@ -2842,16 +2810,16 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 </select>
               </label>
             </div>
-          </BodyInset>
+          </div>
 
-          <BodyInset className="space-y-4">
-            <p className="text-xs font-semibold text-slate-700">월 현금흐름</p>
+          <div className="rounded-[2rem] bg-slate-50/50 border border-slate-100 p-6 space-y-6">
+            <SubSectionHeader title="월 현금흐름" titleClassName="text-sm" />
             <div className="grid gap-3 sm:grid-cols-3">
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 월 실수령
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className={bodyFieldClassName.replace("mt-1 ", "")}
+                    className={cn(bodyFieldClassName.replace("mt-1 ", ""), "rounded-xl h-10 border-slate-200")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 5,100,000"
@@ -2865,7 +2833,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 필수지출
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className={bodyFieldClassName.replace("mt-1 ", "")}
+                    className={cn(bodyFieldClassName.replace("mt-1 ", ""), "rounded-xl h-10 border-slate-200")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 2,200,000"
@@ -2879,7 +2847,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 선택지출
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className={bodyFieldClassName.replace("mt-1 ", "")}
+                    className={cn(bodyFieldClassName.replace("mt-1 ", ""), "rounded-xl h-10 border-slate-200")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 900,000"
@@ -2890,16 +2858,16 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 </div>
               </label>
             </div>
-          </BodyInset>
+          </div>
 
-          <BodyInset className="space-y-4">
-            <p className="text-xs font-semibold text-slate-700">자산</p>
+          <div className="rounded-[2rem] bg-slate-50/50 border border-slate-100 p-6 space-y-6">
+            <SubSectionHeader title="자산" titleClassName="text-sm" />
             <div className="grid gap-3 sm:grid-cols-2">
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 현금(예금)
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className={bodyFieldClassName.replace("mt-1 ", "")}
+                    className={cn(bodyFieldClassName.replace("mt-1 ", ""), "rounded-xl h-10 border-slate-200")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 12,000,000"
@@ -2913,7 +2881,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 투자자산
                 <div className="mt-1 flex items-center gap-2">
                   <input
-                    className={bodyFieldClassName.replace("mt-1 ", "")}
+                    className={cn(bodyFieldClassName.replace("mt-1 ", ""), "rounded-xl h-10 border-slate-200")}
                     inputMode="numeric"
                     type="text"
                     placeholder="예: 18,000,000"
@@ -2924,26 +2892,30 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 </div>
               </label>
             </div>
-          </BodyInset>
+          </div>
 
-          <BodyInset className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-slate-700">부채 리스트</p>
-              <Button
-                disabled={beginnerMode && profileForm.debts.length >= BEGINNER_MAX_DEBT_ROWS}
-                onClick={addDebtRow}
-                size="sm"
-                variant="outline"
-              >
-                부채 추가
-              </Button>
-            </div>
-            {beginnerMode ? (
-              <p className="text-xs text-slate-500">초보자 모드는 부채 1~3개 입력을 권장합니다.</p>
-            ) : null}
+          <div className="rounded-[2rem] bg-slate-50/50 border border-slate-100 p-6 space-y-6">
+            <SubSectionHeader
+              title="부채 리스트"
+              titleClassName="text-sm"
+              description={beginnerMode ? "초보자 모드는 부채 1~3개 입력을 권장합니다." : undefined}
+              action={
+                <Button
+                  disabled={beginnerMode && profileForm.debts.length >= BEGINNER_MAX_DEBT_ROWS}
+                  onClick={addDebtRow}
+                  size="sm"
+                  variant="outline"
+                  className="rounded-xl font-bold bg-white"
+                >
+                  부채 추가
+                </Button>
+              }
+            />
+
             {profileForm.debts.length === 0 ? (
-              <BodyEmptyState
-                description="부채가 없다면 비워두고 진행해도 됩니다. 주택담보대출, 신용대출, 카드론처럼 월 상환이 있는 항목만 추가하세요."
+              <EmptyState
+                className="bg-white/50 border-dashed"
+                description="부채가 없다면 비워두고 진행해도 됩니다. 월 상환액이 있는 항목만 추가하세요."
                 title="등록된 부채가 없습니다."
               />
             ) : (
@@ -2951,12 +2923,12 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 {profileForm.debts.map((debt, index) => {
                   const estimated = estimateDebtMonthlyPaymentKrw(debt);
                   return (
-                    <BodyInset className="bg-white" key={debt.id || `debt-${index}`}>
+                    <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm" key={debt.id || `debt-${index}`}>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <label className={`block text-xs ${bodyLabelClassName}`}>
                           부채 ID
                           <input
-                            className={bodyFieldClassName}
+                            className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
                             value={debt.id}
                             onChange={(event) => updateDebtRow(index, { ...debt, id: event.target.value })}
                           />
@@ -2964,18 +2936,18 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                         <label className={`block text-xs ${bodyLabelClassName}`}>
                           이름
                           <input
-                            className={bodyFieldClassName}
+                            className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
                             value={debt.name}
                             onChange={(event) => updateDebtRow(index, { ...debt, name: event.target.value })}
                           />
                         </label>
                       </div>
-                      <div className="mt-2 grid gap-3 sm:grid-cols-3">
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
                         <label className={`block text-xs ${bodyLabelClassName}`}>
                           대출 잔액
                           <div className="mt-1 flex items-center gap-2">
                             <input
-                              className={bodyCompactFieldClassName}
+                              className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
                               inputMode="numeric"
                               type="text"
                               placeholder="예: 25,000,000"
@@ -2989,7 +2961,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                           금리
                           <div className="mt-1 flex items-center gap-2">
                             <input
-                              className={bodyCompactFieldClassName}
+                              className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
                               type="number"
                               placeholder="예: 4.8"
                               value={debt.aprPct}
@@ -3002,7 +2974,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                           최소 상환액
                           <div className="mt-1 flex items-center gap-2">
                             <input
-                              className={bodyCompactFieldClassName}
+                              className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
                               inputMode="numeric"
                               type="text"
                               min={0}
@@ -3014,13 +2986,13 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                           </div>
                         </label>
                       </div>
-                      <details className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                        <summary className="cursor-pointer text-xs font-semibold text-slate-700">상환 조건(고급)</summary>
-                        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                      <details className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                        <summary className="cursor-pointer text-xs font-black text-slate-500 uppercase tracking-widest">상환 조건(고급)</summary>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
                           <label className={`block text-xs ${bodyLabelClassName}`}>
                             상환 방식
                             <select
-                              className={bodyFieldClassName}
+                              className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
                               value={debt.repaymentType}
                               onChange={(event) => updateDebtRow(index, {
                                 ...debt,
@@ -3035,7 +3007,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                             남은 개월
                             <div className="mt-1 flex items-center gap-2">
                               <input
-                                className={bodyCompactFieldClassName}
+                                className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
                                 type="number"
                                 min={1}
                                 placeholder="예: 60"
@@ -3046,62 +3018,70 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                             </div>
                           </label>
                         </div>
-                        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-600">
-                          <p>추정 월상환액(참고): <span className="font-semibold">{formatKrw(locale, estimated)}</span></p>
+                        <div className="mt-4 flex items-center justify-between gap-2 text-xs">
+                          <p className="font-medium text-slate-500 italic">추정 월상환액(참고): <span className="font-black text-slate-900">{formatKrw(locale, estimated)}</span></p>
                           <Button
                             aria-label={`부채 ${index + 1} 추정 월상환액 적용`}
                             onClick={() => updateDebtRow(index, { ...debt, monthlyPayment: estimated })}
                             size="sm"
                             variant="outline"
+                            className="rounded-lg h-8 bg-white"
                           >
                             추정치 적용
                           </Button>
                         </div>
                       </details>
-                      <div className="mt-2 flex items-center justify-between">
-                        <p className="text-xs text-slate-600">입력 월상환액: <span className="font-semibold">{formatKrw(locale, debt.monthlyPayment)}</span></p>
+                      <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                        <p className="text-xs font-bold text-emerald-600">입력 월상환액: {formatKrw(locale, debt.monthlyPayment)}</p>
                         <Button
                           aria-label={`부채 ${index + 1} 삭제`}
                           disabled={beginnerMode && profileForm.debts.length <= 1}
                           onClick={() => removeDebtRow(index)}
                           size="sm"
                           variant="ghost"
+                          className="text-rose-600 hover:bg-rose-50 h-8 font-bold"
                         >
                           삭제
                         </Button>
                       </div>
-                    </BodyInset>
+                    </div>
                   );
                 })}
               </div>
             )}
-          </BodyInset>
+          </div>
 
-          <div className="space-y-3 rounded-xl border border-slate-200 p-3">
-            <p className="text-xs font-semibold text-slate-700">목표</p>
+          <div className="rounded-[2rem] bg-slate-50/50 border border-slate-100 p-6 space-y-6">
+            <SubSectionHeader
+              title="목표"
+              titleClassName="text-sm"
+              action={!beginnerMode && <Button onClick={addGoalRow} size="sm" variant="outline" className="rounded-xl font-bold bg-white">목표 추가</Button>}
+            />
             {beginnerMode ? (
-              <div className="space-y-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                <label className="block text-xs font-semibold text-slate-600">
-                  비상금 목표(개월)
-                  <input
-                    className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
-                    min={1}
-                    type="number"
-                    value={beginnerEmergencyMonths}
-                    onChange={(event) => {
-                      const months = Math.max(1, Math.trunc(toFiniteNumber(event.target.value, beginnerEmergencyMonths)));
-                      const monthlyExpenses = Math.max(0, profileForm.monthlyEssentialExpenses + profileForm.monthlyDiscretionaryExpenses);
-                      updateBeginnerGoal("emergency", {
-                        targetAmount: Math.round(monthlyExpenses * months),
-                      });
-                    }}
-                  />
-                </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-xs font-semibold text-slate-600">
+              <div className="space-y-4">
+                <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
+                    비상금 목표(개월)
+                    <input
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
+                      min={1}
+                      type="number"
+                      value={beginnerEmergencyMonths}
+                      onChange={(event) => {
+                        const months = Math.max(1, Math.trunc(toFiniteNumber(event.target.value, beginnerEmergencyMonths)));
+                        const monthlyExpenses = Math.max(0, profileForm.monthlyEssentialExpenses + profileForm.monthlyDiscretionaryExpenses);
+                        updateBeginnerGoal("emergency", {
+                          targetAmount: Math.round(monthlyExpenses * months),
+                        });
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm grid gap-4 sm:grid-cols-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
                     목돈 목표 금액(KRW)
                     <input
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
                       min={0}
                       inputMode="numeric"
                       type="text"
@@ -3109,21 +3089,21 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                       onChange={(event) => updateBeginnerGoal("lumpSum", { targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
                     />
                   </label>
-                  <label className="block text-xs font-semibold text-slate-600">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
                     목돈 목표 시점
                     <input
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
                       type="month"
                       value={monthOffsetToInput(beginnerGoals.lumpSum.targetMonth)}
                       onChange={(event) => updateBeginnerGoal("lumpSum", { targetMonth: inputToMonthOffset(event.target.value) })}
                     />
                   </label>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-xs font-semibold text-slate-600">
+                <div className="p-5 rounded-2xl bg-white border border-slate-100 shadow-sm grid gap-4 sm:grid-cols-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
                     은퇴 목표 금액(KRW)
                     <input
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
                       min={0}
                       inputMode="numeric"
                       type="text"
@@ -3131,10 +3111,10 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                       onChange={(event) => updateBeginnerGoal("retirement", { targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
                     />
                   </label>
-                  <label className="block text-xs font-semibold text-slate-600">
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
                     은퇴 목표 시점
                     <input
-                      className="mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold"
                       type="month"
                       value={monthOffsetToInput(beginnerGoals.retirement.targetMonth)}
                       onChange={(event) => updateBeginnerGoal("retirement", { targetMonth: inputToMonthOffset(event.target.value) })}
@@ -3143,438 +3123,460 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 </div>
               </div>
             ) : (
-              <BodyInset className="space-y-2 rounded-lg border-slate-100">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-slate-700">목표 목록</p>
-                  <Button onClick={addGoalRow} size="sm" variant="outline">목표 추가</Button>
-                </div>
+              <div className="space-y-3">
                 {profileForm.goals.length === 0 ? (
-                  <BodyEmptyState
-                    description="비상금 외에 목돈 마련이나 은퇴 목표가 있다면 추가해 두면 결과 화면에서 달성 가능성을 함께 비교할 수 있습니다."
+                  <EmptyState
+                    className="bg-white/50 border-dashed"
+                    description="목돈 마련이나 은퇴 목표가 있다면 추가하여 달성 가능성을 비교해 보세요."
                     title="등록된 목표가 없습니다."
                   />
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {profileForm.goals.map((goal, index) => (
-                      <div className="grid gap-2 sm:grid-cols-[1fr_1.2fr_1fr_1fr_1fr_0.8fr_1fr_auto]" key={goal.id || `goal-${index}`}>
-                          <input
-                            aria-label={`목표 ${index + 1} ID`}
-                            className={bodyCompactFieldClassName}
-                            value={goal.id}
-                            onChange={(event) => updateGoalRow(index, { ...goal, id: event.target.value })}
-                            placeholder="goal-id"
-                          />
-                          <input
-                            aria-label={`목표 ${index + 1} 이름`}
-                            className={bodyCompactFieldClassName}
-                            value={goal.name}
-                            onChange={(event) => updateGoalRow(index, { ...goal, name: event.target.value })}
-                            placeholder="목표 이름"
-                          />
-                          <input
-                            aria-label={`목표 ${index + 1} 목표 금액`}
-                            className={bodyCompactFieldClassName}
-                            inputMode="numeric"
-                            type="text"
-                            value={formatGroupedIntegerInput(goal.targetAmount)}
-                            onChange={(event) => updateGoalRow(index, { ...goal, targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
-                            placeholder="목표 금액"
-                          />
-                          <input
-                            aria-label={`목표 ${index + 1} 현재 금액`}
-                            className={bodyCompactFieldClassName}
-                            inputMode="numeric"
-                            type="text"
-                            value={formatGroupedIntegerInput(goal.currentAmount)}
-                            onChange={(event) => updateGoalRow(index, { ...goal, currentAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
-                            placeholder="현재 금액"
-                          />
-                          <input
-                            aria-label={`목표 ${index + 1} 목표 시점`}
-                            className={bodyCompactFieldClassName}
-                            type="month"
-                            value={monthOffsetToInput(goal.targetMonth)}
-                            onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value) })}
-                          />
-                          <input
-                            aria-label={`목표 ${index + 1} 우선순위`}
-                            className={bodyCompactFieldClassName}
-                            type="number"
-                            min={1}
-                            value={goal.priority}
-                            onChange={(event) => updateGoalRow(index, { ...goal, priority: Math.max(1, Math.trunc(toFiniteNumber(event.target.value, 1))) })}
-                            placeholder="우선순위(1~10)"
-                          />
-                          <input
-                            aria-label={`목표 ${index + 1} 최소 월 납입`}
-                            className={bodyCompactFieldClassName}
-                            inputMode="numeric"
-                            type="text"
-                            min={0}
-                            value={formatGroupedIntegerInput(goal.minimumMonthlyContribution)}
-                            onChange={(event) => updateGoalRow(index, { ...goal, minimumMonthlyContribution: Math.max(0, toFiniteNumber(event.target.value)) })}
-                            placeholder="최소 월 납입"
-                          />
-                          <Button aria-label={`목표 ${index + 1} 삭제`} onClick={() => removeGoalRow(index)} size="sm" variant="ghost">삭제</Button>
+                      <div className="p-5 rounded-2xl border border-slate-100 bg-white shadow-sm" key={goal.id || `goal-${index}`}>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className={`block text-xs ${bodyLabelClassName}`}>
+                            목표 ID
+                            <input
+                              className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
+                              value={goal.id}
+                              onChange={(event) => updateGoalRow(index, { ...goal, id: event.target.value })}
+                              placeholder="goal-id"
+                            />
+                          </label>
+                          <label className={`block text-xs ${bodyLabelClassName}`}>
+                            목표 이름
+                            <input
+                              className={cn(bodyFieldClassName, "rounded-lg border-slate-200")}
+                              value={goal.name}
+                              onChange={(event) => updateGoalRow(index, { ...goal, name: event.target.value })}
+                              placeholder="목표 이름"
+                            />
+                          </label>
                         </div>
-                      ))}
-                    </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          <label className={`block text-xs ${bodyLabelClassName}`}>
+                            목표 금액
+                            <input
+                              className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200")}
+                              inputMode="numeric"
+                              type="text"
+                              value={formatGroupedIntegerInput(goal.targetAmount)}
+                              onChange={(event) => updateGoalRow(index, { ...goal, targetAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
+                            />
+                          </label>
+                          <label className={`block text-xs ${bodyLabelClassName}`}>
+                            현재 금액
+                            <input
+                              className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200")}
+                              inputMode="numeric"
+                              type="text"
+                              value={formatGroupedIntegerInput(goal.currentAmount)}
+                              onChange={(event) => updateGoalRow(index, { ...goal, currentAmount: Math.max(0, toFiniteNumber(event.target.value)) })}
+                            />
+                          </label>
+                          <label className={`block text-xs ${bodyLabelClassName}`}>
+                            목표 시점
+                            <input
+                              className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200")}
+                              type="month"
+                              value={monthOffsetToInput(goal.targetMonth)}
+                              onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value) })}
+                            />
+                          </label>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                          <div className="flex gap-4">
+                            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              우선순위
+                              <input
+                                className="w-12 h-7 rounded border-slate-200 text-center font-bold text-slate-700"
+                                type="number"
+                                min={1}
+                                value={goal.priority}
+                                onChange={(event) => updateGoalRow(index, { ...goal, priority: Math.max(1, Math.trunc(toFiniteNumber(event.target.value, 1))) })}
+                              />
+                            </label>
+                            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              최소 납입
+                              <input
+                                className="w-24 h-7 rounded border-slate-200 text-center font-bold text-slate-700"
+                                inputMode="numeric"
+                                type="text"
+                                value={formatGroupedIntegerInput(goal.minimumMonthlyContribution)}
+                                onChange={(event) => updateGoalRow(index, { ...goal, minimumMonthlyContribution: Math.max(0, toFiniteNumber(event.target.value)) })}
+                              />
+                            </label>
+                          </div>
+                          <Button aria-label={`목표 ${index + 1} 삭제`} onClick={() => removeGoalRow(index)} size="sm" variant="ghost" className="text-rose-600 hover:bg-rose-50 h-8 font-bold">삭제</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </BodyInset>
+              </div>
             )}
           </div>
 
-          <BodyStatusInset className="grid gap-2 text-xs" tone="success">
-            <p>월 잉여: <span className="font-semibold">{formatKrw(locale, liveSummary.monthlySurplus)}</span></p>
-            <p>DSR(월부채상환/수입): <span className="font-semibold">{formatPct(locale, liveSummary.dsrPct)}</span></p>
-            <p>총 월상환액: <span className="font-semibold">{formatKrw(locale, liveSummary.totalMonthlyDebtPayment)}</span></p>
-            <p>비상금 목표액(6개월): <span className="font-semibold">{formatKrw(locale, liveSummary.emergencyTargetKrw)}</span></p>
-            <p>비상금 부족분: <span className="font-semibold">{formatKrw(locale, liveSummary.emergencyGapKrw)}</span></p>
-          </BodyStatusInset>
+          <div className="p-6 rounded-[2rem] bg-emerald-50 border border-emerald-100 grid gap-3 text-xs">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-emerald-800">월 잉여금</span>
+              <span className="text-lg font-black text-emerald-600 tabular-nums">{formatKrw(locale, liveSummary.monthlySurplus)}</span>
+            </div>
+            <div className="h-px bg-emerald-100/50" />
+            <div className="grid grid-cols-2 gap-4 text-[11px] font-bold text-emerald-700">
+              <p className="flex justify-between"><span>DSR</span> <span>{formatPct(locale, liveSummary.dsrPct)}</span></p>
+              <p className="flex justify-between"><span>총 월상환</span> <span>{formatKrw(locale, liveSummary.totalMonthlyDebtPayment)}</span></p>
+              <p className="flex justify-between"><span>비상금 목표</span> <span>{formatKrw(locale, liveSummary.emergencyTargetKrw)}</span></p>
+              <p className="flex justify-between"><span>비상금 부족</span> <span className="text-rose-600">{formatKrw(locale, liveSummary.emergencyGapKrw)}</span></p>
+            </div>
+          </div>
 
           {profileValidation.errors.length > 0 ? (
-            <BodyStatusInset tone="danger">
-              <p className="font-semibold">입력 오류 ({profileValidation.errors.length})</p>
-              {profileValidation.errors.map((item) => (
-                <p key={item}>- {item}</p>
-              ))}
-            </BodyStatusInset>
+            <div className="p-5 rounded-2xl bg-rose-50 border border-rose-100 space-y-2">
+              <p className="text-sm font-black text-rose-800">입력 오류 ({profileValidation.errors.length})</p>
+              <div className="space-y-1 text-xs font-bold text-rose-700/80">
+                {profileValidation.errors.map((item) => (
+                  <p key={item}>• {item}</p>
+                ))}
+              </div>
+            </div>
           ) : null}
 
           {profileValidation.warnings.length > 0 ? (
-            <BodyStatusInset tone="warning">
-              <p className="font-semibold">입력 경고 ({profileValidation.warnings.length})</p>
-              {profileValidation.warnings.map((item) => (
-                <p key={item}>- {item}</p>
-              ))}
-            </BodyStatusInset>
+            <div className="p-5 rounded-2xl bg-amber-50 border border-amber-100 space-y-2">
+              <p className="text-sm font-black text-amber-800">입력 경고 ({profileValidation.warnings.length})</p>
+              <div className="space-y-1 text-xs font-bold text-amber-700/80">
+                {profileValidation.warnings.map((item) => (
+                  <p key={item}>• {item}</p>
+                ))}
+              </div>
+            </div>
           ) : null}
 
-          <details className="rounded-xl border border-slate-200 p-3" data-testid="planning-advanced-panel">
-            <summary className="cursor-pointer text-xs font-semibold text-slate-700" data-testid="planning-advanced-toggle">고급(개발자): Profile JSON</summary>
-            <label className={`mt-3 block text-xs ${bodyLabelClassName}`}>
+          <details className="rounded-2xl border border-slate-200 p-4" data-testid="planning-advanced-panel">
+            <summary className="cursor-pointer text-xs font-black text-slate-400 uppercase tracking-widest" data-testid="planning-advanced-toggle">고급(개발자): Profile JSON</summary>
+            <label className={`mt-4 block text-xs ${bodyLabelClassName}`}>
               편집 (JSON)
               <textarea
-                className={bodyTextAreaClassName}
+                className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[200px] font-mono")}
                 data-testid="planning-json-editor"
                 value={profileJsonDraft}
                 onChange={(event) => replaceProfileFromJsonText(event.target.value)}
               />
               {profileJsonError ? <p className="mt-2 text-xs text-rose-700">{profileJsonError}</p> : null}
             </label>
-            <div className={`mt-3 ${bodyDenseActionRowClassName}`}>
-              <Button onClick={() => applyProfileJsonEditorAction()} size="sm" variant="outline">Apply JSON</Button>
-              <Button onClick={() => void copyProfileJsonEditorAction()} size="sm" variant="ghost">Copy</Button>
+            <div className={`mt-4 flex gap-2`}>
+              <Button onClick={() => applyProfileJsonEditorAction()} size="sm" variant="outline" className="rounded-lg h-9 font-bold bg-white">Apply JSON</Button>
+              <Button onClick={() => void copyProfileJsonEditorAction()} size="sm" variant="ghost" className="rounded-lg h-9 font-bold">Copy</Button>
             </div>
           </details>
 
           {pendingSuggestions.length > 0 ? (
-            <BodyStatusInset className="space-y-3 text-xs" tone="warning">
-              <p className="font-semibold">입력 정규화 제안 ({pendingSuggestions.length})</p>
-              <p className="text-amber-800">선택한 항목만 반영해 저장합니다. 선택하지 않으면 원본 그대로 저장됩니다.</p>
+            <div className="p-6 rounded-[2rem] bg-amber-50 border border-amber-100 space-y-4">
+              <p className="text-sm font-black text-amber-900">입력 정규화 제안 ({pendingSuggestions.length})</p>
+              <p className="text-xs font-medium text-amber-800 leading-relaxed italic">선택한 항목만 반영해 저장합니다. 선택하지 않으면 원본 그대로 저장됩니다.</p>
               <div className="space-y-2">
                 {pendingSuggestions.map((suggestion) => (
-                  <label className={bodyChoiceRowClassName} key={suggestion.code}>
+                  <label className="flex items-start gap-3 p-3 rounded-xl bg-white border border-amber-200 cursor-pointer" key={suggestion.code}>
                     <input
                       checked={acceptedSuggestionCodes.includes(suggestion.code)}
                       onChange={(event) => toggleSuggestionCode(suggestion.code, event.target.checked)}
                       type="checkbox"
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                     />
-                    <span>[{formatSeverityKo(suggestion.severity)}] {suggestion.message}</span>
+                    <span className="text-xs font-bold text-slate-700">[{formatSeverityKo(suggestion.severity)}] {suggestion.message}</span>
                   </label>
                 ))}
               </div>
-              <div className={bodyDenseActionRowClassName}>
-                <Button disabled={savingProfile || !pendingProfileSave} onClick={() => void applySuggestedProfileSaveAction()} size="sm" variant="primary">선택 적용 후 저장</Button>
-                <Button disabled={savingProfile || !pendingProfileSave} onClick={() => void continueProfileSaveWithoutSuggestionsAction()} size="sm" variant="outline">변경 없이 저장</Button>
-                <Button disabled={savingProfile} onClick={() => clearPendingSuggestions()} size="sm" variant="ghost">취소</Button>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button disabled={savingProfile || !pendingProfileSave} onClick={() => void applySuggestedProfileSaveAction()} size="sm" variant="primary" className="rounded-xl px-5 h-10 font-bold">선택 적용 후 저장</Button>
+                <Button disabled={savingProfile || !pendingProfileSave} onClick={() => void continueProfileSaveWithoutSuggestionsAction()} size="sm" variant="outline" className="rounded-xl px-5 h-10 font-bold bg-white">변경 없이 저장</Button>
+                <Button disabled={savingProfile} onClick={() => clearPendingSuggestions()} size="sm" variant="ghost" className="rounded-xl px-5 h-10 font-bold">취소</Button>
               </div>
-            </BodyStatusInset>
+            </div>
           ) : null}
 
-          <div className={bodyDenseActionRowClassName}>
-            <Button data-testid="planning-profile-create-button" disabled={savingProfile} id="planning-profile-create-button" onClick={() => beginProfileSave("create")} variant="primary">새로 만들기</Button>
-            <Button disabled={savingProfile || !selectedProfileId} onClick={() => beginProfileSave("duplicate")} variant="outline">복제</Button>
-            <Button data-testid="planning-profile-update-button" disabled={savingProfile || !selectedProfileId} id="planning-profile-update-button" onClick={() => beginProfileSave("update")} variant="outline">저장</Button>
-            <Button disabled={savingProfile || !selectedProfileId} onClick={() => void deleteProfileAction()} variant="ghost">삭제</Button>
-            <Button data-testid="planning-profile-refresh-button" disabled={loadingProfiles} id="planning-profile-refresh-button" onClick={() => void loadProfiles(selectedProfileId)} variant="ghost">목록 새로고침</Button>
-            <Button disabled={savingProfile} onClick={loadSampleProfileAction} variant="ghost">샘플 프로필 불러오기</Button>
+          <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-50">
+            <Button data-testid="planning-profile-create-button" disabled={savingProfile} id="planning-profile-create-button" onClick={() => beginProfileSave("create")} variant="primary" className="rounded-full px-6 font-bold h-10">새로 만들기</Button>
+            <Button disabled={savingProfile || !selectedProfileId} onClick={() => beginProfileSave("duplicate")} variant="outline" className="rounded-full px-6 font-bold h-10 bg-white">복제</Button>
+            <Button data-testid="planning-profile-update-button" disabled={savingProfile || !selectedProfileId} id="planning-profile-update-button" onClick={() => beginProfileSave("update")} variant="outline" className="rounded-full px-6 font-bold h-10 bg-white">저장</Button>
+            <Button disabled={savingProfile || !selectedProfileId} onClick={() => void deleteProfileAction()} variant="ghost" className="rounded-full px-6 font-bold h-10 text-rose-600 hover:bg-rose-50">삭제</Button>
+            <Button data-testid="planning-profile-refresh-button" disabled={loadingProfiles} id="planning-profile-refresh-button" onClick={() => void loadProfiles(selectedProfileId)} variant="ghost" className="rounded-full px-4 font-bold h-10">새로고침</Button>
+            <Button disabled={savingProfile} onClick={loadSampleProfileAction} variant="ghost" className="rounded-full px-4 font-bold h-10">샘플 프로필</Button>
           </div>
         </ProfileV2Form>
 
-        <Card className="space-y-4">
-          <BodySectionHeading
-            description="기본값만으로도 실행 가능합니다."
+        <Card className="p-8 space-y-8">
+          <SubSectionHeader
             title="실행 옵션"
+            description="기본값만으로도 실행 가능합니다."
           />
 
-          <SnapshotPicker
-            advancedEnabled={!beginnerMode}
-            items={availableSnapshotItems}
-            value={effectiveSnapshotSelection}
-            onChange={(next) => setSnapshotSelection(next)}
-          />
-          {snapshotItemsWarning ? (
-            <p className="text-xs text-amber-700">{snapshotItemsWarning}</p>
-          ) : null}
-
-          <label className={`block text-xs ${bodyLabelClassName}`}>
-            분배 정책
-            <select
-              className={bodyFieldClassName}
-              value={policyId}
-              onChange={(event) => setPolicyId(event.target.value as AllocationPolicyId)}
-            >
-              {ALLOCATION_POLICIES.map((item) => (
-                <option key={item.id} value={item.id}>{item.label}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className={`block text-xs ${bodyLabelClassName}`}>
-            실행 제목
-            <input
-              className={bodyFieldClassName}
-              value={runTitle}
-              onChange={(event) => setRunTitle(event.target.value)}
+          <div className="space-y-6">
+            <SnapshotPicker
+              advancedEnabled={!beginnerMode}
+              items={availableSnapshotItems}
+              value={effectiveSnapshotSelection}
+              onChange={(next) => setSnapshotSelection(next)}
             />
-          </label>
+            {snapshotItemsWarning ? (
+              <p className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">{snapshotItemsWarning}</p>
+            ) : null}
 
-          <label className={`block text-xs ${bodyLabelClassName}`}>
-            기간 (개월)
-            {beginnerMode ? (
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                <Button
-                  size="sm"
-                  variant={horizonMonths === "120" ? "primary" : "outline"}
-                  onClick={() => setHorizonMonths("120")}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
+                분배 정책
+                <select
+                  className={cn(bodyFieldClassName, "mt-2 rounded-xl h-11 border-slate-200 font-bold")}
+                  value={policyId}
+                  onChange={(event) => setPolicyId(event.target.value as AllocationPolicyId)}
                 >
-                  10년 (120)
-                </Button>
-                <Button
-                  size="sm"
-                  variant={horizonMonths === "360" ? "primary" : "outline"}
-                  onClick={() => setHorizonMonths("360")}
-                >
-                  30년 (360)
-                </Button>
-              </div>
-            ) : (
-              <input
-                className={bodyFieldClassName}
-                value={horizonMonths}
-                onChange={(event) => setHorizonMonths(event.target.value)}
-              />
-            )}
-          </label>
-
-          {!beginnerMode ? (
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => setHorizonMonths("120")}>120</Button>
-              <Button size="sm" variant="outline" onClick={() => setHorizonMonths("360")}>360</Button>
-            </div>
-          ) : null}
-
-          {!beginnerMode ? (
-            <BodyInset className="space-y-3">
-              <p className="text-xs font-semibold text-slate-700">가정(Assumptions) override</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className={`block text-xs ${bodyLabelClassName}`}>
-                  인플레이션(%)
-                  <input
-                    className={bodyFieldClassName}
-                    type="number"
-                    value={assumptionsForm.inflationPct}
-                    onChange={(event) => updateAssumptionsField("inflationPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.inflationPct))}
-                  />
-                </label>
-                <label className={`block text-xs ${bodyLabelClassName}`}>
-                  기대수익률(%)
-                  <input
-                    className={bodyFieldClassName}
-                    type="number"
-                    value={assumptionsForm.expectedReturnPct}
-                    onChange={(event) => updateAssumptionsField("expectedReturnPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.expectedReturnPct))}
-                  />
-                </label>
-                <label className={`block text-xs ${bodyLabelClassName}`}>
-                  현금수익률(%)
-                  <input
-                    className={bodyFieldClassName}
-                    type="number"
-                    value={assumptionsForm.cashReturnPct}
-                    onChange={(event) => updateAssumptionsField("cashReturnPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.cashReturnPct))}
-                  />
-                </label>
-                <label className={`block text-xs ${bodyLabelClassName}`}>
-                  인출률(%)
-                  <input
-                    className={bodyFieldClassName}
-                    type="number"
-                    value={assumptionsForm.withdrawalRatePct}
-                    onChange={(event) => updateAssumptionsField("withdrawalRatePct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.withdrawalRatePct))}
-                  />
-                </label>
-              </div>
-            </BodyInset>
-          ) : null}
-
-          {beginnerMode ? (
-            <BodyInset className="text-xs text-slate-700">
-              <p>시나리오: ON</p>
-              <p>Monte Carlo: OFF</p>
-              <p>Actions: ON (상품 후보 OFF)</p>
-              <p>Debt 분석: ON</p>
-            </BodyInset>
-          ) : (
-            <div className="grid gap-2 text-sm">
-              <label className={bodyChoiceRowClassName}>
-                <input checked={runScenariosEnabled} onChange={(event) => setRunScenariosEnabled(event.target.checked)} type="checkbox" />
-                시나리오 실행
+                  {ALLOCATION_POLICIES.map((item) => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </select>
               </label>
-              {!monteCarloServerDisabled ? (
-                <label className={bodyChoiceRowClassName}>
-                  <input checked={runMonteCarloEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunMonteCarloEnabled(event.target.checked)} type="checkbox" />
-                  몬테카를로 실행
-                </label>
-              ) : null}
-              <label className={bodyChoiceRowClassName}>
-                <input checked={runActionsEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunActionsEnabled(event.target.checked)} type="checkbox" />
-                실행 계획 생성
-              </label>
-              <label className={bodyChoiceRowClassName}>
-                <input checked={runDebtEnabled} onChange={(event) => setRunDebtEnabled(event.target.checked)} type="checkbox" />
-                부채 분석
-              </label>
-              {!optimizerServerDisabled ? (
-                <label className={bodyChoiceRowClassName}>
-                  <input checked={runOptimizeEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunOptimizeEnabled(event.target.checked)} type="checkbox" />
-                  실험용 최적화
-                </label>
-              ) : null}
-            </div>
-          )}
 
-          {!beginnerMode && monteCarloServerDisabled ? (
-            <p className="text-xs text-amber-700">서버 설정으로 비활성화됨: Monte Carlo</p>
-          ) : null}
-          {!beginnerMode && includeProductsServerDisabled ? (
-            <p className="text-xs text-amber-700">서버 설정으로 비활성화됨: 상품 후보 포함</p>
-          ) : null}
-          {!beginnerMode && optimizerServerDisabled ? (
-            <p className="text-xs text-amber-700">서버 설정으로 비활성화됨: Optimizer</p>
-          ) : null}
-
-          {!beginnerMode && runMonteCarloEnabled ? (
-            <div className="grid grid-cols-2 gap-3">
               <label className={`block text-xs ${bodyLabelClassName}`}>
-                몬테카를로 paths
-                <input className={bodyFieldClassName} value={monteCarloPaths} onChange={(event) => setMonteCarloPaths(event.target.value)} />
-              </label>
-              <label className={`block text-xs ${bodyLabelClassName}`}>
-                몬테카를로 seed
-                <input className={bodyFieldClassName} value={monteCarloSeed} onChange={(event) => setMonteCarloSeed(event.target.value)} />
-              </label>
-            </div>
-          ) : null}
-
-          {!beginnerMode && runActionsEnabled ? (
-            <div className="grid grid-cols-2 gap-3">
-              {!includeProductsServerDisabled ? (
-                <label className={bodyChoiceRowClassName}>
-                  <input checked={includeProducts} disabled={saveBlockedByHealth} onChange={(event) => setIncludeProducts(event.target.checked)} type="checkbox" />
-                  상품 후보 포함
-                </label>
-              ) : <div />}
-              <label className={`block text-xs ${bodyLabelClassName}`}>
-                후보 최대 개수
-                <input className={bodyFieldClassName} value={maxCandidatesPerAction} onChange={(event) => setMaxCandidatesPerAction(event.target.value)} />
-              </label>
-            </div>
-          ) : null}
-
-          {effectiveRunDebtEnabled ? (
-            <BodyInset className="space-y-3">
-              <label className={`block text-xs ${bodyLabelClassName}`}>
-                부채 추가상환 금액(KRW)
+                실행 제목
                 <input
-                  className={bodyFieldClassName}
-                  inputMode="numeric"
-                  type="text"
-                  value={formatGroupedIntegerInput(toFiniteNumber(debtExtraPaymentKrw, 0))}
-                  onChange={(event) => setDebtExtraPaymentKrw(event.target.value)}
+                  className={cn(bodyFieldClassName, "mt-2 rounded-xl h-11 border-slate-200 font-bold")}
+                  value={runTitle}
+                  onChange={(event) => setRunTitle(event.target.value)}
+                  placeholder="예: 2025년 3월 시뮬레이션"
                 />
               </label>
-              {!beginnerMode ? (
-                <BodyInset className="space-y-2 rounded-lg border-slate-100 bg-white">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-700">리파이낸스 제안</p>
-                    <Button onClick={addDebtOfferRow} size="sm" variant="outline">제안 추가</Button>
+            </div>
+
+            <div className="rounded-2xl bg-slate-50 p-6 border border-slate-100">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">분석 기간</p>
+              {beginnerMode ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Button
+                    size="sm"
+                    variant={horizonMonths === "120" ? "primary" : "outline"}
+                    className="rounded-xl h-12 font-black"
+                    onClick={() => setHorizonMonths("120")}
+                  >
+                    10년 (120개월)
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={horizonMonths === "360" ? "primary" : "outline"}
+                    className="rounded-xl h-12 font-black"
+                    onClick={() => setHorizonMonths("360")}
+                  >
+                    30년 (360개월)
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <input
+                    className={cn(bodyFieldClassName, "max-w-[120px] rounded-xl h-11 border-slate-200 text-center font-black")}
+                    value={horizonMonths}
+                    onChange={(event) => setHorizonMonths(event.target.value)}
+                  />
+                  <span className="text-sm font-bold text-slate-500">개월 분석</span>
+                  <div className="flex gap-2 ml-auto">
+                    <Button size="sm" variant="ghost" className="h-9 px-3 text-xs font-bold" onClick={() => setHorizonMonths("120")}>10년</Button>
+                    <Button size="sm" variant="ghost" className="h-9 px-3 text-xs font-bold" onClick={() => setHorizonMonths("360")}>30년</Button>
                   </div>
-                  {debtOfferRows.length === 0 ? (
-                    <BodyEmptyState
-                      description="현재 부채를 다른 조건으로 갈아탈 가능성이 있을 때만 입력하세요. 없으면 비워두고 계산해도 됩니다."
-                      title="리파이낸스 제안을 입력하지 않았습니다."
+                </div>
+              )}
+            </div>
+
+            {!beginnerMode && (
+              <div className="rounded-2xl border border-slate-100 p-6 space-y-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">가정(Assumptions) Override</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className={`block text-xs ${bodyLabelClassName}`}>
+                    인플레이션(%)
+                    <input
+                      className={cn(bodyFieldClassName, "mt-2 rounded-xl h-10 border-slate-200")}
+                      type="number"
+                      value={assumptionsForm.inflationPct}
+                      onChange={(event) => updateAssumptionsField("inflationPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.inflationPct))}
                     />
-                  ) : (
-                    <div className="space-y-2">
-                      {debtOfferRows.map((row, index) => (
-                        <div className="grid gap-2 sm:grid-cols-[1.1fr_1fr_0.8fr_0.8fr_auto]" key={row.rowId}>
-                          <select
-                            className={bodyCompactFieldClassName}
-                            value={row.liabilityId}
-                            onChange={(event) => updateDebtOfferRow(index, { ...row, liabilityId: event.target.value })}
-                          >
-                            <option value="">부채 선택</option>
-                            {debtLiabilityOptions.map((option) => (
-                              <option key={option.id} value={option.id}>{option.id} ({option.label})</option>
-                            ))}
-                          </select>
-                          <input
-                            className={bodyCompactFieldClassName}
-                            value={row.title}
-                            onChange={(event) => updateDebtOfferRow(index, { ...row, title: event.target.value })}
-                            placeholder="제안 제목(선택)"
-                          />
-                          <input
-                            className={bodyCompactFieldClassName}
-                            type="number"
-                            value={row.newAprPct}
-                            onChange={(event) => updateDebtOfferRow(index, { ...row, newAprPct: toFiniteNumber(event.target.value) })}
-                            placeholder="신규 금리(%)"
-                          />
-                          <input
-                            className={bodyCompactFieldClassName}
-                            inputMode="numeric"
-                            type="text"
-                            value={formatGroupedIntegerInput(row.feeKrw)}
-                            onChange={(event) => updateDebtOfferRow(index, { ...row, feeKrw: Math.max(0, toFiniteNumber(event.target.value)) })}
-                            placeholder="수수료(KRW)"
-                          />
-                          <Button aria-label={`리파이낸스 제안 ${index + 1} 삭제`} onClick={() => removeDebtOfferRow(index)} size="sm" variant="ghost">삭제</Button>
-                        </div>
-                      ))}
-                    </div>
+                  </label>
+                  <label className={`block text-xs ${bodyLabelClassName}`}>
+                    기대수익률(%)
+                    <input
+                      className={cn(bodyFieldClassName, "mt-2 rounded-xl h-10 border-slate-200")}
+                      type="number"
+                      value={assumptionsForm.expectedReturnPct}
+                      onChange={(event) => updateAssumptionsField("expectedReturnPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.expectedReturnPct))}
+                    />
+                  </label>
+                  <label className={`block text-xs ${bodyLabelClassName}`}>
+                    현금수익률(%)
+                    <input
+                      className={cn(bodyFieldClassName, "mt-2 rounded-xl h-10 border-slate-200")}
+                      type="number"
+                      value={assumptionsForm.cashReturnPct}
+                      onChange={(event) => updateAssumptionsField("cashReturnPct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.cashReturnPct))}
+                    />
+                  </label>
+                  <label className={`block text-xs ${bodyLabelClassName}`}>
+                    인출률(%)
+                    <input
+                      className={cn(bodyFieldClassName, "mt-2 rounded-xl h-10 border-slate-200")}
+                      type="number"
+                      value={assumptionsForm.withdrawalRatePct}
+                      onChange={(event) => updateAssumptionsField("withdrawalRatePct", toFiniteNumber(event.target.value, ASSUMPTIONS_FORM_DEFAULT.withdrawalRatePct))}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl bg-slate-50 p-6 border border-slate-100">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Pipeline 설정</p>
+              {beginnerMode ? (
+                <div className="grid grid-cols-2 gap-y-2 text-[11px] font-bold text-slate-600 px-1">
+                  <p className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> 시나리오: ON</p>
+                  <p className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-slate-300" /> Monte Carlo: OFF</p>
+                  <p className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Actions: ON</p>
+                  <p className="flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Debt 분석: ON</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                    <input checked={runScenariosEnabled} onChange={(event) => setRunScenariosEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                    <span className="text-xs font-bold text-slate-700">시나리오 실행</span>
+                  </label>
+                  {!monteCarloServerDisabled && (
+                    <label className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                      <input checked={runMonteCarloEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunMonteCarloEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                      <span className="text-xs font-bold text-slate-700">몬테카를로 실행</span>
+                    </label>
                   )}
-                  {debtOfferInvalidIds.length > 0 ? (
-                    <BodyStatusInset className="text-xs" tone="warning">
-                      <p className="font-semibold">DEBT_OFFER_LIABILITY_NOT_FOUND</p>
-                      <p className="mt-1">다음 liabilityId가 현재 프로필 부채 목록에 없습니다: {debtOfferInvalidIds.join(", ")}</p>
-                    </BodyStatusInset>
-                  ) : null}
-                </BodyInset>
-              ) : null}
-            </BodyInset>
-          ) : null}
+                  <label className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                    <input checked={runActionsEnabled} disabled={saveBlockedByHealth} onChange={(event) => setRunActionsEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                    <span className="text-xs font-bold text-slate-700">실행 계획 생성</span>
+                  </label>
+                  <label className="flex items-center gap-3 p-3 rounded-xl bg-white border border-slate-200 cursor-pointer">
+                    <input checked={runDebtEnabled} onChange={(event) => setRunDebtEnabled(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                    <span className="text-xs font-bold text-slate-700">부채 분석</span>
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {!beginnerMode && (
+              <div className="space-y-4">
+                {runMonteCarloEnabled && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                      몬테카를로 paths
+                      <input className={cn(bodyFieldClassName, "mt-2 rounded-xl h-10 border-slate-200")} value={monteCarloPaths} onChange={(event) => setMonteCarloPaths(event.target.value)} />
+                    </label>
+                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                      몬테카를로 seed
+                      <input className={cn(bodyFieldClassName, "mt-2 rounded-xl h-10 border-slate-200")} value={monteCarloSeed} onChange={(event) => setMonteCarloSeed(event.target.value)} />
+                    </label>
+                  </div>
+                )}
+
+                {runActionsEnabled && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {!includeProductsServerDisabled ? (
+                      <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                        <input checked={includeProducts} disabled={saveBlockedByHealth} onChange={(event) => setIncludeProducts(event.target.checked)} type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                        <span className="text-xs font-bold text-slate-700">상품 후보 포함</span>
+                      </label>
+                    ) : <div />}
+                    <label className={`block text-xs ${bodyLabelClassName}`}>
+                      후보 최대 개수
+                      <input className={cn(bodyFieldClassName, "mt-2 rounded-xl h-10 border-slate-200")} value={maxCandidatesPerAction} onChange={(event) => setMaxCandidatesPerAction(event.target.value)} />
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {effectiveRunDebtEnabled && (
+              <div className="rounded-[2rem] bg-slate-50/50 border border-slate-100 p-6 space-y-6">
+                <SubSectionHeader title="부채 추가상환 및 리파이낸스" titleClassName="text-sm" />
+                <label className={`block text-xs ${bodyLabelClassName}`}>
+                  부채 추가상환 금액(KRW)
+                  <input
+                    className={cn(bodyFieldClassName, "mt-2 rounded-xl h-11 border-slate-200 font-bold")}
+                    inputMode="numeric"
+                    type="text"
+                    value={formatGroupedIntegerInput(toFiniteNumber(debtExtraPaymentKrw, 0))}
+                    onChange={(event) => setDebtExtraPaymentKrw(event.target.value)}
+                  />
+                </label>
+                {!beginnerMode && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">리파이낸스 제안</p>
+                      <Button onClick={addDebtOfferRow} size="sm" variant="outline" className="rounded-lg h-8 bg-white font-bold">제안 추가</Button>
+                    </div>
+                    {debtOfferRows.length === 0 ? (
+                      <p className="py-8 text-center text-xs font-bold text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">입력된 제안이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {debtOfferRows.map((row, index) => (
+                          <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm" key={row.rowId}>
+                            <div className="grid gap-3 sm:grid-cols-[1.5fr_1fr_auto]">
+                              <select
+                                className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200 h-9 font-bold")}
+                                value={row.liabilityId}
+                                onChange={(event) => updateDebtOfferRow(index, { ...row, liabilityId: event.target.value })}
+                              >
+                                <option value="">부채 선택</option>
+                                {debtLiabilityOptions.map((option) => (
+                                  <option key={option.id} value={option.id}>{option.id} ({option.label})</option>
+                                ))}
+                              </select>
+                              <input
+                                className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200 h-9")}
+                                value={row.title}
+                                onChange={(event) => updateDebtOfferRow(index, { ...row, title: event.target.value })}
+                                placeholder="제안 제목(선택)"
+                              />
+                              <Button aria-label={`삭제`} onClick={() => removeDebtOfferRow(index)} size="sm" variant="ghost" className="h-9 text-rose-600">삭제</Button>
+                            </div>
+                            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                              <label className="block">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">신규 금리(%)</span>
+                                <input
+                                  className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200 h-9 font-black text-emerald-600")}
+                                  type="number"
+                                  value={row.newAprPct}
+                                  onChange={(event) => updateDebtOfferRow(index, { ...row, newAprPct: toFiniteNumber(event.target.value) })}
+                                />
+                              </label>
+                              <label className="block">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">수수료(KRW)</span>
+                                <input
+                                  className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200 h-9")}
+                                  inputMode="numeric"
+                                  type="text"
+                                  value={formatGroupedIntegerInput(row.feeKrw)}
+                                  onChange={(event) => updateDebtOfferRow(index, { ...row, feeKrw: Math.max(0, toFiniteNumber(event.target.value)) })}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {!beginnerMode && runOptimizeEnabled ? (
-            <BodyInset className="space-y-3 border-indigo-200 bg-indigo-50">
-              <p className="text-xs font-semibold text-indigo-900">실험용 최적화기</p>
-              <p className="text-xs text-indigo-800">후보 전략 2~5개를 비교만 제공합니다. 자동 적용은 하지 않습니다.</p>
+            <div className="mt-6 p-6 rounded-2xl border border-indigo-100 bg-indigo-50/30 space-y-4">
+              <SubSectionHeader title="실험용 최적화기" titleClassName="text-sm text-indigo-900" description="후보 전략 2~5개를 비교만 제공합니다. 자동 적용은 하지 않습니다." />
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 Optimizer 제약 JSON
                 <textarea
-                  className={`${bodyTextAreaClassName} min-h-[90px]`}
+                  className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[90px]")}
                   value={optimizerConstraintsJson}
                   onChange={(event) => setOptimizerConstraintsJson(event.target.value)}
                 />
@@ -3582,7 +3584,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 Optimizer 파라미터 JSON
                 <textarea
-                  className={`${bodyTextAreaClassName} min-h-[90px]`}
+                  className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[90px]")}
                   value={optimizerKnobsJson}
                   onChange={(event) => setOptimizerKnobsJson(event.target.value)}
                 />
@@ -3590,25 +3592,25 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               <label className={`block text-xs ${bodyLabelClassName}`}>
                 Optimizer 탐색 JSON
                 <textarea
-                  className={`${bodyTextAreaClassName} min-h-[90px]`}
+                  className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[90px]")}
                   value={optimizerSearchJson}
                   onChange={(event) => setOptimizerSearchJson(event.target.value)}
                 />
               </label>
-              <Button disabled={runningOptimize || optimizerServerDisabled || saveBlockedByHealth} onClick={() => void runOptimizeAction()} size="sm" variant="outline">
+              <Button disabled={runningOptimize || optimizerServerDisabled || saveBlockedByHealth} onClick={() => void runOptimizeAction()} size="sm" variant="outline" className="rounded-xl h-10 px-6 bg-white font-bold text-indigo-700 border-indigo-200">
                 {runningOptimize ? "최적화 실행 중..." : "최적화 실행"}
               </Button>
-            </BodyInset>
+            </div>
           ) : null}
 
           {!beginnerMode ? (
-            <details className="rounded-xl border border-slate-200 p-3">
-              <summary className="cursor-pointer text-xs font-semibold text-slate-700">고급(개발자): JSON 편집기</summary>
-              <div className="mt-3 space-y-3">
+            <details className="mt-6 rounded-2xl border border-slate-200 p-4">
+              <summary className="cursor-pointer text-xs font-black text-slate-400 uppercase tracking-widest">고급(개발자): JSON 편집기</summary>
+              <div className="mt-4 space-y-4">
                 <label className={`block text-xs ${bodyLabelClassName}`}>
                   가정 Override JSON
                   <textarea
-                    className={`${bodyTextAreaClassName} min-h-[120px]`}
+                    className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[120px] font-mono")}
                     value={assumptionsOverrideJson}
                     onChange={(event) => replaceAssumptionsFromJsonText(event.target.value)}
                   />
@@ -3617,7 +3619,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                 <label className={`block text-xs ${bodyLabelClassName}`}>
                   리파이낸스 제안 JSON
                   <textarea
-                    className={`${bodyTextAreaClassName} min-h-[100px]`}
+                    className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[100px] font-mono")}
                     value={debtOffersJson}
                     onChange={(event) => replaceDebtOffersFromJsonText(event.target.value)}
                   />
@@ -3627,124 +3629,133 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             </details>
           ) : null}
 
-          {healthWarnings.length > 0 ? (
-            <BodyStatusInset className="text-xs" tone="warning">
-              <p className="font-semibold">가정 건강도 경고 ({healthWarnings.length})</p>
-              <div className="mt-2 space-y-1">
-                {healthWarnings.map((warning) => (
-                  <p key={`${warning.code}:${warning.severity}`}>[{formatSeverityKo(warning.severity)}] {warning.code} - {warning.message}</p>
-                ))}
-              </div>
-              {healthWarnings.some((warning) => warning.code === "SNAPSHOT_STALE" || warning.code === "SNAPSHOT_VERY_STALE" || warning.code === "SNAPSHOT_MISSING") ? (
-                <div className="mt-2">
-                  <BodyActionLink href="/ops/assumptions">/ops/assumptions로 이동해 스냅샷 동기화</BodyActionLink>
+          <div className="mt-6 space-y-4">
+            {healthWarnings.length > 0 ? (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 space-y-2">
+                <p className="text-sm font-black text-amber-800">가정 건강도 경고 ({healthWarnings.length})</p>
+                <div className="space-y-1 text-xs font-bold text-amber-700/80">
+                  {healthWarnings.map((warning) => (
+                    <p key={`${warning.code}:${warning.severity}`}>[{formatSeverityKo(warning.severity)}] {warning.code} - {warning.message}</p>
+                  ))}
                 </div>
-              ) : null}
-            </BodyStatusInset>
-          ) : null}
-
-          {preflightHasBlockers ? (
-            <BodyStatusInset className="text-xs" id="planning-preflight-block-reason" tone="danger">
-              <p className="font-semibold">사전 점검 차단 ({preflightBlockIssues.length})</p>
-              <div className="mt-2 space-y-1">
-                {preflightBlockIssues.map((issue, index) => (
-                  <p key={`${issue.code}-${index}`}>[{issue.code}] {formatPreflightIssue(issue)}</p>
-                ))}
+                {healthWarnings.some((warning) => warning.code === "SNAPSHOT_STALE" || warning.code === "SNAPSHOT_VERY_STALE" || warning.code === "SNAPSHOT_MISSING") ? (
+                  <div className="mt-2">
+                    <Link href="/ops/assumptions" className="text-xs font-black text-amber-900 underline underline-offset-4 decoration-2 decoration-amber-200 hover:decoration-amber-400 transition-all">스냅샷 동기화하러 가기 →</Link>
+                  </div>
+                ) : null}
               </div>
-            </BodyStatusInset>
-          ) : null}
-          {preflightWarnIssues.length > 0 ? (
-            <p className="text-xs text-amber-700">
-              사전 점검 경고: {preflightWarnSummary}
-              {preflightWarnIssues.length > 1 ? ` 외 ${preflightWarnIssues.length - 1}건` : ""}
-            </p>
-          ) : null}
+            ) : null}
 
-          {hasCriticalHealth ? (
-            <BodyStatusInset className="text-xs" tone="danger">
-              <label className={bodyChoiceRowClassName}>
-                <input checked={healthAck} onChange={(event) => setHealthAck(event.target.checked)} type="checkbox" />
-                <span>위 경고를 확인했고, 이 가정으로 계산 결과가 왜곡될 수 있음을 이해했습니다.</span>
-              </label>
-            </BodyStatusInset>
-          ) : null}
+            {preflightHasBlockers ? (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 space-y-2" id="planning-preflight-block-reason">
+                <p className="text-sm font-black text-rose-800">사전 점검 차단 ({preflightBlockIssues.length})</p>
+                <div className="space-y-1 text-xs font-bold text-rose-700/80">
+                  {preflightBlockIssues.map((issue, index) => (
+                    <p key={`${issue.code}-${index}`}>[{issue.code}] {formatPreflightIssue(issue)}</p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {preflightWarnIssues.length > 0 ? (
+              <p className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
+                사전 점검 경고: {preflightWarnSummary}
+                {preflightWarnIssues.length > 1 ? ` 외 ${preflightWarnIssues.length - 1}건` : ""}
+              </p>
+            ) : null}
+
+            {hasCriticalHealth ? (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input checked={healthAck} onChange={(event) => setHealthAck(event.target.checked)} type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                  <span className="text-xs font-bold text-rose-800 leading-relaxed">위 경고를 확인했고, 이 가정으로 계산 결과가 왜곡될 수 있음을 이해했습니다.</span>
+                </label>
+              </div>
+            ) : null}
+          </div>
 
           {healthDisabledReason ? (
-            <p className="text-xs text-slate-500" id="planning-save-disabled-reason">{healthDisabledReason}</p>
+            <p className="text-xs font-bold text-slate-400 italic px-1" id="planning-save-disabled-reason">{healthDisabledReason}</p>
           ) : null}
           {monteCarloBudgetSkipped ? (
-            <p className="text-xs text-amber-700">Monte Carlo는 예산 초과로 생략되었습니다.</p>
+            <p className="text-xs font-bold text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">Monte Carlo는 예산 초과로 생략되었습니다.</p>
           ) : null}
 
-          <BodyInset className="space-y-3">
-            <BodySectionHeading
-              description="추천이 아닌 기준 대비 비교 실행"
+          <div className="rounded-[2rem] bg-slate-50/50 border border-slate-100 p-6 space-y-6">
+            <SubSectionHeader
               title="What-if 시나리오"
+              description="추천이 아닌 특정 조건을 가정하여 비교 실행합니다."
             />
-            <label className={`block text-xs ${bodyLabelClassName}`}>
-              기준 실행(Baseline)
-              <select
-                className={bodyFieldClassName}
-                value={baselineRunId}
-                onChange={(event) => setBaselineRunId(event.target.value)}
-              >
-                <option value="">선택 안 함</option>
-                {availableBaselineRuns.map((run) => (
-                  <option key={run.id} value={run.id}>
-                    {run.title ? `${run.title} · ` : ""}{run.id.slice(0, 8)} · {formatDateTime(locale, run.createdAt)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {loadingBaselineRuns ? <p className="text-[11px] text-slate-500">기준 실행 목록을 불러오는 중입니다...</p> : null}
-            <label className={`block text-xs ${bodyLabelClassName}`}>
-              시나리오 템플릿
-              <select
-                className={bodyFieldClassName}
-                value={scenarioTemplateId}
-                onChange={(event) => setScenarioTemplateId(event.target.value as ScenarioTemplateId)}
-              >
-                {(Object.keys(SCENARIO_TEMPLATE_LABELS) as ScenarioTemplateId[]).map((templateId) => (
-                  <option key={templateId} value={templateId}>
-                    {SCENARIO_TEMPLATE_LABELS[templateId]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <BodyInset className="rounded-lg border-slate-100 bg-white px-3 py-2">
-              <p className="text-[11px] font-semibold text-slate-700">적용 patch</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className={`block text-xs ${bodyLabelClassName}`}>
+                기준 실행(Baseline)
+                <select
+                  className={cn(bodyFieldClassName, "mt-2 rounded-xl h-11 border-slate-200 font-bold")}
+                  value={baselineRunId}
+                  onChange={(event) => setBaselineRunId(event.target.value)}
+                >
+                  <option value="">선택 안 함</option>
+                  {availableBaselineRuns.map((run) => (
+                    <option key={run.id} value={run.id}>
+                      {run.title ? `${run.title} · ` : ""}{run.id.slice(0, 8)} · {formatDateTime(locale, run.createdAt)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className={`block text-xs ${bodyLabelClassName}`}>
+                시나리오 템플릿
+                <select
+                  className={cn(bodyFieldClassName, "mt-2 rounded-xl h-11 border-slate-200 font-bold")}
+                  value={scenarioTemplateId}
+                  onChange={(event) => setScenarioTemplateId(event.target.value as ScenarioTemplateId)}
+                >
+                  {(Object.keys(SCENARIO_TEMPLATE_LABELS) as ScenarioTemplateId[]).map((templateId) => (
+                    <option key={templateId} value={templateId}>
+                      {SCENARIO_TEMPLATE_LABELS[templateId]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {loadingBaselineRuns ? <p className="text-[10px] font-bold text-slate-400 animate-pulse px-1">기준 실행 목록 로딩 중...</p> : null}
+
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">적용 PATCH 미리보기</p>
               {scenarioPatchesPreview.length < 1 ? (
-                <BodyEmptyState
-                  className="mt-2 border-none bg-transparent px-0 py-2 text-left"
-                  description="선택한 템플릿이 현재 입력값에서 바꾸는 항목이 있으면 여기 표시됩니다."
-                  title="적용할 patch가 없습니다."
-                />
+                <p className="text-xs font-bold text-slate-300 italic py-2">적용할 항목이 없습니다.</p>
               ) : (
-                <ul className="mt-1 space-y-1 text-[11px] text-slate-600">
+                <ul className="space-y-1.5">
                   {scenarioPatchesPreview.map((patch, index) => (
-                    <li key={`${patch.op}:${index}`}>
+                    <li key={`${patch.op}:${index}`} className="text-[11px] font-bold text-slate-600 flex items-center gap-2">
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
                       {"field" in patch
-                        ? `${patch.field} · ${patch.op} · ${patch.value}`
-                        : `debt(${patch.debtId}) · ${patch.op} · ${patch.value}`}
+                        ? <><span className="text-slate-400">{patch.field}</span> <span className="text-emerald-600">{patch.op}</span> <span>{patch.value}</span></>
+                        : <><span className="text-slate-400">debt({patch.debtId})</span> <span className="text-emerald-600">{patch.op}</span> <span>{patch.value}</span></>}
                     </li>
                   ))}
                 </ul>
               )}
-            </BodyInset>
-          </BodyInset>
-
-          <BodyInset data-testid="run-stages-timeline">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold text-slate-700">Pipeline</p>
-              <p className="text-xs text-slate-500">{running ? "단계 실행 중" : "최근 실행 기준"}</p>
             </div>
-            <div className="grid gap-2 md:grid-cols-2">
+          </div>
+
+          <div className="rounded-[2rem] bg-slate-900 p-6 text-white" data-testid="run-stages-timeline">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Execution Pipeline</p>
+              <Badge variant="secondary" className="bg-white/10 text-white border-none text-[9px]">
+                {running ? "단계 실행 중" : "최근 실행 상태"}
+              </Badge>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {currentStepStatuses.map((step) => (
-                <BodyInset className="rounded-lg bg-white px-3 py-2 text-xs" data-testid={`stage-${step.id}`} key={step.id}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-800">{STEP_LABELS[step.id]}</span>
+                <div className="rounded-xl bg-white/5 border border-white/10 p-3" data-testid={`stage-${step.id}`} key={step.id}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-300">{STEP_LABELS[step.id]}</span>
                     <span
-                      className={`rounded-full border px-2 py-0.5 text-[11px] ${stepStateClass(step.state)}`}
+                      className={cn(
+                        "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-tight",
+                        step.state === 'SUCCESS' ? "bg-emerald-500/20 text-emerald-400" :
+                        step.state === 'RUNNING' ? "bg-sky-500/20 text-sky-400 animate-pulse" :
+                        step.state === 'FAILED' ? "bg-rose-500/20 text-rose-400" : "bg-slate-700 text-slate-500"
+                      )}
                       data-testid={step.id === "simulate" ? "stage-simulate-pill" : `stage-${step.id}-status`}
                     >
                       <span
@@ -3755,58 +3766,63 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                       </span>
                     </span>
                   </div>
-                  {step.message ? <p className="mt-1 text-slate-600">{step.message}</p> : null}
-                </BodyInset>
+                  {step.message ? <p className="mt-2 text-[10px] text-slate-400 leading-relaxed line-clamp-1" title={step.message}>{step.message}</p> : null}
+                </div>
               ))}
             </div>
-          </BodyInset>
+          </div>
 
           {preflightWarnIssues.length > 0 ? (
-            <label className={bodyChoiceRowClassName} id="planning-save-warning-confirm-hint">
+            <label className="flex items-start gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-100 cursor-pointer" id="planning-save-warning-confirm-hint">
               <input
                 checked={saveWarningConfirmed}
                 disabled={savingRun || preflightHasBlockers}
                 onChange={(event) => setSaveWarningConfirmed(event.target.checked)}
                 type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
               />
-              사전 점검 경고를 확인했고, 이 상태로 저장합니다.
+              <span className="text-xs font-bold text-amber-800 leading-relaxed">사전 점검 경고를 확인했고, 이 상태로 저장을 진행합니다.</span>
             </label>
           ) : null}
 
-          <label className={bodyChoiceRowClassName}>
+          <label className={cn(bodyChoiceRowClassName, "px-1")}>
             <input
               checked={autoSaveRunAfterSuccess}
               disabled={running || savingRun || saveBlockedByHealth || preflightHasBlockers || preflightWarnIssues.length > 0}
               onChange={(event) => setAutoSaveRunAfterSuccess(event.target.checked)}
               type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
             />
-            실행 성공 시 실행 기록 자동 저장
+            <span className="text-xs font-bold text-slate-600">실행 성공 시 실행 기록 자동 저장</span>
           </label>
 
-          <div className={bodyDenseActionRowClassName}>
+          <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100">
             <Button
               aria-describedby={preflightHasBlockers ? "planning-preflight-block-reason" : undefined}
               data-testid="run-button"
               disabled={running || !selectedProfileId || preflightHasBlockers}
               onClick={() => void runPlanAction()}
               variant="primary"
+              className="rounded-full px-8 h-12 text-base font-black shadow-lg shadow-emerald-600/20"
             >
-              {running ? "실행 중..." : "실행"}
+              {running ? "실행 중..." : "플래닝 실행"}
             </Button>
             <Button
               disabled={running || !selectedProfileId || preflightHasBlockers || scenarioPatchesPreview.length < 1}
               onClick={() => void runScenarioAction()}
               variant="outline"
+              className="rounded-full px-6 h-12 text-sm font-bold bg-white"
             >
-              {running ? "실행 중..." : "What-if 실행"}
+              {running ? "실행 중..." : "시나리오 실행"}
             </Button>
             <Button
               aria-describedby={saveButtonDescribedBy}
               disabled={savingRun || !selectedProfileId || !runResult?.hasSimulateResult || saveBlockedByHealth || preflightHasBlockers || saveNeedsWarningConfirmation}
               onClick={() => void saveRunAction()}
               variant="outline"
+              className="rounded-full px-6 h-12 text-sm font-bold bg-white"
             >
-              {savingRun ? "저장 중..." : "실행 기록 저장"}
+              {savingRun ? "저장 중..." : "결과 저장"}
             </Button>
           </div>
         </Card>
@@ -3853,8 +3869,8 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
       ) : null}
 
       {runResult ? (
-        <div className="mt-6 space-y-6">
-          <div className="sticky top-3 z-20">
+        <div className="mt-8 space-y-8 animate-in fade-in duration-500">
+          <div className="sticky top-4 z-20">
             <ResultGuideCard
               locale={locale}
               status={guideBadge.status}
@@ -3867,35 +3883,55 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             />
           </div>
 
-          <BodyInset className="text-xs text-slate-700">
-            <details>
-              <summary className="cursor-pointer font-semibold text-slate-900">결과 해석 가이드</summary>
-              <div className="mt-3 space-y-2">
-                <p><span className="font-semibold">NEGATIVE_CASHFLOW</span>: 월 적자 상태입니다. 지출 절감 또는 부채/적립 조정을 먼저 점검하세요.</p>
-                <p><span className="font-semibold">HIGH_DEBT_SERVICE</span>: DSR이 높습니다. 상환 기간/금리/추가상환 시나리오를 비교하세요.</p>
-                <p><span className="font-semibold">SNAPSHOT_STALE</span>: 가정 최신성이 낮습니다. `/ops/assumptions` 동기화 후 재실행을 권장합니다.</p>
-                <p><span className="font-semibold">Monte Carlo 확률</span>: 통계 기반 참고값이며 보장값이 아닙니다.</p>
-                <p><span className="font-semibold">실행 계획 후보</span>: 실행 비교용 제안 목록입니다. 특정 상품 가입 권유가 아닙니다.</p>
+          <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+            <details className="group">
+              <summary className="cursor-pointer text-xs font-black text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                <span>결과 해석 가이드</span>
+                <span className="group-open:rotate-180 transition-transform">↓</span>
+              </summary>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-[11px] font-bold text-slate-600">
+                <p className="p-3 rounded-xl bg-white border border-slate-100">
+                  <span className="text-emerald-600 block mb-1">NEGATIVE_CASHFLOW</span>
+                  월 적자 상태입니다. 지출 절감 또는 부채/적립 조정을 먼저 점검하세요.
+                </p>
+                <p className="p-3 rounded-xl bg-white border border-slate-100">
+                  <span className="text-emerald-600 block mb-1">HIGH_DEBT_SERVICE</span>
+                  DSR이 높습니다. 상환 기간/금리/추가상환 시나리오를 비교하세요.
+                </p>
+                <p className="p-3 rounded-xl bg-white border border-slate-100">
+                  <span className="text-emerald-600 block mb-1">SNAPSHOT_STALE</span>
+                  가정 최신성이 낮습니다. `/ops/assumptions` 동기화 후 재실행을 권장합니다.
+                </p>
+                <p className="p-3 rounded-xl bg-white border border-slate-100">
+                  <span className="text-slate-400 block mb-1">Monte Carlo 확률</span>
+                  통계 기반 참고값이며 보장값이 아닙니다.
+                </p>
+                <p className="p-3 rounded-xl bg-white border border-slate-100">
+                  <span className="text-slate-400 block mb-1">실행 계획 후보</span>
+                  실행 비교용 제안 목록입니다. 특정 상품 가입 권유가 아닙니다.
+                </p>
               </div>
             </details>
-          </BodyInset>
+          </div>
 
-          <Card>
-            <div className="flex flex-wrap gap-2">
+          <Card className="p-8 space-y-8">
+            <div className="flex flex-wrap gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200 w-fit">
               {tabs.map((tab) => (
-                <Button
+                <button
                   key={tab.id}
-                  size="sm"
-                  variant={activeTab === tab.id ? "primary" : "outline"}
+                  className={cn(
+                    "px-6 py-2.5 rounded-xl text-xs font-black transition-all",
+                    activeTab === tab.id ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  )}
                   onClick={() => setActiveTab(tab.id)}
                 >
                   {tab.label}
-                </Button>
+                </button>
               ))}
             </div>
 
             {activeTab === "summary" ? (
-              <div className="mt-4 space-y-3 text-xs text-slate-700">
+              <div className="space-y-8">
                 <InterpretabilityGuideCard
                   summaryMetrics={{
                     ...(typeof summaryMonthlySurplusKrw === "number" ? { monthlySurplusKrw: summaryMonthlySurplusKrw } : {}),
@@ -3926,76 +3962,99 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                   }}
                 />
 
-                <BodyInset data-testid="planning-metric-evidence">
-                  <p className="text-xs font-semibold text-slate-900">계산 근거</p>
-                  <p className="mt-1 text-[11px] text-slate-600">현재 입력값과 선택한 정책 기준으로 계산합니다.</p>
-                  <div className="mt-2 space-y-2">
+                <div className="rounded-[2rem] bg-slate-50 border border-slate-100 p-6 space-y-6" data-testid="planning-metric-evidence">
+                  <SubSectionHeader
+                    title="계산 근거"
+                    titleClassName="text-sm"
+                    description="현재 입력값과 선택한 정책 기준으로 계산된 중간 단계 데이터입니다."
+                  />
+                  <div className="bg-white rounded-2xl border border-slate-100 p-4">
                     <EvidencePanel
                       items={metricEvidenceItems}
                       locale={locale}
                       formatNumber={(value) => formatNumber(locale, value)}
                     />
                   </div>
-                </BodyInset>
+                </div>
 
-                <DisclosuresPanel report={combinedNormalizationReport} />
+                <div className="rounded-[2rem] overflow-hidden">
+                  <DisclosuresPanel report={combinedNormalizationReport} />
+                </div>
 
-                <div className="grid gap-2 md:grid-cols-5">
-                  <BodyInset>
-                    말기 순자산: <span className="font-semibold">{formatKrw(locale, summaryEndNetWorthKrw)}</span>
-                  </BodyInset>
-                  <BodyInset>
-                    최저 현금(월): <span className="font-semibold">{formatKrw(locale, summaryWorstCashKrw)} (M{summaryWorstCashMonth + 1})</span>
-                  </BodyInset>
-                  <BodyInset>
-                    목표 달성: <span className="font-semibold">{summaryGoalsText}</span>
-                  </BodyInset>
-                  <BodyInset>
-                    DSR: <span className="font-semibold">{typeof summaryDsr === "number" ? formatRatioPct(locale, summaryDsr) : "-"}</span>
-                  </BodyInset>
-                  <BodyInset>
-                    치명 경고: <span className="font-semibold">{summaryCriticalWarnings}</span>
-                  </BodyInset>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">말기 순자산</p>
+                    <p className="text-sm font-black text-slate-900 tabular-nums">{formatKrw(locale, summaryEndNetWorthKrw)}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">최저 현금(월)</p>
+                    <p className="text-sm font-black text-slate-900 tabular-nums">{formatKrw(locale, summaryWorstCashKrw)} <span className="text-[10px] text-slate-400 font-bold ml-1">(M{summaryWorstCashMonth + 1})</span></p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">목표 달성</p>
+                    <p className="text-sm font-black text-emerald-600">{summaryGoalsText}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">DSR</p>
+                    <p className="text-sm font-black text-slate-900">{typeof summaryDsr === "number" ? formatRatioPct(locale, summaryDsr) : "-"}</p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">치명 경고</p>
+                    <p className={cn("text-sm font-black", summaryCriticalWarnings > 0 ? "text-rose-600" : "text-emerald-600")}>{summaryCriticalWarnings}</p>
+                  </div>
                 </div>
 
                 {Object.keys(summaryEvidence).length > 0 ? (
-                  <details className="text-xs text-slate-700" data-testid="planning-summary-evidence">
-                    <summary className="cursor-pointer font-semibold text-slate-900">요약 지표 계산 근거</summary>
-                    <BodyInset className="mt-2">
-                      <div className="space-y-2">
-                        {Object.entries(summaryEvidence).map(([metric, evidence]) => (
-                          evidence ? (
-                            <BodyInset className="bg-white" key={metric}>
-                              <p className="font-semibold text-slate-900">{metric}</p>
-                              <p className="mt-1 text-[11px] text-slate-600">공식: {evidence.formula}</p>
-                              <p className="mt-1 text-[11px] text-slate-600">입력:</p>
-                              <ul className="list-disc pl-4">
-                                {Object.entries(evidence.inputs).map(([key, value]) => (
-                                  <li key={`${metric}:${key}`}>{key}: {formatDisclosureValue(value)}</li>
-                                ))}
-                              </ul>
-                              <p className="mt-1 text-[11px] text-slate-600">가정:</p>
-                              <ul className="list-disc pl-4">
-                                {evidence.assumptions.map((assumption, index) => (
-                                  <li key={`${metric}:assumption:${index}`}>{assumption}</li>
-                                ))}
-                              </ul>
-                            </BodyInset>
-                          ) : null
-                        ))}
-                      </div>
-                    </BodyInset>
+                  <details className="group rounded-2xl border border-slate-200 p-4" data-testid="planning-summary-evidence">
+                    <summary className="cursor-pointer text-xs font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                      <span>요약 지표 계산 근거</span>
+                      <span className="group-open:rotate-180 transition-transform">↓</span>
+                    </summary>
+                    <div className="mt-6 space-y-4">
+                      {Object.entries(summaryEvidence).map(([metric, evidence]) => (
+                        evidence ? (
+                          <div className="p-5 rounded-xl bg-slate-50 border border-slate-100" key={metric}>
+                            <p className="text-sm font-black text-slate-900">{metric}</p>
+                            <p className="mt-2 text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded inline-block">공식: {evidence.formula}</p>
+                            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                              <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-2">입력 데이터</p>
+                                <ul className="space-y-1 text-[11px] font-bold text-slate-600">
+                                  {Object.entries(evidence.inputs).map(([key, value]) => (
+                                    <li className="flex justify-between border-b border-slate-200/50 pb-1" key={`${metric}:${key}`}>
+                                      <span>{key}</span>
+                                      <span className="text-slate-900">{formatDisclosureValue(value)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-2">적용 가정</p>
+                                <ul className="space-y-1 text-[11px] font-medium text-slate-500">
+                                  {evidence.assumptions.map((assumption, index) => (
+                                    <li key={`${metric}:assumption:${index}`}>• {assumption}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null
+                      ))}
+                    </div>
                   </details>
                 ) : null}
 
-                <BodyInset>
-                  <p className="font-semibold text-slate-900">Key Findings</p>
-                  <div className="mt-1 space-y-1">
+                <div className="p-6 rounded-[2rem] bg-slate-900 text-white shadow-xl shadow-slate-900/10">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Key Findings</p>
+                  <div className="space-y-3">
                     {keyFindings.slice(0, 3).map((line, index) => (
-                      <p key={`finding-${index}`}>- {line}</p>
+                      <p className="text-sm font-bold leading-relaxed flex items-start gap-3" key={`finding-${index}`}>
+                        <span className="text-emerald-500 mt-1">★</span>
+                        {line}
+                      </p>
                     ))}
                   </div>
-                </BodyInset>
+                </div>
 
                 <BodyInset>
                   <p className="font-semibold text-slate-900">Warnings Summary (Top 5)</p>
@@ -4046,7 +4105,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               <div className="mt-4 space-y-3 text-xs text-slate-700">
                 <h3 className="font-semibold text-slate-900">{t(locale, "CHARTS_HEADER")}</h3>
                 {chartMode === "none" ? (
-                  <BodyEmptyState title={t(locale, "CHART_NOT_AVAILABLE")} />
+                  <EmptyState title={t(locale, "CHART_NOT_AVAILABLE")} />
                 ) : (
                   <PlanningMiniCharts locale={locale} mode={chartMode} points={chartPoints} />
                 )}
@@ -4074,7 +4133,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                     시나리오 단계 실패: {scenariosStatus.message ?? "시나리오 계산에 실패했습니다."}
                   </BodyStatusInset>
                 ) : !hasScenariosData ? (
-                  <BodyEmptyState title="시나리오 결과가 없습니다" />
+                  <EmptyState title="시나리오 결과가 없습니다" />
                 ) : (
                   <>
                     <BodyInset>
@@ -4100,7 +4159,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
 
                     <h3 className="font-semibold text-slate-900">시나리오 비교 표</h3>
                     {scenarioComparisonRows.length === 0 ? (
-                      <BodyEmptyState title="시나리오 결과가 없습니다" />
+                      <EmptyState title="시나리오 결과가 없습니다" />
                     ) : (
                       <BodyTableFrame>
                         <table className="min-w-full divide-y divide-slate-200">
@@ -4158,7 +4217,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                     몬테카를로 단계 생략: {monteCarloStatus.message ?? "실행 조건에 의해 생략되었습니다."}
                   </BodyStatusInset>
                 ) : !hasMonteCarloData || Object.keys(monteData).length === 0 ? (
-                  <BodyEmptyState title="몬테카를로 결과가 없습니다" />
+                  <EmptyState title="몬테카를로 결과가 없습니다" />
                 ) : (
                   <>
                     <BodyInset>
@@ -4216,7 +4275,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                     </BodyInset>
 
                     {actionTableRows.length === 0 ? (
-                      <BodyEmptyState title="실행 계획이 없습니다" />
+                      <EmptyState title="실행 계획이 없습니다" />
                     ) : (
                       <BodyTableFrame>
                         <table className="min-w-full divide-y divide-slate-200">
@@ -4307,7 +4366,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                     부채 분석 단계 실패: {debtStatus.message ?? "부채 분석에 실패했습니다."}
                   </BodyStatusInset>
                 ) : !hasDebtData ? (
-                  <BodyEmptyState title="부채 분석 결과가 없습니다" />
+                  <EmptyState title="부채 분석 결과가 없습니다" />
                 ) : (
                   <>
                     <BodyInset>
@@ -4327,7 +4386,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
 
                     <h3 className="font-semibold text-slate-900">부채별 상환 요약</h3>
                     {debtSummaries.length === 0 ? (
-                      <BodyEmptyState title="부채 요약 데이터가 없습니다" />
+                      <EmptyState title="부채 요약 데이터가 없습니다" />
                     ) : (
                       <BodyTableFrame>
                         <table className="min-w-full divide-y divide-slate-200">
