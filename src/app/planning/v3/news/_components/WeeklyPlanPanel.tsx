@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { cn } from "@/lib/utils";
 
 type WeeklyPlanPanelProps = {
   csrf?: string;
@@ -140,67 +142,72 @@ export function WeeklyPlanPanel({ csrf }: WeeklyPlanPanelProps) {
   }
 
   return (
-    <Card className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-bold text-slate-900">주간 계획 (토픽/지표)</h2>
-          <p className="text-xs text-slate-500">명시적 저장 방식이며 자동 저장은 비활성화되어 있습니다.</p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs text-slate-500">저장 시각: {formatDateTime(savedAt)}</p>
-          <p className="text-xs text-slate-500">주차 시작일: {asString(weekOf) || "-"}</p>
+    <Card className="rounded-[2.5rem] p-8 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <SubSectionHeader
+          title="주간 모니터링 계획"
+          description="이번 주 집중적으로 살펴볼 토픽과 지표 ID를 관리합니다."
+          className="mb-0"
+        />
+        <div className="text-right space-y-1">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">마지막 저장: {formatDateTime(savedAt)}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">주차 시작: {asString(weekOf) || "-"}</p>
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <label className="space-y-1 text-xs font-semibold text-slate-700">
-          토픽 ID 목록 (줄바꿈 또는 쉼표)
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">토픽 ID 리스트</span>
+            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full tabular-nums">COUNT {topicCount}</span>
+          </div>
           <textarea
             value={topicsText}
             onChange={(event) => setTopicsText(event.target.value)}
             rows={5}
-            placeholder="예: rates\ninflation\nfx"
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+            placeholder="예: rates, inflation, fx"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all"
             disabled={loading || saving}
           />
-          <span className="text-[11px] text-slate-500">총 {topicCount.toLocaleString("ko-KR")}개</span>
-        </label>
+        </div>
 
-        <label className="space-y-1 text-xs font-semibold text-slate-700">
-          Series ID 목록 (줄바꿈 또는 쉼표)
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">지표 Series ID 리스트</span>
+            <span className="text-[10px] font-black text-sky-600 bg-sky-50 px-2 py-0.5 rounded-full tabular-nums">COUNT {seriesCount}</span>
+          </div>
           <textarea
             value={seriesText}
             onChange={(event) => setSeriesText(event.target.value)}
             rows={5}
-            placeholder="예: kr_base_rate\nkr_usdkrw\nkr_cpi"
-            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+            placeholder="예: kr_base_rate, kr_usdkrw"
+            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all"
             disabled={loading || saving}
           />
-          <span className="text-[11px] text-slate-500">총 {seriesCount.toLocaleString("ko-KR")}개</span>
-        </label>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
-        <div className="space-y-1">
-          {errorMessage ? <p className="text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
-          {notice ? <p className="text-xs font-semibold text-emerald-700">{notice}</p> : null}
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-6">
+        <div className="flex-1 min-w-[200px]">
+          {errorMessage ? <p className="text-xs font-bold text-rose-600">❌ {errorMessage}</p> : null}
+          {notice ? <p className="text-xs font-bold text-emerald-600">✅ {notice}</p> : null}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700"
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all"
             disabled={loading || saving}
           >
-            다시 불러오기
+            기존 계획 불러오기
           </button>
           <button
             type="button"
             onClick={() => void savePlan()}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-60"
+            className="rounded-xl bg-slate-900 px-6 py-2.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60 shadow-sm transition-all"
             disabled={loading || saving}
           >
-            {saving ? "저장 중..." : "저장"}
+            {saving ? "저장 중..." : "주간 계획 저장"}
           </button>
         </div>
       </div>

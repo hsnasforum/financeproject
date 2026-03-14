@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import {
   reportHeroActionLinkClassName,
   reportHeroFilterChipClassName,
@@ -12,7 +13,9 @@ import {
   ReportHeroStatCard,
   ReportHeroStatGrid,
 } from "@/components/ui/ReportTone";
+import { NewsNavigation } from "./NewsNavigation";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
+import { cn } from "@/lib/utils";
 
 type NewsAlertsClientProps = {
   csrf?: string;
@@ -112,15 +115,15 @@ function formatDateTime(value: string | null | undefined): string {
 }
 
 function levelBadgeClass(level: AlertLevel): string {
-  if (level === "high") return "bg-rose-100 text-rose-700";
-  if (level === "medium") return "bg-amber-100 text-amber-700";
-  return "bg-slate-100 text-slate-700";
+  if (level === "high") return "bg-rose-50 text-rose-700 border-rose-100";
+  if (level === "medium") return "bg-amber-50 text-amber-700 border-amber-100";
+  return "bg-slate-50 text-slate-600 border-slate-100";
 }
 
 function levelLabel(level: AlertLevel): string {
-  if (level === "high") return "상";
-  if (level === "medium") return "중";
-  return "하";
+  if (level === "high") return "중요도 상";
+  if (level === "medium") return "중요도 중";
+  return "중요도 하";
 }
 
 function ruleKindLabel(value: AlertEvent["ruleKind"]): string {
@@ -141,10 +144,9 @@ function targetTypeLabel(value: AlertEvent["targetType"]): string {
 }
 
 function buildAlertLead(event: AlertEvent): string {
-  const level = levelLabel(event.level);
   const kind = ruleKindLabel(event.ruleKind);
   const source = sourceLabel(event.source);
-  return `중요도 ${level} · ${kind} · ${source}`;
+  return `${kind} · ${source}`;
 }
 
 function formatAlertSummary(value: string): string {
@@ -301,43 +303,37 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
 
   return (
     <PageShell>
-      <div className="space-y-5">
+      <div className="space-y-8">
         <ReportHeroCard
           kicker="Alert Brief"
-          title="중요 알림"
-          description="토픽 급증이나 지표 변화처럼 바로 확인할 만한 신호를 날짜별로 모아보고, 확인 완료나 숨김 상태까지 같은 흐름으로 정리합니다."
+          title="중요 알림함"
+          description="토픽 급증이나 지표 변화처럼 바로 확인할 만한 신호를 모았습니다. 확인 완료나 숨김 상태를 관리하여 노이즈를 줄이세요."
           action={(
-            <>
-              <Link href="/planning/v3/news" className={reportHeroActionLinkClassName}>
-                오늘 브리핑
-              </Link>
-              <Link href="/planning/v3/news/trends" className={reportHeroActionLinkClassName}>
-                흐름 보기
-              </Link>
-              <Link href="/planning/v3/news/explore" className={reportHeroActionLinkClassName}>
-                뉴스 탐색
-              </Link>
+            <div className="flex flex-wrap items-center gap-2">
               <Link href={NEWS_ALERT_RULES_SETTINGS_HREF} className={reportHeroActionLinkClassName}>
-                설정
+                알림 설정
               </Link>
-              <button
-                type="button"
-                onClick={() => setDays(7)}
-                className={reportHeroToggleButtonClassName(days === 7)}
-              >
-                7일
-              </button>
-              <button
-                type="button"
-                onClick={() => setDays(30)}
-                className={reportHeroToggleButtonClassName(days === 30)}
-              >
-                30일
-              </button>
-            </>
+              <div className="ml-2 flex items-center bg-white/10 rounded-lg p-1">
+                <button
+                  type="button"
+                  onClick={() => setDays(7)}
+                  className={reportHeroToggleButtonClassName(days === 7)}
+                >
+                  7일
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDays(30)}
+                  className={reportHeroToggleButtonClassName(days === 30)}
+                >
+                  30일
+                </button>
+              </div>
+            </div>
           )}
         >
-          <p className="text-xs text-white/60">최근 {days}일 · 이벤트 {total}건 · 날짜 {dayCount}일</p>
+          <NewsNavigation />
+
           <ReportHeroStatGrid className="xl:grid-cols-3">
             <ReportHeroStatCard
               label="긴급 확인"
@@ -345,18 +341,19 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
               description="중요도 상 알림 수"
             />
             <ReportHeroStatCard
-              label="아직 확인 전"
+              label="미확인 신호"
               value={loading ? "-" : `${summary.pendingTotal}건`}
-              description="숨김을 제외하고 아직 읽지 않은 알림 수"
+              description="숨김을 제외하고 아직 읽지 않은 알림"
             />
             <ReportHeroStatCard
-              label="숨김 / 확인 완료"
-              value={loading ? "-" : `${summary.hiddenTotal}건 / ${summary.acknowledgedTotal}건`}
-              description={summary.latestVisibleTitle ? `가장 최근 표시중 알림: ${summary.latestVisibleTitle}` : "상태를 바꾼 알림 수를 여기에 보여줍니다."}
+              label="상태 관리됨"
+              value={loading ? "-" : `${summary.hiddenTotal} / ${summary.acknowledgedTotal}`}
+              description="숨김 / 확인 완료 알림 수"
             />
           </ReportHeroStatGrid>
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-semibold text-white/70">빠른 필터</span>
+
+          <div className="mt-8 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
+            <span className="text-white/40 mr-2">Quick Filter</span>
             <button
               type="button"
               onClick={() => setStatusFilter("visible")}
@@ -385,26 +382,13 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
             >
               숨김
             </button>
-            <button
-              type="button"
-              onClick={() => setLevelFilter("all")}
-              className={reportHeroFilterChipClassName(levelFilter === "all")}
-            >
-              전체 중요도
-            </button>
+            <div className="mx-2 h-3 w-px bg-white/20" />
             <button
               type="button"
               onClick={() => setLevelFilter("high")}
               className={reportHeroFilterChipClassName(levelFilter === "high", "rose")}
             >
-              중요도 상
-            </button>
-            <button
-              type="button"
-              onClick={() => setLevelFilter("medium")}
-              className={reportHeroFilterChipClassName(levelFilter === "medium", "amber")}
-            >
-              중요도 중
+              중요
             </button>
             <button
               type="button"
@@ -413,132 +397,129 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
             >
               전체 출처
             </button>
-            <button
-              type="button"
-              onClick={() => setSourceFilter("news:refresh")}
-              className={reportHeroFilterChipClassName(sourceFilter === "news:refresh", "emerald")}
-            >
-              뉴스 갱신
-            </button>
-            <button
-              type="button"
-              onClick={() => setSourceFilter("indicators:refresh")}
-              className={reportHeroFilterChipClassName(sourceFilter === "indicators:refresh", "sky")}
-            >
-              지표 갱신
-            </button>
           </div>
-          {errorMessage ? <p className="text-xs font-semibold text-rose-300">{errorMessage}</p> : null}
+          {errorMessage ? <p className="mt-4 text-xs font-bold text-rose-300">❌ {errorMessage}</p> : null}
         </ReportHeroCard>
 
-        <Card className="space-y-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">알림 이벤트</h2>
-            <p className="text-xs text-slate-500">먼저 한 줄 요약을 보고, 관련 화면으로 바로 이어서 확인할 수 있습니다.</p>
-          </div>
-          <p className="text-xs text-slate-500">현재 필터 결과: {filteredTotal}건</p>
+        <Card className="rounded-[2.5rem] p-8 shadow-sm">
+          <SubSectionHeader
+            title="알림 이벤트"
+            description="중요한 신호를 먼저 확인하고 상태를 관리하세요."
+            action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">FILTERED: {filteredTotal}건</span>}
+          />
+
           {loading ? (
-            <p className="text-sm text-slate-600">불러오는 중...</p>
+            <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
           ) : groups.length < 1 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">최근 조건 충족 이벤트가 없습니다.</p>
-              <p className="mt-1 text-xs text-slate-600">흐름 화면에서 급증 토픽을 보고, 필요하면 설정에서 기준을 조정할 수 있습니다.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Link href="/planning/v3/news/trends" className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white">
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
+              <p className="text-sm font-bold text-slate-900">최근 조건 충족 이벤트가 없습니다.</p>
+              <p className="mt-2 text-xs font-medium text-slate-500">흐름 화면에서 급증 토픽을 보고, 필요하면 설정에서 기준을 조정할 수 있습니다.</p>
+              <div className="mt-6 flex flex-wrap justify-center gap-3">
+                <Link href="/planning/v3/news/trends" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
                   최근 흐름 보기
                 </Link>
-                <Link href={NEWS_ALERT_RULES_SETTINGS_HREF} className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white">
-                  기준 조정하기
+                <Link href={NEWS_ALERT_RULES_SETTINGS_HREF} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+                  알림 기준 조정
                 </Link>
               </div>
             </div>
           ) : filteredGroups.length < 1 ? (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">지금 필터에 맞는 알림이 없습니다.</p>
-              <p className="mt-1 text-xs text-slate-600">중요도나 출처 필터를 풀면 다른 알림을 바로 확인할 수 있습니다.</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
+              <p className="text-sm font-bold text-slate-900">필터 조건에 맞는 알림이 없습니다.</p>
+              <p className="mt-2 text-xs font-medium text-slate-500">상태나 중요도 필터를 변경해 보세요.</p>
+              <div className="mt-6 flex justify-center">
                 <button
                   type="button"
                   onClick={() => {
                     setLevelFilter("all");
                     setSourceFilter("all");
+                    setStatusFilter("visible");
                   }}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
                 >
-                  필터 전체 해제
+                  필터 전체 초기화
                 </button>
-                <Link href="/planning/v3/news/trends" className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white">
-                  최근 흐름 보기
-                </Link>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-8">
               {filteredGroups.map((group) => (
-                <div key={group.dayKst} className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-sm font-black text-slate-900">{group.dayKst}</p>
-                  <ul className="mt-2 space-y-2">
+                <div key={group.dayKst} className="space-y-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 pl-2">{group.dayKst}</p>
+                  <ul className="space-y-3">
                     {group.events.map((event) => (
-                      <li key={event.id} className={`rounded-md border p-2 ${isHidden(event) ? "border-slate-300 bg-slate-50" : isAcknowledged(event) ? "border-sky-200 bg-sky-50/50" : "border-slate-200"}`}>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${levelBadgeClass(event.level)}`}>
+                      <li key={event.id} className={cn(
+                        "group rounded-2xl border p-5 transition-all shadow-sm",
+                        isHidden(event) ? "border-slate-200 bg-slate-50/50 opacity-60" :
+                        isAcknowledged(event) ? "border-sky-100 bg-sky-50/20" : "border-slate-200 bg-white hover:border-emerald-200 hover:shadow-md"
+                      )}>
+                        <div className="flex flex-wrap items-center gap-3 mb-3">
+                          <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black tabular-nums", levelBadgeClass(event.level))}>
                             {levelLabel(event.level)}
                           </span>
-                          <span className="text-xs text-slate-500">{ruleKindLabel(event.ruleKind)} · {sourceLabel(event.source)}</span>
-                          <span className="text-xs text-slate-500">{formatDateTime(event.createdAt)}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{formatDateTime(event.createdAt)}</span>
+                            <span className="h-1 w-1 rounded-full bg-slate-200" />
+                            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{buildAlertLead(event)}</span>
+                          </div>
                           {isAcknowledged(event) ? (
-                            <span className="rounded bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-700">확인 완료</span>
-                          ) : null}
-                          {isHidden(event) ? (
-                            <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">숨김</span>
+                            <span className="ml-auto rounded-lg bg-sky-100 px-2 py-0.5 text-[10px] font-black text-sky-700">ACKNOWLEDGED</span>
+                          ) : isHidden(event) ? (
+                            <span className="ml-auto rounded-lg bg-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600">HIDDEN</span>
                           ) : null}
                         </div>
-                        <p className="mt-1 text-xs font-semibold text-emerald-700">{buildAlertLead(event)}</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{event.title}</p>
-                        <p className="mt-1 text-xs text-slate-600">{formatAlertSummary(event.summary)}</p>
-                        <p className="mt-1 text-[11px] text-slate-500">대상: {targetTypeLabel(event.targetType)} · {event.targetId}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {isHidden(event) ? (
-                            <button
-                              type="button"
-                              onClick={() => void saveEventState(event.id, "unhide")}
-                              disabled={savingEventId === event.id}
-                              className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+
+                        <p className="text-base font-black text-slate-900 tracking-tight leading-snug">{event.title}</p>
+                        <p className="mt-2 text-sm font-medium text-slate-600 leading-relaxed">{formatAlertSummary(event.summary)}</p>
+                        <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">TARGET: {targetTypeLabel(event.targetType)} · {event.targetId}</p>
+
+                        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-4">
+                          <div className="flex items-center gap-2">
+                            {isHidden(event) ? (
+                              <button
+                                type="button"
+                                onClick={() => void saveEventState(event.id, "unhide")}
+                                disabled={savingEventId === event.id}
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[10px] font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60 transition-colors"
+                              >
+                                {savingEventId === event.id ? "저장 중..." : "숨김 해제"}
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveEventState(event.id, isAcknowledged(event) ? "unack" : "ack")}
+                                  disabled={savingEventId === event.id}
+                                  className={cn(
+                                    "rounded-lg border px-3 py-1.5 text-[10px] font-black transition-colors disabled:opacity-60",
+                                    isAcknowledged(event) ? "border-slate-200 text-slate-500 hover:bg-slate-50" : "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                                  )}
+                                >
+                                  {savingEventId === event.id ? "저장 중..." : isAcknowledged(event) ? "미확인 상태로 변경" : "확인 완료"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void saveEventState(event.id, "hide")}
+                                  disabled={savingEventId === event.id}
+                                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-50 disabled:opacity-60 transition-colors"
+                                >
+                                  {savingEventId === event.id ? "저장 중..." : "숨기기"}
+                                </button>
+                              </>
+                            )}
+                          </div>
+
+                          {event.link && (
+                            <a
+                              href={event.link}
+                              target={isInternalLink(event.link) ? undefined : "_blank"}
+                              rel="noopener noreferrer"
+                              className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest"
                             >
-                              {savingEventId === event.id ? "저장 중..." : "숨김 해제"}
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => void saveEventState(event.id, isAcknowledged(event) ? "unack" : "ack")}
-                                disabled={savingEventId === event.id}
-                                className="rounded-md border border-sky-300 px-3 py-1.5 text-xs font-semibold text-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {savingEventId === event.id ? "저장 중..." : isAcknowledged(event) ? "미확인으로 되돌리기" : "확인 완료"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => void saveEventState(event.id, "hide")}
-                                disabled={savingEventId === event.id}
-                                className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                              >
-                                {savingEventId === event.id ? "저장 중..." : "숨기기"}
-                              </button>
-                            </>
+                              상세 보기 ▶
+                            </a>
                           )}
                         </div>
-                        {event.link ? (
-                          isInternalLink(event.link) ? (
-                            <Link href={event.link} className="mt-1 inline-block text-xs font-semibold text-emerald-700 underline underline-offset-2">
-                              관련 보기
-                            </Link>
-                          ) : (
-                            <a href={event.link} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-xs font-semibold text-emerald-700 underline underline-offset-2">
-                              관련 보기
-                            </a>
-                          )
-                        ) : null}
                       </li>
                     ))}
                   </ul>
