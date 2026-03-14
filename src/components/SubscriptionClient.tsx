@@ -1,19 +1,21 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Container } from "@/components/ui/Container";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { FallbackBanner } from "@/components/FallbackBanner";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
 import { parseSubscriptionFilters, type SubscriptionHouseType, type SubscriptionMode } from "@/lib/schemas/subscriptionFilters";
-import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { FallbackBanner } from "@/components/FallbackBanner";
 import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
 
 const ERROR_SUMMARY_ID = "subscription_error_summary";
@@ -100,13 +102,6 @@ export function SubscriptionClient({
   const [detailLoading, setDetailLoading] = useState(false);
   const runInFlightRef = useRef(false);
 
-  const summaryLines = useMemo(() => {
-    return [
-      `지역 ${region || "전국"} · 유형 ${houseTypeLabel(houseType)}`,
-      `조회 기간 ${from || "-"} ~ ${to || "-"}`,
-      `키워드 ${query.trim() || "-"}`,
-    ];
-  }, [from, houseType, query, region, to]);
   const fieldIssueMap = useMemo(() => issuesToFieldMap(formIssues), [formIssues]);
 
   const showValidationIssues = useCallback((issues: Issue[]) => {
@@ -212,197 +207,283 @@ export function SubscriptionClient({
   }, [initialMode, run]);
 
   return (
-    <main className="py-8">
+    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
       <Container>
-        <SectionHeader title="청약 공고 조회" subtitle="청약홈 분양정보 · 지역별 참고 일정" />
-        <Card>
-          <FallbackBanner fallback={meta.fallback} className="mb-3" />
-          <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-3" />
-          <ErrorAnnouncer />
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <div>
-              <select
-                id={pathToId("region")}
-                className="h-10 w-full rounded-xl border border-border px-3"
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                aria-invalid={Boolean(fieldIssueMap.region?.[0])}
-                aria-describedby={fieldIssueMap.region?.[0] ? `${pathToId("region")}_error` : undefined}
-              >
-                {["전국", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"].map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <FieldError id={`${pathToId("region")}_error`} message={fieldIssueMap.region?.[0]} />
-            </div>
-            <div>
-              <input
-                id={pathToId("from")}
-                type="date"
-                className="h-10 w-full rounded-xl border border-border px-3"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                aria-invalid={Boolean(fieldIssueMap.from?.[0])}
-                aria-describedby={fieldIssueMap.from?.[0] ? `${pathToId("from")}_error` : undefined}
-              />
-              <FieldError id={`${pathToId("from")}_error`} message={fieldIssueMap.from?.[0]} />
-            </div>
-            <div>
-              <input
-                id={pathToId("to")}
-                type="date"
-                className="h-10 w-full rounded-xl border border-border px-3"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                aria-invalid={Boolean(fieldIssueMap.to?.[0])}
-                aria-describedby={fieldIssueMap.to?.[0] ? `${pathToId("to")}_error` : undefined}
-              />
-              <FieldError id={`${pathToId("to")}_error`} message={fieldIssueMap.to?.[0]} />
-            </div>
-            <div>
-              <select
-                id={pathToId("houseType")}
-                className="h-10 w-full rounded-xl border border-border px-3"
-                value={houseType}
-                onChange={(e) => setHouseType(e.target.value as "apt" | "urbty" | "remndr")}
-                aria-invalid={Boolean(fieldIssueMap.houseType?.[0])}
-                aria-describedby={fieldIssueMap.houseType?.[0] ? `${pathToId("houseType")}_error` : undefined}
-              >
-                <option value="apt">APT</option>
-                <option value="urbty">오피스텔/도시형</option>
-                <option value="remndr">잔여세대</option>
-              </select>
-              <FieldError id={`${pathToId("houseType")}_error`} message={fieldIssueMap.houseType?.[0]} />
-            </div>
-            <div>
-              <input
-                id={pathToId("q")}
-                className="h-10 w-full rounded-xl border border-border px-3"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="주택명 키워드(선택)"
-                aria-invalid={Boolean(fieldIssueMap.q?.[0])}
-                aria-describedby={fieldIssueMap.q?.[0] ? `${pathToId("q")}_error` : undefined}
-              />
-              <FieldError id={`${pathToId("q")}_error`} message={fieldIssueMap.q?.[0]} />
-            </div>
-          </div>
-          <div className="mt-2 flex gap-2">
-            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(7)); setTo(todayIsoDate()); }} disabled={loading}>최근 7일</Button>
-            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }} disabled={loading}>최근 30일</Button>
-            <Button variant="outline" onClick={() => { setFrom(daysAgoIsoDate(90)); setTo(todayIsoDate()); }} disabled={loading}>최근 90일</Button>
-          </div>
-          <div className="mt-2 flex gap-2">
-            <Button onClick={() => void run()} disabled={loading}>{loading ? "로딩..." : "조회"}</Button>
-            <Button variant="outline" disabled={loading} onClick={() => {
-              const fallbackFrom = daysAgoIsoDate(90);
-              const fallbackTo = todayIsoDate();
-              setRegion("전국");
-              setQuery("");
-              setFrom(fallbackFrom);
-              setTo(fallbackTo);
-              void run({ region: "전국", from: fallbackFrom, to: fallbackTo, query: "", mode: "all" });
-            }}>
-              전체 보기
-            </Button>
-          </div>
-          {error ? (
-            <div className="mt-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-              <p>{error}</p>
-              <Link href="/settings/data-sources" className="mt-2 inline-block text-xs underline">
-                데이터 소스 상태 확인
-              </Link>
-            </div>
-          ) : null}
-          {assumption ? <p className="mt-2 text-xs text-slate-500">{assumption}</p> : null}
-          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <p className="text-sm font-semibold text-slate-800">조건 요약</p>
-            <ul className="mt-1 space-y-1 text-xs text-slate-600">
-              {summaryLines.map((line) => (
-                <li key={line}>- {line}</li>
-              ))}
-            </ul>
-          </div>
-          <p className="mt-1 text-xs text-slate-500">공고 일정/상태는 변경될 수 있으므로 최종 공고문을 확인하세요.</p>
-          <ul className="mt-3 space-y-2 text-sm">
-            {items.map((item) => (
-              <li key={item.id} className="rounded-xl border border-border bg-surface-muted p-2">
-                <p className="font-medium">{item.title}</p>
-                <p className="text-slate-600">지역 {item.region ?? "-"}</p>
-                <p className="text-slate-600">신청 {item.applyStart ?? "-"} ~ {item.applyEnd ?? "-"}</p>
-                <div className="mt-2">
-                  <Button size="sm" variant="outline" onClick={() => void openDetail(item)}>상세 보기</Button>
+        <PageHeader title="청약 공고 탐색" description="청약홈의 최신 분양 정보와 지역별 모집 일정을 한눈에 확인하세요." />
+        
+        <div className="mb-8 space-y-4">
+          <Card className="rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm">
+            <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-6" />
+            <ErrorAnnouncer />
+            
+            <div className="grid gap-6">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">지역</span>
+                  <div>
+                    <select
+                      id={pathToId("region")}
+                      className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                      aria-invalid={!!fieldIssueMap.region?.[0]}
+                      aria-describedby={fieldIssueMap.region?.[0] ? `${pathToId("region")}-error` : undefined}
+                    >
+                      {["전국", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"].map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                    <FieldError id={`${pathToId("region")}-error`} message={fieldIssueMap.region?.[0]} />
+                  </div>
                 </div>
-              </li>
-            ))}
-          </ul>
-          {!loading && !error && items.length === 0 ? (
-            <div className="mt-3 space-y-2 text-sm text-slate-600">
-              <p>
-                {(meta.rawMatched ?? meta.matchedRows ?? 0) > 0 && (meta.normalizedCount ?? 0) === 0
-                  ? `원본 후보 ${meta.rawMatched ?? meta.matchedRows ?? 0}건을 찾았지만 정규화 결과는 0건입니다. 필수 필드 매핑을 확인해 주세요.`
-                  : (meta.scannedRows ?? 0) === 0
-                  ? "업스트림 데이터가 0건이거나 연결/인증/스키마 문제일 수 있습니다. 설정 페이지에서 연결 테스트를 확인하세요."
-                  : typeof meta.upstreamTotalCount === "number" && meta.upstreamTotalCount === 0
-                  ? "API 자체가 0건을 반환했습니다. 기간/공고 갱신 여부를 확인하세요."
-                  : `API에서 ${meta.scannedRows ?? 0}건(페이지 ${meta.scannedPages ?? 0})을 받아 지역 매칭 0건입니다.`}
-              </p>
-              {meta.dropStats?.missingTitle ? (
-                <p className="text-xs text-amber-700">정규화 드롭 사유: 제목 누락 {meta.dropStats.missingTitle}건</p>
-              ) : null}
-              {Array.isArray(meta.availableRegionsTop) && meta.availableRegionsTop.length > 0 ? (
-                <p className="text-xs text-slate-500">가능한 지역 예: {meta.availableRegionsTop.join(", ")}</p>
-              ) : null}
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => void run({ region, mode: "all" })}>전체 보기(필터 없이)</Button>
-                <Button size="sm" variant="outline" onClick={() => void run({ region, deep: true })}>더 깊게 검색</Button>
-                <Link href="/settings/data-sources" className="inline-flex h-8 items-center rounded-xl border border-border px-2 text-xs">
-                  설정 확인
-                </Link>
+                
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">유형</span>
+                  <div>
+                    <select
+                      id={pathToId("houseType")}
+                      className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      value={houseType}
+                      onChange={(e) => setHouseType(e.target.value as "apt" | "urbty" | "remndr")}
+                      aria-invalid={!!fieldIssueMap.houseType?.[0]}
+                      aria-describedby={fieldIssueMap.houseType?.[0] ? `${pathToId("houseType")}-error` : undefined}
+                    >
+                      <option value="apt">APT</option>
+                      <option value="urbty">오피스텔/도시형</option>
+                      <option value="remndr">잔여세대</option>
+                    </select>
+                    <FieldError id={`${pathToId("houseType")}-error`} message={fieldIssueMap.houseType?.[0]} />
+                  </div>
+                </div>
+
+                <div className="h-4 w-px bg-slate-100" />
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">조회 기간</span>
+                  <div className="flex items-center gap-1">
+                    <div>
+                      <input
+                        id={pathToId("from")}
+                        type="date"
+                        className="h-9 rounded-full border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold outline-none"
+                        value={from}
+                        onChange={(e) => setFrom(e.target.value)}
+                        aria-invalid={!!fieldIssueMap.from?.[0]}
+                        aria-describedby={fieldIssueMap.from?.[0] ? `${pathToId("from")}-error` : undefined}
+                      />
+                      <FieldError id={`${pathToId("from")}-error`} message={fieldIssueMap.from?.[0]} />
+                    </div>
+                    <span className="text-slate-300">~</span>
+                    <div>
+                      <input
+                        id={pathToId("to")}
+                        type="date"
+                        className="h-9 rounded-full border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold outline-none"
+                        value={to}
+                        onChange={(e) => setTo(e.target.value)}
+                        aria-invalid={!!fieldIssueMap.to?.[0]}
+                        aria-describedby={fieldIssueMap.to?.[0] ? `${pathToId("to")}-error` : undefined}
+                      />
+                      <FieldError id={`${pathToId("to")}-error`} message={fieldIssueMap.to?.[0]} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-6">
+                <div className="flex flex-1 min-w-[240px] flex-col gap-1">
+                  <input
+                    id={pathToId("q")}
+                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="아파트명 또는 주택명 키워드 입력"
+                    aria-invalid={!!fieldIssueMap.q?.[0]}
+                    aria-describedby={fieldIssueMap.q?.[0] ? `${pathToId("q")}-error` : undefined}
+                  />
+                  <FieldError id={`${pathToId("q")}-error`} message={fieldIssueMap.q?.[0]} />
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }}>최근 30일</Button>
+                  <Button variant="primary" size="sm" className="rounded-full px-8" onClick={() => void run()} disabled={loading}>
+                    {loading ? "조회 중" : "공고 검색"}
+                  </Button>
+                </div>
               </div>
             </div>
-          ) : null}
-          {!loading && !error && items.length > 0 && meta.truncated ? (
-            <p className="mt-2 text-xs text-amber-700">스캔 상한에 도달해 일부 결과만 표시했습니다. 더 깊게 검색을 사용하세요.</p>
-          ) : null}
-        </Card>
-      </Container>
-      {selected ? (
-        <div className="fixed inset-0 z-50 bg-black/30 p-4" onClick={() => setSelected(null)}>
-          <div className="mx-auto mt-10 max-w-2xl rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">{selected.title}</h3>
-              <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>닫기</Button>
-            </div>
-            <details open className="mt-3 rounded-xl border border-border p-3">
-              <summary className="cursor-pointer text-sm font-semibold">공고 요약</summary>
-              <p className="mt-2 text-sm text-slate-700">지역: {selected.region ?? "-"}</p>
-              <p className="mt-1 text-sm text-slate-700">접수: {selected.applyStart ?? "-"} ~ {selected.applyEnd ?? "-"}</p>
-            </details>
-            <details className="mt-2 rounded-xl border border-border p-3">
-              <summary className="cursor-pointer text-sm font-semibold">추가 정보</summary>
-              {detailLoading ? <p className="mt-2 text-xs text-slate-500">로딩 중...</p> : null}
-              {!detailLoading ? (
-                <dl className="mt-2 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-                  {selected.supplyType ? <><dt className="text-slate-500">공급유형</dt><dd>{selected.supplyType}</dd></> : null}
-                  {selected.sizeHints ? <><dt className="text-slate-500">주택형/면적</dt><dd>{selected.sizeHints}</dd></> : null}
-                  {selected.address ? <><dt className="text-slate-500">공급위치</dt><dd>{selected.address}</dd></> : null}
-                  {selected.totalHouseholds ? <><dt className="text-slate-500">모집세대수</dt><dd>{selected.totalHouseholds}</dd></> : null}
-                  {selected.contact ? <><dt className="text-slate-500">문의처</dt><dd>{selected.contact}</dd></> : null}
-                  {selected.link ? <><dt className="text-slate-500">상세링크</dt><dd><a className="text-primary underline" href={selected.link} target="_blank" rel="noopener noreferrer">공고 보기</a></dd></> : null}
-                </dl>
-              ) : null}
-              {!detailLoading && selected.details && Object.keys(selected.details).length > 0 ? (
-                <div className="mt-3 rounded-lg border border-slate-200 p-2">
-                  {Object.entries(selected.details).map(([label, value]) => (
-                    <p key={label} className="text-xs text-slate-600">{label}: {value}</p>
-                  ))}
-                </div>
-              ) : null}
-            </details>
-          </div>
+          </Card>
         </div>
-      ) : null}
+
+        <div className="mb-6 flex items-center justify-between px-2">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-black text-emerald-600">{items.length.toLocaleString()}건의 공고</span>
+            {assumption && <div className="h-3 w-px bg-slate-200" />}
+            {assumption && <span className="text-[10px] italic text-slate-400">{assumption}</span>}
+          </div>
+          <FallbackBanner fallback={meta.fallback} />
+        </div>
+
+        {error && (
+          <ErrorState message={error} onRetry={() => void run()} className="mb-8" />
+        )}
+
+        <div className="space-y-4">
+          {loading && items.length === 0 ? (
+            <LoadingState description="최신 청약 공고를 불러오고 있습니다." />
+          ) : items.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {items.map((item) => (
+                <Card key={item.id} className="group relative overflow-hidden rounded-[2rem] border-slate-200/60 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+                  <div className="mb-4">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      {item.region || "지역 미상"}
+                    </span>
+                    <h3 className="mt-3 text-lg font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-2">
+                      {item.title}
+                    </h3>
+                  </div>
+                  
+                  <div className="space-y-2 rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-400">접수 기간</span>
+                      <span className="font-black text-slate-700">{item.applyStart} ~ {item.applyEnd}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-400">공급 유형</span>
+                      <span className="font-medium text-slate-600">{item.supplyType || "-"}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 flex gap-2">
+                    <Button variant="outline" className="flex-1 rounded-2xl h-10 text-xs font-bold" onClick={() => void openDetail(item)}>
+                      상세 정보
+                    </Button>
+                    {item.link && (
+                      <a
+                        href={item.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center flex-1 rounded-2xl bg-emerald-600 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700"
+                      >
+                        공고문 보기
+                      </a>
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : !loading && !error ? (
+            <EmptyState
+              title="검색 결과가 없습니다"
+              description="조건을 완화하거나 전체 보기로 다시 검색해 보세요."
+              actionLabel="전체 보기"
+              onAction={() => {
+                const f = daysAgoIsoDate(90);
+                const t = todayIsoDate();
+                setRegion("전국");
+                setQuery("");
+                setFrom(f);
+                setTo(t);
+                void run({ region: "전국", from: f, to: t, query: "", mode: "all" });
+              }}
+            />
+          ) : null}
+        </div>
+      </Container>
+
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
+          <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-slate-50/80 p-6 md:p-8 border-b border-slate-100 flex items-start justify-between">
+              <div className="space-y-2">
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                  {selected.region} · {houseTypeLabel(houseType)}
+                </span>
+                <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-snug">{selected.title}</h3>
+              </div>
+              <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white" onClick={() => setSelected(null)}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </Button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+              <section>
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">주요 일정</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-5">
+                    <p className="text-[10px] font-bold text-slate-400">접수 시작</p>
+                    <p className="mt-1 text-lg font-black text-slate-900">{selected.applyStart || "-"}</p>
+                  </div>
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-5">
+                    <p className="text-[10px] font-bold text-slate-400">접수 종료</p>
+                    <p className="mt-1 text-lg font-black text-slate-900">{selected.applyEnd || "-"}</p>
+                  </div>
+                </div>
+              </section>
+              
+              <section>
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">상세 정보</p>
+                <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">
+                  {detailLoading ? (
+                    <div className="space-y-3 animate-pulse">
+                      <div className="h-4 w-3/4 rounded-full bg-slate-200" />
+                      <div className="h-4 w-1/2 rounded-full bg-slate-200" />
+                    </div>
+                  ) : (
+                    <dl className="grid gap-y-4 text-sm sm:grid-cols-2 sm:gap-x-8">
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">공급 위치</dt>
+                        <dd className="mt-1 font-bold text-slate-700">{selected.address || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">공급 규모</dt>
+                        <dd className="mt-1 font-bold text-slate-700">{selected.totalHouseholds || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">주택형/면적</dt>
+                        <dd className="mt-1 font-bold text-slate-700">{selected.sizeHints || "-"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">문의처</dt>
+                        <dd className="mt-1 font-bold text-slate-700">{selected.contact || "-"}</dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+              </section>
+
+              {selected.details && Object.keys(selected.details).length > 0 && (
+                <section>
+                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">기타 유의사항</p>
+                  <div className="space-y-2">
+                    {Object.entries(selected.details).map(([k, v]) => (
+                      <div key={k} className="flex justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs">
+                        <span className="font-bold text-slate-400">{k}</span>
+                        <span className="font-black text-slate-700">{v}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="bg-slate-50/80 p-6 border-t border-slate-100 flex items-center justify-between">
+               <p className="text-[10px] font-bold text-slate-400">데이터 제공: 청약홈 Open API</p>
+               {selected.link && (
+                 <a
+                   href={selected.link}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className="rounded-full bg-emerald-600 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700"
+                 >
+                   공고 전문 보기
+                 </a>
+               )}
+            </div>
+          </Card>
+        </div>
+      )}
     </main>
   );
 }

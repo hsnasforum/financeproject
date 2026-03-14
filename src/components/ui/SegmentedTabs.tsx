@@ -13,10 +13,11 @@ type SegmentedTabsProps = {
   activeTab: string;
   onChange: (id: string) => void;
   className?: string;
+  layoutId?: string;
   tone?: "light" | "dark";
 };
 
-export function SegmentedTabs({ options, activeTab, onChange, className, tone = "light" }: SegmentedTabsProps) {
+export function SegmentedTabs({ options, activeTab, onChange, className, layoutId = "segmented-tab-active", tone = "light" }: SegmentedTabsProps) {
   const dark = tone === "dark";
   return (
     <div
@@ -41,7 +42,7 @@ export function SegmentedTabs({ options, activeTab, onChange, className, tone = 
           >
             {isActive && (
               <motion.div
-                layoutId="segmented-tab-active"
+                layoutId={layoutId}
                 className={cn(
                   "absolute inset-0 rounded-full shadow-sm",
                   dark ? "bg-white/16 ring-1 ring-white/10" : "bg-white"

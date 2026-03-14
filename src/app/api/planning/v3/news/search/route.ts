@@ -2,7 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
-import { readNewsSearchIndex, readNewsTopicTrends, searchNewsIndex, writeNewsSearchIndex, type NewsSearchFilters } from "@/lib/planning/v3/news/search";
+import {
+  readNewsSearchIndex,
+  readNewsTopicTrends,
+  searchNewsIndex,
+  writeNewsSearchIndex,
+  writeNewsSearchIndexFromStore,
+  type NewsSearchFilters,
+} from "@/lib/planning/v3/news/search";
+import { readState } from "@/lib/planning/v3/news/store";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -11,6 +19,17 @@ function asString(value: unknown): string {
 function asNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toDateMs(value: string | null | undefined): number {
+  const parsed = Date.parse(asString(value));
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function isSearchIndexStale(indexGeneratedAt: string, lastRefreshedAt: string | null): boolean {
+  const lastRefreshedMs = toDateMs(lastRefreshedAt);
+  const indexGeneratedMs = toDateMs(indexGeneratedAt);
+  return Number.isFinite(lastRefreshedMs) && Number.isFinite(indexGeneratedMs) && lastRefreshedMs > indexGeneratedMs;
 }
 
 function toList(value: string | null): string[] {
@@ -74,6 +93,12 @@ const SearchResponseSchema = z.object({
   data: z.object({
     generatedAt: z.string().datetime(),
     indexGeneratedAt: z.string().datetime(),
+    freshness: z.object({
+      contract: z.literal("search_index"),
+      status: z.union([z.literal("current"), z.literal("stale")]),
+      indexGeneratedAt: z.string().datetime(),
+      lastRefreshedAt: z.string().datetime().nullable(),
+    }),
     total: z.number().int().nonnegative(),
     filters: z.object({
       q: z.string(),
@@ -121,8 +146,22 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const filters = normalizeFilters(url);
 
-  const index = readNewsSearchIndex() ?? writeNewsSearchIndex({ generatedAt: new Date().toISOString() });
+  const lastRefreshedAt = readState().lastRunAt ?? null;
+  const hasRefreshTimestamp = Number.isFinite(toDateMs(lastRefreshedAt));
+  let index = readNewsSearchIndex();
+
+  if (!index) {
+    index = hasRefreshTimestamp
+      ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
+      : writeNewsSearchIndex({ generatedAt: new Date().toISOString() });
+  } else if (isSearchIndexStale(index.generatedAt, lastRefreshedAt)) {
+    index = hasRefreshTimestamp
+      ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
+      : writeNewsSearchIndex({ generatedAt: new Date().toISOString() });
+  }
+
   const trends = readNewsTopicTrends();
+  const freshnessStatus = isSearchIndexStale(index.generatedAt, lastRefreshedAt) ? "stale" : "current";
   const burstByTopic = new Map((trends?.topics ?? []).map((row) => [asString(row.topicId), row.burstLevel]));
 
   const searched = searchNewsIndex(index, filters);
@@ -168,6 +207,12 @@ export async function GET(request: Request) {
     data: {
       generatedAt: new Date().toISOString(),
       indexGeneratedAt: index.generatedAt,
+      freshness: {
+        contract: "search_index",
+        status: freshnessStatus,
+        indexGeneratedAt: index.generatedAt,
+        lastRefreshedAt,
+      },
       total: reranked.length,
       filters: {
         q: filters.q ?? "",

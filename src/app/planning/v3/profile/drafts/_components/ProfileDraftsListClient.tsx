@@ -31,6 +31,8 @@ type DraftListItem = {
 type Props = {
   initialRows?: DraftListItem[];
   disableAutoLoad?: boolean;
+  initialDeleteTargetId?: string;
+  initialLoadFailed?: boolean;
 };
 
 type ListResponse = {
@@ -116,17 +118,24 @@ function normalizeRows(rows: DraftListItem[]): DraftListItem[] {
   }));
 }
 
-export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = false }: Props) {
+export function ProfileDraftsListClient({
+  initialRows = [],
+  disableAutoLoad = false,
+  initialDeleteTargetId = "",
+  initialLoadFailed = false,
+}: Props) {
   const [rows, setRows] = useState<DraftListItem[]>(normalizeRows(initialRows));
-  const [loading, setLoading] = useState(!disableAutoLoad && initialRows.length < 1);
+  const [loading, setLoading] = useState(!disableAutoLoad && initialRows.length < 1 && !initialLoadFailed);
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState("");
-  const [deleteTargetId, setDeleteTargetId] = useState("");
+  const [deleteTargetId, setDeleteTargetId] = useState(initialDeleteTargetId);
+  const [loadFailed, setLoadFailed] = useState(initialLoadFailed);
   const [draftBatchId, setDraftBatchId] = useState("");
   const [message, setMessage] = useState("");
 
   const loadDrafts = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     setMessage("");
     try {
       const response = await fetch(`/api/planning/v3/profile/drafts${buildCsrfQuery()}`, {
@@ -136,13 +145,14 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
       const json = await response.json().catch(() => null);
       if (!response.ok || !isListResponse(json)) {
         setRows([]);
-        setMessage("초안 목록을 불러오지 못했습니다.");
+        setLoadFailed(true);
         return;
       }
       setRows(normalizeRows(json.data));
+      setLoadFailed(false);
     } catch {
       setRows([]);
-      setMessage("초안 목록을 불러오지 못했습니다.");
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -269,7 +279,7 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
               CSV 업로드
             </BodyActionLink>
             <BodyActionLink href="/planning/v3/batches">
-              Batches
+              배치 센터
             </BodyActionLink>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
@@ -277,7 +287,12 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
 
         <Card className="space-y-3">
           {loading ? <p className="text-sm text-slate-600">목록을 불러오는 중...</p> : null}
-          {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 profile draft가 없습니다.</p> : null}
+          {!loading && loadFailed ? (
+            <p className="text-sm text-slate-600" data-testid="v3-profile-drafts-load-failure">
+              초안 목록을 확인하지 못했습니다. 새로고침으로 다시 시도해 주세요.
+            </p>
+          ) : null}
+          {!loading && !loadFailed && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 profile draft가 없습니다.</p> : null}
 
           {rows.length > 0 ? (
             <BodyTableFrame>
@@ -333,7 +348,7 @@ export function ProfileDraftsListClient({ initialRows = [], disableAutoLoad = fa
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8"
           role="dialog"
         >
-          <BodyDialogSurface>
+          <BodyDialogSurface data-testid="v3-profile-draft-delete-dialog">
             <h2 className="text-base font-black text-slate-900" id="v3-profile-draft-delete-title">초안 삭제 확인</h2>
             <p className="mt-2 text-sm text-slate-700">이 초안을 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.</p>
             <div className={bodyDialogActionsClassName}>

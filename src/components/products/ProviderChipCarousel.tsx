@@ -19,55 +19,60 @@ type Props = {
 
 export function ProviderChipCarousel({ providers, selectedId, onSelect }: Props) {
   return (
-    <div className="relative group/carousel">
-      <div className="flex w-full gap-3 overflow-x-auto pb-3 scrollbar-hide snap-x">
+    <div className="relative">
+      <div className="flex w-full gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {providers.map((provider) => {
           const isActive = selectedId === provider.id;
           const isInstitution = /^\d{7}$/.test(provider.id);
+          const countLabel = typeof provider.totalCount === "number" ? `${provider.totalCount.toLocaleString()}개` : null;
 
           return (
             <button
               key={provider.id}
               onClick={() => onSelect(provider.id)}
               className={cn(
-                "flex min-w-[84px] snap-start flex-col items-center gap-2.5 rounded-2xl border bg-white p-4 transition-all duration-300 active:scale-95",
+                "inline-flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-2 text-left transition-all duration-300 active:scale-95",
                 isActive
-                  ? "border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500 shadow-sm"
-                  : "border-slate-100 hover:border-emerald-200 hover:bg-slate-50"
+                  ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-500/10"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-slate-50 hover:text-slate-900"
               )}
             >
-              <div className={cn(
-                "flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-50 ring-1 ring-slate-100 transition-all duration-300",
-                isActive ? "bg-white ring-emerald-200" : "group-hover:bg-white"
-              )}>
+              <div
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 ring-1 ring-slate-200 transition-all duration-300",
+                  isActive ? "bg-white ring-emerald-200" : "bg-slate-50"
+                )}
+              >
                 {isInstitution ? (
                   <ProviderLogo
                     providerKey={provider.id}
                     providerName={provider.name}
-                    size={32}
-                    className={cn("transition-transform duration-500", isActive && "scale-110")}
+                    size={20}
+                    className={cn("transition-transform duration-300", isActive && "scale-105")}
                   />
                 ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isActive ? "text-emerald-600" : "text-slate-400"}><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={isActive ? "text-emerald-600" : "text-slate-400"}><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/></svg>
                 )}
               </div>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className={cn(
-                  "text-[11px] font-bold tracking-tight text-center leading-tight transition-colors",
-                  isActive ? "text-emerald-700" : "text-slate-500"
-                )}>
+              <div className="min-w-0">
+                <span
+                  className={cn(
+                    "block max-w-[8rem] truncate text-[11px] font-bold leading-tight transition-colors",
+                    isActive ? "text-emerald-700" : "text-slate-700"
+                  )}
+                >
                   {provider.name}
                 </span>
-                {typeof provider.totalCount === "number" && (
-                  <span className="text-[9px] font-bold text-slate-400 tabular-nums">{provider.totalCount}</span>
-                )}
+                {countLabel ? (
+                  <span className={cn("mt-0.5 block text-[10px] font-semibold tabular-nums", isActive ? "text-emerald-600" : "text-slate-400")}>
+                    {countLabel}
+                  </span>
+                ) : null}
               </div>
             </button>
           );
         })}
       </div>
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-white to-transparent opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent" />
     </div>
   );
 }
