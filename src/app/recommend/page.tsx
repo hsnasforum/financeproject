@@ -624,14 +624,6 @@ function RecommendPageInner() {
           description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
         />
 
-        {feedback && (
-          <div className="fixed top-24 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-top-4 duration-300">
-            <div className="rounded-full bg-slate-900 px-6 py-2.5 text-xs font-black text-white shadow-xl">
-              {feedback}
-            </div>
-          </div>
-        )}
-
         <div className="mb-8 flex flex-col gap-6">
           <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
           
@@ -804,10 +796,15 @@ function RecommendPageInner() {
           <div className="space-y-8">
             <div className="flex flex-wrap items-center justify-between gap-4 px-2">
               <h2 className="text-xl font-black text-slate-900">추천 결과 <span className="ml-1 text-emerald-600">{result.items?.length}</span></h2>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="rounded-full" onClick={saveCurrentRun}>결과 저장</Button>
-                <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunJson}>JSON</Button>
-                <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunCsv}>CSV</Button>
+              <div className="flex items-center gap-3">
+                {feedback && (
+                  <span className="text-xs font-bold text-emerald-600 animate-in fade-in duration-300">{feedback}</span>
+                )}
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="rounded-full" onClick={saveCurrentRun}>결과 저장</Button>
+                  <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunJson}>JSON</Button>
+                  <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunCsv}>CSV</Button>
+                </div>
               </div>
             </div>
 
