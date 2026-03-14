@@ -18,7 +18,9 @@
 - **Typography**: 시스템 폰트(geist-sans 계열) 기반으로 자신감 있고 읽기 쉬운 텍스트 구성
 - **Spacing & Layout**: 답답하고 촘촘한 레이아웃을 피하고, 넉넉하고 정돈된 여백(Spacing scale) 리듬 유지
 - **Radius & Shadow**:
-  - 기본 Radius: `2rem`, 소형 Radius: `1rem`
+  - **Base Radius**: `rounded-[2rem]` (32px) - 대형 카드, 모달, 컨테이너용
+  - **Small Radius**: `rounded-xl` (12px) - 버튼(대), 스켈레톤, 리스트 아이템용
+  - **Pill Radius**: `rounded-full` - 배지, 탭, 검색바, 소형 버튼용
   - 표면감과 그림자는 절제되고 일관된 규칙(기본 `--card-shadow`, 호버 시 `--card-shadow-hover`) 적용
 
 ## 4. Key UI Patterns (핵심 화면 패턴)
