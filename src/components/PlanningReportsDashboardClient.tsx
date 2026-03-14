@@ -12,14 +12,7 @@ import {
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
 import DisclosuresPanel from "@/components/planning/DisclosuresPanel";
 import {
-  BodyActionLink,
-  BodyEmptyState,
-  BodyInset,
-  BodySectionHeading,
-  BodyStatusInset,
-  BodyTableFrame,
   bodyCompactFieldClassName,
-  bodyDenseActionRowClassName,
 } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -28,6 +21,9 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { StatCard } from "@/components/ui/StatCard";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { Badge } from "@/components/ui/Badge";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
 import { appendProfileIdQuery } from "@/lib/planning/profileScope";
 import {
@@ -39,6 +35,7 @@ import { reportFromNormalizationDisclosure, type NormalizationReport } from "@/l
 import { parsePlanningV2Response } from "@/lib/planning/api/contracts";
 import { computeReportDeltas, type ReportDeltaItem } from "@/lib/planning/reports/computeDeltas";
 import { REPORT_SECTION_IDS } from "@/lib/planning/navigation/sectionIds";
+import { cn } from "@/lib/utils";
 
 export type PlanningReportsDashboardClientProps = {
   initialRuns?: PlanningRunRecord[];
@@ -75,9 +72,9 @@ function DeferredReportSectionPlaceholder({
   description: string;
 }) {
   return (
-    <Card className="space-y-3">
-      <LoadingState title={title} />
-      <p className="text-xs text-slate-600">{description}</p>
+    <Card className="space-y-3 p-6">
+      <LoadingState description={title} />
+      <p className="text-xs text-slate-400 font-medium">{description}</p>
     </Card>
   );
 }
@@ -249,7 +246,6 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     [selectedRun],
   );
   const selectedRunVmData = selectedRunVm.vm;
-  const selectedRunVmError = selectedRunVm.error;
   const baselineOptions = useMemo(() => {
     return runs
       .filter((run) => run.id !== selectedRunId)
@@ -534,81 +530,73 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   }, [selectedRun?.id, showCandidateInsights]);
 
   return (
-    <PageShell className="report-root">
+    <PageShell className="bg-slate-50">
       <PageHeader
         title="플래닝 리포트"
         description="저장된 실행(run) 기준으로 요약 대시보드를 확인합니다."
         action={(
-          <div className="no-print flex items-center gap-3 text-sm">
+          <div className="no-print flex items-center gap-3">
             <Button
               data-testid="report-print-button"
               onClick={handlePrint}
               size="sm"
-              type="button"
               variant="outline"
+              className="rounded-full font-bold h-9"
             >
               PDF 인쇄
             </Button>
-            <BodyActionLink href={planningHref} prefetch={false}>플래닝</BodyActionLink>
-            <BodyActionLink href={runsHref} prefetch={false}>실행 기록</BodyActionLink>
+            <Link href={planningHref}>
+              <Button variant="primary" className="rounded-full font-bold h-9">플래닝 돌아가기</Button>
+            </Link>
+            <Link href={runsHref}>
+              <Button variant="outline" className="rounded-full font-bold h-9 bg-white">실행 기록</Button>
+            </Link>
           </div>
         )}
       />
 
-      {showInitialLoadNotice ? (
-        <BodyStatusInset className="no-print mb-4 text-sm" tone="warning">
+      {showInitialLoadNotice && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-sm font-bold text-amber-800">
           {props.initialLoadNotice}
-        </BodyStatusInset>
-      ) : null}
+        </div>
+      )}
 
       {loading ? (
-        <LoadingState title="실행 기록을 불러오는 중입니다" />
-      ) : null}
-
-      {!loading && error ? (
-        <ErrorState message={error} onRetry={() => window.location.reload()} retryLabel="다시 불러오기" />
-      ) : null}
-
-      {!loading && !error && runs.length < 1 ? (
-        <div className="space-y-4">
+        <LoadingState description="실행 기록을 불러오는 중입니다." />
+      ) : error ? (
+        <ErrorState message={error} onRetry={() => window.location.reload()} />
+      ) : runs.length < 1 ? (
+        <div className="space-y-6">
           <EmptyState
             title="저장된 실행 기록이 없습니다"
             description="/planning에서 실행 후 저장하면 이 화면에서 리포트를 확인할 수 있습니다."
-            icon="data"
           />
-          <BodyInset className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">막히지 않게 바로 이어서 시작할 수 있습니다.</p>
-              <p className="mt-1 text-xs text-slate-600">프로필 입력 후 실행하고 저장하면 공식 리포트와 비교 화면이 열립니다.</p>
-            </div>
-            <div className={bodyDenseActionRowClassName}>
-              <Link href={planningHref} prefetch={false}>
-                <Button size="sm" type="button" variant="primary">플래닝 시작</Button>
+          <Card className="p-8 text-center bg-slate-50/50 border-dashed rounded-[2.5rem]">
+            <p className="text-sm font-bold text-slate-900">막히지 않게 바로 이어서 시작할 수 있습니다.</p>
+            <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">프로필 입력 후 실행하고 저장하면 공식 리포트와 비교 화면이 열립니다.</p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Link href={planningHref}>
+                <Button variant="primary" className="rounded-xl px-6">플래닝 시작</Button>
               </Link>
-              <Link href={runsHref} prefetch={false}>
-                <Button size="sm" type="button" variant="outline">실행 기록 열기</Button>
+              <Link href={runsHref}>
+                <Button variant="outline" className="rounded-xl px-6 bg-white">실행 기록 열기</Button>
               </Link>
             </div>
-          </BodyInset>
+          </Card>
         </div>
-      ) : null}
-
-      {!loading && !error && runs.length > 0 && !selectedRun ? (
-        <BodyStatusInset className="no-print" tone="warning">
+      ) : !selectedRun ? (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 text-sm font-bold text-amber-800 italic">
           선택한 실행을 다시 찾지 못해 가장 최근 실행으로 다시 맞추는 중입니다.
-        </BodyStatusInset>
-      ) : null}
-
-      {!loading && !error && runs.length > 0 && selectedRun ? (
-        <div className="report-root space-y-5" data-testid="report-dashboard">
-          <Card className="print-card space-y-3">
-            <BodySectionHeading
-              className="no-print"
-              title="실행 선택"
+        </div>
+      ) : (
+        <div className="space-y-6" data-testid="report-dashboard">
+          <Card className="p-6">
+            <SubSectionHeader
+              title="실행 및 비교 선택"
               action={
-                <div className={bodyDenseActionRowClassName}>
+                <div className="no-print flex flex-wrap items-center gap-3">
                   <select
-                    className={`${bodyCompactFieldClassName} min-w-[280px]`}
+                    className={cn(bodyCompactFieldClassName, "min-w-[240px] h-9 text-xs font-bold rounded-lg")}
                     id="report-run-selector"
                     value={selectedRunId}
                     onChange={(event) => setSelectedRunId(event.target.value)}
@@ -619,15 +607,12 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                       </option>
                     ))}
                   </select>
-                  <BodyActionLink href={selectedRunDetailHref} prefetch={false}>
-                    상세 리포트
-                  </BodyActionLink>
                   <Button
                     data-testid="compare-toggle"
                     onClick={() => setCompareMode((previous) => !previous)}
                     size="sm"
-                    type="button"
                     variant={compareMode ? "primary" : "outline"}
+                    className="rounded-lg h-9 font-bold"
                   >
                     {compareMode ? "비교 끄기" : "비교 켜기"}
                   </Button>
@@ -635,14 +620,14 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
               }
             />
 
-            {compareMode ? (
-              <BodyInset className="space-y-3">
+            {compareMode && (
+              <div className="mt-6 p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-6">
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="text-xs font-semibold text-slate-600" htmlFor="report-baseline-selector">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400" htmlFor="report-baseline-selector">
                     기준 실행
                   </label>
                   <select
-                    className={`${bodyCompactFieldClassName} min-w-[280px]`}
+                    className={cn(bodyCompactFieldClassName, "min-w-[240px] h-8 text-[11px] font-bold rounded-lg bg-white")}
                     data-testid="baseline-selector"
                     id="report-baseline-selector"
                     value={baselineRunId}
@@ -658,120 +643,110 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 </div>
 
                 {!baselineRun ? (
-                  <BodyEmptyState className="px-3 py-4" description="다른 실행을 먼저 저장하면 비교 기준으로 선택할 수 있습니다." title="비교 가능한 기준 실행이 없습니다." />
+                  <p className="text-sm font-bold text-slate-400 italic">다른 실행을 저장하면 비교할 수 있습니다.</p>
                 ) : reportDeltaRows.length < 1 ? (
-                  <BodyEmptyState className="px-3 py-4" description="현재 실행과 기준 실행 사이에서 비교 가능한 핵심 변화가 없습니다." title="표시 가능한 변화 지표가 없습니다." />
+                  <p className="text-sm font-bold text-slate-400 italic">비교 가능한 핵심 변화가 없습니다.</p>
                 ) : (
-                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" data-testid="delta-cards">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="delta-cards">
                     {reportDeltaRows.map((item) => (
-                      <BodyInset className="px-3 py-2" key={item.key}>
-                        <p className="text-[11px] font-semibold text-slate-600">{item.label}</p>
-                        <p className="text-sm text-slate-700">
-                          기준 {formatMetricValue(item.unitKind, item.baseValue)}
-                        </p>
-                        <p className="text-sm text-slate-700">
-                          현재 {formatMetricValue(item.unitKind, item.currentValue)}
-                        </p>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {formatMetricDelta(item.unitKind, item.delta)}
-                          {" · "}
-                          {directionLabel(item.direction)}
-                        </p>
-                      </BodyInset>
+                      <div className="p-4 rounded-xl bg-white border border-slate-100 shadow-sm" key={item.key}>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{item.label}</p>
+                        <div className="flex items-baseline justify-between">
+                          <p className={cn("text-lg font-black tabular-nums", item.delta > 0 ? "text-emerald-600" : item.delta < 0 ? "text-rose-600" : "text-slate-900")}>
+                            {formatMetricDelta(item.unitKind, item.delta)}
+                          </p>
+                          <span className="text-[10px] font-bold text-slate-400">{directionLabel(item.direction)}</span>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-[10px] font-bold text-slate-500">
+                          <span>기준 {formatMetricValue(item.unitKind, item.baseValue)}</span>
+                          <span>→ {formatMetricValue(item.unitKind, item.currentValue)}</span>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
-              </BodyInset>
-            ) : null}
-          </Card>
-
-          {interpretationInput ? (
-            canRenderInterpretability ? (
-              <div className="print-card">
-                <InterpretabilityGuideCard
-                  aggregatedWarnings={interpretationInput.aggregatedWarnings}
-                  goals={interpretationInput.goals}
-                  monthlyOperatingGuide={selectedRunVmData?.monthlyOperatingGuide}
-                  summaryMetrics={interpretationInput.summary}
-                  outcomes={interpretationInput.outcomes}
-                  summaryEvidence={interpretationInput.summaryEvidence}
-                />
               </div>
-            ) : (
-              <BodyInset className="print-card text-sm text-slate-700">
-                해석 가이드는 simulate 단계 성공 시에만 표시됩니다.
-              </BodyInset>
-            )
-          ) : null}
-
-          <Card className="print-card space-y-3" data-testid="report-summary-cards">
-            <h2 className="text-base font-bold text-slate-900">Summary</h2>
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              <BodyInset className="px-3 py-2">
-                <p className="text-[11px] text-slate-500">말기 순자산</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {typeof summaryCards.endNetWorthKrw === "number" ? formatKrw("ko-KR", summaryCards.endNetWorthKrw) : "-"}
-                </p>
-              </BodyInset>
-              <BodyInset className="px-3 py-2">
-                <p className="text-[11px] text-slate-500">최저 현금</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {typeof summaryCards.worstCashKrw === "number" ? formatKrw("ko-KR", summaryCards.worstCashKrw) : "-"}
-                </p>
-              </BodyInset>
-              <BodyInset className="px-3 py-2">
-                <p className="text-[11px] text-slate-500">부채상환비율(DSR)</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {typeof summaryCards.debtServiceRatioPct === "number" ? formatPct("ko-KR", summaryCards.debtServiceRatioPct) : "-"}
-                </p>
-              </BodyInset>
-              <BodyInset className="px-3 py-2">
-                <p className="text-[11px] text-slate-500">경고 수</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {typeof summaryCards.warningsCount === "number" ? summaryCards.warningsCount.toLocaleString("ko-KR") : "-"}
-                </p>
-              </BodyInset>
-            </div>
+            )}
           </Card>
 
-          <Card className="print-card space-y-3" data-testid="report-optional-sections">
-            <h2 className="text-base font-bold text-slate-900">추가 비교 자료</h2>
-            <p className="text-sm text-slate-600">
-              핵심 리포트를 먼저 보고, 필요한 보조 자료만 직접 불러오도록 기본 동작을 줄였습니다.
-            </p>
-            <div className={`${bodyDenseActionRowClassName} items-start`}>
+          {interpretationInput && (
+            canRenderInterpretability ? (
+              <InterpretabilityGuideCard
+                aggregatedWarnings={interpretationInput.aggregatedWarnings}
+                goals={interpretationInput.goals}
+                monthlyOperatingGuide={selectedRunVmData?.monthlyOperatingGuide}
+                summaryMetrics={interpretationInput.summary}
+                outcomes={interpretationInput.outcomes}
+                summaryEvidence={interpretationInput.summaryEvidence}
+              />
+            ) : (
+              <div className="p-6 rounded-[2rem] bg-slate-100 text-sm font-bold text-slate-500 text-center">
+                해석 가이드는 simulate 단계 성공 시에만 표시됩니다.
+              </div>
+            )
+          )}
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-testid="report-summary-cards">
+            <StatCard
+              label="말기 순자산"
+              value={typeof summaryCards.endNetWorthKrw === "number" ? formatKrw("ko-KR", summaryCards.endNetWorthKrw) : "-"}
+              className="rounded-3xl"
+            />
+            <StatCard
+              label="최저 현금"
+              value={typeof summaryCards.worstCashKrw === "number" ? formatKrw("ko-KR", summaryCards.worstCashKrw) : "-"}
+              className="rounded-3xl"
+            />
+            <StatCard
+              label="부채상환비율(DSR)"
+              value={typeof summaryCards.debtServiceRatioPct === "number" ? formatPct("ko-KR", summaryCards.debtServiceRatioPct) : "-"}
+              className="rounded-3xl"
+            />
+            <StatCard
+              label="경고 수"
+              value={typeof summaryCards.warningsCount === "number" ? summaryCards.warningsCount.toLocaleString("ko-KR") : "-"}
+              className="rounded-3xl"
+            />
+          </div>
+
+          <Card className="p-6">
+            <SubSectionHeader
+              title="추가 분석 및 리포트"
+              description="핵심 리포트 외 필요한 보조 자료를 선택하여 불러옵니다."
+            />
+            <div className="flex flex-wrap gap-2">
               <Button
                 disabled={!selectedRunVmData || showCandidateInsights}
                 onClick={() => setShowCandidateInsights(true)}
                 size="sm"
-                type="button"
                 variant={showCandidateInsights ? "outline" : "primary"}
+                className="rounded-xl h-10 px-5 font-bold"
               >
-                {showCandidateInsights ? "상품 비교 자료 불러옴" : "상품 비교 자료 불러오기"}
+                {showCandidateInsights ? "상품 비교 완료" : "상품 비교 분석"}
               </Button>
               <Button
                 disabled={!selectedRunVmData || showBenefitInsights}
                 onClick={() => setShowBenefitInsights(true)}
                 size="sm"
-                type="button"
-                variant="outline"
+                variant={showBenefitInsights ? "outline" : "primary"}
+                className="rounded-xl h-10 px-5 font-bold"
               >
-                {showBenefitInsights ? "혜택 후보 불러옴" : "혜택 후보 불러오기"}
+                {showBenefitInsights ? "혜택 후보 완료" : "혜택 후보 분석"}
               </Button>
               <Button
                 disabled={showRealtimeProductExplorer}
                 onClick={() => setShowRealtimeProductExplorer(true)}
                 size="sm"
-                type="button"
-                variant="outline"
+                variant={showRealtimeProductExplorer ? "outline" : "primary"}
+                className="rounded-xl h-10 px-5 font-bold"
               >
-                {showRealtimeProductExplorer ? "실시간 상품 탐색 열림" : "실시간 상품 탐색 열기"}
+                {showRealtimeProductExplorer ? "상품 탐색 열림" : "상품 탐색기 열기"}
               </Button>
             </div>
           </Card>
 
-          {selectedRunVmData && showCandidateInsights ? (
-            <div className="print-card">
+          {selectedRunVmData && showCandidateInsights && (
+            <Card className="p-0 overflow-hidden">
               <DeferredReportRecommendationsSection
                 runId={selectedRun.id}
                 vm={selectedRunVmData}
@@ -779,129 +754,139 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 payloadLoading={candidateLoading}
                 payloadError={candidateError}
               />
-            </div>
-          ) : null}
+            </Card>
+          )}
 
-          {selectedRunVmData && showBenefitInsights ? (
-            <div className="print-card">
+          {selectedRunVmData && showBenefitInsights && (
+            <Card className="p-0 overflow-hidden">
               <DeferredReportBenefitsSection profileId={selectedRun.profileId} vm={selectedRunVmData} />
-            </div>
-          ) : null}
+            </Card>
+          )}
 
-          {showCandidateInsights ? (
-            <div className="print-card">
+          {showCandidateInsights && (
+            <Card className="p-0 overflow-hidden">
               <DeferredCandidateComparisonSection
                 runId={selectedRun.id}
                 payload={candidatePayload}
                 payloadLoading={candidateLoading}
                 payloadError={candidateError}
               />
-            </div>
-          ) : null}
+            </Card>
+          )}
 
-          {showRealtimeProductExplorer ? (
-            <div className="print-card">
+          {showRealtimeProductExplorer && (
+            <Card className="p-0 overflow-hidden">
               <DeferredProductCandidatesPanel />
-            </div>
-          ) : null}
+            </Card>
+          )}
 
-          <div className="print-card">
+          <Card className="p-0 overflow-hidden">
             <DisclosuresPanel report={runNormalizationReport} />
-          </div>
+          </Card>
 
-          {selectedRunVmError ? (
-            <BodyStatusInset className="print-card" tone="danger">
-              선택한 실행의 리포트를 구성하지 못했습니다. {selectedRunVmError}
-            </BodyStatusInset>
-          ) : null}
-
-          <Card className="print-card space-y-3" id={REPORT_SECTION_IDS.warnings}>
-            <h2 className="text-base font-bold text-slate-900">Warnings</h2>
-            <BodyTableFrame>
-              <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="report-warnings-table">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left">code</th>
-                    <th className="px-3 py-2 text-left">message</th>
-                    <th className="px-3 py-2 text-right">count</th>
+          <Card className="p-6" id={REPORT_SECTION_IDS.warnings}>
+            <SubSectionHeader title="발생 경고 (Warnings)" />
+            <div className="overflow-hidden rounded-2xl border border-slate-100 mt-4">
+              <table className="min-w-full text-sm" data-testid="report-warnings-table">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="px-4 py-3 text-left">Code</th>
+                    <th className="px-4 py-3 text-left">Message</th>
+                    <th className="px-4 py-3 text-right">Count</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
+                <tbody className="divide-y divide-slate-50 bg-white">
                   {warningRows.length < 1 ? (
                     <tr>
-                      <td className="px-3 py-2 text-slate-600" colSpan={3}>경고가 없습니다.</td>
+                      <td className="px-4 py-8 text-center text-slate-400 font-bold" colSpan={3}>경고가 없습니다.</td>
                     </tr>
                   ) : warningRows.map((row) => (
                     <tr key={`${row.code}:${row.message}`}>
-                      <td className="px-3 py-2 font-semibold text-slate-900">{row.code}</td>
-                      <td className="px-3 py-2 text-slate-700">{row.message}</td>
-                      <td className="px-3 py-2 text-right">{row.count.toLocaleString("ko-KR")}</td>
+                      <td className="px-4 py-4 font-black text-slate-900">{row.code}</td>
+                      <td className="px-4 py-4 font-medium text-slate-600 leading-relaxed">{row.message}</td>
+                      <td className="px-4 py-4 text-right tabular-nums font-bold text-slate-400">{row.count.toLocaleString("ko-KR")}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </BodyTableFrame>
+            </div>
           </Card>
 
-          <Card className="print-card space-y-3">
-            <h2 className="text-base font-bold text-slate-900">Goals</h2>
-            <BodyTableFrame>
-              <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left">name</th>
-                    <th className="px-3 py-2 text-left">achieved</th>
-                    <th className="px-3 py-2 text-right">shortfall</th>
+          <Card className="p-6">
+            <SubSectionHeader title="목표 달성 여부 (Goals)" />
+            <div className="overflow-hidden rounded-2xl border border-slate-100 mt-4">
+              <table className="min-w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="px-4 py-3 text-left">Goal Name</th>
+                    <th className="px-4 py-3 text-left">Status</th>
+                    <th className="px-4 py-3 text-right">Shortfall</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
+                <tbody className="divide-y divide-slate-50 bg-white">
                   {goalRows.length < 1 ? (
                     <tr>
-                      <td className="px-3 py-2 text-slate-600" colSpan={3}>목표 정보가 없습니다.</td>
+                      <td className="px-4 py-8 text-center text-slate-400 font-bold" colSpan={3}>목표 정보가 없습니다.</td>
                     </tr>
                   ) : goalRows.map((row, index) => (
                     <tr key={`${row.name}:${index}`}>
-                      <td className="px-3 py-2 font-semibold text-slate-900">{row.name}</td>
-                      <td className="px-3 py-2">{row.achieved ? "달성" : "미달"}</td>
-                      <td className="px-3 py-2 text-right">
-                        {typeof row.shortfall === "number" ? formatKrw("ko-KR", row.shortfall) : "-"}
+                      <td className="px-4 py-4 font-black text-slate-900">{row.name}</td>
+                      <td className="px-4 py-4 font-bold">
+                        <Badge variant={row.achieved ? "secondary" : "destructive"} className="px-2 py-0.5 text-[10px] h-5">
+                          {row.achieved ? "달성" : "미달"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-4 text-right tabular-nums font-black text-rose-600">
+                        {typeof row.shortfall === "number" && row.shortfall > 0 ? formatKrw("ko-KR", row.shortfall) : "-"}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </BodyTableFrame>
+            </div>
           </Card>
 
-          <Card className="print-card space-y-3" data-testid="report-top-actions">
-            <h2 className="text-base font-bold text-slate-900">Top Actions</h2>
+          <Card className="p-6" data-testid="report-top-actions">
+            <SubSectionHeader title="최우선 권고 액션 (Top Actions)" />
             {topActions.length < 1 ? (
-              <BodyEmptyState className="px-4 py-6" description="실행 결과가 액션 추천을 만들지 못했습니다." title="액션 정보가 없습니다." />
+              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 mt-4">
+                권고 액션 정보가 없습니다.
+              </p>
             ) : (
-              <ol className="space-y-2">
+              <div className="grid gap-4 mt-4">
                 {topActions.map((action, index) => (
-                  <li key={`${action.title}:${index}`}>
-                    <BodyInset className="bg-white p-3">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {index + 1}. [{severityLabel(action.severity)}] {action.title}
-                    </p>
+                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 relative overflow-hidden" key={`${action.title}:${index}`}>
+                    <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+                    <div className="flex items-start justify-between gap-4 mb-3">
+                      <p className="text-base font-black text-slate-900 tracking-tight">
+                        {index + 1}. {action.title}
+                      </p>
+                      <Badge variant="secondary" className={cn("text-[9px] uppercase font-black",
+                        action.severity === 'critical' ? "bg-rose-100 text-rose-700" :
+                        action.severity === 'warn' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                      )}>
+                        {severityLabel(action.severity)}
+                      </Badge>
+                    </div>
                     {action.steps.length > 0 ? (
-                      <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-slate-700">
+                      <ul className="space-y-2">
                         {action.steps.map((step, stepIndex) => (
-                          <li key={`${action.title}:${stepIndex}`}>{step}</li>
+                          <li key={`${action.title}:${stepIndex}`} className="flex gap-3 text-xs font-medium text-slate-600 leading-relaxed">
+                            <span className="text-emerald-500 font-black">•</span>
+                            {step}
+                          </li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="mt-1 text-xs text-slate-500">세부 단계 정보가 없습니다.</p>
+                      <p className="text-xs font-bold text-slate-400 italic">세부 단계 정보가 없습니다.</p>
                     )}
-                    </BodyInset>
-                  </li>
+                  </div>
                 ))}
-              </ol>
+              </div>
             )}
           </Card>
 
-          <div className="no-print rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+          <div className="no-print p-4 rounded-2xl border border-slate-200 bg-slate-50/50">
             <Button
               aria-expanded={showAdvancedRaw}
               data-ready={interactiveReady ? "true" : "false"}
@@ -909,19 +894,19 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
               disabled={!interactiveReady}
               onClick={() => setShowAdvancedRaw((prev) => !prev)}
               size="sm"
-              type="button"
               variant="ghost"
+              className="w-full h-10 font-bold text-slate-500"
             >
-              {showAdvancedRaw ? "고급 보기 닫기 (Markdown 리포트 관리)" : "고급 보기 (Markdown 리포트 관리)"}
+              {showAdvancedRaw ? "고급 보기 닫기 (Markdown)" : "고급 보기 (Markdown 리포트 관리)"}
             </Button>
-            {showAdvancedRaw ? (
-              <BodyInset className="mt-3 bg-white p-4" data-testid="report-advanced-raw">
+            {showAdvancedRaw && (
+              <div className="mt-4 p-6 bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-900/5">
                 <DeferredPlanningReportsClient embedded />
-              </BodyInset>
-            ) : null}
+              </div>
+            )}
           </div>
         </div>
-      ) : null}
+      )}
     </PageShell>
   );
 }

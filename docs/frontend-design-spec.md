@@ -8,7 +8,11 @@
 ## 2. Tech Stack & Styling
 - **Framework**: Next.js 16 (App Router), React 19
 - **Styling**: Tailwind CSS v4, Framer Motion (애니메이션 및 인터랙션)
-- **Component Strategy**: `src/components/ui/` 폴더 기반의 재사용 가능한 UI Primitive 컴포넌트(e.g., Button, Card, Badge, SegmentedTabs)를 적극 활용하며, 1회성 하드코딩 스타일은 최소화합니다.
+- **Core Primitives**: `src/components/ui/` 폴더 기반의 재사용 가능한 UI Primitive 컴포넌트를 적극 활용합니다.
+  - **PageHeader**: 페이지 최상단 타이틀, 설명, 액션 버튼을 정돈하여 배치합니다.
+  - **SubSectionHeader**: 카드 내부 또는 섹션 단위의 헤더입니다. `text-lg font-black` 타이포그래피를 사용합니다.
+  - **StatCard**: 핵심 수치(Metric)와 라벨, 트렌드를 시각화하는 요약용 카드입니다.
+  - 기타: `Button`, `Card`, `Badge`, `SegmentedTabs` 등 표준 컴포넌트를 우선 사용합니다.
 
 ## 3. Design Tokens (기본 테마)
 - **Color Palette**:
