@@ -17,8 +17,9 @@
     - **Formatting**: `formatValue` prop을 통해 각 도메인(KRW, %, 등)에 맞는 수치 표현을 지원합니다.
     - 가독성을 위해 은은한 영역 채우기(Area fill)와 부드러운 선 표현을 권장합니다.
   - **Range Visualization**: 수치가 특정 범위(Min/Max) 내에서 어디에 위치하는지 보여주는 소형 막대 시각화입니다.
-  - **Data Tables**: 데이터 밀도가 높은 표에서는 헤더에 `text-[10px] font-black uppercase tracking-widest text-slate-400` 스타일을 적용하고, 숫자 데이터에는 `tabular-nums`를 필수 적용합니다.
+  - **Data Tables**: 데이터 밀도가 높은 표에서는 헤더에 `text-[10px] font-black uppercase tracking-widest text-slate-400` 스타일을 적용하고, 숫자 데이터에는 `tabular-nums`를 필수 적용합니다. 데스크톱 환경에서는 정보의 가로 비교가 유리하도록 테이블 구조를 유지합니다.
   - **Mobile Data Display**: 모바일 뷰에서는 테이블 사용을 지양하고, 카드 또는 리스트 Row 구조로 전환하여 가독성을 확보합니다. 이때 데스크톱 표와 동일한 정보 위계와 색상 강조 규칙을 유지하여 일관된 제품 언어를 제공합니다.
+    - *Pattern (Trends Card)*: 상단(Title + Signal Badge), 중단(Sparkline - full width), 하단(Metrics Grid) 구조를 활용하여 좁은 화면에서도 수치와 흐름을 동시에 파악할 수 있게 합니다. (`NewsTrendsTableClient.tsx` 참고)
   - 기타: `Button`, `Card`, `Badge`, `SegmentedTabs` 등 표준 컴포넌트를 우선 사용합니다.
 
 ## 3. Design Tokens (기본 테마)
