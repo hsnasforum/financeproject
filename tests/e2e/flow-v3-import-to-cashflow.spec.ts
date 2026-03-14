@@ -26,6 +26,7 @@ test("planning v3 transactions uploads csv and follows override save through in 
   await expect(page).toHaveURL(/\/planning\/v3\/transactions\/batches\/[^/?#]+(?:\?.*)?$/, { timeout: 30_000 });
   await expect(page.getByTestId("v3-batch-meta")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("v3-batch-range")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("link", { name: "CSV Import", exact: true })).toHaveAttribute("href", "/planning/v3/import/csv");
   await expect(page.getByText("거래 분류, 계좌 매핑, 이체 판정은 먼저 오버라이드로 저장됩니다. 아래 카테고리 집계와 캐시플로우는 저장 뒤 자동으로 다시 계산됩니다.", { exact: true })).toBeVisible({ timeout: 30_000 });
 
   const firstTxnRow = page.getByTestId(/v3-txn-row-/).first();

@@ -1030,7 +1030,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             <BodyActionLink href="/planning/v3/categories/rules">
               카테고리 룰
             </BodyActionLink>
-            <BodyActionLink href="/planning/v3/import">
+            <BodyActionLink href="/planning/v3/import/csv">
               CSV Import
             </BodyActionLink>
           </div>
