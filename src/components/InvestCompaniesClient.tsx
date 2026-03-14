@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { SearchPill } from "@/components/ui/SearchPill";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { FilterWrapper } from "@/components/ui/FilterWrapper";
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/Container";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -230,38 +232,32 @@ export function InvestCompaniesClient() {
         <div className="mb-8">
           <Card className="rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm">
             <form
-              className="flex flex-wrap items-end gap-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 void searchCompanies();
               }}
             >
-              <div className="flex-1 min-w-[240px]">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">회사명 검색</label>
-                <SearchPill
-                  className="mt-2 h-10 w-full"
-                  value={queryInput}
-                  onChange={(event) => setQueryInput(event.target.value)}
-                  onClear={() => setQueryInput("")}
-                  placeholder="예: 삼성전자, 현대자동차"
-                  isLoading={searchLoading}
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">정렬</label>
-                <select 
-                  className="mt-2 block h-10 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none" 
-                  value={sortKey} 
+              <FilterWrapper className="items-end">
+                <div className="flex-1 min-w-[240px]">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">회사명 검색</label>
+                  <SearchPill
+                    className="mt-2 h-10 w-full"
+                    value={queryInput}
+                    onChange={(event) => setQueryInput(event.target.value)}
+                    onClear={() => setQueryInput("")}
+                    placeholder="예: 삼성전자, 현대자동차"
+                    isLoading={searchLoading}
+                  />
+                </div>
+                <FilterSelect
+                  label="정렬"
+                  value={sortKey}
                   onChange={(event) => setSortKey(event.target.value as SortKey)}
-                >
-                  <option value="name">가나다순</option>
-                  <option value="name_desc">역순</option>
-                  <option value="stock_first">상장사 우선</option>
-                </select>
-              </div>
-              <Button variant="primary" type="submit" className="rounded-2xl px-8 h-10" disabled={searchLoading}>
-                {searchLoading ? "조회 중" : "검색"}
-              </Button>
+                />
+                <Button variant="primary" type="submit" className="rounded-2xl px-8 h-10" disabled={searchLoading}>
+                  {searchLoading ? "조회 중" : "검색"}
+                </Button>
+              </FilterWrapper>
             </form>
             <div className="mt-4 flex items-center gap-3 px-1">
               <span className="text-xs font-black text-emerald-600">{searchItems.length.toLocaleString()}건 발견</span>

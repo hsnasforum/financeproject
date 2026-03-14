@@ -11,6 +11,8 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { SearchPill } from "@/components/ui/SearchPill";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { FilterWrapper } from "@/components/ui/FilterWrapper";
 import { cn } from "@/lib/utils";
 import { SIDO_LIST, normalizeSido } from "@/lib/regions/kr";
 import {
@@ -351,11 +353,11 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   return (
     <main className="min-h-screen bg-slate-50 py-8 md:py-12">
       <Container>
-        <PageHeader 
-          title="공공 혜택 탐색" 
-          description="중앙부처 및 지자체에서 제공하는 다양한 혜택 정보를 한곳에서 확인해 보세요." 
+        <PageHeader
+          title="공공 혜택 탐색"
+          description="중앙부처 및 지자체에서 제공하는 다양한 혜택 정보를 한곳에서 확인해 보세요."
         />
-        
+
         <div className="mb-8 space-y-4">
           <Card className="rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm">
             <div className="space-y-6">
@@ -391,27 +393,25 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-4">
+              <FilterWrapper>
                 <Button variant="outline" size="sm" className="rounded-full" onClick={() => setAdvancedOpen((prev) => !prev)}>
                   키워드 검색 {advancedOpen ? "닫기" : "열기"}
                 </Button>
                 <div className="h-4 w-px bg-slate-100" />
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">지역</span>
-                  <select
-                    className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    value={sido}
-                    onChange={(e) => applyAndRun({ sido: e.target.value, sigungu: "" })}
-                  >
-                    <option value="">전국</option>
-                    {SIDO_LIST.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </div>
+
+                <FilterSelect
+                  label="지역"
+                  value={sido}
+                  onChange={(e) => applyAndRun({ sido: e.target.value, sigungu: "" })}
+                >
+                  <option value="">전국</option>
+                  {SIDO_LIST.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </FilterSelect>
+
                 {sido && (
-                  <select
-                    className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  <FilterSelect
                     value={sigungu}
                     onChange={(e) => applyAndRun({ sigungu: e.target.value })}
                   >
@@ -419,9 +419,9 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                     {facets.sigungu.map((entry) => (
                       <option key={entry.key} value={entry.key}>{entry.key}</option>
                     ))}
-                  </select>
+                  </FilterSelect>
                 )}
-                
+
                 <div className="ml-auto flex items-center gap-2">
                   <Button
                     variant="primary"
@@ -432,7 +432,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                     {loading ? "검색 중" : "필터 적용"}
                   </Button>
                 </div>
-              </div>
+              </FilterWrapper>
 
               {advancedOpen && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">
@@ -462,7 +462,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
               </Button>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" className="h-8 rounded-full text-[10px] text-slate-400" onClick={() => setAdvancedConfigOpen((prev) => !prev)}>
               고급 설정
@@ -522,9 +522,9 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                             {quality === "HIGH" ? "정보 충분" : quality === "MED" ? "보통" : "정보 부족"}
                           </Badge>
                         </div>
-                        
+
                         <p className="mb-6 flex-1 text-sm leading-relaxed text-slate-500 line-clamp-2">{item.summary}</p>
-                        
+
                         <div className="space-y-2 rounded-2xl bg-slate-50 p-4">
                           <div className="flex items-center gap-3 text-xs">
                             <span className="w-12 font-bold text-slate-400 shrink-0">운영기관</span>
@@ -541,7 +541,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 p-4 px-6">
                         <div className="flex gap-1.5">
                           {item.eligibilityChips?.slice(0, 2).map((chip) => (
@@ -556,7 +556,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                   );
                 })}
               </div>
-              
+
               {nextCursor !== null && (
                 <div className="mt-8 flex justify-center">
                   <Button
@@ -581,7 +581,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
           ) : null}
         </div>
       </Container>
-      
+
       {selected ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
           <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
@@ -597,7 +597,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </Button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
               <section>
                 <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">혜택 설명</p>
@@ -605,7 +605,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                   {selected.summary}
                 </div>
               </section>
-              
+
               <section>
                 <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">지원 조건</p>
                 <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">

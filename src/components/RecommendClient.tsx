@@ -10,6 +10,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { AssumptionsCallout } from "@/components/ui/AssumptionsCallout";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { FilterField } from "@/components/ui/FilterField";
 import { cn } from "@/lib/utils";
 
 export function RecommendClient() {
@@ -133,29 +135,29 @@ export function RecommendClient() {
             </div>
             
             <div className="grid gap-8 md:grid-cols-2 max-w-3xl mx-auto">
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">선호 기간 (개월)</label>
-                <input
-                  className="w-full h-12 rounded-xl border border-border bg-surface px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+              <div className="space-y-1">
+                <FilterField
+                  label="선호 기간 (개월)"
+                  wrapperClassName="flex-col items-start gap-2"
+                  className="h-12 w-full rounded-xl text-left"
                   value={preferredTermsText}
                   onChange={(e) => setPreferredTermsText(e.target.value)}
                   placeholder="예: 12, 24, 36"
                 />
-                <p className="text-[10px] text-slate-400 italic">콤마(,)로 구분하여 입력하세요.</p>
+                <p className="text-[10px] text-slate-400 italic ml-1">콤마(,)로 구분하여 입력하세요.</p>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block">자금 유동성 필요도</label>
-                <select 
-                  className="w-full h-12 rounded-xl border border-border bg-surface px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none shadow-sm cursor-pointer" 
-                  value={liquidityNeed} 
-                  onChange={(e) => setLiquidityNeed(e.target.value as RecommendProfile["liquidityNeed"])}
-                >
-                  <option value="low">낮음 (장기 예치 가능)</option>
-                  <option value="medium">보통 (일반적)</option>
-                  <option value="high">높음 (언제든 인출 필요)</option>
-                </select>
-              </div>
+              <FilterSelect
+                label="자금 유동성 필요도"
+                labelPosition="vertical"
+                size="md"
+                value={liquidityNeed}
+                onChange={(e) => setLiquidityNeed(e.target.value as RecommendProfile["liquidityNeed"])}
+              >
+                <option value="low">낮음 (장기 예치 가능)</option>
+                <option value="medium">보통 (일반적)</option>
+                <option value="high">높음 (언제든 인출 필요)</option>
+              </FilterSelect>
 
               <div className="space-y-3 md:col-span-2 max-w-md mx-auto w-full">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest block text-center">금리 선호도</label>

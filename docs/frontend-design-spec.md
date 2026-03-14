@@ -35,7 +35,9 @@
   - 데이터는 반드시 **카드(Card) 또는 리스트 Row** 형태로 변환하여 가독성을 높여야 합니다. (e.g., `/products/compare`의 모바일 카드 뷰)
 - **Search & Filter Patterns**:
   - **SearchPill**: `rounded-full` 배경에 검색 아이콘이 포함된 인풋을 사용하며, 우측에 Clear(X) 버튼을 포함합니다. `src/components/ui/SearchPill.tsx`를 공통으로 사용합니다.
-  - **FilterField**: `rounded-full` 컨테이너 내부에 라벨(Label), 입력 필드(Input), 단위(Unit)를 정돈하여 배치합니다. `src/components/ui/FilterField.tsx`를 통해 기간, 금리 등 수치 입력 필드의 일관성을 유지합니다.
+  - **FilterField**: `rounded-full` 컨테이너 내부에 라벨(Label), 입력 필드(Input), 단위(Unit)를 정돈하여 배치합니다. 수평 및 수직(Vertical) 배치를 모두 지원합니다.
+  - **FilterSelect**: `rounded-full` 또는 `rounded-2xl` 컨테이너 내부에 라벨과 Select 요소를 배치합니다. 수평/수직 배치 및 에러 상태 표현을 지원합니다.
+  - **FilterWrapper**: 여러 필터 요소를 일관된 간격(`gap-4`)으로 정렬하는 표준 컨테이너입니다.
   - **FilterChips**: 가급적 칩(Chip) 형태의 `rounded-full` 컨테이너를 사용하여 선택된 상태를 명확히 표시합니다. `src/components/ui/FilterChips.tsx`를 활용합니다.
 - **공통 상태 분리**:
   - `Loading`: 레이아웃이 크게 흔들리지 않도록 스켈레톤 또는 자리표시자 형태로 먼저 보여줍니다.
