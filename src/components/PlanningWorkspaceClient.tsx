@@ -110,7 +110,6 @@ import {
   BodyTableFrame,
   bodyChoiceRowClassName,
   bodyCompactFieldClassName,
-  bodyDialogActionsClassName,
   bodyFieldClassName,
   bodyLabelClassName,
   bodyTextAreaClassName,
@@ -3604,27 +3603,31 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
           ) : null}
 
           {!beginnerMode ? (
-            <details className="mt-6 rounded-2xl border border-slate-200 p-4">
-              <summary className="cursor-pointer text-xs font-black text-slate-400 uppercase tracking-widest">고급(개발자): JSON 편집기</summary>
-              <div className="mt-4 space-y-4">
-                <label className={`block text-xs ${bodyLabelClassName}`}>
-                  가정 Override JSON
+            <details className="mt-6 rounded-[2rem] border border-slate-200 bg-slate-50/50 p-6 group">
+              <summary className="cursor-pointer text-xs font-black text-slate-400 uppercase tracking-widest flex items-center justify-between">
+                <span>고급(개발자): JSON 편집기</span>
+                <span className="group-open:rotate-180 transition-transform">↓</span>
+              </summary>
+              <div className="mt-6 space-y-8 animate-in fade-in duration-300">
+                <div className="space-y-4">
+                  <SubSectionHeader title="가정 Override JSON" titleClassName="text-[11px]" description="계산에 사용되는 거시 지표 가정을 원본 형식으로 편집합니다." />
                   <textarea
-                    className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[120px] font-mono")}
+                    className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[140px] font-mono bg-white")}
                     value={assumptionsOverrideJson}
                     onChange={(event) => replaceAssumptionsFromJsonText(event.target.value)}
                   />
-                  {assumptionsJsonError ? <p className="mt-2 text-xs text-rose-700">{assumptionsJsonError}</p> : null}
-                </label>
-                <label className={`block text-xs ${bodyLabelClassName}`}>
-                  리파이낸스 제안 JSON
+                  {assumptionsJsonError ? <p className="mt-2 text-xs font-bold text-rose-600 px-1">{assumptionsJsonError}</p> : null}
+                </div>
+
+                <div className="space-y-4">
+                  <SubSectionHeader title="리파이낸스 제안 JSON" titleClassName="text-[11px]" description="부채 갈아타기 시나리오 데이터를 원본 형식으로 편집합니다." />
                   <textarea
-                    className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[100px] font-mono")}
+                    className={cn(bodyTextAreaClassName, "mt-2 rounded-xl border-slate-200 min-h-[120px] font-mono bg-white")}
                     value={debtOffersJson}
                     onChange={(event) => replaceDebtOffersFromJsonText(event.target.value)}
                   />
-                  {debtOffersJsonError ? <p className="mt-2 text-xs text-rose-700">{debtOffersJsonError}</p> : null}
-                </label>
+                  {debtOffersJsonError ? <p className="mt-2 text-xs font-bold text-rose-600 px-1">{debtOffersJsonError}</p> : null}
+                </div>
               </div>
             </details>
           ) : null}
@@ -4102,21 +4105,36 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             ) : null}
 
             {activeTab === "warningsGoals" ? (
-              <div className="mt-4 space-y-3 text-xs text-slate-700">
-                <h3 className="font-semibold text-slate-900">{t(locale, "CHARTS_HEADER")}</h3>
+              <div className="mt-6 space-y-6 animate-in fade-in duration-300">
+                <SubSectionHeader title={t(locale, "CHARTS_HEADER")} titleClassName="text-sm" />
                 {chartMode === "none" ? (
                   <EmptyState title={t(locale, "CHART_NOT_AVAILABLE")} />
                 ) : (
                   <PlanningMiniCharts locale={locale} mode={chartMode} points={chartPoints} />
                 )}
 
-                <BodyInset>
-                  해석: 상태 배지와 아래 표를 함께 보면 반복 경고, 목표 부족액, 현금흐름 악화 구간을 빠르게 확인할 수 있습니다.
-                </BodyInset>
+                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-800 leading-relaxed">
+                  💡 해석: 상태 배지와 아래 표를 함께 보면 반복 경고, 목표 부족액, 현금흐름 악화 구간을 빠르게 확인할 수 있습니다.
+                </div>
 
-                <WarningsTable warnings={aggregatedWarnings} />
-                <GoalsTable locale={locale} goals={goalTableRows} />
-                <TimelineSummaryTable locale={locale} rows={timelineSummaryRows} />
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <SubSectionHeader title="발생 경고 요약" titleClassName="text-[11px]" />
+                    <WarningsTable warnings={aggregatedWarnings} />
+                  </div>
+
+                  <div className="grid gap-6 xl:grid-cols-2">
+                    <div className="space-y-4">
+                      <SubSectionHeader title="목표 달성 상태" titleClassName="text-[11px]" />
+                      <GoalsTable locale={locale} goals={goalTableRows} />
+                    </div>
+                    <div className="space-y-4">
+                      <SubSectionHeader title="주요 지표 타임라인" titleClassName="text-[11px]" />
+                      <TimelineSummaryTable locale={locale} rows={timelineSummaryRows} />
+                    </div>
+                  </div>
+                </div>
+
                 {warningsGoalsDebugSections.length > 0 ? (
                   <AdvancedJsonPanel
                     sections={warningsGoalsDebugSections}
@@ -4126,74 +4144,81 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               </div>
             ) : null}
 
+
             {activeTab === "scenarios" ? (
-              <div className="mt-4 space-y-3 text-xs text-slate-700">
+              <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                 {scenariosStatus.state === "FAILED" ? (
-                  <BodyStatusInset tone="danger">
+                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-sm font-bold text-rose-800">
                     시나리오 단계 실패: {scenariosStatus.message ?? "시나리오 계산에 실패했습니다."}
-                  </BodyStatusInset>
+                  </div>
                 ) : !hasScenariosData ? (
                   <EmptyState title="시나리오 결과가 없습니다" />
                 ) : (
                   <>
-                    <BodyInset>
-                      해석: 기준 대비 순자산 변화와 목표 달성 변화를 함께 보면 어떤 가정이 결과를 악화시키는지 빠르게 파악할 수 있습니다.
-                    </BodyInset>
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-800 leading-relaxed">
+                      💡 해석: 기준 대비 순자산 변화와 목표 달성 변화를 함께 보면 어떤 가정이 결과를 악화시키는지 빠르게 파악할 수 있습니다.
+                    </div>
 
-                    <div className="grid gap-2 md:grid-cols-4">
-                      <BodyInset>
-                        기준 말기 순자산: <span className="font-semibold">{formatKrw(locale, Number(scenariosBaseSummary.endNetWorthKrw ?? 0))}</span>
-                      </BodyInset>
-                      <BodyInset>
-                        기준 최저 현금: <span className="font-semibold">{formatKrw(locale, Number(scenariosBaseSummary.worstCashKrw ?? 0))}</span>
-                      </BodyInset>
-                      <BodyInset>
-                        기준 목표 달성: <span className="font-semibold">{formatNumber(locale, scenariosBaseSummary.goalsAchieved)}</span>
-                      </BodyInset>
-                      <BodyInset>
-                        기준 경고 수: <span className="font-semibold">{formatNumber(locale, scenariosBaseSummary.warningsCount)}</span>
-                      </BodyInset>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">기준 말기 순자산</p>
+                        <p className="text-sm font-black text-slate-900 tabular-nums">{formatKrw(locale, Number(scenariosBaseSummary.endNetWorthKrw ?? 0))}</p>
+                      </div>
+                      <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">기준 최저 현금</p>
+                        <p className="text-sm font-black text-slate-900 tabular-nums">{formatKrw(locale, Number(scenariosBaseSummary.worstCashKrw ?? 0))}</p>
+                      </div>
+                      <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">기준 목표 달성</p>
+                        <p className="text-sm font-black text-slate-900 tabular-nums">{formatNumber(locale, scenariosBaseSummary.goalsAchieved)}건</p>
+                      </div>
+                      <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm">
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">기준 경고 수</p>
+                        <p className="text-sm font-black text-slate-900 tabular-nums">{formatNumber(locale, scenariosBaseSummary.warningsCount)}개</p>
+                      </div>
                     </div>
 
                     <WarningsTable warnings={aggregateGuideWarnings(scenariosBaseWarnings)} />
 
-                    <h3 className="font-semibold text-slate-900">시나리오 비교 표</h3>
-                    {scenarioComparisonRows.length === 0 ? (
-                      <EmptyState title="시나리오 결과가 없습니다" />
-                    ) : (
-                      <BodyTableFrame>
-                        <table className="min-w-full divide-y divide-slate-200">
-                          <thead className="bg-slate-50">
-                            <tr>
-                              <th className="px-3 py-2 text-left">시나리오</th>
-                              <th className="px-3 py-2 text-right">말기 순자산</th>
-                              <th className="px-3 py-2 text-right">기준 대비</th>
-                              <th className="px-3 py-2 text-right">목표 달성</th>
-                              <th className="px-3 py-2 text-right">달성 변화</th>
-                              <th className="px-3 py-2 text-right">경고 수</th>
-                              <th className="px-3 py-2 text-left">해석</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 bg-white">
-                            {scenarioComparisonRows.map((row) => (
-                              <tr key={row.id || row.title}>
-                                <td className="px-3 py-2 font-semibold text-slate-900">{row.title}</td>
-                                <td className="px-3 py-2 text-right">{formatKrw(locale, row.endNetWorthKrw)}</td>
-                                <td className={`px-3 py-2 text-right ${row.endNetWorthDeltaKrw < 0 ? "text-rose-700" : "text-emerald-700"}`}>
-                                  {formatKrw(locale, row.endNetWorthDeltaKrw)}
-                                </td>
-                                <td className="px-3 py-2 text-right">{row.goalsAchieved}</td>
-                                <td className={`px-3 py-2 text-right ${row.goalsAchievedDelta < 0 ? "text-rose-700" : "text-emerald-700"}`}>
-                                  {row.goalsAchievedDelta >= 0 ? "+" : ""}{row.goalsAchievedDelta}
-                                </td>
-                                <td className="px-3 py-2 text-right">{row.warningsCount}</td>
-                                <td className="px-3 py-2">{row.shortWhy[0] ?? "핵심 지표 변화를 먼저 확인하세요."}</td>
+                    <div className="space-y-4">
+                      <SubSectionHeader title="시나리오 비교 표" titleClassName="text-sm" />
+                      {scenarioComparisonRows.length === 0 ? (
+                        <EmptyState title="시나리오 결과가 없습니다" />
+                      ) : (
+                        <BodyTableFrame>
+                          <table className="min-w-full divide-y divide-slate-100">
+                            <thead className="bg-slate-50">
+                              <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                <th className="px-4 py-3 text-left">시나리오</th>
+                                <th className="px-4 py-3 text-right">말기 순자산</th>
+                                <th className="px-4 py-3 text-right">기준 대비</th>
+                                <th className="px-4 py-3 text-right">목표 달성</th>
+                                <th className="px-4 py-3 text-right">달성 변화</th>
+                                <th className="px-4 py-3 text-right">경고 수</th>
+                                <th className="px-4 py-3 text-left">해석</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </BodyTableFrame>
-                    )}
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 bg-white">
+                              {scenarioComparisonRows.map((row) => (
+                                <tr className="hover:bg-slate-50/50 transition-colors" key={row.id || row.title}>
+                                  <td className="px-4 py-3.5 text-xs font-black text-slate-900">{row.title}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, row.endNetWorthKrw)}</td>
+                                  <td className={cn("px-4 py-3.5 text-right text-xs font-black tabular-nums", row.endNetWorthDeltaKrw < 0 ? "text-rose-600" : "text-emerald-600")}>
+                                    {formatKrw(locale, row.endNetWorthDeltaKrw)}
+                                  </td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{row.goalsAchieved}</td>
+                                  <td className={cn("px-4 py-3.5 text-right text-xs font-black tabular-nums", row.goalsAchievedDelta < 0 ? "text-rose-600" : "text-emerald-600")}>
+                                    {row.goalsAchievedDelta >= 0 ? "+" : ""}{row.goalsAchievedDelta}
+                                  </td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-400">{row.warningsCount}</td>
+                                  <td className="px-4 py-3.5 text-xs font-medium text-slate-500 leading-relaxed">{row.shortWhy[0] ?? "핵심 지표 변화를 먼저 확인하세요."}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </BodyTableFrame>
+                      )}
+                    </div>
 
                     {scenariosDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
@@ -4207,50 +4232,53 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             ) : null}
 
             {activeTab === "monteCarlo" ? (
-              <div className="mt-4 space-y-3 text-xs text-slate-700">
+              <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                 {monteCarloStatus.state === "FAILED" ? (
-                  <BodyStatusInset tone="danger">
+                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-sm font-bold text-rose-800">
                     몬테카를로 단계 실패: {monteCarloStatus.message ?? "몬테카를로 계산에 실패했습니다."}
-                  </BodyStatusInset>
+                  </div>
                 ) : monteCarloStatus.state === "SKIPPED" ? (
-                  <BodyStatusInset tone="warning">
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100 text-sm font-bold text-amber-800">
                     몬테카를로 단계 생략: {monteCarloStatus.message ?? "실행 조건에 의해 생략되었습니다."}
-                  </BodyStatusInset>
+                  </div>
                 ) : !hasMonteCarloData || Object.keys(monteData).length === 0 ? (
                   <EmptyState title="몬테카를로 결과가 없습니다" />
                 ) : (
                   <>
-                    <BodyInset>
-                      {typeof monteDepletionProb === "number"
-                        ? `은퇴 자산 고갈 확률: ${formatPct(locale, monteDepletionProb * 100)} (모델 기반, 보장 아님)`
+                    <div className="p-4 rounded-2xl bg-slate-900 text-white text-xs font-bold leading-relaxed shadow-lg shadow-slate-900/10">
+                      📊 {typeof monteDepletionProb === "number"
+                        ? `은퇴 자산 고갈 확률: ${formatPct(locale, monteDepletionProb * 100)} (모델 기반 통계값, 보장 아님)`
                         : "고갈 확률 지표가 제공되지 않았습니다."}
-                    </BodyInset>
-                    <BodyTableFrame>
-                      <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50">
-                          <tr>
-                            <th className="px-3 py-2 text-left">지표</th>
-                            <th className="px-3 py-2 text-right">P10</th>
-                            <th className="px-3 py-2 text-right">P50</th>
-                            <th className="px-3 py-2 text-right">P90</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          <tr>
-                            <td className="px-3 py-2 font-semibold text-slate-900">말기 순자산</td>
-                            <td className="px-3 py-2 text-right">{formatKrw(locale, Number(monteEndNetWorth.p10 ?? 0))}</td>
-                            <td className="px-3 py-2 text-right">{formatKrw(locale, Number(monteEndNetWorth.p50 ?? 0))}</td>
-                            <td className="px-3 py-2 text-right">{formatKrw(locale, Number(monteEndNetWorth.p90 ?? 0))}</td>
-                          </tr>
-                          <tr>
-                            <td className="px-3 py-2 font-semibold text-slate-900">최저 현금</td>
-                            <td className="px-3 py-2 text-right">{formatKrw(locale, Number(monteWorstCash.p10 ?? 0))}</td>
-                            <td className="px-3 py-2 text-right">{formatKrw(locale, Number(monteWorstCash.p50 ?? 0))}</td>
-                            <td className="px-3 py-2 text-right">{formatKrw(locale, Number(monteWorstCash.p90 ?? 0))}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </BodyTableFrame>
+                    </div>
+                    <div className="space-y-4">
+                      <SubSectionHeader title="확률 분포 요약 (End State)" titleClassName="text-sm" />
+                      <BodyTableFrame>
+                        <table className="min-w-full divide-y divide-slate-100">
+                          <thead className="bg-slate-50">
+                            <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              <th className="px-4 py-3 text-left">지표</th>
+                              <th className="px-4 py-3 text-right">P10 (하위)</th>
+                              <th className="px-4 py-3 text-right">P50 (중앙)</th>
+                              <th className="px-4 py-3 text-right">P90 (상위)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50 bg-white">
+                            <tr className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3.5 text-xs font-black text-slate-900">말기 순자산</td>
+                              <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, Number(monteEndNetWorth.p10 ?? 0))}</td>
+                              <td className="px-4 py-3.5 text-right text-xs font-black tabular-nums text-emerald-600">{formatKrw(locale, Number(monteEndNetWorth.p50 ?? 0))}</td>
+                              <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, Number(monteEndNetWorth.p90 ?? 0))}</td>
+                            </tr>
+                            <tr className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-4 py-3.5 text-xs font-black text-slate-900">최저 현금</td>
+                              <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, Number(monteWorstCash.p10 ?? 0))}</td>
+                              <td className="px-4 py-3.5 text-right text-xs font-black tabular-nums text-emerald-600">{formatKrw(locale, Number(monteWorstCash.p50 ?? 0))}</td>
+                              <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, Number(monteWorstCash.p90 ?? 0))}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </BodyTableFrame>
+                    </div>
                   </>
                 )}
                 {monteCarloDebugSections.length > 0 ? (
@@ -4263,87 +4291,97 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             ) : null}
 
             {activeTab === "actions" ? (
-              <div className="mt-4 space-y-3 text-xs text-slate-700">
+              <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                 {actionsStatus.state === "FAILED" ? (
-                  <BodyStatusInset tone="danger">
+                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-sm font-bold text-rose-800">
                     실행 계획 단계 실패: {actionsStatus.message ?? "실행 계획 생성에 실패했습니다."}
-                  </BodyStatusInset>
+                  </div>
                 ) : (
                   <>
-                    <BodyInset>
-                      해석: 심각도(치명/경고/정보) 순서대로 우선 처리하면 경고를 가장 빠르게 줄일 수 있습니다.
-                    </BodyInset>
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-800 leading-relaxed">
+                      💡 해석: 심각도(치명/경고/정보) 순서대로 우선 처리하면 경고를 가장 빠르게 줄일 수 있습니다.
+                    </div>
 
-                    {actionTableRows.length === 0 ? (
-                      <EmptyState title="실행 계획이 없습니다" />
-                    ) : (
-                      <BodyTableFrame>
-                        <table className="min-w-full divide-y divide-slate-200">
-                          <thead className="bg-slate-50">
-                            <tr>
-                              <th className="px-3 py-2 text-left">심각도</th>
-                              <th className="px-3 py-2 text-left">코드</th>
-                              <th className="px-3 py-2 text-left">액션</th>
-                              <th className="px-3 py-2 text-left">요약</th>
-                              <th className="px-3 py-2 text-right">근거수</th>
-                              <th className="px-3 py-2 text-right">실행단계수</th>
-                              <th className="px-3 py-2 text-right">주의사항수</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 bg-white">
-                            {visibleActionRows.map((row) => (
-                              <tr key={`${row.code}-${row.title}`}>
-                                <td className={`px-3 py-2 font-semibold ${
-                                  row.severity === "critical" ? "text-rose-700" : row.severity === "warn" ? "text-amber-700" : "text-slate-700"
-                                }`}
-                                >
-                                  {row.severity === "critical" ? "치명" : row.severity === "warn" ? "경고" : "정보"}
-                                </td>
-                                <td className="px-3 py-2 font-semibold text-slate-900">{row.code}</td>
-                                <td className="px-3 py-2">{row.title}</td>
-                                <td className="px-3 py-2">{row.summary || "요약 없음"}</td>
-                                <td className="px-3 py-2 text-right">{row.whyCount}</td>
-                                <td className="px-3 py-2 text-right">{row.steps.length}</td>
-                                <td className="px-3 py-2 text-right">{row.cautions.length}</td>
+                    <div className="space-y-4">
+                      <SubSectionHeader title="추천 실행 계획 목록" titleClassName="text-sm" />
+                      {actionTableRows.length === 0 ? (
+                        <EmptyState title="실행 계획이 없습니다" />
+                      ) : (
+                        <BodyTableFrame>
+                          <table className="min-w-full divide-y divide-slate-100">
+                            <thead className="bg-slate-50">
+                              <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                <th className="px-4 py-3 text-left">심각도</th>
+                                <th className="px-4 py-3 text-left">코드</th>
+                                <th className="px-4 py-3 text-left">액션</th>
+                                <th className="px-4 py-3 text-left">요약</th>
+                                <th className="px-4 py-3 text-right">근거</th>
+                                <th className="px-4 py-3 text-right">단계</th>
+                                <th className="px-4 py-3 text-right">주의</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </BodyTableFrame>
-                    )}
-                    {actionTableRows.length > LIMITS.actionsTop ? (
-                      <BodyInset className="flex items-center justify-between">
-                        <span>{showAllActions ? `전체 ${actionTableRows.length}개 액션 표시 중` : `추가 ${omittedActionRows}개 액션이 생략되었습니다.`}</span>
-                        <button
-                          className="font-semibold text-emerald-700"
-                          onClick={() => setShowAllActions((prev) => !prev)}
-                          type="button"
-                        >
-                          {showAllActions ? "접기" : "더 보기"}
-                        </button>
-                      </BodyInset>
-                    ) : null}
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 bg-white">
+                              {visibleActionRows.map((row) => (
+                                <tr className="hover:bg-slate-50/50 transition-colors" key={`${row.code}-${row.title}`}>
+                                  <td className="px-4 py-3.5">
+                                    <Badge variant={row.severity === 'critical' ? 'destructive' : row.severity === 'warn' ? 'warning' : 'secondary'} className="text-[9px] uppercase font-black px-1.5 h-5">
+                                      {row.severity === "critical" ? "치명" : row.severity === "warn" ? "경고" : "정보"}
+                                    </Badge>
+                                  </td>
+                                  <td className="px-4 py-3.5 text-[11px] font-black text-slate-400 uppercase tracking-tight">{row.code}</td>
+                                  <td className="px-4 py-3.5 text-xs font-black text-slate-900">{row.title}</td>
+                                  <td className="px-4 py-3.5 text-xs font-medium text-slate-500 leading-relaxed max-w-xs">{row.summary || "요약 없음"}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-400">{row.whyCount}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-400">{row.steps.length}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-400">{row.cautions.length}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </BodyTableFrame>
+                      )}
+                      {actionTableRows.length > LIMITS.actionsTop ? (
+                        <div className="flex items-center justify-between px-2">
+                          <span className="text-xs font-bold text-slate-400 italic">{showAllActions ? `전체 ${actionTableRows.length}개 액션 표시 중` : `추가 ${omittedActionRows}개 액션이 생략되었습니다.`}</span>
+                          <Button
+                            variant="ghost"
+                            className="text-xs font-black text-emerald-600 hover:bg-emerald-50 h-8 rounded-lg"
+                            onClick={() => setShowAllActions((prev) => !prev)}
+                          >
+                            {showAllActions ? "간략히 보기 ↑" : "전체 액션 보기 ↓"}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
 
                     {actionTableRows.length > 0 ? (
-                      <div className="grid gap-2 md:grid-cols-2">
+                      <div className="grid gap-4 md:grid-cols-3">
                         {actionTableRows.slice(0, 3).map((row) => (
-                          <BodyInset key={`detail-${row.code}-${row.title}`}>
-                            <p className="font-semibold text-slate-900">{row.title}</p>
-                            <p className="mt-1">{row.summary || "핵심 문제를 줄이기 위한 조치입니다."}</p>
-                            <p className="mt-2 font-semibold text-slate-900">권장 단계</p>
-                            {row.steps.length === 0 ? (
-                              <p className="mt-1">세부 단계는 고급 보기를 참고하세요.</p>
-                            ) : (
-                              <ol className="mt-1 space-y-1">
-                                {row.steps.slice(0, 3).map((step, index) => (
-                                  <li key={`${row.code}-step-${index}`}>{index + 1}. {step}</li>
-                                ))}
-                              </ol>
-                            )}
+                          <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col" key={`detail-${row.code}-${row.title}`}>
+                            <p className="text-sm font-black text-slate-900">{row.title}</p>
+                            <p className="mt-2 text-xs font-medium text-slate-500 leading-relaxed flex-1">{row.summary || "핵심 문제를 줄이기 위한 조치입니다."}</p>
+
+                            <div className="mt-4 space-y-3">
+                              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">권장 단계</p>
+                              {row.steps.length === 0 ? (
+                                <p className="text-[11px] font-bold text-slate-400 italic">세부 단계는 고급 보기를 참고하세요.</p>
+                              ) : (
+                                <ul className="space-y-1.5">
+                                  {row.steps.slice(0, 3).map((step, index) => (
+                                    <li className="flex gap-2 text-[11px] font-bold text-slate-600" key={`${row.code}-step-${index}`}>
+                                      <span className="text-emerald-500">{index + 1}.</span>
+                                      <span className="leading-relaxed">{step}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
                             {row.cautions.length > 0 ? (
-                              <p className="mt-2 text-amber-800">주의: {row.cautions[0]}</p>
+                              <div className="mt-4 p-2 rounded-lg bg-amber-50 text-[10px] font-bold text-amber-700">
+                                ⚠️ 주의: {row.cautions[0]}
+                              </div>
                             ) : null}
-                          </BodyInset>
+                          </div>
                         ))}
                       </div>
                     ) : null}
@@ -4360,121 +4398,129 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             ) : null}
 
             {activeTab === "debt" ? (
-              <div className="mt-4 space-y-3 text-xs text-slate-700">
+              <div className="mt-6 space-y-6 animate-in fade-in duration-300">
                 {debtStatus.state === "FAILED" ? (
-                  <BodyStatusInset tone="danger">
+                  <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100 text-sm font-bold text-rose-800">
                     부채 분석 단계 실패: {debtStatus.message ?? "부채 분석에 실패했습니다."}
-                  </BodyStatusInset>
+                  </div>
                 ) : !hasDebtData ? (
                   <EmptyState title="부채 분석 결과가 없습니다" />
                 ) : (
                   <>
-                    <BodyInset>
-                      해석: 부채 탭은 현재 상환부담(DSR), 이자비용, 리파이낸스 효과를 함께 보고 우선순위를 정하는 용도입니다.
-                    </BodyInset>
+                    <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-xs font-bold text-emerald-800 leading-relaxed">
+                      💡 해석: 부채 탭은 현재 상환부담(DSR), 이자비용, 리파이낸스 효과를 함께 보고 우선순위를 정하는 용도입니다.
+                    </div>
 
-                    <div className="grid gap-2 md:grid-cols-2">
-                      <BodyInset>
-                        현재 DSR: <span className="font-semibold">{formatRatioPct(locale, debtMeta.debtServiceRatio)}</span>
-                      </BodyInset>
-                      <BodyInset>
-                        월 총상환액: <span className="font-semibold">{formatKrw(locale, Number(debtMeta.totalMonthlyPaymentKrw ?? 0))}</span>
-                      </BodyInset>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-slate-400">현재 DSR</span>
+                        <span className="text-sm font-black text-slate-900 tabular-nums">{formatRatioPct(locale, debtMeta.debtServiceRatio)}</span>
+                      </div>
+                      <div className="p-4 rounded-xl border border-slate-100 bg-white shadow-sm flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-slate-400">월 총상환액</span>
+                        <span className="text-sm font-black text-emerald-600 tabular-nums">{formatKrw(locale, Number(debtMeta.totalMonthlyPaymentKrw ?? 0))}</span>
+                      </div>
                     </div>
 
                     <WarningsTable warnings={debtWarnings} />
 
-                    <h3 className="font-semibold text-slate-900">부채별 상환 요약</h3>
-                    {debtSummaries.length === 0 ? (
-                      <EmptyState title="부채 요약 데이터가 없습니다" />
-                    ) : (
+                    <div className="space-y-4">
+                      <SubSectionHeader title="부채별 상환 요약" titleClassName="text-sm" />
+                      {debtSummaries.length === 0 ? (
+                        <EmptyState title="부채 요약 데이터가 없습니다" />
+                      ) : (
+                        <BodyTableFrame>
+                          <table className="min-w-full divide-y divide-slate-100">
+                            <thead className="bg-slate-50">
+                              <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                <th className="px-4 py-3 text-left">부채명</th>
+                                <th className="px-4 py-3 text-right">원금</th>
+                                <th className="px-4 py-3 text-right">금리(APR)</th>
+                                <th className="px-4 py-3 text-right">월 상환액</th>
+                                <th className="px-4 py-3 text-right">월 이자</th>
+                                <th className="px-4 py-3 text-right">잔여 총이자</th>
+                                <th className="px-4 py-3 text-right">상환완료</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 bg-white">
+                              {debtSummaries.map((row, index) => (
+                                <tr className="hover:bg-slate-50/50 transition-colors" key={`${String(row.liabilityId ?? index)}-${String(row.name ?? "")}`}>
+                                  <td className="px-4 py-3.5 text-xs font-black text-slate-900">{String(row.name ?? row.liabilityId ?? "부채")}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, Number(row.principalKrw ?? 0))}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-black tabular-nums text-emerald-600">{typeof row.aprPct === "number" ? formatPct(locale, row.aprPct) : "-"}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, Number(row.monthlyPaymentKrw ?? 0))}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-rose-600/70">{formatKrw(locale, Number(row.monthlyInterestKrw ?? 0))}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{formatKrw(locale, Number(row.totalInterestRemainingKrw ?? 0))}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-black text-slate-400">M{Number(row.payoffMonthIndex ?? 0) + 1}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </BodyTableFrame>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <SubSectionHeader title="리파이낸스 비교" titleClassName="text-sm" />
+                      {debtRefinance.length === 0 ? (
+                        <div className="bg-white/50 border border-dashed border-slate-200 rounded-2xl py-8 text-center text-slate-400 font-bold text-xs">
+                          적용 가능한 리파이낸스 제안이 없습니다. 현재 조건 유지 또는 추가상환을 먼저 검토하세요.
+                        </div>
+                      ) : (
+                        <BodyTableFrame>
+                          <table className="min-w-full divide-y divide-slate-100">
+                            <thead className="bg-slate-50">
+                              <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                <th className="px-4 py-3 text-left">부채</th>
+                                <th className="px-4 py-3 text-left">제안</th>
+                                <th className="px-4 py-3 text-right">신규금리</th>
+                                <th className="px-4 py-3 text-right">월상환 변화</th>
+                                <th className="px-4 py-3 text-right">예상이자절감</th>
+                                <th className="px-4 py-3 text-right">손익분기</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50 bg-white">
+                              {debtRefinance.map((row, index) => (
+                                <tr className="hover:bg-slate-50/50 transition-colors" key={`${String(row.liabilityId ?? index)}-${String(row.offerTitle ?? "")}`}>
+                                  <td className="px-4 py-3.5 text-[11px] font-black text-slate-400 uppercase tracking-tight">{String(row.liabilityId ?? "부채")}</td>
+                                  <td className="px-4 py-3.5 text-xs font-black text-slate-900">{String(row.offerTitle ?? "리파이낸스")}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-black tabular-nums text-emerald-600">{typeof row.newAprPct === "number" ? formatPct(locale, row.newAprPct) : "-"}</td>
+                                  <td className={cn("px-4 py-3.5 text-right text-xs font-black tabular-nums", Number(row.monthlyPaymentDeltaKrw ?? 0) > 0 ? "text-rose-600" : "text-emerald-600")}>
+                                    {formatKrw(locale, Number(row.monthlyPaymentDeltaKrw ?? 0))}
+                                  </td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-emerald-600">{formatKrw(locale, Number(row.interestSavingsKrw ?? 0))}</td>
+                                  <td className="px-4 py-3.5 text-right text-xs font-bold text-slate-400">{typeof row.breakEvenMonths === "number" ? `${row.breakEvenMonths}개월` : "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </BodyTableFrame>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <SubSectionHeader title="What-if 요약" titleClassName="text-sm" />
                       <BodyTableFrame>
-                        <table className="min-w-full divide-y divide-slate-200">
+                        <table className="min-w-full divide-y divide-slate-100">
                           <thead className="bg-slate-50">
-                            <tr>
-                              <th className="px-3 py-2 text-left">부채명</th>
-                              <th className="px-3 py-2 text-right">원금</th>
-                              <th className="px-3 py-2 text-right">금리(APR)</th>
-                              <th className="px-3 py-2 text-right">월 상환액</th>
-                              <th className="px-3 py-2 text-right">월 이자</th>
-                              <th className="px-3 py-2 text-right">잔여 총이자</th>
-                              <th className="px-3 py-2 text-right">예상 상환완료월</th>
+                            <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                              <th className="px-4 py-3 text-left">전략</th>
+                              <th className="px-4 py-3 text-right">제안 수</th>
+                              <th className="px-4 py-3 text-left">해석</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100 bg-white">
-                            {debtSummaries.map((row, index) => (
-                              <tr key={`${String(row.liabilityId ?? index)}-${String(row.name ?? "")}`}>
-                                <td className="px-3 py-2 font-semibold text-slate-900">{String(row.name ?? row.liabilityId ?? "부채")}</td>
-                                <td className="px-3 py-2 text-right">{formatKrw(locale, Number(row.principalKrw ?? 0))}</td>
-                                <td className="px-3 py-2 text-right">{typeof row.aprPct === "number" ? formatPct(locale, row.aprPct) : "-"}</td>
-                                <td className="px-3 py-2 text-right">{formatKrw(locale, Number(row.monthlyPaymentKrw ?? 0))}</td>
-                                <td className="px-3 py-2 text-right">{formatKrw(locale, Number(row.monthlyInterestKrw ?? 0))}</td>
-                                <td className="px-3 py-2 text-right">{formatKrw(locale, Number(row.totalInterestRemainingKrw ?? 0))}</td>
-                                <td className="px-3 py-2 text-right">M{Number(row.payoffMonthIndex ?? 0) + 1}</td>
+                          <tbody className="divide-y divide-slate-50 bg-white">
+                            {debtWhatIfSummary.map((row) => (
+                              <tr className="hover:bg-slate-50/50 transition-colors" key={row.title}>
+                                <td className="px-4 py-3.5 text-xs font-black text-slate-900">{row.title}</td>
+                                <td className="px-4 py-3.5 text-right text-xs font-bold tabular-nums text-slate-700">{row.count}</td>
+                                <td className="px-4 py-3.5 text-xs font-medium text-slate-500 leading-relaxed">{row.interpretation}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </BodyTableFrame>
-                    )}
-
-                    <h3 className="font-semibold text-slate-900">리파이낸스 비교</h3>
-                    {debtRefinance.length === 0 ? (
-                      <BodyInset>
-                        적용 가능한 리파이낸스 제안이 없습니다. 현재 조건 유지 또는 추가상환을 먼저 검토하세요.
-                      </BodyInset>
-                    ) : (
-                      <BodyTableFrame>
-                        <table className="min-w-full divide-y divide-slate-200">
-                          <thead className="bg-slate-50">
-                            <tr>
-                              <th className="px-3 py-2 text-left">부채</th>
-                              <th className="px-3 py-2 text-left">제안</th>
-                              <th className="px-3 py-2 text-right">신규금리</th>
-                              <th className="px-3 py-2 text-right">월상환 변화</th>
-                              <th className="px-3 py-2 text-right">예상이자절감</th>
-                              <th className="px-3 py-2 text-right">손익분기(월)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 bg-white">
-                            {debtRefinance.map((row, index) => (
-                              <tr key={`${String(row.liabilityId ?? index)}-${String(row.offerTitle ?? "")}`}>
-                                <td className="px-3 py-2 font-semibold text-slate-900">{String(row.liabilityId ?? "부채")}</td>
-                                <td className="px-3 py-2">{String(row.offerTitle ?? "리파이낸스")}</td>
-                                <td className="px-3 py-2 text-right">{typeof row.newAprPct === "number" ? formatPct(locale, row.newAprPct) : "-"}</td>
-                                <td className={`px-3 py-2 text-right ${Number(row.monthlyPaymentDeltaKrw ?? 0) > 0 ? "text-rose-700" : "text-emerald-700"}`}>
-                                  {formatKrw(locale, Number(row.monthlyPaymentDeltaKrw ?? 0))}
-                                </td>
-                                <td className="px-3 py-2 text-right">{formatKrw(locale, Number(row.interestSavingsKrw ?? 0))}</td>
-                                <td className="px-3 py-2 text-right">{typeof row.breakEvenMonths === "number" ? row.breakEvenMonths : "-"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </BodyTableFrame>
-                    )}
-
-                    <h3 className="font-semibold text-slate-900">What-if 요약</h3>
-                    <BodyTableFrame>
-                      <table className="min-w-full divide-y divide-slate-200">
-                        <thead className="bg-slate-50">
-                          <tr>
-                            <th className="px-3 py-2 text-left">전략</th>
-                            <th className="px-3 py-2 text-right">제안 수</th>
-                            <th className="px-3 py-2 text-left">해석</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {debtWhatIfSummary.map((row) => (
-                            <tr key={row.title}>
-                              <td className="px-3 py-2 font-semibold text-slate-900">{row.title}</td>
-                              <td className="px-3 py-2 text-right">{row.count}</td>
-                              <td className="px-3 py-2">{row.interpretation}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </BodyTableFrame>
+                    </div>
 
                     {debtDebugSections.length > 0 ? (
                       <AdvancedJsonPanel
@@ -4482,22 +4528,23 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                         title="고급 보기 (debt summary)"
                       />
                     ) : null}
-                  </>
-                )}
-              </div>
-            ) : null}
+                    </>
+                    )}
+                    </div>
+                    ) : null}
+
           </Card>
         </div>
       ) : null}
 
       {profileDeleteDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="planning-profile-delete-title">
-          <BodyDialogSurface className="max-w-lg">
-            <h2 id="planning-profile-delete-title" className="text-base font-bold text-slate-900">프로필 삭제 확인</h2>
-            <p className="mt-1 text-xs text-slate-600">아래 확인 문구를 정확히 입력해야 삭제가 진행됩니다.</p>
-            <BodyInset className="mt-3 px-3 py-2 font-mono text-xs text-slate-700">{profileDeleteDialog.expectedConfirm}</BodyInset>
+          <BodyDialogSurface className="max-w-md">
+            <SubSectionHeader title="프로필 삭제 확인" />
+            <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">아래 확인 문구를 정확히 입력해야 삭제가 진행됩니다.</p>
+            <div className="mt-4 px-3 py-2 font-mono text-[10px] text-rose-600 bg-rose-50 rounded-lg border border-rose-100">{profileDeleteDialog.expectedConfirm}</div>
             <input
-              className={bodyFieldClassName}
+              className={cn(bodyFieldClassName, "mt-4 h-11 text-center font-bold")}
               value={profileDeleteDialog.confirmText}
               onChange={(event) => {
                 const nextValue = event.target.value;
@@ -4505,10 +4552,11 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               }}
               disabled={savingProfile}
             />
-            <div className={bodyDialogActionsClassName}>
+            <div className="mt-6 flex justify-end gap-2">
               <Button
                 type="button"
                 variant="ghost"
+                className="rounded-xl h-10 px-6 font-bold"
                 onClick={() => {
                   if (savingProfile) return;
                   setProfileDeleteDialog(null);
@@ -4519,6 +4567,8 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               </Button>
               <Button
                 type="button"
+                variant="primary"
+                className="rounded-xl h-10 px-6 font-bold"
                 onClick={() => void submitDeleteProfileAction()}
                 disabled={savingProfile || profileDeleteDialog.confirmText.trim() !== profileDeleteDialog.expectedConfirm}
               >
@@ -4532,59 +4582,62 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
       {feedbackModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="planning-feedback-title">
           <BodyDialogSurface className="max-w-xl">
-            <h2 id="planning-feedback-title" className="text-base font-bold text-slate-900">피드백 보내기</h2>
-            <p className="mt-1 text-xs text-slate-600">/planning 사용 중 불편/버그를 로컬에 저장합니다.</p>
+            <SubSectionHeader title="피드백 보내기" />
+            <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">/planning 사용 중 발견한 불편한 점이나 버그를 알려주세요. 피드백은 브라우저 로컬 저장소에 안전하게 보관됩니다.</p>
 
-            <div className="mt-4 space-y-3">
-              <label className={`block text-xs ${bodyLabelClassName}`}>
-                분류
-                <select
-                  className={bodyFieldClassName}
-                  value={feedbackCategory}
-                  onChange={(event) => setFeedbackCategory(event.target.value as PlanningFeedbackCategory)}
-                  disabled={feedbackSubmitting}
-                >
-                  {FEEDBACK_CATEGORY_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
+            <div className="mt-8 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">분류</label>
+                  <select
+                    className={cn(bodyFieldClassName, "rounded-xl font-bold h-11 border-slate-200")}
+                    value={feedbackCategory}
+                    onChange={(event) => setFeedbackCategory(event.target.value as PlanningFeedbackCategory)}
+                    disabled={feedbackSubmitting}
+                  >
+                    {FEEDBACK_CATEGORY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
 
-              <label className={`block text-xs ${bodyLabelClassName}`}>
-                제목
-                <input
-                  className={bodyFieldClassName}
-                  placeholder="예: 실행 결과 탭 전환이 헷갈려요"
-                  value={feedbackTitle}
-                  onChange={(event) => setFeedbackTitle(event.target.value)}
-                  maxLength={160}
-                  disabled={feedbackSubmitting}
-                />
-              </label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">제목</label>
+                  <input
+                    className={cn(bodyFieldClassName, "rounded-xl font-bold h-11 border-slate-200")}
+                    placeholder="제목 (선택 사항)"
+                    value={feedbackTitle}
+                    onChange={(event) => setFeedbackTitle(event.target.value)}
+                    maxLength={160}
+                    disabled={feedbackSubmitting}
+                  />
+                </div>
+              </div>
 
-              <label className={`block text-xs ${bodyLabelClassName}`}>
-                내용
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">내용</label>
                 <textarea
-                  className={`${bodyTextAreaClassName} min-h-28`}
-                  placeholder="재현 단계/기대 결과/실제 결과를 간단히 적어주세요."
+                  className={cn(bodyTextAreaClassName, "min-h-[160px] rounded-2xl")}
+                  placeholder="구체적인 내용을 입력해 주세요 (재현 단계 등)."
                   value={feedbackMessage}
                   onChange={(event) => setFeedbackMessage(event.target.value)}
                   maxLength={5000}
                   disabled={feedbackSubmitting}
                 />
-              </label>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 space-y-2 text-[11px] font-bold text-slate-500">
+                <p className="flex justify-between"><span>snapshot:</span> <span className="text-slate-900">{workspaceSnapshotState.displayId || "-"}</span></p>
+                <p className="flex justify-between"><span>runId:</span> <span className="text-slate-900">{savedRun?.id ?? "-"}</span></p>
+                <p className="flex justify-between"><span>health:</span> <span className="text-slate-900">critical={healthSummary?.criticalCount ?? "-"}, warnings={healthSummary?.warningCodes?.length ?? 0}</span></p>
+              </div>
             </div>
 
-            <BodyInset className="mt-4 px-3 py-2 text-xs text-slate-700">
-              <p>snapshot: {workspaceSnapshotState.displayId || "-"}</p>
-              <p>runId: {savedRun?.id ?? "-"}</p>
-              <p>health: critical={healthSummary?.criticalCount ?? "-"}, warnings={healthSummary?.warningCodes?.slice(0, 10).join(", ") || "-"}</p>
-            </BodyInset>
-
-            <div className={bodyDialogActionsClassName}>
+            <div className="mt-8 flex justify-end gap-2">
               <Button
                 type="button"
                 variant="ghost"
+                className="rounded-xl h-10 px-6 font-bold"
                 onClick={() => {
                   if (feedbackSubmitting) return;
                   setFeedbackModalOpen(false);
@@ -4595,8 +4648,10 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
               </Button>
               <Button
                 type="button"
+                variant="primary"
+                className="rounded-xl h-10 px-6 font-bold"
                 onClick={() => void submitPlanningFeedbackAction()}
-                disabled={feedbackSubmitting}
+                disabled={feedbackSubmitting || !feedbackMessage.trim()}
               >
                 {feedbackSubmitting ? "저장 중..." : "저장"}
               </Button>
