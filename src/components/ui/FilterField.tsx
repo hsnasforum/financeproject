@@ -8,22 +8,24 @@ export interface FilterFieldProps
   label?: string;
   unit?: string;
   wrapperClassName?: string;
+  labelPosition?: "horizontal" | "vertical";
 }
 
 const FilterField = React.forwardRef<HTMLInputElement, FilterFieldProps>(
-  ({ className, label, unit, wrapperClassName, value, ...props }, ref) => {
+  ({ className, label, unit, wrapperClassName, labelPosition = "horizontal", value, ...props }, ref) => {
     const hasValue = value !== undefined && value !== null && value !== "";
+    const isVertical = labelPosition === "vertical";
 
     return (
-      <div className={cn("flex items-center gap-3", wrapperClassName)}>
+      <div className={cn("flex gap-3", isVertical ? "flex-col items-start" : "items-center", wrapperClassName)}>
         {label && (
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0">
             {label}
           </label>
         )}
         <div
           className={cn(
-            "flex items-center overflow-hidden rounded-full border border-slate-200 bg-slate-50 transition-all duration-300",
+            "flex items-center overflow-hidden rounded-full border border-slate-200 bg-slate-50 transition-all duration-300 w-full",
             "focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 focus-within:bg-white",
             hasValue && "border-emerald-200 bg-emerald-50/20"
           )}
@@ -32,7 +34,7 @@ const FilterField = React.forwardRef<HTMLInputElement, FilterFieldProps>(
             ref={ref}
             value={value}
             className={cn(
-              "h-9 min-w-16 bg-transparent px-3 text-center text-sm font-bold outline-none placeholder:text-slate-300 placeholder:font-normal",
+              "h-9 min-w-16 bg-transparent px-3 text-center text-sm font-bold outline-none placeholder:text-slate-300 placeholder:font-normal flex-1",
               className
             )}
             {...props}

@@ -12,7 +12,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { SearchPill } from "@/components/ui/SearchPill";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { FilterWrapper } from "@/components/ui/FilterWrapper";
 import { FallbackBanner } from "@/components/FallbackBanner";
+import { cn } from "@/lib/utils";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { firstError, issuesToFieldMap } from "@/lib/forms/issueMap";
@@ -218,44 +221,22 @@ export function SubscriptionClient({
             <ErrorAnnouncer />
             
             <form className="grid gap-6" onSubmit={(e) => { e.preventDefault(); void run(); }}>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">지역</span>
-                  <div>
-                    <select
-                      id={pathToId("region")}
-                      className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                      value={region}
-                      onChange={(e) => setRegion(e.target.value)}
-                      aria-invalid={!!fieldIssueMap.region?.[0]}
-                      aria-describedby={fieldIssueMap.region?.[0] ? `${pathToId("region")}-error` : undefined}
-                    >
-                      {["전국", "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"].map((name) => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </select>
-                    <FieldError id={`${pathToId("region")}-error`} message={fieldIssueMap.region?.[0]} />
-                  </div>
-                </div>
+              <FilterWrapper>
+                <FilterSelect
+                  id={pathToId("region")}
+                  label="지역"
+                  value={region}
+                  onChange={(e) => setRegion(e.target.value)}
+                  error={fieldIssueMap.region?.[0]}
+                />
                 
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">유형</span>
-                  <div>
-                    <select
-                      id={pathToId("houseType")}
-                      className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                      value={houseType}
-                      onChange={(e) => setHouseType(e.target.value as "apt" | "urbty" | "remndr")}
-                      aria-invalid={!!fieldIssueMap.houseType?.[0]}
-                      aria-describedby={fieldIssueMap.houseType?.[0] ? `${pathToId("houseType")}-error` : undefined}
-                    >
-                      <option value="apt">APT</option>
-                      <option value="urbty">오피스텔/도시형</option>
-                      <option value="remndr">잔여세대</option>
-                    </select>
-                    <FieldError id={`${pathToId("houseType")}-error`} message={fieldIssueMap.houseType?.[0]} />
-                  </div>
-                </div>
+                <FilterSelect
+                  id={pathToId("houseType")}
+                  label="유형"
+                  value={houseType}
+                  onChange={(e) => setHouseType(e.target.value as "apt" | "urbty" | "remndr")}
+                  error={fieldIssueMap.houseType?.[0]}
+                />
 
                 <div className="h-4 w-px bg-slate-100" />
 
@@ -266,7 +247,10 @@ export function SubscriptionClient({
                       <input
                         id={pathToId("from")}
                         type="date"
-                        className="h-9 rounded-full border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold outline-none"
+                        className={cn(
+                          "h-9 rounded-full border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold outline-none",
+                          fieldIssueMap.from?.[0] && "border-rose-300 bg-rose-50/30"
+                        )}
                         value={from}
                         onChange={(e) => setFrom(e.target.value)}
                         aria-invalid={!!fieldIssueMap.from?.[0]}
@@ -279,7 +263,10 @@ export function SubscriptionClient({
                       <input
                         id={pathToId("to")}
                         type="date"
-                        className="h-9 rounded-full border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold outline-none"
+                        className={cn(
+                          "h-9 rounded-full border border-slate-200 bg-slate-50 px-3 text-[11px] font-bold outline-none",
+                          fieldIssueMap.to?.[0] && "border-rose-300 bg-rose-50/30"
+                        )}
                         value={to}
                         onChange={(e) => setTo(e.target.value)}
                         aria-invalid={!!fieldIssueMap.to?.[0]}
@@ -289,7 +276,7 @@ export function SubscriptionClient({
                     </div>
                   </div>
                 </div>
-              </div>
+              </FilterWrapper>
 
               <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-6">
                 <div className="flex flex-1 min-w-[240px] flex-col gap-1">

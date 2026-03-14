@@ -16,6 +16,7 @@ import { Container } from "@/components/ui/Container";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { FilterSelect } from "@/components/ui/FilterSelect";
 import { downloadText } from "@/lib/browser/download";
 import { type NormalizedProduct } from "@/lib/finlife/types";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
@@ -634,40 +635,40 @@ function RecommendPageInner() {
             <div className="grid gap-8 lg:grid-cols-4">
               <div className="space-y-6 lg:col-span-3">
                 <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label htmlFor={pathToId("purpose")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">저축 목적</label>
-                    <select
+                  <div className="flex flex-col gap-1">
+                    <FilterSelect
+                      size="md"
                       id={pathToId("purpose")}
-                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      label="저축 목적"
                       value={profile.purpose}
                       onChange={(e) => setProfile((prev) => ({ ...prev, purpose: e.target.value as StoredProfile["purpose"] }))}
                     >
                       <option value="emergency">단기 비상금 (안정성 중시)</option>
                       <option value="seed-money">목돈 마련 (수익성 중시)</option>
                       <option value="long-term">장기 저축 (복리 효과)</option>
-                    </select>
+                    </FilterSelect>
                     <FieldError id={`${pathToId("purpose")}_error`} message={fieldIssueMap.purpose?.[0]} />
                   </div>
 
-                  <div className="space-y-2">
-                    <label htmlFor={pathToId("kind")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">상품 유형</label>
-                    <select
+                  <div className="flex flex-col gap-1">
+                    <FilterSelect
+                      size="md"
                       id={pathToId("kind")}
-                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      label="상품 유형"
                       value={profile.kind}
                       onChange={(e) => setProfile((prev) => ({ ...prev, kind: e.target.value as StoredProfile["kind"] }))}
                     >
                       <option value="deposit">정기 예금</option>
                       <option value="saving">정기 적금</option>
-                    </select>
+                    </FilterSelect>
                     <FieldError id={`${pathToId("kind")}_error`} message={fieldIssueMap.kind?.[0]} />
                   </div>
 
-                  <div className="space-y-2">
-                    <label htmlFor={pathToId("preferredTerm")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">희망 기간</label>
-                    <select
+                  <div className="flex flex-col gap-1">
+                    <FilterSelect
+                      size="md"
                       id={pathToId("preferredTerm")}
-                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      label="희망 기간"
                       value={profile.preferredTerm}
                       onChange={(e) => setProfile((prev) => ({ ...prev, preferredTerm: Number(e.target.value) as StoredProfile["preferredTerm"] }))}
                     >
@@ -676,22 +677,22 @@ function RecommendPageInner() {
                       <option value={12}>12개월</option>
                       <option value={24}>24개월</option>
                       <option value={36}>36개월</option>
-                    </select>
+                    </FilterSelect>
                     <FieldError id={`${pathToId("preferredTerm")}_error`} message={fieldIssueMap.preferredTerm?.[0]} />
                   </div>
 
-                  <div className="space-y-2">
-                    <label htmlFor={pathToId("rateMode")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">금리 정책</label>
-                    <select
+                  <div className="flex flex-col gap-1">
+                    <FilterSelect
+                      size="md"
                       id={pathToId("rateMode")}
-                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      label="금리 정책"
                       value={profile.rateMode}
                       onChange={(e) => setProfile((prev) => ({ ...prev, rateMode: e.target.value as StoredProfile["rateMode"] }))}
                     >
                       <option value="max">최고 금리 높은 상품 우선</option>
                       <option value="base">기본 금리 높은 상품 우선</option>
                       <option value="simple">우대 조건 없는 단순 상품</option>
-                    </select>
+                    </FilterSelect>
                     <FieldError id={`${pathToId("rateMode")}_error`} message={fieldIssueMap.rateMode?.[0]} />
                   </div>
                 </div>
