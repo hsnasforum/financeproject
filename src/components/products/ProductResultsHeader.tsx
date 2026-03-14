@@ -25,6 +25,18 @@ type Props = {
   showSortControl?: boolean;
 };
 
+function getModeLabel(mode: Props["mode"]) {
+  if (mode === "mock") return "대체 데이터";
+  if (mode === "fixture") return "검증 데이터";
+  return "실시간";
+}
+
+function getModeVariant(mode: Props["mode"]) {
+  if (mode === "mock") return "warning" as const;
+  if (mode === "fixture") return "secondary" as const;
+  return "success" as const;
+}
+
 export function ProductResultsHeader({
   viewMode,
   shownProducts,
@@ -42,37 +54,44 @@ export function ProductResultsHeader({
   mode,
   showSortControl = true,
 }: Props) {
+  const shownCount = viewMode === "product" ? shownProducts : shownOptions;
+  const totalCount = viewMode === "product" ? totalProducts : totalOptions;
+  const modeLabel = getModeLabel(mode);
+  const viewLabel = viewMode === "product" ? "상품 기준" : "옵션 기준";
+  const scanLabel = scanMode === "page"
+    ? `페이지 ${nowPage ?? "-"} / ${maxPage ?? "-"}`
+    : `스캔 ${pagesFetched ?? "-"}페이지`;
+
   return (
-    <div className="flex flex-col md:flex-row md:items-center justify-between py-6 gap-4 border-b border-border/50">
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-2 text-sm font-bold text-slate-900 tracking-tight">
-          검색 결과 <span className="text-primary font-black tabular-nums">{(viewMode === "product" ? shownProducts : shownOptions).toLocaleString()}</span>개
-          <span className="h-3 w-px bg-slate-200 mx-1" />
-          <span className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">
-            Total {(viewMode === "product" ? totalProducts : totalOptions).toLocaleString()}
-          </span>
+    <div className="flex flex-col gap-4 border-b border-border/50 py-6 md:flex-row md:items-end md:justify-between">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={getModeVariant(mode)} className="px-2.5 py-0.5">
+            {modeLabel}
+          </Badge>
+          <span className="text-sm font-semibold text-slate-500">{viewLabel}</span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          <Badge variant="secondary" className="px-1.5 py-0 h-4 bg-surface-muted text-slate-400 text-[9px] font-black">{mode ?? "LIVE"}</Badge>
-          <span className="opacity-40">/</span>
-          <span>{viewMode === "product" ? "Product Focused" : "Option Focused"}</span>
-          <span className="opacity-40">/</span>
-          {scanMode === "page" ? (
-            <span className="tabular-nums">PAGE {nowPage ?? "-"}/{maxPage ?? "-"}</span>
-          ) : (
-            <span className="tabular-nums">SCANNED {pagesFetched ?? "-"} PAGES</span>
-          )}
-          {truncatedByMaxPages && <span className="text-amber-500 font-black">· LIMIT REACHED</span>}
+        <div className="flex flex-wrap items-end gap-2">
+          <h2 className="text-base font-bold text-slate-900">검색 결과</h2>
+          <span className="text-3xl font-black tabular-nums text-primary">{shownCount.toLocaleString()}</span>
+          <span className="pb-1 text-sm font-semibold text-slate-500">개</span>
+          <span className="pb-1 text-sm text-slate-400">전체 {totalCount.toLocaleString()}개 중</span>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
+          <span className="rounded-full bg-slate-100 px-3 py-1">{scanLabel}</span>
+          {truncatedByMaxPages ? (
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">최대 조회 범위에서 중단됨</span>
+          ) : null}
         </div>
       </div>
 
-      {showSortControl && (
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Sort by</span>
+      {showSortControl ? (
+        <label className="flex min-w-[12rem] flex-col gap-2 md:items-end">
+          <span className="text-[11px] font-semibold text-slate-500">정렬 기준</span>
           <select
             value={sortKey}
-            onChange={(e) => onSortChange(e.target.value as SortKey)}
-            className="h-10 rounded-full bg-surface-muted border-none px-5 text-[11px] font-bold text-slate-700 outline-none cursor-pointer hover:bg-surface hover:ring-2 hover:ring-primary/20 transition-all focus:ring-4 focus:ring-primary/10"
+            onChange={(event) => onSortChange(event.target.value as SortKey)}
+            className="h-11 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
           >
             <option value={ratePreference === "higher" ? "rateDesc" : "rateAsc"}>
               {ratePreference === "higher" ? "최고 금리순" : "최저 금리순"}
@@ -80,8 +99,8 @@ export function ProductResultsHeader({
             <option value="termAsc">기간 짧은 순</option>
             <option value="nameAsc">상품 이름 순</option>
           </select>
-        </div>
-      )}
+        </label>
+      ) : null}
     </div>
   );
 }

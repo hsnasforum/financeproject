@@ -1,0 +1,38 @@
+# Frontend Design Specification (v1.0)
+
+## 1. Overview & Direction
+- **Mission**: 현대적이고 일관된 완성도 높은 UI/UX 경험 제공
+- **Core Mood**: 신뢰감(Trust), 세련됨(Modern), 가볍지만 전문적임(Light & Professional)
+- **Key Principle**: 기존 레거시 디자인 보존보다 전체적인 통일성과 완성도를 최우선으로 합니다. 낡은 느낌(Old-looking)을 배제하고 모바일에서 데스크톱까지 자연스러운 반응형(Responsive) 레이아웃을 제공합니다.
+
+## 2. Tech Stack & Styling
+- **Framework**: Next.js 16 (App Router), React 19
+- **Styling**: Tailwind CSS v4, Framer Motion (애니메이션 및 인터랙션)
+- **Component Strategy**: `src/components/ui/` 폴더 기반의 재사용 가능한 UI Primitive 컴포넌트(e.g., Button, Card, Badge, SegmentedTabs)를 적극 활용하며, 1회성 하드코딩 스타일은 최소화합니다.
+
+## 3. Design Tokens (기본 테마)
+- **Color Palette**:
+  - `Primary`: `#059669` (Emerald 600) - 최고금리, 핵심 수치, 주요 액션 강조에 통일하여 사용
+  - `Background`: `#f8fafc` (Slate 50) 바탕 / `Surface`: `#ffffff` (White)
+  - `Text`: `Foreground` (`#0f172a`), `Secondary` (`#475569`), `Muted` (`#94a3b8`)
+- **Typography**: 시스템 폰트(geist-sans 계열) 기반으로 자신감 있고 읽기 쉬운 텍스트 구성
+- **Spacing & Layout**: 답답하고 촘촘한 레이아웃을 피하고, 넉넉하고 정돈된 여백(Spacing scale) 리듬 유지
+- **Radius & Shadow**:
+  - 기본 Radius: `2rem`, 소형 Radius: `1rem`
+  - 표면감과 그림자는 절제되고 일관된 규칙(기본 `--card-shadow`, 호버 시 `--card-shadow-hover`) 적용
+
+## 4. Key UI Patterns (핵심 화면 패턴)
+- **상품 탐색 UI 계층 (Reference Pattern)**:
+  해당 프로젝트의 상품 탐색은 아래의 위계와 흐름을 최우선으로 따릅니다.
+  1. **Segmented Tabs** (대분류)
+  2. **Provider 칩** (제공자 필터)
+  3. **Filter 칩/그리드** (세부 조건 필터)
+  4. **리스트 / Row 아이템** (결과 노출)
+- **Mobile Environment**:
+  - 모바일 뷰에서 **테이블(Table) 형태 사용을 엄격히 금지**합니다.
+  - 데이터는 반드시 **카드(Card) 또는 리스트 Row** 형태로 변환하여 가독성을 높여야 합니다.
+
+## 5. QA & Definition of Done (완료 기준)
+- 특정 섹션이나 페이지만 부분적으로 모던해 보이고 주변은 낡아 보이는 '패치워크' 상태가 아니어야 합니다.
+- 페이지별로 각기 다른 간격(Spacing), 둥글기(Radius), 그림자(Shadow), 버튼 철학이 혼용되지 않고 전체 프로덕트가 하나의 디자인 언어로 통일되어야 합니다.
+- 새로운 UI 추가 시 연관된 공통 컴포넌트부터 정비하여 프로젝트 전반의 완성도를 끌어올립니다.
