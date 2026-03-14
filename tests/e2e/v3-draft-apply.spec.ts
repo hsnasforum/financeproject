@@ -214,3 +214,151 @@ test("planning v3 profile draft flow can create, preflight, and apply a saved dr
   await page.getByTestId("v3-draft-apply-profile").click();
   await expect(page).toHaveURL(/\/planning\?profileId=profile-new$/);
 });
+
+test("planning v3 profile drafts list separates load failure from empty guidance", async ({ page }) => {
+  await page.route(/\/api\/planning\/v3\/profile\/drafts(\?.*)?$/, async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: {
+          code: "INTERNAL",
+          message: "초안 목록을 불러오지 못했습니다.",
+        },
+      }),
+    });
+  });
+
+  await page.goto("/planning/v3/profile/drafts");
+
+  await expect(page.getByTestId("v3-profile-drafts-load-failure")).toContainText(
+    "초안 목록을 확인하지 못했습니다. 새로고침으로 다시 시도해 주세요.",
+  );
+  await expect(page.getByText("저장된 profile draft가 없습니다.")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "CSV 업로드", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "배치 센터", exact: true })).toBeVisible();
+});
+
+test("planning v3 profile draft detail keeps failure guidance after a failed preflight request", async ({ page }) => {
+  await page.route(/\/api\/planning\/v3\/profile\/drafts\/draft-1(\?.*)?$/, async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: {
+          id: "draft-1",
+          batchId: "batch-1",
+          createdAt: "2026-03-03T00:00:00.000Z",
+          draftPatch: {
+            monthlyIncomeNet: 3_250_000,
+            monthlyEssentialExpenses: 850_000,
+            monthlyDiscretionaryExpenses: 500_000,
+            assumptions: ["최근 2개월 기준"],
+            monthsConsidered: 2,
+          },
+          evidence: {
+            monthsUsed: ["2026-01", "2026-02"],
+            ymStats: [
+              {
+                ym: "2026-01",
+                incomeKrw: 3_200_000,
+                expenseKrw: 1_200_000,
+                fixedExpenseKrw: 800_000,
+                variableExpenseKrw: 400_000,
+                debtExpenseKrw: 0,
+                transferKrw: 0,
+              },
+            ],
+            byCategoryStats: [
+              { categoryId: "housing", totalKrw: 900_000 },
+            ],
+            medians: {
+              incomeKrw: 3_250_000,
+              expenseKrw: 1_350_000,
+              fixedExpenseKrw: 850_000,
+              variableExpenseKrw: 500_000,
+              debtExpenseKrw: 0,
+            },
+            ruleCoverage: {
+              total: 3,
+              override: 0,
+              rule: 3,
+              default: 0,
+              transfer: 0,
+            },
+          },
+          assumptions: ["최근 2개월 기준"],
+          stats: {
+            months: 2,
+            transfersExcluded: true,
+            unassignedCount: 1,
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route(/\/api\/planning\/v3\/profiles(\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        data: [
+          {
+            profileId: "profile-base",
+            name: "기본 프로필",
+            updatedAt: "2026-03-03T00:00:00.000Z",
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route("**/api/planning/v3/profile/drafts/draft-1/preflight", async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: {
+          code: "PREFLIGHT_FAILED",
+          message: "프리플라이트 실행에 실패했습니다.",
+        },
+      }),
+    });
+  });
+
+  await page.goto("/planning/v3/profile/drafts/draft-1");
+
+  await expect(page.getByTestId("v3-draft-meta")).toBeVisible();
+  await page.getByTestId("v3-draft-base-profile-picker").selectOption("profile-base");
+  await page.getByTestId("v3-draft-run-preflight").click();
+
+  await expect(page.getByText("프리플라이트 실행에 실패했습니다.")).toBeVisible();
+  await expect(page.getByTestId("v3-draft-apply-guidance")).toContainText(
+    "프리플라이트 실행이 실패했습니다. 같은 기준으로 다시 실행해 주세요.",
+  );
+  await expect(page.getByTestId("v3-preflight-summary")).toContainText("프리플라이트 실행 실패");
+  await expect(page.getByTestId("v3-preflight-errors")).toContainText(
+    "실행이 완료되지 않아 오류 목록을 보여주지 못했습니다. 메시지를 확인한 뒤 다시 실행해 주세요.",
+  );
+  await expect(page.getByTestId("v3-preflight-warnings")).toContainText(
+    "실행이 완료되지 않아 경고 목록을 보여주지 못했습니다. 메시지를 확인한 뒤 다시 실행해 주세요.",
+  );
+  await expect(page.getByTestId("v3-preflight-changes")).toContainText(
+    "실행이 완료되지 않아 변경 항목을 계산하지 못했습니다. 메시지를 확인한 뒤 다시 실행해 주세요.",
+  );
+});
