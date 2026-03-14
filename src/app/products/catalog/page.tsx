@@ -15,6 +15,8 @@ import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
+import { SearchPill } from "@/components/ui/SearchPill";
+import { FilterField } from "@/components/ui/FilterField";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 
 type UnifiedOption = {
@@ -176,30 +178,16 @@ export default function ProductsCatalogPage() {
                   onChange={(id) => setKind(id as "deposit" | "saving")}
                 />
                 
-                <div className="relative flex flex-1 items-center gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      className="h-11 w-full rounded-full border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                      placeholder="은행명 또는 상품명을 검색해 보세요"
-                      value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                    />
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                    </div>
-                    {q && (
-                      <button
-                        onClick={() => setQ("")}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-500 transition-colors"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                      </button>
-                    )}
-                  </div>
-                  <Button variant="primary" size="md" className="rounded-full px-6" onClick={() => void run({ append: false })} disabled={loading}>
-                    {loading ? "조회 중" : "검색"}
-                  </Button>
-                </div>
+                <SearchPill
+                  placeholder="은행명 또는 상품명을 검색해 보세요"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  onClear={() => setQ("")}
+                  isLoading={loading && rows.length === 0}
+                />
+                <Button variant="primary" size="md" className="rounded-full px-6" onClick={() => void run({ append: false })} disabled={loading}>
+                  {loading ? "조회 중" : "검색"}
+                </Button>
               </div>
 
               <ProviderChips
@@ -209,31 +197,21 @@ export default function ProductsCatalogPage() {
               />
 
               <div className="flex flex-wrap items-center gap-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">기간</span>
-                  <div className="flex items-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
-                    <input
-                      className="h-9 w-16 bg-transparent px-3 text-center text-sm font-bold outline-none"
-                      placeholder="전체"
-                      value={termMonths}
-                      onChange={(e) => setTermMonths(e.target.value)}
-                    />
-                    <span className="bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500 border-l border-slate-200">개월</span>
-                  </div>
-                </div>
+                <FilterField
+                  label="기간"
+                  unit="개월"
+                  placeholder="전체"
+                  value={termMonths}
+                  onChange={(e) => setTermMonths(e.target.value)}
+                />
 
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">최소 금리</span>
-                  <div className="flex items-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
-                    <input
-                      className="h-9 w-16 bg-transparent px-3 text-center text-sm font-bold outline-none"
-                      placeholder="0.0"
-                      value={minRate}
-                      onChange={(e) => setMinRate(e.target.value)}
-                    />
-                    <span className="bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500 border-l border-slate-200">% 이상</span>
-                  </div>
-                </div>
+                <FilterField
+                  label="최소 금리"
+                  unit="% 이상"
+                  placeholder="0.0"
+                  value={minRate}
+                  onChange={(e) => setMinRate(e.target.value)}
+                />
                 
                 <div className="ml-auto flex items-center gap-6">
                   <label className="flex cursor-pointer items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">

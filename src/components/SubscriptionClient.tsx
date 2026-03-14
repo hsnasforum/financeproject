@@ -11,6 +11,7 @@ import { Container } from "@/components/ui/Container";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { SearchPill } from "@/components/ui/SearchPill";
 import { FallbackBanner } from "@/components/FallbackBanner";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
@@ -292,11 +293,12 @@ export function SubscriptionClient({
 
               <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-6">
                 <div className="flex flex-1 min-w-[240px] flex-col gap-1">
-                  <input
+                  <SearchPill
                     id={pathToId("q")}
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    className="h-10 w-full"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
+                    onClear={() => setQuery("")}
                     placeholder="아파트명 또는 주택명 키워드 입력"
                     aria-invalid={!!fieldIssueMap.q?.[0]}
                     aria-describedby={fieldIssueMap.q?.[0] ? `${pathToId("q")}-error` : undefined}

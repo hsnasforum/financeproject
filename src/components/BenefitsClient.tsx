@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { SearchPill } from "@/components/ui/SearchPill";
 import { cn } from "@/lib/utils";
 import { SIDO_LIST, normalizeSido } from "@/lib/regions/kr";
 import {
@@ -435,10 +436,11 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
               {advancedOpen && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <input
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  <SearchPill
+                    className="h-10 w-full"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
+                    onClear={() => setQuery("")}
                     placeholder="찾으시는 혜택 키워드를 입력해 보세요 (예: 청년, 의료비, 임대주택)"
                   />
                 </div>
