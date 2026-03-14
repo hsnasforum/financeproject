@@ -478,6 +478,19 @@ describe("planning v3 golden regression", () => {
     expect(first).toStrictEqual(second);
   });
 
+  it("keeps golden baseline free from migrate and doctor metadata", () => {
+    const output = runFixturePipeline() as Record<string, unknown>;
+    const digest = output.digest as Record<string, unknown>;
+
+    expect(output).not.toHaveProperty("mode");
+    expect(output).not.toHaveProperty("totals");
+    expect(output).not.toHaveProperty("issues");
+    expect(output).not.toHaveProperty("doctor");
+    expect(output).not.toHaveProperty("backupPath");
+    expect(output).not.toHaveProperty("checkedAt");
+    expect(digest).not.toHaveProperty("schemaVersion");
+  });
+
   it("matches golden snapshot for digest/scenarios/alerts/impact", () => {
     const output = runFixturePipeline();
     expect(output).toMatchSnapshot();

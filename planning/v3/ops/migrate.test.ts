@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { runV3Doctor } from "./doctor";
 import { runV3Migrate } from "./migrate";
 
 function writeJson(filePath: string, value: unknown): void {
@@ -51,6 +52,14 @@ describe("planning v3 migrate cli", () => {
     expect(summary.totals.applied).toBe(0);
     expect(summary.totals.errors).toBe(0);
     expect(summary.files).toHaveLength(9);
+    expect(summary.doctor).toBeUndefined();
+    expect(summary.files.find((row) => row.path === ".data/news/state.json")).toEqual(expect.objectContaining({
+      currentSchemaVersion: null,
+      nextSchemaVersion: 1,
+      changed: true,
+      stepIds: ["add_schema_version_v1"],
+      valid: true,
+    }));
     expect(before).toBe(after);
   });
 
@@ -110,16 +119,17 @@ describe("planning v3 migrate cli", () => {
       apply: true,
       now: new Date("2026-03-04T00:00:00.000Z"),
     });
+    const doctor = runV3Doctor({ cwd: root });
 
     expect(summary.mode).toBe("apply");
     expect(summary.totals.errors).toBe(0);
     expect(summary.totals.applied).toBe(2);
     expect(summary.backupPath).toBeTruthy();
-    expect(summary.doctor).toEqual(expect.objectContaining({
-      ok: expect.any(Boolean),
-      errors: expect.any(Number),
-      warnings: expect.any(Number),
-    }));
+    expect(summary.doctor).toEqual({
+      ok: doctor.ok,
+      errors: doctor.counts.errors,
+      warnings: doctor.counts.warnings,
+    });
     expect(fs.existsSync(path.join(summary.backupPath!, "news/state.json"))).toBe(true);
 
     const migrated = JSON.parse(fs.readFileSync(path.join(root, ".data/news/state.json"), "utf-8")) as {
