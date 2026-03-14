@@ -192,7 +192,7 @@ function resolveQuickView(action: { label: string; href?: string }): { kind: Qui
   return { kind: "products", href, title: action.label };
 }
 
-function TrendRow({ label, values, color }: { label: string; values: number[]; color: string }) {
+function TrendRow({ label, values, color, formatValue }: { label: string; values: number[]; color: string; formatValue?: (v: number) => string }) {
   const current = values.length ? values[values.length - 1] : 0;
   const prev = values.length > 1 ? values[values.length - 2] : current;
   const diff = current - prev;
@@ -210,7 +210,7 @@ function TrendRow({ label, values, color }: { label: string; values: number[]; c
         </p>
       </div>
       <div className="w-24">
-        <Sparkline values={values} color={color} />
+        <Sparkline values={values} color={color} formatValue={formatValue} />
       </div>
     </motion.div>
   );
@@ -974,10 +974,10 @@ export function PlannerWizard() {
                            <span className="h-px bg-slate-200 flex-1" />
                         </p>
                         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <TrendRow label="월 저축액" values={monthlySavingTrend} color="#059669" />
-                          <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#dc2626" />
-                          <TrendRow label="필요 적립액" values={goalRequiredTrend} color="#059669" />
-                          <TrendRow label="부채 상환율" values={debtRatioTrend} color="#6366f1" />
+                          <TrendRow label="월 저축액" values={monthlySavingTrend} color="#059669" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#dc2626" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="필요 적립액" values={goalRequiredTrend} color="#059669" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="부채 상환율" values={debtRatioTrend} color="#6366f1" formatValue={(v) => `${v.toFixed(1)}%`} />
                         </div>
                      </div>
                   </Card>

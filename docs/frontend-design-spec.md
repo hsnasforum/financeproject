@@ -12,7 +12,10 @@
   - **PageHeader**: 페이지 최상단 타이틀, 설명, 액션 버튼을 정돈하여 배치합니다.
   - **SubSectionHeader**: 카드 내부 또는 섹션 단위의 헤더입니다. `text-lg font-black` 타이포그래피를 사용합니다.
   - **StatCard**: 핵심 수치(Metric)와 라벨, 트렌드를 시각화하는 요약용 카드입니다.
-  - **Sparkline**: 데이터의 흐름과 트렌드를 아주 간결한 선형 또는 영역형 차트로 시각화합니다. 가독성을 위해 은은한 영역 채우기(Area fill)와 부드러운 선 표현을 권장합니다.
+  - **Sparkline**: 데이터의 흐름과 트렌드를 아주 간결한 선형 또는 영역형 차트로 시각화합니다.
+    - **Interactions**: 마우스 호버 또는 키보드 포커스 시 해당 지점의 수치를 노출하는 툴팁과 가이드라인을 제공합니다.
+    - **Formatting**: `formatValue` prop을 통해 각 도메인(KRW, %, 등)에 맞는 수치 표현을 지원합니다.
+    - 가독성을 위해 은은한 영역 채우기(Area fill)와 부드러운 선 표현을 권장합니다.
   - **Range Visualization**: 수치가 특정 범위(Min/Max) 내에서 어디에 위치하는지 보여주는 소형 막대 시각화입니다.
   - **Data Tables**: 데이터 밀도가 높은 표에서는 헤더에 `text-[10px] font-black uppercase tracking-widest text-slate-400` 스타일을 적용하고, 숫자 데이터에는 `tabular-nums`를 필수 적용합니다.
   - 기타: `Button`, `Card`, `Badge`, `SegmentedTabs` 등 표준 컴포넌트를 우선 사용합니다.
