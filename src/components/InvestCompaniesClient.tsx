@@ -283,6 +283,12 @@ export function InvestCompaniesClient() {
                   <p className="text-sm font-bold text-amber-800">로컬 회사 인덱스가 없습니다.</p>
                   <p className="mt-2 text-xs text-amber-600">안정적인 검색을 위해 최초 1회 인덱스 생성이 필요합니다.</p>
                   
+                  {searchError && (
+                    <div className="mx-auto mt-4 max-w-lg rounded-xl bg-amber-100/50 p-3 text-xs font-bold text-amber-900">
+                      {searchError}
+                    </div>
+                  )}
+
                   <div className="my-6 rounded-xl bg-slate-900/5 p-4 text-left">
                     <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">수동 복구 명령</p>
                     <code className="block break-all text-[11px] font-medium text-slate-700">

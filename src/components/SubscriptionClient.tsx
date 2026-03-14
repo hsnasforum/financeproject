@@ -216,7 +216,7 @@ export function SubscriptionClient({
             <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-6" />
             <ErrorAnnouncer />
             
-            <div className="grid gap-6">
+            <form className="grid gap-6" onSubmit={(e) => { e.preventDefault(); void run(); }}>
               <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">지역</span>
@@ -305,13 +305,13 @@ export function SubscriptionClient({
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="rounded-full" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }}>최근 30일</Button>
-                  <Button variant="primary" size="sm" className="rounded-full px-8" onClick={() => void run()} disabled={loading}>
+                  <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }}>최근 30일</Button>
+                  <Button type="submit" variant="primary" size="sm" className="rounded-full px-8" disabled={loading}>
                     {loading ? "조회 중" : "공고 검색"}
                   </Button>
                 </div>
               </div>
-            </div>
+            </form>
           </Card>
         </div>
 
