@@ -2,9 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { upsertItems, writeState } from "../planning/v3/news/store";
 import { GET } from "../src/app/api/planning/v3/news/search/route";
 import { closeNewsDatabase, openNewsDatabase, resolveNewsDbPath } from "../src/lib/news/storageSqlite";
-import { writeNewsSearchIndex } from "../src/lib/news/searchIndex";
+import { readNewsSearchIndex, writeNewsSearchIndex } from "../src/lib/news/searchIndex";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = env.NODE_ENV;
@@ -91,10 +92,25 @@ describe("planning v3 news search api", () => {
 
   it("allows same-origin remote host", async () => {
     const response = await GET(requestGet("/api/planning/v3/news/search", "example.com", true));
-    const payload = await response.json() as { ok?: boolean; data?: { total?: number } };
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: {
+        total?: number;
+        freshness?: {
+          contract?: string;
+          status?: string;
+          indexGeneratedAt?: string;
+          lastRefreshedAt?: string | null;
+        };
+      };
+    };
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.data?.total).toBeGreaterThanOrEqual(0);
+    expect(payload.data?.freshness?.contract).toBe("search_index");
+    expect(payload.data?.freshness?.status).toBe("current");
+    expect(payload.data?.freshness?.indexGeneratedAt).toBe("2026-03-04T09:00:00.000Z");
+    expect(payload.data?.freshness?.lastRefreshedAt).toBeNull();
   });
 
   it("filters and ranks deterministically", async () => {
@@ -117,5 +133,52 @@ describe("planning v3 news search api", () => {
     expect("snippet" in (items[0] ?? {})).toBe(false);
     expect("description" in (items[0] ?? {})).toBe(false);
     expect("fullText" in (items[0] ?? {})).toBe(false);
+  });
+
+  it("rebuilds the search index when refresh finished after the stored index was generated", async () => {
+    upsertItems([{
+      id: "store-1",
+      sourceId: "bok_press_all",
+      title: "기준금리 새로고침 반영",
+      url: "https://example.com/store-1",
+      publishedAt: "2026-03-04T10:05:00.000Z",
+      snippet: "검색 인덱스 재생성 확인",
+      fetchedAt: "2026-03-04T10:30:00.000Z",
+    }]);
+    writeState({
+      schemaVersion: 1,
+      lastRunAt: "2026-03-04T10:30:00.000Z",
+      sources: {},
+    });
+
+    const response = await GET(requestGet("/api/planning/v3/news/search?days=30", LOCAL_HOST, true));
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: {
+        total?: number;
+        items?: Array<{
+          id?: string;
+          sourceName?: string;
+        }>;
+        freshness?: {
+          status?: string;
+          indexGeneratedAt?: string;
+          lastRefreshedAt?: string | null;
+        };
+      };
+    };
+    const rebuiltIndex = readNewsSearchIndex();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.total).toBe(1);
+    expect(payload.data?.items?.[0]?.id).toBe("store-1");
+    expect(payload.data?.items?.[0]?.sourceName).toBe("한국은행 보도자료(전체)");
+    expect(payload.data?.freshness?.status).toBe("current");
+    expect(payload.data?.freshness?.indexGeneratedAt).toBe("2026-03-04T10:30:00.000Z");
+    expect(payload.data?.freshness?.lastRefreshedAt).toBe("2026-03-04T10:30:00.000Z");
+    expect(rebuiltIndex?.generatedAt).toBe("2026-03-04T10:30:00.000Z");
+    expect(rebuiltIndex?.itemCount).toBe(1);
+    expect(rebuiltIndex?.items[0]?.id).toBe("store-1");
   });
 });

@@ -89,8 +89,20 @@ describe("planning v3 legacy drafts UI", () => {
     expect(html).toContain('data-testid="v3-draft-summary"');
     expect(html).toContain("Merged Profile 미리보기");
     expect(html).toContain("기준 프로필을 선택해 이번 초안이 실제 프로필에 어떻게 반영되는지 먼저 확인할 수 있습니다.");
+    expect(html).toContain("기준 프로필(선택)");
+    expect(html).toContain("기본 템플릿");
+    expect(html).toContain("적용 결과 미리보기");
+    expect(html).toContain("Export merged profile JSON");
     expect(html).toContain('data-testid="v3-draft-diff"');
     expect(html).toContain("미리보기를 실행하면 변경 요약이 표시됩니다.");
+  });
+
+  it("renders legacy drafts empty-state guidance before any saved draft exists", () => {
+    const html = renderToStaticMarkup(<DraftsListClient disableAutoLoad initialRows={[]} />);
+
+    expect(html).toContain("저장된 초안이 없습니다.");
+    expect(html).toContain('href="/planning/v3/drafts/profile"');
+    expect(html).toContain("Profile 초안 생성");
   });
 
   it("renders profile draft entry CTAs toward canonical batch and draft routes", () => {

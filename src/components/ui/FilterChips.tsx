@@ -26,8 +26,8 @@ export function FilterChips({ options, selectedIds, onToggle, className }: Filte
             className={cn(
               "inline-flex h-9 items-center justify-center rounded-full border px-4 text-xs font-semibold transition-all duration-300 active:scale-95",
               isSelected
-                ? "border-emerald-500 bg-emerald-600 text-white shadow-md shadow-emerald-500/20"
-                : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:bg-emerald-50"
+                ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                : "border-slate-200 bg-white text-slate-600 hover:border-primary/50 hover:bg-primary/5 hover:text-primary"
             )}
           >
             {option.label}

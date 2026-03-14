@@ -15,6 +15,7 @@ import {
   getOptionRates,
   groupOptionRowsByProduct,
   sortOptionRows,
+  type OptionRow,
   type OptionSortKey,
 } from "@/lib/finlife/optionView";
 import { FINLIFE_TOP_GROUPS } from "@/lib/finlife/topGroups";
@@ -111,6 +112,36 @@ function buildUnifiedDetailId(product: NormalizedProduct): string | null {
   const finPrdtCd = (product.fin_prdt_cd ?? "").trim();
   if (!finPrdtCd) return null;
   return `${sourceId}:${finPrdtCd}`;
+}
+
+function GroupedOptionMobileItem({ row }: { row: OptionRow }) {
+  const rates = getOptionRates(row.option);
+  const term = row.option.save_trm ? `${row.option.save_trm}개월` : "기간 정보 없음";
+
+  return (
+    <div className="rounded-3xl border border-slate-200/80 bg-slate-50/80 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-slate-500">만기 기간</p>
+          <p className="mt-1 text-sm font-bold text-slate-900">{term}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[11px] font-semibold text-slate-500">최고 금리</p>
+          <p className="mt-1 text-lg font-black tabular-nums text-primary">{formatOptionRate(rates.best)}</p>
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+        <div className="rounded-2xl bg-white px-3 py-2 shadow-sm">
+          <p className="font-semibold text-slate-500">기본 금리</p>
+          <p className="mt-1 tabular-nums text-slate-900">{formatOptionRate(rates.base)}</p>
+        </div>
+        <div className="rounded-2xl bg-white px-3 py-2 shadow-sm">
+          <p className="font-semibold text-slate-500">우대 폭</p>
+          <p className="mt-1 tabular-nums text-slate-900">{formatOptionBonus(rates.bonus)}</p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1 }: Props) {
@@ -710,36 +741,43 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                           </div>
 
                           {open ? (
-                            <BodyTableFrame
-                              className="mt-3 bg-white"
-                              data-testid="finlife-group-table"
-                              data-group-key={groupKey}
-                            >
-                              <table className="min-w-full text-xs">
-                                <thead className="bg-slate-50 text-slate-500">
-                                  <tr>
-                                    <th className="px-3 py-2 text-left font-semibold">기간(개월)</th>
-                                    <th className="px-3 py-2 text-right font-semibold">기본 금리</th>
-                                    <th className="px-3 py-2 text-right font-semibold">최고 금리(조건 충족 시)</th>
-                                    <th className="px-3 py-2 text-right font-semibold">우대폭</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {group.rows.map((row) => {
-                                    const rates = getOptionRates(row.option);
-                                    const term = row.option.save_trm ?? "-";
-                                    return (
-                                      <tr key={row.key} className="border-t border-slate-100 text-slate-700">
-                                        <td className="px-3 py-2">{term}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{formatOptionRate(rates.base)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums text-primary font-bold">{formatOptionRate(rates.best)}</td>
-                                        <td className="px-3 py-2 text-right tabular-nums">{formatOptionBonus(rates.bonus)}</td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </BodyTableFrame>
+                            <>
+                              <div className="mt-3 space-y-3 md:hidden" data-group-key={groupKey}>
+                                {group.rows.map((row) => (
+                                  <GroupedOptionMobileItem key={row.key} row={row} />
+                                ))}
+                              </div>
+                              <BodyTableFrame
+                                className="mt-3 hidden bg-white md:block"
+                                data-testid="finlife-group-table"
+                                data-group-key={groupKey}
+                              >
+                                <table className="min-w-full text-xs">
+                                  <thead className="bg-slate-50 text-slate-500">
+                                    <tr>
+                                      <th className="px-3 py-2 text-left font-semibold">기간(개월)</th>
+                                      <th className="px-3 py-2 text-right font-semibold">기본 금리</th>
+                                      <th className="px-3 py-2 text-right font-semibold">최고 금리(조건 충족 시)</th>
+                                      <th className="px-3 py-2 text-right font-semibold">우대폭</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {group.rows.map((row) => {
+                                      const rates = getOptionRates(row.option);
+                                      const term = row.option.save_trm ?? "-";
+                                      return (
+                                        <tr key={row.key} className="border-t border-slate-100 text-slate-700">
+                                          <td className="px-3 py-2">{term}</td>
+                                          <td className="px-3 py-2 text-right tabular-nums">{formatOptionRate(rates.base)}</td>
+                                          <td className="px-3 py-2 text-right tabular-nums font-bold text-primary">{formatOptionRate(rates.best)}</td>
+                                          <td className="px-3 py-2 text-right tabular-nums">{formatOptionBonus(rates.bonus)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </BodyTableFrame>
+                            </>
                           ) : null}
                         </BodyInset>
                       </div>

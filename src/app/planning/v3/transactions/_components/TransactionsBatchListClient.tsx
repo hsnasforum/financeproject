@@ -356,7 +356,7 @@ export function TransactionsBatchListClient() {
               <p className="font-semibold">{uploadError}</p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
                 <li>date + amount(또는 inflow/outflow) 컬럼이 있는지 확인해 주세요.</li>
-                <li>CSV 헤더명이 맞지 않으면 /planning/v3/import에서 매핑 UI로 먼저 검증해 주세요.</li>
+                <li>CSV 헤더명이 맞지 않으면 /planning/v3/import/csv에서 매핑 UI로 먼저 검증해 주세요.</li>
               </ul>
               <div className={`${bodyDenseActionRowClassName} mt-3`}>
                 <a

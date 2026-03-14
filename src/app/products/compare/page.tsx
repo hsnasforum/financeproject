@@ -1,17 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   BodyActionLink,
-  BodyEmptyState,
-  BodyInset,
-  BodyTableFrame,
   bodyDenseActionRowClassName,
 } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { PageShell } from "@/components/ui/PageShell";
+import { Container } from "@/components/ui/Container";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import {
   clearCompareIdsStorage,
   compareStoreConfig,
@@ -133,153 +134,261 @@ export default function ProductsComparePage() {
   const hasEnoughItems = ids.length >= 2;
 
   return (
-    <PageShell className="bg-surface-muted">
-      <PageHeader
-        title="상품 비교"
-        description={`최대 ${compareStoreConfig.max}개의 상품을 선택하여 한눈에 조건을 비교해보세요.`}
-      />
+    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
+      <Container>
+        <PageHeader
+          title="상품 비교"
+          description={`최대 ${compareStoreConfig.max}개의 상품을 선택하여 한눈에 조건을 비교해보세요.`}
+        />
 
-      <Card className="mb-6 border-none shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <BodyInset className="px-3 py-2 text-sm font-bold text-slate-700">
-              비교함: <span className="ml-1 font-black text-primary">{ids.length}/{compareStoreConfig.max}</span>
-            </BodyInset>
-            <BodyInset className="px-3 py-2 text-sm font-bold text-slate-700">
-              유효 상품: <span className="ml-1 font-black text-primary">{validCount}</span>
-            </BodyInset>
-          </div>
-          <div className={bodyDenseActionRowClassName}>
-            <Button variant="outline" size="sm" className="h-9 px-4 rounded-full" onClick={() => void refresh()} disabled={loading}>
-              {loading ? "불러오는 중..." : "새로고침"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 px-4 rounded-full hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
-              onClick={() => {
-                clearCompareIdsStorage();
-                void refresh();
-              }}
-              disabled={ids.length === 0}
-            >
-              비우기
-            </Button>
-            <BodyActionLink href="/products/catalog" className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-5 text-[11px] font-bold text-white no-underline shadow-sm transition-colors hover:bg-emerald-700">
-              상품 추가하기
-            </BodyActionLink>
-          </div>
-        </div>
-      </Card>
+        <Card className="mb-8 rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+            <div className="flex items-center gap-6">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">비교 중인 상품</span>
+                <span className="text-xl font-black text-emerald-600">{ids.length} / {compareStoreConfig.max}</span>
+              </div>
+              <div className="h-8 w-px bg-slate-100" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">유효한 상품</span>
+                <span className="text-xl font-black text-slate-900">{validCount}</span>
+              </div>
+            </div>
 
-      {!hasRows ? (
-        <Card className="py-20 text-center border-dashed border-2 shadow-none bg-surface/50">
-          <div className="h-16 w-16 mx-auto bg-surface rounded-full flex items-center justify-center text-slate-300 mb-4 shadow-sm">
-             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" x2="12" y1="22" y2="12"/></svg>
+            <div className={bodyDenseActionRowClassName}>
+              <Button variant="outline" size="sm" className="rounded-full" onClick={() => void refresh()} disabled={loading}>
+                새로고침
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
+                onClick={() => {
+                  clearCompareIdsStorage();
+                  void refresh();
+                }}
+                disabled={ids.length === 0}
+              >
+                비우기
+              </Button>
+              <BodyActionLink href="/products/catalog" className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-600 px-6 text-[11px] font-bold text-white no-underline shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 hover:scale-[1.02]">
+                상품 추가하기
+              </BodyActionLink>
+            </div>
           </div>
-          <BodyEmptyState
-            className="mx-auto max-w-xl border-none bg-transparent px-0 py-0"
-            description="통합 카탈로그나 상세 페이지에서 '비교 담기'를 눌러주세요."
-            title="비교함이 비어 있습니다."
+        </Card>
+
+        {!hasRows && !loading ? (
+          <EmptyState
+            title="비교함이 비어 있습니다"
+            description="상품 카탈로그에서 '비교 담기'를 눌러 상품을 추가해 보세요."
+            actionLabel="상품 보러 가기"
+            onAction={() => window.location.href = "/products/catalog"}
           />
-        </Card>
-      ) : !hasEnoughItems ? (
-        <Card className="py-16 text-center border-dashed border-2 shadow-none bg-surface/50">
-          <BodyInset className="mx-auto inline-block border-amber-200 bg-amber-50 text-sm font-bold text-amber-700">
-            비교를 위해 최소 2개의 상품이 필요합니다. (현재 {ids.length}개)
-          </BodyInset>
-        </Card>
-      ) : (
-        <Card className="p-0 overflow-hidden border-none shadow-card">
-          <BodyTableFrame className="no-scrollbar rounded-none border-none pb-4">
-            <table className="min-w-[840px] w-full text-sm">
-              <thead className="sticky top-0 z-20 bg-surface shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                <tr className="text-left text-slate-500">
-                  <th className="py-4 px-6 font-bold text-xs uppercase tracking-widest w-32 bg-surface-muted/50 border-r border-border">비교 항목</th>
-                  {cells.map((cell) => (
-                    <th key={`head-${cell.id}`} className="py-5 px-6 align-top min-w-[240px] border-r border-border last:border-0 relative group">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
-                          void refresh();
-                        }}
-                        className="absolute top-4 right-4 h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-colors opacity-0 group-hover:opacity-100"
-                        title="제거"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                      </button>
-                      <p className="text-[10px] font-bold text-primary mb-1 uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
-                      <p className="font-black text-base text-slate-900 leading-snug mb-3 line-clamp-2">{cell.item?.productName ?? cell.id}</p>
-                      <BodyActionLink
-                        href={`/products/catalog/${encodeURIComponent(cell.id)}`}
-                        className="inline-flex rounded-full bg-slate-100 px-4 py-1.5 text-[10px] font-bold text-slate-700 no-underline transition-colors hover:bg-slate-200"
-                      >
-                        상세 정보 보기
-                      </BodyActionLink>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                <tr className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-6 font-bold text-xs text-slate-500 bg-surface-muted/30 border-r border-border">상품 유형</td>
-                  {cells.map((cell) => (
-                    <td key={`kind-${cell.id}`} className="py-4 px-6 text-slate-900 font-medium border-r border-border/50 last:border-0">
-                       <span className="bg-slate-100 px-2.5 py-1 rounded text-xs font-bold uppercase tracking-widest text-slate-600">{cell.item?.kind ?? "-"}</span>
-                    </td>
-                  ))}
-                </tr>
-                <tr className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-5 px-6 font-bold text-xs text-slate-500 bg-surface-muted/30 border-r border-border">최고 금리</td>
-                  {cells.map((cell) => {
-                    const option = representativeOption(cell.item);
-                    const applied = option ? (option.intrRate2 ?? option.intrRate ?? null) : null;
-                    return (
-                      <td key={`rate-${cell.id}`} className="py-5 px-6 border-r border-border/50 last:border-0">
-                         <span className="text-2xl font-black text-emerald-600 tabular-nums">{formatRate(applied)}</span>
+        ) : loading && !hasRows ? (
+          <LoadingState description="비교 정보를 불러오고 있습니다." />
+        ) : !hasEnoughItems && !loading ? (
+          <Card className="rounded-[2.5rem] border-dashed border-2 border-slate-200 bg-white/50 py-16 text-center shadow-none">
+            <p className="text-sm font-bold text-slate-500">
+              비교를 위해 최소 2개의 상품이 필요합니다. (현재 {ids.length}개)
+            </p>
+            <Button variant="outline" className="mt-4 rounded-full" onClick={() => window.location.href = "/products/catalog"}>
+              상품 더 담기
+            </Button>
+          </Card>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <Card className="hidden md:block overflow-hidden rounded-[2.5rem] border-slate-200/60 p-0 shadow-lg">
+              <div className="overflow-x-auto scrollbar-hide">
+                <table className="w-full min-w-[800px] border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-50/50">
+                      <th className="sticky left-0 z-20 w-40 bg-slate-50/50 p-6 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 border-r border-slate-100">
+                        비교 항목
+                      </th>
+                      {cells.map((cell) => (
+                        <th key={`head-${cell.id}`} className="min-w-[240px] p-6 text-left border-r border-slate-100 last:border-0 relative group">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
+                              void refresh();
+                            }}
+                            className="absolute top-4 right-4 h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                          </button>
+                          
+                          <div className="flex flex-col gap-3">
+                            <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-10 w-10" />
+                            <div>
+                              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
+                              <h3 className="mt-1 font-black text-slate-900 leading-snug line-clamp-2">{cell.item?.productName ?? cell.id}</h3>
+                            </div>
+                            <Link
+                              href={`/products/catalog/${encodeURIComponent(cell.id)}`}
+                              className="inline-flex w-fit rounded-full bg-slate-100 px-4 py-1.5 text-[10px] font-bold text-slate-600 transition hover:bg-slate-200"
+                            >
+                              상세 정보
+                            </Link>
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr className="hover:bg-slate-50/30 transition-colors">
+                      <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
+                        상품 유형
                       </td>
-                    );
-                  })}
-                </tr>
-                <tr className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-6 font-bold text-xs text-slate-500 bg-surface-muted/30 border-r border-border">가입 기간</td>
-                  {cells.map((cell) => (
-                    <td key={`term-${cell.id}`} className="py-4 px-6 text-slate-900 font-bold border-r border-border/50 last:border-0">{termLabel(representativeOption(cell.item))}</td>
-                  ))}
-                </tr>
-                <tr className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-6 font-bold text-xs text-slate-500 bg-surface-muted/30 border-r border-border">예금자 보호</td>
-                  {cells.map((cell) => (
-                    <td key={`protection-${cell.id}`} className="py-4 px-6 border-r border-border/50 last:border-0">
-                       {cell.item?.signals?.depositProtection === "matched" ? (
-                          <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m12 22-8-4.5v-6A10 10 0 0 1 12 2a10 10 0 0 1 8 9.5v6Z"/></svg>
-                            보호 대상
+                      {cells.map((cell) => (
+                        <td key={`kind-${cell.id}`} className="p-5 px-6 border-r border-slate-100 last:border-0">
+                          <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">
+                            {cell.item?.kind ?? "-"}
                           </span>
-                       ) : (
-                          <span className="text-xs font-medium text-slate-400">확인 안 됨</span>
-                       )}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-6 font-bold text-xs text-slate-500 bg-surface-muted/30 border-r border-border">핵심 요약</td>
-                  {cells.map((cell) => (
-                    <td key={`summary-${cell.id}`} className="py-4 px-6 text-sm text-slate-600 leading-relaxed border-r border-border/50 last:border-0">
-                      {cell.error ? (
-                        <span className="text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded text-xs">{cell.error}</span>
-                      ) : (
-                        ((cell.item?.summary ?? (cell.item?.badges ?? []).join(", ")) || "-")
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </BodyTableFrame>
-        </Card>
-      )}
-    </PageShell>
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/30 transition-colors">
+                      <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
+                        최고 금리
+                      </td>
+                      {cells.map((cell) => {
+                        const option = representativeOption(cell.item);
+                        const applied = option ? (option.intrRate2 ?? option.intrRate ?? null) : null;
+                        return (
+                          <td key={`rate-${cell.id}`} className="p-5 px-6 border-r border-slate-100 last:border-0">
+                            <span className="text-2xl font-black text-emerald-600 tabular-nums">
+                              {formatRate(applied)}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    <tr className="hover:bg-slate-50/30 transition-colors">
+                      <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
+                        가입 기간
+                      </td>
+                      {cells.map((cell) => (
+                        <td key={`term-${cell.id}`} className="p-5 px-6 font-bold text-slate-900 border-r border-slate-100 last:border-0">
+                          {termLabel(representativeOption(cell.item))}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/30 transition-colors">
+                      <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
+                        예금자 보호
+                      </td>
+                      {cells.map((cell) => (
+                        <td key={`protection-${cell.id}`} className="p-5 px-6 border-r border-slate-100 last:border-0">
+                          {cell.item?.signals?.depositProtection === "matched" ? (
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+                              보호 대상
+                            </div>
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-300">확인 안 됨</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/30 transition-colors">
+                      <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
+                        핵심 요약
+                      </td>
+                      {cells.map((cell) => (
+                        <td key={`summary-${cell.id}`} className="p-5 px-6 text-xs leading-relaxed text-slate-600 border-r border-slate-100 last:border-0">
+                          {cell.error ? (
+                            <span className="font-bold text-rose-600">{cell.error}</span>
+                          ) : (
+                            (cell.item?.summary ?? (cell.item?.badges ?? []).join(", ")) || "-"
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            {/* Mobile Card View */}
+            <div className="grid gap-4 md:hidden">
+              {cells.map((cell) => {
+                const option = representativeOption(cell.item);
+                const applied = option ? (option.intrRate2 ?? option.intrRate ?? null) : null;
+                return (
+                  <Card key={`mobile-${cell.id}`} className="relative overflow-hidden rounded-[2rem] border-slate-200/60 bg-white p-6 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
+                        void refresh();
+                      }}
+                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 active:bg-rose-100 active:text-rose-600 transition-all"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+
+                    <div className="mb-6 flex items-center gap-4">
+                      <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-12 w-12" />
+                      <div>
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
+                        <h3 className="mt-1 font-black text-slate-900 leading-tight">{cell.item?.productName ?? cell.id}</h3>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-6">
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">최고 금리</p>
+                        <p className="text-xl font-black text-emerald-600 tabular-nums">{formatRate(applied)}</p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 p-4">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">가입 기간</p>
+                        <p className="text-sm font-black text-slate-900">{termLabel(option)}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between px-2">
+                        <span className="text-[11px] font-bold text-slate-400">상품 유형</span>
+                        <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-slate-600">
+                          {cell.item?.kind ?? "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between px-2">
+                        <span className="text-[11px] font-bold text-slate-400">예금자 보호</span>
+                        {cell.item?.signals?.depositProtection === "matched" ? (
+                          <span className="text-[10px] font-bold text-emerald-700">보호 대상</span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-slate-300">확인 안 됨</span>
+                        )}
+                      </div>
+                      <div className="pt-4 border-t border-slate-50 px-2">
+                        <p className="text-[11px] font-bold text-slate-400 mb-2 uppercase tracking-widest">핵심 요약</p>
+                        <p className="text-xs leading-relaxed text-slate-600 italic">
+                          {cell.error ? (
+                            <span className="font-bold text-rose-600">{cell.error}</span>
+                          ) : (
+                            (cell.item?.summary ?? (cell.item?.badges ?? []).join(", ")) || "-"
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Link
+                      href={`/products/catalog/${encodeURIComponent(cell.id)}`}
+                      className="mt-8 flex h-12 w-full items-center justify-center rounded-2xl bg-slate-100 text-sm font-bold text-slate-700 transition active:bg-slate-200"
+                    >
+                      상세 정보 보기
+                    </Link>
+                  </Card>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </Container>
+    </main>
   );
 }

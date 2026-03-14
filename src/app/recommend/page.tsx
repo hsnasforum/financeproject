@@ -3,26 +3,19 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
-import { NumberField } from "@/components/forms/NumberField";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
-import {
-  BodyActionLink,
-  BodyEmptyState,
-  BodyInset,
-  BodySectionHeading,
-  BodyStatusInset,
-  BodyTableFrame,
-  bodyChoiceRowClassName,
-  bodyDenseActionRowClassName,
-  bodyFieldClassName,
-  bodyLabelClassName,
-} from "@/components/ui/BodyTone";
 import { SourceBadge } from "@/components/debug/SourceBadge";
 import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
 import { type FreshnessSourceSpec } from "@/components/data/freshness";
-import { FallbackBanner } from "@/components/FallbackBanner";
 import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { Container } from "@/components/ui/Container";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { downloadText } from "@/lib/browser/download";
 import { type NormalizedProduct } from "@/lib/finlife/types";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
@@ -50,7 +43,6 @@ import {
   type RecommendProfileNormalized,
 } from "@/lib/schemas/recommendProfile";
 import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
-import { Button } from "@/components/ui/Button";
 
 type RecommendItem = {
   unifiedId: string;
@@ -142,29 +134,6 @@ type StoredRecommendResultV1 = {
   profile: StoredProfile;
   meta?: RecommendResponse["meta"];
   items: StoredRecommendItemV1[];
-};
-
-type RecommendDiffChangedItem = {
-  key: string;
-  sourceId: string;
-  finPrdtCd: string;
-  productName: string;
-  providerName: string;
-  previousRank: number;
-  currentRank: number;
-  previousRate: number | null;
-  currentRate: number | null;
-  previousTerm: string | null;
-  currentTerm: string | null;
-  changedFields: Array<"rank" | "rate" | "term">;
-};
-
-type RecommendDiff = {
-  previousSavedAt: string;
-  currentSavedAt: string;
-  changed: RecommendDiffChangedItem[];
-  added: StoredRecommendItemV1[];
-  removed: StoredRecommendItemV1[];
 };
 
 const STORAGE_KEY = "recommend_profile_v1";
@@ -319,69 +288,6 @@ function buildStoredResult(profile: StoredProfile, res: RecommendResponse): Stor
   };
 }
 
-function computeDiff(prev: StoredRecommendResultV1, curr: StoredRecommendResultV1): RecommendDiff {
-  const prevMap = new Map(prev.items.map((item) => [item.key, item]));
-  const currMap = new Map(curr.items.map((item) => [item.key, item]));
-
-  const changed: RecommendDiffChangedItem[] = [];
-  const added: StoredRecommendItemV1[] = [];
-  const removed: StoredRecommendItemV1[] = [];
-
-  for (const item of curr.items) {
-    const prevItem = prevMap.get(item.key);
-    if (!prevItem) {
-      added.push(item);
-      continue;
-    }
-
-    const changedFields: Array<"rank" | "rate" | "term"> = [];
-    if (prevItem.rank !== item.rank) changedFields.push("rank");
-    if (
-      (prevItem.appliedRate === null) !== (item.appliedRate === null) ||
-      (prevItem.appliedRate !== null && item.appliedRate !== null && Math.abs(prevItem.appliedRate - item.appliedRate) >= 0.0001)
-    ) {
-      changedFields.push("rate");
-    }
-    if ((prevItem.saveTrm ?? null) !== (item.saveTrm ?? null)) changedFields.push("term");
-
-    if (changedFields.length > 0) {
-      changed.push({
-        key: item.key,
-        sourceId: item.sourceId,
-        finPrdtCd: item.finPrdtCd,
-        productName: item.productName,
-        providerName: item.providerName,
-        previousRank: prevItem.rank,
-        currentRank: item.rank,
-        previousRate: prevItem.appliedRate,
-        currentRate: item.appliedRate,
-        previousTerm: prevItem.saveTrm,
-        currentTerm: item.saveTrm,
-        changedFields,
-      });
-    }
-  }
-
-  for (const item of prev.items) {
-    if (!currMap.has(item.key)) removed.push(item);
-  }
-
-  changed.sort((a, b) => {
-    const bWeight = b.changedFields.length + Math.abs(b.previousRank - b.currentRank);
-    const aWeight = a.changedFields.length + Math.abs(a.previousRank - a.currentRank);
-    if (bWeight !== aWeight) return bWeight - aWeight;
-    return a.currentRank - b.currentRank;
-  });
-
-  return {
-    previousSavedAt: prev.savedAt,
-    currentSavedAt: curr.savedAt,
-    changed,
-    added,
-    removed,
-  };
-}
-
 function formatKoreanDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "-";
@@ -400,23 +306,6 @@ function parseStoredResult(raw: string | null): StoredRecommendResultV1 | null {
   } catch {
     return null;
   }
-}
-
-function fmtDeltaRate(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "-";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%p`;
-}
-
-function fmtRankShift(value: number): string {
-  if (!Number.isFinite(value)) return "-";
-  if (value > 0) return `+${value}`;
-  return String(value);
-}
-
-function fmtRate(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "-";
-  return `${value.toFixed(2)}%`;
 }
 
 function normalizeRate(value: number | null | undefined, fallback: number): number | null {
@@ -541,14 +430,12 @@ function RecommendPageInner() {
   const [profile, setProfile] = useState<StoredProfile>(defaultProfile);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [feedback, setFeedback] = useState("");
   const [result, setResult] = useState<RecommendResponse | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [lastStored, setLastStored] = useState<StoredRecommendResultV1 | null>(null);
-  const [diff, setDiff] = useState<RecommendDiff | null>(null);
-  const [entrySource, setEntrySource] = useState<string | null>(null);
   const [readyToPersist, setReadyToPersist] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState<string | null>(null);
-  const [actionNotice, setActionNotice] = useState("");
   const [formIssues, setFormIssues] = useState<Issue[]>([]);
   const lastStoredRef = useRef<StoredRecommendResultV1 | null>(null);
   const autoRunTriggeredRef = useRef(false);
@@ -605,32 +492,23 @@ function RecommendPageInner() {
       }
       const json = attachUnifiedIds(rawJson);
 
-      const prevStored = lastStoredRef.current;
       const currStored = buildStoredResult(requestProfile, json);
-      if (prevStored) {
-        setDiff(computeDiff(prevStored, currStored));
-      } else {
-        setDiff(null);
-      }
       localStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(currStored));
       setLastStored(currStored);
       lastStoredRef.current = currStored;
       setResult(json);
-      setActionNotice("");
       setFormIssues([]);
 
       if (options?.autoSave) {
         const sig = options.autorunSig ?? buildAutorunSignature(requestProfile);
         const previous = readAutorunSessionPayload();
         if (previous?.sig === sig && previous.runId) {
-          setActionNotice("같은 세션에서 동일 자동 실행은 이미 저장되어 저장을 건너뛰었습니다.");
           if (options.goHistory) {
             router.push(`/recommend/history?open=${encodeURIComponent(previous.runId)}`);
           }
         } else {
           const runId = saveRunFromRecommend(toSavedRunProfile(requestProfile), json);
           writeAutorunSessionPayload({ sig, runId });
-          setActionNotice("자동 실행 결과를 저장했습니다.");
           if (options.goHistory) {
             router.push(`/recommend/history?open=${encodeURIComponent(runId)}`);
           }
@@ -658,7 +536,7 @@ function RecommendPageInner() {
         nextProfile = normalized.value;
       }
     } catch {
-      // ignore malformed localStorage
+      // ignore
     }
 
     const queryOverrides = parseQueryOverrides(searchParams);
@@ -673,8 +551,6 @@ function RecommendPageInner() {
     const stored = parseStoredResult(localStorage.getItem(RESULT_STORAGE_KEY));
     setLastStored(stored);
     lastStoredRef.current = stored;
-    setDiff(null);
-    setEntrySource(queryOverrides.source);
     setProfile(nextProfile);
     setReadyToPersist(true);
 
@@ -703,13 +579,9 @@ function RecommendPageInner() {
     if (profile.kind === "saving") {
       return [{ sourceId: "finlife", kind: "saving", label: "FINLIFE 적금", importance: "required" }];
     }
-
     return [{ sourceId: "finlife", kind: "deposit", label: "FINLIFE 예금", importance: "required" }];
   }, [profile.kind]);
 
-  const changedPreview = (diff?.changed ?? []).slice(0, 12);
-  const addedPreview = (diff?.added ?? []).slice(0, 8);
-  const removedPreview = (diff?.removed ?? []).slice(0, 8);
   const fieldIssueMap = useMemo(() => issuesToFieldMap(formIssues), [formIssues]);
 
   async function submit() {
@@ -719,8 +591,9 @@ function RecommendPageInner() {
 
   function saveCurrentRun() {
     if (!result) return;
-    const runId = saveRunFromRecommend(toSavedRunProfile(profile), result);
-    setActionNotice(`실행을 저장했습니다. (${runId})`);
+    saveRunFromRecommend(toSavedRunProfile(profile), result);
+    setFeedback("결과가 히스토리에 저장되었습니다.");
+    setTimeout(() => setFeedback(""), 3000);
   }
 
   function exportCurrentRunJson() {
@@ -729,7 +602,8 @@ function RecommendPageInner() {
     if (!run) return;
     const content = exportRunJson(run);
     downloadText(`recommend-run-${run.savedAt.slice(0, 10)}.json`, content, "application/json;charset=utf-8");
-    setActionNotice("JSON 파일을 내보냈습니다.");
+    setFeedback("JSON 파일이 다운로드되었습니다.");
+    setTimeout(() => setFeedback(""), 3000);
   }
 
   function exportCurrentRunCsv() {
@@ -738,533 +612,321 @@ function RecommendPageInner() {
     if (!run) return;
     const content = exportRunCsv(run);
     downloadText(`recommend-run-${run.savedAt.slice(0, 10)}.csv`, content, "text/csv;charset=utf-8");
-    setActionNotice("CSV 파일을 내보냈습니다.");
+    setFeedback("CSV 파일이 다운로드되었습니다.");
+    setTimeout(() => setFeedback(""), 3000);
   }
 
   return (
-    <main data-testid="recommend-root" className="min-h-screen bg-[#F8FAFC] py-10 md:py-14">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4">
-      <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-        <BodySectionHeading
-          title="설명가능 예적금 추천"
-          description="후보군 내 상대 비교 점수이며 확정 수익을 의미하지 않습니다."
+    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
+      <Container>
+        <PageHeader
+          title="스마트 상품 추천"
+          description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
         />
-        <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mt-4" />
-        <ErrorAnnouncer />
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <label className={bodyLabelClassName}>
-            목적
-            <select
-              id={pathToId("purpose")}
-              className={bodyFieldClassName}
-              value={profile.purpose}
-              onChange={(e) => setProfile((prev) => ({ ...prev, purpose: e.target.value as StoredProfile["purpose"] }))}
-              aria-invalid={Boolean(fieldIssueMap.purpose?.[0])}
-              aria-describedby={fieldIssueMap.purpose?.[0] ? `${pathToId("purpose")}_error` : undefined}
-            >
-              <option value="emergency">단기 비상금</option>
-              <option value="seed-money">목돈 마련</option>
-              <option value="long-term">장기 저축</option>
-            </select>
-            <FieldError id={`${pathToId("purpose")}_error`} message={fieldIssueMap.purpose?.[0]} />
-          </label>
-
-          <label className={bodyLabelClassName}>
-            상품 유형
-            <select
-              id={pathToId("kind")}
-              className={bodyFieldClassName}
-              value={profile.kind}
-              onChange={(e) => setProfile((prev) => ({ ...prev, kind: e.target.value as StoredProfile["kind"] }))}
-              aria-invalid={Boolean(fieldIssueMap.kind?.[0])}
-              aria-describedby={fieldIssueMap.kind?.[0] ? `${pathToId("kind")}_error` : undefined}
-            >
-              <option value="deposit">예금</option>
-              <option value="saving">적금</option>
-            </select>
-            <FieldError id={`${pathToId("kind")}_error`} message={fieldIssueMap.kind?.[0]} />
-          </label>
-
-          <label className={bodyLabelClassName}>
-            선호 기간
-            <select
-              id={pathToId("preferredTerm")}
-              className={bodyFieldClassName}
-              value={profile.preferredTerm}
-              onChange={(e) => setProfile((prev) => ({ ...prev, preferredTerm: Number(e.target.value) as StoredProfile["preferredTerm"] }))}
-              aria-invalid={Boolean(fieldIssueMap.preferredTerm?.[0])}
-              aria-describedby={fieldIssueMap.preferredTerm?.[0] ? `${pathToId("preferredTerm")}_error` : undefined}
-            >
-              <option value={3}>3개월</option>
-              <option value={6}>6개월</option>
-              <option value={12}>12개월</option>
-              <option value={24}>24개월</option>
-              <option value={36}>36개월</option>
-            </select>
-            <FieldError id={`${pathToId("preferredTerm")}_error`} message={fieldIssueMap.preferredTerm?.[0]} />
-          </label>
-
-          <label className={bodyLabelClassName}>
-            유동성 선호
-            <select
-              id={pathToId("liquidityPref")}
-              className={bodyFieldClassName}
-              value={profile.liquidityPref}
-              onChange={(e) => setProfile((prev) => ({ ...prev, liquidityPref: e.target.value as StoredProfile["liquidityPref"] }))}
-              aria-invalid={Boolean(fieldIssueMap.liquidityPref?.[0])}
-              aria-describedby={fieldIssueMap.liquidityPref?.[0] ? `${pathToId("liquidityPref")}_error` : undefined}
-            >
-              <option value="low">낮음</option>
-              <option value="mid">중간</option>
-              <option value="high">높음</option>
-            </select>
-            <FieldError id={`${pathToId("liquidityPref")}_error`} message={fieldIssueMap.liquidityPref?.[0]} />
-          </label>
-
-          <label className={bodyLabelClassName}>
-            금리 선택 정책
-            <select
-              id={pathToId("rateMode")}
-              className={bodyFieldClassName}
-              value={profile.rateMode}
-              onChange={(e) => setProfile((prev) => ({ ...prev, rateMode: e.target.value as StoredProfile["rateMode"] }))}
-              aria-invalid={Boolean(fieldIssueMap.rateMode?.[0])}
-              aria-describedby={fieldIssueMap.rateMode?.[0] ? `${pathToId("rateMode")}_error` : undefined}
-            >
-              <option value="max">최고금리 우선</option>
-              <option value="base">기본금리 우선</option>
-              <option value="simple">단순조건 선호</option>
-            </select>
-            <FieldError id={`${pathToId("rateMode")}_error`} message={fieldIssueMap.rateMode?.[0]} />
-          </label>
-
-          <label className={bodyLabelClassName}>
-            Top N
-            <NumberField
-              id={pathToId("topN")}
-              min={1}
-              max={50}
-              className={bodyFieldClassName}
-              value={profile.topN}
-              onValueChange={(value) => setProfile((prev) => ({ ...prev, topN: value === null ? 0 : Math.trunc(value) }))}
-              aria-invalid={Boolean(fieldIssueMap.topN?.[0])}
-              aria-describedby={fieldIssueMap.topN?.[0] ? `${pathToId("topN")}_error` : undefined}
-            />
-            <FieldError id={`${pathToId("topN")}_error`} message={fieldIssueMap.topN?.[0]} />
-          </label>
-        </div>
-
-        <BodyInset className="mt-5">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="font-semibold"
-            onClick={() => setAdvancedOpen((prev) => !prev)}
-          >
-            고급 옵션 {advancedOpen ? "접기" : "열기"}
-          </Button>
-          {advancedOpen ? (
-            <div className="mt-4 space-y-4">
-              <BodyInset className="bg-white px-3 py-2 text-xs text-slate-600">
-                후보풀은 `unified(merged)`로 고정되어 동작합니다.
-              </BodyInset>
-              <p className="text-xs text-slate-500">unified 모드는 merged만 사용하며 integrated는 사용자 화면에 노출하지 않습니다.</p>
-
-              <div className="grid gap-2 md:grid-cols-3">
-                <label className={bodyChoiceRowClassName}>
-                  <input
-                    id={pathToId("depositProtection")}
-                    type="radio"
-                    name="deposit-protection"
-                    checked={profile.depositProtection === "any"}
-                    onChange={() => setProfile((prev) => ({ ...prev, depositProtection: "any" }))}
-                  />
-                  보호신호 any
-                </label>
-                <label className={bodyChoiceRowClassName}>
-                  <input
-                    id={pathToId("depositProtection_prefer")}
-                    type="radio"
-                    name="deposit-protection"
-                    checked={profile.depositProtection === "prefer"}
-                    onChange={() => setProfile((prev) => ({ ...prev, depositProtection: "prefer" }))}
-                  />
-                  보호신호 prefer
-                </label>
-                <label className={bodyChoiceRowClassName}>
-                  <input
-                    id={pathToId("depositProtection_require")}
-                    type="radio"
-                    name="deposit-protection"
-                    checked={profile.depositProtection === "require"}
-                    onChange={() => setProfile((prev) => ({ ...prev, depositProtection: "require" }))}
-                  />
-                  보호신호 require
-                </label>
-              </div>
-              <FieldError id={`${pathToId("depositProtection")}_error`} message={fieldIssueMap.depositProtection?.[0]} />
-              <p className="text-xs text-slate-500">보호신호 필터(any/prefer/require)는 현재 비활성화되어 추천 점수에 영향을 주지 않습니다.</p>
-
-              <div className="grid gap-3 md:grid-cols-3">
-              <label className="text-xs">
-                금리 가중치 {profile.weights.rate.toFixed(2)}
-                <input
-                  id={pathToId("weights.rate")}
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={profile.weights.rate}
-                  onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, rate: Number(e.target.value) } }))}
-                  className="mt-1 w-full"
-                />
-                <FieldError id={`${pathToId("weights.rate")}_error`} message={fieldIssueMap["weights.rate"]?.[0]} />
-              </label>
-              <label className="text-xs">
-                기간 가중치 {profile.weights.term.toFixed(2)}
-                <input
-                  id={pathToId("weights.term")}
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={profile.weights.term}
-                  onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, term: Number(e.target.value) } }))}
-                  className="mt-1 w-full"
-                />
-                <FieldError id={`${pathToId("weights.term")}_error`} message={fieldIssueMap["weights.term"]?.[0]} />
-              </label>
-              <label className="text-xs">
-                유동성 가중치 {profile.weights.liquidity.toFixed(2)}
-                <input
-                  id={pathToId("weights.liquidity")}
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={profile.weights.liquidity}
-                  onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, liquidity: Number(e.target.value) } }))}
-                  className="mt-1 w-full"
-                />
-                <FieldError id={`${pathToId("weights.liquidity")}_error`} message={fieldIssueMap["weights.liquidity"]?.[0]} />
-              </label>
-              </div>
+        {feedback && (
+          <div className="fixed top-24 left-1/2 z-50 -translate-x-1/2 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="rounded-full bg-slate-900 px-6 py-2.5 text-xs font-black text-white shadow-xl">
+              {feedback}
             </div>
-          ) : null}
-        </BodyInset>
-
-        <div className={`mt-6 ${bodyDenseActionRowClassName}`}>
-          <Button
-            data-testid="recommend-submit"
-            variant="primary"
-            onClick={() => void submit()}
-            disabled={loading}
-          >
-            {loading ? "추천 계산 중..." : "추천 실행"}
-          </Button>
-          <span className="text-sm text-slate-500">현재 목적: {purposeLabel}</span>
-          {entrySource ? <span className="text-xs text-slate-500">유입: {entrySource}</span> : null}
-        </div>
-        {loading ? (
-          <p data-testid="recommend-running" className="mt-2 text-xs text-slate-500">추천 계산 중...</p>
-        ) : null}
-      </section>
-
-      {error ? <BodyStatusInset className="text-sm" tone="danger">{error}</BodyStatusInset> : null}
-
-      {result?.message ? (
-        <BodyStatusInset className="text-sm" tone="warning">{result.message}</BodyStatusInset>
-      ) : null}
-
-      <FallbackBanner fallback={result?.meta?.fallback} />
-
-      {result?.meta ? (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <BodySectionHeading title="가정값 및 메타" />
-          <div className="mt-3 grid gap-2 text-sm text-slate-700">
-            <p>kind: {result.meta.kind} / topN: {result.meta.topN} / rateMode: {result.meta.rateMode}</p>
-            <p>candidatePool: {result.meta.candidatePool ?? "unified"} / sources: {(result.meta.candidateSources ?? ["finlife"]).join(", ")} / depositProtection: {result.meta.depositProtection ?? "any"}</p>
-            <p>weights: rate {result.meta.weights.rate.toFixed(2)}, term {result.meta.weights.term.toFixed(2)}, liquidity {result.meta.weights.liquidity.toFixed(2)}</p>
-            <p>{result.meta.assumptions.rateSelectionPolicy}</p>
-            <p>{result.meta.assumptions.liquidityPolicy}</p>
-            <p>{result.meta.assumptions.normalizationPolicy}</p>
-            {result.meta.assumptions.kdbParsingPolicy ? <p>{result.meta.assumptions.kdbParsingPolicy}</p> : null}
-            {result.meta.assumptions.depositProtectionPolicy ? <p>{result.meta.assumptions.depositProtectionPolicy}</p> : null}
-            {result.debug ? <p>debug: 후보 {result.debug.candidateCount}개 / 금리범위 {result.debug.rateMin.toFixed(2)}~{result.debug.rateMax.toFixed(2)}%</p> : null}
           </div>
-        </section>
-      ) : null}
-
-      {result ? (
-        <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <div className={bodyDenseActionRowClassName}>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={saveCurrentRun}
-              disabled={(result.items ?? []).length === 0}
-            >
-              이번 실행 저장
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={exportCurrentRunJson}
-              disabled={(result.items ?? []).length === 0}
-            >
-              JSON 내보내기
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={exportCurrentRunCsv}
-              disabled={(result.items ?? []).length === 0}
-            >
-              CSV 내보내기
-            </Button>
-            <BodyActionLink
-              href="/recommend/history"
-              className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 no-underline shadow-sm transition hover:bg-white"
-            >
-              히스토리 보기
-            </BodyActionLink>
-          </div>
-          {actionNotice ? <p className="mt-2 text-xs text-slate-600">{actionNotice}</p> : null}
-        </section>
-      ) : null}
-
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <BodySectionHeading title="지난 추천 기록" />
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              localStorage.removeItem(RESULT_STORAGE_KEY);
-              setLastStored(null);
-              lastStoredRef.current = null;
-              setDiff(null);
-            }}
-            disabled={!lastStored}
-          >
-            기록 삭제
-          </Button>
-        </div>
-
-        {!lastStored ? (
-          <BodyEmptyState
-            className="mt-3"
-            description="추천 실행을 저장하면 다음 실행 때 순위, 금리, 기간 변화가 여기에서 비교됩니다."
-            title="저장된 추천 기록이 없습니다."
-          />
-        ) : (
-          <>
-            <p className="mt-2 text-sm text-slate-600">
-              마지막 저장: {formatKoreanDateTime(lastStored.savedAt)} / 항목 {lastStored.items.length}건
-            </p>
-
-            {!diff ? (
-              <p className="mt-3 text-sm text-slate-600">아직 직전 실행 대비 변화가 없습니다. 한 번 더 실행하면 순위/금리/기간 변화가 표시됩니다.</p>
-            ) : (
-              <>
-                <p className="mt-3 text-sm text-slate-700">
-                  비교 기준: {formatKoreanDateTime(diff.previousSavedAt)} → {formatKoreanDateTime(diff.currentSavedAt)}
-                </p>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <BodyInset className="text-sm">
-                    <p className="font-semibold text-slate-900">변경</p>
-                    <p className="mt-1 text-slate-700">{diff.changed.length}건</p>
-                  </BodyInset>
-                  <BodyInset className="text-sm">
-                    <p className="font-semibold text-slate-900">신규</p>
-                    <p className="mt-1 text-slate-700">{diff.added.length}건</p>
-                  </BodyInset>
-                  <BodyInset className="text-sm">
-                    <p className="font-semibold text-slate-900">제외</p>
-                    <p className="mt-1 text-slate-700">{diff.removed.length}건</p>
-                  </BodyInset>
-                </div>
-
-                {changedPreview.length > 0 ? (
-                  <BodyTableFrame className="mt-4">
-                    <p className="text-sm font-semibold text-slate-900">변경 항목 (최대 12)</p>
-                    <table className="mt-2 min-w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-left text-slate-600">
-                          <th className="py-2 pr-3">상품</th>
-                          <th className="py-2 pr-3">순위</th>
-                          <th className="py-2 pr-3">금리</th>
-                          <th className="py-2 pr-3">기간</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {changedPreview.map((item) => (
-                          <tr key={item.key} className="border-b border-slate-100 align-top text-slate-700">
-                            <td className="py-2 pr-3">
-                              <p className="font-medium text-slate-900">{item.productName}</p>
-                              <p className="text-xs text-slate-500">{item.sourceId} / {item.finPrdtCd}</p>
-                            </td>
-                            <td className="py-2 pr-3">
-                              {item.previousRank}위 → {item.currentRank}위
-                              {item.changedFields.includes("rank") ? (
-                                <span className="ml-1 text-xs text-slate-500">({fmtRankShift(item.previousRank - item.currentRank)})</span>
-                              ) : null}
-                            </td>
-                            <td className="py-2 pr-3">
-                              {fmtRate(item.previousRate)} → {fmtRate(item.currentRate)}
-                              {item.changedFields.includes("rate") ? (
-                                <span className="ml-1 text-xs text-slate-500">({fmtDeltaRate((item.currentRate ?? 0) - (item.previousRate ?? 0))})</span>
-                              ) : null}
-                            </td>
-                            <td className="py-2 pr-3">{item.previousTerm ?? "-"} → {item.currentTerm ?? "-"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </BodyTableFrame>
-                ) : null}
-
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">신규 항목 (최대 8)</p>
-                    {addedPreview.length === 0 ? (
-                      <p className="mt-1 text-sm text-slate-600">없음</p>
-                    ) : (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                        {addedPreview.map((item) => (
-                          <li key={`added-${item.key}`}>{item.productName} ({item.sourceId})</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">제외 항목 (최대 8)</p>
-                    {removedPreview.length === 0 ? (
-                      <p className="mt-1 text-sm text-slate-600">없음</p>
-                    ) : (
-                      <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                        {removedPreview.map((item) => (
-                          <li key={`removed-${item.key}`}>{item.productName} ({item.sourceId})</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-          </>
         )}
-      </section>
 
-      <section data-testid="recommend-result" className="grid gap-4">
-        {(result?.items ?? []).length === 0 && result?.ok ? (
-          <article className="rounded-[2rem] border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
-            <BodyEmptyState
-              description="조건을 조금 완화해서 다시 실행하거나 상품 탐색 화면에서 직접 필터링해 확인해보세요."
-              title="추천 후보가 없어 표시할 항목이 없습니다."
-            />
-            <div className="mt-4">
-              <BodyActionLink
-                href={profile.kind === "saving" ? "/products/saving" : "/products/deposit"}
-                className="inline-flex rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:bg-white"
-              >
-                상품 탐색으로 이동
-              </BodyActionLink>
+        <div className="mb-8 flex flex-col gap-6">
+          <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
+          
+          <Card className="rounded-[2.5rem] border-slate-200/60 p-8 shadow-sm">
+            <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-6" />
+            <ErrorAnnouncer />
+
+            <div className="grid gap-8 lg:grid-cols-4">
+              <div className="space-y-6 lg:col-span-3">
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label htmlFor={pathToId("purpose")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">저축 목적</label>
+                    <select
+                      id={pathToId("purpose")}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      value={profile.purpose}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, purpose: e.target.value as StoredProfile["purpose"] }))}
+                    >
+                      <option value="emergency">단기 비상금 (안정성 중시)</option>
+                      <option value="seed-money">목돈 마련 (수익성 중시)</option>
+                      <option value="long-term">장기 저축 (복리 효과)</option>
+                    </select>
+                    <FieldError id={`${pathToId("purpose")}_error`} message={fieldIssueMap.purpose?.[0]} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor={pathToId("kind")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">상품 유형</label>
+                    <select
+                      id={pathToId("kind")}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      value={profile.kind}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, kind: e.target.value as StoredProfile["kind"] }))}
+                    >
+                      <option value="deposit">정기 예금</option>
+                      <option value="saving">정기 적금</option>
+                    </select>
+                    <FieldError id={`${pathToId("kind")}_error`} message={fieldIssueMap.kind?.[0]} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor={pathToId("preferredTerm")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">희망 기간</label>
+                    <select
+                      id={pathToId("preferredTerm")}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      value={profile.preferredTerm}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, preferredTerm: Number(e.target.value) as StoredProfile["preferredTerm"] }))}
+                    >
+                      <option value={3}>3개월</option>
+                      <option value={6}>6개월</option>
+                      <option value={12}>12개월</option>
+                      <option value={24}>24개월</option>
+                      <option value={36}>36개월</option>
+                    </select>
+                    <FieldError id={`${pathToId("preferredTerm")}_error`} message={fieldIssueMap.preferredTerm?.[0]} />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor={pathToId("rateMode")} className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">금리 정책</label>
+                    <select
+                      id={pathToId("rateMode")}
+                      className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      value={profile.rateMode}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, rateMode: e.target.value as StoredProfile["rateMode"] }))}
+                    >
+                      <option value="max">최고 금리 높은 상품 우선</option>
+                      <option value="base">기본 금리 높은 상품 우선</option>
+                      <option value="simple">우대 조건 없는 단순 상품</option>
+                    </select>
+                    <FieldError id={`${pathToId("rateMode")}_error`} message={fieldIssueMap.rateMode?.[0]} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col justify-between rounded-[2.5rem] bg-slate-50 p-6 border border-slate-100 shadow-inner">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">분석 요약</p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-500">대상</span>
+                      <span className="text-xs font-black text-slate-900">{purposeLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-500">결과</span>
+                      <span className="text-xs font-black text-slate-900">Top {profile.topN}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="mt-8 space-y-3">
+                  <Button
+                    variant="primary"
+                    className="w-full rounded-2xl h-14 text-sm shadow-emerald-600/20"
+                    onClick={() => void submit()}
+                    disabled={loading}
+                  >
+                    {loading ? "분석 중" : "추천 시작하기"}
+                  </Button>
+                  <button
+                    className="w-full text-[10px] font-bold text-slate-400 hover:text-emerald-600 transition-colors uppercase tracking-widest"
+                    onClick={() => setAdvancedOpen(!advancedOpen)}
+                  >
+                    {advancedOpen ? "설정 닫기" : "가중치 설정"}
+                  </button>
+                </div>
+              </div>
             </div>
-          </article>
-        ) : null}
 
-        {(result?.items ?? []).map((item, index) => {
-          const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
-          const detailProduct = buildDetailProduct(item);
-          return (
-            <article key={itemKey} className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white">#{index + 1}</span>
-                <SourceBadge sourceId={item.sourceId} />
-                {Array.from(
-                  new Set((item.badges ?? []).map((badge) => badge.trim()).filter((badge) => badge.length > 0)),
-                ).map((badge) => (
-                  <span key={`${item.sourceId}-${item.finPrdtCd}-${badge}`} className="rounded-full border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">
-                    {badge}
-                  </span>
-                ))}
-                <span className="text-slate-500">{item.providerName}</span>
+            {advancedOpen && (
+              <div className="mt-8 border-t border-slate-100 pt-8 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="grid gap-8 md:grid-cols-3">
+                  <label className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-xs font-bold text-slate-500">금리 가중치</span>
+                      <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.rate * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={profile.weights.rate}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, rate: Number(e.target.value) } }))}
+                      className="w-full accent-emerald-600"
+                    />
+                  </label>
+                  <label className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-xs font-bold text-slate-500">기간 가중치</span>
+                      <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.term * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={profile.weights.term}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, term: Number(e.target.value) } }))}
+                      className="w-full accent-emerald-600"
+                    />
+                  </label>
+                  <label className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-xs font-bold text-slate-500">유동성 가중치</span>
+                      <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.liquidity * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={profile.weights.liquidity}
+                      onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, liquidity: Number(e.target.value) } }))}
+                      className="w-full accent-emerald-600"
+                    />
+                  </label>
+                </div>
               </div>
+            )}
+          </Card>
+        </div>
 
-              <h3 className="mt-2 text-lg font-semibold text-slate-900">{item.productName}</h3>
-              <p className="mt-1 text-sm text-slate-600">상품코드: {item.finPrdtCd}</p>
-              <p className="mt-1 text-xs text-slate-500">unifiedId: {item.unifiedId}</p>
-              <p className="mt-1 text-sm text-slate-700">선택 옵션: {item.selectedOption.saveTrm ?? "-"}개월 / 적용금리 {item.selectedOption.appliedRate.toFixed(2)}%</p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">최종 점수: {item.finalScore.toFixed(4)}</p>
-              <div className={`mt-3 ${bodyDenseActionRowClassName}`}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setOpenDetailKey(itemKey)}
-                >
-                  상세보기
-                </Button>
-                <BodyActionLink
-                  href={`/products/catalog/${encodeURIComponent(item.unifiedId)}`}
-                  className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-700 no-underline shadow-sm transition hover:bg-white"
-                >
-                  통합 상세 보기
-                </BodyActionLink>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => {
-                    const next = addCompareIdToStorage(item.unifiedId, compareStoreConfig.max);
-                    setActionNotice(`비교함에 담았습니다. (${next.length}/${compareStoreConfig.max})`);
-                  }}
-                >
-                  비교 담기
-                </Button>
-              </div>
+        {error && (
+          <ErrorState message={error} className="mb-8" />
+        )}
 
-              <div className="mt-4 grid gap-2 md:grid-cols-3">
-                {item.breakdown.map((part) => (
-                  <BodyInset className="text-sm" key={part.key}>
-                    <p className="font-semibold text-slate-900">{part.label}</p>
-                    <p>raw: {part.raw.toFixed(4)}</p>
-                    <p>weight: {part.weight.toFixed(2)}</p>
-                    <p>contribution: {part.contribution.toFixed(4)}</p>
-                    <p className="mt-1 text-xs text-slate-600">{part.reason}</p>
-                  </BodyInset>
-                ))}
+        {result && (
+          <div className="space-y-8">
+            <div className="flex flex-wrap items-center justify-between gap-4 px-2">
+              <h2 className="text-xl font-black text-slate-900">추천 결과 <span className="ml-1 text-emerald-600">{result.items?.length}</span></h2>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="rounded-full" onClick={saveCurrentRun}>결과 저장</Button>
+                <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunJson}>JSON</Button>
+                <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunCsv}>CSV</Button>
               </div>
+            </div>
 
-              <div className="mt-4">
-                <p className="text-sm font-semibold text-slate-900">왜 추천됐는지</p>
-                {item.signals?.depositProtection ? (
-                  <p className="mt-1 text-xs text-slate-500">예금자보호 신호: {item.signals.depositProtection}</p>
-                ) : null}
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                  {item.reasons.map((line, i) => <li key={`${item.finPrdtCd}-${i}`}>{line}</li>)}
-                </ul>
-              </div>
-              <ProductDetailDrawer
-                open={openDetailKey === itemKey}
-                onOpenChange={(next) => setOpenDetailKey(next ? itemKey : null)}
-                kind={item.kind}
-                product={detailProduct}
-                amountWonDefault={item.kind === "saving" ? 500_000 : 10_000_000}
-              />
-            </article>
-          );
-        })}
-      </section>
-      </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              {(result.items ?? []).map((item, index) => {
+                const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
+                const detailProduct = buildDetailProduct(item);
+                return (
+                  <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-200/60 bg-white p-8 shadow-sm transition-all hover:shadow-md">
+                    <div className="mb-6 flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
+                          {index + 1}
+                        </span>
+                        <SourceBadge sourceId={item.sourceId} />
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">매칭 점수</span>
+                        <span className="text-lg font-black text-emerald-600">{item.finalScore.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    <div className="mb-8">
+                      <p className="text-[11px] font-bold text-slate-400">{item.providerName}</p>
+                      <h3 className="mt-1 text-xl font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors">
+                        {item.productName}
+                      </h3>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mb-8">
+                      <div className="rounded-2xl bg-slate-50 p-4 text-center">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">선택 기간</p>
+                        <p className="mt-1 font-black text-slate-700">{item.selectedOption.saveTrm || item.selectedOption.termMonths || "-"}개월</p>
+                      </div>
+                      <div className="rounded-2xl bg-emerald-50/50 p-4 text-center">
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">적용 금리</p>
+                        <p className="mt-1 font-black text-emerald-700">{item.selectedOption.appliedRate.toFixed(2)}%</p>
+                      </div>
+                    </div>
+
+                    <div className="mb-8 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">추천 사유</p>
+                      <ul className="space-y-2">
+                        {item.reasons.slice(0, 3).map((reason, i) => (
+                          <li key={i} className="flex gap-2 text-xs font-medium text-slate-600">
+                            <span className="text-emerald-500">•</span>
+                            <span className="line-clamp-1">{reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="flex gap-2 pt-4">
+                      <Button variant="outline" className="flex-1 rounded-2xl h-12" onClick={() => setOpenDetailKey(itemKey)}>
+                        상세 분석
+                      </Button>
+                      <Button
+                        variant="primary"
+                        className="flex-1 rounded-2xl h-12"
+                        onClick={() => {
+                          addCompareIdToStorage(item.unifiedId, compareStoreConfig.max);
+                          setFeedback("상품이 비교함에 담겼습니다.");
+                          setTimeout(() => setFeedback(""), 3000);
+                        }}
+                      >
+                        비교 담기
+                      </Button>
+                    </div>
+
+                    <ProductDetailDrawer
+                      open={openDetailKey === itemKey}
+                      onOpenChange={(next) => setOpenDetailKey(next ? itemKey : null)}
+                      kind={item.kind}
+                      product={detailProduct}
+                      amountWonDefault={item.kind === "saving" ? 500_000 : 10_000_000}
+                    />
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {!loading && !result && (
+          <div className="py-20">
+            <EmptyState
+              title="아직 추천 결과가 없습니다"
+              description="상단의 옵션을 선택하고 '추천 결과 보기' 버튼을 눌러보세요."
+              icon="search"
+            />
+          </div>
+        )}
+
+        {loading && (
+          <div className="py-20">
+            <LoadingState description="최적의 금융 상품을 분석하고 있습니다." />
+          </div>
+        )}
+
+        {lastStored && (
+          <Card className="mt-12 rounded-[2.5rem] border-slate-100 bg-slate-50/30 p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-black text-slate-900">지난 추천 히스토리</h3>
+              <Button size="sm" variant="ghost" onClick={() => {
+                localStorage.removeItem(RESULT_STORAGE_KEY);
+                setLastStored(null);
+              }}>기록 삭제</Button>
+            </div>
+            <p className="text-sm font-medium text-slate-500">마지막 저장일: {formatKoreanDateTime(lastStored.savedAt)}</p>
+          </Card>
+        )}
+      </Container>
     </main>
   );
 }
 
 export default function RecommendPage() {
   return (
-    <Suspense fallback={<main className="mx-auto w-full max-w-6xl px-4 py-10 text-sm text-slate-600">추천 화면을 불러오는 중...</main>}>
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-slate-50"><LoadingState /></main>}>
       <RecommendPageInner />
     </Suspense>
   );
