@@ -47,6 +47,12 @@ type ExploreSource = {
 type ExploreResponse = {
   ok?: boolean;
   data?: {
+    freshness?: {
+      contract: "search_index";
+      status: "current" | "stale";
+      indexGeneratedAt: string;
+      lastRefreshedAt?: string | null;
+    };
     total?: number;
     items?: ExploreItem[];
     topics?: ExploreTopic[];
@@ -65,6 +71,8 @@ type ExploreResponse = {
     message?: string;
   };
 };
+
+type ExploreFreshness = NonNullable<NonNullable<ExploreResponse["data"]>["freshness"]>;
 
 type ExploreFilterState = {
   q: string;
@@ -150,6 +158,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
   const [topics, setTopics] = useState<ExploreTopic[]>([]);
   const [sources, setSources] = useState<ExploreSource[]>([]);
   const [total, setTotal] = useState(0);
+  const [freshness, setFreshness] = useState<ExploreFreshness | null>(null);
   const [advanced, setAdvanced] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async (filters: ExploreFilterState) => {
@@ -174,6 +183,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
       setTopics(payload.data.topics ?? []);
       setSources(payload.data.sources ?? []);
       setTotal(Math.max(0, Number(payload.data.total ?? 0)));
+      setFreshness(payload.data.freshness ?? null);
     } catch (error) {
       if (requestId !== requestSeqRef.current) return;
 
@@ -181,6 +191,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
       setTopics([]);
       setSources([]);
       setTotal(0);
+      setFreshness(null);
       setErrorMessage(error instanceof Error ? error.message : "뉴스 탐색 데이터를 불러오지 못했습니다.");
     } finally {
       if (requestId === requestSeqRef.current) {
@@ -364,6 +375,24 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
             </div>
           </form>
           {errorMessage ? <p className="mt-2 text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
+          {freshness ? (
+            <div className={`mt-3 rounded-lg border px-3 py-2 ${freshness.status === "stale" ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-slate-50"}`}>
+              <p className={`text-xs font-semibold ${freshness.status === "stale" ? "text-amber-900" : "text-slate-700"}`}>
+                {freshness.status === "stale"
+                  ? "최근 수동 갱신이 더 최신이지만, 탐색 화면은 아직 이전 검색 인덱스 기준으로 보입니다."
+                  : "탐색 화면은 검색 인덱스 기준으로 정리된 결과를 보여줍니다."}
+              </p>
+              <p className={`mt-1 text-xs ${freshness.status === "stale" ? "text-amber-900" : "text-slate-600"}`}>
+                탐색 인덱스 기준 시각: {formatDateTime(freshness.indexGeneratedAt)}
+                {freshness.lastRefreshedAt ? ` · 마지막 수동 갱신: ${formatDateTime(freshness.lastRefreshedAt)}` : ""}
+              </p>
+              {freshness.status === "stale" ? (
+                <p className="mt-1 text-xs text-amber-900">
+                  오늘 브리핑에서 수동 갱신을 마쳤더라도, 탐색 결과는 검색 인덱스 시각이 다시 갱신되기 전까지 바로 바뀌지 않을 수 있습니다.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </Card>
 
         <Card className="space-y-3">
