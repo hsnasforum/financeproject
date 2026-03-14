@@ -305,7 +305,7 @@ describe("planning v3 user-facing remote host API contract", () => {
     const importCsvResponse = await importCsvPOST(requestJson(
       "/api/planning/v3/import/csv",
       "POST",
-      "/planning/v3/import",
+      "/planning/v3/import/csv",
       {
         csrf: "test",
         csvText: [
@@ -395,7 +395,7 @@ describe("planning v3 user-facing remote host API contract", () => {
     await expectOriginMismatch(importCsvPOST(requestCrossOriginJson(
       "/api/planning/v3/import/csv",
       "POST",
-      "/planning/v3/import",
+      "/planning/v3/import/csv",
       {
         csrf: "test",
         csvText: "date,amount,description\n2026-05-01,1000,test",
