@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  BodyEmptyState,
   BodyInset,
-  BodyTableFrame,
-  bodyChoiceRowClassName,
-  bodyDenseActionRowClassName,
-  bodyFieldClassName,
 } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
+import { ProviderChips } from "@/components/ui/ProviderChips";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 
 type UnifiedOption = {
@@ -57,13 +58,6 @@ type UnifiedResponse = {
   };
 };
 
-function formatDateTime(value?: string): string {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (!Number.isFinite(parsed.getTime())) return "-";
-  return parsed.toLocaleString("ko-KR", { hour12: false });
-}
-
 function formatRate(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "-";
   return `${value.toFixed(2)}%`;
@@ -74,14 +68,25 @@ export default function ProductsCatalogPage() {
   const [termMonths, setTermMonths] = useState<string>("");
   const [minRate, setMinRate] = useState<string>("");
   const [q, setQ] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState<string>("all");
   const [includeSamplebank, setIncludeSamplebank] = useState(false);
   const [rows, setRows] = useState<UnifiedItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [generatedAt, setGeneratedAt] = useState("");
   const [compareNotice, setCompareNotice] = useState("");
+
+  const providers = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    map.set("all", { id: "all", name: "전체" });
+    rows.forEach((row) => {
+      if (!map.has(row.providerName)) {
+        map.set(row.providerName, { id: row.providerName, name: row.providerName });
+      }
+    });
+    return Array.from(map.values());
+  }, [rows]);
 
   const run = useCallback(async (input?: { append?: boolean; cursor?: string | null }) => {
     const append = Boolean(input?.append);
@@ -115,7 +120,6 @@ export default function ProductsCatalogPage() {
       setRows((prev) => (append ? [...prev, ...pageItems] : pageItems));
       setHasMore(Boolean(json.data?.pageInfo?.hasMore));
       setNextCursor(typeof json.data?.pageInfo?.nextCursor === "string" ? json.data.pageInfo.nextCursor : null);
-      setGeneratedAt(typeof json.meta?.generatedAt === "string" ? json.meta.generatedAt : "");
       setCompareNotice("");
     } catch {
       setError("UPSTREAM: 통합 카탈로그 조회 중 오류가 발생했습니다.");
@@ -138,6 +142,8 @@ export default function ProductsCatalogPage() {
     const hasMinRateFilter = Number.isFinite(minRateFilter) && minRateFilter > 0;
 
     return rows.filter((item) => {
+      if (selectedProvider !== "all" && item.providerName !== selectedProvider) return false;
+      
       const options = Array.isArray(item.options) ? item.options : [];
       if (!hasTermFilter && !hasMinRateFilter) return true;
       if (options.length === 0) return false;
@@ -147,139 +153,218 @@ export default function ProductsCatalogPage() {
         return true;
       });
     });
-  }, [minRate, rows, termMonths]);
+  }, [minRate, rows, selectedProvider, termMonths]);
 
   return (
     <main className="min-h-screen bg-slate-50 py-8 md:py-12">
       <Container>
-        <SectionHeader
-          title="통합 카탈로그 탐색"
-          subtitle="FINLIFE + KDB를 mode=merged로 통합한 사용자용 탐색 화면입니다."
+        <PageHeader
+          title="통합 상품 탐색"
+          description="FINLIFE와 KDB 데이터를 통합한 전 금융권 상품 카탈로그입니다."
         />
 
-        <Card className="mb-4">
-          <div className="grid gap-3 md:grid-cols-4">
-            <label className="text-sm">
-              상품군
-              <select className={bodyFieldClassName} value={kind} onChange={(e) => setKind(e.target.value === "saving" ? "saving" : "deposit")}>
-                <option value="deposit">예금</option>
-                <option value="saving">적금</option>
-              </select>
-            </label>
-            <label className="text-sm">
-              기간(개월)
-              <input className={bodyFieldClassName} placeholder="예: 12" value={termMonths} onChange={(e) => setTermMonths(e.target.value)} />
-            </label>
-            <label className="text-sm">
-              최소 금리(%)
-              <input className={bodyFieldClassName} placeholder="예: 3.0" value={minRate} onChange={(e) => setMinRate(e.target.value)} />
-            </label>
-            <label className="text-sm">
-              검색어
-              <input className={bodyFieldClassName} placeholder="은행명/상품명" value={q} onChange={(e) => setQ(e.target.value)} />
-            </label>
-          </div>
-          <label className={`mt-3 ${bodyChoiceRowClassName}`}>
-            <input
-              type="checkbox"
-              checked={includeSamplebank}
-              onChange={(event) => setIncludeSamplebank(event.target.checked)}
-            />
-            samplebank fixture 포함(디버그)
-          </label>
-          <div className={`mt-3 text-xs text-slate-600 ${bodyDenseActionRowClassName}`}>
-            <span>생성시각: {formatDateTime(generatedAt)}</span>
-            <span>표시건수: {filteredRows.length.toLocaleString()}건</span>
-            <span>원본누적: {rows.length.toLocaleString()}건</span>
-          </div>
-          {compareNotice ? <p className="mt-2 text-xs text-slate-600">{compareNotice}</p> : null}
-          {error ? (
-            <BodyInset className="mt-3 border-rose-200 bg-rose-50 text-sm text-rose-700">{error}</BodyInset>
-          ) : null}
-        </Card>
-
-        <div className="space-y-3">
-          {filteredRows.map((item) => (
-            <Card key={item.stableId} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">{item.kind}</span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">{(item.sourceIds ?? [item.sourceId]).join(", ")}</span>
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">ID: {item.stableId}</span>
-                {(item.badges ?? []).map((badge) => (
-                  <span key={`${item.stableId}-${badge}`} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-700">{badge}</span>
-                ))}
-              </div>
-              <h2 className="mt-2 text-lg font-bold text-slate-900">{item.productName}</h2>
-              <p className="text-sm text-slate-600">{item.providerName}</p>
-              {item.summary ? <p className="mt-1 text-sm text-slate-600">{item.summary}</p> : null}
-              <div className={`mt-2 ${bodyDenseActionRowClassName}`}>
-                <Link
-                  href={`/products/catalog/${encodeURIComponent(item.stableId)}`}
-                  className="inline-flex rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-                >
-                  통합 상세
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = addCompareIdToStorage(item.stableId, compareStoreConfig.max);
-                    setCompareNotice(`비교함에 담았습니다. (${next.length}/${compareStoreConfig.max})`);
-                  }}
-                  className="inline-flex rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
-                >
-                  비교 담기
-                </button>
-              </div>
-
-              {(item.options ?? []).length > 0 ? (
-                <BodyTableFrame className="mt-3">
-                  <table className="min-w-[460px] text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs text-slate-500">
-                        <th className="py-1 pr-3">기간</th>
-                        <th className="py-1 pr-3">기본금리</th>
-                        <th className="py-1 pr-3">최고금리</th>
-                        <th className="py-1">출처</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(item.options ?? []).map((option, idx) => (
-                        <tr key={`${item.stableId}-${option.termMonths ?? "na"}-${idx}`} className="border-b border-slate-100">
-                          <td className="py-1 pr-3">{option.termMonths !== null ? `${option.termMonths}개월` : (option.saveTrm ?? "-")}</td>
-                          <td className="py-1 pr-3">{formatRate(option.intrRate)}</td>
-                          <td className="py-1 pr-3">{formatRate(option.intrRate2)}</td>
-                          <td className="py-1">{option.sourceId ?? "-"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </BodyTableFrame>
-              ) : (
-                <BodyEmptyState
-                  className="mt-3 border-none bg-slate-50/80"
-                  description="이 상품은 통합 카탈로그 기준으로 노출 가능한 옵션 상세가 아직 없습니다."
-                  title="옵션 정보가 없습니다."
+        <div className="sticky top-0 z-30 mb-8 space-y-4">
+          <Card className="rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm backdrop-blur-md bg-white/90">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <SegmentedTabs
+                  options={[
+                    { id: "deposit", label: "예금" },
+                    { id: "saving", label: "적금" },
+                  ]}
+                  activeTab={kind}
+                  onChange={(id) => setKind(id as "deposit" | "saving")}
                 />
-              )}
-            </Card>
-          ))}
+                
+                <div className="relative flex flex-1 items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      className="h-11 w-full rounded-full border border-slate-200 bg-slate-50 pl-11 pr-4 text-sm shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                      placeholder="은행명 또는 상품명을 검색해 보세요"
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                    />
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    </div>
+                    {q && (
+                      <button
+                        onClick={() => setQ("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-500 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    )}
+                  </div>
+                  <Button variant="primary" size="md" className="rounded-full px-6" onClick={() => void run({ append: false })} disabled={loading}>
+                    {loading ? "조회 중" : "검색"}
+                  </Button>
+                </div>
+              </div>
 
-          {!loading && filteredRows.length === 0 && !error ? (
-            <Card className="rounded-2xl border border-slate-200 bg-white p-4">
-              <BodyEmptyState
-                description="기간, 최소 금리, 검색어를 조금 완화한 뒤 다시 조회해보세요."
-                title="조건에 맞는 결과가 없습니다."
+              <ProviderChips
+                providers={providers}
+                selectedId={selectedProvider}
+                onSelect={setSelectedProvider}
               />
-            </Card>
+
+              <div className="flex flex-wrap items-center gap-6">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">기간</span>
+                  <div className="flex items-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+                    <input
+                      className="h-9 w-16 bg-transparent px-3 text-center text-sm font-bold outline-none"
+                      placeholder="전체"
+                      value={termMonths}
+                      onChange={(e) => setTermMonths(e.target.value)}
+                    />
+                    <span className="bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500 border-l border-slate-200">개월</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">최소 금리</span>
+                  <div className="flex items-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+                    <input
+                      className="h-9 w-16 bg-transparent px-3 text-center text-sm font-bold outline-none"
+                      placeholder="0.0"
+                      value={minRate}
+                      onChange={(e) => setMinRate(e.target.value)}
+                    />
+                    <span className="bg-slate-100 px-3 py-2 text-[10px] font-bold text-slate-500 border-l border-slate-200">% 이상</span>
+                  </div>
+                </div>
+                
+                <div className="ml-auto flex items-center gap-6">
+                  <label className="flex cursor-pointer items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                      checked={includeSamplebank}
+                      onChange={(e) => setIncludeSamplebank(e.target.checked)}
+                    />
+                    샘플 데이터 포함
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-sm font-black text-emerald-600">
+                      {filteredRows.length.toLocaleString()} <span className="text-[11px] font-bold text-slate-400">items</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {compareNotice ? (
+          <BodyInset className="mb-6 border-emerald-100 bg-emerald-50/50 text-emerald-700">
+            {compareNotice}
+          </BodyInset>
+        ) : null}
+
+        {error ? (
+          <ErrorState
+            className="mb-8"
+            message={error}
+            onRetry={() => void run({ append: false })}
+            retryLabel="다시 시도"
+          />
+        ) : null}
+
+        <div className="space-y-4">
+          {loading && filteredRows.length === 0 ? (
+            <LoadingState description="최적의 상품 목록을 불러오고 있습니다." />
+          ) : filteredRows.length > 0 ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredRows.map((item) => (
+                <Card key={item.stableId} className="group relative overflow-hidden rounded-[2rem] border-slate-200/60 bg-white p-6 shadow-sm transition-all hover:shadow-md">
+                  <div className="flex items-start justify-between">
+                    <ProviderLogo providerName={item.providerName} className="h-12 w-12" />
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {item.badges?.slice(0, 2).map((badge) => (
+                        <span key={badge} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                          {badge}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="text-[11px] font-bold text-slate-400">{item.providerName}</p>
+                    <h2 className="mt-1 text-lg font-black text-slate-900 line-clamp-1 group-hover:text-emerald-600 transition-colors">
+                      {item.productName}
+                    </h2>
+                    {item.summary && (
+                      <p className="mt-2 text-sm leading-relaxed text-slate-500 line-clamp-2">
+                        {item.summary}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-6 space-y-2">
+                    {item.options?.slice(0, 2).map((option, idx) => (
+                      <div key={idx} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs">
+                        <span className="font-bold text-slate-600">{option.termMonths ? `${option.termMonths}개월` : option.saveTrm}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-slate-400">최고</span>
+                          <span className="text-sm font-black text-emerald-600">{formatRate(option.intrRate2)}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {item.options && item.options.length > 2 && (
+                      <p className="text-center text-[10px] font-bold text-slate-400">+{item.options.length - 2}개의 옵션 더 있음</p>
+                    )}
+                  </div>
+
+                  <div className="mt-6 flex gap-2">
+                    <Link
+                      href={`/products/catalog/${encodeURIComponent(item.stableId)}`}
+                      className="flex-1 rounded-2xl bg-slate-100 py-3 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-200"
+                    >
+                      상세 보기
+                    </Link>
+                    <Button
+                      variant="primary"
+                      className="flex-1 rounded-2xl"
+                      onClick={() => {
+                        const next = addCompareIdToStorage(item.stableId, compareStoreConfig.max);
+                        setCompareNotice(`비교함에 담았습니다. (${next.length}/${compareStoreConfig.max})`);
+                      }}
+                    >
+                      비교 담기
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : !loading && !error ? (
+            <EmptyState
+              title="검색 결과가 없습니다"
+              description="필터 조건을 조정하거나 다른 검색어를 입력해 보세요."
+              actionLabel="필터 초기화"
+              onAction={() => {
+                setTermMonths("");
+                setMinRate("");
+                setQ("");
+                setSelectedProvider("all");
+              }}
+            />
           ) : null}
         </div>
 
-        <div className="mt-4 flex items-center gap-2">
-          <Button variant="outline" onClick={() => void run({ append: false })} disabled={loading}>{loading ? "조회 중..." : "다시 조회"}</Button>
-          <Button variant="primary" onClick={() => void run({ append: true, cursor: nextCursor })} disabled={loading || !hasMore || !nextCursor}>
-            {loading ? "로딩..." : hasMore ? "더 보기" : "마지막 페이지"}
-          </Button>
-        </div>
+        {hasMore && !loading && (
+          <div className="mt-12 flex justify-center">
+            <Button
+              variant="outline"
+              size="lg"
+              className="rounded-full px-12"
+              onClick={() => void run({ append: true, cursor: nextCursor })}
+            >
+              더 많은 상품 보기
+            </Button>
+          </div>
+        )}
       </Container>
     </main>
   );

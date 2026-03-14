@@ -1,10 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 
 type SearchItem = {
   corpCode: string;
@@ -32,18 +36,6 @@ type IndexMeta = {
   generatedAt?: string;
 };
 
-type IndexStatus = {
-  exists: boolean;
-  primaryPath: string;
-  triedPaths: string[];
-  meta?: {
-    loadedPath?: string;
-    mtimeMs?: number;
-    generatedAt?: string;
-    count?: number;
-  };
-};
-
 const INDEX_HINT = "python3 scripts/dart_corpcode_build.py";
 const INDEX_HINT_WITH_PATH = "DART_CORPCODES_INDEX_PATH=tmp/dart/corpCodes.index.json python3 scripts/dart_corpcode_build.py";
 
@@ -53,21 +45,14 @@ export function InvestCompaniesClient() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searchItems, setSearchItems] = useState<SearchItem[]>([]);
-  const [searchTotal, setSearchTotal] = useState(0);
   const [indexMeta, setIndexMeta] = useState<IndexMeta | null>(null);
   const [indexMissing, setIndexMissing] = useState(false);
   const [canAutoBuild, setCanAutoBuild] = useState(false);
   const [autoBuildDisabledReason, setAutoBuildDisabledReason] = useState("");
   const [buildEndpoint, setBuildEndpoint] = useState("/api/public/disclosure/corpcodes/build");
   const [statusEndpoint, setStatusEndpoint] = useState("/api/public/disclosure/corpcodes/status");
-  const [primaryPath, setPrimaryPath] = useState("");
-  const [triedPaths, setTriedPaths] = useState<string[]>([]);
   const [statusLoading, setStatusLoading] = useState(false);
-  const [statusError, setStatusError] = useState("");
-  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [buildLoading, setBuildLoading] = useState(false);
-  const [buildError, setBuildError] = useState("");
-  const [buildDone, setBuildDone] = useState("");
   const [selectedCode, setSelectedCode] = useState("");
 
   const [detailLoading, setDetailLoading] = useState(false);
@@ -79,20 +64,14 @@ export function InvestCompaniesClient() {
     if (!query) {
       setSearchError("회사명 검색어를 입력하세요.");
       setSearchItems([]);
-      setSearchTotal(0);
       return;
     }
 
     setSearchLoading(true);
     setSearchError("");
-    setBuildError("");
-    setBuildDone("");
     setCanAutoBuild(false);
     setAutoBuildDisabledReason("");
     setIndexMissing(false);
-    setStatusError("");
-    setPrimaryPath("");
-    setTriedPaths([]);
     setDetail(null);
     setDetailError("");
     setSelectedCode("");
@@ -119,13 +98,10 @@ export function InvestCompaniesClient() {
           setAutoBuildDisabledReason(typeof raw.autoBuildDisabledReason === "string" ? raw.autoBuildDisabledReason : "");
           setBuildEndpoint(typeof raw.buildEndpoint === "string" ? raw.buildEndpoint : "/api/public/disclosure/corpcodes/build");
           setStatusEndpoint(typeof raw.statusEndpoint === "string" ? raw.statusEndpoint : "/api/public/disclosure/corpcodes/status");
-          setPrimaryPath(typeof raw.primaryPath === "string" ? raw.primaryPath : "");
-          setTriedPaths(Array.isArray(raw.triedPaths) ? raw.triedPaths.filter((x): x is string => typeof x === "string") : []);
         } else {
           setSearchError(message);
         }
         setSearchItems([]);
-        setSearchTotal(0);
         setIndexMeta(null);
         return;
       }
@@ -150,13 +126,11 @@ export function InvestCompaniesClient() {
         .filter((value): value is SearchItem => value !== null);
 
       setSearchItems(items);
-      setSearchTotal(typeof raw.total === "number" ? raw.total : items.length);
       setIndexMeta(typeof raw.indexMeta === "object" && raw.indexMeta !== null ? (raw.indexMeta as IndexMeta) : null);
     } catch (error) {
       console.error("[invest-companies] search failed", error);
       setSearchError("회사 검색에 실패했습니다. 잠시 후 다시 시도하세요.");
       setSearchItems([]);
-      setSearchTotal(0);
       setIndexMeta(null);
       setIndexMissing(false);
     } finally {
@@ -166,7 +140,6 @@ export function InvestCompaniesClient() {
 
   async function fetchIndexStatus() {
     setStatusLoading(true);
-    setStatusError("");
     try {
       const res = await fetch(statusEndpoint, { cache: "no-store" });
       const raw = (await res.json()) as Record<string, unknown>;
@@ -174,29 +147,15 @@ export function InvestCompaniesClient() {
         const code = typeof raw.error === "string" ? raw.error : "";
         if (res.status === 409 || code === "CORPCODES_INDEX_MISSING") {
           setIndexMissing(true);
-          setPrimaryPath(typeof raw.primaryPath === "string" ? raw.primaryPath : "");
-          setTriedPaths(Array.isArray(raw.triedPaths) ? raw.triedPaths.filter((x): x is string => typeof x === "string") : []);
           setCanAutoBuild(Boolean(raw.canAutoBuild));
           setAutoBuildDisabledReason(typeof raw.autoBuildDisabledReason === "string" ? raw.autoBuildDisabledReason : "");
           setBuildEndpoint(typeof raw.buildEndpoint === "string" ? raw.buildEndpoint : "/api/public/disclosure/corpcodes/build");
           setStatusEndpoint(typeof raw.statusEndpoint === "string" ? raw.statusEndpoint : "/api/public/disclosure/corpcodes/status");
         }
-        setStatusError(typeof raw.message === "string" ? raw.message : "인덱스 상태 조회에 실패했습니다.");
         return;
       }
-      const exists = raw.exists === true;
-      const nextStatus: IndexStatus = {
-        exists,
-        primaryPath: typeof raw.primaryPath === "string" ? raw.primaryPath : "",
-        triedPaths: Array.isArray(raw.triedPaths) ? raw.triedPaths.filter((x): x is string => typeof x === "string") : [],
-        meta: typeof raw.meta === "object" && raw.meta !== null ? (raw.meta as IndexStatus["meta"]) : undefined,
-      };
-      setPrimaryPath(nextStatus.primaryPath);
-      setTriedPaths(nextStatus.triedPaths);
-      setIndexStatus(nextStatus);
     } catch (error) {
       console.error("[invest-companies] status failed", error);
-      setStatusError("인덱스 상태 조회에 실패했습니다. 잠시 후 다시 시도하세요.");
     } finally {
       setStatusLoading(false);
     }
@@ -204,8 +163,6 @@ export function InvestCompaniesClient() {
 
   async function autoBuildIndex() {
     setBuildLoading(true);
-    setBuildError("");
-    setBuildDone("");
     try {
       const res = await fetch(buildEndpoint, {
         method: "POST",
@@ -213,33 +170,11 @@ export function InvestCompaniesClient() {
       });
       const raw = (await res.json()) as Record<string, unknown>;
       if (!res.ok || raw.ok !== true) {
-        const message = typeof raw.message === "string" ? raw.message : "인덱스 자동 생성에 실패했습니다.";
-        const stderrTail = typeof raw.stderrTail === "string" ? raw.stderrTail : "";
-        setBuildError(stderrTail ? `${message} (${stderrTail})` : message);
-        if (typeof raw.status === "object" && raw.status !== null) {
-          const status = raw.status as IndexStatus;
-          setIndexStatus(status);
-          setPrimaryPath(status.primaryPath ?? "");
-          setTriedPaths(Array.isArray(status.triedPaths) ? status.triedPaths : []);
-        }
         return;
       }
-
-      if (typeof raw.status === "object" && raw.status !== null) {
-        const status = raw.status as IndexStatus;
-        setIndexStatus(status);
-        setPrimaryPath(status.primaryPath ?? "");
-        setTriedPaths(Array.isArray(status.triedPaths) ? status.triedPaths : []);
-      }
-      const count = typeof (raw.status as Record<string, unknown> | undefined)?.meta === "object"
-        ? ((raw.status as Record<string, unknown>).meta as Record<string, unknown>)?.count
-        : undefined;
-      const countText = typeof count === "number" ? ` (count=${count})` : "";
-      setBuildDone(`인덱스 생성이 완료되었습니다${countText}. 검색을 다시 시도합니다.`);
       await searchCompanies();
     } catch (error) {
       console.error("[invest-companies] auto build failed", error);
-      setBuildError("인덱스 자동 생성에 실패했습니다. 잠시 후 다시 시도하세요.");
     } finally {
       setBuildLoading(false);
     }
@@ -284,126 +219,175 @@ export function InvestCompaniesClient() {
   }
 
   return (
-    <main className="py-8">
+    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
       <Container>
-        <SectionHeader 
-          title="기업개황 보조정보" 
-          subtitle="회사명 검색 → corp_code 선택 → 기업개황 조회" 
-          icon="/icons/ic-dashboard.png"
+        <PageHeader 
+          title="기업 공시 통합 정보" 
+          description="DART 공시 대상 회사의 기본 정보와 공시 코드를 통합 검색할 수 있습니다." 
         />
 
-        <Card>
-          <form
-            className="flex flex-wrap items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void searchCompanies();
-            }}
-          >
-            <label className="text-sm">
-              회사명 검색
-              <input
-                className="mt-1 block h-10 rounded-xl border border-border px-3"
-                value={queryInput}
-                onChange={(event) => setQueryInput(event.target.value)}
-                placeholder="예: 삼성"
-              />
-            </label>
-            <label className="text-sm">
-              정렬
-              <select className="mt-1 block h-10 rounded-xl border border-border bg-surface px-3" value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)}>
-                <option value="name">회사명 가나다순</option>
-                <option value="name_desc">회사명 역순</option>
-                <option value="stock_first">상장사 우선</option>
-              </select>
-            </label>
-            <Button type="submit">검색</Button>
-          </form>
-          <p className="mt-2 text-xs text-slate-600">결과 {searchItems.length}건 / 총 {searchTotal}건</p>
-          {process.env.NODE_ENV !== "production" && indexMeta ? (
-            <details className="mt-2 text-xs text-slate-500">
-              <summary>자세히(개발)</summary>
-              <p>loadedPath: {indexMeta.loadedPath ?? "-"}</p>
-              <p>count: {indexMeta.count ?? "-"}</p>
-              <p>generatedAt: {indexMeta.generatedAt ?? "-"}</p>
-            </details>
-          ) : null}
-        </Card>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <Card>
-            <h2 className="text-base font-semibold">회사 목록</h2>
-            {searchLoading ? <p className="mt-3 text-sm text-slate-600">검색 중...</p> : null}
-            {!searchLoading && searchError ? <p className="mt-3 text-sm text-red-700">{searchError}</p> : null}
-            {!searchLoading && indexMissing ? (
-              <div className="mt-2 rounded-xl border border-border bg-surface-muted p-2">
-                <p className="text-xs text-slate-600">OpenDART corpCode ZIP/XML을 내려받아 로컬 인덱스를 생성합니다. 수 초~수 분 걸릴 수 있어요.</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => void fetchIndexStatus()} disabled={statusLoading}>
-                    {statusLoading ? "인덱스 상태 확인 중..." : "인덱스 상태 확인"}
-                  </Button>
-                  <Button className="" size="sm" onClick={() => void autoBuildIndex()} disabled={buildLoading || !canAutoBuild}>
-                    {buildLoading ? "인덱스 생성 중..." : "인덱스 자동 생성(1회)"}
-                  </Button>
-                </div>
-                {!canAutoBuild && autoBuildDisabledReason ? <p className="mt-1 text-xs text-amber-700">{autoBuildDisabledReason}</p> : null}
-                {primaryPath ? <p className="mt-1 text-xs text-slate-500">primaryPath: {primaryPath}</p> : null}
-                {triedPaths.length > 0 ? <p className="mt-1 text-xs text-slate-500">triedPaths: {triedPaths.join(" | ")}</p> : null}
-                {statusError ? <p className="mt-1 text-xs text-red-700">{statusError}</p> : null}
-                {indexStatus ? (
-                  <details className="mt-1 text-xs text-slate-600">
-                    <summary>status 응답(개발)</summary>
-                    <p>exists: {String(indexStatus.exists)}</p>
-                    <p>loadedPath: {indexStatus.meta?.loadedPath ?? "-"}</p>
-                    <p>mtimeMs: {typeof indexStatus.meta?.mtimeMs === "number" ? String(indexStatus.meta?.mtimeMs) : "-"}</p>
-                    <p>count: {typeof indexStatus.meta?.count === "number" ? String(indexStatus.meta?.count) : "-"}</p>
-                    <p>generatedAt: {indexStatus.meta?.generatedAt ?? "-"}</p>
-                  </details>
-                ) : null}
-                {buildError ? <p className="mt-1 text-xs text-red-700">{buildError}</p> : null}
-                {buildDone ? <p className="mt-1 text-xs text-green-700">{buildDone}</p> : null}
+        <div className="mb-8">
+          <Card className="rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm">
+            <form
+              className="flex flex-wrap items-end gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void searchCompanies();
+              }}
+            >
+              <div className="flex-1 min-w-[240px]">
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">회사명 검색</label>
+                <input
+                  className="mt-2 block h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  value={queryInput}
+                  onChange={(event) => setQueryInput(event.target.value)}
+                  placeholder="예: 삼성전자, 현대자동차"
+                />
               </div>
-            ) : null}
-            {!searchLoading && !searchError && searchItems.length === 0 ? <p className="mt-3 text-sm text-slate-600">검색 결과가 없습니다.</p> : null}
+              <div>
+                <label className="text-xs font-bold uppercase tracking-widest text-slate-400">정렬</label>
+                <select 
+                  className="mt-2 block h-10 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold outline-none" 
+                  value={sortKey} 
+                  onChange={(event) => setSortKey(event.target.value as SortKey)}
+                >
+                  <option value="name">가나다순</option>
+                  <option value="name_desc">역순</option>
+                  <option value="stock_first">상장사 우선</option>
+                </select>
+              </div>
+              <Button variant="primary" type="submit" className="rounded-2xl px-8 h-10" disabled={searchLoading}>
+                {searchLoading ? "조회 중" : "검색"}
+              </Button>
+            </form>
+            <div className="mt-4 flex items-center gap-3 px-1">
+              <span className="text-xs font-black text-emerald-600">{searchItems.length.toLocaleString()}건 발견</span>
+              {indexMeta && <span className="text-[10px] text-slate-400">인덱스 생성일: {new Date(indexMeta.generatedAt || "").toLocaleDateString()}</span>}
+            </div>
+          </Card>
+        </div>
 
-            {!searchLoading && !searchError && searchItems.length > 0 ? (
-              <ul className="mt-3 max-h-[420px] space-y-2 overflow-auto pr-1">
-                {searchItems.map((item) => (
-                  <li key={item.corpCode} className="rounded-xl border border-border bg-surface-muted p-3">
-                    <p className="text-sm font-medium">{item.corpName}</p>
-                    <p className="text-xs text-slate-600">
-                      corp_code {item.corpCode}
-                      {item.stockCode ? ` · 종목코드 ${item.stockCode}` : " · 비상장"}
-                    </p>
-                    <Button className="mt-2" size="sm" onClick={() => void loadCompany(item.corpCode)}>
-                      기업개황 조회
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card className="flex flex-col rounded-[2.5rem] border-slate-200/60 p-0 overflow-hidden shadow-sm">
+            <div className="p-6 border-b border-slate-50">
+              <h2 className="text-base font-black text-slate-900">회사 목록</h2>
+            </div>
+            
+            <div className="flex-1 p-6">
+              {searchLoading ? (
+                <LoadingState description="기업 인덱스를 탐색하고 있습니다." />
+              ) : searchError && !indexMissing ? (
+                <ErrorState message={searchError} />
+              ) : indexMissing ? (
+                <div className="rounded-[2rem] border border-dashed border-amber-200 bg-amber-50/50 p-8 text-center">
+                  <p className="text-sm font-bold text-amber-800">로컬 회사 인덱스가 없습니다.</p>
+                  <p className="mt-2 text-xs text-amber-600">안정적인 검색을 위해 최초 1회 인덱스 생성이 필요합니다.</p>
+                  
+                  <div className="my-6 rounded-xl bg-slate-900/5 p-4 text-left">
+                    <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">수동 복구 명령</p>
+                    <code className="block break-all text-[11px] font-medium text-slate-700">
+                      {INDEX_HINT}
+                    </code>
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap justify-center gap-3">
+                    <Button size="sm" variant="outline" className="rounded-full bg-white" onClick={() => void fetchIndexStatus()} disabled={statusLoading}>
+                      상태 확인
                     </Button>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
+                    <Button size="sm" variant="primary" className="rounded-full px-6" onClick={() => void autoBuildIndex()} disabled={buildLoading || !canAutoBuild}>
+                      {buildLoading ? "생성 중..." : "인덱스 자동 생성"}
+                    </Button>
+                  </div>
+                  {!canAutoBuild && autoBuildDisabledReason && (
+                    <div className="mt-4 rounded-lg bg-amber-100/50 px-3 py-2 text-[11px] font-bold text-amber-800">
+                      자동 생성 불가: {autoBuildDisabledReason}
+                    </div>
+                  )}
+                </div>
+              ) : searchItems.length === 0 ? (
+                <EmptyState title="검색 결과가 없습니다" description="다른 검색어를 입력해 보세요." />
+              ) : (
+                <ul className="space-y-3 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                  {searchItems.map((item) => (
+                    <li 
+                      key={item.corpCode} 
+                      className={cn(
+                        "group cursor-pointer rounded-2xl border border-slate-100 p-4 transition-all hover:border-emerald-200 hover:bg-emerald-50/30",
+                        selectedCode === item.corpCode && "border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500"
+                      )}
+                      onClick={() => void loadCompany(item.corpCode)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-black text-slate-900 group-hover:text-emerald-700">{item.corpName}</p>
+                          <p className="mt-1 text-[10px] font-bold text-slate-400">
+                            CODE {item.corpCode}
+                            {item.stockCode ? ` · STOCK ${item.stockCode}` : " · 비상장"}
+                          </p>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity">조회 →</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </Card>
 
-          <Card>
-            <h2 className="text-base font-semibold">기업개황 상세</h2>
-            {selectedCode ? <p className="mt-1 text-xs text-slate-500">선택 corp_code: {selectedCode}</p> : null}
+          <Card className="flex flex-col rounded-[2.5rem] border-slate-200/60 p-0 overflow-hidden shadow-sm">
+            <div className="p-6 border-b border-slate-50">
+              <h2 className="text-base font-black text-slate-900">기업 상세 정보</h2>
+            </div>
 
-            {detailLoading ? <p className="mt-3 text-sm text-slate-600">로딩 중...</p> : null}
-            {!detailLoading && detailError ? <p className="mt-3 text-sm text-red-700">{detailError}</p> : null}
-            {!detailLoading && !detailError && !detail ? <p className="mt-3 text-sm text-slate-600">왼쪽 목록에서 회사를 선택하세요.</p> : null}
+            <div className="flex-1 p-6">
+              {detailLoading ? (
+                <LoadingState description="기업 상세 정보를 가져오는 중입니다." />
+              ) : detailError ? (
+                <ErrorState message={detailError} />
+              ) : !detail ? (
+                <div className="flex h-full items-center justify-center py-20 text-center">
+                  <p className="text-sm font-bold text-slate-400">목록에서 회사를 선택하여<br/>상세 정보를 확인하세요.</p>
+                </div>
+              ) : (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                  <div className="rounded-[2rem] bg-slate-50 p-8">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Company Profile</p>
+                    <h3 className="mt-2 text-2xl font-black text-slate-900">{detail.corpName}</h3>
+                    {detail.industry && <p className="mt-1 text-sm font-bold text-slate-500">{detail.industry}</p>}
+                  </div>
 
-            {!detailLoading && !detailError && detail ? (
-              <dl className="mt-3 grid grid-cols-1 gap-2 text-sm">
-                <div><dt className="text-slate-500">회사명</dt><dd className="font-medium text-slate-900">{detail.corpName ?? "-"}</dd></div>
-                <div><dt className="text-slate-500">corp_code</dt><dd>{detail.corpCode ?? "-"}</dd></div>
-                <div><dt className="text-slate-500">종목코드</dt><dd>{detail.stockCode ?? "-"}</dd></div>
-                <div><dt className="text-slate-500">대표자</dt><dd>{detail.ceo ?? "-"}</dd></div>
-                <div><dt className="text-slate-500">업종코드</dt><dd>{detail.industry ?? "-"}</dd></div>
-                <div><dt className="text-slate-500">홈페이지</dt><dd>{detail.homepage ?? "-"}</dd></div>
-                <div><dt className="text-slate-500">주소</dt><dd>{detail.address ?? "-"}</dd></div>
-                <div><dt className="text-slate-500">출처</dt><dd>{detail.source ?? "-"}</dd></div>
-              </dl>
-            ) : null}
+                  <dl className="grid gap-4 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-100 p-4">
+                      <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">대표자</dt>
+                      <dd className="mt-1 text-sm font-black text-slate-700">{detail.ceo || "-"}</dd>
+                    </div>
+                    <div className="rounded-2xl border border-slate-100 p-4">
+                      <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">종목 코드</dt>
+                      <dd className="mt-1 text-sm font-black text-slate-700">{detail.stockCode || "비상장"}</dd>
+                    </div>
+                    <div className="col-span-2 rounded-2xl border border-slate-100 p-4">
+                      <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">홈페이지</dt>
+                      <dd className="mt-1 text-sm font-black text-emerald-600 break-all">
+                        {detail.homepage ? (
+                          <a href={detail.homepage.startsWith("http") ? detail.homepage : `http://${detail.homepage}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">
+                            {detail.homepage}
+                          </a>
+                        ) : "-"}
+                      </dd>
+                    </div>
+                    <div className="col-span-2 rounded-2xl border border-slate-100 p-4">
+                      <dt className="text-[10px] font-bold uppercase tracking-widest text-slate-400">주소</dt>
+                      <dd className="mt-1 text-sm font-medium text-slate-700 leading-relaxed">{detail.address || "-"}</dd>
+                    </div>
+                  </dl>
+
+                  <div className="pt-4 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-slate-300">데이터 출처: {detail.source || "DART"}</span>
+                    {detail.fetchedAt && <span className="text-[10px] font-bold text-slate-300">갱신일: {new Date(detail.fetchedAt).toLocaleDateString()}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
           </Card>
         </div>
       </Container>

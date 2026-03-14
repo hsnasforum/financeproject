@@ -16,7 +16,7 @@ export function LoadingState({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-slate-200 bg-slate-50 p-5",
+        "rounded-2xl border border-slate-200 bg-slate-50 p-5 animate-pulse",
         className,
       )}
       data-testid={testId}
