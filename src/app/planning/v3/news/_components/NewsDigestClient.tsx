@@ -5,9 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BodyActionLink, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { type DigestDay } from "@/lib/planning/v3/news/digest";
 import { type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
+import { cn } from "@/lib/utils";
 
 type NewsDigestClientProps = {
   csrf?: string;
@@ -476,13 +479,11 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
 
   return (
     <PageShell>
-      <div className="space-y-5">
-        <Card className="space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h1 className="text-xl font-black text-slate-900">Planning v3 News Digest</h1>
-              <p className="text-sm text-slate-600">RSS 기반 로컬 뉴스 동향/시나리오 요약</p>
-            </div>
+      <div className="space-y-8">
+        <PageHeader
+          title="News Digest"
+          description="RSS 기반 로컬 뉴스 동향/시나리오 요약"
+          action={(
             <div className={bodyDenseActionRowClassName}>
               <BodyActionLink href="/planning/v3/news/trends">
                 트렌드 보기
@@ -503,349 +504,336 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                 type="button"
                 disabled={refreshing}
                 onClick={() => { void handleRefresh(); }}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
               >
                 {refreshing ? "갱신 중..." : "수동 갱신"}
               </button>
             </div>
-          </div>
-          <p className="text-xs text-slate-500">마지막 생성 시각: {formatDateTime(digest?.generatedAt)}</p>
-          {notice ? <p className="text-xs font-semibold text-emerald-700">{notice}</p> : null}
-          {errorMessage ? <p className="text-xs font-semibold text-rose-700">{errorMessage}</p> : null}
-        </Card>
+          )}
+        />
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">내 판단 메모</h2>
-          {!activeTarget ? (
-            <p className="text-xs text-slate-600">기사/토픽/시나리오 카드에서 &quot;메모&quot;를 눌러 대상을 선택해 주세요.</p>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-xs text-slate-700">
-                대상: <span className="font-semibold">{activeTarget.label}</span>
-              </p>
-              <textarea
-                value={noteText}
-                onChange={(event) => setNoteText(event.target.value)}
-                placeholder="판단 근거/가정/리스크 메모"
-                className="h-24 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
-              />
-              <input
-                value={tagsText}
-                onChange={(event) => setTagsText(event.target.value)}
-                placeholder="태그(쉼표 또는 줄바꿈)"
-                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={noteSaving}
-                  onClick={() => { void handleSaveNote(); }}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {noteSaving ? "저장 중..." : "메모 저장"}
-                </button>
-                <button
-                  type="button"
-                  disabled={noteSaving}
-                  onClick={() => {
-                    setActiveTarget(null);
-                    setNoteText("");
-                    setTagsText("");
-                  }}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  대상 해제
-                </button>
+        <div className="space-y-6">
+          {notice || errorMessage ? (
+            <div className="px-2">
+              {notice ? <p className="text-xs font-bold text-emerald-600">✅ {notice}</p> : null}
+              {errorMessage ? <p className="text-xs font-bold text-rose-600">❌ {errorMessage}</p> : null}
+              <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">마지막 생성: {formatDateTime(digest?.generatedAt)}</p>
+            </div>
+          ) : null}
+
+          <Card className="rounded-[2.5rem] p-8 shadow-sm">
+            <SubSectionHeader title="내 판단 메모" description="기사/토픽/시나리오 카드에서 '메모'를 눌러 대상을 선택해 주세요." />
+            {!activeTarget ? (
+              <div className="rounded-2xl bg-slate-50 px-6 py-8 text-center border border-dashed border-slate-200">
+                <p className="text-sm font-medium text-slate-500">선택된 메모 대상이 없습니다.</p>
               </div>
-            </div>
-          )}
-        </Card>
-
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">오늘의 관찰</h2>
-          {loading ? (
-            <p className="text-sm text-slate-600">불러오는 중...</p>
-          ) : (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm font-semibold text-slate-800">{summaryLine}</p>
-          )}
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="min-w-0">
-              <p className="mb-2 text-xs font-bold text-slate-700">근거 링크</p>
-              {digest?.summary.evidenceLinks?.length ? (
-                <ul className="space-y-1 text-xs">
-                  {digest.summary.evidenceLinks.slice(0, 5).map((url) => (
-                    <li key={url} className="min-w-0">
-                      <a
-                        className="block max-w-full truncate text-emerald-700 underline underline-offset-2"
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title={url}
-                      >
-                        {compactUrlLabel(url)}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-xs text-slate-500">없음</p>
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="mb-2 text-xs font-bold text-slate-700">체크 변수</p>
-              {digest?.watchlist?.length ? (
-                <ul className="space-y-1 text-xs text-slate-700">
-                  {digest.watchlist.map((row) => (
-                    <li key={`${row.seriesId}-${row.label}-${row.view}`}>
-                      - {row.label}: {row.valueSummary}
-                      {row.status === "unknown" ? " (데이터 부족)" : ""}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-xs text-slate-500">없음</p>
-              )}
-            </div>
-          </div>
-        </Card>
-
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Top Links</h2>
-          {!digest?.topItems?.length ? (
-            <p className="text-sm text-slate-600">데이터 없음</p>
-          ) : (
-            <ul className="space-y-2">
-              {digest.topItems.slice(0, 10).map((item) => {
-                const related = notesForTarget("item", item.url);
-                return (
-                <li key={`${item.url}-${item.publishedAt}`} className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-xs text-slate-500">{item.topicLabel} · {item.sourceName} · 점수 {item.score.toFixed(2)}</p>
-                  <p className="mt-1 text-xs text-slate-600">근거: {asString(item.rationale) || "기본 점수 규칙 반영"}</p>
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-slate-900 underline-offset-2 hover:underline">
-                    {item.title}
-                  </a>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">대상</span>
+                  <span className="text-sm font-bold text-slate-900">{activeTarget.label}</span>
+                </div>
+                <textarea
+                  value={noteText}
+                  onChange={(event) => setNoteText(event.target.value)}
+                  placeholder="판단 근거/가정/리스크 메모"
+                  className="h-32 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
+                />
+                <input
+                  value={tagsText}
+                  onChange={(event) => setTagsText(event.target.value)}
+                  placeholder="태그(쉼표 또는 줄바꿈)"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
+                />
+                <div className="flex items-center gap-3 pt-2">
                   <button
                     type="button"
-                    onClick={() => setAdvancedTopItem((prev) => ({ ...prev, [item.url]: !prev[item.url] }))}
-                    className="mt-2 rounded border border-slate-300 px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
+                    disabled={noteSaving}
+                    onClick={() => { void handleSaveNote(); }}
+                    className="rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60 transition-colors"
                   >
-                    {advancedTopItem[item.url] ? "고급 보기 닫기" : "고급 보기"}
+                    {noteSaving ? "저장 중..." : "메모 저장"}
                   </button>
-                  {advancedTopItem[item.url] ? (
-                    <ul className="mt-1 space-y-1 text-[11px] text-slate-600">
-                      <li>소스 기여: {Number(item.scoreParts?.source ?? 0).toFixed(2)}</li>
-                      <li>최근성 기여: {Number(item.scoreParts?.recency ?? 0).toFixed(2)}</li>
-                      <li>키워드 기여: {Number(item.scoreParts?.keyword ?? 0).toFixed(2)}</li>
-                      <li>버스트 기여: {Number(item.scoreParts?.burst ?? 0).toFixed(2)}</li>
-                      <li>편중 감점: {Number(item.scoreParts?.diversityPenalty ?? 0).toFixed(2)}</li>
-                      <li>중복 감점: {Number(item.scoreParts?.duplicatePenalty ?? 0).toFixed(2)}</li>
-                    </ul>
-                  ) : null}
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-slate-600">
-                      {related.length > 0 ? `관련 메모 있음 (${related.length})` : "관련 메모 없음"}
-                    </p>
+                  <button
+                    type="button"
+                    disabled={noteSaving}
+                    onClick={() => {
+                      setActiveTarget(null);
+                      setNoteText("");
+                      setTagsText("");
+                    }}
+                    className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    대상 해제
+                  </button>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card className="rounded-[2.5rem] p-8 shadow-sm">
+            <SubSectionHeader title="오늘의 관찰" description="뉴스 동향 기반 종합 관찰 결과입니다." />
+            {loading ? (
+              <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
+            ) : (
+              <p className="rounded-[2rem] bg-emerald-50/50 border border-emerald-100/50 p-6 text-sm font-bold text-emerald-900 leading-relaxed tabular-nums">{summaryLine}</p>
+            )}
+            <div className="mt-8 grid gap-8 md:grid-cols-2">
+              <div className="min-w-0">
+                <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">근거 링크</p>
+                {digest?.summary.evidenceLinks?.length ? (
+                  <ul className="space-y-2.5 text-xs">
+                    {digest.summary.evidenceLinks.slice(0, 5).map((url) => (
+                      <li key={url} className="min-w-0">
+                        <a
+                          className="block max-w-full truncate text-emerald-700 font-bold underline decoration-emerald-200 underline-offset-4 hover:decoration-emerald-500 transition-all"
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={url}
+                        >
+                          {compactUrlLabel(url)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">근거 데이터 없음</p>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">체크 변수</p>
+                {digest?.watchlist?.length ? (
+                  <ul className="space-y-3 text-xs text-slate-700">
+                    {digest.watchlist.map((row) => (
+                      <li key={`${row.seriesId}-${row.label}-${row.view}`} className="flex items-start gap-2">
+                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-slate-300" />
+                        <span className="font-bold">{row.label}:</span>
+                        <span className="tabular-nums text-slate-600">{row.valueSummary}</span>
+                        {row.status === "unknown" ? <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">데이터 부족</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">체크 변수 없음</p>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <div className="space-y-4">
+            <div className="px-2">
+              <SubSectionHeader title="Top Links" description="중요도 점수가 높은 핵심 기사들입니다." />
+            </div>
+            {!digest?.topItems?.length ? (
+              <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+                <p className="text-sm font-medium text-slate-500">표시할 기사가 없습니다.</p>
+              </div>
+            ) : (
+              <ul className="space-y-4">
+                {digest.topItems.slice(0, 10).map((item) => {
+                  const related = notesForTarget("item", item.url);
+                  return (
+                  <li key={`${item.url}-${item.publishedAt}`} className="group rounded-[2rem] border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600 uppercase tracking-wider">{item.topicLabel}</span>
+                        <span className="text-[10px] font-bold text-slate-400">{item.sourceName}</span>
+                      </div>
+                      <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full tabular-nums">SCORE {item.score.toFixed(2)}</span>
+                    </div>
+
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="block text-base font-black text-slate-900 leading-snug tracking-tight hover:text-emerald-700 transition-colors">
+                      {item.title}
+                    </a>
+
+                    <p className="mt-2 text-xs font-medium text-slate-500 leading-relaxed italic">근거: {asString(item.rationale) || "기본 점수 규칙 반영"}</p>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setAdvancedTopItem((prev) => ({ ...prev, [item.url]: !prev[item.url] }))}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                      >
+                        {advancedTopItem[item.url] ? "상세 분석 닫기" : "상세 분석"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => focusNoteTarget({ targetType: "item", targetId: item.url, label: item.title })}
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        className="rounded-lg border border-slate-900 bg-slate-900 px-3 py-1.5 text-[10px] font-black text-white hover:bg-slate-800 transition-colors"
                       >
-                        메모
+                        메모 추가
                       </button>
                     </div>
-                    {related.slice(0, 2).map((row) => (
-                      <div key={row.id} className="mt-2 rounded-md bg-slate-50 p-2">
-                        <p className="text-xs text-slate-700">{row.note}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {row.tags.map((tag) => (
-                            <span key={`${row.id}-${tag}`} className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">#{tag}</span>
-                          ))}
-                          <span className="text-[10px] text-slate-500">{formatDateTime(row.createdAt)}</span>
-                          <button
-                            type="button"
-                            disabled={noteDeletingId === row.id}
-                            onClick={() => { void handleDeleteNote(row.id); }}
-                            className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            삭제
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Top Topics</h2>
-          {!digest?.topTopics?.length ? (
-            <p className="text-sm text-slate-600">데이터 없음</p>
-          ) : (
-            <ul className="space-y-2">
-              {digest.topTopics.slice(0, 8).map((topic) => {
-                const related = notesForTarget("topic", topic.topicId);
-                const contradiction = contradictionByTopic.get(asString(topic.topicId).toLowerCase());
-                return (
-                  <li key={topic.topicId} className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-sm font-semibold text-slate-900">{topic.topicLabel} ({topic.burstLevel})</p>
-                    <p className="text-xs text-slate-600">
-                      기사 수 {topic.count.toLocaleString("ko-KR")}건 · 점수 합계 {topic.scoreSum.toFixed(2)}
-                    </p>
-                    {contradiction ? (
-                      <p className="mt-1 text-xs text-slate-600">
-                        토픽 내부 상충: {contradictionGradeLabel(contradiction.contradictionGrade)} · {contradiction.summary}
-                      </p>
-                    ) : null}
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-slate-600">
-                        {related.length > 0 ? `관련 메모 있음 (${related.length})` : "관련 메모 없음"}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => focusNoteTarget({ targetType: "topic", targetId: topic.topicId, label: topic.topicLabel })}
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        메모
-                      </button>
-                    </div>
-                    {related.slice(0, 2).map((row) => (
-                      <div key={row.id} className="mt-2 rounded-md bg-slate-50 p-2">
-                        <p className="text-xs text-slate-700">{row.note}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {row.tags.map((tag) => (
-                            <span key={`${row.id}-${tag}`} className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">#{tag}</span>
-                          ))}
-                          <span className="text-[10px] text-slate-500">{formatDateTime(row.createdAt)}</span>
-                          <button
-                            type="button"
-                            disabled={noteDeletingId === row.id}
-                            onClick={() => { void handleDeleteNote(row.id); }}
-                            className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            삭제
-                          </button>
-                        </div>
+                    {advancedTopItem[item.url] ? (
+                      <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-[10px] font-bold text-slate-500 tabular-nums">
+                        <p>소스: {Number(item.scoreParts?.source ?? 0).toFixed(2)}</p>
+                        <p>최근성: {Number(item.scoreParts?.recency ?? 0).toFixed(2)}</p>
+                        <p>키워드: {Number(item.scoreParts?.keyword ?? 0).toFixed(2)}</p>
+                        <p>버스트: {Number(item.scoreParts?.burst ?? 0).toFixed(2)}</p>
+                        <p className="text-rose-600">편중: {Number(item.scoreParts?.diversityPenalty ?? 0).toFixed(2)}</p>
+                        <p className="text-rose-600">중복: {Number(item.scoreParts?.duplicatePenalty ?? 0).toFixed(2)}</p>
                       </div>
-                    ))}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
+                    ) : null}
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">시나리오 카드</h2>
-          {!scenarios?.scenarios?.length ? (
-            <p className="text-sm text-slate-600">데이터 없음</p>
-          ) : (
-            <div className="grid gap-3 md:grid-cols-3">
-              {scenarios.scenarios.map((row) => {
-                const related = notesForTarget("scenario", row.name);
-                return (
-                  <div key={row.name} id={`scenario-${row.name}`} className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-sm font-black text-slate-900">{row.name} (신뢰도 {confidenceLabel(row.confidence)})</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      트리거 상태: {triggerStatusLabel(row.triggerStatus)} · {formatLegacyTriggerText(row.triggerSummary)}
-                    </p>
-                    {asString(row.uncertaintyLabel) ? (
-                      <p className="mt-1 text-xs text-slate-600">
-                        불확실성: {row.uncertaintyLabel} · 컨센서스 {consensusLabel(row.consensusGrade)}
-                      </p>
-                    ) : null}
-                    {strongestContradiction ? (
-                      <p className="mt-1 text-xs text-slate-600">
-                        상충 시그널: {contradictionGradeLabel(strongestContradiction.contradictionGrade)} · {strongestContradiction.summary}
-                      </p>
-                    ) : null}
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-slate-600">
-                        {related.length > 0 ? `관련 메모 있음 (${related.length})` : "관련 메모 없음"}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => focusNoteTarget({ targetType: "scenario", targetId: row.name, label: `${row.name} 시나리오` })}
-                        className="rounded-md border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        메모
-                      </button>
-                    </div>
-                    {related.slice(0, 2).map((noteRow) => (
-                      <div key={noteRow.id} className="mt-2 rounded-md bg-slate-50 p-2">
-                        <p className="text-xs text-slate-700">{noteRow.note}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          {noteRow.tags.map((tag) => (
-                            <span key={`${noteRow.id}-${tag}`} className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-700">#{tag}</span>
-                          ))}
-                          <span className="text-[10px] text-slate-500">{formatDateTime(noteRow.createdAt)}</span>
-                          <button
-                            type="button"
-                            disabled={noteDeletingId === noteRow.id}
-                            onClick={() => { void handleDeleteNote(noteRow.id); }}
-                            className="rounded border border-slate-300 px-1.5 py-0.5 text-[10px] text-slate-600 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            삭제
-                          </button>
-                        </div>
+                    {related.length > 0 && (
+                      <div className="mt-4 space-y-2 border-t border-slate-50 pt-4">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">연결된 메모 ({related.length})</p>
+                        {related.slice(0, 2).map((row) => (
+                          <div key={row.id} className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                            <p className="text-sm font-medium text-slate-700 leading-relaxed">{row.note}</p>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              {row.tags.map((tag) => (
+                                <span key={`${row.id}-${tag}`} className="rounded-lg bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">#{tag}</span>
+                              ))}
+                              <span className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(row.createdAt)}</span>
+                              <button
+                                type="button"
+                                disabled={noteDeletingId === row.id}
+                                onClick={() => { void handleDeleteNote(row.id); }}
+                                className="ml-auto text-[10px] font-black text-rose-600 hover:underline disabled:opacity-60"
+                              >
+                                {noteDeletingId === row.id ? "삭제 중..." : "삭제"}
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    <p className="mt-2 text-xs font-semibold text-slate-700">관찰</p>
-                    <p className="mt-1 text-xs text-slate-600">{row.observation}</p>
-                    <p className="mt-2 text-xs font-semibold text-slate-700">트리거</p>
-                    <ul className="mt-1 space-y-1 text-xs text-slate-600">
-                      {row.trigger.slice(0, 3).map((line) => <li key={line}>- {formatLegacyTriggerText(line)}</li>)}
-                    </ul>
-                    <p className="mt-2 text-xs font-semibold text-slate-700">옵션</p>
-                    <ul className="mt-1 space-y-1 text-xs text-slate-600">
-                      {(row.options ?? []).slice(0, 3).map((line) => <li key={line}>- {line}</li>)}
-                    </ul>
-                    <p className="mt-2 text-xs font-semibold text-slate-700">모니터링</p>
-                    <ul className="mt-1 space-y-1 text-xs text-slate-600">
-                      {row.monitoringOptions.slice(0, 3).map((line) => <li key={line}>- {line}</li>)}
-                    </ul>
-                    <p className="mt-2 text-xs font-semibold text-slate-700">내 상황 영향</p>
-                    {row.personalImpact && !isProfileMissingImpact(row.personalImpact) ? (
-                      <div className="mt-1 space-y-1 text-xs text-slate-600">
-                        <p>현금흐름 압력: {impactGradeLabel(row.personalImpact.cashflowRisk)} · 부채상환 압력: {impactGradeLabel(row.personalImpact.debtServiceRisk)}</p>
-                        <p>물가 압력: {impactGradeLabel(row.personalImpact.inflationPressureRisk)} · 환율 압력: {impactGradeLabel(row.personalImpact.fxPressureRisk)}</p>
-                        <p>소득 압력: {impactGradeLabel(row.personalImpact.incomeRisk)} · 완충력: {impactGradeLabel(row.personalImpact.bufferAdequacy)}</p>
-                        <ul className="space-y-1">
-                          {(row.personalImpact.rationale ?? []).slice(0, 3).map((line) => <li key={`${row.name}-impact-${line}`}>- {line}</li>)}
-                        </ul>
+                    )}
+                  </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="px-2">
+              <SubSectionHeader title="Top Topics" description="최근 기사가 급증한 주요 키워드 그룹입니다." />
+            </div>
+            {!digest?.topTopics?.length ? (
+              <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+                <p className="text-sm font-medium text-slate-500">표시할 토픽이 없습니다.</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {digest.topTopics.slice(0, 8).map((topic) => {
+                  const related = notesForTarget("topic", topic.topicId);
+                  const contradiction = contradictionByTopic.get(asString(topic.topicId).toLowerCase());
+                  return (
+                    <div key={topic.topicId} className="group rounded-[2rem] border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <p className="text-base font-black text-slate-900 tracking-tight">{topic.topicLabel}</p>
+                        <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700 uppercase tracking-wider">{topic.burstLevel}</span>
+                      </div>
+                      <p className="text-xs font-bold text-slate-500 tabular-nums">
+                        기사 {topic.count.toLocaleString("ko-KR")}건 · 점수 합계 {topic.scoreSum.toFixed(2)}
+                      </p>
+                      {contradiction ? (
+                        <div className="mt-3 rounded-xl bg-rose-50/50 border border-rose-100 p-3">
+                          <p className="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-1">토픽 내부 상충: {contradictionGradeLabel(contradiction.contradictionGrade)}</p>
+                          <p className="text-xs font-medium text-rose-900 leading-relaxed">{contradiction.summary}</p>
+                        </div>
+                      ) : null}
+
+                      <div className="mt-4 flex items-center justify-between border-t border-slate-50 pt-4">
+                        <p className="text-[10px] font-black text-slate-400">
+                          {related.length > 0 ? `메모 ${related.length}건` : "메모 없음"}
+                        </p>
                         <button
                           type="button"
-                          onClick={() => setAdvancedScenario((prev) => ({ ...prev, [row.name]: !prev[row.name] }))}
-                          className="mt-1 rounded border border-slate-300 px-2 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-50"
+                          onClick={() => focusNoteTarget({ targetType: "topic", targetId: topic.topicId, label: topic.topicLabel })}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-colors"
                         >
-                          {advancedScenario[row.name] ? "고급 보기 닫기" : "고급 보기"}
+                          메모 작성
                         </button>
-                        {advancedScenario[row.name] ? (
-                          <p className="text-[10px] text-slate-500">watch: {(row.personalImpact.watch ?? []).join(", ") || "없음"}</p>
-                        ) : null}
                       </div>
-                    ) : (
-                      <p className="mt-1 text-xs text-slate-600">
-                        Unknown(프로필 설정 필요) · <Link href="/planning/v3/exposure" className="underline underline-offset-2">노출 프로필 설정</Link>
-                      </p>
-                    )}
-                    <p className="mt-2 text-xs font-semibold text-slate-700">스트레스 점검</p>
-                    {row.stress ? (
-                      <ul className="mt-1 space-y-1 text-xs text-slate-600">
-                        {row.stress.pressureAreas.slice(0, 2).map((line) => <li key={`${row.name}-stress-p-${line}`}>- {line}</li>)}
-                        {row.stress.monitoringCadence.slice(0, 1).map((line) => <li key={`${row.name}-stress-m-${line}`}>- {line}</li>)}
-                      </ul>
-                    ) : (
-                      <p className="mt-1 text-xs text-slate-600">데이터 부족</p>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {related.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          {related.slice(0, 1).map((row) => (
+                            <div key={row.id} className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                              <p className="text-xs font-medium text-slate-700 leading-relaxed line-clamp-2">{row.note}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <div className="px-2">
+              <SubSectionHeader title="시나리오 카드" description="현재 관찰 결과에 따른 미래 재무 시나리오 요약입니다." />
             </div>
-          )}
-        </Card>
+            {!scenarios?.scenarios?.length ? (
+              <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+                <p className="text-sm font-medium text-slate-500">분석된 시나리오가 없습니다.</p>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {scenarios.scenarios.map((row) => {
+                  const related = notesForTarget("scenario", row.name);
+                  return (
+                    <div key={row.name} id={`scenario-${row.name}`} className="group rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm hover:shadow-md transition-all flex flex-col">
+                      <div className="flex items-center justify-between gap-3 mb-4">
+                        <p className="text-lg font-black text-slate-900 tracking-tight">{row.name}</p>
+                        <span className="rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black text-sky-700 uppercase tracking-wider">신뢰도 {confidenceLabel(row.confidence)}</span>
+                      </div>
+
+                      <div className="space-y-4 flex-1">
+                        <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">트리거 상태: {triggerStatusLabel(row.triggerStatus)}</p>
+                          <p className="text-xs font-bold text-slate-700 leading-relaxed">{formatLegacyTriggerText(row.triggerSummary)}</p>
+                        </div>
+
+                        <div>
+                          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">관찰</p>
+                          <p className="text-xs font-medium text-slate-600 leading-relaxed">{row.observation}</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">트리거 요건</p>
+                            <ul className="space-y-1.5 text-[11px] text-slate-600">
+                              {row.trigger.slice(0, 2).map((line) => <li key={line} className="line-clamp-2 leading-snug">• {formatLegacyTriggerText(line)}</li>)}
+                            </ul>
+                          </div>
+                          <div>
+                            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">내 영향 점검</p>
+                            {row.personalImpact && !isProfileMissingImpact(row.personalImpact) ? (
+                              <div className="space-y-1 text-[11px] font-bold text-slate-700">
+                                <p className="flex justify-between">현금흐름 <span className="text-emerald-600">{impactGradeLabel(row.personalImpact.cashflowRisk)}</span></p>
+                                <p className="flex justify-between">부채상환 <span className="text-emerald-600">{impactGradeLabel(row.personalImpact.debtServiceRisk)}</span></p>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-slate-400 italic">프로필 설정 필요</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-8 pt-6 border-t border-slate-50 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() => focusNoteTarget({ targetType: "scenario", targetId: row.name, label: `${row.name} 시나리오` })}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                        >
+                          메모 추가
+                        </button>
+                        <Link href="#news-digest-scenarios-all" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest">상세 분석 ▶</Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </PageShell>
   );

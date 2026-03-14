@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import {
   reportHeroActionLinkClassName,
   reportHeroAnchorLinkClassName,
@@ -17,6 +18,8 @@ import { type ExposureProfile } from "@/lib/planning/v3/exposure/contracts";
 import { type ImpactResult, type ScenarioForImpact } from "@/lib/planning/v3/financeNews/contracts";
 import { computeImpact } from "@/lib/planning/v3/financeNews/impactModel";
 import { WeeklyPlanPanel } from "./WeeklyPlanPanel";
+import { NewsNavigation } from "./NewsNavigation";
+import { cn } from "@/lib/utils";
 
 type NewsTodayClientProps = {
   csrf?: string;
@@ -473,35 +476,42 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
 
   return (
     <PageShell>
-      <div className="space-y-5">
+      <div className="space-y-8">
         <ReportHeroCard
-          kicker="Daily Brief"
+          kicker="Market Pulse"
           title="오늘 재무 브리핑"
-          description="핵심 관찰과 내 상황 영향을 먼저 보고, 필요한 항목만 아래에서 자세히 확인하면 됩니다."
+          description="금융 시장의 핵심 관찰과 내 자산 상황에 미칠 수 있는 잠재적 영향을 정리합니다. 아래 요약에서 필요한 시나리오를 확인하세요."
           action={(
-            <>
-                <Link href="/planning/v3/news/trends" className={reportHeroActionLinkClassName}>
-                  트렌드
-                </Link>
-                <Link href="/planning/v3/journal" className={reportHeroActionLinkClassName}>
-                  저널
-                </Link>
-                <Link href={profile ? "/planning/v3/news/settings" : "/planning/v3/exposure"} className={reportHeroActionLinkClassName}>
-                  {profile ? "설정" : "내 상황 입력"}
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => void handleRefresh()}
-                  disabled={refreshing}
-                  className={`${reportHeroPrimaryActionClassName} disabled:opacity-60`}
-                >
-                  {refreshing ? "갱신 중..." : "지금 갱신"}
-                </button>
-            </>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/planning/v3/journal" className={reportHeroActionLinkClassName}>
+                저널
+              </Link>
+              <button
+                type="button"
+                onClick={() => void handleRefresh()}
+                disabled={refreshing}
+                className={cn(
+                  reportHeroPrimaryActionClassName,
+                  "disabled:opacity-60 transition-colors bg-emerald-600 hover:bg-emerald-500 border-emerald-500/50"
+                )}
+              >
+                {refreshing ? "갱신 중..." : "지금 갱신"}
+              </button>
+            </div>
           )}
         >
-          <p className="text-sm font-semibold text-white/85">{priorityMessage}</p>
-          <ReportHeroStatGrid>
+          <NewsNavigation />
+
+          <div className="mb-8 rounded-3xl bg-emerald-500/10 p-5 border border-emerald-500/20 backdrop-blur-sm">
+            <div className="flex items-start gap-3">
+              <div className="mt-1 h-2 w-2 flex-none animate-pulse rounded-full bg-emerald-400" />
+              <p className="text-sm font-bold text-emerald-50 leading-relaxed tracking-tight">
+                {priorityMessage}
+              </p>
+            </div>
+          </div>
+
+          <ReportHeroStatGrid className="xl:grid-cols-4">
             <ReportHeroStatCard
               label="마지막 갱신"
               value={formatDateTime(data?.lastRefreshedAt ?? null)}
@@ -513,8 +523,8 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
               description="중요한 뉴스 근거와 해석 카드 수"
             />
             <ReportHeroStatCard
-              label="watch 상태"
-              value={`${watchlistRows.length}개 중 ${unresolvedWatchCount}개 점검 필요`}
+              label="지표 점검"
+              value={`${watchlistRows.length}개 중 ${unresolvedWatchCount}건`}
               description="unknown 또는 설정 누락 항목"
             />
             <ReportHeroStatCard
@@ -524,58 +534,75 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
             />
           </ReportHeroStatGrid>
 
-          <div className="flex flex-wrap gap-2 text-xs">
-            <a href="#news-today-observation" className={reportHeroAnchorLinkClassName}>오늘 핵심</a>
-            <a href="#news-today-watchlist" className={reportHeroAnchorLinkClassName}>watchlist</a>
-            <a href="#news-today-scenarios" className={reportHeroAnchorLinkClassName}>시나리오</a>
-            <a href="#news-today-ops" className={reportHeroAnchorLinkClassName}>고급 작업</a>
+          <div className="mt-8 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
+            <span className="text-white/40 mr-2">Quick Access</span>
+            <a href="#news-today-observation" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>오늘 핵심</a>
+            <a href="#news-today-watchlist" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>지표 추이</a>
+            <a href="#news-today-scenarios" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>대응 시나리오</a>
+            <a href="#news-today-ops" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>고급 작업</a>
           </div>
 
-          {notice ? <p className="text-xs font-semibold text-emerald-300">{notice}</p> : null}
-          {errorMessage ? <p className="text-xs font-semibold text-rose-300">{errorMessage}</p> : null}
+          {notice || errorMessage ? (
+            <div className="mt-6 rounded-2xl bg-black/20 p-4 border border-white/5">
+              {notice ? <p className="text-xs font-bold text-emerald-400 flex items-center gap-2"><span>✅</span> {notice}</p> : null}
+              {errorMessage ? <p className="text-xs font-bold text-rose-400 flex items-center gap-2"><span>❌</span> {errorMessage}</p> : null}
+            </div>
+          ) : null}
         </ReportHeroCard>
 
         <WeeklyPlanPanel csrf={csrf} />
 
-        <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-          <Card id="news-today-observation" className="space-y-3">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">오늘 핵심</h2>
-              <p className="text-xs text-slate-500">가장 먼저 읽을 한 줄 요약과, 근거가 되는 링크를 같이 봅니다.</p>
-            </div>
-            {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : <p className="text-sm leading-6 text-slate-800">{asString(data?.digest?.observation) || "데이터 없음"}</p>}
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-slate-700">반대 시그널</p>
-                <span className="text-xs text-slate-500">{counterSignalCount}건</span>
+        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <Card id="news-today-observation" className="rounded-[2.5rem] p-8 shadow-sm">
+            <SubSectionHeader
+              title="오늘 핵심"
+              description="가장 먼저 읽을 한 줄 요약과 반대 시그널을 확인합니다."
+            />
+            {loading ? (
+              <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
+            ) : (
+              <p className="rounded-2xl bg-emerald-50/50 border border-emerald-100/50 p-5 text-sm font-bold text-emerald-900 leading-relaxed">
+                {asString(data?.digest?.observation) || "데이터 없음"}
+              </p>
+            )}
+
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">반대 시그널</p>
+                <span className="text-[10px] font-black text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full tabular-nums">{counterSignalCount}건</span>
               </div>
               {!data?.digest?.counterSignals?.length ? (
-                <p className="mt-1 text-sm text-slate-600">반대 시그널 없음</p>
+                <p className="text-xs font-medium text-slate-500 italic">반대 시그널 없음</p>
               ) : (
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-800">
+                <ul className="list-disc space-y-2 pl-4 text-xs font-bold text-slate-700">
                   {data.digest.counterSignals.map((row, index) => (
-                    <li key={`${row}-${index}`}>{asString(row)}</li>
+                    <li key={`${row}-${index}`} className="leading-relaxed">{asString(row)}</li>
                   ))}
                 </ul>
               )}
             </div>
           </Card>
 
-          <Card className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-bold text-slate-900">근거 링크</h2>
-              <span className="text-xs text-slate-500">{evidenceCount}건</span>
-            </div>
+          <Card className="rounded-[2.5rem] p-8 shadow-sm">
+            <SubSectionHeader
+              title="근거 링크"
+              description="오늘 관찰의 근거가 된 뉴스 기사들입니다."
+              action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">{evidenceCount}건</span>}
+            />
             {!data?.digest?.evidence?.length ? (
-              <p className="text-sm text-slate-600">근거 링크 없음</p>
+              <p className="text-sm text-slate-500 italic">근거 링크 없음</p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {data.digest.evidence.slice(0, 5).map((row, index) => (
-                  <li key={`${asString(row.url)}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
-                    <a href={asString(row.url)} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline underline-offset-2">
+                  <li key={`${asString(row.url)}-${index}`} className="group rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm hover:shadow-md transition-all">
+                    <a href={asString(row.url)} target="_blank" rel="noopener noreferrer" className="block text-sm font-black text-slate-900 leading-snug hover:text-emerald-700 transition-colors">
                       {asString(row.title) || asString(row.url) || "링크"}
                     </a>
-                    <p className="mt-1 text-xs text-slate-500">{asString(row.sourceId)} · {formatDateTime(row.publishedAt)}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-tight">{asString(row.sourceId)}</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-200" />
+                      <span className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(row.publishedAt)}</span>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -583,35 +610,36 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           </Card>
         </div>
 
-        <Card id="news-today-watchlist" className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">watchlist</h2>
-              <p className="text-xs text-slate-500">오늘 점검이 필요한 지표만 먼저 보고, 문제 항목은 바로 설정 화면으로 이동합니다.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setWatchAdvanced((prev) => !prev)}
-              className="text-[11px] font-semibold text-emerald-700 underline underline-offset-2"
-            >
-              {watchAdvanced ? "고급 닫기" : "고급 보기"}
-            </button>
-          </div>
+        <Card id="news-today-watchlist" className="rounded-[2.5rem] p-8 shadow-sm">
+          <SubSectionHeader
+            title="watchlist"
+            description="오늘 점검이 필요한 핵심 지표 추이입니다."
+            action={(
+              <button
+                type="button"
+                onClick={() => setWatchAdvanced((prev) => !prev)}
+                className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
+              >
+                {watchAdvanced ? "간략히 보기" : "상세 분석 모드"}
+              </button>
+            )}
+          />
 
           {watchlistRows.length > 0 ? (
-            <>
+            <div className="space-y-6">
               {watchlistRows.some((row) => row.status === "unknown" || row.unknownReasonCode === "missing" || row.unknownReasonCode === "disabled") ? (
-                <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs font-bold text-amber-800">상태 원인 안내</p>
-                  <ul className="mt-1 space-y-1 text-xs text-amber-900">
+                <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50/50 p-5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">상태 원인 안내</p>
+                  <ul className="space-y-1.5 text-xs font-bold text-amber-900">
                     {watchlistRows
                       .filter((row) => row.status === "unknown" || row.unknownReasonCode === "missing" || row.unknownReasonCode === "disabled")
                       .slice(0, 8)
                       .map((row) => (
-                        <li key={`unknown-${row.seriesId}-${row.label}`}>
-                          {row.label}: {row.unknownReasonLabel || "원인을 확인하지 못했습니다."}{" "}
+                        <li key={`unknown-${row.seriesId}-${row.label}`} className="flex items-center gap-2">
+                          <span className="h-1 w-1 shrink-0 rounded-full bg-amber-400" />
+                          <span>{row.label}: {row.unknownReasonLabel || "원인을 확인하지 못했습니다."}</span>
                           {row.resolveHref ? (
-                            <Link href={row.resolveHref} className="font-semibold underline underline-offset-2">
+                            <Link href={row.resolveHref} className="text-emerald-700 underline underline-offset-4 font-black">
                               빠른 해결
                             </Link>
                           ) : null}
@@ -620,207 +648,214 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                   </ul>
                 </div>
               ) : null}
-              <ul className="grid gap-2 sm:grid-cols-2">
+
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {watchlistRows.map((row) => (
-                <li key={`${row.seriesId}-${row.label}`} className="rounded border border-slate-200 bg-slate-50 px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-800">{row.label}</p>
-                    <p className={`text-xs font-bold ${gradeToneClass(row.grade)}`}>
+                <li key={`${row.seriesId}-${row.label}`} className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm hover:shadow-md transition-all">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <p className="text-sm font-black text-slate-900 tracking-tight">{row.label}</p>
+                    <p className={cn("text-[10px] font-black px-2 py-0.5 rounded-full tabular-nums",
+                      row.grade === "상" ? "bg-rose-50 text-rose-700" :
+                      row.grade === "중" ? "bg-amber-50 text-amber-700" :
+                      row.grade === "하" ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-500")}>
                       {row.grade} {trendArrow(row.sparklineTrend)}
                     </p>
                   </div>
-                  <div className="mt-1">
+                  <div className="mt-2 h-10 flex items-end">
                     <Sparkline points={row.sparklinePoints} />
                   </div>
-                  {watchAdvanced ? (
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      최근값 {formatLastValue(row.sparklineLastValue)} · 기준일 {row.asOf ?? "-"}
-                    </p>
-                  ) : null}
+                  {watchAdvanced && (
+                    <div className="mt-4 pt-3 border-t border-slate-50 flex justify-between text-[10px] font-bold text-slate-400 tabular-nums">
+                      <span>최근값 {formatLastValue(row.sparklineLastValue)}</span>
+                      <span>{row.asOf ?? "-"}</span>
+                    </div>
+                  )}
                   {row.status === "unknown" ? (
-                    <p className="mt-1 text-[11px] text-amber-700">
-                      {row.unknownReasonLabel || "데이터 부족"}
-                      {row.resolveHref ? (
-                        <>
-                          {" · "}
-                          <Link href={row.resolveHref} className="font-semibold underline underline-offset-2">
-                            빠른 해결
-                          </Link>
-                        </>
-                      ) : null}
-                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100">
+                      <p className="text-[10px] font-black text-amber-700">{row.unknownReasonLabel || "데이터 부족"}</p>
+                      {row.resolveHref && (
+                        <Link href={row.resolveHref} className="text-[10px] font-black text-emerald-700 hover:underline">해결 ▶</Link>
+                      )}
+                    </div>
                   ) : null}
                 </li>
                 ))}
               </ul>
-            </>
-          ) : !data?.digest?.watchlist?.length ? (
-            <p className="text-sm text-slate-600">체크 변수 없음</p>
+            </div>
           ) : (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {data.digest.watchlist.map((row, index) => (
-                <li key={`${row}-${index}`} className="rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                  {asString(row)}
-                </li>
-              ))}
-            </ul>
+            <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+              <p className="text-sm font-medium text-slate-500">체크된 변수가 없습니다.</p>
+            </div>
           )}
         </Card>
 
-        <Card id="news-today-scenarios" className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">시나리오 비교</h2>
-              <p className="text-xs text-slate-500">각 시나리오의 핵심 해석과 내 상황 영향 요약을 한 번에 비교합니다.</p>
-            </div>
-            <span className="text-xs text-slate-500">{scenarioCount}개</span>
-          </div>
+        <Card id="news-today-scenarios" className="rounded-[2.5rem] p-8 shadow-sm">
+          <SubSectionHeader
+            title="시나리오 비교"
+            description="현재 관찰 결과에 따른 주요 시나리오와 개인화된 영향 요약입니다."
+            action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">{scenarioCount}개</span>}
+          />
+
           {!data?.scenarios?.cards?.length ? (
-            <p className="text-sm text-slate-600">시나리오 없음</p>
+            <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+              <p className="text-sm font-medium text-slate-500">시나리오 데이터가 없습니다.</p>
+            </div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-3">
-              {data.scenarios.cards.map((card, index) => (
-                (() => {
-                  const scenario: ScenarioForImpact = {
-                    name: normalizeScenarioName(card.name),
-                    triggerStatus: inferTriggerStatus(card),
-                    linkedTopics: (card.linkedTopics ?? []).map((row) => asString(row).toLowerCase()).filter(Boolean),
-                    confirmIndicators: (card.indicators ?? []).map((row) => asString(row).toLowerCase()).filter(Boolean),
-                    leadingIndicators: [],
-                    observation: asString(card.observation),
-                    triggerSummary: (card.triggers ?? []).map((row) => `${asString(row.topicId)}:${asString(row.condition)}`).join(" · "),
-                  };
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {data.scenarios.cards.map((card, index) => {
+                const scenario: ScenarioForImpact = {
+                  name: normalizeScenarioName(card.name),
+                  triggerStatus: inferTriggerStatus(card),
+                  linkedTopics: (card.linkedTopics ?? []).map((row) => asString(row).toLowerCase()).filter(Boolean),
+                  confirmIndicators: (card.indicators ?? []).map((row) => asString(row).toLowerCase()).filter(Boolean),
+                  leadingIndicators: [],
+                  observation: asString(card.observation),
+                  triggerSummary: (card.triggers ?? []).map((row) => `${asString(row.topicId)}:${asString(row.condition)}`).join(" · "),
+                };
 
-                  let impact = unknownImpactResult();
-                  try {
-                    impact = computeImpact({
-                      profile,
-                      scenario,
-                    });
-                  } catch {
-                    impact = unknownImpactResult();
-                  }
-                  const key = `${asString(card.name)}-${index}`;
-                  const showAdvanced = advancedImpact[key] === true;
-                  const isProfileMissing = profile === null;
+                let impact = unknownImpactResult();
+                try {
+                  impact = computeImpact({
+                    profile,
+                    scenario,
+                  });
+                } catch {
+                  impact = unknownImpactResult();
+                }
+                const key = `${asString(card.name)}-${index}`;
+                const showAdvanced = advancedImpact[key] === true;
+                const isProfileMissing = profile === null;
 
-                  return (
-                    <div key={key} className="rounded-lg border border-slate-200 p-3">
-                      <p className="text-sm font-black text-slate-900">{asString(card.name) || "Scenario"}</p>
-                      <p className="mt-1 text-xs text-slate-700">{asString(card.observation) || "-"}</p>
-                      <p className="mt-2 text-[11px] font-semibold text-slate-500">연결 토픽: {(card.linkedTopics ?? []).join(", ") || "-"}</p>
-                      <p className="mt-1 text-[11px] font-semibold text-slate-500">트리거: {scenario.triggerSummary || "-"}</p>
-                      <p className="mt-1 text-[11px] text-slate-500">옵션: {(card.options ?? []).slice(0, 2).join(" / ") || "-"}</p>
+                return (
+                  <div key={key} className="group rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm hover:shadow-md transition-all flex flex-col">
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <p className="text-lg font-black text-slate-900 tracking-tight">{asString(card.name) || "Scenario"}</p>
+                      <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">INDEX {index + 1}</span>
+                    </div>
+
+                    <div className="space-y-4 flex-1">
+                      <p className="text-sm font-bold text-slate-700 leading-relaxed">{asString(card.observation) || "-"}</p>
+
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">컨텍스트</p>
+                        <p className="text-[11px] font-bold text-slate-500 leading-snug line-clamp-2">토픽: {(card.linkedTopics ?? []).join(", ") || "-"}</p>
+                        <p className="text-[11px] font-bold text-slate-500 leading-snug">트리거: {scenario.triggerSummary || "-"}</p>
+                      </div>
+
                       {Array.isArray(card.quality?.uncertaintyLabels) && card.quality.uncertaintyLabels.length > 0 ? (
-                        <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2">
-                          <p className="text-[11px] font-semibold text-amber-800">
-                            불확실성 라벨 · 중복도 {qualityLevelLabel(card.quality?.dedupeLevel)} · 상충 {qualityLevelLabel(card.quality?.contradictionLevel)}
-                          </p>
-                          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-amber-900">
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50/30 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">불확실성 리포트</p>
+                          <ul className="list-disc space-y-1 pl-4 text-[11px] font-bold text-amber-900">
                             {card.quality.uncertaintyLabels.slice(0, 2).map((line, lineIndex) => (
-                              <li key={`${key}-uncertainty-${lineIndex}`}>{asString(line)}</li>
+                              <li key={`${key}-uncertainty-${lineIndex}`} className="leading-snug">{asString(line)}</li>
                             ))}
                           </ul>
                         </div>
                       ) : null}
 
-                      <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] font-bold text-slate-700">내 상황 영향(요약)</p>
+                      <div className="mt-auto pt-4 border-t border-slate-50">
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">내 상황 영향 요약</p>
                           <button
                             type="button"
-                            className="text-[11px] font-semibold text-emerald-700 underline underline-offset-2"
+                            className="text-[10px] font-black text-emerald-600 hover:underline"
                             onClick={() => setAdvancedImpact((prev) => ({ ...prev, [key]: !showAdvanced }))}
                           >
-                            {showAdvanced ? "고급 닫기" : "고급 보기"}
+                            {showAdvanced ? "간략히" : "분석 근거 ▶"}
                           </button>
                         </div>
 
                         {isProfileMissing ? (
-                          <p className="mt-1 text-[11px] text-slate-600">
-                            Unknown (프로필 설정 필요){" "}
-                            <Link href="/planning/v3/exposure" className="font-semibold text-emerald-700 underline underline-offset-2">설정하기</Link>
-                          </p>
+                          <div className="rounded-xl bg-slate-50 p-3 text-center border border-dashed border-slate-200">
+                            <p className="text-[11px] font-bold text-slate-500">프로필 설정이 필요합니다.</p>
+                            <Link href="/planning/v3/exposure" className="text-[11px] font-black text-emerald-700 underline underline-offset-4 mt-1 block">지금 설정하기</Link>
+                          </div>
                         ) : (
-                          <>
-                            <p className="mt-1 text-[11px] text-slate-700">
-                              부채 {gradeLabel(impact.debtServiceRisk)} · 물가 {gradeLabel(impact.inflationPressureRisk)} · 환율 {gradeLabel(impact.fxPressureRisk)} · 완충력 {gradeLabel(impact.bufferAdequacy)}
-                            </p>
-                            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px] text-slate-600">
-                              {impact.rationale.slice(0, 3).map((line, lineIndex) => (
-                                <li key={`${key}-rationale-${lineIndex}`}>{line}</li>
-                              ))}
-                            </ul>
-                          </>
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2 text-[11px] font-black tabular-nums">
+                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">부채 <span className="text-emerald-600">{gradeLabel(impact.debtServiceRisk)}</span></p>
+                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">물가 <span className="text-emerald-600">{gradeLabel(impact.inflationPressureRisk)}</span></p>
+                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">환율 <span className="text-emerald-600">{gradeLabel(impact.fxPressureRisk)}</span></p>
+                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">완충 <span className="text-emerald-600">{gradeLabel(impact.bufferAdequacy)}</span></p>
+                            </div>
+                            {showAdvanced && (
+                              <ul className="list-disc space-y-1.5 pl-4 text-[11px] font-bold text-slate-600 animate-in fade-in slide-in-from-top-1 duration-200">
+                                {impact.rationale.slice(0, 3).map((line, lineIndex) => (
+                                  <li key={`${key}-rationale-${lineIndex}`} className="leading-snug">{line}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
                         )}
-
-                        {showAdvanced ? (
-                          <p className="mt-1 text-[11px] text-slate-500">
-                            watch seriesIds: {impact.watch.length > 0 ? impact.watch.join(", ") : "-"}
-                          </p>
-                        ) : null}
                       </div>
                     </div>
-                  );
-                })()
-              ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
 
-        <Card id="news-today-ops" className="space-y-3 border-amber-200 bg-amber-50/60">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">고급 작업</h2>
-            <p className="text-xs text-slate-700">일반 사용자는 거의 쓸 일이 없고, 데이터가 꼬였을 때만 캐시/트렌드 복구를 실행하면 됩니다.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+        <Card id="news-today-ops" className="rounded-[2.5rem] p-8 shadow-sm border-amber-200 bg-amber-50/30">
+          <SubSectionHeader
+            title="고급 시스템 작업"
+            description="데이터 정합성에 이슈가 있을 때만 캐시/트렌드 복구를 실행하세요."
+          />
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               disabled={recovering}
               onClick={() => void requestRecoveryPreview("rebuild_caches")}
-              className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
+              className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-black text-amber-900 shadow-sm hover:bg-amber-50 disabled:opacity-60 transition-colors"
             >
-              캐시 재구성 요약 보기
+              캐시 재구성 분석
             </button>
             <button
               type="button"
               disabled={recovering}
               onClick={() => void requestRecoveryPreview("recompute_trends")}
-              className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
+              className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-xs font-black text-amber-900 shadow-sm hover:bg-amber-50 disabled:opacity-60 transition-colors"
             >
-              트렌드 재계산 요약 보기
+              트렌드 재계산 분석
             </button>
           </div>
 
           {recoveryPreview ? (
-            <div className="space-y-2 rounded-md border border-amber-200 bg-white p-3">
-              <p className="text-xs font-bold text-amber-800">{asString(recoveryPreview.title) || "복구 요약"}</p>
-              <p className="text-xs text-amber-900">{asString(recoveryPreview.description) || "-"}</p>
-              <p className="text-xs text-amber-900">
-                기준 아이템 {recoveryPreview.itemCount ?? 0}건 · 대상 일수 {recoveryPreview.dailyDays ?? 0}일
-              </p>
-              <ul className="list-disc space-y-0.5 pl-4 text-xs text-amber-900">
-                {(recoveryPreview.notes ?? []).slice(0, 3).map((line, index) => (
-                  <li key={`recovery-note-${index}`}>{asString(line)}</li>
-                ))}
-              </ul>
-              <p className="text-xs text-amber-900">
-                예상 변경 파일: {(recoveryPreview.writeTargets ?? []).slice(0, 3).join(" / ") || "-"}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="mt-6 space-y-4 rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-black text-amber-900">{asString(recoveryPreview.title) || "복구 요약"}</p>
+                <span className="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full tabular-nums">CONFIRMATION REQUIRED</span>
+              </div>
+              <p className="text-xs font-bold text-amber-800 leading-relaxed">{asString(recoveryPreview.description) || "-"}</p>
+
+              <div className="grid grid-cols-2 gap-4 text-[11px] font-bold text-amber-700 tabular-nums">
+                <p>기준 아이템: {recoveryPreview.itemCount ?? 0}건</p>
+                <p>대상 일수: {recoveryPreview.dailyDays ?? 0}일</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">실행 로그 요약</p>
+                <ul className="list-disc space-y-1 pl-4 text-[11px] font-bold text-amber-800">
+                  {(recoveryPreview.notes ?? []).slice(0, 3).map((line, index) => (
+                    <li key={`recovery-note-${index}`}>{asString(line)}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
                   type="button"
                   disabled={recovering}
                   onClick={() => void runRecovery()}
-                  className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                  className="rounded-xl bg-amber-600 px-5 py-2.5 text-xs font-black text-white shadow-sm hover:bg-amber-700 disabled:opacity-60 transition-colors"
                 >
-                  {recovering ? "복구 실행 중..." : "요약 확인 후 실행"}
+                  {recovering ? "복구 실행 중..." : "분석 내용 확인 후 실행"}
                 </button>
                 <button
                   type="button"
                   disabled={recovering}
                   onClick={() => setRecoveryPreview(null)}
-                  className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-800 disabled:opacity-60"
+                  className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 transition-colors"
                 >
                   취소
                 </button>
