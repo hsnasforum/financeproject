@@ -22,7 +22,7 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault }: Props) {
   return (
     <>
       <div
-        className="group relative flex flex-col md:flex-row md:items-center gap-4 py-5 px-4 transition-all duration-300 hover:bg-surface-muted rounded-2xl cursor-pointer"
+        className="group relative flex flex-col md:flex-row md:items-center gap-4 py-5 px-4 transition-all duration-300 hover:bg-slate-50 rounded-[1.5rem] cursor-pointer"
         onClick={() => setOpen(true)}
       >
         <div className="flex flex-1 items-center gap-4 min-w-0">

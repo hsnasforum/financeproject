@@ -493,7 +493,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   }, [kind]);
 
   return (
-    <PageShell className="py-6 md:py-10">
+    <PageShell className="py-6 md:py-10 bg-slate-50">
         <PageHeader 
           title={title} 
           description="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
@@ -637,16 +637,16 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
             showSortControl={viewMode === "product"}
           />
 
-          <div className="divide-y divide-border/30">
+          <div className="divide-y divide-slate-50">
             {loading ? (
               Array.from({ length: 5 }).map((_, idx) => (
-                <div key={`loading-${idx}`} className="flex items-center gap-4 py-5">
-                  <Skeleton className="h-12 w-12 rounded-full" />
+                <div key={`loading-${idx}`} className="flex items-center gap-4 py-6 px-4">
+                  <Skeleton className="h-12 w-12 rounded-full bg-slate-100" />
                   <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-1/4" />
-                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-1/4 bg-slate-100 rounded-lg" />
+                    <Skeleton className="h-5 w-3/4 bg-slate-100 rounded-lg" />
                   </div>
-                  <Skeleton className="h-10 w-20 rounded-xl" />
+                  <Skeleton className="h-10 w-24 rounded-2xl bg-slate-100" />
                 </div>
               ))
             ) : error ? (
