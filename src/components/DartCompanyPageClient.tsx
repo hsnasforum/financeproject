@@ -266,7 +266,7 @@ export function DartCompanyPageClient() {
                   <Link
                     href={monitorHref}
                     prefetch={false}
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-slate-900 px-6 text-sm font-black text-white shadow-lg transition-all hover:bg-slate-800 hover:-translate-y-0.5 active:scale-95"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-700 hover:-translate-y-0.5 active:scale-95"
                     onClick={() => prepareMonitorNavigation()}
                   >
                     공시 모니터링 탭으로 이동
