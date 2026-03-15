@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 
 const DEV_UNLOCKED_SESSION_KEY = "dev_action_unlocked_v1";
 const DEV_CSRF_SESSION_KEY = "dev_action_csrf_v1";
@@ -101,6 +103,19 @@ function categoryLabel(category: FeedbackCategory): string {
   if (category === "bug") return "버그";
   if (category === "improve") return "개선";
   return "질문";
+}
+
+function statusClassName(status: FeedbackStatus): string {
+  if (status === "DONE") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "DOING") return "bg-amber-50 text-amber-700 border-amber-200";
+  return "bg-sky-50 text-sky-700 border-sky-200";
+}
+
+function priorityClassName(priority: FeedbackPriority): string {
+  if (priority === "P0") return "bg-rose-50 text-rose-700 border-rose-200";
+  if (priority === "P1") return "bg-amber-50 text-amber-700 border-amber-200";
+  if (priority === "P2") return "bg-sky-50 text-sky-700 border-sky-200";
+  return "bg-slate-100 text-slate-700 border-slate-300";
 }
 
 type Props = {
@@ -502,46 +517,51 @@ export function FeedbackDetailClient({ id }: Props) {
           <p className="text-sm text-slate-500">표시할 데이터가 없습니다.</p>
         ) : (
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">{categoryLabel(item.category)}</span>
-              <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 font-semibold text-slate-700">{item.status}</span>
-              <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 font-semibold text-slate-700">{item.priority}</span>
-              <span>{formatDateTime(item.createdAt)}</span>
-              <span>id: {item.id}</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-lg bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white uppercase tracking-wider">{categoryLabel(item.category)}</span>
+              <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{item.status}</span>
+              <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", priorityClassName(item.priority))}>{item.priority}</span>
+              <span className="text-[11px] font-bold text-slate-400 tabular-nums">{formatDateTime(item.createdAt)}</span>
+              <span className="text-[11px] font-bold text-slate-400 font-mono ml-auto">ID: {item.id}</span>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm leading-relaxed text-slate-800 whitespace-pre-wrap">{item.message}</p>
+            <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8">
+              <p className="text-base font-medium leading-relaxed text-slate-800 whitespace-pre-wrap">{item.message}</p>
             </div>
 
             {opsAction ? (
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                <p className="text-xs font-black text-rose-800">운영 이슈(OPS) 복구</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div className="rounded-[2rem] border border-rose-100 bg-rose-50/30 p-6">
+                <p className="text-[10px] font-black text-rose-800 uppercase tracking-widest mb-3">운영 이슈(OPS) 복구 액션</p>
+                <div className="flex flex-wrap items-center gap-2">
                   {isDevEnv ? (
                     <>
-                      <Button size="sm" variant="outline" onClick={() => { void handleOpsPlan(); }} disabled={opsPlanLoading || opsRunning}>
+                      <Button size="sm" variant="outline" className="rounded-xl font-black bg-white" onClick={() => { void handleOpsPlan(); }} disabled={opsPlanLoading || opsRunning}>
                         {opsPlanLoading ? "계획 조회 중..." : "복구 계획 보기"}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => { void handleOpsExecute(); }} disabled={opsRunning}>
+                      <Button size="sm" variant="primary" className="rounded-xl font-black shadow-sm" onClick={() => { void handleOpsExecute(); }} disabled={opsRunning}>
                         {opsRunning ? "복구 실행 중..." : "복구 실행"}
                       </Button>
                     </>
                   ) : (
-                    <p className="text-[11px] text-slate-600">복구 버튼은 dev 환경에서만 표시됩니다.</p>
+                    <p className="text-xs font-bold text-slate-500 italic">복구 기능은 개발 환경(Dev)에서만 활성화됩니다.</p>
                   )}
                 </div>
                 {opsPlan ? (
-                  <div className="mt-2 rounded-md border border-slate-200 bg-white p-2">
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${riskBadgeClass(opsPlan.risk)}`}>
-                      {opsPlan.risk}
-                    </span>
-                    <p className="mt-1 text-[11px] text-slate-700">steps: {opsPlan.steps.join(" -> ")}</p>
+                  <div className="mt-4 rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={cn("rounded-full px-2 py-0.5 text-[9px] font-black tracking-wider border", riskBadgeClass(opsPlan.risk))}>
+                        RISK: {opsPlan.risk}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
+                      <span className="text-slate-400 mr-2 uppercase tracking-widest">Steps:</span>
+                      {opsPlan.steps.join(" → ")}
+                    </p>
                     {opsAction?.kind === "CHAIN" && opsPlan.risk === "HIGH" ? (
-                      <div className="mt-2">
-                        <p className="text-[11px] font-semibold text-rose-700">확인 문구: RUN {opsAction.id}</p>
+                      <div className="mt-4 pt-4 border-t border-rose-50">
+                        <p className="text-[11px] font-black text-rose-600 mb-2 uppercase tracking-widest">실행 확인: &quot;RUN {opsAction.id}&quot; 입력</p>
                         <input
-                          className="mt-1 h-9 w-full rounded-md border border-rose-300 px-3 text-sm"
+                          className="h-10 w-full rounded-xl border border-rose-200 bg-white px-4 text-sm font-bold text-rose-700 outline-none focus:ring-1 focus:ring-rose-500 transition-all"
                           placeholder={`RUN ${opsAction.id}`}
                           value={opsConfirmText}
                           onChange={(event) => setOpsConfirmText(event.target.value)}
@@ -553,42 +573,56 @@ export function FeedbackDetailClient({ id }: Props) {
                 ) : null}
                 {opsMessage ? (
                   <DevUnlockShortcutMessage
-                    className="mt-2 text-[11px] font-semibold text-slate-700"
-                    linkClassName="text-slate-700"
+                    className="mt-3 text-[11px] font-bold text-slate-600 bg-white/50 p-2 rounded-lg"
+                    linkClassName="text-emerald-600 underline"
                     message={opsMessage}
                   />
                 ) : null}
               </div>
             ) : null}
 
-            <div className="grid gap-2 text-xs text-slate-600">
-              <p><span className="font-semibold text-slate-700">URL:</span> {item.url ?? "-"}</p>
-              <p><span className="font-semibold text-slate-700">UserAgent:</span> {item.userAgent ?? "-"}</p>
-              <p><span className="font-semibold text-slate-700">AppVersion:</span> {item.appVersion ?? "-"}</p>
-              <p><span className="font-semibold text-slate-700">TraceId:</span> {item.traceId ?? "-"}</p>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 pt-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Context URL</span>
+                <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.url ?? "-"}>{item.url ?? "-"}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">User Agent</span>
+                <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.userAgent ?? "-"}>{item.userAgent ?? "-"}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">App Version</span>
+                <p className="text-xs font-bold text-slate-600 bg-slate-50 p-2 rounded-lg">{item.appVersion ?? "-"}</p>
+              </div>
+              <div className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trace ID</span>
+                <p className="text-xs font-bold text-slate-600 font-mono bg-slate-50 p-2 rounded-lg">{item.traceId ?? "-"}</p>
+              </div>
             </div>
 
-            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="block text-xs text-slate-600">
-                  <span className="mb-1 block font-semibold text-slate-700">상태</span>
+            <div className="mt-8 space-y-6 rounded-[2rem] border border-slate-100 bg-slate-50/30 p-8">
+              <SubSectionHeader title="관리 메타데이터" description="티켓 상태, 우선순위, 태그 및 작업 내역을 관리합니다." />
+              
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">상태</span>
                   <select
                     value={status}
                     onChange={(event) => setStatus(event.target.value as FeedbackStatus)}
-                    className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
                     disabled={saving}
                   >
                     <option value="OPEN">OPEN</option>
                     <option value="DOING">DOING</option>
                     <option value="DONE">DONE</option>
                   </select>
-                </label>
-                <label className="block text-xs text-slate-600">
-                  <span className="mb-1 block font-semibold text-slate-700">우선순위</span>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">우선순위</span>
                   <select
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as FeedbackPriority)}
-                    className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
                     disabled={saving}
                   >
                     <option value="P0">P0</option>
@@ -596,68 +630,73 @@ export function FeedbackDetailClient({ id }: Props) {
                     <option value="P2">P2</option>
                     <option value="P3">P3</option>
                   </select>
-                </label>
-                <label className="block text-xs text-slate-600">
-                  <span className="mb-1 block font-semibold text-slate-700">마감일</span>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">마감일</span>
                   <input
                     type="date"
                     value={dueDate}
                     onChange={(event) => setDueDate(event.target.value)}
-                    className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
                     disabled={saving}
                   />
-                </label>
-                <label className="block text-xs text-slate-600">
-                  <span className="mb-1 block font-semibold text-slate-700">태그 (콤마 구분)</span>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">태그 (콤마 구분)</span>
                   <input
                     value={tagsInput}
                     onChange={(event) => setTagsInput(event.target.value)}
-                    className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm"
-                    placeholder="ux,api,error"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    placeholder="ux, api, bug"
                     disabled={saving}
                   />
-                </label>
+                </div>
               </div>
-              <label className="block text-xs text-slate-600">
-                <span className="mb-1 block font-semibold text-slate-700">메모</span>
+              
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">관리 메모</span>
                 <textarea
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   rows={4}
-                  className="w-full rounded-md border border-slate-300 p-3 text-sm"
+                  className="w-full rounded-[1.5rem] border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                  placeholder="진행 상황이나 특이사항을 기록하세요."
                   disabled={saving}
                 />
-              </label>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-700">체크리스트</p>
-                <div className="flex flex-wrap items-center gap-2">
+              </div>
+
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">체크리스트</span>
+                <div className="flex items-center gap-3">
                   <input
                     value={taskInput}
                     onChange={(event) => setTaskInput(event.target.value)}
-                    className="h-9 flex-1 rounded-md border border-slate-300 px-3 text-sm"
-                    placeholder="할 일을 입력하세요"
+                    className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    placeholder="추가할 할 일을 입력하세요"
                     disabled={saving}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
                   />
-                  <Button size="sm" variant="outline" onClick={handleAddTask} disabled={saving}>
+                  <Button size="sm" variant="outline" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={handleAddTask} disabled={saving}>
                     추가
                   </Button>
                 </div>
                 {tasks.length === 0 ? (
-                  <p className="text-xs text-slate-500">등록된 항목이 없습니다.</p>
+                  <p className="text-xs font-bold text-slate-400 italic bg-white/50 p-4 rounded-xl text-center">등록된 체크리스트 항목이 없습니다.</p>
                 ) : (
-                  <ul className="space-y-1.5">
+                  <ul className="grid gap-2">
                     {tasks.map((task) => (
-                      <li key={task.id} className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5">
+                      <li key={task.id} className="flex items-center gap-3 rounded-[1rem] border border-slate-100 bg-white p-3 shadow-sm hover:border-slate-200 transition-all">
                         <input
                           type="checkbox"
                           checked={task.done}
                           onChange={() => handleToggleTask(task.id)}
+                          className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-all"
                           disabled={saving}
                         />
-                        <span className={`flex-1 text-xs ${task.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{task.text}</span>
+                        <span className={cn("flex-1 text-sm font-bold transition-all", task.done ? "text-slate-300 line-through" : "text-slate-700")}>{task.text}</span>
                         <button
                           type="button"
-                          className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                          className="rounded-lg bg-rose-50 px-2 py-1 text-[10px] font-black text-rose-700 hover:bg-rose-100 transition-all"
                           onClick={() => handleRemoveTask(task.id)}
                           disabled={saving}
                         >
@@ -668,56 +707,60 @@ export function FeedbackDetailClient({ id }: Props) {
                   </ul>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="primary" onClick={() => { void handleSave(); }} disabled={saving}>
-                  {saving ? "저장 중..." : "저장"}
+
+              <div className="flex items-center justify-end pt-4">
+                <Button size="sm" variant="primary" className="h-11 px-12 rounded-2xl font-black shadow-md" onClick={() => { void handleSave(); }} disabled={saving}>
+                  {saving ? "저장 중..." : "설정 저장"}
                 </Button>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => { void handleCopy(); }}>
-                복사
+            <div className="flex flex-wrap items-center gap-3 pt-6">
+              <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={() => { void handleCopy(); }}>
+                JSON 복사
               </Button>
-              <Button size="sm" variant="outline" onClick={handleDownload}>
-                다운로드
+              <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={handleDownload}>
+                JSON 다운로드
               </Button>
-              <Button size="sm" variant="outline" onClick={handleGenerateIssueTemplate}>
-                Issue 템플릿 생성
+              <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={handleGenerateIssueTemplate}>
+                GitHub Issue 템플릿 생성
               </Button>
-              {notice ? <p className="text-xs text-slate-500">{notice}</p> : null}
+              {notice ? <p className="text-xs font-black text-emerald-600 animate-in fade-in slide-in-from-left-2">{notice}</p> : null}
             </div>
 
             {issueMarkdown ? (
-              <div className="space-y-2">
-                <label className="block text-xs font-semibold text-slate-700" htmlFor="issue_markdown">
-                  Issue Markdown
+              <div className="space-y-3 pt-6 border-t border-slate-100">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400" htmlFor="issue_markdown">
+                  Issue Markdown Preview
                 </label>
                 <textarea
                   id="issue_markdown"
                   value={issueMarkdown}
                   onChange={(event) => setIssueMarkdown(event.target.value)}
                   rows={12}
-                  className="w-full rounded-xl border border-slate-300 bg-white p-3 font-mono text-xs leading-5 text-slate-800"
+                  className="w-full rounded-[1.5rem] border border-slate-200 bg-slate-900 p-5 font-mono text-xs leading-relaxed text-slate-300 focus:ring-1 focus:ring-emerald-500 transition-all"
                 />
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => { void handleCopyIssueTemplate(); }}>
+                  <Button size="sm" variant="primary" className="rounded-xl font-black shadow-md" onClick={() => { void handleCopyIssueTemplate(); }}>
                     템플릿 복사
                   </Button>
-                  <Button size="sm" variant="outline" onClick={handleDownloadIssueTemplate}>
-                    템플릿 다운로드
+                  <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm" onClick={handleDownloadIssueTemplate}>
+                    마크다운 다운로드
                   </Button>
                 </div>
               </div>
             ) : null}
 
-            <details className="rounded-xl border border-slate-200 bg-white p-3">
-              <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-                진단 스냅샷 {item.snapshot ? "보기" : "(없음)"}
+            <details className="group mt-10 rounded-[2rem] border border-slate-100 bg-white shadow-sm overflow-hidden">
+              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-slate-900 group-open:bg-slate-50 transition-colors list-none">
+                <span>진단 스냅샷 {item.snapshot ? "보기" : "(첨부 데이터 없음)"}</span>
+                <span className="text-[10px] font-bold text-slate-400 group-open:rotate-180 transition-transform">▼</span>
               </summary>
-              <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-[11px] leading-5 text-slate-100">
-                {item.snapshot ? snapshotPretty : "첨부된 진단 스냅샷이 없습니다."}
-              </pre>
+              <div className="p-6 border-t border-slate-50 bg-slate-900">
+                <pre className="overflow-x-auto text-[11px] leading-relaxed text-emerald-400/90 font-mono scrollbar-thin scrollbar-thumb-slate-700">
+                  {item.snapshot ? snapshotPretty : "첨부된 진단 데이터가 존재하지 않습니다."}
+                </pre>
+              </div>
             </details>
           </div>
         )}
