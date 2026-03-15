@@ -151,11 +151,12 @@ export function Sparkline({
               transform: "translateX(-50%)"
             }}
           >
-            <div className="bg-slate-900 text-white text-[10px] font-black px-2 py-1 rounded shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5">
-              <span className="opacity-60 uppercase tracking-tighter">Point {hoveredPoint.index + 1}</span>
-              <span className="tabular-nums">{formatValue(hoveredPoint.value, hoveredPoint.index)}</span>
-              {/* Arrow */}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+            <div className="relative bg-white border border-slate-200 text-slate-900 text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5">
+              <span className="text-slate-400 uppercase tracking-tighter text-[9px]">Point {hoveredPoint.index + 1}</span>
+              <span className="tabular-nums text-slate-700">{formatValue(hoveredPoint.value, hoveredPoint.index)}</span>
+              {/* Arrow with border effect */}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-200" />
+              <div className="absolute top-[calc(100%-1px)] left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white" />
             </div>
           </motion.div>
         )}
