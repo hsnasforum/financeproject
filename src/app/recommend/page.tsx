@@ -12,8 +12,9 @@ import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { Container } from "@/components/ui/Container";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FilterSelect } from "@/components/ui/FilterSelect";
@@ -142,7 +143,9 @@ const RESULT_STORAGE_KEY = "recommend_last_result_v1";
 const AUTORUN_SIG_SESSION_KEY = "recommend_autorun_sig";
 const ERROR_SUMMARY_ID = "recommend_error_summary";
 
-type QueryOverrides = {
+const defaultProfile: StoredProfile = recommendProfileDefaults();
+
+function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
   profilePatch: Partial<StoredProfile>;
   hasQuery: boolean;
   autoRun: boolean;
@@ -150,16 +153,7 @@ type QueryOverrides = {
   goHistory: boolean;
   source: string | null;
   issues: Issue[];
-};
-
-type AutorunSessionPayload = {
-  sig: string;
-  runId: string | null;
-};
-
-const defaultProfile: StoredProfile = recommendProfileDefaults();
-
-function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): QueryOverrides {
+} {
   const parsedPatch = recommendProfileFromSearchParams(searchParams);
   const patch = parsedPatch.value;
 
@@ -198,12 +192,12 @@ function buildAutorunSignature(profile: StoredProfile): string {
   });
 }
 
-function readAutorunSessionPayload(): AutorunSessionPayload | null {
+function readAutorunSessionPayload(): { sig: string; runId: string | null } | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.sessionStorage.getItem(AUTORUN_SIG_SESSION_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<AutorunSessionPayload>;
+    const parsed = JSON.parse(raw) as Partial<{ sig: string; runId: string | null }>;
     if (typeof parsed.sig !== "string" || !parsed.sig) return null;
     return {
       sig: parsed.sig,
@@ -214,7 +208,7 @@ function readAutorunSessionPayload(): AutorunSessionPayload | null {
   }
 }
 
-function writeAutorunSessionPayload(payload: AutorunSessionPayload): void {
+function writeAutorunSessionPayload(payload: { sig: string; runId: string | null }): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.setItem(AUTORUN_SIG_SESSION_KEY, JSON.stringify(payload));
 }
@@ -618,307 +612,319 @@ function RecommendPageInner() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
-      <Container>
-        <PageHeader
-          title="스마트 상품 추천"
-          description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
-        />
+    <PageShell>
+      <PageHeader
+        title="스마트 상품 추천"
+        description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
+      />
 
-        <div className="mb-8 flex flex-col gap-6">
-          <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
-          
-          <Card className="rounded-[2.5rem] border-slate-200/60 p-8 shadow-sm">
-            <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-6" />
-            <ErrorAnnouncer />
+      <div className="mb-8 space-y-6">
+        <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
+        
+        <Card className="rounded-[2.5rem] p-8 shadow-sm">
+          <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-6" />
+          <ErrorAnnouncer />
 
-            <div className="grid gap-8 lg:grid-cols-4">
-              <div className="space-y-6 lg:col-span-3">
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="flex flex-col gap-1">
-                    <FilterSelect
-                      size="md"
-                      id={pathToId("purpose")}
-                      label="저축 목적"
-                      value={profile.purpose}
-                      onChange={(e) => setProfile((prev) => ({ ...prev, purpose: e.target.value as StoredProfile["purpose"] }))}
-                    >
-                      <option value="emergency">단기 비상금 (안정성 중시)</option>
-                      <option value="seed-money">목돈 마련 (수익성 중시)</option>
-                      <option value="long-term">장기 저축 (복리 효과)</option>
-                    </FilterSelect>
-                    <FieldError id={`${pathToId("purpose")}_error`} message={fieldIssueMap.purpose?.[0]} />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <FilterSelect
-                      size="md"
-                      id={pathToId("kind")}
-                      label="상품 유형"
-                      value={profile.kind}
-                      onChange={(e) => setProfile((prev) => ({ ...prev, kind: e.target.value as StoredProfile["kind"] }))}
-                    >
-                      <option value="deposit">정기 예금</option>
-                      <option value="saving">정기 적금</option>
-                    </FilterSelect>
-                    <FieldError id={`${pathToId("kind")}_error`} message={fieldIssueMap.kind?.[0]} />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <FilterSelect
-                      size="md"
-                      id={pathToId("preferredTerm")}
-                      label="희망 기간"
-                      value={profile.preferredTerm}
-                      onChange={(e) => setProfile((prev) => ({ ...prev, preferredTerm: Number(e.target.value) as StoredProfile["preferredTerm"] }))}
-                    >
-                      <option value={3}>3개월</option>
-                      <option value={6}>6개월</option>
-                      <option value={12}>12개월</option>
-                      <option value={24}>24개월</option>
-                      <option value={36}>36개월</option>
-                    </FilterSelect>
-                    <FieldError id={`${pathToId("preferredTerm")}_error`} message={fieldIssueMap.preferredTerm?.[0]} />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <FilterSelect
-                      size="md"
-                      id={pathToId("rateMode")}
-                      label="금리 정책"
-                      value={profile.rateMode}
-                      onChange={(e) => setProfile((prev) => ({ ...prev, rateMode: e.target.value as StoredProfile["rateMode"] }))}
-                    >
-                      <option value="max">최고 금리 높은 상품 우선</option>
-                      <option value="base">기본 금리 높은 상품 우선</option>
-                      <option value="simple">우대 조건 없는 단순 상품</option>
-                    </FilterSelect>
-                    <FieldError id={`${pathToId("rateMode")}_error`} message={fieldIssueMap.rateMode?.[0]} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col justify-between rounded-[2.5rem] bg-slate-50 p-6 border border-slate-100 shadow-inner">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">분석 요약</p>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-500">대상</span>
-                      <span className="text-xs font-black text-slate-900">{purposeLabel}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-500">결과</span>
-                      <span className="text-xs font-black text-slate-900">Top {profile.topN}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-8 space-y-3">
-                  <Button
-                    variant="primary"
-                    className="w-full rounded-2xl h-14 text-sm shadow-emerald-600/20"
-                    onClick={() => void submit()}
-                    disabled={loading}
+          <div className="grid gap-8 lg:grid-cols-4">
+            <div className="space-y-6 lg:col-span-3">
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <FilterSelect
+                    size="md"
+                    id={pathToId("purpose")}
+                    label="저축 목적"
+                    value={profile.purpose}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, purpose: e.target.value as StoredProfile["purpose"] }))}
                   >
-                    {loading ? "분석 중" : "추천 시작하기"}
-                  </Button>
-                  <button
-                    className="w-full text-[10px] font-bold text-slate-400 hover:text-emerald-600 transition-colors uppercase tracking-widest"
-                    onClick={() => setAdvancedOpen(!advancedOpen)}
+                    <option value="emergency">단기 비상금 (안정성 중시)</option>
+                    <option value="seed-money">목돈 마련 (수익성 중시)</option>
+                    <option value="long-term">장기 저축 (복리 효과)</option>
+                  </FilterSelect>
+                  <FieldError id={`${pathToId("purpose")}_error`} message={fieldIssueMap.purpose?.[0]} />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <FilterSelect
+                    size="md"
+                    id={pathToId("kind")}
+                    label="상품 유형"
+                    value={profile.kind}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, kind: e.target.value as StoredProfile["kind"] }))}
                   >
-                    {advancedOpen ? "설정 닫기" : "가중치 설정"}
-                  </button>
+                    <option value="deposit">정기 예금</option>
+                    <option value="saving">정기 적금</option>
+                  </FilterSelect>
+                  <FieldError id={`${pathToId("kind")}_error`} message={fieldIssueMap.kind?.[0]} />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <FilterSelect
+                    size="md"
+                    id={pathToId("preferredTerm")}
+                    label="희망 기간"
+                    value={profile.preferredTerm}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, preferredTerm: Number(e.target.value) as StoredProfile["preferredTerm"] }))}
+                  >
+                    <option value={3}>3개월</option>
+                    <option value={6}>6개월</option>
+                    <option value={12}>12개월</option>
+                    <option value={24}>24개월</option>
+                    <option value={36}>36개월</option>
+                  </FilterSelect>
+                  <FieldError id={`${pathToId("preferredTerm")}_error`} message={fieldIssueMap.preferredTerm?.[0]} />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <FilterSelect
+                    size="md"
+                    id={pathToId("rateMode")}
+                    label="금리 정책"
+                    value={profile.rateMode}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, rateMode: e.target.value as StoredProfile["rateMode"] }))}
+                  >
+                    <option value="max">최고 금리 높은 상품 우선</option>
+                    <option value="base">기본 금리 높은 상품 우선</option>
+                    <option value="simple">우대 조건 없는 단순 상품</option>
+                  </FilterSelect>
+                  <FieldError id={`${pathToId("rateMode")}_error`} message={fieldIssueMap.rateMode?.[0]} />
                 </div>
               </div>
             </div>
 
-            {advancedOpen && (
-              <div className="mt-8 border-t border-slate-100 pt-8 animate-in fade-in slide-in-from-top-4 duration-500">
-                <div className="grid gap-8 md:grid-cols-3">
-                  <label className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-xs font-bold text-slate-500">금리 가중치</span>
-                      <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.rate * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={profile.weights.rate}
-                      onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, rate: Number(e.target.value) } }))}
-                      className="w-full accent-emerald-600"
-                    />
-                  </label>
-                  <label className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-xs font-bold text-slate-500">기간 가중치</span>
-                      <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.term * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={profile.weights.term}
-                      onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, term: Number(e.target.value) } }))}
-                      className="w-full accent-emerald-600"
-                    />
-                  </label>
-                  <label className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-xs font-bold text-slate-500">유동성 가중치</span>
-                      <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.liquidity * 100)}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={profile.weights.liquidity}
-                      onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, liquidity: Number(e.target.value) } }))}
-                      className="w-full accent-emerald-600"
-                    />
-                  </label>
+            <div className="flex flex-col justify-between rounded-[2rem] bg-slate-50 p-6 border border-slate-100 shadow-inner">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">분석 요약</p>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500">대상</span>
+                    <span className="text-xs font-black text-slate-900">{purposeLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-500">결과</span>
+                    <span className="text-xs font-black text-slate-900">Top {profile.topN}</span>
+                  </div>
                 </div>
               </div>
-            )}
-          </Card>
+              
+              <div className="mt-8 space-y-3">
+                <Button
+                  variant="primary"
+                  className="w-full rounded-2xl h-14 text-sm font-black shadow-lg shadow-emerald-900/20"
+                  onClick={() => void submit()}
+                  disabled={loading}
+                >
+                  {loading ? "분석 중" : "추천 시작하기"}
+                </Button>
+                <button
+                  className="w-full text-[10px] font-bold text-slate-400 hover:text-emerald-600 transition-colors uppercase tracking-widest"
+                  onClick={() => setAdvancedOpen(!advancedOpen)}
+                >
+                  {advancedOpen ? "설정 닫기" : "가중치 설정"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {advancedOpen && (
+            <div className="mt-8 border-t border-slate-100 pt-8 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="grid gap-8 md:grid-cols-3">
+                <label className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-xs font-bold text-slate-500">금리 가중치</span>
+                    <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.rate * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={profile.weights.rate}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, rate: Number(e.target.value) } }))}
+                    className="w-full accent-emerald-600"
+                  />
+                </label>
+                <label className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-xs font-bold text-slate-500">기간 가중치</span>
+                    <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.term * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={profile.weights.term}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, term: Number(e.target.value) } }))}
+                    className="w-full accent-emerald-600"
+                  />
+                </label>
+                <label className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-xs font-bold text-slate-500">유동성 가중치</span>
+                    <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.liquidity * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={profile.weights.liquidity}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, liquidity: Number(e.target.value) } }))}
+                    className="w-full accent-emerald-600"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {error && (
+        <ErrorState message={error} className="mb-8" />
+      )}
+
+      {result && (
+        <div className="space-y-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 px-2">
+            <h2 className="text-xl font-black text-slate-900">추천 결과 <span className="ml-1 text-emerald-600">{result.items?.length}</span></h2>
+            <div className="flex items-center gap-3">
+              {feedback && (
+                <span className="text-xs font-bold text-emerald-600 animate-in fade-in duration-300">{feedback}</span>
+              )}
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={saveCurrentRun}>결과 저장</Button>
+                <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunJson}>JSON</Button>
+                <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunCsv}>CSV</Button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-2">
+            {(result.items ?? []).map((item, index) => {
+              const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
+              const detailProduct = buildDetailProduct(item);
+              const scorePct = Math.min(100, Math.max(0, item.finalScore));
+              return (
+                <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100">
+                  <div className="mb-6 flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
+                        {index + 1}
+                      </span>
+                      <SourceBadge sourceId={item.sourceId} />
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">매칭 점수</span>
+                      <span className="text-lg font-black text-emerald-600 tabular-nums">{item.finalScore.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="mb-8">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{item.providerName}</p>
+                    <h3 className="mt-1 text-xl font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tight">
+                      {item.productName}
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">선택 기간</p>
+                      <p className="mt-1 font-black text-slate-700 tabular-nums">{item.selectedOption.saveTrm || item.selectedOption.termMonths || "-"}개월</p>
+                    </div>
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4 text-center">
+                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">적용 금리</p>
+                      <p className="mt-1 font-black text-emerald-700 tabular-nums">{item.selectedOption.appliedRate.toFixed(2)}%</p>
+                    </div>
+                  </div>
+
+                  <div className="mb-8 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Score Breakdown</p>
+                      <span className="text-[10px] font-black text-emerald-600 tabular-nums">{Math.round(scorePct)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 transition-all duration-1000 ease-out shadow-sm shadow-emerald-200" 
+                        style={{ width: `${scorePct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-8 space-y-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">추천 사유</p>
+                    <ul className="space-y-3">
+                      {item.reasons.slice(0, 3).map((reason, i) => (
+                        <li key={i} className="flex gap-3 text-sm font-medium text-slate-600">
+                          <span className="text-emerald-500 font-black mt-0.5">•</span>
+                          <span className="line-clamp-2 leading-relaxed">{reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="flex gap-3 pt-4 border-t border-slate-50">
+                    <Button variant="outline" className="flex-1 rounded-2xl h-12 font-black" onClick={() => setOpenDetailKey(itemKey)}>
+                      상세 분석
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="flex-1 rounded-2xl h-12 font-black shadow-md"
+                      onClick={() => {
+                        addCompareIdToStorage(item.unifiedId, compareStoreConfig.max);
+                        setFeedback("상품이 비교함에 담겼습니다.");
+                        setTimeout(() => setFeedback(""), 3000);
+                      }}
+                    >
+                      비교 담기
+                    </Button>
+                  </div>
+
+                  <ProductDetailDrawer
+                    open={openDetailKey === itemKey}
+                    onOpenChange={(next) => setOpenDetailKey(next ? itemKey : null)}
+                    kind={item.kind}
+                    product={detailProduct}
+                    amountWonDefault={item.kind === "saving" ? 500_000 : 10_000_000}
+                  />
+                </Card>
+              );
+            })}
+          </div>
         </div>
+      )}
 
-        {error && (
-          <ErrorState message={error} className="mb-8" />
-        )}
+      {!loading && !result && (
+        <div className="py-20">
+          <EmptyState
+            title="아직 추천 결과가 없습니다"
+            description="상단의 옵션을 선택하고 '추천 결과 보기' 버튼을 눌러보세요."
+            icon="search"
+          />
+        </div>
+      )}
 
-        {result && (
-          <div className="space-y-8">
-            <div className="flex flex-wrap items-center justify-between gap-4 px-2">
-              <h2 className="text-xl font-black text-slate-900">추천 결과 <span className="ml-1 text-emerald-600">{result.items?.length}</span></h2>
-              <div className="flex items-center gap-3">
-                {feedback && (
-                  <span className="text-xs font-bold text-emerald-600 animate-in fade-in duration-300">{feedback}</span>
-                )}
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="rounded-full" onClick={saveCurrentRun}>결과 저장</Button>
-                  <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunJson}>JSON</Button>
-                  <Button size="sm" variant="outline" className="rounded-full" onClick={exportCurrentRunCsv}>CSV</Button>
-                </div>
-              </div>
-            </div>
+      {loading && (
+        <div className="py-20">
+          <LoadingState description="최적의 금융 상품을 분석하고 있습니다." />
+        </div>
+      )}
 
-            <div className="grid gap-6 md:grid-cols-2">
-              {(result.items ?? []).map((item, index) => {
-                const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
-                const detailProduct = buildDetailProduct(item);
-                return (
-                  <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-200/60 bg-white p-8 shadow-sm transition-all hover:shadow-md">
-                    <div className="mb-6 flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
-                          {index + 1}
-                        </span>
-                        <SourceBadge sourceId={item.sourceId} />
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">매칭 점수</span>
-                        <span className="text-lg font-black text-emerald-600">{item.finalScore.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <div className="mb-8">
-                      <p className="text-[11px] font-bold text-slate-400">{item.providerName}</p>
-                      <h3 className="mt-1 text-xl font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors">
-                        {item.productName}
-                      </h3>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 mb-8">
-                      <div className="rounded-2xl bg-slate-50 p-4 text-center">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">선택 기간</p>
-                        <p className="mt-1 font-black text-slate-700">{item.selectedOption.saveTrm || item.selectedOption.termMonths || "-"}개월</p>
-                      </div>
-                      <div className="rounded-2xl bg-emerald-50/50 p-4 text-center">
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">적용 금리</p>
-                        <p className="mt-1 font-black text-emerald-700">{item.selectedOption.appliedRate.toFixed(2)}%</p>
-                      </div>
-                    </div>
-
-                    <div className="mb-8 space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">추천 사유</p>
-                      <ul className="space-y-2">
-                        {item.reasons.slice(0, 3).map((reason, i) => (
-                          <li key={i} className="flex gap-2 text-xs font-medium text-slate-600">
-                            <span className="text-emerald-500">•</span>
-                            <span className="line-clamp-1">{reason}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="flex gap-2 pt-4">
-                      <Button variant="outline" className="flex-1 rounded-2xl h-12" onClick={() => setOpenDetailKey(itemKey)}>
-                        상세 분석
-                      </Button>
-                      <Button
-                        variant="primary"
-                        className="flex-1 rounded-2xl h-12"
-                        onClick={() => {
-                          addCompareIdToStorage(item.unifiedId, compareStoreConfig.max);
-                          setFeedback("상품이 비교함에 담겼습니다.");
-                          setTimeout(() => setFeedback(""), 3000);
-                        }}
-                      >
-                        비교 담기
-                      </Button>
-                    </div>
-
-                    <ProductDetailDrawer
-                      open={openDetailKey === itemKey}
-                      onOpenChange={(next) => setOpenDetailKey(next ? itemKey : null)}
-                      kind={item.kind}
-                      product={detailProduct}
-                      amountWonDefault={item.kind === "saving" ? 500_000 : 10_000_000}
-                    />
-                  </Card>
-                );
-              })}
-            </div>
+      {lastStored && (
+        <Card className="mt-12 rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <SubSectionHeader title="지난 추천 히스토리" className="mb-0" />
+            <Button size="sm" variant="ghost" className="text-xs text-slate-400 font-bold hover:text-rose-500" onClick={() => {
+              localStorage.removeItem(RESULT_STORAGE_KEY);
+              setLastStored(null);
+            }}>기록 삭제</Button>
           </div>
-        )}
-
-        {!loading && !result && (
-          <div className="py-20">
-            <EmptyState
-              title="아직 추천 결과가 없습니다"
-              description="상단의 옵션을 선택하고 '추천 결과 보기' 버튼을 눌러보세요."
-              icon="search"
-            />
-          </div>
-        )}
-
-        {loading && (
-          <div className="py-20">
-            <LoadingState description="최적의 금융 상품을 분석하고 있습니다." />
-          </div>
-        )}
-
-        {lastStored && (
-          <Card className="mt-12 rounded-[2.5rem] border-slate-100 bg-slate-50/30 p-8">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-black text-slate-900">지난 추천 히스토리</h3>
-              <Button size="sm" variant="ghost" onClick={() => {
-                localStorage.removeItem(RESULT_STORAGE_KEY);
-                setLastStored(null);
-              }}>기록 삭제</Button>
-            </div>
-            <p className="text-sm font-medium text-slate-500">마지막 저장일: {formatKoreanDateTime(lastStored.savedAt)}</p>
-          </Card>
-        )}
-      </Container>
-    </main>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">마지막 저장일: <span className="text-slate-600 ml-1 tabular-nums">{formatKoreanDateTime(lastStored.savedAt)}</span></p>
+        </Card>
+      )}
+    </PageShell>
   );
 }
 

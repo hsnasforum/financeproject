@@ -59,11 +59,11 @@
 - **Calculators & Visualizations**:
   - **Ratio Progress Bar**: 수치의 임계값(Threshold)에 따라 색상(Emerald/Amber/Rose)을 가변적으로 적용하여 위험도를 직관적으로 표현합니다.
   - **Stacked Bar**: 전체(Total) 대비 각 항목의 점유율을 한 줄의 막대에 겹쳐서 표시하며, 하단에 범례(Legend)를 함께 제공하여 비전문가의 이해를 돕습니다. (`HousingAffordClient.tsx` 참고)
-- **Setting Tools & Destructive Actions**:
-  - **Danger Zone**: 시스템 상태에 영구적인 변화를 주는 위험 작업(RESET, 삭제 등)은 Rose 톤의 카드 배경(`bg-rose-50/20`) 또는 경계선을 사용하여 시각적으로 강력하게 격리합니다.
-  - **Safety Confirmation**: 위험 작업 실행 전 반드시 'RESET'과 같은 명확한 키워드 입력을 통한 2단계 확인 절차를 거치도록 설계합니다. (`RecoveryClient.tsx` 참고)
+  - **Score Bar**: 추천이나 매칭 결과의 점수를 0-100% 사이의 부드러운 애니메이션 바(`transition-all duration-1000`)로 표현합니다. 배경은 `slate-100`, 채움은 `emerald-500`을 기본으로 합니다. (`recommend/page.tsx` 참고)
+- **Quality & Readiness Indicators**:
+  - **Quality Badge**: 정보의 충실도나 준비 상태를 `HIGH`(Emerald), `MED`(Blue), `LOW`(Slate) 단계별로 구분하여 카드 상단에 배치합니다.
   - **Status Strip**: 여러 데이터 소스나 단계별 상태를 요약하여 보여줄 때, 상단에 슬림한 가로형 카드를 배치하여 현재 정합성을 한눈에 파악하게 합니다. (`Gov24Client.tsx`, `data-sources/page.tsx` 참고)
-- **Entry Surfaces (Home & Dashboard)**:
+- **공통 상태 분리**:
   - **Hero Layout**: 홈 화면 상단은 `bg-slate-100` 배경과 `emerald-600` 기반의 강력한 Primary CTA를 배치하여 첫인상을 세련되게 전달합니다.
   - **Portal Consistency**: 대시보드와 홈 포털 카드는 `bg-slate-50`과 `White` 서피스를 교차 활용하여 정보 밀도를 유지하면서도 쾌적한 여백을 제공합니다. 모든 진입 카드에는 `rounded-[2rem]` 또는 `rounded-[2.5rem]`을 적용합니다.
 - **공통 상태 분리**:  - `Loading`: 레이아웃이 크게 흔들리지 않도록 스켈레톤 또는 자리표시자 형태로 먼저 보여줍니다.
