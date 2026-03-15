@@ -569,38 +569,36 @@ export function BackupClient() {
       ) : null}
 
       {importSummary ? (
-        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border-slate-900 bg-slate-900 text-white">
+        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-slate-50">
           <SubSectionHeader 
             title="복원 결과 요약" 
             className="mb-6"
-            titleClassName="text-white"
-            descriptionClassName="text-white/50"
             description={importSummary.validated ? "검증 통과 및 복원이 성공적으로 완료되었습니다." : "복원 처리가 완료되었습니다."} 
           />
           
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-            <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/40">localStorage</p>
-              <p className="text-base font-black tabular-nums mt-1">+{importSummary.localApplied.length} / -{importSummary.localRemoved.length}</p>
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">localStorage</p>
+              <p className="text-base font-black tabular-nums mt-1 text-slate-900">+{importSummary.localApplied.length} / -{importSummary.localRemoved.length}</p>
             </div>
-            <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Server Files</p>
-              <p className="text-base font-black tabular-nums mt-1">Written {importSummary.serverWritten.length}</p>
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Server Files</p>
+              <p className="text-base font-black tabular-nums mt-1 text-slate-900">Written {importSummary.serverWritten.length}</p>
             </div>
-            <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Restore Point</p>
-              <p className="text-base font-black mt-1">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
+              <p className="text-base font-black mt-1 text-slate-900">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
             </div>
-            <div className="rounded-2xl bg-white/5 p-4 border border-white/10">
-              <p className="text-[10px] font-black uppercase tracking-widest text-white/40">Rollback Status</p>
-              <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-400" : "text-emerald-400")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rollback Status</p>
+              <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-emerald-600")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
             </div>
           </div>
 
           {importSummary.issues.length > 0 && (
-            <div className="rounded-2xl bg-rose-500/10 border border-rose-500/30 p-5 mb-6">
-              <p className="text-xs font-black text-rose-400 uppercase tracking-widest mb-3">검증 이슈 발견</p>
-              <ul className="space-y-1.5 text-xs font-bold text-rose-200/80">
+            <div className="rounded-2xl bg-rose-50 border border-rose-100 p-5 mb-6">
+              <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">검증 이슈 발견</p>
+              <ul className="space-y-1.5 text-xs font-bold text-rose-800/80">
                 {importSummary.issues.slice(0, 5).map((issue, idx) => (
                   <li key={idx} className="flex gap-2"><span className="text-rose-500">•</span> {issue}</li>
                 ))}
@@ -610,11 +608,12 @@ export function BackupClient() {
 
           {importSummary.serverSkipped.length > 0 && (
             <div className="space-y-2">
-              <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">Skip Details</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Skip Details</p>
               <ul className="grid gap-2">
                 {importSummary.serverSkipped.slice(0, 10).map((item) => (
-                  <li key={`${item.path}:${item.reason}`} className="text-[11px] font-bold text-white/60 bg-white/5 p-2 rounded-lg truncate">
-                    <span className="text-white/80 mr-2">{item.path}</span> — {item.reason}
+                  <li key={`${item.path}:${item.reason}`} className="text-[11px] font-bold text-slate-600 bg-white border border-slate-100 p-3 rounded-xl truncate shadow-sm">
+                    <span className="text-slate-400 font-black mr-2 uppercase tracking-tight">{item.path}</span>
+                    <span className="text-slate-700">{item.reason}</span>
                   </li>
                 ))}
               </ul>
