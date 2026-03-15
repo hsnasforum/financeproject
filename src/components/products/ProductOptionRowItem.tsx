@@ -36,7 +36,7 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault }: Props) {
           <div className="flex flex-1 flex-col gap-1 overflow-hidden">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{row.product.kor_co_nm ?? "-"}</span>
-              <Badge variant="secondary" className="bg-slate-900 text-[9px] font-black uppercase tracking-wider text-white border-none px-1.5 h-4">
+              <Badge variant="secondary" className="bg-slate-100 text-[9px] font-black uppercase tracking-wider text-slate-600 border border-slate-200 px-1.5 h-4 shadow-none">
                 옵션 기준
               </Badge>
               {row.option.save_trm ? (

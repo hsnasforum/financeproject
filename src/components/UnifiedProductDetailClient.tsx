@@ -181,7 +181,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
           <>
             <Card className="rounded-[2.5rem] p-8 shadow-sm">
               <div className="flex flex-wrap items-center gap-2 mb-6">
-                <span className="rounded-lg bg-slate-900 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">{item.kind}</span>
+                <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{item.kind}</span>
                 <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Source: {(item.sourceIds ?? [item.sourceId]).join(", ")}</span>
                 {(item.badges ?? []).map((badge) => (
                   <span key={`${item.stableId}-${badge}`} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{badge}</span>
@@ -249,12 +249,15 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                 </div>
 
                 <div className="space-y-6">
-                  <Card className="rounded-[2rem] p-8 shadow-sm bg-slate-900 text-white">
-                    <SubSectionHeader title="비교 및 저장" description="상품을 비교함에 담고 나중에 다시 확인하세요." titleClassName="text-white" descriptionClassName="text-white/50" />
+                  <Card className="rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-slate-50/50">
+                    <SubSectionHeader
+                      title="비교 및 저장"
+                      description="상품을 비교함에 담고 나중에 다시 확인하세요."
+                    />
                     <div className="mt-8 space-y-4">
                       <Button
                         variant="primary"
-                        className="w-full h-14 rounded-2xl font-black shadow-lg shadow-emerald-900/40"
+                        className="w-full h-14 rounded-2xl font-black shadow-lg shadow-emerald-900/20"
                         onClick={() => {
                           const next = addCompareIdToStorage(item.stableId || id, compareStoreConfig.max);
                           setCompareMessage(`비교함에 추가됨 (${next.length}/${compareStoreConfig.max})`);
@@ -263,12 +266,12 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                         상품 비교함에 담기
                       </Button>
                       <Link href="/products/compare" className="block">
-                        <Button variant="outline" className="w-full h-12 rounded-2xl border-white/10 bg-white/5 font-black text-white hover:bg-white/10">
+                        <Button variant="outline" className="w-full h-12 rounded-2xl border-slate-200 bg-white font-black text-slate-700 hover:bg-slate-100">
                           비교함 페이지로 이동
                         </Button>
                       </Link>
                       {compareMessage && (
-                        <p className="text-center text-xs font-black text-emerald-400 animate-in fade-in slide-in-from-top-1">{compareMessage}</p>
+                        <p className="text-center text-xs font-black text-emerald-600 animate-in fade-in slide-in-from-top-1">{compareMessage}</p>
                       )}
                     </div>
                   </Card>

@@ -136,8 +136,8 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                   onClick={() => setSelectedOptionIndex(index)}
                   className={cn(
                     "rounded-full border px-4 py-2 text-xs font-black transition-all shadow-sm",
-                    selectedOptionIndex === index 
-                      ? "border-emerald-200 bg-emerald-500 text-white shadow-emerald-100" 
+                    selectedOptionIndex === index
+                      ? "border-emerald-200 bg-emerald-500 text-white shadow-emerald-100"
                       : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                   )}
                 >
@@ -183,64 +183,62 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
           </section>
 
           {(kind === "deposit" || kind === "saving") && selectedOption && (
-            <section className="space-y-6 rounded-[2.5rem] bg-slate-900 p-8 lg:p-10 text-white shadow-2xl">
-              <SubSectionHeader 
-                title="금리 계산기" 
-                description="기본 세율 15.4% 기준 예상 수령액입니다." 
-                titleClassName="text-white" 
-                descriptionClassName="text-white/50" 
+            <section className="space-y-6 rounded-[2.5rem] bg-slate-50 border border-slate-100 p-8 lg:p-10 shadow-sm">
+              <SubSectionHeader
+                title="금리 계산기"
+                description="기본 세율 15.4% 기준 예상 수령액입니다."
               />
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
                     {kind === "deposit" ? "예치금액" : "월 납입액"}
                   </label>
                   <div className="relative">
-                    <input 
-                      className="h-11 w-full rounded-xl bg-white/10 border border-white/10 px-4 text-sm font-black text-white outline-none focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums" 
-                      value={(kind === "deposit" ? amountWon : savingMonthlyWon).toLocaleString()} 
+                    <input
+                      className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums shadow-sm"
+                      value={(kind === "deposit" ? amountWon : savingMonthlyWon).toLocaleString()}
                       onChange={(e) => {
                         const val = Number(e.target.value.replace(/[^0-9]/g, "")) || 0;
                         if (kind === "deposit") setAmountWon(val);
                         else setSavingMonthlyWon(val);
-                      }} 
+                      }}
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/30">원</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-300">원</span>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">기간</label>
-                  <input className="h-11 w-full rounded-xl bg-white/5 border border-white/5 px-4 text-sm font-black text-white/50 outline-none tabular-nums" value={formatGlossaryValue("save_trm", String(parseTerm(selectedOption)))} readOnly />
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">기간</label>
+                  <input className="h-11 w-full rounded-xl bg-slate-100/50 border border-slate-100 px-4 text-sm font-black text-slate-400 outline-none tabular-nums" value={formatGlossaryValue("save_trm", String(parseTerm(selectedOption)))} readOnly />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">세율(%)</label>
-                  <input className="h-11 w-full rounded-xl bg-white/10 border border-white/10 px-4 text-sm font-black text-white outline-none focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} />
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">세율(%)</label>
+                  <input className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums shadow-sm" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">금리 기준</label>
-                  <select className="h-11 w-full rounded-xl bg-white/10 border border-white/10 px-4 text-sm font-black text-white outline-none focus:ring-1 focus:ring-emerald-500 transition-all" value={usePrimeRate ? "prime" : "base"} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
-                    <option value="base" className="text-slate-900">기본금리</option>
-                    <option value="prime" className="text-slate-900">최고금리</option>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">금리 기준</label>
+                  <select className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm" value={usePrimeRate ? "prime" : "base"} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
+                    <option value="base">기본금리</option>
+                    <option value="prime">최고금리</option>
                   </select>
                 </div>
               </div>
 
               {calc && (
-                <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 pt-8 border-t border-white/10">
-                  <div className="rounded-2xl bg-white/5 p-4 border border-white/5">
-                    <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">세전 이자</p>
-                    <p className="mt-1 text-base font-black tabular-nums">{formatKrwWithEok(calc.grossInterestWon)}</p>
+                <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 pt-8 border-t border-slate-200">
+                  <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">세전 이자</p>
+                    <p className="mt-1 text-base font-black tabular-nums text-slate-700">{formatKrwWithEok(calc.grossInterestWon)}</p>
                   </div>
-                  <div className="rounded-2xl bg-white/5 p-4 border border-white/5">
-                    <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">이자 과세</p>
-                    <p className="mt-1 text-base font-black tabular-nums text-rose-400">-{formatKrwWithEok(calc.taxWon)}</p>
+                  <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">이자 과세</p>
+                    <p className="mt-1 text-base font-black tabular-nums text-rose-500">-{formatKrwWithEok(calc.taxWon)}</p>
                   </div>
-                  <div className="rounded-2xl bg-white/5 p-4 border border-white/5">
-                    <p className="text-[10px] font-black text-white/40 uppercase tracking-widest">세후 이자</p>
-                    <p className="mt-1 text-base font-black tabular-nums text-emerald-400">{formatKrwWithEok(calc.netInterestWon)}</p>
+                  <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">세후 이자</p>
+                    <p className="mt-1 text-base font-black tabular-nums text-emerald-600">{formatKrwWithEok(calc.netInterestWon)}</p>
                   </div>
-                  <div className="rounded-2xl bg-emerald-500 p-5 shadow-lg shadow-emerald-900/40">
+                  <div className="rounded-2xl bg-emerald-500 p-5 shadow-lg shadow-emerald-900/20">
                     <p className="text-[10px] font-black text-emerald-900 uppercase tracking-widest">예상 수령액</p>
                     <p className="mt-1 text-xl font-black tabular-nums text-white">{formatKrwWithEok(calc.maturityWon)}</p>
                   </div>
