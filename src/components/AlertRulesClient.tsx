@@ -27,6 +27,7 @@ import {
 import { validateRegexPattern, type RegexValidationResult } from "@/lib/dart/ruleRegexGuard";
 import { Card } from "@/components/ui/Card";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 
 const ALERT_PREFS_STORAGE_KEY = "dart_alert_prefs_v1";
 const ALERT_PREFS_CHANGED_EVENT = "dart-alert-prefs-changed";
@@ -487,9 +488,9 @@ export function AlertRulesClient() {
   return (
     <div className="space-y-6">
       <Card className="rounded-[2rem] p-8 shadow-sm">
-        <SubSectionHeader 
-          title="프리셋" 
-          description="필터/규칙을 preset 단위로 저장하고 전환합니다." 
+        <SubSectionHeader
+          title="프리셋"
+          description="필터/규칙을 preset 단위로 저장하고 전환합니다."
         />
         <div className="mt-6 grid gap-4 md:grid-cols-[240px_1fr_auto_auto]">
           <select
@@ -509,7 +510,7 @@ export function AlertRulesClient() {
           />
           <button
             type="button"
-            className="h-11 rounded-2xl bg-slate-900 px-6 text-sm font-black text-white hover:bg-slate-800 transition-colors shadow-sm"
+            className="h-11 rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
             onClick={onCreatePreset}
           >
             생성
@@ -546,9 +547,9 @@ export function AlertRulesClient() {
       </Card>
 
       <Card className="rounded-[2rem] p-8 shadow-sm">
-        <SubSectionHeader 
-          title="필터 설정" 
-          description="현재 프리셋의 상세 필터링 임계치를 설정합니다." 
+        <SubSectionHeader
+          title="필터 설정"
+          description="현재 프리셋의 상세 필터링 임계치를 설정합니다."
         />
         <div className="mt-6 grid gap-4 md:grid-cols-5">
           <div className="space-y-1.5">
@@ -608,9 +609,9 @@ export function AlertRulesClient() {
       </Card>
 
       <Card className="rounded-[2rem] p-8 shadow-sm">
-        <SubSectionHeader 
-          title="규칙 추가" 
-          description="회사/카테고리/키워드/클러스터 단위 무시 규칙을 정의합니다." 
+        <SubSectionHeader
+          title="규칙 추가"
+          description="회사/카테고리/키워드/클러스터 단위 무시 규칙을 정의합니다."
         />
         <div className={`mt-6 grid gap-4 ${kind === "keyword" ? "md:grid-cols-[180px_160px_1fr_auto]" : "md:grid-cols-[180px_1fr_auto]"}`}>
           <select
@@ -641,7 +642,12 @@ export function AlertRulesClient() {
           {renderRuleValueInput()}
           <button
             type="button"
-            className={`h-11 rounded-2xl px-6 text-sm font-black text-white shadow-sm transition-all ${canSaveRule ? "bg-slate-900 hover:bg-slate-800" : "cursor-not-allowed bg-slate-300 opacity-50"}`}
+            className={cn(
+              "h-11 rounded-2xl px-6 text-sm font-black shadow-sm transition-all active:scale-95",
+              canSaveRule
+                ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-900/20"
+                : "cursor-not-allowed bg-slate-100 text-slate-400"
+            )}
             onClick={onAddRule}
             disabled={!canSaveRule}
           >
@@ -659,9 +665,9 @@ export function AlertRulesClient() {
       </Card>
 
       <Card className="rounded-[2rem] p-8 shadow-sm">
-        <SubSectionHeader 
-          title="규칙 목록" 
-          description={`${rules.length}개의 활성 규칙이 등록되어 있습니다.`} 
+        <SubSectionHeader
+          title="규칙 목록"
+          description={`${rules.length}개의 활성 규칙이 등록되어 있습니다.`}
         />
         {rules.length === 0 ? (
           <div className="py-12 text-center rounded-[2rem] border border-dashed border-slate-200 bg-slate-50/50">
