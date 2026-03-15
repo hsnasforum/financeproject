@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 
 type OpenDartStatusPayload = {
   exists?: boolean;
@@ -30,7 +32,7 @@ function formatDateTime(value: string | undefined): string {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleString("ko-KR");
+  return parsed.toLocaleString("ko-KR", { hour12: false });
 }
 
 export function OpenDartStatusCard({ configured }: { configured: boolean }) {
@@ -91,52 +93,103 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
   const exists = status?.exists === true;
 
   return (
-    <Card className="mt-4 p-4">
-      <div className="flex items-center justify-between gap-2">
+    <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div>
-          <p className="text-sm font-semibold text-slate-900">OpenDART</p>
-          <p className="text-xs text-slate-500">corpCodes 인덱스 및 키 상태</p>
+          <SubSectionHeader title="OpenDART 연동" className="mb-0" />
+          <p className="mt-1 text-sm font-bold text-slate-500">corpCodes 인덱스 및 API 키 연동 상태를 확인합니다.</p>
         </div>
-        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${configured ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-          key {configured ? "configured" : "missing"}
+        <span className={cn(
+          "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
+          configured ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"
+        )}>
+          Key: {configured ? "CONFIGURED" : "MISSING"}
         </span>
       </div>
 
-      {loading ? <p className="mt-2 text-xs text-slate-500">상태 로딩 중...</p> : null}
-      {error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
-
-      {status ? (
-        <div className="mt-2 text-xs text-slate-700">
-          <p>indexExists: {exists ? "yes" : "no"}</p>
-          <p>primaryPath: {status.primaryPath ?? "-"}</p>
-          <p>loadedPath: {status.meta?.loadedPath ?? "-"}</p>
-          <p>generatedAt: {formatDateTime(status.meta?.generatedAt)}</p>
-          <p>count: {typeof status.meta?.count === "number" ? status.meta.count : "-"}</p>
-          {Array.isArray(status.triedPaths) ? <p>triedPaths: {status.triedPaths.join(" | ")}</p> : null}
-          {!exists && status.message ? <p className="mt-1 text-amber-700">{status.message}</p> : null}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">인덱스 메타데이터</p>
+            {loading ? (
+              <p className="text-xs font-bold text-slate-400 animate-pulse">상태를 불러오는 중...</p>
+            ) : status ? (
+              <dl className="grid gap-y-3 text-xs">
+                <div className="flex justify-between border-b border-slate-100 pb-2">
+                  <dt className="font-bold text-slate-500">Index Exists</dt>
+                  <dd className={cn("font-black", exists ? "text-emerald-600" : "text-rose-600")}>{exists ? "YES" : "NO"}</dd>
+                </div>
+                <div className="flex flex-col gap-1 border-b border-slate-100 pb-2">
+                  <dt className="font-bold text-slate-500">Primary Path</dt>
+                  <dd className="font-mono text-[10px] text-slate-400 break-all">{status.primaryPath ?? "-"}</dd>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 pb-2">
+                  <dt className="font-bold text-slate-500">Generated At</dt>
+                  <dd className="font-bold text-slate-700 tabular-nums">{formatDateTime(status.meta?.generatedAt)}</dd>
+                </div>
+                <div className="flex justify-between">
+                  <dt className="font-bold text-slate-500">Company Count</dt>
+                  <dd className="font-black text-slate-900 tabular-nums">{typeof status.meta?.count === "number" ? status.meta.count.toLocaleString() : "-"}</dd>
+                </div>
+              </dl>
+            ) : (
+              <p className="text-xs font-bold text-rose-500">{error || "정보 없음"}</p>
+            )}
+          </div>
+          
+          {!exists && status?.message && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+              <p className="text-xs font-bold text-amber-700 leading-relaxed">
+                <span className="mr-2">⚠️</span>
+                {status.message}
+              </p>
+            </div>
+          )}
         </div>
-      ) : null}
 
-      {isDev ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={() => void fetchStatus()} disabled={loading}>
-            상태 새로고침
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => void buildIndex()}
-            disabled={buildLoading || status?.canAutoBuild === false}
-          >
-            {buildLoading ? "인덱스 생성 중..." : "인덱스 생성"}
-          </Button>
-          {status?.canAutoBuild === false && status.autoBuildDisabledReason ? (
-            <p className="text-xs text-amber-700">{status.autoBuildDisabledReason}</p>
-          ) : null}
+        <div className="flex flex-col gap-4">
+          <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 flex-1 flex flex-col">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">인덱스 관리</p>
+            <p className="text-xs font-medium text-slate-500 leading-relaxed mb-6">
+              DART 기업 검색 성능 향상을 위해 1회성 로컬 인덱스 구축이 필요합니다. 환경 변수(`OPENDART_API_KEY`)가 설정되어 있어야 합니다.
+            </p>
+            
+            <div className="mt-auto space-y-3">
+              {isDev && (
+                <>
+                  <Button 
+                    className="w-full h-11 rounded-2xl font-black shadow-md" 
+                    onClick={() => void buildIndex()} 
+                    disabled={buildLoading || status?.canAutoBuild === false}
+                  >
+                    {buildLoading ? "인덱스 구축 중..." : "인덱스 자동 생성 실행"}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    className="w-full h-11 rounded-2xl font-black" 
+                    onClick={() => void fetchStatus()} 
+                    disabled={loading}
+                  >
+                    상태 새로고침
+                  </Button>
+                </>
+              )}
+              {status?.canAutoBuild === false && status.autoBuildDisabledReason ? (
+                <p className="text-[10px] font-bold text-rose-500 text-center">{status.autoBuildDisabledReason}</p>
+              ) : null}
+            </div>
+          </div>
         </div>
-      ) : null}
+      </div>
 
-      {buildNotice ? <p className="mt-2 text-xs text-emerald-700">{buildNotice}</p> : null}
-      {buildError ? <p className="mt-2 text-xs text-rose-700">{buildError}</p> : null}
+      {(buildNotice || buildError) && (
+        <div className={cn(
+          "mt-6 rounded-2xl p-4 text-xs font-black",
+          buildNotice ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+        )}>
+          {buildNotice || buildError}
+        </div>
+      )}
     </Card>
   );
 }
