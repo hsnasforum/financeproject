@@ -438,8 +438,8 @@ export function ReportClient({
           ) : (
             <div className="space-y-10">
               <div className="grid gap-4 md:grid-cols-3">
-                 <div className="rounded-[1.5rem] bg-slate-900 p-6 text-white shadow-xl">
-                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1">월 순소득</p>
+                 <div className="rounded-[1.5rem] bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 mb-1">월 순소득</p>
                    <p className="text-2xl font-black tabular-nums tracking-tight">{reportModel.planner.snapshot.input.monthlyIncomeNet.toLocaleString()}원</p>
                  </div>
                  <div className="rounded-[1.5rem] bg-slate-50 p-6 border border-slate-100">
@@ -534,7 +534,7 @@ export function ReportClient({
                         <td className="py-4 px-6 text-center">
                           <span className={cn(
                             "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black shadow-sm",
-                            item.rank === 1 ? "bg-slate-900 text-white" :
+                            item.rank === 1 ? "bg-emerald-500 text-white" :
                             item.rank === 2 ? "bg-slate-200 text-slate-700" :
                             item.rank === 3 ? "bg-slate-100 text-slate-500" : "bg-white text-slate-300 border border-slate-100"
                           )}>
@@ -695,7 +695,7 @@ export function ReportClient({
                 <div className="grid gap-4 md:grid-cols-2">
                   {dailyBrief.lines.slice(0, 10).map((line, index) => (
                     <div key={`daily-brief-${index}`} className="flex items-start gap-4 p-5 rounded-2xl bg-slate-50/30 border border-slate-100/50 shadow-sm">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-[10px] font-black text-white shrink-0 shadow-sm">{index + 1}</span>
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[10px] font-black text-slate-700 shrink-0 shadow-sm">{index + 1}</span>
                       <p className="text-sm font-bold text-slate-700 leading-snug">{line}</p>
                     </div>
                   ))}

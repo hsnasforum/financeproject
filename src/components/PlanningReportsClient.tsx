@@ -607,7 +607,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                                 <Badge variant={action.severity === "critical" ? "destructive" : action.severity === "warn" ? "warning" : "secondary"} className="h-6 rounded-lg px-2.5 text-[10px] font-black border-none uppercase tracking-widest">
                                   {severityLabel(action.severity)}
                                 </Badge>
-                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-[10px] font-black text-white shadow-sm">{index + 1}</span>
+                                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[10px] font-black text-slate-700 shadow-sm">{index + 1}</span>
                               </div>
                               <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
                               <p className="mt-3 text-sm font-bold text-slate-600 leading-relaxed">{action.summary || "핵심 경고를 줄이기 위한 실행 계획입니다."}</p>
@@ -726,8 +726,8 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                           title="8) Debt Analysis"
                         />
                         <div className="grid gap-4 md:grid-cols-2">
-                          <div className="rounded-[1.5rem] bg-slate-900 p-6 text-white shadow-xl">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1">현재 DSR</p>
+                          <div className="rounded-[1.5rem] bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 mb-1">현재 DSR</p>
                             <p className="text-3xl font-black tabular-nums tracking-tight">{formatRatioPct(debtSummaryMeta?.debtServiceRatio)}</p>
                           </div>
                           <div className="rounded-[1.5rem] bg-slate-50 p-6 border border-slate-100">
