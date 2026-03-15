@@ -269,7 +269,7 @@ export default async function Home() {
   const heroContent = await loadHomeHeroSlides();
 
   return (
-    <main className="min-h-screen bg-[#f6f7fb] pb-24">
+    <main className="min-h-screen bg-slate-50 pb-24">
       <HomeHero slides={heroContent.slides} />
       <QuickTiles />
       <TodayQueue actionSummary={heroContent.actionSummary} />
