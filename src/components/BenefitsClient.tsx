@@ -631,15 +631,20 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
               </section>
 
               {selected.applyHow && (
-                <section className="rounded-[2rem] bg-slate-900 p-8 lg:p-10 text-white shadow-xl shadow-slate-200">
-                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-white/40 ml-1">How to Apply</p>
-                  <div className="text-sm font-black text-white leading-relaxed">
+                <section className="rounded-[2.5rem] bg-slate-50 p-8 md:p-10 border border-slate-100 shadow-sm transition-all">
+                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">How to Apply</p>
+                  <div className="text-sm font-bold text-slate-700 leading-relaxed">
                     <p>
                       {selected.applyHow}
                     </p>
                     {selectedApplyShortcut && (
                       <div className="mt-8">
-                        <a href={selectedApplyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center rounded-2xl bg-emerald-500 px-8 text-sm font-black text-white shadow-lg shadow-emerald-900/40 transition-all hover:bg-emerald-400 active:scale-95">신청 바로가기 ▶</a>
+                        <a href={selectedApplyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-8 text-sm font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98]">
+                          신청 바로가기
+                          <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
                       </div>
                     )}
                   </div>
