@@ -100,7 +100,7 @@ export default function ReportAdvancedRaw({ reproducibility, raw, onLoadMoreRunJ
           <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">시스템 원문 데이터</h2>
           <p className="mt-2 text-sm font-bold text-slate-500 leading-relaxed">재현성과 디버깅을 위한 원문 확인용 영역입니다.</p>
         </div>
-        <Badge variant="secondary" className="rounded-lg bg-slate-900 text-white border-none px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+        <Badge variant="secondary" className="rounded-lg bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm">
           Raw Access
         </Badge>
       </div>

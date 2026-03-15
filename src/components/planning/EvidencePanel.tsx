@@ -105,21 +105,21 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
   if (rows.length < 1) return null;
   const cls = className ? ` ${className}` : "";
   const rootClassName = tone === "dark"
-    ? `${reportSurfaceDisclosureClassName} text-white/78`
+    ? `${reportSurfaceDisclosureClassName} text-slate-600`
     : "rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700";
   const summaryClassName = tone === "dark"
     ? reportSurfaceDisclosureSummaryClassName
     : "cursor-pointer font-semibold text-slate-900";
   const plainSummaryClassName = tone === "dark"
-    ? `${reportSurfaceInsetClassName} p-3 text-white`
+    ? `${reportSurfaceInsetClassName} p-3 text-slate-900`
     : "rounded-xl border border-slate-200 bg-white px-3 py-3";
-  const sectionLabelClassName = tone === "dark" ? "text-[11px] font-semibold text-white/60" : "text-[11px] font-semibold text-slate-600";
+  const sectionLabelClassName = tone === "dark" ? "text-[11px] font-black uppercase tracking-widest text-slate-400" : "text-[11px] font-semibold text-slate-600";
   const inputItemClassName = tone === "dark" ? `${reportSurfaceDetailClassName} px-3 py-2` : "rounded-lg bg-white px-3 py-2";
   const nestedDetailsClassName = tone === "dark"
     ? `${reportSurfaceDisclosureClassName} p-3`
     : "rounded-lg border border-slate-200 bg-white px-3 py-2";
-  const nestedBodyClassName = tone === "dark" ? "mt-2 space-y-2 text-white/80" : "mt-2 space-y-2";
-  const nestedFormulaClassName = tone === "dark" ? "text-[11px] text-white/65" : "text-[11px] text-slate-600";
+  const nestedBodyClassName = tone === "dark" ? "mt-2 space-y-2 text-slate-600" : "mt-2 space-y-2";
+  const nestedFormulaClassName = tone === "dark" ? "text-[11px] font-bold text-slate-400 font-mono" : "text-[11px] text-slate-600";
   return (
     <div className={`space-y-2${cls}`}>
       {rows.map((entry) => (
@@ -132,12 +132,12 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
               const summary = buildPlainSummary(entry, locale, formatNumber);
               return (
                 <div className={plainSummaryClassName}>
-                  <p className={tone === "dark" ? "text-[11px] font-semibold uppercase tracking-[0.14em] text-white/55" : "text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500"}>
+                  <p className={tone === "dark" ? "text-[11px] font-black uppercase tracking-widest text-emerald-600" : "text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500"}>
                     쉽게 말하면
                   </p>
-                  <p className={tone === "dark" ? "mt-2 leading-5 text-white/82" : "mt-2 leading-5 text-slate-800"}>{summary.headline}</p>
+                  <p className={tone === "dark" ? "mt-2 leading-relaxed font-bold text-slate-800" : "mt-2 leading-5 text-slate-800"}>{summary.headline}</p>
                   {summary.bullets.length > 0 ? (
-                    <ul className={tone === "dark" ? "mt-2 list-disc space-y-1 pl-4 text-white/70" : "mt-2 list-disc space-y-1 pl-4 text-slate-600"}>
+                    <ul className={tone === "dark" ? "mt-2 list-disc space-y-1 pl-4 text-[11px] font-medium text-slate-500" : "mt-2 list-disc space-y-1 pl-4 text-slate-600"}>
                       {summary.bullets.map((bullet, index) => (
                         <li key={`${entry.id}:plain:${index}`}>{bullet}</li>
                       ))}
@@ -152,8 +152,8 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
               <ul className="mt-1 space-y-1">
                 {entry.inputs.map((input, index) => (
                   <li className={inputItemClassName} key={`${entry.id}:input:${index}`}>
-                    <span className={tone === "dark" ? "text-white/60" : "text-slate-500"}>{input.label}</span>
-                    <span className={tone === "dark" ? "ml-2 font-semibold text-white" : "ml-2 font-semibold text-slate-900"}>
+                    <span className={tone === "dark" ? "text-slate-400 font-black uppercase tracking-widest text-[9px]" : "text-slate-500"}>{input.label}</span>
+                    <span className={tone === "dark" ? "ml-2 font-black text-slate-900 tabular-nums" : "ml-2 font-semibold text-slate-900"}>
                       {formatInputValue(input, locale, formatNumber)}
                     </span>
                   </li>
@@ -167,7 +167,7 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
                 <p className={nestedFormulaClassName}>계산식: {entry.formula}</p>
                 <div>
                   <p className={sectionLabelClassName}>가정</p>
-                  <ul className="mt-1 list-disc pl-4">
+                  <ul className="mt-1 list-disc pl-4 text-[11px] font-medium text-slate-500">
                     {entry.assumptions.map((assumption, index) => (
                       <li key={`${entry.id}:assumption:${index}`}>{assumption}</li>
                     ))}
@@ -176,7 +176,7 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
                 {entry.notes && entry.notes.length > 0 ? (
                   <div>
                     <p className={sectionLabelClassName}>참고</p>
-                    <ul className="mt-1 list-disc pl-4">
+                    <ul className="mt-1 list-disc pl-4 text-[11px] font-medium text-slate-500">
                       {entry.notes.map((note, index) => (
                         <li key={`${entry.id}:note:${index}`}>{note}</li>
                       ))}
