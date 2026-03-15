@@ -3741,24 +3741,24 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
             </div>
           </div>
 
-          <div className="rounded-[2rem] bg-slate-900 p-6 text-white" data-testid="run-stages-timeline">
+          <div className="rounded-[2rem] bg-slate-50 p-6 border border-slate-100 shadow-sm" data-testid="run-stages-timeline">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Execution Pipeline</p>
-              <Badge variant="secondary" className="bg-white/10 text-white border-none text-[9px]">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Execution Pipeline</p>
+              <Badge variant="secondary" className="bg-white text-slate-500 border border-slate-200 text-[9px] shadow-sm">
                 {running ? "단계 실행 중" : "최근 실행 상태"}
               </Badge>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {currentStepStatuses.map((step) => (
-                <div className="rounded-xl bg-white/5 border border-white/10 p-3" data-testid={`stage-${step.id}`} key={step.id}>
+                <div className="rounded-xl bg-white border border-slate-100 p-3 shadow-sm" data-testid={`stage-${step.id}`} key={step.id}>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-300">{STEP_LABELS[step.id]}</span>
+                    <span className="text-xs font-bold text-slate-600">{STEP_LABELS[step.id]}</span>
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-tight",
-                        step.state === 'SUCCESS' ? "bg-emerald-500/20 text-emerald-400" :
-                        step.state === 'RUNNING' ? "bg-sky-500/20 text-sky-400 animate-pulse" :
-                        step.state === 'FAILED' ? "bg-rose-500/20 text-rose-400" : "bg-slate-700 text-slate-500"
+                        step.state === 'SUCCESS' ? "bg-emerald-50 text-emerald-600" :
+                        step.state === 'RUNNING' ? "bg-sky-50 text-sky-600 animate-pulse" :
+                        step.state === 'FAILED' ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-400"
                       )}
                       data-testid={step.id === "simulate" ? "stage-simulate-pill" : `stage-${step.id}-status`}
                     >
@@ -4066,12 +4066,12 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                   </details>
                 ) : null}
 
-                <div className="p-6 rounded-[2rem] bg-slate-900 text-white shadow-xl shadow-slate-900/10">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Key Findings</p>
+                <div className="p-6 rounded-[2rem] bg-emerald-600 text-white shadow-xl shadow-emerald-900/20">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100 mb-4">Key Findings</p>
                   <div className="space-y-3">
                     {keyFindings.slice(0, 3).map((line, index) => (
                       <p className="text-sm font-bold leading-relaxed flex items-start gap-3" key={`finding-${index}`}>
-                        <span className="text-emerald-500 mt-1">★</span>
+                        <span className="text-emerald-300 mt-1">★</span>
                         {line}
                       </p>
                     ))}
@@ -4264,9 +4264,10 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                   <EmptyState title="몬테카를로 결과가 없습니다" />
                 ) : (
                   <>
-                    <div className="p-4 rounded-2xl bg-slate-900 text-white text-xs font-bold leading-relaxed shadow-lg shadow-slate-900/10">
-                      📊 {typeof monteDepletionProb === "number"
-                        ? `은퇴 자산 고갈 확률: ${formatPct(locale, monteDepletionProb * 100)} (모델 기반 통계값, 보장 아님)`
+                    <div className="p-4 rounded-2xl bg-slate-50 text-slate-700 text-xs font-bold leading-relaxed border border-slate-100 shadow-sm">
+                      <span className="mr-2">📊</span>
+                      {typeof monteDepletionProb === "number"
+                        ? <>은퇴 자산 고갈 확률: <span className="text-emerald-600 font-black">{formatPct(locale, monteDepletionProb * 100)}</span> <span className="text-[10px] text-slate-400 font-medium">(모델 기반 통계값, 보장 아님)</span></>
                         : "고갈 확률 지표가 제공되지 않았습니다."}
                     </div>
                     <div className="space-y-4">
