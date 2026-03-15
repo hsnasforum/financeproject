@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
+import { cn } from "@/lib/utils";
 
 export type QuickViewKind = "deposit" | "saving" | "recommend" | "products" | "fxtool" | "benefits" | "subscription";
 
@@ -142,17 +143,27 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
     if (kind === "products") {
       return (
         <div>
-          <div className="mb-3 flex gap-2">
+          <div className="mb-4 flex gap-2">
             <button
               type="button"
-              className={`rounded border px-3 py-1.5 text-sm ${productsTab === "deposit" ? "bg-slate-900 text-white" : "bg-white"}`}
+              className={cn(
+                "rounded-full px-4 py-2 text-xs font-black transition-all shadow-sm active:scale-95",
+                productsTab === "deposit"
+                  ? "bg-emerald-600 text-white shadow-emerald-900/10"
+                  : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+              )}
               onClick={() => setProductsTab("deposit")}
             >
               예금
             </button>
             <button
               type="button"
-              className={`rounded border px-3 py-1.5 text-sm ${productsTab === "saving" ? "bg-slate-900 text-white" : "bg-white"}`}
+              className={cn(
+                "rounded-full px-4 py-2 text-xs font-black transition-all shadow-sm active:scale-95",
+                productsTab === "saving"
+                  ? "bg-emerald-600 text-white shadow-emerald-900/10"
+                  : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+              )}
               onClick={() => setProductsTab("saving")}
             >
               적금
@@ -170,24 +181,26 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[110] overflow-y-auto bg-black/45 p-4"
+      className="fixed inset-0 z-[110] overflow-y-auto bg-slate-900/45 backdrop-blur-sm p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div role="dialog" aria-modal="true" aria-labelledby="quickview-title" className="mx-auto my-8 w-full max-w-3xl rounded-xl bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 id="quickview-title" className="text-xl font-semibold">{title}</h2>
-          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="quickview-title" className="mx-auto my-8 w-full max-w-3xl rounded-[2.5rem] bg-white p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <h2 id="quickview-title" className="text-2xl font-black text-slate-900 tracking-tight leading-tight">{title}</h2>
+          <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all shadow-sm" onClick={onClose}>
             닫기
           </button>
         </div>
 
-        {body}
+        <div className="min-h-[200px]">
+          {body}
+        </div>
 
-        <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
+        <div className="mt-8 flex flex-wrap gap-2 border-t border-slate-100 pt-6">
           <a
-            className="rounded bg-slate-900 px-3 py-2 text-sm text-white"
+            className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-8 text-sm font-black text-white shadow-xl shadow-emerald-900/20 transition-all hover:bg-emerald-700 active:scale-95"
             href={hrefForNewTab}
             target="_blank"
             rel="noopener noreferrer"
