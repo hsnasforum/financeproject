@@ -297,9 +297,9 @@ export function InvestCompaniesClient() {
                   </div>
                 )}
 
-                <div className="my-8 rounded-2xl bg-slate-900/5 p-5 text-left border border-slate-900/5">
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">수동 복구 명령</p>
-                  <code className="block break-all text-[11px] font-bold text-slate-600 font-mono">
+                <div className="my-8 rounded-[2rem] bg-slate-50/50 p-8 text-left border border-slate-100 shadow-inner">
+                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">수동 복구 가이드</p>
+                  <code className="block break-all text-[11px] font-bold text-slate-500 font-mono leading-relaxed">
                     {INDEX_HINT}
                   </code>
                 </div>
@@ -372,10 +372,10 @@ export function InvestCompaniesClient() {
               </div>
             ) : (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="rounded-[2rem] bg-slate-900 p-10 text-white shadow-xl shadow-slate-200">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-400/80">Corporate Profile</p>
-                  <h3 className="mt-4 text-3xl font-black tracking-tight">{detail.corpName}</h3>
-                  {detail.industry && <p className="mt-3 text-sm font-bold text-white/50 leading-relaxed">{detail.industry}</p>}
+                <div className="rounded-[2.5rem] bg-white border border-slate-100 p-10 shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">Corporate Profile</p>
+                  <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-900">{detail.corpName}</h3>
+                  {detail.industry && <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">{detail.industry}</p>}
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
