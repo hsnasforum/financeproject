@@ -31,26 +31,26 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
             </div>
             
             <div className="mt-10 pt-8 border-t border-slate-50 flex justify-end">
-              <Link className="inline-flex h-11 items-center rounded-xl bg-slate-900 px-6 text-sm font-black text-white shadow-md transition-all hover:bg-slate-800" href="/settings/data-sources">
+              <Link className="inline-flex h-11 items-center rounded-xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-95" href="/settings/data-sources">
                 연결 설정 및 진단 보기
               </Link>
             </div>
           </div>
 
-          <div className="rounded-[2.5rem] bg-slate-900 p-10 text-white shadow-2xl shadow-slate-200">
-            <p className="text-sm font-black uppercase tracking-widest text-white/30">MMD Core Flow</p>
-            <h3 className="mt-6 text-3xl font-black tracking-tight">플랜부터 혜택까지 한 흐름으로</h3>
-            <ul className="mt-8 space-y-4 text-sm font-medium leading-relaxed text-slate-400">
+          <div className="rounded-[2.5rem] bg-white p-10 shadow-sm border border-slate-100">
+            <p className="text-sm font-black uppercase tracking-widest text-slate-400">MMD Core Flow</p>
+            <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-900">플랜부터 혜택까지 한 흐름으로</h3>
+            <ul className="mt-8 space-y-4 text-sm font-medium leading-relaxed text-slate-500">
               <li className="flex items-start gap-3">
-                <span className="text-emerald-400 font-black">01</span>
+                <span className="text-emerald-600 font-black">01</span>
                 <span>플래닝 저장 후 공식 리포트로 바로 연결</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-emerald-400 font-black">02</span>
+                <span className="text-emerald-600 font-black">02</span>
                 <span>리포트에서 추천 상품과 혜택 후보를 이어서 확인</span>
               </li>
               <li className="flex items-start gap-3">
-                <span className="text-emerald-400 font-black">03</span>
+                <span className="text-emerald-600 font-black">03</span>
                 <span>실행 기록에서 저장된 run 흐름을 다시 점검</span>
               </li>
             </ul>

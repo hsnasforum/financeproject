@@ -66,108 +66,111 @@ export function HomePortalClient({
           >
             {latestRun && featuredAction ? (
               <Link
-                className="block rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:bg-white/15"
+                className="block rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                 href={featuredAction.href}
               >
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">TODAY</p>
-                  <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[11px] font-semibold text-white/75">
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">TODAY</p>
+                  <span className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-sm shadow-emerald-100">
                     {featuredAction.badge}
                   </span>
                   {featuredAction.quickRuleLabel ? (
-                    <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-[11px] font-semibold text-emerald-200">
+                    <span className="rounded-lg border border-emerald-100 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600">
                       quick rules · {featuredAction.quickRuleLabel}
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">{featuredAction.title}</p>
-                <p className="mt-2 text-sm leading-6 text-white/75">{featuredAction.summary}</p>
-                {featuredAction.basis ? (
-                  <p className="mt-2 text-xs text-white/55">기준: {featuredAction.basis}</p>
-                ) : null}
-                {featuredAction.quickRuleDetail ? (
-                  <p className="mt-2 text-xs text-white/60">상태 읽기: {featuredAction.quickRuleDetail}</p>
-                ) : null}
-                <p className="mt-6 text-sm font-bold text-emerald-400">액션부터 보기</p>
-                </Link>
-                ) : null}
-                <div className="grid gap-4 lg:grid-cols-3">
-                {latestRun ? (
+                <p className="mt-4 text-xl font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">{featuredAction.title}</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">{featuredAction.summary}</p>
+                <div className="mt-4 flex flex-wrap gap-4 text-xs font-bold">
+                  {featuredAction.basis ? (
+                    <p className="text-slate-400">기준: {featuredAction.basis}</p>
+                  ) : null}
+                  {featuredAction.quickRuleDetail ? (
+                    <p className="text-emerald-600/70 italic">상태 읽기: {featuredAction.quickRuleDetail}</p>
+                  ) : null}
+                </div>
+                <p className="mt-6 text-sm font-black text-emerald-600">액션 리포트 보기 →</p>
+              </Link>
+            ) : null}
+            <div className="grid gap-4 lg:grid-cols-3">
+              {latestRun ? (
                 <>
                 <Link
-                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(latestRun.id)}`, latestRun.profileId)}
                   prefetch={devPlanningPrefetch("/planning/reports")}
                 >
-                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">NEXT 1</p>
-                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">최신 리포트 다시 보기</p>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">NEXT 1</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">최신 리포트 다시 보기</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     {latestRun.title} · {formatDateLabel(latestRun.createdAt)}
                   </p>
-                  <p className="mt-6 text-sm font-bold text-emerald-400">리포트 열기</p>
+                  <p className="mt-6 text-sm font-black text-emerald-600">리포트 열기 →</p>
                 </Link>
                 <Link
-                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href={appendProfileIdQuery("/planning", latestRun.profileId)}
                   prefetch={devPlanningPrefetch("/planning")}
                 >
-                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">NEXT 2</p>
-                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">같은 프로필로 다시 계산</p>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">NEXT 2</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">같은 프로필로 다시 계산</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     저장된 조건을 이어 받아 수정 후 다시 실행합니다.
                   </p>
-                  <p className="mt-6 text-sm font-bold text-emerald-400">플래닝 이어가기</p>
+                  <p className="mt-6 text-sm font-black text-emerald-600">플래닝 이어가기 →</p>
                 </Link>
                 <Link
-                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href="/benefits"
                 >
-                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">NEXT 3</p>
-                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">혜택 후보까지 이어보기</p>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">NEXT 3</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">혜택 후보까지 이어보기</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     플랜을 본 뒤 바로 생활 혜택과 지원 후보를 비교합니다.
                   </p>
-                  <p className="mt-6 text-sm font-bold text-amber-400">혜택 탐색</p>
+                  <p className="mt-6 text-sm font-black text-amber-500">혜택 탐색 →</p>
                 </Link>
                 </>
-                ) : (
+              ) : (
                 <>
                 <Link
-                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href="/planning"
                   prefetch={devPlanningPrefetch("/planning")}
                 >
-                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">START 1</p>
-                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">첫 플랜 만들기</p>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">START 1</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">첫 플랜 만들기</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     월수입, 지출, 자산만 입력해도 첫 결과를 볼 수 있습니다.
                   </p>
-                  <p className="mt-6 text-sm font-bold text-emerald-400">플래닝 시작</p>
+                  <p className="mt-6 text-sm font-black text-emerald-600">플래닝 시작 →</p>
                 </Link>
                 <Link
-                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href="/products/catalog"
                 >
-                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">START 2</p>
-                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">상품 흐름 먼저 익히기</p>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">START 2</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">상품 흐름 먼저 익히기</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     예적금, 대출, 연금 카테고리를 먼저 훑고 비교 기준을 잡습니다.
                   </p>
-                  <p className="mt-6 text-sm font-bold text-emerald-400">카탈로그 보기</p>
+                  <p className="mt-6 text-sm font-black text-emerald-600">카탈로그 보기 →</p>
                 </Link>
                 <Link
-                  className="rounded-2xl border border-white/10 bg-white/10 p-5 transition-all hover:-translate-y-1 hover:bg-white/15"
+                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href="/benefits"
                 >
-                  <p className="text-[11px] font-black tracking-[0.16em] text-white/55">START 3</p>
-                  <p className="mt-3 text-lg font-black tracking-[-0.03em] text-white">혜택 후보 먼저 보기</p>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">START 3</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">혜택 후보 먼저 보기</p>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     플랜 전에도 주거, 청년, 생활안정 관련 혜택을 바로 탐색할 수 있습니다.
                   </p>
-                  <p className="mt-6 text-sm font-bold text-amber-400">혜택 보기</p>
+                  <p className="mt-6 text-sm font-black text-amber-500">혜택 보기 →</p>
                 </Link>
                 </>
-                )}            </div>
+              )}
+            </div>
           </ReportHeroCard>
 
           <Card className="space-y-6">

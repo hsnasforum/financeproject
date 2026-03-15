@@ -103,16 +103,16 @@ export function ReportHeroCard({
   return (
     <Card
       className={cn(
-        "overflow-hidden border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-0 text-white shadow-2xl rounded-[2.5rem]",
+        "overflow-hidden border border-slate-100 bg-white p-0 text-slate-900 shadow-sm rounded-[2.5rem]",
         className,
       )}
     >
       <div className={cn("space-y-8 p-8 lg:p-10", contentClassName)}>
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-400/80">{kicker}</p>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-white leading-tight">{title}</h1>
-            <p className="mt-4 text-base font-medium leading-relaxed text-white/60">{description}</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-600">{kicker}</p>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900 leading-tight">{title}</h1>
+            <p className="mt-4 text-base font-medium leading-relaxed text-slate-500">{description}</p>
           </div>
           {action ? <div className="flex flex-wrap items-center gap-3">{action}</div> : null}
         </div>
@@ -124,7 +124,7 @@ export function ReportHeroCard({
 
 export function ReportHeroStatGrid({ children, className }: ReportHeroStatGridProps) {
   return (
-    <div className={cn("grid gap-3 md:grid-cols-2 xl:grid-cols-4", className)}>
+    <div className={cn("grid gap-4 md:grid-cols-2 xl:grid-cols-4", className)}>
       {children}
     </div>
   );
@@ -132,10 +132,10 @@ export function ReportHeroStatGrid({ children, className }: ReportHeroStatGridPr
 
 export function ReportHeroStatCard({ label, value, description, children, className }: ReportHeroStatCardProps) {
   return (
-    <div className={cn("rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur", className)}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">{label}</p>
-      <p className="mt-2 text-lg font-black tracking-tight text-white">{value}</p>
-      {description ? <p className="mt-1 text-xs text-white/70">{description}</p> : null}
+    <div className={cn("rounded-2xl border border-slate-100 bg-slate-50/50 px-5 py-4 transition-all hover:bg-white hover:shadow-sm group", className)}>
+      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 group-hover:text-emerald-600 transition-colors">{label}</p>
+      <p className="mt-2 text-xl font-black tracking-tight text-slate-900">{value}</p>
+      {description ? <p className="mt-1 text-xs font-bold text-slate-400">{description}</p> : null}
       {children ? <div className="mt-3">{children}</div> : null}
     </div>
   );

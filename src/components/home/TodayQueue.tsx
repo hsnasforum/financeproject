@@ -47,36 +47,36 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           {actionSummary ? (
             <>
-              <div className="rounded-[2.5rem] bg-slate-900 p-10 text-white shadow-2xl shadow-slate-200">
+              <div className="rounded-[2.5rem] bg-white border border-slate-100 p-10 shadow-sm transition-all hover:shadow-md">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="rounded-lg bg-emerald-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+                  <span className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-sm shadow-emerald-200">
                     {actionSummary.badge}
                   </span>
                   {actionSummary.quickRuleLabel ? (
-                    <span className="rounded-lg border border-white/20 bg-white/5 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                    <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600">
                       quick rules · {actionSummary.quickRuleLabel}
                     </span>
                   ) : null}
                 </div>
-                <h2 className="mt-6 text-3xl font-black leading-tight tracking-tight">
+                <h2 className="mt-6 text-3xl font-black leading-tight tracking-tight text-slate-900">
                   {actionSummary.title}
                 </h2>
-                <p className="mt-4 max-w-md text-sm font-medium leading-relaxed text-slate-400">
+                <p className="mt-4 max-w-md text-sm font-medium leading-relaxed text-slate-500">
                   {actionSummary.summary}
                 </p>
-                <div className="mt-8 space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-white/30">계산 기준</p>
-                  <p className="max-w-md text-xs font-bold text-slate-500">
+                <div className="mt-8 space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">계산 기준</p>
+                  <p className="max-w-md text-xs font-bold text-slate-400">
                     {actionSummary.basis}
                   </p>
                 </div>
                 {actionSummary.quickRuleDetail ? (
-                  <p className="mt-2 max-w-md text-xs font-bold text-emerald-500/70">
+                  <p className="mt-3 max-w-md text-xs font-bold text-emerald-600/80 italic">
                     상태 읽기: {actionSummary.quickRuleDetail}
                   </p>
                 ) : null}
                 <Link
-                  className="mt-10 inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-8 text-sm font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-500 active:scale-95"
+                  className="mt-10 inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-10 text-sm font-black text-white shadow-lg shadow-emerald-100 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98]"
                   href={actionSummary.href}
                   prefetch={devPlanningPrefetch("/planning/reports")}
                 >
@@ -110,7 +110,7 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
                   플래닝에서 시작하고, 리포트와 추천, 혜택으로 바로 이어지는 흐름만 남겼습니다.
                 </p>
                 <Link
-                  className="mt-10 inline-flex h-12 items-center rounded-2xl bg-slate-900 px-8 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-800 active:scale-95"
+                  className="mt-10 inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-10 text-sm font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98]"
                   href="/planning"
                   prefetch={devPlanningPrefetch("/planning")}
                 >

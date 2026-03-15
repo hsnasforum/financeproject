@@ -476,74 +476,79 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
               <button
                 type="button"
                 onClick={() => window.location.reload()}
-                className={reportHeroActionLinkClassName}
+                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
               >
                 {refreshing ? "새로고침 중..." : "새로고침"}
               </button>
               <Link
                 href={latestRun ? latestRunReportHref : "/planning"}
                 prefetch={devPlanningPrefetch(latestRun ? latestRunReportHref : "/planning")}
-                className={reportHeroPrimaryActionClassName}
+                className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
               >
                 {latestRun ? "최근 리포트 보기" : "첫 플랜 시작"}
               </Link>
               <Link
                 href={latestRunPlanningHref}
                 prefetch={devPlanningPrefetch(latestRunPlanningHref)}
-                className={reportHeroActionLinkClassName}
+                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
               >
                 다시 계산
               </Link>
               <Link
                 href="/planning/runs"
                 prefetch={devPlanningPrefetch("/planning/runs")}
-                className={reportHeroActionLinkClassName}
+                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
               >
                 실행 기록
               </Link>
             </>
           )}
         >
-          <p className="text-xs text-white/60">
-            최근 실행 {latestRun ? `${formatDateTime(latestRun.createdAt)} · ${formatRunStatus(latestRun.overallStatus)}` : "없음"} · 다음 액션{" "}
-            {latestSummary.topAction || "리포트에서 우선 액션을 확인하세요."}
-          </p>
+          <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-400">
+            <p>
+              최근 실행 {latestRun ? `${formatDateTime(latestRun.createdAt)} · ${formatRunStatus(latestRun.overallStatus)}` : "없음"}
+            </p>
+            <div className="h-1 w-1 rounded-full bg-slate-200" />
+            <p className="text-emerald-600">
+              다음 액션: {latestSummary.topAction || "리포트에서 우선 액션을 확인하세요."}
+            </p>
+          </div>
           <ReportHeroStatGrid className="xl:grid-cols-5">
             <ReportHeroStatCard
               label="저장된 실행"
               value={state.runs.length}
-              description={latestRun ? `최근 실행 ${formatDateTime(latestRun.createdAt)}` : "아직 저장된 실행이 없습니다."}
+              description={latestRun ? `최근 실행 ${formatDateTime(latestRun.createdAt)}` : "기록 없음"}
             />
             <ReportHeroStatCard
               label="월 잉여금"
               value={formatKrw(latestSummary.monthlySurplusKrw)}
-              description="최근 저장 플랜 요약"
+              description="최근 저장 요약"
             />
             <ReportHeroStatCard
               label="말기 순자산"
               value={formatKrw(latestSummary.endNetWorthKrw)}
-              description="최근 저장 플랜 요약"
+              description="최근 저장 요약"
             />
             <ReportHeroStatCard
               label="P0 데이터 연결"
               value={`${configuredP0}/${totalP0 || 0}`}
-              description={totalP0 > 0 && configuredP0 < totalP0 ? "필수 연결 보완 필요" : "필수 데이터 소스 기준"}
+              description={totalP0 > 0 && configuredP0 < totalP0 ? "보완 필요" : "기준 소스"}
             />
             <ReportHeroStatCard
               label="USD 1,000"
               value={usdPreview ? formatKrw(usdPreview.krw) : "-"}
-              description={usdPreview?.asOfDate ? `${usdPreview.asOfDate} 기준` : "환율 데이터 대기"}
+              description={usdPreview?.asOfDate ? `${formatDate(usdPreview.asOfDate)}` : "데이터 대기"}
             />
           </ReportHeroStatGrid>
-          <div className="flex flex-wrap gap-2 text-xs text-white/75">
-            <span className={reportHeroMetaChipClassName}>
+          <div className="flex flex-wrap gap-2 text-xs font-black">
+            <span className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-slate-400">
               상품 소스 freshness {freshSources}/{state.sourceStatuses.length || 0}
             </span>
-            <span className={reportHeroMetaChipClassName}>
+            <span className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-slate-400">
               최저 현금 {formatKrw(latestSummary.worstCashKrw)}
             </span>
-            <Link href="/recommend" className={reportHeroMetaChipClassName}>
-              추천 허브
+            <Link href="/recommend" className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-600 hover:bg-emerald-100 transition-colors">
+              추천 허브 →
             </Link>
           </div>
           {state.warnings.length > 0 ? (
