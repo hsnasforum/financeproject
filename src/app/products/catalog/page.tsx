@@ -312,7 +312,7 @@ export default function ProductsCatalogPage() {
                   <div className="mt-10 flex gap-3">
                     <Link
                       href={`/products/catalog/${encodeURIComponent(item.stableId)}`}
-                      className="flex-1 rounded-2xl bg-slate-900 py-4 text-center text-xs font-black text-white shadow-lg transition-all hover:bg-slate-800 active:scale-95"
+                      className="flex-1 rounded-2xl bg-emerald-600 py-4 text-center text-xs font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-700 active:scale-95"
                     >
                       상세 보기
                     </Link>

@@ -607,7 +607,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
               </label>
               <Link
                 href="/products/compare"
-                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg transition-all hover:bg-slate-800 active:scale-95 px-4"
+                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-900/10 transition-all hover:bg-emerald-700 active:scale-95 px-4"
               >
                 <span className="text-xs font-black">비교함 {compareCount}</span>
               </Link>
@@ -778,7 +778,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
               >
                 이전 페이지
               </Button>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white shadow-md">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 border border-slate-200 text-sm font-black text-slate-600 shadow-sm">
                 {payload?.meta.nowPage ?? pageNo}
               </div>
               <Button
