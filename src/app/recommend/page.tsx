@@ -45,6 +45,7 @@ import {
   type RecommendProfileNormalized,
 } from "@/lib/schemas/recommendProfile";
 import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
+import { cn } from "@/lib/utils";
 
 type RecommendItem = {
   unifiedId: string;
@@ -811,7 +812,10 @@ function RecommendPageInner() {
                 <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100">
                   <div className="mb-6 flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-black text-white">
+                      <span className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-full text-xs font-black shadow-sm",
+                        index === 0 ? "bg-emerald-500 text-white shadow-emerald-900/10" : "bg-slate-100 text-slate-600 border border-slate-200"
+                      )}>
                         {index + 1}
                       </span>
                       <SourceBadge sourceId={item.sourceId} />
