@@ -120,6 +120,7 @@ import ProfileV2Form from "@/components/planning/ProfileV2Form";
 import PlanningOnboardingWizard from "@/components/planning/PlanningOnboardingWizard";
 import PlanningQuickStartGate from "@/components/planning/PlanningQuickStartGate";
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
+import { buildEvidence } from "@/lib/planning/v2/insights/evidence";
 import { buildMetricEvidence } from "@/app/planning/_lib/metricEvidence";
 import { copyToClipboard } from "@/lib/browser/clipboard";
 import { withDevCsrf, writeDevCsrfToken } from "@/lib/dev/clientCsrf";
@@ -3945,7 +3946,17 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                     ...(typeof summaryDsr === "number" ? { dsrPct: summaryDsr } : {}),
                     ...(summaryGoalsText !== "-" ? { goalsAchievedText: summaryGoalsText } : {}),
                   }}
-                  summaryEvidence={summaryEvidence}
+                  summaryEvidence={buildEvidence(
+                    {
+                      summaryCards: {
+                        monthlySurplusKrw: summaryMonthlySurplusKrw ?? undefined,
+                        dsrPct: summaryDsr ?? undefined,
+                        emergencyFundMonths: summaryEmergencyFundMonths ?? undefined,
+                      },
+                    },
+                    undefined, // use default policy
+                    summaryEvidence,
+                  )}
                   aggregatedWarnings={aggregatedWarningsForInsight.map((warning) => ({
                     code: warning.code,
                     severity: warning.severity,
@@ -3954,7 +3965,15 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                     ...(typeof warning.lastMonth === "number" ? { lastMonth: warning.lastMonth } : {}),
                     ...(typeof warning.sampleMessage === "string" ? { sampleMessage: warning.sampleMessage } : {}),
                   }))}
-                  goals={goalsForInsight}
+                  goals={goalsForInsight.map((goal) => ({
+                    goalId: goal.id,
+                    name: goal.name,
+                    achieved: goal.achieved,
+                    targetMonth: goal.targetMonth,
+                    progressPct: goal.targetAmount > 0 ? (goal.currentAmount / goal.targetAmount) * 100 : 0,
+                    shortfallKrw: goal.shortfall,
+                    interpretation: goal.comment,
+                  }))}
                   outcomes={{
                     ...(actionsTopForInsight.length > 0 ? { actionsTop: actionsTopForInsight } : {}),
                     snapshotMeta: workspaceSnapshotState.outcomesMeta,

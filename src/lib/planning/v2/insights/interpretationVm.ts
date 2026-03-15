@@ -1,5 +1,5 @@
 import { type ActionCode, type ActionItemV2 } from "../actions/types";
-import { type GoalRow } from "../report/mapGoals";
+import { type GoalStatusRow } from "../resultGuide";
 import { type CalcEvidence } from "../../calc";
 import { buildEvidence, type EvidenceItem } from "./evidence";
 import { resolveInterpretationActionHref } from "./actionLinks";
@@ -37,7 +37,7 @@ export type InterpretationInput = {
     suggestedActionId?: string;
     subjectLabel?: string;
   }>;
-  goals: GoalRow[];
+  goals: GoalStatusRow[];
   outcomes?: {
     actionsTop?: ActionItemV2[];
     snapshotMeta?: {
@@ -48,14 +48,10 @@ export type InterpretationInput = {
       retirementDepletionBeforeEnd?: number;
     };
     runId?: string;
+    timelinePointCount?: number;
   };
-  summaryEvidence?: {
-    monthlySurplusKrw?: CalcEvidence;
-    dsrPct?: CalcEvidence;
-    emergencyFundMonths?: CalcEvidence;
+  summaryEvidence?: EvidenceItem[];
   };
-};
-
 export type InterpretationVM = {
   verdict: {
     code: InterpretationVerdict;
@@ -184,19 +180,15 @@ export function buildInterpretationVM(
   policy: PlanningInterpretationPolicy = DEFAULT_PLANNING_POLICY,
 ): InterpretationVM {
   const evidenceByDiagId = (() => {
-    const items = buildEvidence(
+    const items = Array.isArray(input.summaryEvidence) ? input.summaryEvidence : buildEvidence(
       {
         summaryCards: {
           ...(typeof input.summary.monthlySurplusKrw === "number" ? { monthlySurplusKrw: input.summary.monthlySurplusKrw } : {}),
           ...(typeof input.summary.dsrPct === "number" ? { dsrPct: input.summary.dsrPct } : {}),
           ...(typeof input.summary.emergencyFundMonths === "number" ? { emergencyFundMonths: input.summary.emergencyFundMonths } : {}),
         },
-        evidence: {
-          summary: input.summaryEvidence,
-        },
       },
       policy,
-      input.summaryEvidence,
     );
     const byMetric = new Map(items.map((item) => [item.id, item]));
     const toDiagEvidence = (item: EvidenceItem | undefined): EvidenceItem | undefined => {
@@ -224,7 +216,7 @@ export function buildInterpretationVM(
 
   const goalsAchieved = parseGoalsAchievedText(input.summary.goalsAchievedText);
   const goalsMissed = input.goals.length > 0
-    ? input.goals.some((goal) => !goal.achieved || goal.shortfall > 0)
+    ? input.goals.some((goal) => !goal.achieved || goal.shortfallKrw > 0)
     : Boolean(goalsAchieved && goalsAchieved.total > goalsAchieved.achieved);
 
   const warningsSorted = [...input.aggregatedWarnings].sort((a, b) => {
@@ -259,7 +251,6 @@ export function buildInterpretationVM(
         : severity === "caution"
           ? "남는 돈이 많지 않아 작은 지출 변화에도 흔들릴 수 있습니다."
           : "매달 남는 돈이 있어 계획을 이어갈 여지가 있습니다.",
-      ...(input.summaryEvidence?.monthlySurplusKrw ? { evidenceDetail: input.summaryEvidence.monthlySurplusKrw } : {}),
       ...(evidenceByDiagId.get("monthly-surplus") ? { evidenceItem: evidenceByDiagId.get("monthly-surplus") } : {}),
     });
   }
@@ -280,11 +271,10 @@ export function buildInterpretationVM(
         ? "대출 갚는 비중이 커서 다른 목표까지 함께 챙기기 어려운 상태입니다."
         : severity === "caution"
           ? "상환 부담이 적지 않아 지출이 늘면 압박이 커질 수 있습니다."
-          : "대출 상환 부담은 관리 가능한 수준입니다.",
-      ...(input.summaryEvidence?.dsrPct ? { evidenceDetail: input.summaryEvidence.dsrPct } : {}),
-      ...(evidenceByDiagId.get("dsr") ? { evidenceItem: evidenceByDiagId.get("dsr") } : {}),
-    });
-  }
+          : "수입 대비 대출 상환액이 관리 가능한 범위입니다.",
+          ...(evidenceByDiagId.get("dsr") ? { evidenceItem: evidenceByDiagId.get("dsr") } : {}),
+          });
+          }
 
   if (typeof emergencyFundMonths === "number") {
     const severity: DiagnosticCandidate["severity"] = emergencyFundMonths < policy.emergencyFundMonths.risk
@@ -302,11 +292,10 @@ export function buildInterpretationVM(
         ? "비상금이 짧아 예상 밖 지출이 생기면 바로 타격을 받을 수 있습니다."
         : severity === "caution"
           ? "조금만 더 쌓아두면 훨씬 안정적으로 버틸 수 있습니다."
-          : "예상치 못한 상황을 버틸 완충 여력이 있는 편입니다.",
-      ...(input.summaryEvidence?.emergencyFundMonths ? { evidenceDetail: input.summaryEvidence.emergencyFundMonths } : {}),
-      ...(evidenceByDiagId.get("emergency-fund") ? { evidenceItem: evidenceByDiagId.get("emergency-fund") } : {}),
-    });
-  }
+          : "최소한의 비상금이 확보되어 있어 안정적입니다.",
+          ...(evidenceByDiagId.get("emergency-fund") ? { evidenceItem: evidenceByDiagId.get("emergency-fund") } : {}),
+          });
+          }
 
   if (typeof worstCashKrw === "number") {
     const severity: DiagnosticCandidate["severity"] = worstCashKrw <= 0 ? "risk" : "info";
@@ -345,7 +334,7 @@ export function buildInterpretationVM(
   if (goalsMissed) {
     const total = input.goals.length || goalsAchieved?.total || 0;
     const achieved = input.goals.length
-      ? input.goals.filter((goal) => goal.achieved && goal.shortfall <= 0).length
+      ? input.goals.filter((goal) => goal.achieved && goal.shortfallKrw <= 0).length
       : goalsAchieved?.achieved || 0;
     diagnostics.push({
       id: "goals",
