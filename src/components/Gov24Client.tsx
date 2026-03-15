@@ -1,21 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import {
-  BodyInset,
-  BodySectionHeading,
-  BodyStatusInset,
-  BodyTableFrame,
-  bodyCompactFieldClassName,
-  bodyDenseActionRowClassName,
-  bodyFieldClassName,
-  bodyInlineActionLinkClassName,
-  bodyMetaChipClassName,
-} from "@/components/ui/BodyTone";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import {
   GOV24_HOUSEHOLD_TRAITS,
   GOV24_PERSONAL_TRAITS,
@@ -26,8 +17,10 @@ import {
 } from "@/lib/publicApis/gov24SimpleFind/types";
 import { MEDIAN_INCOME_2025 } from "@/lib/gov24/medianIncome2025";
 import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
-import { Gov24ServiceDetailModal } from "@/components/Gov24ServiceDetailModal";
-import { type EligibilityItem } from "@/lib/gov24/eligibilityNormalize";
+import {
+  Gov24ServiceDetailModal,
+  type Gov24ServiceDetailData,
+} from "@/components/Gov24ServiceDetailModal";
 import {
   SIDO_ADMIN_2025,
   SIGUNGU_BY_SIDO_CODE_2025,
@@ -37,6 +30,7 @@ import {
 import { type Gov24OrgType } from "@/lib/gov24/orgClassifier";
 import { safeMark, safeMeasure } from "@/lib/perf/safeMeasure";
 import { type ApplyLink } from "@/lib/gov24/applyLinks";
+import { cn } from "@/lib/utils";
 
 type SyncState = "ready" | "syncing" | "needs_sync";
 
@@ -76,28 +70,7 @@ type Gov24SearchStatusResponse = {
 
 type DetailResponse = {
   ok: boolean;
-  data?: {
-    id: string;
-    title: string;
-    org?: string;
-    applyHow?: string;
-    contact?: string;
-    link?: string;
-    source: "official" | "openapi" | "fallback";
-    tabs: {
-      overview: string[];
-      target: string[];
-      benefit: string[];
-      apply: string[];
-      contact: string[];
-    };
-    supportTarget?: {
-      items: EligibilityItem[];
-      raw: string[];
-    };
-    applyLinks?: ApplyLink[];
-    primaryApplyUrl?: string | null;
-  };
+  data?: Gov24ServiceDetailData;
 };
 
 const INCOME_OPTIONS: Array<{ value: Gov24IncomeBracket; label: string }> = [
@@ -138,8 +111,6 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
 
   const [syncState, setSyncState] = useState<SyncState>("needs_sync");
   const [syncing, setSyncing] = useState(false);
-  const [syncPagesFetched, setSyncPagesFetched] = useState<number | null>(null);
-  const [syncEffectiveMaxPages, setSyncEffectiveMaxPages] = useState<number | null>(null);
   const [syncUniqueCount, setSyncUniqueCount] = useState<number | null>(null);
   const [snapshotGeneratedAt, setSnapshotGeneratedAt] = useState<string>("");
   const [syncError, setSyncError] = useState<string>("");
@@ -147,7 +118,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   const [completionRate, setCompletionRate] = useState<number | null>(null);
   const [syncMetaNote, setSyncMetaNote] = useState<string>("");
 
-  const [detailData, setDetailData] = useState<DetailResponse["data"] | null>(null);
+  const [detailData, setDetailData] = useState<Gov24ServiceDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const selectedSido = useMemo(() => getSidoByCode(selectedSidoCode), [selectedSidoCode]);
@@ -180,8 +151,6 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     setSnapshotTotal(snapshot?.totalItems ?? null);
     setCompletionRate(typeof snapshot?.completionRate === "number" ? snapshot.completionRate : null);
     setSnapshotGeneratedAt(typeof snapshot?.generatedAt === "string" ? snapshot.generatedAt : "");
-    setSyncPagesFetched(typeof snapshot?.pagesFetched === "number" ? snapshot.pagesFetched : null);
-    setSyncEffectiveMaxPages(typeof snapshot?.effectiveMaxPages === "number" ? snapshot.effectiveMaxPages : null);
     setSyncUniqueCount(typeof snapshot?.uniqueCount === "number" ? snapshot.uniqueCount : null);
     setSyncState(statusJson.meta?.sync?.state ?? "needs_sync");
     setSyncing((statusJson.meta?.sync?.state ?? "needs_sync") === "syncing");
@@ -306,261 +275,390 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   }, [orgTypeFilter, searchSimpleFind, step]);
 
   return (
-    <main className="py-8">
-      <Container>
-        <SectionHeader title="보조금24" subtitle="간편 찾기" />
-        <Card>
-          <div className={`mb-4 ${bodyDenseActionRowClassName}`}>
-            <span className={bodyMetaChipClassName}>
-              동기화 상태: {syncing || syncState === "syncing" ? "동기화 중" : syncState === "ready" ? "준비됨" : "동기화 필요"}
+    <PageShell>
+      <PageHeader
+        title="보조금24"
+        description="나에게 맞는 정부 혜택을 간편하게 찾아보세요."
+        action={
+          <div className="flex items-center gap-2">
+            <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border transition-all", syncing ? "bg-emerald-50 text-emerald-600 border-emerald-200 animate-pulse" : "bg-slate-100 text-slate-400 border-slate-200")}>
+              {syncing || syncState === "syncing" ? "데이터 동기화 중" : "데이터 준비 완료"}
             </span>
-            <span className={bodyMetaChipClassName}>스냅샷 {snapshotTotal ?? "?"}건</span>
-            <span className={bodyMetaChipClassName}>완주율 {completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
-            {syncPagesFetched !== null ? <span className={bodyMetaChipClassName}>페이지 {syncPagesFetched}/{syncEffectiveMaxPages ?? "?"}</span> : null}
-            {syncUniqueCount !== null ? <span className={bodyMetaChipClassName}>수집 {syncUniqueCount}건</span> : null}
-            {snapshotGeneratedAt ? <span className={bodyMetaChipClassName}>최근 갱신 {new Date(snapshotGeneratedAt).toLocaleString("ko-KR", { hour12: false })}</span> : null}
-            {process.env.NODE_ENV !== "production" ? (
-              <Button type="button" size="sm" variant="outline" onClick={() => void runManualSync()} disabled={syncing}>
-                {syncing ? "동기화 중..." : "동기화 실행"}
+            {process.env.NODE_ENV !== "production" && (
+              <Button type="button" size="sm" variant="outline" className="rounded-xl font-black h-8" onClick={() => void runManualSync()} disabled={syncing}>
+                {syncing ? "갱신 중..." : "수동 갱신"}
               </Button>
-            ) : null}
+            )}
           </div>
+        }
+      />
 
+      <div className="space-y-6">
+        {/* Status Strip */}
+        <Card className="rounded-3xl p-4 lg:p-5 shadow-sm bg-slate-50/50 border-slate-100">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] font-bold text-slate-500">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              스냅샷 <span className="text-slate-900 font-black ml-0.5">{snapshotTotal?.toLocaleString() ?? "?"}건</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+              완주율 <span className="text-slate-900 font-black ml-0.5">{completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
+            </div>
+            {syncUniqueCount !== null && (
+              <div className="flex items-center gap-2 text-slate-400">
+                수집 <span className="font-black ml-0.5">{syncUniqueCount.toLocaleString()}건</span>
+              </div>
+            )}
+            {snapshotGeneratedAt && (
+              <div className="ml-auto text-[10px] text-slate-400 font-medium">
+                최근 갱신: {new Date(snapshotGeneratedAt).toLocaleString("ko-KR", { hour12: false })}
+              </div>
+            )}
+          </div>
           {syncMetaNote ? (
-            <BodyStatusInset className="mb-4 text-sm" tone="warning">
-              {syncMetaNote}
-            </BodyStatusInset>
+            <p className="mt-3 text-[10px] font-bold text-amber-600 bg-amber-50/50 p-2 rounded-lg">{syncMetaNote}</p>
           ) : null}
-
           {syncError ? (
-            <BodyStatusInset className="mb-4 text-sm" tone="danger">
-              동기화 실패: {syncError}
-            </BodyStatusInset>
+            <p className="mt-3 text-[10px] font-bold text-rose-600 bg-rose-50/50 p-2 rounded-lg">동기화 실패: {syncError}</p>
           ) : null}
+        </Card>
 
-          {syncing ? (
-            <BodyStatusInset className="mb-4 p-6 text-sm" tone="default">
-              오픈 API 전체 데이터를 동기화 중입니다.
-            </BodyStatusInset>
-          ) : null}
+        {step <= 6 ? (
+          <Card className="rounded-[2rem] p-8 shadow-sm">
+            <div className="mb-8 flex items-center justify-between">
+              <div className="space-y-1">
+                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Step 0{step} / 06</span>
+                <SubSectionHeader
+                  title={step === 1 ? "혜택 대상을 선택해 주세요" :
+                         step === 2 ? "거주하시는 지역을 선택해 주세요" :
+                         step === 3 ? "생년월일과 성별을 알려주세요" :
+                         step === 4 ? "소득 구간을 선택해 주세요" :
+                         step === 5 ? "해당하는 개인 특성을 모두 골라주세요" :
+                         "해당하는 가구 특성을 모두 골라주세요"}
+                  className="mb-0"
+                />
+              </div>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5, 6].map((s) => (
+                  <div key={s} className={cn("h-1 rounded-full transition-all", s === step ? "w-6 bg-emerald-500" : s < step ? "w-2 bg-emerald-200" : "w-2 bg-slate-100")} />
+                ))}
+              </div>
+            </div>
 
-          {step <= 6 ? (
-            <div className="space-y-5">
-              <span className={bodyMetaChipClassName}>STEP {step} / 6</span>
+            <div className="min-h-[320px]">
+              {step === 1 && (
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => setTargetType("individual")}
+                    className={cn(
+                      "flex flex-col items-center justify-center gap-4 rounded-3xl border-2 p-8 transition-all active:scale-[0.98]",
+                      targetType === "individual" ? "border-emerald-500 bg-emerald-50/30 text-emerald-700" : "border-slate-100 hover:border-slate-200 text-slate-500"
+                    )}
+                  >
+                    <span className="text-3xl">👤</span>
+                    <span className="text-sm font-black">개인 / 가구</span>
+                  </button>
+                  <button type="button" disabled className="flex flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-slate-100 p-8 opacity-50 cursor-not-allowed">
+                    <span className="text-3xl grayscale">🏪</span>
+                    <span className="text-sm font-black text-slate-400">소상공인 (준비중)</span>
+                  </button>
+                  <button type="button" disabled className="flex flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-slate-100 p-8 opacity-50 cursor-not-allowed">
+                    <span className="text-3xl grayscale">🏢</span>
+                    <span className="text-sm font-black text-slate-400">법인 (준비중)</span>
+                  </button>
+                </div>
+              )}
 
-              {step === 1 ? (
-                <BodyInset className="space-y-3 bg-white">
-                  <BodySectionHeading title="대상 선택" />
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <Button type="button" variant={targetType === "individual" ? "primary" : "outline"} onClick={() => setTargetType("individual")}>개인/가구</Button>
-                    <Button type="button" variant="outline" disabled>소상공인 (준비중)</Button>
-                    <Button type="button" variant="outline" disabled>법인 (준비중)</Button>
+              {step === 2 && (
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">시/도</p>
+                    <div className="grid grid-cols-3 gap-2 h-[280px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
+                      {SIDO_ADMIN_2025.map((sido) => (
+                        <button
+                          key={sido.code}
+                          type="button"
+                          onClick={() => { setSelectedSidoCode(sido.code); setSelectedSigunguCode(""); }}
+                          className={cn("h-10 rounded-xl text-xs font-bold transition-all border shadow-sm", selectedSidoCode === sido.code ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                        >
+                          {sido.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </BodyInset>
-              ) : null}
-
-              {step === 2 ? (
-                <BodyInset className="space-y-3 bg-white">
-                  <BodySectionHeading title="거주 지역" />
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <BodyInset className="max-h-64 overflow-auto bg-white">
-                      <div className="flex flex-wrap gap-2">
-                        {SIDO_ADMIN_2025.map((sido) => (
-                          <Button
-                            key={sido.code}
-                            size="sm"
-                            type="button"
-                            variant={selectedSidoCode === sido.code ? "primary" : "outline"}
-                            onClick={() => {
-                              setSelectedSidoCode(sido.code);
-                              setSelectedSigunguCode("");
-                            }}
-                          >
-                            {sido.name}
-                          </Button>
-                        ))}
-                      </div>
-                    </BodyInset>
-                    <BodyInset className="max-h-64 overflow-auto bg-white">
-                      <div className="flex flex-wrap gap-2">
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">시/군/구</p>
+                    {selectedSidoCode ? (
+                      <div className="grid grid-cols-2 gap-2 h-[280px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-200">
                         {sigunguOptions.map((sigungu) => (
-                          <Button
+                          <button
                             key={sigungu.code}
-                            size="sm"
                             type="button"
-                            variant={selectedSigunguCode === sigungu.code ? "primary" : "outline"}
                             onClick={() => setSelectedSigunguCode(sigungu.code)}
+                            className={cn("h-10 rounded-xl text-xs font-bold transition-all border shadow-sm", selectedSigunguCode === sigungu.code ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
                           >
                             {sigungu.name}
-                          </Button>
+                          </button>
                         ))}
                       </div>
-                    </BodyInset>
+                    ) : (
+                      <div className="h-[280px] flex items-center justify-center rounded-2xl border border-dashed border-slate-100 bg-slate-50/30">
+                        <p className="text-xs font-bold text-slate-400">먼저 시/도를 선택해 주세요.</p>
+                      </div>
+                    )}
                   </div>
-                </BodyInset>
-              ) : null}
+                </div>
+              )}
 
-              {step === 3 ? (
-                <BodyInset className="space-y-3 bg-white">
-                  <BodySectionHeading title="생년월일 / 성별" />
-                  <div className="flex flex-wrap gap-2">
+              {step === 3 && (
+                <div className="space-y-8">
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">생년월일 (8자리)</p>
                     <input
-                      className={`${bodyFieldClassName.replace("mt-1 ", "")} h-10 w-auto min-w-44`}
-                      placeholder="YYYYMMDD"
+                      className="h-14 w-full sm:w-[320px] rounded-2xl border border-slate-200 px-6 text-xl font-black text-slate-900 tracking-[0.2em] shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none placeholder:text-slate-200 placeholder:tracking-normal"
+                      placeholder="19900101"
                       value={birthYmd}
                       onChange={(e) => setBirthYmd(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
                     />
-                    <Button type="button" size="sm" variant={gender === "F" ? "primary" : "outline"} onClick={() => setGender("F")}>여성</Button>
-                    <Button type="button" size="sm" variant={gender === "M" ? "primary" : "outline"} onClick={() => setGender("M")}>남성</Button>
                   </div>
-                </BodyInset>
-              ) : null}
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">성별</p>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setGender("F")}
+                        className={cn("h-12 px-8 rounded-2xl text-sm font-black transition-all border shadow-sm", gender === "F" ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                      >
+                        여성
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGender("M")}
+                        className={cn("h-12 px-8 rounded-2xl text-sm font-black transition-all border shadow-sm", gender === "M" ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                      >
+                        남성
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              {step === 4 ? (
-                <BodyInset className="space-y-3 bg-white">
-                  <BodySectionHeading title="소득금액 구간" />
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {INCOME_OPTIONS.map((entry) => (
-                      <Button key={entry.value} type="button" variant={incomeBracket === entry.value ? "primary" : "outline"} onClick={() => setIncomeBracket(entry.value)}>{entry.label}</Button>
-                    ))}
+              {step === 4 && (
+                <div className="grid gap-8 lg:grid-cols-[1fr_auto]">
+                  <div className="grid gap-3">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">소득 구간 선택</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {INCOME_OPTIONS.map((entry) => (
+                        <button
+                          key={entry.value}
+                          type="button"
+                          onClick={() => setIncomeBracket(entry.value)}
+                          className={cn("h-12 px-4 rounded-2xl text-xs font-black transition-all border shadow-sm text-left", incomeBracket === entry.value ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                        >
+                          {entry.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <BodyTableFrame>
-                    <table className="min-w-full text-xs">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-2 py-2 text-left">구간</th>
-                          {[1, 2, 3, 4, 5, 6].map((n) => <th key={n} className="px-2 py-2 text-right">{n}인</th>)}
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 overflow-x-auto">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">2025년 기준 중위소득 참고 (단위: 원)</p>
+                    <table className="min-w-full text-[11px]">
+                      <thead>
+                        <tr className="text-slate-400 font-black">
+                          <th className="pb-3 text-left">구간</th>
+                          {[1, 2, 3, 4].map((n) => <th key={n} className="pb-3 text-right">{n}인</th>)}
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-slate-100">
                         {MEDIAN_INCOME_2025.brackets.map((row) => (
-                          <tr key={row.key} className="border-t border-border">
-                            <td className="px-2 py-2">{row.label}</td>
-                            {[1, 2, 3, 4, 5, 6].map((n) => (
-                              <td key={n} className="px-2 py-2 text-right">
-                                {row.isUpperBound ? `${row.households[n as 1 | 2 | 3 | 4 | 5 | 6].toLocaleString()} 초과` : row.households[n as 1 | 2 | 3 | 4 | 5 | 6].toLocaleString()}
+                          <tr key={row.key} className="text-slate-600 font-bold">
+                            <td className="py-2.5 pr-4 whitespace-nowrap">{row.label}</td>
+                            {[1, 2, 3, 4].map((n) => (
+                              <td key={n} className="py-2.5 text-right tabular-nums">
+                                {row.households[n as 1 | 2 | 3 | 4].toLocaleString()}
                               </td>
                             ))}
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </BodyTableFrame>
-                </BodyInset>
-              ) : null}
+                  </div>
+                </div>
+              )}
 
-              {step === 5 ? (
-                <BodyInset className="space-y-3 bg-white">
-                  <BodySectionHeading title="개인 특성" />
+              {step === 5 && (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">개인 특성 (중복 선택 가능)</p>
                   <div className="flex flex-wrap gap-2">
                     {GOV24_PERSONAL_TRAITS.map((trait) => (
-                      <Button key={trait} type="button" size="sm" variant={personalTraits.includes(trait) ? "primary" : "outline"} onClick={() => toggleTrait(personalTraits, trait, setPersonalTraits)}>{trait}</Button>
+                      <button
+                        key={trait}
+                        type="button"
+                        onClick={() => toggleTrait(personalTraits, trait, setPersonalTraits)}
+                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", personalTraits.includes(trait) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
+                      >
+                        {trait}
+                      </button>
                     ))}
                   </div>
-                </BodyInset>
-              ) : null}
+                </div>
+              )}
 
-              {step === 6 ? (
-                <BodyInset className="space-y-3 bg-white">
-                  <BodySectionHeading title="가구 특성" />
+              {step === 6 && (
+                <div className="space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">가구 특성 (중복 선택 가능)</p>
                   <div className="flex flex-wrap gap-2">
                     {GOV24_HOUSEHOLD_TRAITS.map((trait) => (
-                      <Button key={trait} type="button" size="sm" variant={householdTraits.includes(trait) ? "primary" : "outline"} onClick={() => toggleTrait(householdTraits, trait, setHouseholdTraits)}>{trait}</Button>
+                      <button
+                        key={trait}
+                        type="button"
+                        onClick={() => toggleTrait(householdTraits, trait, setHouseholdTraits)}
+                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", householdTraits.includes(trait) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
+                      >
+                        {trait}
+                      </button>
                     ))}
                   </div>
-                </BodyInset>
-              ) : null}
+                </div>
+              )}
+            </div>
 
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setStep((prev) => Math.max(1, prev - 1))} disabled={step === 1}>이전</Button>
-                {step < 6 ? (
-                  <Button
-                    type="button"
-                    onClick={() => setStep((prev) => Math.min(6, prev + 1))}
-                    disabled={(step === 2 && (!selectedSidoCode || !selectedSigunguCode)) || (step === 3 && !/^\d{8}$/.test(birthYmd))}
+            <div className="mt-12 flex items-center justify-between border-t border-slate-50 pt-8">
+              <Button type="button" variant="outline" className="rounded-2xl font-black h-12 px-8" onClick={() => setStep((prev) => Math.max(1, prev - 1))} disabled={step === 1}>
+                이전 단계
+              </Button>
+              {step < 6 ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="rounded-2xl font-black h-12 px-12 shadow-md"
+                  onClick={() => setStep((prev) => Math.min(6, prev + 1))}
+                  disabled={(step === 2 && (!selectedSidoCode || !selectedSigunguCode)) || (step === 3 && !/^\d{8}$/.test(birthYmd))}
+                >
+                  다음 단계
+                </Button>
+              ) : (
+                <Button type="button" variant="primary" className="rounded-2xl font-black h-12 px-12 shadow-md" onClick={() => void searchSimpleFind({ cursor: 0 })} disabled={loading}>
+                  {loading ? "검색 중..." : "결과 확인하기"}
+                </Button>
+              )}
+            </div>
+          </Card>
+        ) : null}
+
+        {step === 7 && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <Card className="rounded-[2rem] p-8 shadow-sm">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">검색 조건 요약</p>
+                  <SubSectionHeader title={summaryLine} className="mb-0" />
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <input
+                      className="h-11 min-w-[280px] rounded-2xl border border-slate-200 bg-slate-50/50 px-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all"
+                      placeholder="결과 내 재검색 (예: 장학금, 의료비)"
+                      value={resultQuery}
+                      onChange={(e) => setResultQuery(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && void searchSimpleFind({ cursor: 0 })}
+                    />
+                    <Button type="button" variant="primary" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={() => void searchSimpleFind({ cursor: 0 })} disabled={loading}>검색</Button>
+                    <Button type="button" variant="outline" className="h-11 px-6 rounded-2xl font-black" onClick={() => { setStep(1); setItems([]); setTotalMatched(0); setNextCursor(null); }}>조건 변경</Button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 min-w-[180px]">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">기관별 필터</p>
+                  <select 
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none shadow-sm focus:ring-1 focus:ring-emerald-500" 
+                    value={orgTypeFilter} 
+                    onChange={(e) => setOrgTypeFilter(e.target.value as Gov24OrgType)}
                   >
-                    다음
-                  </Button>
-                ) : (
-                  <Button type="button" onClick={() => void searchSimpleFind({ cursor: 0 })}>결과 보기</Button>
+                    {ORG_FILTER_OPTIONS.map((entry) => (
+                      <option key={entry.value} value={entry.value}>{entry.label} ({orgTypeCounts[entry.value] ?? 0})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {error ? (
+                <p className="mt-4 text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">검색 오류: {error}</p>
+              ) : null}
+            </Card>
+
+            {loading && items.length === 0 ? (
+              <LoadingState title="맞춤 혜택을 찾고 있습니다" description="오픈 API에서 최신 데이터를 가져오는 중입니다." />
+            ) : items.length === 0 ? (
+              <Card className="rounded-[2rem] p-20 text-center border-dashed border-slate-200 bg-slate-50/30">
+                <p className="text-lg font-black text-slate-900">검색된 혜택이 없습니다</p>
+                <p className="mt-2 text-sm font-medium text-slate-500">다른 키워드로 검색하거나 검색 조건을 변경해 보세요.</p>
+                <Button variant="outline" className="mt-8 rounded-2xl font-black" onClick={() => { setStep(1); setItems([]); }}>다시 찾기</Button>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <p className="text-sm font-bold text-slate-500">총 <span className="text-slate-900 font-black">{totalMatched.toLocaleString()}건</span>의 혜택이 발견되었습니다.</p>
+                </div>
+                <div className="grid gap-4">
+                  {items.map((item) => {
+                    const quickUrl = item.primaryApplyUrl;
+                    return (
+                      <Card key={item.id} className="rounded-[2rem] p-6 lg:p-8 shadow-sm hover:border-emerald-200 transition-all group">
+                        <div className="flex flex-wrap items-center gap-3 mb-3">
+                          {item.card?.badge && (
+                            <span className="rounded-lg bg-slate-900 px-2.5 py-1 text-[10px] font-black text-white uppercase tracking-wider">{item.card.badge}</span>
+                          )}
+                          {item.card?.department && (
+                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">관할: {item.card.department}</span>
+                          )}
+                        </div>
+                        <h3 className="text-xl font-black text-slate-900 tracking-tight group-hover:text-emerald-600 transition-colors">{item.card?.title ?? item.title}</h3>
+                        <p className="mt-3 line-clamp-2 text-sm font-medium leading-relaxed text-slate-600">{item.card?.summary ?? item.summary}</p>
+                        
+                        <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {(item.card?.lines ?? []).map((line) => (
+                            <div key={`${item.id}-${line.label}`} className="rounded-xl bg-slate-50 p-3">
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{line.label}</p>
+                              <p className="mt-1 text-xs font-bold text-slate-700">{line.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-8 flex items-center gap-3">
+                          <Button variant="primary" className="h-11 px-8 rounded-2xl font-black shadow-md" onClick={() => void openDetail(item)} disabled={detailLoading}>
+                            상세 내용 보기
+                          </Button>
+                          {quickUrl ? (
+                            <a 
+                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-[0.98]" 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              href={quickUrl}
+                            >
+                              정부24 신청하기
+                            </a>
+                          ) : (
+                            <span className="text-xs font-bold text-slate-300 ml-2 italic">※ 이 혜택은 온라인 신청 정보가 없습니다.</span>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {nextCursor !== null && (
+                  <div className="flex justify-center pt-8">
+                    <Button variant="outline" className="rounded-2xl font-black h-12 px-12" onClick={() => void searchSimpleFind({ cursor: nextCursor, append: true })} disabled={loading}>
+                      {loading ? "혜택을 더 불러오는 중..." : "결과 더 보기"}
+                    </Button>
+                  </div>
                 )}
               </div>
-            </div>
-          ) : null}
-
-          {step === 7 ? (
-            <div className="space-y-4">
-              <BodyInset>
-                <BodySectionHeading title="조건 요약" description={summaryLine} />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <input
-                    className={`${bodyCompactFieldClassName} h-9 min-w-56`}
-                    placeholder="결과 내 재검색(선택)"
-                    value={resultQuery}
-                    onChange={(e) => setResultQuery(e.target.value)}
-                  />
-                  <Button type="button" size="sm" onClick={() => void searchSimpleFind({ cursor: 0 })}>검색</Button>
-                  <Button type="button" size="sm" variant="outline" onClick={() => { setStep(1); setItems([]); setTotalMatched(0); setNextCursor(null); }}>다시 찾기</Button>
-                </div>
-              </BodyInset>
-
-              <div className={`text-sm ${bodyDenseActionRowClassName}`}>
-                <span className={bodyMetaChipClassName}>총 {totalMatched}건</span>
-                <select className={`${bodyCompactFieldClassName} h-9 text-xs`} value={orgTypeFilter} onChange={(e) => setOrgTypeFilter(e.target.value as Gov24OrgType)}>
-                  {ORG_FILTER_OPTIONS.map((entry) => (
-                    <option key={entry.value} value={entry.value}>{entry.label} ({orgTypeCounts[entry.value] ?? 0})</option>
-                  ))}
-                </select>
-              </div>
-
-              {error ? (
-                <BodyStatusInset className="text-sm" tone="danger">
-                  {error}
-                </BodyStatusInset>
-              ) : null}
-
-              <ul className="space-y-2">
-                {items.map((item) => {
-                  const quickUrl = item.primaryApplyUrl;
-                  return (
-                    <li key={item.id}>
-                      <BodyInset className="bg-white">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {item.card?.badge ? <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-white">{item.card.badge}</span> : null}
-                        {item.card?.department ? <span className="text-[11px] text-slate-500">관할: {item.card.department}</span> : null}
-                      </div>
-                      <p className="mt-1 font-semibold">{item.card?.title ?? item.title}</p>
-                      <p className="mt-1 line-clamp-2 text-sm text-slate-700">{item.card?.summary ?? item.summary}</p>
-                      <ul className="mt-2 space-y-1 text-xs text-slate-600">
-                        {(item.card?.lines ?? []).map((line) => (
-                          <li key={`${item.id}-${line.label}`}>• {line.label}: {line.value}</li>
-                        ))}
-                      </ul>
-                      <div className="mt-2 flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => void openDetail(item)} disabled={detailLoading}>상세 보기</Button>
-                        {quickUrl ? (
-                          <a className={bodyInlineActionLinkClassName} target="_blank" rel="noopener noreferrer" href={quickUrl}>
-                            바로가기
-                          </a>
-                        ) : null}
-                      </div>
-                      </BodyInset>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {nextCursor !== null ? (
-                <Button type="button" variant="outline" onClick={() => void searchSimpleFind({ cursor: nextCursor, append: true })} disabled={loading}>
-                  {loading ? "로딩..." : "더 보기"}
-                </Button>
-              ) : null}
-            </div>
-          ) : null}
-        </Card>
-      </Container>
+            )}
+          </div>
+        )}
+      </div>
 
       {detailData ? <Gov24ServiceDetailModal data={detailData} onClose={() => setDetailData(null)} /> : null}
-    </main>
+    </PageShell>
   );
 }
