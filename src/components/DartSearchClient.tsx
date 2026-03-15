@@ -670,7 +670,7 @@ export function DartSearchClient() {
           onClick={() => setTab("search")}
           className={cn(
             "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
-            tab === "search" ? "bg-slate-900 text-white" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+            tab === "search" ? "bg-emerald-600 text-white shadow-emerald-900/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
           )}
         >
           기업 검색
@@ -680,7 +680,7 @@ export function DartSearchClient() {
           onClick={() => setTab("monitor")}
           className={cn(
             "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
-            tab === "monitor" ? "bg-slate-900 text-white" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+            tab === "monitor" ? "bg-emerald-600 text-white shadow-emerald-900/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
           )}
         >
           공시 모니터링
