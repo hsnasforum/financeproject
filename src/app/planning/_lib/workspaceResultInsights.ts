@@ -144,6 +144,7 @@ export type WorkspaceGoalTableRow = {
 };
 
 export type WorkspaceGoalInsight = {
+  id: string;
   name: string;
   targetAmount: number;
   currentAmount: number;
@@ -573,6 +574,7 @@ export function buildWorkspaceResultSummaryVm(input: {
     };
   });
   const goalsForInsight = resultDto.goals.map((goal) => ({
+    id: goal.id,
     name: goal.title,
     targetAmount: Number(goal.targetKrw ?? 0),
     currentAmount: Number(goal.currentKrw ?? 0),
