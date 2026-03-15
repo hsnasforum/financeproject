@@ -769,7 +769,7 @@ export function PlanningRunsClient({
                   const snapshotLabel = run.meta.snapshot?.id || run.meta.snapshot?.asOf || "latest/missing";
                   const completion = actionProgressSummaryByRun[run.id];
                   return (
-                    <tr className={cn("hover:bg-slate-50/50 transition-colors", selectedRunId === run.id && "bg-emerald-50/30")} key={run.id}>
+                    <tr className={cn("hover:bg-slate-50/50 transition-colors", selectedRunId === run.id && "bg-emerald-50")} key={run.id}>
                       <td className="no-print px-4 py-3">
                         <input
                           checked={checked}
@@ -832,24 +832,24 @@ export function PlanningRunsClient({
               </p>
             ) : (
               <div className="space-y-6">
-                <div className="rounded-2xl bg-slate-900 p-6 text-white shadow-xl shadow-slate-900/10">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4">Run Details</p>
+                <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100 mb-4">Run Details</p>
                   <h3 className="text-xl font-black tracking-tight">{selectedRun.title || selectedRun.id.slice(0, 8)}</h3>
                   <div className="mt-4 grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase">생성 시각</p>
+                      <p className="text-[10px] font-bold text-emerald-100/70 uppercase">생성 시각</p>
                       <p className="text-sm font-bold">{formatDateTime(selectedRun.createdAt)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase">종료 순자산</p>
-                      <p className="text-sm font-bold text-emerald-400">{formatNumber(selectedSummary.endNetWorthKrw)}원</p>
+                      <p className="text-[10px] font-bold text-emerald-100/70 uppercase">종료 순자산</p>
+                      <p className="text-sm font-bold text-white">{formatNumber(selectedSummary.endNetWorthKrw)}원</p>
                     </div>
                   </div>
 
                   <div className="mt-8 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" className="h-8 text-[10px] font-black rounded-lg border-white/20 bg-white/5 hover:bg-white/10" onClick={() => void copyRunJsonAction(selectedRun)}>JSON 복사</Button>
                     <Link
-                      className="inline-flex items-center h-8 rounded-lg bg-emerald-500 px-3 text-[10px] font-black text-white hover:bg-emerald-600 transition-colors"
+                      className="inline-flex items-center h-8 rounded-lg bg-white px-3 text-[10px] font-black text-emerald-600 hover:bg-emerald-50 transition-colors shadow-sm"
                       href={appendProfileIdQuery(`/planning/reports/${encodeURIComponent(selectedRun.id)}`, selectedRun.profileId)}
                     >
                       상세 리포트 보기 →
@@ -974,7 +974,7 @@ export function PlanningRunsClient({
                   </div>
                 </div>
                 <a
-                  className="block w-full text-center py-3 rounded-xl bg-slate-900 text-white text-xs font-black hover:bg-slate-800 transition-colors"
+                  className="block w-full text-center py-3 rounded-xl bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98]"
                   href={`/api/planning/v2/runs/${encodeURIComponent(compareResult.other.id)}/report?compareTo=${encodeURIComponent(compareResult.base.id)}`}
                   target="_blank"
                   rel="noopener noreferrer"
