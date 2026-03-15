@@ -20,6 +20,11 @@
   - **Data Tables**: 데이터 밀도가 높은 표에서는 헤더에 `text-[10px] font-black uppercase tracking-widest text-slate-400` 스타일을 적용하고, 숫자 데이터에는 `tabular-nums`를 필수 적용합니다. 데스크톱 환경에서는 정보의 가로 비교가 유리하도록 테이블 구조를 유지합니다.
   - **Mobile Data Display**: 모바일 뷰에서는 테이블 사용을 지양하고, 카드 또는 리스트 Row 구조로 전환하여 가독성을 확보합니다. 이때 데스크톱 표와 동일한 정보 위계와 색상 강조 규칙을 유지하여 일관된 제품 언어를 제공합니다.
     - *Pattern (Trends Card)*: 상단(Title + Signal Badge), 중단(Sparkline - full width), 하단(Metrics Grid) 구조를 활용하여 좁은 화면에서도 수치와 흐름을 동시에 파악할 수 있게 합니다. (`NewsTrendsTableClient.tsx` 참고)
+    - *Pattern (List Card)*: 상단(Metadata/Tags), 중단(Primary Content), 하단(Secondary Metadata + CTA) 구조를 활용합니다. (`FeedbackListClient.tsx` 참고)
+  - **Form & Filter Density**: 
+    - 입력 요소(`input`, `select`, `textarea`)는 가급적 `h-11` 높이와 `rounded-2xl` 이상의 radius를 적용하여 현대적인 인상을 줍니다.
+    - 필터 칩(Chip)이나 배지(Badge)는 `rounded-full`을 사용하여 버튼과 시각적으로 구분합니다.
+    - 여백(Gap)은 `gap-6` (24px) 이상을 기본으로 하여 정보 간의 가독성을 확보합니다.
   - 기타: `Button`, `Card`, `Badge`, `SegmentedTabs` 등 표준 컴포넌트를 우선 사용합니다.
 
 ## 3. Design Tokens (기본 테마)

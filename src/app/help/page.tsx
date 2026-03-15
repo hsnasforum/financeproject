@@ -1,23 +1,29 @@
 import { uiTextKo } from "@/lib/uiText.ko";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Card } from "@/components/ui/Card";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 
 export default function HelpPage() {
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <h1 className="text-3xl font-semibold">{uiTextKo.help.title}</h1>
-      <p className="mt-2 text-sm text-slate-600">{uiTextKo.help.subtitle}</p>
+    <PageShell>
+      <PageHeader 
+        title={uiTextKo.help.title} 
+        description={uiTextKo.help.subtitle}
+      />
 
-      <div className="mt-8 space-y-6">
+      <div className="grid gap-6 md:grid-cols-2">
         {uiTextKo.help.sections.map((section) => (
-          <section key={section.title} className="rounded-lg border bg-white p-4">
-            <h2 className="text-lg font-semibold">{section.title}</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+          <Card key={section.title} className="rounded-[2rem] p-8 shadow-sm">
+            <SubSectionHeader title={section.title} />
+            <ul className="mt-4 list-disc space-y-3 pl-5 text-sm font-medium leading-relaxed text-slate-600">
               {section.body.map((line) => (
-                <li key={line}>{line}</li>
+                <li key={line} className="pl-1">{line}</li>
               ))}
             </ul>
-          </section>
+          </Card>
         ))}
       </div>
-    </main>
+    </PageShell>
   );
 }
