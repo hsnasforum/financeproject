@@ -518,7 +518,7 @@ export function FeedbackDetailClient({ id }: Props) {
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-lg bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white uppercase tracking-wider">{categoryLabel(item.category)}</span>
+              <span className="rounded-lg bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
               <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{item.status}</span>
               <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", priorityClassName(item.priority))}>{item.priority}</span>
               <span className="text-[11px] font-bold text-slate-400 tabular-nums">{formatDateTime(item.createdAt)}</span>
