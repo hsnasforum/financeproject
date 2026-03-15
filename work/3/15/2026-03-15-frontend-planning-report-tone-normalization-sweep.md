@@ -10,9 +10,9 @@
    - 기존의 어두운 그라디언트 배경과 강조 블록들을 밝은 `Slate 50`/`White` 기반으로 변경.
    - 핵심 지표(Hero Stats) 영역의 시각적 밀도와 가독성 보완.
 
-2. **Interpretation Guide (`InterpretationGuide.tsx`)**:
+2. **Interpretation Guide (`InterpretationGuide.tsx`, `runActionStore.ts`)**:
    - '결과 해석' 섹션의 다크 테마를 제거하고, `Card` 깊이와 에메랄드 포인트를 활용한 밝은 디자인으로 전환.
-   - 내부 데이터 모델(GoalRow vs GoalStatusRow) 간의 타입 불일치 해결.
+   - 내부 데이터 모델(`GoalRow` vs `GoalStatusRow`) 간의 타입 불일치를 `runActionStore.ts` 매핑 보정으로 최종 해결하여 빌드 안정성 확보.
 
 3. **Candidate Comparison (`CandidateComparisonSection.tsx`)**:
    - 상품 후보 비교 표의 다크 그라디언트 제거 및 필터 영역 UI 현대화.
@@ -35,11 +35,15 @@
 - **`PlanningReportDetailClient.tsx`**: 개별 리포트 상세 페이지의 레이아웃 및 톤 보정.
 - **`reportInterpretationAdapter.ts` & `PlanningWorkspaceClient.tsx`**: 컴포넌트 prop 변경에 따른 타입 매핑 로직 수정.
 - **`interpretationVm.ts`**: 내부 데이터 구조 최적화 (summaryEvidence 타입 개선).
+- **`runActionStore.ts`**: 리포트 데이터 로드 시 `GoalStatusRow` 매핑 안정화 (빌드 수정분).
 
 ## Verification Results
 - **pnpm build**: 성공 (Next.js 16.1.6 환경)
 - **pnpm lint**: 에러 없음 (기존 경고 27건 유지)
 - **TypeScript**: 모든 타입 오류 해결 확인
+
+## Remaining Risks
+- **Type Coupling**: Planning Workspace와 Report 간의 데이터 모델(GoalRow 등) 결합도가 여전히 높아, 향후 스키마 변경 시 주의가 필요함.
 
 ## Files Exclusion
 - `.data/finlife_*_snapshot.json`, `analysis_docs/**`: 데이터 스냅샷 및 분석 문서는 작업 범위 외로 제외.
