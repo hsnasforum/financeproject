@@ -2,12 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  BodyInset,
-} from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Container } from "@/components/ui/Container";
+import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SegmentedTabs } from "@/components/ui/SegmentedTabs";
 import { ProviderChips } from "@/components/ui/ProviderChips";
@@ -158,44 +155,56 @@ export default function ProductsCatalogPage() {
   }, [minRate, rows, selectedProvider, termMonths]);
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
-      <Container>
-        <PageHeader
-          title="통합 상품 탐색"
-          description="FINLIFE와 KDB 데이터를 통합한 전 금융권 상품 카탈로그입니다."
-        />
+    <PageShell>
+      <PageHeader
+        title="통합 상품 탐색"
+        description="FINLIFE와 KDB 데이터를 통합한 전 금융권 상품 카탈로그입니다."
+      />
 
-        <div className="sticky top-0 z-30 mb-8 space-y-4">
-          <Card className="rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm backdrop-blur-md bg-white/90">
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="sticky top-0 z-30 mb-10 space-y-4">
+        <Card className="rounded-[2.5rem] p-8 shadow-lg backdrop-blur-md bg-white/95 border-slate-100">
+          <div className="flex flex-col gap-8">
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">상품군 선택</p>
                 <SegmentedTabs
                   options={[
-                    { id: "deposit", label: "예금" },
-                    { id: "saving", label: "적금" },
+                    { id: "deposit", label: "정기예금" },
+                    { id: "saving", label: "정기적금" },
                   ]}
                   activeTab={kind}
                   onChange={(id) => setKind(id as "deposit" | "saving")}
                 />
-                
-                <SearchPill
-                  placeholder="은행명 또는 상품명을 검색해 보세요"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  onClear={() => setQ("")}
-                  isLoading={loading && rows.length === 0}
-                />
-                <Button variant="primary" size="md" className="rounded-full px-6" onClick={() => void run({ append: false })} disabled={loading}>
-                  {loading ? "조회 중" : "검색"}
-                </Button>
               </div>
+              
+              <div className="flex-1 min-w-[320px] space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">키워드 검색</p>
+                <div className="flex items-center gap-3">
+                  <SearchPill
+                    className="h-12 w-full rounded-2xl"
+                    placeholder="은행명 또는 상품명을 입력하세요"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    onClear={() => setQ("")}
+                    isLoading={loading && rows.length === 0}
+                  />
+                  <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-emerald-900/20" onClick={() => void run({ append: false })} disabled={loading}>
+                    {loading ? "조회 중" : "검색"}
+                  </Button>
+                </div>
+              </div>
+            </div>
 
+            <div className="space-y-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">제공 기관 필터</p>
               <ProviderChips
                 providers={providers}
                 selectedId={selectedProvider}
                 onSelect={setSelectedProvider}
               />
+            </div>
 
+            <div className="flex flex-wrap items-center gap-8 border-t border-slate-50 pt-6">
               <div className="flex flex-wrap items-center gap-6">
                 <FilterField
                   label="기간"
@@ -212,102 +221,108 @@ export default function ProductsCatalogPage() {
                   value={minRate}
                   onChange={(e) => setMinRate(e.target.value)}
                 />
-                
-                <div className="ml-auto flex items-center gap-6">
-                  <label className="flex cursor-pointer items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-                      checked={includeSamplebank}
-                      onChange={(e) => setIncludeSamplebank(e.target.checked)}
-                    />
-                    샘플 데이터 포함
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-sm font-black text-emerald-600">
-                      {filteredRows.length.toLocaleString()} <span className="text-[11px] font-bold text-slate-400">items</span>
-                    </span>
-                  </div>
+              </div>
+              
+              <div className="ml-auto flex items-center gap-8">
+                <label className="flex cursor-pointer items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded-lg border-slate-200 text-emerald-600 focus:ring-emerald-500 transition-all"
+                    checked={includeSamplebank}
+                    onChange={(e) => setIncludeSamplebank(e.target.checked)}
+                  />
+                  샘플 데이터 포함
+                </label>
+                <div className="flex items-center gap-3 rounded-2xl bg-emerald-50/50 px-4 py-2 border border-emerald-100/50">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-200" />
+                  <span className="text-sm font-black text-emerald-700">
+                    {filteredRows.length.toLocaleString()} <span className="text-[10px] font-black text-emerald-600/50 uppercase tracking-widest ml-1">results</span>
+                  </span>
                 </div>
               </div>
             </div>
-          </Card>
+          </div>
+        </Card>
+      </div>
+
+      {compareNotice && (
+        <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 text-center animate-in fade-in slide-in-from-top-2">
+          <p className="text-sm font-black text-emerald-700">{compareNotice}</p>
         </div>
+      )}
 
-        {compareNotice ? (
-          <BodyInset className="mb-6 border-emerald-100 bg-emerald-50/50 text-emerald-700">
-            {compareNotice}
-          </BodyInset>
-        ) : null}
+      {error ? (
+        <ErrorState
+          className="mb-12"
+          message={error}
+          onRetry={() => void run({ append: false })}
+          retryLabel="다시 시도"
+        />
+      ) : null}
 
-        {error ? (
-          <ErrorState
-            className="mb-8"
-            message={error}
-            onRetry={() => void run({ append: false })}
-            retryLabel="다시 시도"
-          />
-        ) : null}
-
-        <div className="space-y-4">
-          {loading && filteredRows.length === 0 ? (
-            <LoadingState description="최적의 상품 목록을 불러오고 있습니다." />
-          ) : filteredRows.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="space-y-8">
+        {loading && filteredRows.length === 0 ? (
+          <div className="py-20">
+            <LoadingState title="최적의 상품 목록을 분석하고 있습니다" />
+          </div>
+        ) : filteredRows.length > 0 ? (
+          <>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filteredRows.map((item) => (
-                <Card key={item.stableId} className="group relative overflow-hidden rounded-[2rem] border-slate-200/60 bg-white p-6 shadow-sm transition-all hover:shadow-md">
-                  <div className="flex items-start justify-between">
-                    <ProviderLogo providerName={item.providerName} className="h-12 w-12" />
-                    <div className="flex flex-wrap justify-end gap-1">
+                <Card key={item.stableId} className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100 hover:-translate-y-1">
+                  <div className="flex items-start justify-between gap-4 mb-6">
+                    <ProviderLogo providerName={item.providerName} className="h-12 w-12 rounded-2xl shadow-sm" />
+                    <div className="flex flex-wrap justify-end gap-1.5">
                       {item.badges?.slice(0, 2).map((badge) => (
-                        <span key={badge} className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                        <span key={badge} className="rounded-lg bg-emerald-50 border border-emerald-100/50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
                           {badge}
                         </span>
                       ))}
                     </div>
                   </div>
 
-                  <div className="mt-4">
-                    <p className="text-[11px] font-bold text-slate-400">{item.providerName}</p>
-                    <h2 className="mt-1 text-lg font-black text-slate-900 line-clamp-1 group-hover:text-emerald-600 transition-colors">
+                  <div className="flex-1">
+                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{item.providerName}</p>
+                    <h2 className="mt-2 text-xl font-black text-slate-900 leading-snug group-hover:text-emerald-600 transition-colors tracking-tight line-clamp-2">
                       {item.productName}
                     </h2>
                     {item.summary && (
-                      <p className="mt-2 text-sm leading-relaxed text-slate-500 line-clamp-2">
+                      <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500 line-clamp-2">
                         {item.summary}
                       </p>
                     )}
                   </div>
 
-                  <div className="mt-6 space-y-2">
+                  <div className="mt-8 space-y-2">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">대표 옵션</p>
                     {item.options?.slice(0, 2).map((option, idx) => (
-                      <div key={idx} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs">
-                        <span className="font-bold text-slate-600">{option.termMonths ? `${option.termMonths}개월` : option.saveTrm}</span>
+                      <div key={idx} className="flex items-center justify-between rounded-xl bg-slate-50/50 p-4 border border-slate-100/50">
+                        <span className="text-xs font-black text-slate-600 tabular-nums">{option.termMonths ? `${option.termMonths}개월` : option.saveTrm}</span>
                         <div className="flex items-center gap-3">
-                          <span className="text-slate-400">최고</span>
-                          <span className="text-sm font-black text-emerald-600">{formatRate(option.intrRate2)}</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MAX</span>
+                          <span className="text-base font-black text-emerald-600 tabular-nums">{formatRate(option.intrRate2)}</span>
                         </div>
                       </div>
                     ))}
                     {item.options && item.options.length > 2 && (
-                      <p className="text-center text-[10px] font-bold text-slate-400">+{item.options.length - 2}개의 옵션 더 있음</p>
+                      <p className="text-center text-[10px] font-black text-slate-300 uppercase tracking-widest pt-1">+{item.options.length - 2} more options</p>
                     )}
                   </div>
 
-                  <div className="mt-6 flex gap-2">
+                  <div className="mt-10 flex gap-3">
                     <Link
                       href={`/products/catalog/${encodeURIComponent(item.stableId)}`}
-                      className="flex-1 rounded-2xl bg-slate-100 py-3 text-center text-xs font-bold text-slate-700 transition hover:bg-slate-200"
+                      className="flex-1 rounded-2xl bg-slate-900 py-4 text-center text-xs font-black text-white shadow-lg transition-all hover:bg-slate-800 active:scale-95"
                     >
                       상세 보기
                     </Link>
                     <Button
-                      variant="primary"
-                      className="flex-1 rounded-2xl"
+                      variant="outline"
+                      className="flex-1 rounded-2xl h-12 font-black border-slate-200"
                       onClick={() => {
                         const next = addCompareIdToStorage(item.stableId, compareStoreConfig.max);
                         setCompareNotice(`비교함에 담았습니다. (${next.length}/${compareStoreConfig.max})`);
+                        setTimeout(() => setCompareNotice(""), 3000);
                       }}
                     >
                       비교 담기
@@ -316,10 +331,12 @@ export default function ProductsCatalogPage() {
                 </Card>
               ))}
             </div>
-          ) : !loading && !error ? (
+          </>
+        ) : !loading && !error ? (
+          <div className="py-20">
             <EmptyState
               title="검색 결과가 없습니다"
-              description="필터 조건을 조정하거나 다른 검색어를 입력해 보세요."
+              description="필터 조건을 완화하거나 다른 검색어를 입력해 보세요."
               actionLabel="필터 초기화"
               onAction={() => {
                 setTermMonths("");
@@ -328,22 +345,21 @@ export default function ProductsCatalogPage() {
                 setSelectedProvider("all");
               }}
             />
-          ) : null}
-        </div>
-
-        {hasMore && !loading && (
-          <div className="mt-12 flex justify-center">
-            <Button
-              variant="outline"
-              size="lg"
-              className="rounded-full px-12"
-              onClick={() => void run({ append: true, cursor: nextCursor })}
-            >
-              더 많은 상품 보기
-            </Button>
           </div>
-        )}
-      </Container>
-    </main>
+        ) : null}
+      </div>
+
+      {hasMore && !loading && (
+        <div className="mt-16 flex justify-center pb-12">
+          <Button
+            variant="outline"
+            className="rounded-2xl h-14 px-16 font-black shadow-sm transition-all hover:bg-white active:scale-95"
+            onClick={() => void run({ append: true, cursor: nextCursor })}
+          >
+            더 많은 상품 불러오기
+          </Button>
+        </div>
+      )}
+    </PageShell>
   );
 }
