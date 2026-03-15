@@ -56,6 +56,9 @@
   - **FilterSelect**: `rounded-full` 또는 `rounded-2xl` 컨테이너 내부에 라벨과 Select 요소를 배치합니다. 수평/수직 배치 및 에러 상태 표현을 지원합니다.
   - **FilterWrapper**: 여러 필터 요소를 일관된 간격(`gap-4`)으로 정렬하는 표준 컨테이너입니다.
   - **FilterChips**: 가급적 칩(Chip) 형태의 `rounded-full` 컨테이너를 사용하여 선택된 상태를 명확히 표시합니다. `src/components/ui/FilterChips.tsx`를 활용합니다.
+- **Calculators & Visualizations**:
+  - **Ratio Progress Bar**: 수치의 임계값(Threshold)에 따라 색상(Emerald/Amber/Rose)을 가변적으로 적용하여 위험도를 직관적으로 표현합니다.
+  - **Stacked Bar**: 전체(Total) 대비 각 항목의 점유율을 한 줄의 막대에 겹쳐서 표시하며, 하단에 범례(Legend)를 함께 제공하여 비전문가의 이해를 돕습니다. (`HousingAffordClient.tsx` 참고)
 - **공통 상태 분리**:
   - `Loading`: 레이아웃이 크게 흔들리지 않도록 스켈레톤 또는 자리표시자 형태로 먼저 보여줍니다.
   - `Empty`: 비어 있는 이유를 짧게 설명하고, 기본 CTA 1개를 반드시 둡니다.
