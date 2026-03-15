@@ -63,6 +63,9 @@
   - **Danger Zone**: 시스템 상태에 영구적인 변화를 주는 위험 작업(RESET, 삭제 등)은 Rose 톤의 카드 배경(`bg-rose-50/20`) 또는 경계선을 사용하여 시각적으로 강력하게 격리합니다.
   - **Safety Confirmation**: 위험 작업 실행 전 반드시 'RESET'과 같은 명확한 키워드 입력을 통한 2단계 확인 절차를 거치도록 설계합니다. (`RecoveryClient.tsx` 참고)
   - **Status Strip**: 여러 데이터 소스나 단계별 상태를 요약하여 보여줄 때, 상단에 슬림한 가로형 카드를 배치하여 현재 정합성을 한눈에 파악하게 합니다. (`Gov24Client.tsx`, `data-sources/page.tsx` 참고)
+- **Entry Surfaces (Home & Dashboard)**:
+  - **Hero Layout**: 홈 화면 상단은 `bg-slate-100` 배경과 `emerald-600` 기반의 강력한 Primary CTA를 배치하여 첫인상을 세련되게 전달합니다.
+  - **Portal Consistency**: 대시보드와 홈 포털 카드는 `bg-slate-50`과 `White` 서피스를 교차 활용하여 정보 밀도를 유지하면서도 쾌적한 여백을 제공합니다. 모든 진입 카드에는 `rounded-[2rem]` 또는 `rounded-[2.5rem]`을 적용합니다.
 - **공통 상태 분리**:  - `Loading`: 레이아웃이 크게 흔들리지 않도록 스켈레톤 또는 자리표시자 형태로 먼저 보여줍니다.
   - `Empty`: 비어 있는 이유를 짧게 설명하고, 기본 CTA 1개를 반드시 둡니다.
   - `Empty` 기본 CTA는 현재 화면의 핵심 흐름을 가장 직접 이어 주는 액션을 우선합니다. 우선순위는 `필터 초기화` -> `첫 작업 시작` -> `이전 단계로 이동`입니다.

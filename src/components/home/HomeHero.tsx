@@ -87,11 +87,11 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
   const theme = THEME_MAP[activeSlide.theme];
 
   return (
-    <section className="border-b border-slate-200 bg-[#dcecf8]">
+    <section className="border-b border-slate-200 bg-slate-100">
       <Container className="px-4 py-14 sm:px-6 md:py-20 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="max-w-2xl">
-            <p className="text-sm font-bold text-slate-500">금융을 넘어 생활 자산까지 한 번에</p>
+            <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">Better Decisions, Financial Wellness</p>
             <h1 className="mt-5 text-[2.75rem] font-black leading-[1.12] tracking-[-0.04em] text-slate-950 md:text-[4.4rem]">
               한눈에 비교하고
               <br />
@@ -99,23 +99,23 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
               <br />
               바로 움직이는 MMD
             </h1>
-            <p className="mt-5 max-w-lg text-lg leading-8 text-slate-700">
+            <p className="mt-5 max-w-lg text-lg font-medium leading-relaxed text-slate-600">
               플래닝, 추천, 리포트를 한 흐름으로 묶어 지금 필요한 선택만 바로 보여줍니다.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-10 flex flex-wrap gap-3">
               <Link
-                className="inline-flex h-14 items-center rounded-xl bg-[#4f8ef7] px-7 text-base font-extrabold text-white shadow-[0_14px_30px_rgba(79,142,247,0.28)] transition-transform hover:-translate-y-0.5"
+                className="inline-flex h-14 items-center rounded-2xl bg-emerald-600 px-8 text-base font-black text-white shadow-xl shadow-emerald-200 transition-all hover:bg-emerald-700 hover:-translate-y-0.5 active:scale-95"
                 href="/planning"
                 prefetch={devPlanningPrefetch("/planning")}
               >
-                플래닝 바로가기
+                플래닝 시작하기
               </Link>
               <Link
-                className="inline-flex h-14 items-center rounded-xl bg-[#5b95ee] px-7 text-base font-extrabold text-white shadow-[0_14px_30px_rgba(91,149,238,0.2)] transition-transform hover:-translate-y-0.5"
-                href="/products/saving"
+                className="inline-flex h-14 items-center rounded-2xl bg-slate-900 px-8 text-base font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-800 hover:-translate-y-0.5 active:scale-95"
+                href="/products/catalog"
               >
-                예적금 보러가기
+                전체 상품 보기
               </Link>
             </div>
           </div>

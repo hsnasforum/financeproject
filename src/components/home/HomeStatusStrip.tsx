@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/Container";
+import { cn } from "@/lib/utils";
 
 interface StatusProps {
   configured: number;
@@ -14,28 +15,44 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
   return (
     <section className="py-14">
       <Container className="px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-[32px] bg-white p-8 shadow-sm">
-            <p className="text-sm font-bold text-slate-400">MMD 준비 상태</p>
-            <h3 className="mt-3 text-[2rem] font-black tracking-[-0.04em] text-slate-950">지금 바로 비교할 준비가 됐는지 확인합니다.</h3>
-            <p className={`mt-4 text-sm font-extrabold ${readinessTone}`}>{readiness}</p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-[2.5rem] bg-white p-10 shadow-sm border border-slate-100">
+            <p className="text-sm font-black uppercase tracking-widest text-slate-400">MMD Ready Status</p>
+            <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-900">지금 바로 비교할 준비가 됐는지 확인합니다.</h3>
+            <div className="mt-4 flex items-center gap-2">
+              <span className={cn("w-2 h-2 rounded-full", status.p0Missing > 0 ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
+              <p className={`text-sm font-black uppercase tracking-widest ${readinessTone}`}>{readiness}</p>
+            </div>
+            
+            <div className="mt-10 grid gap-4 sm:grid-cols-3">
               <StatusBox label="연결됨" value={status.configured} />
               <StatusBox label="전체" value={status.total} />
               <StatusBox label="추가 설정" value={status.p0Missing} warning={status.p0Missing > 0} />
             </div>
-            <Link className="mt-8 inline-flex text-sm font-bold text-[#4f8ef7]" href="/settings/data-sources">
-              연결 설정 보기
-            </Link>
+            
+            <div className="mt-10 pt-8 border-t border-slate-50 flex justify-end">
+              <Link className="inline-flex h-11 items-center rounded-xl bg-slate-900 px-6 text-sm font-black text-white shadow-md transition-all hover:bg-slate-800" href="/settings/data-sources">
+                연결 설정 및 진단 보기
+              </Link>
+            </div>
           </div>
 
-          <div className="rounded-[32px] bg-[#111827] p-8 text-white">
-            <p className="text-sm font-bold text-slate-300">MMD 핵심 흐름</p>
-            <h3 className="mt-3 text-[2rem] font-black tracking-[-0.04em]">플랜부터 혜택까지 한 흐름으로</h3>
-            <ul className="mt-6 space-y-3 text-sm leading-7 text-slate-300">
-              <li>플래닝 저장 후 공식 리포트로 바로 연결</li>
-              <li>리포트에서 추천 상품과 혜택 후보를 이어서 확인</li>
-              <li>실행 기록에서 저장된 run 흐름을 다시 점검</li>
+          <div className="rounded-[2.5rem] bg-slate-900 p-10 text-white shadow-2xl shadow-slate-200">
+            <p className="text-sm font-black uppercase tracking-widest text-white/30">MMD Core Flow</p>
+            <h3 className="mt-6 text-3xl font-black tracking-tight">플랜부터 혜택까지 한 흐름으로</h3>
+            <ul className="mt-8 space-y-4 text-sm font-medium leading-relaxed text-slate-400">
+              <li className="flex items-start gap-3">
+                <span className="text-emerald-400 font-black">01</span>
+                <span>플래닝 저장 후 공식 리포트로 바로 연결</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-emerald-400 font-black">02</span>
+                <span>리포트에서 추천 상품과 혜택 후보를 이어서 확인</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <span className="text-emerald-400 font-black">03</span>
+                <span>실행 기록에서 저장된 run 흐름을 다시 점검</span>
+              </li>
             </ul>
           </div>
         </div>
@@ -46,9 +63,9 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
 
 function StatusBox(props: { label: string; value: number; warning?: boolean }) {
   return (
-    <div className="rounded-[24px] bg-[#f7f8fb] p-5">
-      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{props.label}</p>
-      <p className={`mt-3 text-4xl font-black tracking-[-0.05em] ${props.warning ? "text-amber-600" : "text-slate-950"}`}>
+    <div className="rounded-[2rem] bg-slate-50 p-6 border border-slate-100/50">
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{props.label}</p>
+      <p className={`mt-4 text-4xl font-black tracking-tight tabular-nums ${props.warning ? "text-rose-600" : "text-slate-900"}`}>
         {props.value}
       </p>
     </div>
