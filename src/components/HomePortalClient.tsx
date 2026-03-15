@@ -198,7 +198,7 @@ export function HomePortalClient({
               <p className="text-lg font-black text-slate-900">아직 저장된 실행 기록이 없습니다.</p>
               <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">첫 플래닝 실행을 저장하면 이 영역에서 바로 리포트를 이어서 볼 수 있습니다.</p>
               <Link
-                className="mt-10 inline-flex h-12 items-center rounded-2xl bg-slate-900 px-10 text-sm font-black text-white shadow-xl shadow-slate-200 transition-all hover:bg-slate-800 active:scale-95"
+                className="mt-10 inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-10 text-sm font-black text-white shadow-xl shadow-emerald-900/20 transition-all hover:bg-emerald-700 active:scale-95"
                 href="/planning"
                 prefetch={devPlanningPrefetch("/planning")}
               >
