@@ -497,7 +497,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                         key={trait}
                         type="button"
                         onClick={() => toggleTrait(personalTraits, trait, setPersonalTraits)}
-                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", personalTraits.includes(trait) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
+                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", personalTraits.includes(trait) ? "bg-emerald-600 text-white border-emerald-600 shadow-emerald-900/10" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
                       >
                         {trait}
                       </button>
@@ -515,7 +515,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                         key={trait}
                         type="button"
                         onClick={() => toggleTrait(householdTraits, trait, setHouseholdTraits)}
-                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", householdTraits.includes(trait) ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
+                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", householdTraits.includes(trait) ? "bg-emerald-600 text-white border-emerald-600 shadow-emerald-900/10" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
                       >
                         {trait}
                       </button>
@@ -605,7 +605,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                       <Card key={item.id} className="rounded-[2rem] p-6 lg:p-8 shadow-sm hover:border-emerald-200 transition-all group">
                         <div className="flex flex-wrap items-center gap-3 mb-3">
                           {item.card?.badge && (
-                            <span className="rounded-lg bg-slate-900 px-2.5 py-1 text-[10px] font-black text-white uppercase tracking-wider">{item.card.badge}</span>
+                            <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600 uppercase tracking-wider">{item.card.badge}</span>
                           )}
                           {item.card?.department && (
                             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">관할: {item.card.department}</span>
