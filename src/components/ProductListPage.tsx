@@ -502,7 +502,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
         <FallbackBanner fallback={payload?.meta?.fallback} className="mt-3" />
 
         {snapshotStatus ? (
-          <BodyInset className="mb-4 text-xs text-slate-700">
+          <BodyInset className="mb-4 text-xs text-slate-700 bg-white">
             <p className="font-semibold">{snapshotStatus.text}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {snapshotStatus.hasNarrowGroup ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">업권 범위가 1개입니다. 데이터 점검 실행을 권장합니다.</span> : null}
