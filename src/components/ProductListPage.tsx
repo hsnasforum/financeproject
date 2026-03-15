@@ -32,16 +32,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
 import { type FreshnessSourceSpec } from "@/components/data/freshness";
 import { FallbackBanner } from "@/components/FallbackBanner";
-import {
-  BodyActionLink,
-  BodyInset,
-  BodyStatusInset,
-  BodyTableFrame,
-  bodyChoiceRowClassName,
-  bodyDenseActionRowClassName,
-  bodyFieldClassName,
-  bodyLabelClassName,
-} from "@/components/ui/BodyTone";
+import { Card } from "@/components/ui/Card";
 import {
   ensureProductReasons,
   filterProductsForList,
@@ -56,6 +47,8 @@ import {
   toggleFavorite,
   type ProductShelfState,
 } from "@/lib/state/productShelf";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 type Props = {
   kind: FinlifeKind;
@@ -119,25 +112,25 @@ function GroupedOptionMobileItem({ row }: { row: OptionRow }) {
   const term = row.option.save_trm ? `${row.option.save_trm}개월` : "기간 정보 없음";
 
   return (
-    <div className="rounded-3xl border border-slate-200/80 bg-slate-50/80 p-4 shadow-sm">
+    <div className="rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-slate-500">만기 기간</p>
-          <p className="mt-1 text-sm font-bold text-slate-900">{term}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">만기 기간</p>
+          <p className="mt-1 text-sm font-black text-slate-900">{term}</p>
         </div>
         <div className="text-right">
-          <p className="text-[11px] font-semibold text-slate-500">최고 금리</p>
-          <p className="mt-1 text-lg font-black tabular-nums text-primary">{formatOptionRate(rates.best)}</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">최고 금리</p>
+          <p className="mt-1 text-lg font-black tabular-nums text-emerald-600">{formatOptionRate(rates.best)}</p>
         </div>
       </div>
-      <div className="mt-4 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
-        <div className="rounded-2xl bg-white px-3 py-2 shadow-sm">
-          <p className="font-semibold text-slate-500">기본 금리</p>
-          <p className="mt-1 tabular-nums text-slate-900">{formatOptionRate(rates.base)}</p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-slate-50 p-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">기본 금리</p>
+          <p className="mt-1 text-xs font-bold tabular-nums text-slate-700">{formatOptionRate(rates.base)}</p>
         </div>
-        <div className="rounded-2xl bg-white px-3 py-2 shadow-sm">
-          <p className="font-semibold text-slate-500">우대 폭</p>
-          <p className="mt-1 tabular-nums text-slate-900">{formatOptionBonus(rates.bonus)}</p>
+        <div className="rounded-xl bg-emerald-50/50 p-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/50">우대 폭</p>
+          <p className="mt-1 text-xs font-bold tabular-nums text-emerald-700">{formatOptionBonus(rates.bonus)}</p>
         </div>
       </div>
     </div>
@@ -493,26 +486,32 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   }, [kind]);
 
   return (
-    <PageShell className="py-6 md:py-10 bg-slate-50">
-        <PageHeader 
-          title={title} 
-          description="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
-        />
-        <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
-        <FallbackBanner fallback={payload?.meta?.fallback} className="mt-3" />
+    <PageShell>
+      <PageHeader 
+        title={title} 
+        description="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
+      />
+      <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
+      <FallbackBanner fallback={payload?.meta?.fallback} className="mb-4" />
 
-        {snapshotStatus ? (
-          <BodyInset className="mb-4 text-xs text-slate-700 bg-white">
-            <p className="font-semibold">{snapshotStatus.text}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {snapshotStatus.hasNarrowGroup ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">업권 범위가 1개입니다. 데이터 점검 실행을 권장합니다.</span> : null}
-              {snapshotStatus.hasIncomplete ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">미완주(하드캡/완주율)</span> : null}
-              {snapshotStatus.isMock ? <span className="rounded-full bg-red-100 px-2 py-0.5 text-red-700">MOCK 데이터(실 API 실패)</span> : null}
-              {snapshotStatus.note ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{snapshotStatus.note}</span> : null}
+      {snapshotStatus ? (
+        <Card className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{snapshotStatus.text}</p>
+          </div>
+          {(snapshotStatus.hasNarrowGroup || snapshotStatus.hasIncomplete || snapshotStatus.isMock || snapshotStatus.note) && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {snapshotStatus.hasNarrowGroup ? <span className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 border border-amber-100">업권 범위 좁음</span> : null}
+              {snapshotStatus.hasIncomplete ? <span className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 border border-amber-100">미완주 스캔</span> : null}
+              {snapshotStatus.isMock ? <span className="rounded-lg bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700 border border-rose-100">MOCK 데이터</span> : null}
+              {snapshotStatus.note ? <span className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-500 border border-slate-100">{snapshotStatus.note}</span> : null}
             </div>
-          </BodyInset>
-        ) : null}
+          )}
+        </Card>
+      ) : null}
 
+      <div className="space-y-10">
         <ProductExplorerHeaderCard
           selectedProviderId={topFinGrpNo}
           onProviderSelect={(id) => {
@@ -565,24 +564,24 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
           onOptionGroupChange={setOptionGroup}
         />
 
-        <BodyInset className="mb-4 bg-white">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
-            <label className={`text-xs ${bodyLabelClassName}`}>
-              검색
+        <Card className="rounded-[2.5rem] p-8 shadow-sm border-slate-100 bg-white">
+          <div className="grid gap-6 md:grid-cols-4 items-end mb-8">
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">상세 검색</label>
               <input
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);
                   setPageNo(1);
                 }}
-                placeholder="은행명 또는 상품명"
-                className={bodyFieldClassName}
+                placeholder="은행명 또는 상품명을 입력하세요"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
               />
-            </label>
-            <label className={`text-xs ${bodyLabelClassName}`}>
-              정렬
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">정렬</label>
               <select
-                className={bodyFieldClassName}
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-700 outline-none cursor-pointer transition-all focus:border-emerald-500 focus:bg-white"
                 value={sortKey}
                 onChange={(event) => setSortKey(event.target.value as SortKey)}
               >
@@ -592,9 +591,9 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                 <option value="termAsc">기간 짧은 순</option>
                 <option value="nameAsc">상품명 순</option>
               </select>
-            </label>
-            <label className="flex items-end">
-              <span className={`${bodyChoiceRowClassName} inline-flex h-10 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-3 shadow-sm transition-colors hover:bg-white`}>
+            </div>
+            <div className="flex gap-2">
+              <label className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 transition-all hover:bg-white px-4">
                 <input
                   type="checkbox"
                   checked={onlyFavorites}
@@ -602,23 +601,19 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                     setOnlyFavorites(event.target.checked);
                     setPageNo(1);
                   }}
-                  className="rounded border-border text-primary focus:ring-primary"
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
                 />
-                즐겨찾기만
-              </span>
-            </label>
-            <div className="flex items-end">
-              <BodyActionLink
+                <span className="text-xs font-black text-slate-600">즐겨찾기</span>
+              </label>
+              <Link
                 href="/products/compare"
-                className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 no-underline shadow-sm transition-colors hover:bg-white"
+                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg transition-all hover:bg-slate-800 active:scale-95 px-4"
               >
-                비교함 {compareCount}/{productShelfConfig.maxCompareBasket}
-              </BodyActionLink>
+                <span className="text-xs font-black">비교함 {compareCount}</span>
+              </Link>
             </div>
           </div>
-        </BodyInset>
 
-        <div className="rounded-3xl bg-surface px-6 shadow-card transition-shadow">
           <ProductResultsHeader
             viewMode={viewMode}
             shownProducts={totals.shownProducts}
@@ -634,41 +629,39 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
             pagesFetched={payload?.meta.pagesFetched}
             truncatedByMaxPages={payload?.meta.truncatedByMaxPages}
             mode={payload?.mode}
-            showSortControl={viewMode === "product"}
+            showSortControl={false}
           />
 
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-50 mt-4">
             {loading ? (
               Array.from({ length: 5 }).map((_, idx) => (
-                <div key={`loading-${idx}`} className="flex items-center gap-4 py-6 px-4">
-                  <Skeleton className="h-12 w-12 rounded-full bg-slate-100" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-4 w-1/4 bg-slate-100 rounded-lg" />
-                    <Skeleton className="h-5 w-3/4 bg-slate-100 rounded-lg" />
+                <div key={`loading-${idx}`} className="flex items-center gap-6 py-8 px-4">
+                  <Skeleton className="h-14 w-14 rounded-2xl bg-slate-100" />
+                  <div className="flex-1 space-y-3">
+                    <Skeleton className="h-4 w-1/4 bg-slate-100 rounded-full" />
+                    <Skeleton className="h-6 w-3/4 bg-slate-100 rounded-full" />
                   </div>
-                  <Skeleton className="h-10 w-24 rounded-2xl bg-slate-100" />
+                  <Skeleton className="h-12 w-28 rounded-2xl bg-slate-100" />
                 </div>
               ))
             ) : error ? (
-              <BodyStatusInset className="mx-auto my-12 max-w-2xl text-center" tone="danger">
-                <p className="text-base font-bold text-slate-900">데이터를 불러오지 못했어요</p>
-                <p className="mt-1 text-sm">{error}</p>
-                {error.includes("동기화 필요") || error.includes("SNAPSHOT") ? (
-                  <p className="mt-2 text-xs text-amber-700">동기화 필요: `pnpm finlife:sync` 실행 후 다시 시도하세요.</p>
-                ) : null}
-                <Button className="mt-6" onClick={() => router.refresh()}>
+              <div className="mx-auto my-20 max-w-md text-center py-10 rounded-[2.5rem] bg-rose-50 border border-rose-100">
+                <p className="text-lg font-black text-rose-900">데이터 오류</p>
+                <p className="mt-2 text-sm font-medium text-rose-700/70 leading-relaxed">{error}</p>
+                <Button className="mt-8 rounded-2xl px-10 h-12 font-black shadow-lg shadow-rose-900/20" variant="primary" onClick={() => router.refresh()}>
                   다시 시도하기
                 </Button>
-              </BodyStatusInset>
+              </div>
             ) : ((viewMode === "product" ? enrichedProducts.length : optionRows.length) === 0) ? (
-              <EmptyState
-                title="검색 결과가 없습니다"
-                description="다른 검색어나 필터를 조정하여 당신에게 꼭 맞는 상품을 찾아보세요."
-                icon="search"
-                actionLabel="필터 초기화"
-                onAction={resetFilters}
-                className="my-12"
-              />
+              <div className="py-20">
+                <EmptyState
+                  title="검색 결과가 없습니다"
+                  description="다른 검색어나 필터를 조정하여 당신에게 꼭 맞는 상품을 찾아보세요."
+                  icon="search"
+                  actionLabel="필터 초기화"
+                  onAction={resetFilters}
+                />
+              </div>
             ) : (
               viewMode === "product"
                 ? enrichedProducts.map((item: NormalizedProduct, index) => {
@@ -700,16 +693,16 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                     const summaryTerm = group.representativeRow.option.save_trm ? `${group.representativeRow.option.save_trm}개월` : "기간 정보 없음";
                     const open = !!openGroups[groupKey];
                     return (
-                      <div key={groupKey} className="py-4">
-                        <BodyInset className="bg-white">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex min-w-0 items-start gap-3">
-                              <ProviderLogo providerKey={group.product.fin_co_no} providerName={group.product.kor_co_nm ?? "-"} size={40} />
+                      <div key={groupKey} className="py-6">
+                        <Card className={cn("overflow-hidden border border-slate-100 transition-all", open ? "shadow-md" : "shadow-sm")}>
+                          <div className="flex items-start justify-between gap-4 p-6 bg-slate-50/30">
+                            <div className="flex min-w-0 items-start gap-4">
+                              <ProviderLogo providerKey={group.product.fin_co_no} providerName={group.product.kor_co_nm ?? "-"} size={48} className="rounded-2xl shadow-sm" />
                               <div className="min-w-0">
-                                <p className="text-xs text-slate-500">{group.product.kor_co_nm ?? "-"}</p>
-                                <h3 className="truncate text-sm font-bold text-slate-900">{group.product.fin_prdt_nm ?? "-"}</h3>
-                                <p className="mt-1 text-xs text-slate-600">
-                                  {summaryTerm} · 최고 {formatOptionRate(rep.best)} (기본 {formatOptionRate(rep.base)}) · 우대 {formatOptionBonus(rep.bonus)}
+                                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{group.product.kor_co_nm ?? "-"}</p>
+                                <h3 className="truncate text-base font-black text-slate-900 tracking-tight">{group.product.fin_prdt_nm ?? "-"}</h3>
+                                <p className="mt-1 text-[11px] font-bold text-slate-500">
+                                  {summaryTerm} · 최고 <span className="text-emerald-600">{formatOptionRate(rep.best)}</span> (기본 {formatOptionRate(rep.base)})
                                 </p>
                               </div>
                             </div>
@@ -720,55 +713,48 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                                 event.stopPropagation();
                                 setOpenGroups((prev) => toggleOpen(prev, groupKey));
                               }}
-                              aria-expanded={open}
-                              data-testid="finlife-group-toggle"
-                              data-group-key={groupKey}
-                              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-white"
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] font-black text-slate-600 transition-all hover:border-emerald-200 hover:text-emerald-600"
                             >
-                              {open ? "접기" : "펼치기"}
+                              {open ? "옵션 접기" : "옵션 보기"}
                             </button>
                           </div>
 
-                          {open ? (
-                            <>
-                              <div className="mt-3 space-y-3 md:hidden" data-group-key={groupKey}>
+                          {open && (
+                            <div className="border-t border-slate-100 p-6 bg-white animate-in slide-in-from-top-2 duration-300">
+                              <div className="space-y-3 md:hidden">
                                 {group.rows.map((row) => (
                                   <GroupedOptionMobileItem key={row.key} row={row} />
                                 ))}
                               </div>
-                              <BodyTableFrame
-                                className="mt-3 hidden bg-white md:block"
-                                data-testid="finlife-group-table"
-                                data-group-key={groupKey}
-                              >
+                              <div className="hidden overflow-hidden rounded-2xl border border-slate-100 md:block">
                                 <table className="min-w-full text-xs">
-                                  <thead className="bg-slate-50 text-slate-500">
+                                  <thead className="bg-slate-50 text-slate-400">
                                     <tr>
-                                      <th className="px-3 py-2 text-left font-semibold">기간(개월)</th>
-                                      <th className="px-3 py-2 text-right font-semibold">기본 금리</th>
-                                      <th className="px-3 py-2 text-right font-semibold">최고 금리(조건 충족 시)</th>
-                                      <th className="px-3 py-2 text-right font-semibold">우대폭</th>
+                                      <th className="px-4 py-3 text-left font-black uppercase tracking-widest">기간(개월)</th>
+                                      <th className="px-4 py-3 text-right font-black uppercase tracking-widest">기본 금리</th>
+                                      <th className="px-4 py-3 text-right font-black uppercase tracking-widest">최고 금리</th>
+                                      <th className="px-4 py-3 text-right font-black uppercase tracking-widest">우대폭</th>
                                     </tr>
                                   </thead>
-                                  <tbody>
+                                  <tbody className="divide-y divide-slate-50">
                                     {group.rows.map((row) => {
                                       const rates = getOptionRates(row.option);
                                       const term = row.option.save_trm ?? "-";
                                       return (
-                                        <tr key={row.key} className="border-t border-slate-100 text-slate-700">
-                                          <td className="px-3 py-2">{term}</td>
-                                          <td className="px-3 py-2 text-right tabular-nums">{formatOptionRate(rates.base)}</td>
-                                          <td className="px-3 py-2 text-right tabular-nums font-bold text-primary">{formatOptionRate(rates.best)}</td>
-                                          <td className="px-3 py-2 text-right tabular-nums">{formatOptionBonus(rates.bonus)}</td>
+                                        <tr key={row.key} className="text-slate-700 hover:bg-slate-50 transition-colors">
+                                          <td className="px-4 py-3 font-black">{term}</td>
+                                          <td className="px-4 py-3 text-right tabular-nums font-bold">{formatOptionRate(rates.base)}</td>
+                                          <td className="px-4 py-3 text-right tabular-nums font-black text-emerald-600">{formatOptionRate(rates.best)}</td>
+                                          <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-400">{formatOptionBonus(rates.bonus)}</td>
                                         </tr>
                                       );
                                     })}
                                   </tbody>
                                 </table>
-                              </BodyTableFrame>
-                            </>
-                          ) : null}
-                        </BodyInset>
+                              </div>
+                            </div>
+                          )}
+                        </Card>
                       </div>
                     );
                   })
@@ -779,7 +765,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
           </div>
 
           {!loading && !error && (viewMode === "product" ? enrichedProducts.length > 0 : optionRows.length > 0) && scanMode === "page" && (
-            <div className={`${bodyDenseActionRowClassName} justify-center border-t border-border/50 py-8`}>
+            <div className="flex items-center justify-center gap-6 border-t border-slate-100 py-12 mt-8">
               <Button
                 variant="outline"
                 size="sm"
@@ -788,11 +774,13 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 disabled={pageNo <= 1}
-                className="rounded-full px-6"
+                className="rounded-2xl h-12 px-8 font-black"
               >
-                이전
+                이전 페이지
               </Button>
-              <span className="text-sm font-bold text-slate-900">{payload?.meta.nowPage ?? pageNo}</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-sm font-black text-white shadow-md">
+                {payload?.meta.nowPage ?? pageNo}
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -801,13 +789,14 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 disabled={!hasNext}
-                className="rounded-full px-6"
+                className="rounded-2xl h-12 px-8 font-black"
               >
-                다음
+                다음 페이지
               </Button>
             </div>
           )}
-        </div>
+        </Card>
+      </div>
     </PageShell>
   );
 }
