@@ -239,7 +239,7 @@ export function FeedbackListClient() {
                         className={cn(
                           "rounded-full px-3 py-1.5 text-xs font-black transition-all shadow-sm",
                           status === entry
-                            ? "bg-slate-900 text-white"
+                            ? "bg-emerald-600 text-white shadow-emerald-900/10"
                             : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
                         )}
                       >
