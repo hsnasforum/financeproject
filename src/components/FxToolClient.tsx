@@ -97,7 +97,7 @@ export function FxToolClient() {
             
             {rows.length === 0 ? (
               <div className="py-20 text-center">
-                <p className="text-sm font-black text-slate-300 uppercase tracking-[0.2em]">Ready to Calculate</p>
+                <p className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Ready to Calculate</p>
               </div>
             ) : (
               <div className="mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -119,13 +119,13 @@ export function FxToolClient() {
                   ))}
                 </div>
 
-                <div className="rounded-3xl bg-slate-900 p-8 shadow-xl shadow-slate-200">
+                <div className="rounded-3xl bg-emerald-600 p-8 shadow-xl shadow-emerald-900/20 text-white">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Total Estimate</p>
-                      <p className="text-sm font-black text-white/60">원화 환산 합계</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">Total Estimate</p>
+                      <p className="text-sm font-black text-white">원화 환산 합계</p>
                     </div>
-                    <p className="text-3xl font-black text-emerald-400 tabular-nums tracking-tight">
+                    <p className="text-3xl font-black tabular-nums tracking-tight">
                       {formatKrwWithEok(totalKrw)}
                     </p>
                   </div>
