@@ -9,6 +9,7 @@ type SubSectionHeaderProps = {
   action?: ReactNode;
   className?: string;
   titleClassName?: string;
+  descriptionClassName?: string;
 };
 
 /**
@@ -21,7 +22,8 @@ export function SubSectionHeader({
   description, 
   action, 
   className,
-  titleClassName 
+  titleClassName,
+  descriptionClassName
 }: SubSectionHeaderProps) {
   return (
     <div className={cn("flex flex-wrap items-center justify-between gap-3 mb-4", className)}>
@@ -30,7 +32,7 @@ export function SubSectionHeader({
           {title}
         </h3>
         {description && (
-          <div className="mt-1 text-sm text-slate-500 font-medium leading-relaxed">
+          <div className={cn("mt-1 text-sm text-slate-500 font-medium leading-relaxed", descriptionClassName)}>
             {description}
           </div>
         )}

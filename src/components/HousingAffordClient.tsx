@@ -6,15 +6,16 @@ import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { NumberField } from "@/components/forms/NumberField";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
 import { issuesToFieldMap } from "@/lib/forms/issueMap";
 import { housingBurden } from "@/lib/housing/afford";
 import { parseHousingAfford, type HousingAffordMode } from "@/lib/schemas/housingAfford";
+import { cn } from "@/lib/utils";
 
 const ERROR_SUMMARY_ID = "housing_afford_error_summary";
 
@@ -158,20 +159,29 @@ export function HousingAffordClient({
     return links;
   }, [mode, result.housingRatioPct, result.residualCashFlow]);
 
-  return (
-    <main className="py-8">
-      <Container>
-        <SectionHeader title="주거비 부담 계산기" subtitle="전월세/매매 조건별 월 주거비와 잔여현금흐름을 즉시 계산합니다." />
+  const incomeVal = Number(incomeNetInput) || 1;
+  const otherOutflowVal = Number(outflowInput) || 0;
+  const housingCostVal = result.monthlyHousingCost || 0;
 
-        <Card>
-          <ErrorSummary issues={parsedInput.issues} id={ERROR_SUMMARY_ID} className="mb-3" />
+  return (
+    <PageShell>
+      <PageHeader
+        title="주거비 부담 계산기"
+        description="전월세/매매 조건별 월 주거비와 잔여현금흐름을 즉시 계산합니다."
+      />
+
+      <div className="space-y-6">
+        <Card className="rounded-[2rem] p-8 shadow-sm">
+          <SubSectionHeader title="기본 정보 및 소득" description="월 소득과 고정 지출을 입력하세요." />
+          <ErrorSummary issues={parsedInput.issues} id={ERROR_SUMMARY_ID} className="mt-4" />
           <ErrorAnnouncer />
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="text-sm">
-              계산 모드
+          
+          <div className="mt-6 grid gap-6 md:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">계산 모드</label>
               <select
                 id={pathToId("mode")}
-                className="mt-1 h-10 w-full rounded-xl border border-border px-3"
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
                 value={mode}
                 onChange={(e) => setMode(e.target.value === "buy" ? "buy" : "rent")}
                 aria-invalid={Boolean(fieldIssueMap.mode?.[0])}
@@ -181,185 +191,320 @@ export function HousingAffordClient({
                 <option value="buy">매매(대출)</option>
               </select>
               <FieldError id={`${pathToId("mode")}_error`} message={fieldIssueMap.mode?.[0]} />
-            </label>
-            <label className="text-sm">
-              월 소득(세후)
-              <NumberField
-                id={pathToId("incomeNet")}
-                className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                value={toNumberOrNull(incomeNetInput)}
-                onValueChange={(value) => setIncomeNetInput(value === null ? "" : String(value))}
-                aria-invalid={Boolean(fieldIssueMap.incomeNet?.[0])}
-                aria-describedby={fieldIssueMap.incomeNet?.[0] ? `${pathToId("incomeNet")}_error` : undefined}
-              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">월 소득 (세후)</label>
+              <div className="relative">
+                <NumberField
+                  id={pathToId("incomeNet")}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                  value={toNumberOrNull(incomeNetInput)}
+                  onValueChange={(value) => setIncomeNetInput(value === null ? "" : String(value))}
+                  aria-invalid={Boolean(fieldIssueMap.incomeNet?.[0])}
+                  aria-describedby={fieldIssueMap.incomeNet?.[0] ? `${pathToId("incomeNet")}_error` : undefined}
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">원</span>
+              </div>
               <FieldError id={`${pathToId("incomeNet")}_error`} message={fieldIssueMap.incomeNet?.[0]} />
-            </label>
-            <label className="text-sm">
-              주거 외 월 지출
-              <NumberField
-                id={pathToId("outflow")}
-                className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                value={toNumberOrNull(outflowInput)}
-                onValueChange={(value) => setOutflowInput(value === null ? "" : String(value))}
-                aria-invalid={Boolean(fieldIssueMap.outflow?.[0])}
-                aria-describedby={fieldIssueMap.outflow?.[0] ? `${pathToId("outflow")}_error` : undefined}
-              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">주거 외 월 지출</label>
+              <div className="relative">
+                <NumberField
+                  id={pathToId("outflow")}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                  value={toNumberOrNull(outflowInput)}
+                  onValueChange={(value) => setOutflowInput(value === null ? "" : String(value))}
+                  aria-invalid={Boolean(fieldIssueMap.outflow?.[0])}
+                  aria-describedby={fieldIssueMap.outflow?.[0] ? `${pathToId("outflow")}_error` : undefined}
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">원</span>
+              </div>
               <FieldError id={`${pathToId("outflow")}_error`} message={fieldIssueMap.outflow?.[0]} />
-            </label>
+            </div>
           </div>
-
-          {mode === "rent" ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <label className="text-sm">
-                보증금
-                <NumberField
-                  id={pathToId("deposit")}
-                  className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                  value={toNumberOrNull(depositInput)}
-                  onValueChange={(value) => setDepositInput(value === null ? "" : String(value))}
-                  aria-invalid={Boolean(fieldIssueMap.deposit?.[0])}
-                  aria-describedby={fieldIssueMap.deposit?.[0] ? `${pathToId("deposit")}_error` : undefined}
-                />
-                <FieldError id={`${pathToId("deposit")}_error`} message={fieldIssueMap.deposit?.[0]} />
-              </label>
-              <label className="text-sm">
-                월세
-                <NumberField
-                  id={pathToId("monthlyRent")}
-                  className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                  value={toNumberOrNull(monthlyRentInput)}
-                  onValueChange={(value) => setMonthlyRentInput(value === null ? "" : String(value))}
-                  aria-invalid={Boolean(fieldIssueMap.monthlyRent?.[0])}
-                  aria-describedby={fieldIssueMap.monthlyRent?.[0] ? `${pathToId("monthlyRent")}_error` : undefined}
-                />
-                <FieldError id={`${pathToId("monthlyRent")}_error`} message={fieldIssueMap.monthlyRent?.[0]} />
-              </label>
-              <label className="text-sm">
-                보증금 월환산 이율(연%)
-                <NumberField
-                  id={pathToId("opportunityAprPct")}
-                  className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                  value={toNumberOrNull(opportunityAprPctInput)}
-                  onValueChange={(value) => setOpportunityAprPctInput(value === null ? "" : String(value))}
-                  aria-invalid={Boolean(fieldIssueMap.opportunityAprPct?.[0])}
-                  aria-describedby={fieldIssueMap.opportunityAprPct?.[0] ? `${pathToId("opportunityAprPct")}_error` : undefined}
-                />
-                <FieldError id={`${pathToId("opportunityAprPct")}_error`} message={fieldIssueMap.opportunityAprPct?.[0]} />
-              </label>
-            </div>
-          ) : (
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <label className="text-sm">
-                매매가
-                <NumberField
-                  id={pathToId("purchasePrice")}
-                  className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                  value={toNumberOrNull(purchasePriceInput)}
-                  onValueChange={(value) => setPurchasePriceInput(value === null ? "" : String(value))}
-                  aria-invalid={Boolean(fieldIssueMap.purchasePrice?.[0])}
-                  aria-describedby={fieldIssueMap.purchasePrice?.[0] ? `${pathToId("purchasePrice")}_error` : undefined}
-                />
-                <FieldError id={`${pathToId("purchasePrice")}_error`} message={fieldIssueMap.purchasePrice?.[0]} />
-              </label>
-              <label className="text-sm">
-                자기자본
-                <NumberField
-                  id={pathToId("equity")}
-                  className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                  value={toNumberOrNull(equityInput)}
-                  onValueChange={(value) => setEquityInput(value === null ? "" : String(value))}
-                  aria-invalid={Boolean(fieldIssueMap.equity?.[0])}
-                  aria-describedby={fieldIssueMap.equity?.[0] ? `${pathToId("equity")}_error` : undefined}
-                />
-                <FieldError id={`${pathToId("equity")}_error`} message={fieldIssueMap.equity?.[0]} />
-              </label>
-              <label className="text-sm">
-                대출금리(연%)
-                <NumberField
-                  id={pathToId("loanAprPct")}
-                  className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                  value={toNumberOrNull(loanAprPctInput)}
-                  onValueChange={(value) => setLoanAprPctInput(value === null ? "" : String(value))}
-                  aria-invalid={Boolean(fieldIssueMap.loanAprPct?.[0])}
-                  aria-describedby={fieldIssueMap.loanAprPct?.[0] ? `${pathToId("loanAprPct")}_error` : undefined}
-                />
-                <FieldError id={`${pathToId("loanAprPct")}_error`} message={fieldIssueMap.loanAprPct?.[0]} />
-              </label>
-              <label className="text-sm">
-                대출기간(개월)
-                <NumberField
-                  id={pathToId("termMonths")}
-                  className="mt-1 h-10 w-full rounded-xl border border-border px-3"
-                  value={toNumberOrNull(termMonthsInput)}
-                  onValueChange={(value) => setTermMonthsInput(value === null ? "" : String(value))}
-                  aria-invalid={Boolean(fieldIssueMap.termMonths?.[0])}
-                  aria-describedby={fieldIssueMap.termMonths?.[0] ? `${pathToId("termMonths")}_error` : undefined}
-                />
-                <FieldError id={`${pathToId("termMonths")}_error`} message={fieldIssueMap.termMonths?.[0]} />
-              </label>
-            </div>
-          )}
         </Card>
 
-        <Card className="mt-4 border-emerald-200 bg-emerald-50/40">
-          <h2 className="text-lg font-semibold text-emerald-900">계산 결과</h2>
-          <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-emerald-200 bg-white p-3">
-              <p className="text-xs text-slate-500">월 주거비</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{fmtKrw(result.monthlyHousingCost)}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-white p-3">
-              <p className="text-xs text-slate-500">주거비율</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{fmtPct(result.housingRatioPct)}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-white p-3">
-              <p className="text-xs text-slate-500">잔여현금흐름</p>
-              <p className={`mt-1 text-lg font-semibold ${result.residualCashFlow < 0 ? "text-rose-700" : "text-slate-900"}`}>{fmtKrw(result.residualCashFlow)}</p>
-            </div>
-            <div className="rounded-xl border border-emerald-200 bg-white p-3">
-              <p className="text-xs text-slate-500">경고 수</p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">{result.warnings.length}건</p>
-            </div>
-          </div>
-
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+        <Card className="rounded-[2rem] p-8 shadow-sm">
+          <SubSectionHeader 
+            title={mode === "rent" ? "전월세 조건" : "매매 및 대출 조건"} 
+            description={mode === "rent" ? "보증금과 월세 정보를 입력하세요." : "매매가와 대출 상세 정보를 입력하세요."} 
+          />
+          
+          <div className="mt-6">
             {mode === "rent" ? (
-              <>
-                <p>월세: {fmtKrw(result.breakdown.monthlyRent)}</p>
-                <p>보증금 월환산: {fmtKrw(result.breakdown.depositOpportunityCostMonthly)}</p>
-              </>
+              <div className="grid gap-6 md:grid-cols-3">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">보증금</label>
+                  <div className="relative">
+                    <NumberField
+                      id={pathToId("deposit")}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      value={toNumberOrNull(depositInput)}
+                      onValueChange={(value) => setDepositInput(value === null ? "" : String(value))}
+                      aria-invalid={Boolean(fieldIssueMap.deposit?.[0])}
+                      aria-describedby={fieldIssueMap.deposit?.[0] ? `${pathToId("deposit")}_error` : undefined}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">원</span>
+                  </div>
+                  <FieldError id={`${pathToId("deposit")}_error`} message={fieldIssueMap.deposit?.[0]} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">월세</label>
+                  <div className="relative">
+                    <NumberField
+                      id={pathToId("monthlyRent")}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      value={toNumberOrNull(monthlyRentInput)}
+                      onValueChange={(value) => setMonthlyRentInput(value === null ? "" : String(value))}
+                      aria-invalid={Boolean(fieldIssueMap.monthlyRent?.[0])}
+                      aria-describedby={fieldIssueMap.monthlyRent?.[0] ? `${pathToId("monthlyRent")}_error` : undefined}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">원</span>
+                  </div>
+                  <FieldError id={`${pathToId("monthlyRent")}_error`} message={fieldIssueMap.monthlyRent?.[0]} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">보증금 월환산 이율 (연%)</label>
+                  <div className="relative">
+                    <NumberField
+                      id={pathToId("opportunityAprPct")}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      value={toNumberOrNull(opportunityAprPctInput)}
+                      onValueChange={(value) => setOpportunityAprPctInput(value === null ? "" : String(value))}
+                      aria-invalid={Boolean(fieldIssueMap.opportunityAprPct?.[0])}
+                      aria-describedby={fieldIssueMap.opportunityAprPct?.[0] ? `${pathToId("opportunityAprPct")}_error` : undefined}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                  </div>
+                  <FieldError id={`${pathToId("opportunityAprPct")}_error`} message={fieldIssueMap.opportunityAprPct?.[0]} />
+                </div>
+              </div>
             ) : (
-              <>
-                <p>대출 원금: {fmtKrw(result.breakdown.principal)}</p>
-                <p>월 원리금균등 상환: {fmtKrw(result.breakdown.monthlyMortgagePayment)}</p>
-              </>
+              <div className="grid gap-6 md:grid-cols-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">매매가</label>
+                  <div className="relative">
+                    <NumberField
+                      id={pathToId("purchasePrice")}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      value={toNumberOrNull(purchasePriceInput)}
+                      onValueChange={(value) => setPurchasePriceInput(value === null ? "" : String(value))}
+                      aria-invalid={Boolean(fieldIssueMap.purchasePrice?.[0])}
+                      aria-describedby={fieldIssueMap.purchasePrice?.[0] ? `${pathToId("purchasePrice")}_error` : undefined}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">원</span>
+                  </div>
+                  <FieldError id={`${pathToId("purchasePrice")}_error`} message={fieldIssueMap.purchasePrice?.[0]} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">자기자본</label>
+                  <div className="relative">
+                    <NumberField
+                      id={pathToId("equity")}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      value={toNumberOrNull(equityInput)}
+                      onValueChange={(value) => setEquityInput(value === null ? "" : String(value))}
+                      aria-invalid={Boolean(fieldIssueMap.equity?.[0])}
+                      aria-describedby={fieldIssueMap.equity?.[0] ? `${pathToId("equity")}_error` : undefined}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">원</span>
+                  </div>
+                  <FieldError id={`${pathToId("equity")}_error`} message={fieldIssueMap.equity?.[0]} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">대출금리 (연%)</label>
+                  <div className="relative">
+                    <NumberField
+                      id={pathToId("loanAprPct")}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      value={toNumberOrNull(loanAprPctInput)}
+                      onValueChange={(value) => setLoanAprPctInput(value === null ? "" : String(value))}
+                      aria-invalid={Boolean(fieldIssueMap.loanAprPct?.[0])}
+                      aria-describedby={fieldIssueMap.loanAprPct?.[0] ? `${pathToId("loanAprPct")}_error` : undefined}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">%</span>
+                  </div>
+                  <FieldError id={`${pathToId("loanAprPct")}_error`} message={fieldIssueMap.loanAprPct?.[0]} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">대출기간 (개월)</label>
+                  <div className="relative">
+                    <NumberField
+                      id={pathToId("termMonths")}
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      value={toNumberOrNull(termMonthsInput)}
+                      onValueChange={(value) => setTermMonthsInput(value === null ? "" : String(value))}
+                      aria-invalid={Boolean(fieldIssueMap.termMonths?.[0])}
+                      aria-describedby={fieldIssueMap.termMonths?.[0] ? `${pathToId("termMonths")}_error` : undefined}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">개월</span>
+                  </div>
+                  <FieldError id={`${pathToId("termMonths")}_error`} message={fieldIssueMap.termMonths?.[0]} />
+                </div>
+              </div>
             )}
           </div>
-
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-            <p className="text-sm font-semibold text-slate-800">경고</p>
-            {result.warnings.length > 0 ? (
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                {result.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-sm text-slate-600">현재 조건에서 즉시 경고는 없습니다.</p>
-            )}
-          </div>
-
-          {ctaLinks.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {ctaLinks.map((link) => (
-                <Link key={`${link.href}-${link.label}`} href={link.href}>
-                  <Button size="sm" variant="outline">{link.label}</Button>
-                </Link>
-              ))}
-            </div>
-          ) : null}
         </Card>
-      </Container>
-    </main>
+
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="rounded-[2rem] p-8 shadow-sm lg:col-span-2 border-emerald-100 bg-white">
+            <SubSectionHeader title="상세 계산 결과" description="조건별 비용 구조와 지표 분석입니다." />
+            
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-3xl border border-emerald-50 bg-slate-50/50 p-6">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">월 총 주거비</p>
+                <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{fmtKrw(result.monthlyHousingCost)}</p>
+                
+                <div className="mt-6 space-y-3 border-t border-slate-100 pt-4">
+                  {mode === "rent" ? (
+                    <>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-500">순수 월세</span>
+                        <span className="font-black text-slate-700 tabular-nums">{fmtKrw(result.breakdown.monthlyRent)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-500">보증금 기회비용</span>
+                        <span className="font-black text-slate-700 tabular-nums">{fmtKrw(result.breakdown.depositOpportunityCostMonthly)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-500">대출 원금</span>
+                        <span className="font-black text-slate-700 tabular-nums">{fmtKrw(result.breakdown.principal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-500">월 원리금 상환</span>
+                        <span className="font-black text-slate-700 tabular-nums">{fmtKrw(result.breakdown.monthlyMortgagePayment)}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-emerald-50 bg-slate-50/50 p-6">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">주거비율 및 잔여현금</p>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <p className="text-2xl font-black text-slate-900 tabular-nums">{fmtPct(result.housingRatioPct)}</p>
+                  <span className={cn(
+                    "rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-widest border",
+                    (result.housingRatioPct ?? 0) <= 25 ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                    (result.housingRatioPct ?? 0) <= 35 ? "bg-amber-50 text-amber-600 border-amber-100" :
+                    "bg-rose-50 text-rose-600 border-rose-100"
+                  )}>
+                    {(result.housingRatioPct ?? 0) <= 25 ? "안전" : (result.housingRatioPct ?? 0) <= 35 ? "주의" : "위험"}
+                  </span>
+                </div>
+
+                <div className="mt-6 space-y-3 border-t border-slate-100 pt-4">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-500">잔여 현금흐름</span>
+                    <span className={cn("font-black tabular-nums", result.residualCashFlow < 0 ? "text-rose-600" : "text-emerald-600")}>
+                      {fmtKrw(result.residualCashFlow)}
+                    </span>
+                  </div>
+                  
+                  {/* Housing Ratio Bar */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+                      <div 
+                        className={cn(
+                          "h-full transition-all duration-500",
+                          (result.housingRatioPct ?? 0) <= 25 ? "bg-emerald-500" :
+                          (result.housingRatioPct ?? 0) <= 35 ? "bg-amber-500" : "bg-rose-500"
+                        )}
+                        style={{ width: `${Math.min(100, result.housingRatioPct ?? 0)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      <span>0%</span>
+                      <span>Target 25%</span>
+                      <span>100%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cashflow Breakdown Bar */}
+            <div className="mt-8 space-y-3 rounded-3xl bg-slate-900 p-8 text-white shadow-xl shadow-slate-200">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Cashflow Composition</p>
+                <p className="text-xs font-black text-emerald-400">Total Income: {fmtKrw(Number(incomeNetInput))}</p>
+              </div>
+              
+              <div className="h-4 w-full flex overflow-hidden rounded-full bg-white/10 mt-4">
+                <div 
+                  className="h-full bg-slate-400 border-r border-slate-900/20" 
+                  style={{ width: `${Math.min(100, (otherOutflowVal / incomeVal) * 100)}%` }} 
+                  title="기타 지출"
+                />
+                <div 
+                  className="h-full bg-emerald-500" 
+                  style={{ width: `${Math.min(100, (housingCostVal / incomeVal) * 100)}%` }} 
+                  title="주거비"
+                />
+              </div>
+              
+              <div className="flex flex-wrap gap-4 pt-2">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-slate-400" />
+                  <span className="text-[10px] font-bold text-white/60">기타 지출 ({Math.round((otherOutflowVal / incomeVal) * 100)}%)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-[10px] font-bold text-white/60">주거비 ({Math.round((housingCostVal / incomeVal) * 100)}%)</span>
+                </div>
+                <div className="flex items-center gap-2 ml-auto">
+                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">잔여 {Math.max(0, Math.round((result.residualCashFlow / incomeVal) * 100))}%</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <div className="space-y-6">
+            <Card className="rounded-[2rem] p-8 shadow-sm">
+              <SubSectionHeader title="리스크 및 경고" description={`${result.warnings.length}개의 항목 확인됨`} />
+              {result.warnings.length > 0 ? (
+                <ul className="mt-6 space-y-3">
+                  {result.warnings.map((warning, idx) => (
+                    <li key={idx} className="flex items-start gap-3 rounded-2xl bg-rose-50/50 p-4 border border-rose-100/50">
+                      <span className="text-rose-500 mt-0.5">⚠️</span>
+                      <p className="text-xs font-bold text-rose-800 leading-relaxed">{warning}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="mt-6 py-10 text-center rounded-3xl border border-dashed border-slate-100">
+                  <p className="text-xs font-bold text-slate-400">현재 조건에서 즉시 경고는 없습니다.</p>
+                </div>
+              )}
+            </Card>
+
+            <Card className="rounded-[2rem] p-8 shadow-sm bg-slate-900 text-white">
+              <SubSectionHeader 
+                title="추천 액션" 
+                description="분석 결과에 따른 다음 단계입니다." 
+                titleClassName="text-white"
+                descriptionClassName="text-white/50"
+              />
+              <div className="mt-6 grid gap-2">
+                {ctaLinks.map((link) => (
+                  <Link key={`${link.href}-${link.label}`} href={link.href} className="group">
+                    <div className="flex items-center justify-between rounded-2xl bg-white/5 p-4 transition-all hover:bg-white/10 active:scale-[0.98]">
+                      <span className="text-sm font-black tracking-tight">{link.label}</span>
+                      <span className="text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </PageShell>
   );
 }

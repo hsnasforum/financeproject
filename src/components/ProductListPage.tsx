@@ -28,7 +28,7 @@ import { ProductRowItem } from "./products/ProductRowItem";
 import { ProductOptionRowItem } from "./products/ProductOptionRowItem";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
 import { type FreshnessSourceSpec } from "@/components/data/freshness";
 import { FallbackBanner } from "@/components/FallbackBanner";
@@ -291,14 +291,14 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
         if (aborted) return;
 
         if (!parsed.ok) {
-          setError(parsed.error?.message ?? "데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+          setError(parsed.error?.message ?? "데이터를 불러오지 못해요. 잠시 후 다시 시도해주세요.");
           return;
         }
 
         setPayload(parsed);
       } catch {
         if (aborted) return;
-        setError("데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+        setError("데이터를 불러오지 못해요. 잠시 후 다시 시도해주세요.");
       } finally {
         if (!aborted) setLoading(false);
       }
@@ -366,15 +366,6 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
       if (!selectedFinCoNo) return true;
       return item.fin_co_no === selectedFinCoNo;
     });
-
-    if (process.env.NODE_ENV !== "production" && products.length > 0) {
-      const first = products[0];
-      console.debug("[ProductListPage] Diagnostic:", {
-        fin_prdt_cd: first.fin_prdt_cd,
-        kor_co_nm: first.kor_co_nm,
-        fin_co_no: first.fin_co_no,
-      });
-    }
 
     return applyFilters(
       products,
@@ -502,12 +493,10 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   }, [kind]);
 
   return (
-    <PageShell className="bg-surface-muted py-6 md:py-10">
-        <SectionHeader 
+    <PageShell className="py-6 md:py-10">
+        <PageHeader 
           title={title} 
-          subtitle="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
-          icon="/icons/ic-products.png"
-          className="mb-6"
+          description="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
         />
         <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
         <FallbackBanner fallback={payload?.meta?.fallback} className="mt-3" />
