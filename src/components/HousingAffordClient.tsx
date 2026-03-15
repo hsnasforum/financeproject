@@ -175,7 +175,7 @@ export function HousingAffordClient({
           <SubSectionHeader title="기본 정보 및 소득" description="월 소득과 고정 지출을 입력하세요." />
           <ErrorSummary issues={parsedInput.issues} id={ERROR_SUMMARY_ID} className="mt-4" />
           <ErrorAnnouncer />
-          
+
           <div className="mt-6 grid gap-6 md:grid-cols-3">
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">계산 모드</label>
@@ -192,7 +192,7 @@ export function HousingAffordClient({
               </select>
               <FieldError id={`${pathToId("mode")}_error`} message={fieldIssueMap.mode?.[0]} />
             </div>
-            
+
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">월 소득 (세후)</label>
               <div className="relative">
@@ -228,11 +228,11 @@ export function HousingAffordClient({
         </Card>
 
         <Card className="rounded-[2rem] p-8 shadow-sm">
-          <SubSectionHeader 
-            title={mode === "rent" ? "전월세 조건" : "매매 및 대출 조건"} 
-            description={mode === "rent" ? "보증금과 월세 정보를 입력하세요." : "매매가와 대출 상세 정보를 입력하세요."} 
+          <SubSectionHeader
+            title={mode === "rent" ? "전월세 조건" : "매매 및 대출 조건"}
+            description={mode === "rent" ? "보증금과 월세 정보를 입력하세요." : "매매가와 대출 상세 정보를 입력하세요."}
           />
-          
+
           <div className="mt-6">
             {mode === "rent" ? (
               <div className="grid gap-6 md:grid-cols-3">
@@ -352,12 +352,12 @@ export function HousingAffordClient({
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="rounded-[2rem] p-8 shadow-sm lg:col-span-2 border-emerald-100 bg-white">
             <SubSectionHeader title="상세 계산 결과" description="조건별 비용 구조와 지표 분석입니다." />
-            
+
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl border border-emerald-50 bg-slate-50/50 p-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">월 총 주거비</p>
                 <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{fmtKrw(result.monthlyHousingCost)}</p>
-                
+
                 <div className="mt-6 space-y-3 border-t border-slate-100 pt-4">
                   {mode === "rent" ? (
                     <>
@@ -406,11 +406,11 @@ export function HousingAffordClient({
                       {fmtKrw(result.residualCashFlow)}
                     </span>
                   </div>
-                  
+
                   {/* Housing Ratio Bar */}
                   <div className="space-y-1.5 pt-1">
                     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                      <div 
+                      <div
                         className={cn(
                           "h-full transition-all duration-500",
                           (result.housingRatioPct ?? 0) <= 25 ? "bg-emerald-500" :
@@ -430,36 +430,36 @@ export function HousingAffordClient({
             </div>
 
             {/* Cashflow Breakdown Bar */}
-            <div className="mt-8 space-y-3 rounded-3xl bg-slate-900 p-8 text-white shadow-xl shadow-slate-200">
+            <div className="mt-8 space-y-3 rounded-3xl bg-slate-50 p-8 border border-slate-100 shadow-sm">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Cashflow Composition</p>
-                <p className="text-xs font-black text-emerald-400">Total Income: {fmtKrw(Number(incomeNetInput))}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Cashflow Composition</p>
+                <p className="text-xs font-black text-emerald-600">Total Income: {fmtKrw(Number(incomeNetInput))}</p>
               </div>
-              
-              <div className="h-4 w-full flex overflow-hidden rounded-full bg-white/10 mt-4">
-                <div 
-                  className="h-full bg-slate-400 border-r border-slate-900/20" 
-                  style={{ width: `${Math.min(100, (otherOutflowVal / incomeVal) * 100)}%` }} 
+
+              <div className="h-4 w-full flex overflow-hidden rounded-full bg-slate-200 mt-4">
+                <div
+                  className="h-full bg-slate-400 border-r border-white/20"
+                  style={{ width: `${Math.min(100, (otherOutflowVal / incomeVal) * 100)}%` }}
                   title="기타 지출"
                 />
-                <div 
-                  className="h-full bg-emerald-500" 
-                  style={{ width: `${Math.min(100, (housingCostVal / incomeVal) * 100)}%` }} 
+                <div
+                  className="h-full bg-emerald-500"
+                  style={{ width: `${Math.min(100, (housingCostVal / incomeVal) * 100)}%` }}
                   title="주거비"
                 />
               </div>
-              
+
               <div className="flex flex-wrap gap-4 pt-2">
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-slate-400" />
-                  <span className="text-[10px] font-bold text-white/60">기타 지출 ({Math.round((otherOutflowVal / incomeVal) * 100)}%)</span>
+                  <span className="text-[10px] font-bold text-slate-500">기타 지출 ({Math.round((otherOutflowVal / incomeVal) * 100)}%)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  <span className="text-[10px] font-bold text-white/60">주거비 ({Math.round((housingCostVal / incomeVal) * 100)}%)</span>
+                  <span className="text-[10px] font-bold text-slate-500">주거비 ({Math.round((housingCostVal / incomeVal) * 100)}%)</span>
                 </div>
                 <div className="flex items-center gap-2 ml-auto">
-                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">잔여 {Math.max(0, Math.round((result.residualCashFlow / incomeVal) * 100))}%</span>
+                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">잔여 {Math.max(0, Math.round((result.residualCashFlow / incomeVal) * 100))}%</span>
                 </div>
               </div>
             </div>
@@ -484,19 +484,19 @@ export function HousingAffordClient({
               )}
             </Card>
 
-            <Card className="rounded-[2rem] p-8 shadow-sm bg-slate-900 text-white">
-              <SubSectionHeader 
-                title="추천 액션" 
-                description="분석 결과에 따른 다음 단계입니다." 
+            <Card className="rounded-[2rem] p-8 shadow-xl shadow-emerald-900/20 bg-emerald-600 text-white border-none">
+              <SubSectionHeader
+                title="추천 액션"
+                description="분석 결과에 따른 다음 단계입니다."
                 titleClassName="text-white"
-                descriptionClassName="text-white/50"
+                descriptionClassName="text-emerald-100/70"
               />
               <div className="mt-6 grid gap-2">
                 {ctaLinks.map((link) => (
                   <Link key={`${link.href}-${link.label}`} href={link.href} className="group">
-                    <div className="flex items-center justify-between rounded-2xl bg-white/5 p-4 transition-all hover:bg-white/10 active:scale-[0.98]">
+                    <div className="flex items-center justify-between rounded-2xl bg-white/10 p-4 transition-all hover:bg-white/20 active:scale-[0.98]">
                       <span className="text-sm font-black tracking-tight">{link.label}</span>
-                      <span className="text-emerald-400 opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
+                      <span className="text-white opacity-0 group-hover:opacity-100 transition-opacity">▶</span>
                     </div>
                   </Link>
                 ))}
