@@ -16,7 +16,7 @@ import { resolveReportResultDtoFromRun } from "../reports/reportInputContract";
 import { getRun } from "./runStore";
 import { buildInterpretationVM } from "../v2/insights/interpretationVm";
 import { resolveInterpretationActionHref } from "../v2/insights/actionLinks";
-import { type GoalRow } from "../v2/report/mapGoals";
+import { type GoalStatusRow } from "../v2/resultGuide";
 import { type ActionItemV2 } from "../v2/actions/types";
 import { roundKrw } from "../calc/roundingPolicy";
 
@@ -174,17 +174,21 @@ function parseActionProgress(payload: unknown, runId: string): PlanningRunAction
   };
 }
 
-function goalsFromResultDto(run: PlanningRunRecord): GoalRow[] {
+function goalsFromResultDto(run: PlanningRunRecord): GoalStatusRow[] {
   const dto = resolveReportResultDtoFromRun(run);
-  return dto.goals.map((goal) => ({
-    name: goal.title,
-    targetAmount: Number(goal.targetKrw ?? 0),
-    currentAmount: Number(goal.currentKrw ?? 0),
-    shortfall: Number(goal.shortfallKrw ?? 0),
-    targetMonth: Math.max(0, Math.trunc(Number(goal.targetMonth ?? 0))),
-    achieved: goal.achieved === true,
-    comment: asString(goal.comment),
-  }));
+  return dto.goals.map((goal) => {
+    const target = Number(goal.targetKrw ?? 0);
+    const current = Number(goal.currentKrw ?? 0);
+    return {
+      goalId: goal.id,
+      name: goal.title,
+      achieved: goal.achieved === true,
+      targetMonth: Math.max(0, Math.trunc(Number(goal.targetMonth ?? 0))),
+      progressPct: target > 0 ? (current / target) * 100 : 0,
+      shortfallKrw: Number(goal.shortfallKrw ?? 0),
+      interpretation: asString(goal.comment) || (goal.achieved ? "달성 완료" : "진행 중"),
+    };
+  });
 }
 
 function getActionItemsFromRun(run: PlanningRunRecord): ActionItemV2[] {
