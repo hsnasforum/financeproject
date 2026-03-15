@@ -343,17 +343,17 @@ export function RecommendHistoryClient({
               />
             ) : (
               <div className="space-y-6">
-                <div className="rounded-2xl bg-slate-900 p-6 text-white">
+                <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
                   <div className="flex items-center justify-between gap-4 mb-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Selected Run</p>
-                    {openedFromQuery && <Badge className="bg-emerald-500/20 text-emerald-400 border-none px-2 py-0.5 text-[9px] font-black uppercase">Query Open</Badge>}
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">Selected Run</p>
+                    {openedFromQuery && <Badge className="bg-white/20 text-white border-none px-2 py-0.5 text-[9px] font-black uppercase">Query Open</Badge>}
                   </div>
                   <p className="text-xl font-black tracking-tight">{formatDateTime(activeRun.savedAt)}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-400">항목 {activeRun.items.length}건 / 목적: {activeRun.profile.purpose}</p>
+                  <p className="mt-1 text-sm font-bold text-emerald-100/80">항목 {activeRun.items.length}건 / 목적: {activeRun.profile.purpose}</p>
 
                   <div className="mt-6 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase">비교 담기</span>
+                    <div className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
+                      <span className="text-[10px] font-bold text-emerald-100 uppercase">비교 담기</span>
                       <select
                         className="bg-transparent text-xs font-black outline-none cursor-pointer"
                         value={compareTopN}
@@ -372,7 +372,7 @@ export function RecommendHistoryClient({
                       onClick={() => addTopItemsToCompare(activeRun)}
                       disabled={activeRun.items.length < 2}
                       variant="primary"
-                      className="rounded-xl h-9 px-4 font-black"
+                      className="rounded-xl h-9 px-4 font-black bg-white text-emerald-600 hover:bg-emerald-50 border-none shadow-lg shadow-emerald-900/10"
                     >
                       상위 {compareTopN}개 비교함 담기
                     </Button>
