@@ -325,7 +325,7 @@ export function SubscriptionClient({
             {items.map((item) => (
               <Card key={item.id} className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100 hover:-translate-y-1">
                 <div className="mb-6">
-                  <span className="rounded-lg bg-slate-900 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white">
+                  <span className="rounded-lg bg-slate-100 border border-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">
                     {item.region || "지역 미상"}
                   </span>
                   <h3 className="mt-4 text-xl font-black leading-tight text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-2 tracking-tight">
@@ -353,7 +353,7 @@ export function SubscriptionClient({
                       href={item.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center flex-1 rounded-2xl bg-slate-900 text-white text-sm font-black shadow-md transition-all hover:bg-slate-800 active:scale-95"
+                      className="flex items-center justify-center flex-1 rounded-2xl bg-emerald-600 text-white text-sm font-black shadow-md shadow-emerald-900/10 transition-all hover:bg-emerald-700 active:scale-95"
                     >
                       공고문 보기
                     </a>
