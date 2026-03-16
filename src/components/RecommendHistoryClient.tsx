@@ -276,6 +276,10 @@ export function RecommendHistoryClient({
                 {runs.map((run) => {
                   const selected = selectedRunIds.includes(run.runId);
                   const active = activeRun?.runId === run.runId;
+                  const planningRunId = run.profile.planning?.runId?.trim() ?? "";
+                  const planningReportHref = planningRunId
+                    ? `/planning/reports?runId=${encodeURIComponent(planningRunId)}`
+                    : "";
                   return (
                     <li key={run.runId}>
                       <div className={cn(
@@ -308,13 +312,25 @@ export function RecommendHistoryClient({
                             <p className="mt-1 text-xs font-medium text-slate-500">
                               {run.profile.purpose} · {run.profile.kind} · {run.items.length}건
                             </p>
+                            <p className="mt-2 text-[11px] font-bold text-slate-500">
+                              추천 실행 ID: <span className="font-mono text-slate-700">{run.runId}</span>
+                            </p>
+                            <p className="mt-1 text-[11px] font-bold text-slate-500">
+                              플래닝 실행 ID: {planningRunId ? <span className="font-mono text-slate-700">{planningRunId}</span> : "연결된 실행 없음"}
+                            </p>
                           </div>
-                          <Link
-                            href={`/planning/reports?runId=${encodeURIComponent(run.runId)}`}
-                            className="text-[11px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
-                          >
-                            리포트 →
-                          </Link>
+                          {planningRunId ? (
+                            <Link
+                              href={planningReportHref}
+                              className="text-[11px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
+                            >
+                              플래닝 리포트 →
+                            </Link>
+                          ) : (
+                            <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">
+                              연결된 플래닝 실행 없음
+                            </span>
+                          )}
                         </div>
 
                         <div className="mt-4 flex gap-2">
@@ -341,8 +357,14 @@ export function RecommendHistoryClient({
                 description="왼쪽 목록에서 저장된 실행 하나를 선택하여 상세 내용을 확인하세요."
                 title="실행을 선택해 주세요."
               />
-            ) : (
+          ) : (
               <div className="space-y-6">
+                {(() => {
+                  const activePlanningRunId = activeRun.profile.planning?.runId?.trim() ?? "";
+                  const activePlanningReportHref = activePlanningRunId
+                    ? `/planning/reports?runId=${encodeURIComponent(activePlanningRunId)}`
+                    : "";
+                  return (
                 <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
                   <div className="flex items-center justify-between gap-4 mb-4">
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">Selected Run</p>
@@ -350,6 +372,14 @@ export function RecommendHistoryClient({
                   </div>
                   <p className="text-xl font-black tracking-tight">{formatDateTime(activeRun.savedAt)}</p>
                   <p className="mt-1 text-sm font-bold text-emerald-100/80">항목 {activeRun.items.length}건 / 목적: {activeRun.profile.purpose}</p>
+                  <div className="mt-4 space-y-1 text-[11px] font-bold text-emerald-50/90">
+                    <p>
+                      추천 실행 ID: <span className="font-mono text-white">{activeRun.runId}</span>
+                    </p>
+                    <p>
+                      플래닝 실행 ID: {activePlanningRunId ? <span className="font-mono text-white">{activePlanningRunId}</span> : "연결된 실행 없음"}
+                    </p>
+                  </div>
 
                   <div className="mt-6 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
@@ -376,8 +406,25 @@ export function RecommendHistoryClient({
                     >
                       상위 {compareTopN}개 비교함 담기
                     </Button>
+                    {activePlanningRunId ? (
+                      <Link href={activePlanningReportHref}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl h-9 px-4 font-black border-white/30 bg-white/10 text-white hover:bg-white/20"
+                        >
+                          플래닝 리포트로 이동
+                        </Button>
+                      </Link>
+                    ) : (
+                      <span className="text-[11px] font-bold text-emerald-100/70">
+                        연결된 플래닝 실행이 없어 리포트 이동 링크를 숨깁니다.
+                      </span>
+                    )}
                   </div>
                 </div>
+                  );
+                })()}
 
                 <div className="overflow-hidden rounded-2xl border border-slate-100">
                   <table className="min-w-full text-sm">
