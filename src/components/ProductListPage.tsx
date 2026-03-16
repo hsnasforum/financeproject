@@ -29,9 +29,6 @@ import { ProductOptionRowItem } from "./products/ProductOptionRowItem";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
-import { type FreshnessSourceSpec } from "@/components/data/freshness";
-import { FallbackBanner } from "@/components/FallbackBanner";
 import { Card } from "@/components/ui/Card";
 import {
   ensureProductReasons,
@@ -475,41 +472,19 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     };
   }, [payload]);
 
-  const freshnessSources = useMemo<FreshnessSourceSpec[]>(() => {
-    if (kind === "deposit") {
-      return [{ sourceId: "finlife", kind: "deposit", label: "FINLIFE 예금", importance: "required" }];
-    }
-    if (kind === "saving") {
-      return [{ sourceId: "finlife", kind: "saving", label: "FINLIFE 적금", importance: "required" }];
-    }
-    return [];
-  }, [kind]);
-
-  const fallbackMeta = payload?.meta?.fallback ?? null;
-  const showCompactFallbackHint = useMemo(() => {
-    const mode = fallbackMeta?.mode;
-    if (mode !== "CACHE" && mode !== "REPLAY") return false;
-    const generatedAt = typeof fallbackMeta?.generatedAt === "string" ? fallbackMeta.generatedAt.trim() : "";
-    const nextRetryAt = typeof fallbackMeta?.nextRetryAt === "string" ? fallbackMeta.nextRetryAt.trim() : "";
-    const reason = typeof fallbackMeta?.reason === "string" ? fallbackMeta.reason.trim() : "";
-    return !generatedAt && !nextRetryAt && (reason === "" || reason === "http_cache_hit");
-  }, [fallbackMeta]);
-
   return (
     <PageShell>
       <PageHeader 
         title={title} 
         description="서버에서 수집한 최신 금융상품 데이터를 기준으로 표시됩니다."
       />
-      <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
-      {showCompactFallbackHint ? (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-          <p className="font-semibold">캐시 응답 기준으로 표시 중입니다.</p>
-          <p className="mt-1">실시간 재조회 대신 저장된 응답을 보여 주고 있습니다.</p>
-        </div>
-      ) : (
-        <FallbackBanner fallback={fallbackMeta} className="mb-4" />
-      )}
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        데이터 신뢰 및 연동 상태는{" "}
+        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+          내 설정 &gt; 데이터 신뢰 및 연동 상태
+        </Link>
+        에서 확인할 수 있습니다.
+      </p>
 
       {snapshotStatus ? (
         <Card className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
