@@ -89,11 +89,19 @@ type RecommendApiJson = {
   error?: { message?: string };
   meta?: {
     kind?: string;
+    planning?: {
+      runId?: string;
+      summary?: {
+        stage?: string;
+        overallStatus?: string;
+      };
+    } | null;
     planningContext?: Record<string, unknown> | null;
     planningLinkage?: {
       readiness?: string;
       metricsCount?: number;
       stageInference?: string;
+      inferenceSource?: string;
     };
   };
   items?: Array<{ finalScore?: number; breakdown?: unknown[] }>;
@@ -256,6 +264,13 @@ describe("POST /api/recommend", () => {
         monthlyIncomeKrw: 4_500_000,
         monthlyExpenseKrw: 2_600_000,
       },
+      planning: {
+        runId: "run_20260316_001",
+        summary: {
+          stage: "DEBT",
+          overallStatus: "SUCCESS",
+        },
+      },
     });
 
     expect(status).toBe(200);
@@ -263,14 +278,22 @@ describe("POST /api/recommend", () => {
     expect(json).toHaveProperty("items");
     expect(Array.isArray(json.items)).toBe(true);
     expect(["deposit", "saving"]).toContain(json.meta?.kind);
+    expect(json.meta?.planning).toMatchObject({
+      runId: "run_20260316_001",
+      summary: {
+        stage: "DEBT",
+        overallStatus: "SUCCESS",
+      },
+    });
     expect(json.meta?.planningContext).toMatchObject({
       monthlyIncomeKrw: 4_500_000,
       monthlyExpenseKrw: 2_600_000,
     });
     expect(json.meta?.planningLinkage).toMatchObject({
-      readiness: "partial",
+      readiness: "ready",
       metricsCount: 2,
-      stageInference: "disabled",
+      stageInference: "DEBT",
+      inferenceSource: "planning-summary",
     });
     expect(json).not.toHaveProperty("engine");
     expect(json).not.toHaveProperty("stage");
@@ -313,6 +336,7 @@ describe("POST /api/recommend", () => {
       readiness: "none",
       metricsCount: 0,
       stageInference: "disabled",
+      inferenceSource: "none",
     });
     expect(typeof json.message === "string" || json.debug?.candidateCount === 0).toBe(true);
   });
@@ -357,7 +381,8 @@ describe("POST /api/recommend", () => {
     expect(json.meta?.planningLinkage).toMatchObject({
       readiness: "ready",
       metricsCount: 4,
-      stageInference: "disabled",
+      stageInference: "DEBT",
+      inferenceSource: "planning-context",
     });
   });
 });

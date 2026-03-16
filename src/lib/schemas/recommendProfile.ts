@@ -12,6 +12,7 @@ import {
   type CandidatePool,
   type CandidateSource,
   type DepositProtectionMode,
+  type RecommendPlanningHandoff,
   type LiquidityPref,
   type RecommendPlanningContext,
   type RateMode,
@@ -41,6 +42,7 @@ export type RecommendProfileNormalized = {
     term: number;
     liquidity: number;
   };
+  planning?: RecommendPlanningHandoff;
   planningContext?: RecommendPlanningContext;
 };
 
@@ -52,6 +54,8 @@ type SearchParamsInput =
   | undefined;
 
 const ALLOWED_PREFERRED_TERMS = [3, 6, 12, 24, 36] as const;
+const ALLOWED_PLANNING_STAGES = ["DEFICIT", "DEBT", "EMERGENCY", "INVEST"] as const;
+const ALLOWED_PLANNING_OVERALL_STATUSES = ["RUNNING", "SUCCESS", "PARTIAL_SUCCESS", "FAILED"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -161,6 +165,87 @@ function mergePlanningContextInput(source: Record<string, unknown>): Record<stri
   return {
     ...source,
     ...planningContext,
+  };
+}
+
+function parsePlanningRunId(value: unknown, path: string, issues: Issue[]): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "string" || value.trim().length === 0) {
+    issues.push(issue(path, "must be a non-empty string"));
+    return undefined;
+  }
+  return value.trim();
+}
+
+function parsePlanningStage(
+  value: unknown,
+  path: string,
+  issues: Issue[],
+): RecommendPlanningHandoff["summary"]["stage"] | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "string" && ALLOWED_PLANNING_STAGES.includes(value as RecommendPlanningHandoff["summary"]["stage"])) {
+    return value as RecommendPlanningHandoff["summary"]["stage"];
+  }
+  issues.push(issue(path, "must be one of DEFICIT|DEBT|EMERGENCY|INVEST"));
+  return undefined;
+}
+
+function parsePlanningOverallStatus(
+  value: unknown,
+  path: string,
+  issues: Issue[],
+): RecommendPlanningHandoff["summary"]["overallStatus"] | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (
+    typeof value === "string"
+    && ALLOWED_PLANNING_OVERALL_STATUSES.includes(value as NonNullable<RecommendPlanningHandoff["summary"]["overallStatus"]>)
+  ) {
+    return value as NonNullable<RecommendPlanningHandoff["summary"]["overallStatus"]>;
+  }
+  issues.push(issue(path, "must be one of RUNNING|SUCCESS|PARTIAL_SUCCESS|FAILED"));
+  return undefined;
+}
+
+function parsePlanningHandoff(source: Record<string, unknown>): { planning?: RecommendPlanningHandoff; issues: Issue[] } {
+  const issues: Issue[] = [];
+  const rawPlanning = isRecord(source.planning) ? source.planning : null;
+  if (!rawPlanning) return { issues };
+
+  const runId = parsePlanningRunId(rawPlanning.runId, "planning.runId", issues);
+  if (!runId) {
+    issues.push(issue("planning.runId", "is required when planning is provided"));
+  }
+
+  const rawSummary = rawPlanning.summary;
+  if (!isRecord(rawSummary)) {
+    issues.push(issue("planning.summary", "is required when planning is provided"));
+    return { issues };
+  }
+
+  const stage = parsePlanningStage(rawSummary.stage, "planning.summary.stage", issues);
+  if (!stage) {
+    issues.push(issue("planning.summary.stage", "is required when planning is provided"));
+  }
+
+  const overallStatus = parsePlanningOverallStatus(
+    rawSummary.overallStatus,
+    "planning.summary.overallStatus",
+    issues,
+  );
+
+  if (!runId || !stage) {
+    return { issues };
+  }
+
+  return {
+    planning: {
+      runId,
+      summary: {
+        stage,
+        ...(overallStatus ? { overallStatus } : {}),
+      },
+    },
+    issues,
   };
 }
 
@@ -288,6 +373,7 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
   });
 
   const issues = [...parseStringIssues(bag.issues), ...preferredTermIssues];
+  const parsedPlanning = parsePlanningHandoff(source);
   const planningContextIssues: Issue[] = [];
   const monthlyIncomeKrw = parsePlanningMetric(
     planningContextInput.monthlyIncomeKrw ?? planningContextInput.monthlyIncome,
@@ -316,7 +402,7 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
     ...(typeof debtBalanceKrw === "number" ? { debtBalanceKrw } : {}),
   };
   const hasPlanningContext = Object.keys(planningContext).length > 0;
-  const allIssues = [...issues, ...planningContextIssues];
+  const allIssues = [...issues, ...parsedPlanning.issues, ...planningContextIssues];
 
   return buildParseResult(
     {
@@ -334,6 +420,7 @@ export function parseRecommendProfile(input: unknown): ParseResult<RecommendProf
         term: weightTerm,
         liquidity: weightLiquidity,
       },
+      ...(parsedPlanning.planning ? { planning: parsedPlanning.planning } : {}),
       ...(hasPlanningContext ? { planningContext } : {}),
     },
     allIssues,
