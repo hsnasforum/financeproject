@@ -10,9 +10,9 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **31%** (`4 / 13` 항목 완료)
+- 전체 진행률: **46%** (`6 / 13` 항목 완료)
 - Phase 1 진행률: **100%** (`4 / 4`)
-- Phase 2 진행률: **0%** (`0 / 5`)
+- Phase 2 진행률: **40%** (`2 / 5`)
 - Phase 3 진행률: **0%** (`0 / 4`)
 
 ### 0.2 상태 표기 규칙
@@ -27,7 +27,7 @@
 | Phase | 범위 | 상태 | 진행률 |
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
-| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `0 / 5` |
+| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `2 / 5` |
 | Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[미착수]` | `0 / 4` |
 
 ### 0.4 운영 원칙
@@ -254,7 +254,7 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 
 ### 해야 할 일
 
-#### P2-1) canonical planning-to-recommend contract 정의 `[진행중]`
+#### P2-1) canonical planning-to-recommend contract 정의 `[완료]`
 새 DTO를 만듭니다.
 
 - `PlanningSummaryDto`
@@ -272,13 +272,13 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - planning stage
 - 추천 목적(reason code)
 
-진행 메모 (2026-03-16):
+완료 메모 (2026-03-16):
 - `analysis_docs/v2/06_planning_recommend_contract_decision.md`에 canonical source, ownership, DTO 초안, `P2-2 ~ P2-5` 선행 순서를 고정했습니다.
 - canonical handoff source는 report VM이나 live profile join이 아니라 `PlanningRunRecord`가 소유하는 handoff projection으로 정리했습니다.
 - 현행 `UserRecommendProfile.planningContext` 4개 입력은 legacy bridge로 유지하고, `PlanningToRecommendContextDto`와 `RecommendRequestV2`로 승격하는 방향을 문서 기준으로 확정했습니다.
-- 다만 handoff projection의 실제 저장 경로 이름과 migration 방식은 구현 라운드에서 최종 고정이 필요합니다.
+- handoff projection의 실제 저장 경로 이름과 migration 방식은 후속 구현 라운드 과제로 남지만, 이는 `P2-1`의 설계 결정 완료를 막는 항목이 아니라 `P2-2 ~ P2-5` 구현 범위로 분리합니다.
 
-#### P2-2) stage inference 활성화 `[진행중]`
+#### P2-2) stage inference 활성화 `[완료]`
 현재 disabled인 `planningLinkage.stageInference`를 활성화합니다.
 
 예시 stage:
@@ -287,14 +287,14 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - EMERGENCY
 - INVEST
 
-진행 메모 (2026-03-16):
+완료 메모 (2026-03-16):
 - `UserRecommendProfile`에 optional `planning` handoff 1차를 추가해 `planning.runId`, `planning.summary.stage`, optional `planning.summary.overallStatus`를 request/schema/store에서 읽을 수 있게 맞췄습니다.
 - `/api/recommend`는 `planning.summary.stage`가 있으면 이를 우선 사용하고, 없을 때만 legacy `planningContext` 4개 숫자로 stage를 추론하도록 바꿨습니다.
 - response `meta.planningLinkage`는 `readiness`, `metricsCount`, `stageInference`, `inferenceSource`를 함께 내려 planning summary 기반 활성 상태를 표현합니다.
 - `ReportRecommendationsSection`의 `전체 추천 보기` 링크가 `/recommend`로 갈 때 `planning.runId`, `planning.summary.stage`, optional `planning.summary.overallStatus`를 query에 실어 보내는 첫 producer path를 열었습니다.
 - `/recommend`는 해당 query를 profile로 흡수해 실제 `/api/recommend` request와 saved run profile까지 전달하도록 맞췄습니다.
 - `/recommend` 결과 grid 위에는 planning handoff가 있을 때만 보이는 작은 context strip을 추가해, 현재 플래닝 결과 기준인지, summary 기반인지 legacy planningContext 기반인지, 어떤 실행 ID에서 왔는지를 읽을 수 있게 했습니다.
-- planning run handoff projection 저장이나 다른 producer surface 확장은 아직 열지 않았고, 이번 라운드는 report → recommend 1개 경로까지만 반영했습니다.
+- planning run handoff projection 저장, 추가 producer surface, explanation 확장은 `P2-3 ~ P2-5` 후속 범위로 남기고, `P2-2`의 최소 완료 기준인 consumer 활성화 + producer 경로 1건 + 결과 context 노출은 충족한 것으로 정리합니다.
 
 #### P2-3) 액션 기반 CTA 도입 `[미착수]`
 planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
