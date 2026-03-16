@@ -336,6 +336,8 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 진행 메모 (2026-03-16):
 - recommend local history의 owner id는 `SavedRecommendRun.runId`로 유지하고, planning run 참조는 이미 저장되는 `profile.planning.runId`를 canonical planning ref로 쓰는 원칙을 먼저 고정했습니다.
 - recommend history에서 planning report로 돌아가는 first path는 `profile.planning.runId`가 있을 때만 `/planning/reports?runId=...`로 연결하는 경로를 1순위로 둡니다.
+- 후속 배치에서 `RecommendHistoryClient`의 기존 잘못된 `/planning/reports?runId=${run.runId}` 링크를 제거하고, `profile.planning.runId`가 있을 때만 planning report 링크를 노출하도록 바꿨습니다.
+- active run 상세 영역에는 recommend local history id와 planning run id를 분리 표기하고, planning run id가 있을 때만 `플래닝 리포트로 이동` 버튼을 보여 줍니다.
 - planning report/export 쪽 reverse link는 `SavedRecommendRun.runId`를 명시적으로 잡아두는 시점 전까지 자동 latest-match를 하지 않고 보류합니다.
 - source freshness / assumptions / trace는 planning report/export가 이미 가진 `snapshot`, `assumptionsLines`, `reproducibility`, interpretation evidence 요약까지만 owner로 삼고, raw trace 복제는 후속 범위로 남깁니다.
 - 따라서 `P2-5`는 계약과 first path가 문서로 고정된 상태로 보고 `[진행중]`으로 전환합니다.
