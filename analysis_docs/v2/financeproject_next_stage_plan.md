@@ -404,6 +404,8 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - second rollout으로 `/products/deposit`, `/products/saving`의 product row / option row / grouped option header에 `finlife` 기준 `lastSyncedAt`, optional `freshnessStatus`, explicit `fallbackMode`, 짧은 assumption note를 같은 contract로 연결했습니다.
 - `/products`는 `payload.meta.snapshot.generatedAt`를 `lastSyncedAt` owner로 우선 쓰고, `finlife` source status row가 있을 때만 `freshnessStatus`를 보강합니다. status row가 없어도 snapshot/generatedAt, explicit fallback, 짧은 note는 계속 읽을 수 있게 둡니다.
 - `/recommend` 결과 카드에 `결과 기준` 블록을 추가해 `lastSyncedAt`, `freshnessStatus`, explicit `fallbackMode`, assumption note를 배너 없이 작은 메타로 first rollout 했습니다.
+- third rollout으로 `ExchangeSummaryCard`에 `exchange` surface-local owner 기준 `결과 기준` helper를 추가해 `data.asOf`, optional `fallbackDays`, `assumptions.note`만 작은 chip/helper 수준으로 묶어 노출했습니다.
+- `exchange` surface는 explicit source status row가 아직 없으므로 `freshnessStatus`를 억지 계산하지 않고 생략했고, 상단 날짜 badge와 하단 fallback 문구를 하나의 helper 블록으로 정리했습니다.
 - `(sourceId, kind)` 기준 source status row 매칭이 안 되거나 `/api/sources/status` 조회가 실패하면 카드 freshness 메타는 숨기고, 결과 카드와 기존 error/empty 흐름은 그대로 유지합니다.
 
 #### P3-3) 확장 후보의 제품화 기준 수립 `[미착수]`
