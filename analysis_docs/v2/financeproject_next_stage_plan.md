@@ -322,6 +322,7 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 진행 메모 (2026-03-16):
 - `/planning/reports`에서 이미 열린 두 action CTA(`BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL`)는 `/recommend`로 이동할 때 view-only `planning.actionCode` query를 함께 넘깁니다.
 - `/recommend` 결과 화면은 기존 planning context strip을 확장해, 비상금 보강 액션에서 연 추천인지 목표자금 점검 액션에서 연 추천인지 먼저 읽을 수 있게 했습니다.
+- 후속 배치에서 추천 카드의 `추천 사유` 영역 앞에도 action context helper를 추가해, 상단 strip 설명과 카드 why를 더 자연스럽게 이어 읽을 수 있게 했습니다.
 - 이 first pass는 화면 설명용 연결만 다루며, recommend API contract, saved run 영속, 카드별 추천 이유 재구성은 아직 열지 않았습니다.
 
 #### P2-5) history/report 통합 `[미착수]`

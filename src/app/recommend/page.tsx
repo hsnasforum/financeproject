@@ -135,6 +135,10 @@ type PlanningActionContext = {
   code: PlanningActionContextCode;
   label: string;
 };
+type ActionReasonContext = {
+  sectionLabel: string;
+  helper: string;
+};
 
 type StoredRecommendItemV1 = {
   key: string;
@@ -286,6 +290,26 @@ function buildPlanningContextStrip(
     ...(runId ? { runId } : {}),
     ...(overallStatusLabel ? { overallStatusLabel } : {}),
   };
+}
+
+function buildActionReasonContext(
+  actionContext?: PlanningActionContext | null,
+): ActionReasonContext | null {
+  if (actionContext?.code === "BUILD_EMERGENCY_FUND") {
+    return {
+      sectionLabel: "비상금 보강에 맞는 이유",
+      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 비상금 보강 흐름에서 왜 먼저 검토할 만한지 빠르게 읽을 수 있습니다.",
+    };
+  }
+
+  if (actionContext?.code === "COVER_LUMP_SUM_GOAL") {
+    return {
+      sectionLabel: "목표자금 점검에 맞는 이유",
+      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 목표자금 점검 흐름에서 기간과 금리 균형에 어떻게 맞는지 빠르게 읽을 수 있습니다.",
+    };
+  }
+
+  return null;
 }
 
 function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
@@ -727,6 +751,10 @@ function RecommendPageInner() {
     () => readPlanningActionContext(searchParams),
     [searchParams],
   );
+  const actionReasonContext = useMemo(
+    () => buildActionReasonContext(planningActionContext),
+    [planningActionContext],
+  );
   const planningContextStrip = useMemo(
     () => (result ? buildPlanningContextStrip(lastStored?.profile ?? null, result, planningActionContext) : null),
     [lastStored, planningActionContext, result],
@@ -1050,7 +1078,23 @@ function RecommendPageInner() {
                   </div>
 
                   <div className="mb-8 space-y-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">추천 사유</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {actionReasonContext?.sectionLabel ?? "추천 사유"}
+                        </p>
+                        {actionReasonContext ? (
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                            상단 플래닝 연동 기준
+                          </span>
+                        ) : null}
+                      </div>
+                      {actionReasonContext ? (
+                        <p className="rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600">
+                          {actionReasonContext.helper}
+                        </p>
+                      ) : null}
+                    </div>
                     <ul className="space-y-3">
                       {item.reasons.slice(0, 3).map((reason, i) => (
                         <li key={i} className="flex gap-3 text-sm font-medium text-slate-600">
