@@ -36,6 +36,8 @@ import {
   type CandidatePool,
   type CandidateSource,
   type DepositProtectionMode,
+  type RecommendPlanningContext,
+  type RecommendPlanningHandoff,
   type RecommendDetailProduct,
 } from "@/lib/recommend/types";
 import {
@@ -103,6 +105,14 @@ type RecommendResponse = {
       generatedAt?: string;
       nextRetryAt?: string;
     };
+    planning?: RecommendPlanningHandoff | null;
+    planningContext?: RecommendPlanningContext | null;
+    planningLinkage?: {
+      readiness?: "none" | "partial" | "ready";
+      metricsCount?: number;
+      stageInference?: RecommendPlanningHandoff["summary"]["stage"] | "disabled";
+      inferenceSource?: "planning-summary" | "planning-context" | "none";
+    };
   };
   message?: string;
   items?: RecommendItem[];
@@ -119,6 +129,7 @@ type RecommendResponse = {
 };
 
 type StoredProfile = RecommendProfileNormalized;
+type PlanningInferenceSource = "planning-summary" | "planning-context" | "none" | undefined;
 
 type StoredRecommendItemV1 = {
   key: string;
@@ -145,6 +156,106 @@ const AUTORUN_SIG_SESSION_KEY = "recommend_autorun_sig";
 const ERROR_SUMMARY_ID = "recommend_error_summary";
 
 const defaultProfile: StoredProfile = recommendProfileDefaults();
+
+function formatPlanningStageLabel(stage: RecommendPlanningHandoff["summary"]["stage"] | "disabled" | undefined): string | null {
+  switch (stage) {
+    case "DEFICIT":
+      return "적자 관리 단계";
+    case "DEBT":
+      return "부채 관리 단계";
+    case "EMERGENCY":
+      return "비상금 보강 단계";
+    case "INVEST":
+      return "여유자금 활용 단계";
+    case "disabled":
+      return "단계 판정 없음";
+    default:
+      return null;
+  }
+}
+
+function formatPlanningOverallStatusLabel(status: RecommendPlanningHandoff["summary"]["overallStatus"] | undefined): string | null {
+  switch (status) {
+    case "RUNNING":
+      return "실행 중";
+    case "SUCCESS":
+      return "성공";
+    case "PARTIAL_SUCCESS":
+      return "부분 성공";
+    case "FAILED":
+      return "실패";
+    default:
+      return null;
+  }
+}
+
+function formatInferenceSourceLabel(source: PlanningInferenceSource): string | null {
+  switch (source) {
+    case "planning-summary":
+      return "플래닝 요약 handoff 기반";
+    case "planning-context":
+      return "legacy planningContext 기반";
+    case "none":
+      return "연결 정보 없음";
+    default:
+      return null;
+  }
+}
+
+function buildPlanningContextStrip(
+  storedProfile: StoredProfile | null,
+  result: RecommendResponse,
+): {
+  title: string;
+  description: string;
+  stageLabel?: string;
+  sourceLabel?: string;
+  runId?: string;
+  overallStatusLabel?: string;
+} | null {
+  const planning = result.meta?.planning ?? storedProfile?.planning;
+  const linkage = result.meta?.planningLinkage;
+  const inferenceSource = linkage?.inferenceSource;
+  const stageLabel = formatPlanningStageLabel(planning?.summary.stage ?? linkage?.stageInference);
+  const sourceLabel = formatInferenceSourceLabel(inferenceSource);
+  const overallStatusLabel = formatPlanningOverallStatusLabel(planning?.summary.overallStatus);
+  const runId = planning?.runId;
+  const metricsCount = typeof linkage?.metricsCount === "number" ? linkage.metricsCount : 0;
+  const hasStrip = Boolean(runId || stageLabel || (inferenceSource && inferenceSource !== "none") || metricsCount > 0);
+
+  if (!hasStrip) return null;
+
+  if (inferenceSource === "planning-summary") {
+    return {
+      title: "현재 플래닝 결과 기준으로 연 추천입니다",
+      description: "플래닝 리포트에서 넘긴 실행 요약을 기준으로 지금 추천을 열었습니다.",
+      ...(stageLabel ? { stageLabel } : {}),
+      ...(sourceLabel ? { sourceLabel } : {}),
+      ...(runId ? { runId } : {}),
+      ...(overallStatusLabel ? { overallStatusLabel } : {}),
+    };
+  }
+
+  if (inferenceSource === "planning-context") {
+    return {
+      title: "현재 플래닝 입력값을 바탕으로 연 추천입니다",
+      description: `기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`,
+      ...(stageLabel ? { stageLabel } : {}),
+      ...(sourceLabel ? { sourceLabel } : {}),
+      ...(runId ? { runId } : {}),
+      ...(overallStatusLabel ? { overallStatusLabel } : {}),
+    };
+  }
+
+  return {
+    title: "플래닝 연동 정보가 함께 들어왔습니다",
+    description: "이번 추천은 플래닝 결과와 함께 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.",
+    ...(stageLabel ? { stageLabel } : {}),
+    ...(sourceLabel ? { sourceLabel } : {}),
+    ...(runId ? { runId } : {}),
+    ...(overallStatusLabel ? { overallStatusLabel } : {}),
+  };
+}
 
 function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
   profilePatch: Partial<StoredProfile>;
@@ -581,6 +692,10 @@ function RecommendPageInner() {
   }, [profile.kind]);
 
   const fieldIssueMap = useMemo(() => issuesToFieldMap(formIssues), [formIssues]);
+  const planningContextStrip = useMemo(
+    () => (result ? buildPlanningContextStrip(lastStored?.profile ?? null, result) : null),
+    [lastStored, result],
+  );
 
   async function submit() {
     if (loading) return;
@@ -805,6 +920,40 @@ function RecommendPageInner() {
               </div>
             </div>
           </div>
+
+          {planningContextStrip && (
+            <Card className="rounded-[2.5rem] border border-emerald-100 bg-emerald-50/40 p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">플래닝 연동</p>
+                  <h3 className="text-lg font-black tracking-tight text-slate-900">{planningContextStrip.title}</h3>
+                  <p className="text-sm font-medium leading-relaxed text-slate-600">{planningContextStrip.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] font-black">
+                  {planningContextStrip.stageLabel ? (
+                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
+                      단계: {planningContextStrip.stageLabel}
+                    </span>
+                  ) : null}
+                  {planningContextStrip.sourceLabel ? (
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
+                      연결 방식: {planningContextStrip.sourceLabel}
+                    </span>
+                  ) : null}
+                  {planningContextStrip.overallStatusLabel ? (
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
+                      실행 상태: {planningContextStrip.overallStatusLabel}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              {planningContextStrip.runId ? (
+                <p className="mt-4 text-xs font-bold text-slate-500">
+                  플래닝 실행 ID: <span className="font-mono text-slate-700">{planningContextStrip.runId}</span>
+                </p>
+              ) : null}
+            </Card>
+          )}
 
           <div className="grid gap-6 md:grid-cols-2">
             {(result.items ?? []).map((item, index) => {

@@ -293,6 +293,7 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - response `meta.planningLinkage`는 `readiness`, `metricsCount`, `stageInference`, `inferenceSource`를 함께 내려 planning summary 기반 활성 상태를 표현합니다.
 - `ReportRecommendationsSection`의 `전체 추천 보기` 링크가 `/recommend`로 갈 때 `planning.runId`, `planning.summary.stage`, optional `planning.summary.overallStatus`를 query에 실어 보내는 첫 producer path를 열었습니다.
 - `/recommend`는 해당 query를 profile로 흡수해 실제 `/api/recommend` request와 saved run profile까지 전달하도록 맞췄습니다.
+- `/recommend` 결과 grid 위에는 planning handoff가 있을 때만 보이는 작은 context strip을 추가해, 현재 플래닝 결과 기준인지, summary 기반인지 legacy planningContext 기반인지, 어떤 실행 ID에서 왔는지를 읽을 수 있게 했습니다.
 - planning run handoff projection 저장이나 다른 producer surface 확장은 아직 열지 않았고, 이번 라운드는 report → recommend 1개 경로까지만 반영했습니다.
 
 #### P2-3) 액션 기반 CTA 도입 `[미착수]`
