@@ -718,6 +718,11 @@ type ProblemDetailDto = {
 - planning run 참조는 이미 저장되는 `SavedRunProfile.planning.runId`를 canonical field로 사용합니다.
 - 따라서 history → report 링크는 `SavedRecommendRun.runId`가 아니라 `SavedRunProfile.planning.runId`로 `/planning/reports?runId=...`를 구성해야 합니다.
 - planning report/export → recommend reverse link는 concrete recommend history id가 별도로 잡히기 전까지 자동 추론하지 않습니다.
+- reverse link용 explicit ref value는 recommend local history id인 `SavedRecommendRun.runId`를 쓰고, canonical field name은 `[권장안] recommendRunId`로 고정합니다.
+- reverse ref owner는 `PlanningRunRecord` core schema가 아니라 planning report/read-model metadata처럼 가장 얇은 projection 층에 두는 것을 우선합니다.
+- canonical reverse href는 `/recommend/history?open=<recommendRunId>`입니다.
+- first implementation 순서는 report UI first, export summary later입니다.
+- `latest-match`, 시간대 추정, `PlanningRunRecord.id`와 `SavedRecommendRun.runId` 혼용은 금지합니다.
 - source freshness / assumptions / trace는 planning report/export가 가진 `snapshot`, `assumptionsLines`, `reproducibility`, interpretation evidence 요약까지만 노출하고 raw trace 복제는 후속 범위로 남깁니다.
 
 ---
