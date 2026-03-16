@@ -278,15 +278,20 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - 현행 `UserRecommendProfile.planningContext` 4개 입력은 legacy bridge로 유지하고, `PlanningToRecommendContextDto`와 `RecommendRequestV2`로 승격하는 방향을 문서 기준으로 확정했습니다.
 - 다만 handoff projection의 실제 저장 경로 이름과 migration 방식은 구현 라운드에서 최종 고정이 필요합니다.
 
-#### P2-2) stage inference 활성화 `[미착수]`
+#### P2-2) stage inference 활성화 `[진행중]`
 현재 disabled인 `planningLinkage.stageInference`를 활성화합니다.
 
 예시 stage:
-- SAFETY_GAP
-- DEBT_PRESSURE
-- SAVING_BUILDUP
-- GOAL_TRACKING
-- SURPLUS_OPTIMIZATION
+- DEFICIT
+- DEBT
+- EMERGENCY
+- INVEST
+
+진행 메모 (2026-03-16):
+- `UserRecommendProfile`에 optional `planning` handoff 1차를 추가해 `planning.runId`, `planning.summary.stage`, optional `planning.summary.overallStatus`를 request/schema/store에서 읽을 수 있게 맞췄습니다.
+- `/api/recommend`는 `planning.summary.stage`가 있으면 이를 우선 사용하고, 없을 때만 legacy `planningContext` 4개 숫자로 stage를 추론하도록 바꿨습니다.
+- response `meta.planningLinkage`는 `readiness`, `metricsCount`, `stageInference`, `inferenceSource`를 함께 내려 planning summary 기반 활성 상태를 표현합니다.
+- producer UI나 planning run handoff projection 저장은 아직 열지 않았고, 이번 라운드는 recommend contract/API first pass까지만 반영했습니다.
 
 #### P2-3) 액션 기반 CTA 도입 `[미착수]`
 planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
