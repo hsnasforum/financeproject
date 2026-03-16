@@ -43,3 +43,12 @@
 - [추가 작업 필요] Git tag(`v1.0.4`) 생성 여부는 이번 라운드에서 처리하지 않았습니다.
 - [추가 작업 필요] GitHub Release 생성 여부는 이번 라운드에서 처리하지 않았습니다.
 - [미실행] `release:prepare`, `release:verify`, `pnpm build`, `pnpm lint`, `pnpm test`는 이번 라운드에서 실행하지 않았습니다.
+
+## 남은 리스크
+- 실제 `main` 기준 릴리즈 게이트와 태그 푸시는 이 메모 작성 시점에는 아직 수행 전이었습니다.
+- GitHub Release 자동 생성은 태그 `v1.0.4` 푸시 이후 GitHub Actions 상태에 따라 달라집니다.
+
+## 다음 라운드 우선순위
+- `main` 기준으로 `pnpm release:verify`를 실행해 릴리즈 게이트를 통과시키기
+- `v1.0.4` 태그 생성 및 푸시
+- GitHub Release 자동 생성 여부 확인
