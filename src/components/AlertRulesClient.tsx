@@ -553,7 +553,7 @@ export function AlertRulesClient() {
         />
         <div className="mt-6 grid gap-4 md:grid-cols-5">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Min Score</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">최소 점수</label>
             <input
               type="number"
               min={0}
@@ -575,7 +575,7 @@ export function AlertRulesClient() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Max Items</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">최대 항목 수</label>
             <input
               type="number"
               min={1}
@@ -586,10 +586,10 @@ export function AlertRulesClient() {
             />
           </div>
           <div className="space-y-1.5 md:col-span-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Include Categories</label>
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">포함 카테고리</label>
             <input
               className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
-              placeholder="comma separated"
+              placeholder="쉼표로 구분"
               value={includeCategoriesText}
               onChange={(event) => setIncludeCategoriesText(event.target.value)}
               onBlur={() => updateActivePreferences({ includeCategories: parseCsv(includeCategoriesText) })}
@@ -597,10 +597,11 @@ export function AlertRulesClient() {
           </div>
         </div>
         <div className="mt-4 space-y-1.5">
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Exclude Flags</label>
-          <input
-            className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
-            placeholder="comma separated keywords to ignore"
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">제외 플래그</label>
+            <input
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+              placeholder="무시할 키워드를 쉼표로 구분하여 입력"
+
             value={excludeFlagsText}
             onChange={(event) => setExcludeFlagsText(event.target.value)}
             onBlur={() => updateActivePreferences({ excludeFlags: parseCsv(excludeFlagsText) })}
@@ -634,9 +635,9 @@ export function AlertRulesClient() {
               value={keywordMatch}
               onChange={(event) => setKeywordMatch(event.target.value as AlertKeywordMatch)}
             >
-              <option value="contains">contains</option>
-              <option value="startsWith">startsWith</option>
-              <option value="regex">regex</option>
+              <option value="contains">포함</option>
+              <option value="startsWith">시작 단어</option>
+              <option value="regex">정규식 (Regex)</option>
             </select>
           ) : null}
           {renderRuleValueInput()}

@@ -41,6 +41,14 @@ type IndexMeta = {
 
 const INDEX_HINT = "python3 scripts/dart_corpcode_build.py";
 
+function formatCompanySourceLabel(source?: string): string {
+  if (!source) return "DART";
+  if (source === "dart") return "DART";
+  if (source === "index") return "로컬 인덱스";
+  if (source === "cache") return "저장된 조회값";
+  return source;
+}
+
 export function InvestCompaniesClient() {
   const isDev = process.env.NODE_ENV !== "production";
   const [queryInput, setQueryInput] = useState("삼성");
@@ -264,10 +272,10 @@ export function InvestCompaniesClient() {
           <div className="mt-6 flex items-center gap-4 px-1">
             <span className="text-sm font-black text-emerald-600">{searchItems.length.toLocaleString()}건 발견</span>
             {indexMeta && (
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Index Generated: {new Date(indexMeta.generatedAt || "").toLocaleDateString()}
-              </span>
-            )}
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  인덱스 생성일: {new Date(indexMeta.generatedAt || "").toLocaleDateString()}
+                </span>
+              )}
           </div>
         </Card>
       </div>
@@ -276,7 +284,7 @@ export function InvestCompaniesClient() {
         <Card className="flex flex-col rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
           <div className="bg-slate-50/50 p-6 px-8 border-b border-slate-100 flex items-center justify-between">
             <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">회사 목록</h2>
-            {searchItems.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-100">PAGE 1</span>}
+            {searchItems.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-100">1페이지</span>}
           </div>
           
           <div className="flex-1 p-8">
@@ -373,7 +381,7 @@ export function InvestCompaniesClient() {
             ) : (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="rounded-[2.5rem] bg-white border border-slate-100 p-10 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">Corporate Profile</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">기업 기본 정보</p>
                   <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-900">{detail.corpName}</h3>
                   {detail.industry && <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">{detail.industry}</p>}
                 </div>
@@ -404,8 +412,8 @@ export function InvestCompaniesClient() {
                 </div>
 
                 <div className="pt-6 flex items-center justify-between border-t border-slate-50">
-                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Source: {detail.source || "DART"}</span>
-                  {detail.fetchedAt && <span className="text-[10px] font-bold text-slate-300 tabular-nums">Refreshed: {new Date(detail.fetchedAt).toLocaleDateString()}</span>}
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">출처: {formatCompanySourceLabel(detail.source)}</span>
+                  {detail.fetchedAt && <span className="text-[10px] font-bold text-slate-300 tabular-nums">갱신일: {new Date(detail.fetchedAt).toLocaleDateString()}</span>}
                 </div>
               </div>
             )}

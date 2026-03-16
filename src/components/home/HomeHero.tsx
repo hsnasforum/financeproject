@@ -25,11 +25,11 @@ const DEFAULT_SLIDES: HomeHeroSlide[] = [
     id: "default-planning",
     eyebrow: "내 금융 플랜",
     title: "이번 달 액션",
-    metric: "TOP 1",
+    metric: "우선 1개",
     metricCaption: "비상금 흐름부터 점검",
     summary: "첫 플랜 저장 후 바로 반영",
     footer: "지금 바로 시작",
-    badge: "READY",
+    badge: "준비",
     theme: "sky",
     href: "/planning",
     ctaLabel: "플래닝 시작",
@@ -42,7 +42,7 @@ const DEFAULT_SLIDES: HomeHeroSlide[] = [
     metricCaption: "한 번에 비교",
     summary: "복잡한 설명 없이 바로 선택",
     footer: "실행 저장 후 자동 연결",
-    badge: "REPORT",
+    badge: "리포트",
     theme: "emerald",
     href: "/planning/reports",
     ctaLabel: "리포트 보기",
@@ -91,7 +91,7 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
       <Container className="px-4 py-14 sm:px-6 md:py-20 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="max-w-2xl">
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Better Decisions, Financial Wellness</p>
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">더 쉬운 금융 판단</p>
             <h1 className="mt-5 text-[2.75rem] font-black leading-[1.12] tracking-[-0.04em] text-slate-950 md:text-[4.4rem]">
               한눈에 비교하고
               <br />

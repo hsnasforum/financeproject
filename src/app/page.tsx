@@ -35,11 +35,11 @@ function formatMonthsCompact(value: number | undefined): string {
 }
 
 function statusBadge(status: string | undefined): string {
-  if (status === "SUCCESS") return "LIVE";
-  if (status === "PARTIAL_SUCCESS") return "PARTIAL";
-  if (status === "FAILED") return "CHECK";
-  if (status === "RUNNING") return "RUN";
-  return "READY";
+  if (status === "SUCCESS") return "정상";
+  if (status === "PARTIAL_SUCCESS") return "부분";
+  if (status === "FAILED") return "확인";
+  if (status === "RUNNING") return "실행";
+  return "준비";
 }
 
 function compactText(value: string | undefined, maxLength: number): string {
@@ -126,7 +126,7 @@ async function loadHomeHeroSlides(): Promise<{
       id: "planning-action",
       eyebrow: "내 금융 플랜",
       title: "이번 달 액션",
-      metric: topAction ? "TOP 1" : goalsAchieved,
+      metric: topAction ? "우선 1개" : goalsAchieved,
       metricCaption: compactText(topAction?.title, 18) || "우선 확인할 액션 없음",
       summary: compactText(topAction?.summary, 30) || `월 잉여금 ${monthlySurplus}`,
       footer: `말기 순자산 ${endNetWorth}`,
@@ -144,7 +144,7 @@ async function loadHomeHeroSlides(): Promise<{
       metricCaption: `${goalsAchieved}개 목표 진행`,
       summary: `최저 현금 ${worstCash}`,
       footer: `${featuredRun.input.horizonMonths}개월 플랜`,
-      badge: "REPORT",
+      badge: "리포트",
       theme: "emerald",
       href: reportHref,
       ctaLabel: "리포트 열기",
@@ -158,7 +158,7 @@ async function loadHomeHeroSlides(): Promise<{
       metricCaption: benefitLabels.length > 1 ? `${compactText(benefitLabels[1], 8)} 포함` : "플랜 기준 연결",
       summary: compactText(`플랜 결과 기준 ${benefitLabels.slice(0, 2).join(" · ")}`, 26) || "플랜 결과 기준 혜택 연결",
       footer: profile?.profile.sido ? `${profile.profile.sido} 기준 이어보기` : "혜택 탐색으로 이어보기",
-      badge: "BENEFIT",
+      badge: "혜택",
       theme: "amber",
       href: benefitsHref,
       ctaLabel: "혜택 이어보기",
@@ -215,11 +215,11 @@ async function loadHomeHeroSlides(): Promise<{
     id: "mmd-start",
     eyebrow: "MMD 시작",
     title: "플랜부터 저장",
-    metric: "START",
+    metric: "시작",
     metricCaption: "내 상황 기준 반영",
     summary: "첫 플랜 저장 후 추천과 리포트 연결",
     footer: "지금 바로 시작",
-    badge: "READY",
+    badge: "준비",
     theme: "sky",
     href: "/planning",
     ctaLabel: "플래닝 시작",
@@ -233,7 +233,7 @@ async function loadHomeHeroSlides(): Promise<{
     metricCaption: "주제별 바로 탐색",
     summary: "플랜 전에도 주거·청년 혜택부터 확인",
     footer: "혜택 탐색으로 이동",
-    badge: "NOW",
+    badge: "지금",
     theme: "amber",
     href: "/benefits",
     ctaLabel: "혜택 보기",

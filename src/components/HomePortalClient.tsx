@@ -43,6 +43,13 @@ function formatDateLabel(value: string): string {
   });
 }
 
+function formatPolicyLabel(policyId: string): string {
+  if (policyId === "balanced") return "균형형";
+  if (policyId === "safety" || policyId === "conservative") return "안정형";
+  if (policyId === "growth" || policyId === "aggressive") return "성장형";
+  return "기본 정책";
+}
+
 export function HomePortalClient({
   recentRuns,
   featuredAction,
@@ -58,7 +65,7 @@ export function HomePortalClient({
       <Container className="px-4 sm:px-6 lg:px-8">
         <div className="space-y-6">
           <ReportHeroCard
-            kicker={latestRun ? "Next Actions" : "Quick Start"}
+            kicker={latestRun ? "바로 이어서 보기" : "처음 시작하기"}
             title={latestRun ? "최근 플랜에서 바로 이어서 진행합니다" : "첫 플랜을 시작할 준비가 된 홈 화면"}
             description={latestRun
               ? `${latestRun.title} 기준으로 리포트, 재실행, 혜택 탐색까지 같은 흐름으로 이어갈 수 있습니다.`
@@ -70,13 +77,13 @@ export function HomePortalClient({
                 href={featuredAction.href}
               >
                 <div className="flex flex-wrap items-center gap-3">
-                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">TODAY</p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">추천 액션</p>
                   <span className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-sm shadow-emerald-100">
                     {featuredAction.badge}
                   </span>
                   {featuredAction.quickRuleLabel ? (
                     <span className="rounded-lg border border-emerald-100 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600">
-                      quick rules · {featuredAction.quickRuleLabel}
+                      빠른 점검 · {featuredAction.quickRuleLabel}
                     </span>
                   ) : null}
                 </div>
@@ -101,7 +108,7 @@ export function HomePortalClient({
                   href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(latestRun.id)}`, latestRun.profileId)}
                   prefetch={devPlanningPrefetch("/planning/reports")}
                 >
-                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">NEXT 1</p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">다음 1</p>
                   <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">최신 리포트 다시 보기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     {latestRun.title} · {formatDateLabel(latestRun.createdAt)}
@@ -113,7 +120,7 @@ export function HomePortalClient({
                   href={appendProfileIdQuery("/planning", latestRun.profileId)}
                   prefetch={devPlanningPrefetch("/planning")}
                 >
-                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">NEXT 2</p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">다음 2</p>
                   <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">같은 프로필로 다시 계산</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     저장된 조건을 이어 받아 수정 후 다시 실행합니다.
@@ -124,7 +131,7 @@ export function HomePortalClient({
                   className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href="/benefits"
                 >
-                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">NEXT 3</p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">다음 3</p>
                   <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">혜택 후보까지 이어보기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     플랜을 본 뒤 바로 생활 혜택과 지원 후보를 비교합니다.
@@ -139,7 +146,7 @@ export function HomePortalClient({
                   href="/planning"
                   prefetch={devPlanningPrefetch("/planning")}
                 >
-                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">START 1</p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">시작 1</p>
                   <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">첫 플랜 만들기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     월수입, 지출, 자산만 입력해도 첫 결과를 볼 수 있습니다.
@@ -150,7 +157,7 @@ export function HomePortalClient({
                   className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href="/products/catalog"
                 >
-                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">START 2</p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">시작 2</p>
                   <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">상품 흐름 먼저 익히기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     예적금, 대출, 연금 카테고리를 먼저 훑고 비교 기준을 잡습니다.
@@ -161,7 +168,7 @@ export function HomePortalClient({
                   className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
                   href="/benefits"
                 >
-                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">START 3</p>
+                  <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">시작 3</p>
                   <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">혜택 후보 먼저 보기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     플랜 전에도 주거, 청년, 생활안정 관련 혜택을 바로 탐색할 수 있습니다.
@@ -212,7 +219,7 @@ export function HomePortalClient({
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{run.createdAt.slice(0, 10)}</p>
                   <p className="mt-5 text-xl font-black tracking-tight text-slate-900">{run.title}</p>
                   <p className="mt-2 text-xs font-bold text-slate-500">
-                    {statusLabel(run.overallStatus)} · {run.horizonMonths}개월 · {run.policyId} 정책
+                    {statusLabel(run.overallStatus)} · {run.horizonMonths}개월 · {formatPolicyLabel(run.policyId)}
                   </p>
                   <div className="mt-10 flex flex-wrap items-center gap-6">
                     <Link

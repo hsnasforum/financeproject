@@ -454,10 +454,10 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
           <div className="h-3 w-px bg-slate-200" />
           <div className="flex items-center gap-2">
             <Button variant={includeNationwide ? "secondary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ includeNationwide: !includeNationwide })}>
-              전국 포함 {includeNationwide ? "ON" : "OFF"}
+              전국 포함 {includeNationwide ? "켜짐" : "꺼짐"}
             </Button>
             <Button variant={includeUnknown ? "secondary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ includeUnknown: !includeUnknown })}>
-              미상 포함 {includeUnknown ? "ON" : "OFF"}
+              미상 포함 {includeUnknown ? "켜짐" : "꺼짐"}
             </Button>
           </div>
         </div>
@@ -536,7 +536,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                           <div className="flex flex-col gap-1 font-bold text-slate-700">
                             <span className="line-clamp-1">{item.applyHow || "-"}</span>
                             {applyShortcut && (
-                              <a href={applyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex text-emerald-600 underline underline-offset-4 decoration-emerald-200 hover:text-emerald-700 transition-colors">Apply Link ▶</a>
+                              <a href={applyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex text-emerald-600 underline underline-offset-4 decoration-emerald-200 hover:text-emerald-700 transition-colors">신청 링크 ▶</a>
                             )}
                           </div>
                         </div>
@@ -550,7 +550,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                         ))}
                       </div>
                       <Button variant="ghost" className="h-9 rounded-xl text-xs font-black text-emerald-600 hover:bg-emerald-50 px-4" onClick={() => void openDetail(item)}>
-                        Detail View →
+                        상세 보기 →
                       </Button>
                     </div>
                   </Card>
@@ -566,7 +566,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                   onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: nextCursor, includeFacets: false, append: true, syncUrl: false })}
                   disabled={loading}
                 >
-                  {loading ? "로딩 중..." : "결과 더 보기 (Scroll Down)"}
+                  {loading ? "로딩 중..." : "결과 더 보기"}
                 </Button>
               </div>
             )}
@@ -601,7 +601,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
             <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-10 scrollbar-thin scrollbar-thumb-slate-200">
               <section>
-                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Benefit Summary</p>
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">혜택 요약</p>
                 <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8 text-sm font-medium leading-relaxed text-slate-700 shadow-inner">
                   {selected.summary}
                 </div>
@@ -632,7 +632,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
               {selected.applyHow && (
                 <section className="rounded-[2.5rem] bg-slate-50 p-8 md:p-10 border border-slate-100 shadow-sm transition-all">
-                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">How to Apply</p>
+                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">신청 방법</p>
                   <div className="text-sm font-bold text-slate-700 leading-relaxed">
                     <p>
                       {selected.applyHow}
@@ -653,8 +653,8 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
             </div>
 
             <div className="bg-slate-50/80 p-6 px-10 border-t border-slate-100 flex items-center justify-between">
-               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Source: Gov24 Open API</p>
-               <Button variant="ghost" className="text-xs font-black text-slate-400" onClick={() => setSelected(null)}>Close</Button>
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">출처: 보조금24 Open API</p>
+               <Button variant="ghost" className="text-xs font-black text-slate-400" onClick={() => setSelected(null)}>닫기</Button>
             </div>
           </Card>
         </div>
