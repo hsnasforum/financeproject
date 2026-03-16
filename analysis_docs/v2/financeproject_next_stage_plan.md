@@ -445,6 +445,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `환율`은 primary host를 `public info(/tools/fx)`, secondary host를 `planning`으로 두고, 환전·해외결제 비용 참고 맥락 외의 독립 의사결정 기능으로 확장하지 않는 기준을 적었습니다.
 - raw source 상태, sync, env, fallback diagnostics 같은 운영 정보는 계속 `/settings/data-sources` trust hub owner로 두고, public surface에는 행동 근거/비교 맥락 helper만 얇게 노출하는 공통 규칙을 명시했습니다.
 - `P3-3`에서 정한 `macro / retirement / insurance`의 tier와 host 후보도 함께 정리해, `macro`는 `planning`, `retirement`는 `planning/recommend`, `insurance`는 trust hub candidate 유지 원칙과 충돌하지 않도록 경계를 고정했습니다.
+- 후속 구현으로 planning report의 `ReportBenefitsSection`에서 혜택을 독립 탐색 축처럼 키우지 않고, “현재 플래닝 결과 기준으로 먼저 볼 후보를 좁혀 준다”는 secondary host copy와 `/benefits` deep-link CTA 1건을 추가해 primary host 경로를 명확히 열었습니다.
 
 ### 완료 기준
 - 추천/상품/공공 정보 화면 모두 freshness 표시
