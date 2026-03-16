@@ -140,6 +140,12 @@ type ActionReasonContext = {
   helper: string;
 };
 
+type TrustCue = {
+  tone: "emerald" | "amber" | "slate";
+  label: string;
+  helper: string;
+};
+
 type StoredRecommendItemV1 = {
   key: string;
   sourceId: string;
@@ -310,6 +316,62 @@ function buildActionReasonContext(
   }
 
   return null;
+}
+
+function buildTrustCues(input: {
+  item: RecommendItem;
+  depositProtectionPolicy?: string;
+}): TrustCue[] {
+  const cues: TrustCue[] = [];
+  const { item, depositProtectionPolicy } = input;
+
+  if (item.signals?.depositProtection === "matched") {
+    cues.push({
+      tone: "emerald",
+      label: "예금자 보호 신호 확인",
+      helper: "현재 결과 기준으로 예금자 보호 신호가 함께 확인됐습니다. 가입 전 실제 적용 범위를 다시 확인해 주세요.",
+    });
+  }
+
+  if (item.signals?.depositProtection === "unknown") {
+    cues.push({
+      tone: "amber",
+      label: "예금자 보호 여부 추가 확인 필요",
+      helper: depositProtectionPolicy
+        ? `현재 결과만으로는 예금자 보호 여부가 확실하지 않습니다. ${depositProtectionPolicy} 기준과 상품 설명서를 함께 확인해 주세요.`
+        : "현재 결과만으로는 예금자 보호 여부가 확실하지 않습니다. 가입 전 상품 설명서와 보호 기준을 함께 확인해 주세요.",
+    });
+  }
+
+  if (item.selectedOption.rateSource === "intr_rate2") {
+    cues.push({
+      tone: "amber",
+      label: "우대금리 포함 가능성",
+      helper: "지금 보이는 금리는 우대조건이 반영된 값일 수 있습니다. 실제로 받을 수 있는 조건인지 한 번 더 확인해 주세요.",
+    });
+  } else if (item.selectedOption.rateSource === "intr_rate") {
+    cues.push({
+      tone: "slate",
+      label: "기본 금리 기준",
+      helper: "현재 카드는 기본 금리 기준으로 읽으면 됩니다. 우대조건이 따로 붙는지 비교해서 보세요.",
+    });
+  }
+
+  if ((item.badges ?? []).some((badge) => badge.trim().length > 0)) {
+    cues.push({
+      tone: "slate",
+      label: "상품 메모 확인",
+      helper: "카드에 붙은 메모 배지도 함께 보세요. 가입 조건이나 비교 포인트를 빠르게 읽는 데 도움이 됩니다.",
+    });
+  }
+
+  cues.push({
+    tone: "slate",
+    label: "데이터 최신성 읽기",
+    helper: "이 카드의 최신성 판단은 화면 상단 데이터 배너 기준으로 함께 읽어 주세요.",
+  });
+
+  return cues;
 }
 
 function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
@@ -1028,6 +1090,10 @@ function RecommendPageInner() {
               const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
               const detailProduct = buildDetailProduct(item);
               const scorePct = Math.min(100, Math.max(0, item.finalScore));
+              const trustCues = buildTrustCues({
+                item,
+                depositProtectionPolicy: result.meta?.assumptions.depositProtectionPolicy,
+              });
               return (
                 <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100">
                   <div className="mb-6 flex items-start justify-between">
@@ -1075,6 +1141,33 @@ function RecommendPageInner() {
                         style={{ width: `${scorePct}%` }}
                       />
                     </div>
+                  </div>
+
+                  <div className="mb-8 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">읽기 힌트</p>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {trustCues.length}개
+                      </span>
+                    </div>
+                    <ul className="space-y-2">
+                      {trustCues.map((cue) => (
+                        <li
+                          key={cue.label}
+                          className={cn(
+                            "rounded-2xl border px-4 py-3 text-[11px] font-bold leading-relaxed shadow-sm",
+                            cue.tone === "emerald"
+                              ? "border-emerald-100 bg-emerald-50/40 text-emerald-800"
+                              : cue.tone === "amber"
+                                ? "border-amber-100 bg-amber-50/50 text-amber-900"
+                                : "border-slate-100 bg-slate-50/70 text-slate-600",
+                          )}
+                        >
+                          <p className="text-[10px] font-black uppercase tracking-widest">{cue.label}</p>
+                          <p className="mt-1">{cue.helper}</p>
+                        </li>
+                      ))}
+                    </ul>
                   </div>
 
                   <div className="mb-8 space-y-3">
