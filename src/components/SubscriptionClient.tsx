@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
@@ -14,7 +15,6 @@ import { Button } from "@/components/ui/Button";
 import { SearchPill } from "@/components/ui/SearchPill";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { FilterWrapper } from "@/components/ui/FilterWrapper";
-import { FallbackBanner } from "@/components/FallbackBanner";
 import { cn } from "@/lib/utils";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
@@ -37,24 +37,6 @@ type SubscriptionItem = {
   contact?: string;
   details?: Record<string, string>;
   link?: string;
-};
-
-type SearchMeta = {
-  scannedPages?: number;
-  scannedRows?: number;
-  upstreamTotalCount?: number;
-  matchedRows?: number;
-  rawMatched?: number;
-  normalizedCount?: number;
-  dropStats?: { missingTitle?: number; generatedId?: number };
-  truncated?: boolean;
-  availableRegionsTop?: string[];
-  fallback?: {
-    mode?: string;
-    reason?: string;
-    generatedAt?: string;
-    nextRetryAt?: string;
-  };
 };
 
 function todayIsoDate(): string {
@@ -96,7 +78,6 @@ export function SubscriptionClient({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [assumption, setAssumption] = useState("");
-  const [meta, setMeta] = useState<SearchMeta>({});
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [houseType, setHouseType] = useState<SubscriptionHouseType>(initialHouseType);
@@ -169,7 +150,6 @@ export function SubscriptionClient({
     setLoading(true);
     setError("");
     setFormIssues([]);
-    setMeta({});
     try {
       const params = new URLSearchParams();
       if (filters.region) params.set("region", filters.region);
@@ -194,7 +174,6 @@ export function SubscriptionClient({
       }
       setItems(Array.isArray(json.data?.items) ? json.data.items : []);
       setAssumption(typeof json.data?.assumptions?.note === "string" ? json.data.assumptions.note : "");
-      setMeta(typeof json.meta === "object" && json.meta ? json.meta : {});
     } catch {
       setError("청약 공고 조회 실패");
       announce("청약 공고 조회 실패");
@@ -213,6 +192,13 @@ export function SubscriptionClient({
   return (
     <PageShell>
       <PageHeader title="청약 공고 탐색" description="청약홈의 최신 분양 정보와 지역별 모집 일정을 한눈에 확인하세요." />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        데이터 신뢰 및 연동 상태는{" "}
+        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+          내 설정 &gt; 데이터 신뢰 및 연동 상태
+        </Link>
+        에서 확인할 수 있습니다.
+      </p>
       
       <div className="mb-8 space-y-4">
         <Card className="rounded-[2.5rem] p-8 shadow-sm">
@@ -310,7 +296,6 @@ export function SubscriptionClient({
           {assumption && <div className="h-3 w-px bg-slate-200" />}
           {assumption && <span className="text-[10px] font-bold text-slate-400 italic">※ {assumption}</span>}
         </div>
-        <FallbackBanner fallback={meta.fallback} />
       </div>
 
       {error && (

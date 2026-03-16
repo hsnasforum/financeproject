@@ -1,13 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
 import { SourceBadge } from "@/components/debug/SourceBadge";
-import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
-import { type FreshnessSourceSpec } from "@/components/data/freshness";
 import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -801,13 +800,6 @@ function RecommendPageInner() {
     return "목돈 마련";
   }, [profile.purpose]);
 
-  const freshnessSources = useMemo<FreshnessSourceSpec[]>(() => {
-    if (profile.kind === "saving") {
-      return [{ sourceId: "finlife", kind: "saving", label: "FINLIFE 적금", importance: "required" }];
-    }
-    return [{ sourceId: "finlife", kind: "deposit", label: "FINLIFE 예금", importance: "required" }];
-  }, [profile.kind]);
-
   const fieldIssueMap = useMemo(() => issuesToFieldMap(formIssues), [formIssues]);
   const planningActionContext = useMemo(
     () => readPlanningActionContext(searchParams),
@@ -860,10 +852,15 @@ function RecommendPageInner() {
         title="스마트 상품 추천"
         description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        데이터 신뢰 및 연동 상태는{" "}
+        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+          내 설정 &gt; 데이터 신뢰 및 연동 상태
+        </Link>
+        에서 확인할 수 있습니다.
+      </p>
 
       <div className="mb-8 space-y-6" data-testid="recommend-root">
-        <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
-        
         <Card className="rounded-[2.5rem] p-8 shadow-sm">
           <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-6" />
           <ErrorAnnouncer />
