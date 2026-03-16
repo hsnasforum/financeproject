@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,6 +10,9 @@ import {
 } from "@/components/ui/ReportTone";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
 import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
+import { type Stage } from "@/lib/planning/engine";
+import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
+import { PLANNER_ACTION_LINKS } from "@/lib/planner/compute";
 import { type ReportVM } from "../_lib/reportViewModel";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
@@ -83,6 +87,51 @@ function compactText(value: string | undefined, maxLength: number): string {
   if (!normalized) return "";
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function asStage(value: unknown): Stage | undefined {
+  return value === "DEFICIT" || value === "DEBT" || value === "EMERGENCY" || value === "INVEST" ? value : undefined;
+}
+
+function resolvePlanningStage(vm: ReportVM): Stage | undefined {
+  const raw = asRecord(vm.raw);
+  const run = asRecord(raw?.runJson);
+  const outputs = asRecord(run?.outputs);
+  const engine = asRecord(outputs?.engine);
+  const engineFinancialStatus = asRecord(engine?.financialStatus);
+  const simulate = asRecord(outputs?.simulate);
+  const simulateFinancialStatus = asRecord(simulate?.financialStatus);
+
+  return (
+    asStage(engineFinancialStatus?.stage)
+    ?? asStage(engine?.stage)
+    ?? asStage(simulateFinancialStatus?.stage)
+    ?? asStage(simulate?.stage)
+  );
+}
+
+function buildActionRecommendHref(input: {
+  baseHref: string;
+  runId?: string;
+  stage?: Stage;
+  overallStatus?: PlanningRunOverallStatus;
+}): string {
+  const url = new URL(input.baseHref, "https://financeproject.local");
+  url.searchParams.set("from", "planning-report");
+  if (input.runId) {
+    url.searchParams.set("planning.runId", input.runId);
+  }
+  if (input.stage) {
+    url.searchParams.set("planning.summary.stage", input.stage);
+  }
+  if (input.overallStatus) {
+    url.searchParams.set("planning.summary.overallStatus", input.overallStatus);
+  }
+  return `${url.pathname}${url.search}`;
 }
 
 function actionSummaryTone(input: {
@@ -279,6 +328,15 @@ export default function ReportDashboard({ vm }: Props) {
   ) || "저장된 실행 결과와 기본 가정 기준으로 계산했습니다.";
   const assumptionPreview = compactText(vm.assumptionsLines[0], 120);
   const renderOverrideReason = (reason?: string) => reason?.trim() || "입력값 기준으로 조정";
+  const planningStage = resolvePlanningStage(vm);
+  const emergencyRecommendHref = planningStage
+    ? buildActionRecommendHref({
+      baseHref: PLANNER_ACTION_LINKS.emergencyRecommend.href,
+      runId: vm.header.runId,
+      stage: planningStage,
+      overallStatus: vm.stage.overallStatus,
+    })
+    : null;
 
   return (
     <div className="space-y-8" data-testid="report-dashboard">
@@ -638,6 +696,16 @@ export default function ReportDashboard({ vm }: Props) {
                       ))}
                     </ul>
                   </div>
+                  {action.code === "BUILD_EMERGENCY_FUND" && emergencyRecommendHref ? (
+                    <div className="mt-6 border-t border-slate-100 pt-4">
+                      <Link
+                        className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-700 active:scale-95"
+                        href={emergencyRecommendHref}
+                      >
+                        {PLANNER_ACTION_LINKS.emergencyRecommend.label}
+                      </Link>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>
