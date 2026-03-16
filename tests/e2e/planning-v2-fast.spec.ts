@@ -28,7 +28,7 @@ test("/planning shows form by default and hides raw JSON until Advanced toggle",
   await expect(page.getByTestId("planning-json-editor")).toBeVisible();
 });
 
-test("/planning/reports shows run-based dashboard by default and keeps raw hidden", async ({ page, request }) => {
+test("/planning/reports shows run-based dashboard by default and keeps embedded markdown manager hidden", async ({ page, request }) => {
   const seeded = await seedRunForReports(request);
   await page.goto(
     `/planning/reports?runId=${encodeURIComponent(seeded.runId)}&profileId=${encodeURIComponent(seeded.profileId)}`,
@@ -45,13 +45,13 @@ test("/planning/reports shows run-based dashboard by default and keeps raw hidde
   }
   const warningsTable = page.getByTestId("report-warnings-table");
   await expect(warningsTable).toBeVisible();
-  await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
+  await expect(page.getByRole("heading", { name: "리포트 목록" })).toHaveCount(0);
   const advancedToggle = page.getByTestId("report-advanced-toggle");
   await advancedToggle.scrollIntoViewIfNeeded();
   await expect(advancedToggle).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
   await advancedToggle.click();
   await expect(advancedToggle).toHaveAttribute("aria-expanded", "true", { timeout: 30_000 });
-  await expect(page.getByTestId("report-advanced-raw")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("heading", { name: "리포트 목록" })).toBeVisible({ timeout: 30_000 });
 });
 
 test("/planning/runs shows print button", async ({ page }) => {
@@ -64,7 +64,7 @@ test("key interactive controls expose accessible names", async ({ page, request 
   const seeded = await seedRunForReports(request);
   await page.goto("/planning");
   await expect(page.getByTestId("planning-profile-form")).toBeVisible();
-  await expect(page.getByTestId("run-button")).toHaveAccessibleName("실행");
+  await expect(page.getByTestId("run-button")).toHaveAccessibleName("플래닝 실행");
   await expect(page.getByTestId("planning-snapshot-ops-link")).toBeVisible();
 
   await page.goto(

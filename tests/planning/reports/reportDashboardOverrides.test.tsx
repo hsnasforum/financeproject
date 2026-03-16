@@ -81,11 +81,12 @@ describe("ReportDashboard overrides disclosure", () => {
     const vm = buildReportVM(fixtureRun());
     const html = renderToStaticMarkup(<ReportDashboard vm={vm} />);
 
-    expect(html).toContain("Action First");
-    expect(html).toContain("계산 기준과 가정");
+    expect(html).toContain("우선 액션");
+    expect(html).toContain("계산 기준");
     expect(html).toContain('data-testid="assumptions-overrides-panel"');
-    expect(html).toContain('data-testid="assumptions-overrides-item"');
-    expect(html).toContain("inflationPct");
+    expect(html).toContain("적용된 가정 오버라이드 (1)");
+    expect(html).toContain("조정 항목");
+    expect(html).toContain("ops override");
     expect(html).toContain("2.7");
   });
 
