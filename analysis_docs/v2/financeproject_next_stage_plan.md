@@ -27,7 +27,7 @@
 | Phase | 범위 | 상태 | 진행률 |
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
-| Phase 2 | Planning → Recommend 실질 연동 | `[보류]` | `0 / 5` |
+| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `0 / 5` |
 | Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[미착수]` | `0 / 4` |
 
 ### 0.4 운영 원칙
@@ -254,7 +254,7 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 
 ### 해야 할 일
 
-#### P2-1) canonical planning-to-recommend contract 정의 `[보류]`
+#### P2-1) canonical planning-to-recommend contract 정의 `[진행중]`
 새 DTO를 만듭니다.
 
 - `PlanningSummaryDto`
@@ -272,11 +272,11 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - planning stage
 - 추천 목적(reason code)
 
-보류 메모 (2026-03-16):
-- 현행 `UserRecommendProfile.planningContext`는 월수입/월지출/유동자산/부채잔액 4개 입력만 다룹니다.
-- `/api/recommend`는 `meta.planningLinkage.stageInference = "disabled"`를 현재 계약으로 노출합니다.
-- 저장소 문서에도 canonical `runId`, planning stage/status/trace가 아직 없다고 정리돼 있습니다.
-- 이 상태에서 DTO를 바로 확장하면 `P2-2`, `P2-4`, `P2-5`까지 동시에 열리므로 선행 범위 결정이 필요합니다.
+진행 메모 (2026-03-16):
+- `analysis_docs/v2/06_planning_recommend_contract_decision.md`에 canonical source, ownership, DTO 초안, `P2-2 ~ P2-5` 선행 순서를 고정했습니다.
+- canonical handoff source는 report VM이나 live profile join이 아니라 `PlanningRunRecord`가 소유하는 handoff projection으로 정리했습니다.
+- 현행 `UserRecommendProfile.planningContext` 4개 입력은 legacy bridge로 유지하고, `PlanningToRecommendContextDto`와 `RecommendRequestV2`로 승격하는 방향을 문서 기준으로 확정했습니다.
+- 다만 handoff projection의 실제 저장 경로 이름과 migration 방식은 구현 라운드에서 최종 고정이 필요합니다.
 
 #### P2-2) stage inference 활성화 `[미착수]`
 현재 disabled인 `planningLinkage.stageInference`를 활성화합니다.

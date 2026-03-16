@@ -374,6 +374,11 @@ type UserRecommendProfile = {
 };
 ```
 
+확인 메모 (2026-03-16)
+- 현행 recommend 입력의 planning linkage는 top-level `planningContext` 4개 숫자와 `/api/recommend`의 `stageInference: "disabled"`에 머뭅니다.
+- planning run 기준 canonical `runId / stage / status / trace` ownership과 DTO 승격 방향은 `06_planning_recommend_contract_decision.md`를 우선 기준으로 삼습니다.
+- `planningContext`는 `RecommendRequestV2` 구현 전까지 compatibility bridge로 유지하는 것이 안전합니다.
+
 ## 6.2 SelectedOption
 
 ```ts
@@ -597,6 +602,10 @@ type SimulateRequestBody = {
 
 ## 9. 표준화가 필요한 DTO (권장안)
 
+주의 (2026-03-16)
+- planning → recommend handoff의 상세 canonical contract는 `06_planning_recommend_contract_decision.md`를 우선합니다.
+- 아래 9.1 ~ 9.3은 저장소 전반 DTO 정규화 참고안이고, `P2-1` 구현 시작점은 `PlanningSummaryDto`, `PlanningActionDto`, `PlanningToRecommendContextDto`, `RecommendRequestV2`, `RecommendExplanationDto` 결정안입니다.
+
 ## 9.1 CanonicalFinancialProfileDto
 
 권장 이유
@@ -658,6 +667,10 @@ type PlanningDecisionContextDto = {
 ```
 
 ## 9.3 RecommendationRequestDto (권장 통합판)
+
+메모
+- 이 섹션은 상위 정규화 참고안입니다.
+- planning run 기반 실제 handoff 계약은 `RecommendRequestV2`와 `PlanningToRecommendContextDto`로 별도 고정하는 편이 현재 저장소 구조에 더 가깝습니다.
 
 ```ts
 type RecommendationRequestDto = {
