@@ -131,6 +131,11 @@
   - golden dataset이 어떤 contract를 검증하는지 연결됨
   - release 전에 어떤 세트를 반드시 통과해야 하는지 정의됨
 
+연결 메모 (2026-03-17):
+- gate tier, required/advisory command set, golden dataset category는 `analysis_docs/v2/14_planning_v3_qa_gate_and_golden_dataset.md`를 기준으로 잠급니다.
+- stable / beta / ops-dev는 같은 검증 세트로 다루지 않습니다.
+- `N4` visibility policy는 이 문서의 gate tier와 route policy 연결 규칙을 그대로 재사용합니다.
+
 ## N4. planning/v3 beta exposure / visibility policy
 
 - 분류: `beta exposure`
