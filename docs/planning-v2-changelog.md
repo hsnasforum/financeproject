@@ -1,5 +1,11 @@
 # Planning v2 Changelog (P97-0 ~ P97-99)
 
+## 2026-03-16 Release Notes Prep (v1.0.4)
+
+- 패키지 버전과 Planning v2 릴리즈 스크립트의 `--version` 파라미터를 `1.0.4`로 동기화했습니다.
+- `docs/release-notes.md` 최신 항목과 `docs/releases/planning-v2-1.0.4.md`를 추가해 이번 후속 릴리즈의 사용자 영향과 운영 메모를 정리했습니다.
+- 공식 public UI의 밝은 톤 정리 마감, 한글 copy 정리, 계산 근거 오버레이 개선, 플래닝 입력 폭 수정, `analysis_docs` 정비 완료를 `v1.0.4` 변경 범위로 묶었습니다.
+
 ## 2026-03-02 Release Prep (v1.0.3)
 
 - 릴리즈 준비: 버전 갱신 및 스크립트 버전 파라미터 동기화.
