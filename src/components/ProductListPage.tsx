@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
+import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
 import { applyFilters, collectFilterOptions } from "@/lib/finlife/filters";
 import { pruneOpen, toggleOpen } from "@/lib/finlife/groupOpenState";
@@ -44,6 +44,7 @@ import {
   toggleFavorite,
   type ProductShelfState,
 } from "@/lib/state/productShelf";
+import { type SourceStatusRow } from "@/lib/sources/types";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
@@ -66,6 +67,11 @@ type AvailabilityRow = {
   message?: string;
 };
 
+type StatusApiResponse = {
+  ok: boolean;
+  data?: SourceStatusRow[];
+};
+
 const FINLIFE_PAGE_SIZE = 50;
 
 function parseAmountInput(value: string): number {
@@ -86,6 +92,35 @@ function sanitizeSnapshotNote(note: string | null | undefined): string | null {
   return note
     .replaceAll("pnpm finlife:probe", "데이터 점검")
     .replaceAll("finlife:probe", "데이터 점검");
+}
+
+function toProductAssumptionNote(note: string | null | undefined): string | null {
+  const sanitized = sanitizeSnapshotNote(note)?.trim();
+  if (!sanitized) return null;
+  if (sanitized.includes("업권 범위가 좁을 수 있음")) return "업권 범위가 좁을 수 있습니다.";
+  if (/[a-z]+=/i.test(sanitized)) return null;
+  if (sanitized.toLowerCase().includes("fromfile")) return null;
+  if (sanitized.toLowerCase().includes("replay")) return null;
+  if (sanitized.includes("데이터 점검")) return null;
+  return sanitized;
+}
+
+function deriveFreshnessStatus(row: SourceStatusRow | null): FinlifeCardFreshnessMeta["freshnessStatus"] {
+  if (!row) return undefined;
+  if (row.lastError?.message) return "error";
+  if (row.counts <= 0) return "empty";
+  if (!row.isFresh) return "stale";
+  return "ok";
+}
+
+function formatFinlifeFallbackMode(payload: FinlifeSourceResult | null): string | null {
+  const fallbackMode = payload?.meta.fallback?.mode;
+  if (fallbackMode === "CACHE") return "캐시 기준";
+  if (fallbackMode === "REPLAY") return "재생 데이터 기준";
+  if (payload?.mode === "mock" || payload?.meta.source === "mock") return "예시 데이터 기준";
+  if (payload?.meta.fallbackUsed && payload.meta.source === "snapshot") return "스냅샷 기준";
+  if (payload?.meta.fallbackUsed && payload.meta.source === "live_partial") return "부분 수집 기준";
+  return null;
 }
 
 function isValidSortKey(value: string | null): value is SortKey {
@@ -160,9 +195,11 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [payload, setPayload] = useState<FinlifeSourceResult | null>(null);
+  const [sourceStatusRows, setSourceStatusRows] = useState<SourceStatusRow[]>([]);
   const [availability, setAvailability] = useState<AvailabilityRow[]>([]);
   const [availabilityNotice, setAvailabilityNotice] = useState("");
   const [selectionNotice, setSelectionNotice] = useState("");
+  const sourceStatusAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setShelf(loadShelfFromStorage());
@@ -211,6 +248,39 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   useEffect(() => {
     setAvailability([]);
     setAvailabilityNotice("");
+  }, [kind]);
+
+  useEffect(() => {
+    if (kind !== "deposit" && kind !== "saving") {
+      sourceStatusAbortRef.current?.abort();
+      setSourceStatusRows([]);
+      return;
+    }
+
+    sourceStatusAbortRef.current?.abort();
+    const controller = new AbortController();
+    sourceStatusAbortRef.current = controller;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/sources/status", {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = (await response.json()) as StatusApiResponse;
+        if (!response.ok || !json.ok || !Array.isArray(json.data)) {
+          if (!controller.signal.aborted) setSourceStatusRows([]);
+          return;
+        }
+        if (!controller.signal.aborted) setSourceStatusRows(json.data);
+      } catch (fetchError) {
+        if (fetchError instanceof Error && fetchError.name === "AbortError") return;
+        if (!controller.signal.aborted) setSourceStatusRows([]);
+      }
+    })();
+
+    return () => controller.abort();
   }, [kind]);
 
   const providerOptions = useMemo(() => {
@@ -472,6 +542,32 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     };
   }, [payload]);
 
+  const finlifeSourceStatusRow = useMemo(() => {
+    if (kind !== "deposit" && kind !== "saving") return null;
+    return sourceStatusRows.find((row) => row.sourceId === "finlife" && row.kind === kind) ?? null;
+  }, [kind, sourceStatusRows]);
+
+  const cardFreshnessMeta = useMemo<FinlifeCardFreshnessMeta | null>(() => {
+    if (kind !== "deposit" && kind !== "saving") return null;
+
+    const fallbackMode = formatFinlifeFallbackMode(payload);
+    const assumptionNote = toProductAssumptionNote(payload?.meta.note);
+    const snapshotGeneratedAt = payload?.meta.snapshot?.generatedAt ?? null;
+    const rowStatus = deriveFreshnessStatus(finlifeSourceStatusRow);
+    const lastSyncedAt = snapshotGeneratedAt ?? finlifeSourceStatusRow?.lastSyncedAt ?? null;
+
+    if (!lastSyncedAt && !rowStatus && !fallbackMode && !assumptionNote) return null;
+
+    return {
+      sourceId: "finlife",
+      kind,
+      ...(lastSyncedAt ? { lastSyncedAt } : {}),
+      ...(rowStatus ? { freshnessStatus: rowStatus } : {}),
+      ...(fallbackMode ? { fallbackMode } : {}),
+      ...(assumptionNote ? { assumptionNotes: [assumptionNote] } : {}),
+    };
+  }, [finlifeSourceStatusRow, kind, payload]);
+
   return (
     <PageShell>
       <PageHeader 
@@ -666,6 +762,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                       product={item}
                       kind={kind}
                       amountWonDefault={parseAmountInput(amountInput)}
+                      freshnessMeta={cardFreshnessMeta ?? undefined}
                       badges={[]}
                       reasonLines={highlightReasons}
                       isFavorite={shelfFavoriteIds.has(productId)}
@@ -693,6 +790,41 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                               <div className="min-w-0">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{group.product.kor_co_nm ?? "-"}</p>
                                 <h3 className="truncate text-base font-black text-slate-900 tracking-tight">{group.product.fin_prdt_nm ?? "-"}</h3>
+                                {cardFreshnessMeta ? (
+                                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black">
+                                    {cardFreshnessMeta.lastSyncedAt ? (
+                                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">
+                                        기준 확인 {new Date(cardFreshnessMeta.lastSyncedAt).toLocaleString("ko-KR", { hour12: false })}
+                                      </span>
+                                    ) : null}
+                                    {cardFreshnessMeta.freshnessStatus ? (
+                                      <span
+                                        className={cn(
+                                          "rounded-full border px-2.5 py-1",
+                                          cardFreshnessMeta.freshnessStatus === "ok"
+                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                            : cardFreshnessMeta.freshnessStatus === "stale"
+                                              ? "border-amber-200 bg-amber-50 text-amber-800"
+                                              : cardFreshnessMeta.freshnessStatus === "error"
+                                                ? "border-rose-200 bg-rose-50 text-rose-700"
+                                                : "border-slate-200 bg-white text-slate-500",
+                                        )}
+                                      >
+                                        상태: {cardFreshnessMeta.freshnessStatus === "ok" ? "최신" : cardFreshnessMeta.freshnessStatus === "stale" ? "기준 지남" : cardFreshnessMeta.freshnessStatus === "error" ? "최근 확인 실패" : "기준 정보 없음"}
+                                      </span>
+                                    ) : null}
+                                    {cardFreshnessMeta.fallbackMode ? (
+                                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">
+                                        {cardFreshnessMeta.fallbackMode}
+                                      </span>
+                                    ) : null}
+                                    {cardFreshnessMeta.assumptionNotes?.[0] ? (
+                                      <span className="line-clamp-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">
+                                        유의: {cardFreshnessMeta.assumptionNotes[0]}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
                                 <p className="mt-1 text-[11px] font-bold text-slate-500">
                                   {summaryTerm} · 최고 <span className="text-emerald-600">{formatOptionRate(rep.best)}</span> (기본 {formatOptionRate(rep.base)})
                                 </p>
@@ -751,7 +883,13 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                     );
                   })
                   : optionRows.map((row) => (
-                    <ProductOptionRowItem key={row.key} row={row} kind={kind} amountWonDefault={parseAmountInput(amountInput)} />
+                    <ProductOptionRowItem
+                      key={row.key}
+                      row={row}
+                      kind={kind}
+                      amountWonDefault={parseAmountInput(amountInput)}
+                      freshnessMeta={cardFreshnessMeta ?? undefined}
+                    />
                   ))
             )}
           </div>
