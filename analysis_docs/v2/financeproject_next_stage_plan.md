@@ -412,7 +412,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `/recommend`, `/products/*`, `/housing/subscription`의 운영성 배너는 이미 제거돼 있고, public 결과 화면은 짧은 freshness helper만 보여 주며 상세 운영 상태 확인은 `/settings/data-sources` trust hub로 넘기는 공통 규칙을 유지합니다.
 - daily refresh 장애나 source freshness 문제의 사용자 안내는 public helper + settings trust hub owner 분리 원칙으로 문서화되어 있고, raw source 상태·TTL·last error·수동 재확인은 계속 settings 화면에만 둡니다.
 
-#### P3-3) 확장 후보의 제품화 기준 수립 `[미착수]`
+#### P3-3) 확장 후보의 제품화 기준 수립 `[진행중]`
 현재 data-sources 화면에 있는 expansion candidate를 실제 제품 backlog로 전환합니다.
 
 우선순위 기준:
@@ -421,6 +421,13 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - 설명 가능성
 - 운영 비용
 - 공공 API 장애 내성
+
+진행 메모 (2026-03-17):
+- `retirement`, `insurance`, `macro` 후보를 trust hub의 확장 카드와 실제 제품 backlog를 분리해서 다시 판정하는 기준을 문서로 고정했습니다.
+- 후보 판정은 `사용자 효용 / 최신성·안정성 / 설명 가능성 / 운영 비용 / 규제·오해 리스크` 5축을 `Tier A(바로 backlog 진입 가능) / Tier B(계약·문구·정책 선행 필요) / Tier C(보류)`로 읽는 방식으로 정리했습니다.
+- `retirement`는 사용자 효용은 높지만 비교 문구와 보장 표현이 민감해 `Tier B`, `insurance`는 약관·보장 해석 리스크가 커서 `Tier C`, `macro`는 direct public feature보다 planning support layer가 맞아 `Tier B`로 분류했습니다.
+- rollout 우선순위는 `macro -> retirement -> insurance(보류 유지)`로 좁혔고, 각 후보는 trust hub 카드에서 곧바로 공개 기능으로 승격하지 않고 host surface가 정해질 때만 이동시키는 원칙을 명시했습니다.
+- `P3-4`와의 연결 기준도 함께 적어, 후보가 trust hub를 떠날 때는 독립 기능이 아니라 `planning / recommend / public info`의 행동 근거 보강 레이어로만 들어가도록 방향을 고정했습니다.
 
 #### P3-4) DART/혜택/주거/환율의 역할 분리 `[미착수]`
 이 기능들은 보조 기능이 아니라 “행동 근거 강화 레이어”로 배치합니다.
