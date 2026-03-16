@@ -326,12 +326,19 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 - 후속 배치에서 추천 카드 근처에 예금자 보호 신호, 금리 조건 확인 필요 여부, 데이터 최신성 읽기 힌트를 짧은 trust cue로 붙여 현재 데이터 기준의 신뢰 읽기 포인트를 같이 보이게 했습니다.
 - 따라서 이 항목에 정의한 4축인 planning context strip, action context 설명, 카드 why 연결, trust cue 노출은 현재 커밋 기준으로 모두 충족한 것으로 보고 `P2-4`를 닫습니다.
 
-#### P2-5) history/report 통합 `[미착수]`
+#### P2-5) history/report 통합 `[진행중]`
 recommend history와 planning runs/report의 연결성을 강화합니다.
 
 - planning run에서 파생된 recommend result 링크
 - recommend result에서 근거 planning run 링크
 - report export에서 source freshness / assumptions / trace 포함
+
+진행 메모 (2026-03-16):
+- recommend local history의 owner id는 `SavedRecommendRun.runId`로 유지하고, planning run 참조는 이미 저장되는 `profile.planning.runId`를 canonical planning ref로 쓰는 원칙을 먼저 고정했습니다.
+- recommend history에서 planning report로 돌아가는 first path는 `profile.planning.runId`가 있을 때만 `/planning/reports?runId=...`로 연결하는 경로를 1순위로 둡니다.
+- planning report/export 쪽 reverse link는 `SavedRecommendRun.runId`를 명시적으로 잡아두는 시점 전까지 자동 latest-match를 하지 않고 보류합니다.
+- source freshness / assumptions / trace는 planning report/export가 이미 가진 `snapshot`, `assumptionsLines`, `reproducibility`, interpretation evidence 요약까지만 owner로 삼고, raw trace 복제는 후속 범위로 남깁니다.
+- 따라서 `P2-5`는 계약과 first path가 문서로 고정된 상태로 보고 `[진행중]`으로 전환합니다.
 
 ### 완료 기준
 - planning 실행 후 1-click recommend 전환 가능

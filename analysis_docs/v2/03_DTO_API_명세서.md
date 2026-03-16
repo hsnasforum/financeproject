@@ -707,6 +707,19 @@ type ProblemDetailDto = {
 };
 ```
 
+## 9.5 History / Report linkage 원칙 (권장안)
+
+메모
+- 이 섹션은 `P2-5` 구현 전 선행 계약을 고정하기 위한 문서용 결정입니다.
+- 공식 planning report 기준은 `/planning/reports`와 `src/lib/planning/reports/*`입니다.
+- legacy `/report` builder는 참고용이며 source-of-truth로 쓰지 않습니다.
+
+- recommend local history owner id는 `SavedRecommendRun.runId`입니다.
+- planning run 참조는 이미 저장되는 `SavedRunProfile.planning.runId`를 canonical field로 사용합니다.
+- 따라서 history → report 링크는 `SavedRecommendRun.runId`가 아니라 `SavedRunProfile.planning.runId`로 `/planning/reports?runId=...`를 구성해야 합니다.
+- planning report/export → recommend reverse link는 concrete recommend history id가 별도로 잡히기 전까지 자동 추론하지 않습니다.
+- source freshness / assumptions / trace는 planning report/export가 가진 `snapshot`, `assumptionsLines`, `reproducibility`, interpretation evidence 요약까지만 노출하고 raw trace 복제는 후속 범위로 남깁니다.
+
 ---
 
 ## 10. DTO/API 개선 우선순위
