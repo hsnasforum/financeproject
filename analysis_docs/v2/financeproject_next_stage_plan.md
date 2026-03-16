@@ -10,9 +10,9 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **54%** (`7 / 13` 항목 완료)
+- 전체 진행률: **62%** (`8 / 13` 항목 완료)
 - Phase 1 진행률: **100%** (`4 / 4`)
-- Phase 2 진행률: **60%** (`3 / 5`)
+- Phase 2 진행률: **80%** (`4 / 5`)
 - Phase 3 진행률: **0%** (`0 / 4`)
 
 ### 0.2 상태 표기 규칙
@@ -27,7 +27,7 @@
 | Phase | 범위 | 상태 | 진행률 |
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
-| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `3 / 5` |
+| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `4 / 5` |
 | Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[미착수]` | `0 / 4` |
 
 ### 0.4 운영 원칙
@@ -311,7 +311,7 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 - 현재 열린 action code는 `BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL`, `REDUCE_DEBT_SERVICE` 3건이며, 이 항목에 예시로 정의한 CTA 경로 3종은 모두 현재 커밋 기준으로 충족했습니다.
 - `IMPROVE_RETIREMENT_PLAN` 같은 추가 action code 확장은 별도 후속 개선 범위로 남기고, `P2-3` 자체는 닫습니다.
 
-#### P2-4) 추천 결과 설명 강화 `[진행중]`
+#### P2-4) 추천 결과 설명 강화 `[완료]`
 현재 점수/가중치 중심 UI에 아래를 추가합니다.
 
 - 왜 이 상품이 추천되었는지
@@ -319,12 +319,12 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 - 데이터 최신성은 어떤지
 - 예금자 보호/조건 불확실성은 무엇인지
 
-진행 메모 (2026-03-16):
+완료 메모 (2026-03-16):
 - `/planning/reports`에서 이미 열린 두 action CTA(`BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL`)는 `/recommend`로 이동할 때 view-only `planning.actionCode` query를 함께 넘깁니다.
 - `/recommend` 결과 화면은 기존 planning context strip을 확장해, 비상금 보강 액션에서 연 추천인지 목표자금 점검 액션에서 연 추천인지 먼저 읽을 수 있게 했습니다.
 - 후속 배치에서 추천 카드의 `추천 사유` 영역 앞에도 action context helper를 추가해, 상단 strip 설명과 카드 why를 더 자연스럽게 이어 읽을 수 있게 했습니다.
 - 후속 배치에서 추천 카드 근처에 예금자 보호 신호, 금리 조건 확인 필요 여부, 데이터 최신성 읽기 힌트를 짧은 trust cue로 붙여 현재 데이터 기준의 신뢰 읽기 포인트를 같이 보이게 했습니다.
-- 이 first pass는 화면 설명용 연결만 다루며, recommend API contract, saved run 영속, 카드별 추천 이유 재구성은 아직 열지 않았습니다.
+- 따라서 이 항목에 정의한 4축인 planning context strip, action context 설명, 카드 why 연결, trust cue 노출은 현재 커밋 기준으로 모두 충족한 것으로 보고 `P2-4`를 닫습니다.
 
 #### P2-5) history/report 통합 `[미착수]`
 recommend history와 planning runs/report의 연결성을 강화합니다.
