@@ -384,7 +384,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `OpenDartStatusCard`도 공시 데이터 연결 상태와 현재 읽는 기준 중심으로 문구를 바꾸고, 개발용 인덱스 관리와 파일 경로는 dev 환경 설명으로만 뒤로 내렸습니다.
 - `DataSourceHealthTable`과 detailed diagnostics는 페이지 하단의 `상세 운영 진단` 섹션으로 내려, 사용자용 trust 정보보다 뒤에서 참고용으로만 읽히게 했습니다.
 
-#### P3-2) source freshness contract 표준화 `[미착수]`
+#### P3-2) source freshness contract 표준화 `[진행중]`
 모든 public 결과 카드에 최소 아래 메타를 붙입니다.
 
 - `sourceId`
@@ -393,6 +393,14 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `freshnessStatus`
 - `fallbackMode`
 - `assumptionNotes`
+
+진행 메모 (2026-03-16):
+- `P3-2`는 기존 `DataFreshnessBanner`를 public 화면에 재도입하는 배치가 아니라, 결과 카드 단위의 얇은 freshness 메타 contract를 먼저 고정하는 단계로 정의합니다.
+- card 메타의 freshness 사실 owner는 `SourceStatusRow`와 현재 surface payload가 이미 가진 snapshot / fallback / assumption 값을 우선 재사용하고, 운영 진단 상세는 계속 `/settings/data-sources` owner로 둡니다.
+- `freshnessStatus`는 banner severity(`ok / info / warn / error`)가 아니라 현재 `FreshnessItemStatus` 기반의 card-level 상태(`ok / stale / error / empty`)를 재사용하는 쪽으로 고정합니다.
+- `fallbackMode`는 stale 상태만 보고 추론하지 않고, 현재 payload meta가 explicit하게 주는 `fallback.mode`, `fallbackUsed`, `mode === "mock"` 같은 값이 있을 때만 붙입니다.
+- `sourceId` / `kind` namespace는 아직 모든 public surface에서 단일 enum으로 고정되지 않았으므로, first rollout은 이미 `item.sourceId`, `item.kind`를 가진 `/recommend` 결과 카드로 제한하고 다른 surface 확장은 후속으로 둡니다.
+- public 결과 카드에는 짧은 freshness 메타와 assumption note만 남기고, raw source 상태·TTL·last error·env·ping·수동 재확인은 `/settings/data-sources`에서만 계속 보여 주는 원칙을 명시합니다.
 
 #### P3-3) 확장 후보의 제품화 기준 수립 `[미착수]`
 현재 data-sources 화면에 있는 expansion candidate를 실제 제품 backlog로 전환합니다.
