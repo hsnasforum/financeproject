@@ -902,7 +902,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
       <div className="space-y-8">
         <ReportHeroCard
           kicker="Signal Settings"
-          title="뉴스 및 알림 설정"
+          title="뉴스 기준 설정"
           description="구독할 뉴스 소스를 관리하거나 관심 토픽을 설정하여 나만의 재무 브리핑을 최적화하세요. 프로필을 상세히 입력할수록 분석이 정확해집니다."
           action={(
             <div className="flex flex-wrap items-center gap-2">
@@ -915,7 +915,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   "disabled:opacity-60 transition-colors bg-emerald-600 hover:bg-emerald-500 border-emerald-500/50"
                 )}
               >
-                {saving ? "저장 중..." : "설정 저장"}
+                {saving ? "저장 중..." : "뉴스 기준/내 상황 저장"}
               </button>
             </div>
           )}
@@ -1041,10 +1041,11 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
             <div className="mt-6 space-y-6">
               <div className="rounded-xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-wrap items-center gap-3 mb-4">
-                  <button type="button" onClick={() => void handleAlertRulesAction("reload")} disabled={alertRulesPhase !== "idle" || alertRulesDirty} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-sm transition-all"> {alertRulesPhase === "reloading" ? "로딩 중..." : "적용값 불러오기"} </button>
-                  <button type="button" onClick={() => void handleAlertRulesAction("apply")} disabled={alertRulesPhase !== "idle" || !alertRulesDirty} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60 shadow-sm transition-all"> {alertRulesPhase === "applying" ? "적용 중..." : "규칙 적용"} </button>
+                  <button type="button" onClick={() => void handleAlertRulesAction("reload")} disabled={alertRulesPhase !== "idle" || alertRulesDirty} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-sm transition-all"> {alertRulesPhase === "reloading" ? "로딩 중..." : "현재 적용값 불러오기"} </button>
+                  <button type="button" onClick={() => void handleAlertRulesAction("apply")} disabled={alertRulesPhase !== "idle" || !alertRulesDirty} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60 shadow-sm transition-all"> {alertRulesPhase === "applying" ? "적용 중..." : "알림 규칙 적용"} </button>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest"> <span className="text-slate-500">결과 확인:</span> <Link href="/planning/v3/news/alerts" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>알림함 ▶</Link> <Link href="/planning/v3/news" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>Digest ▶</Link> </div>
+                <div className="flex flex-wrap items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest"> <span className="text-slate-500">적용 뒤 결과 확인</span> <Link href="/planning/v3/news/alerts" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>알림함 확인</Link> <Link href="/planning/v3/news" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>Digest 확인</Link> </div>
+                <p className="mt-4 text-xs font-bold text-slate-600 leading-relaxed">{alertRulesSectionStatusText}</p>
               </div>
               <textarea value={alertRulesJson} onChange={(e) => setAlertRulesJson(e.target.value)} rows={6} className="w-full rounded-2xl border border-slate-200 bg-slate-950 p-5 font-mono text-[11px] text-emerald-400 outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner" placeholder="JSON 오버라이드 입력..." />
               {alertRulesIoSummary && <p className="text-xs font-bold text-emerald-600">✅ {alertRulesIoSummary}</p>}
