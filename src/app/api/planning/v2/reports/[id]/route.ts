@@ -87,6 +87,7 @@ export async function GET(request: Request, context: RouteContext) {
         createdAt: found.meta.createdAt,
         kind: found.meta.kind,
         ...(found.meta.runId ? { runId: found.meta.runId } : {}),
+        ...(found.meta.recommendRunId ? { recommendRunId: found.meta.recommendRunId } : {}),
         markdown: found.markdown,
       },
     });

@@ -28,6 +28,7 @@ type ReportDetail = {
   createdAt: string;
   kind: "run" | "manual";
   runId?: string;
+  recommendRunId?: string;
   markdown: string;
 };
 
@@ -48,6 +49,11 @@ function formatDateTime(value: string): string {
   const ts = Date.parse(value);
   if (!Number.isFinite(ts)) return value;
   return new Date(ts).toLocaleString("ko-KR", { hour12: false });
+}
+
+function buildRecommendHistoryHref(recommendRunId?: string): string {
+  const normalized = typeof recommendRunId === "string" ? recommendRunId.trim() : "";
+  return normalized ? `/recommend/history?open=${encodeURIComponent(normalized)}` : "";
 }
 
 export default function PlanningReportDetailClient({ id }: PlanningReportDetailClientProps) {
@@ -125,6 +131,10 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
   }, [report, run]);
 
   const vm: ReportVM | null = vmResult.vm;
+  const recommendHistoryHref = useMemo(
+    () => buildRecommendHistoryHref(report?.recommendRunId),
+    [report?.recommendRunId],
+  );
 
   const interpretationProps = useMemo<InterpretationGuideProps | null>(() => {
     if (!vm) return null;
@@ -163,6 +173,11 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
         description="저장된 실행 데이터를 바탕으로 해석과 실행 가이드를 보여줍니다."
         action={(
           <div className="no-print flex items-center gap-4">
+            {recommendHistoryHref ? (
+              <Link className="text-sm font-black text-emerald-600 hover:text-emerald-700 transition-colors" href={recommendHistoryHref}>
+                추천 실행으로 돌아가기
+              </Link>
+            ) : null}
             <Button
               onClick={() => typeof window !== "undefined" && window.print()}
               size="sm"
@@ -217,6 +232,12 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
                 <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">원본 실행 ID</p>
                   <p className="text-xs font-black text-slate-700 font-mono break-all">{report.runId}</p>
+                </div>
+              )}
+              {report.recommendRunId && (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">추천 실행 ID</p>
+                  <p className="text-xs font-black text-slate-700 font-mono break-all">{report.recommendRunId}</p>
                 </div>
               )}
             </div>

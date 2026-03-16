@@ -99,13 +99,15 @@ describe("planning report storage", () => {
       },
     });
 
-    const created = await createReportFromRun(run.id);
+    const recommendRunId = "recommend-local-run-001";
+    const created = await createReportFromRun(run.id, { recommendRunId });
     expect(created.id).toBeTruthy();
 
     const listed = await listReports();
     expect(listed.length).toBe(1);
     expect(listed[0]?.id).toBe(created.id);
     expect(listed[0]?.runId).toBe(run.id);
+    expect(listed[0]?.recommendRunId).toBe(recommendRunId);
     expect(listed[0]?.pathRelative.endsWith(".md")).toBe(true);
     expect(path.isAbsolute(String(listed[0]?.pathRelative))).toBe(false);
 
@@ -113,6 +115,7 @@ describe("planning report storage", () => {
     expect(report).not.toBeNull();
     expect(report?.meta.id).toBe(created.id);
     expect(report?.meta.runId).toBe(run.id);
+    expect(report?.meta.recommendRunId).toBe(recommendRunId);
     expect(report?.markdown).toContain("# report run");
     expect(report?.markdown).toContain("## Executive Summary");
     expect(report?.markdown).toContain("## Warnings Summary");
