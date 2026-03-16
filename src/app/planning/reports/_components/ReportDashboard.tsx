@@ -693,10 +693,12 @@ export default function ReportDashboard({ vm }: Props) {
           ) : (
             <div className="grid gap-6 md:grid-cols-3">
               {vm.topActions.map((action) => {
-                const actionRecommendLink = action.code === "BUILD_EMERGENCY_FUND" && emergencyRecommendHref
+                const actionCtaLink = action.code === "BUILD_EMERGENCY_FUND" && emergencyRecommendHref
                   ? { href: emergencyRecommendHref, label: PLANNER_ACTION_LINKS.emergencyRecommend.label }
                   : action.code === "COVER_LUMP_SUM_GOAL" && goalRecommendHref
                     ? { href: goalRecommendHref, label: PLANNER_ACTION_LINKS.savingRecommend.label }
+                    : action.code === "REDUCE_DEBT_SERVICE"
+                      ? { href: PLANNER_ACTION_LINKS.creditLoanProducts.href, label: PLANNER_ACTION_LINKS.creditLoanProducts.label }
                     : null;
 
                 return (
@@ -717,13 +719,13 @@ export default function ReportDashboard({ vm }: Props) {
                         ))}
                       </ul>
                     </div>
-                    {actionRecommendLink ? (
+                    {actionCtaLink ? (
                       <div className="mt-6 border-t border-slate-100 pt-4">
                         <Link
                           className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-700 active:scale-95"
-                          href={actionRecommendLink.href}
+                          href={actionCtaLink.href}
                         >
-                          {actionRecommendLink.label}
+                          {actionCtaLink.label}
                         </Link>
                       </div>
                     ) : null}

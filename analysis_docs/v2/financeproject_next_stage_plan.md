@@ -307,7 +307,8 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 - `ReportDashboard`의 top action 카드에서 `action.code === "BUILD_EMERGENCY_FUND"`일 때만 첫 action-based CTA를 노출했습니다.
 - CTA는 `src/lib/planner/compute.ts`에 이미 있던 emergency recommend preset을 재사용하고, `planning.runId`, `planning.summary.stage`, optional `planning.summary.overallStatus` handoff query를 함께 유지합니다.
 - 후속 배치에서 `action.code === "COVER_LUMP_SUM_GOAL"`일 때만 saving recommend preset을 재사용하는 두 번째 CTA 경로를 추가했습니다.
-- 현재 열린 action code는 `BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL` 2건뿐이며, 다른 action code 매핑과 CTA 분기 테이블은 아직 열지 않았습니다.
+- 후속 배치에서 `action.code === "REDUCE_DEBT_SERVICE"`일 때만 기존 public route인 `/products/credit-loan`으로 이동하는 세 번째 CTA 경로를 추가했습니다.
+- 현재 열린 action code는 `BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL`, `REDUCE_DEBT_SERVICE` 3건뿐이며, 다른 action code 매핑과 CTA 분기 테이블은 아직 열지 않았습니다.
 
 #### P2-4) 추천 결과 설명 강화 `[진행중]`
 현재 점수/가중치 중심 UI에 아래를 추가합니다.
