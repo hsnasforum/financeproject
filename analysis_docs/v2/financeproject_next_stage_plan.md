@@ -296,12 +296,17 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - `/recommend` 결과 grid 위에는 planning handoff가 있을 때만 보이는 작은 context strip을 추가해, 현재 플래닝 결과 기준인지, summary 기반인지 legacy planningContext 기반인지, 어떤 실행 ID에서 왔는지를 읽을 수 있게 했습니다.
 - planning run handoff projection 저장, 추가 producer surface, explanation 확장은 `P2-3 ~ P2-5` 후속 범위로 남기고, `P2-2`의 최소 완료 기준인 consumer 활성화 + producer 경로 1건 + 결과 context 노출은 충족한 것으로 정리합니다.
 
-#### P2-3) 액션 기반 CTA 도입 `[미착수]`
+#### P2-3) 액션 기반 CTA 도입 `[진행중]`
 planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 
 - “비상자금 보강” → 적금/예금 추천 with short-term liquidity preset
 - “부채부담 관리” → 관련 대출/상환 가이드 또는 비교 화면
 - “목표자금 최적화” → 기간/금리/보호 정책 preset된 추천 화면
+
+진행 메모 (2026-03-16):
+- `ReportDashboard`의 top action 카드에서 `action.code === "BUILD_EMERGENCY_FUND"`일 때만 첫 action-based CTA를 노출했습니다.
+- CTA는 `src/lib/planner/compute.ts`에 이미 있던 emergency recommend preset을 재사용하고, `planning.runId`, `planning.summary.stage`, optional `planning.summary.overallStatus` handoff query를 함께 유지합니다.
+- 이번 라운드는 `BUILD_EMERGENCY_FUND` 1건만 열었고, 다른 action code 매핑과 CTA 분기 테이블은 아직 열지 않았습니다.
 
 #### P2-4) 추천 결과 설명 강화 `[미착수]`
 현재 점수/가중치 중심 UI에 아래를 추가합니다.
