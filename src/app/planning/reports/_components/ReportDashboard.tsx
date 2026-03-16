@@ -119,6 +119,7 @@ function buildActionRecommendHref(input: {
   runId?: string;
   stage?: Stage;
   overallStatus?: PlanningRunOverallStatus;
+  actionCode?: "BUILD_EMERGENCY_FUND" | "COVER_LUMP_SUM_GOAL";
 }): string {
   const url = new URL(input.baseHref, "https://financeproject.local");
   url.searchParams.set("from", "planning-report");
@@ -130,6 +131,9 @@ function buildActionRecommendHref(input: {
   }
   if (input.overallStatus) {
     url.searchParams.set("planning.summary.overallStatus", input.overallStatus);
+  }
+  if (input.actionCode) {
+    url.searchParams.set("planning.actionCode", input.actionCode);
   }
   return `${url.pathname}${url.search}`;
 }
@@ -335,6 +339,7 @@ export default function ReportDashboard({ vm }: Props) {
       runId: vm.header.runId,
       stage: planningStage,
       overallStatus: vm.stage.overallStatus,
+      actionCode: "BUILD_EMERGENCY_FUND",
     })
     : null;
   const goalRecommendHref = planningStage
@@ -343,6 +348,7 @@ export default function ReportDashboard({ vm }: Props) {
       runId: vm.header.runId,
       stage: planningStage,
       overallStatus: vm.stage.overallStatus,
+      actionCode: "COVER_LUMP_SUM_GOAL",
     })
     : null;
 

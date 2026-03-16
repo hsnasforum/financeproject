@@ -309,13 +309,18 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 - 후속 배치에서 `action.code === "COVER_LUMP_SUM_GOAL"`일 때만 saving recommend preset을 재사용하는 두 번째 CTA 경로를 추가했습니다.
 - 현재 열린 action code는 `BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL` 2건뿐이며, 다른 action code 매핑과 CTA 분기 테이블은 아직 열지 않았습니다.
 
-#### P2-4) 추천 결과 설명 강화 `[미착수]`
+#### P2-4) 추천 결과 설명 강화 `[진행중]`
 현재 점수/가중치 중심 UI에 아래를 추가합니다.
 
 - 왜 이 상품이 추천되었는지
 - 내 planning 상태에서 어떤 역할을 하는지
 - 데이터 최신성은 어떤지
 - 예금자 보호/조건 불확실성은 무엇인지
+
+진행 메모 (2026-03-16):
+- `/planning/reports`에서 이미 열린 두 action CTA(`BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL`)는 `/recommend`로 이동할 때 view-only `planning.actionCode` query를 함께 넘깁니다.
+- `/recommend` 결과 화면은 기존 planning context strip을 확장해, 비상금 보강 액션에서 연 추천인지 목표자금 점검 액션에서 연 추천인지 먼저 읽을 수 있게 했습니다.
+- 이 first pass는 화면 설명용 연결만 다루며, recommend API contract, saved run 영속, 카드별 추천 이유 재구성은 아직 열지 않았습니다.
 
 #### P2-5) history/report 통합 `[미착수]`
 recommend history와 planning runs/report의 연결성을 강화합니다.
