@@ -406,6 +406,8 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `/recommend` 결과 카드에 `결과 기준` 블록을 추가해 `lastSyncedAt`, `freshnessStatus`, explicit `fallbackMode`, assumption note를 배너 없이 작은 메타로 first rollout 했습니다.
 - third rollout으로 `ExchangeSummaryCard`에 `exchange` surface-local owner 기준 `결과 기준` helper를 추가해 `data.asOf`, optional `fallbackDays`, `assumptions.note`만 작은 chip/helper 수준으로 묶어 노출했습니다.
 - `exchange` surface는 explicit source status row가 아직 없으므로 `freshnessStatus`를 억지 계산하지 않고 생략했고, 상단 날짜 badge와 하단 fallback 문구를 하나의 helper 블록으로 정리했습니다.
+- fourth rollout으로 `/housing/subscription` 결과 summary에 `subscription` surface-local owner 기준 `결과 기준` helper를 추가해 `meta.generatedAt` 우선, 없으면 `meta.fetchedAt`, optional `fallback.mode`, `assumptions.note`만 작은 helper/chip 수준으로 묶어 노출했습니다.
+- `subscription` surface도 explicit source status row가 아직 없으므로 `freshnessStatus`는 생략했고, 카드마다 반복하지 않고 결과 개수 summary 옆의 공통 helper 1개로만 읽히게 유지했습니다.
 - `(sourceId, kind)` 기준 source status row 매칭이 안 되거나 `/api/sources/status` 조회가 실패하면 카드 freshness 메타는 숨기고, 결과 카드와 기존 error/empty 흐름은 그대로 유지합니다.
 
 #### P3-3) 확장 후보의 제품화 기준 수립 `[미착수]`
