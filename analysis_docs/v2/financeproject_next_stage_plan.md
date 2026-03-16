@@ -401,6 +401,8 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `fallbackMode`는 stale 상태만 보고 추론하지 않고, 현재 payload meta가 explicit하게 주는 `fallback.mode`, `fallbackUsed`, `mode === "mock"` 같은 값이 있을 때만 붙입니다.
 - `sourceId` / `kind` namespace는 아직 모든 public surface에서 단일 enum으로 고정되지 않았으므로, first rollout은 이미 `item.sourceId`, `item.kind`를 가진 `/recommend` 결과 카드로 제한하고 다른 surface 확장은 후속으로 둡니다.
 - public 결과 카드에는 짧은 freshness 메타와 assumption note만 남기고, raw source 상태·TTL·last error·env·ping·수동 재확인은 `/settings/data-sources`에서만 계속 보여 주는 원칙을 명시합니다.
+- second rollout으로 `/products/deposit`, `/products/saving`의 product row / option row / grouped option header에 `finlife` 기준 `lastSyncedAt`, optional `freshnessStatus`, explicit `fallbackMode`, 짧은 assumption note를 같은 contract로 연결했습니다.
+- `/products`는 `payload.meta.snapshot.generatedAt`를 `lastSyncedAt` owner로 우선 쓰고, `finlife` source status row가 있을 때만 `freshnessStatus`를 보강합니다. status row가 없어도 snapshot/generatedAt, explicit fallback, 짧은 note는 계속 읽을 수 있게 둡니다.
 - `/recommend` 결과 카드에 `결과 기준` 블록을 추가해 `lastSyncedAt`, `freshnessStatus`, explicit `fallbackMode`, assumption note를 배너 없이 작은 메타로 first rollout 했습니다.
 - `(sourceId, kind)` 기준 source status row 매칭이 안 되거나 `/api/sources/status` 조회가 실패하면 카드 freshness 메타는 숨기고, 결과 카드와 기존 error/empty 흐름은 그대로 유지합니다.
 
