@@ -725,6 +725,46 @@ type ProblemDetailDto = {
 - `latest-match`, 시간대 추정, `PlanningRunRecord.id`와 `SavedRecommendRun.runId` 혼용은 금지합니다.
 - source freshness / assumptions / trace는 planning report/export가 가진 `snapshot`, `assumptionsLines`, `reproducibility`, interpretation evidence 요약까지만 노출하고 raw trace 복제는 후속 범위로 남깁니다.
 
+## 9.6 PublicSourceFreshnessMetaDto (권장안)
+
+메모
+- 이 섹션은 `P3-2` 구현 전 public 결과 카드에 붙일 최소 freshness 메타 contract를 고정하기 위한 문서용 결정입니다.
+- 기존 `DataFreshnessBanner`의 운영성 배너 severity를 그대로 재사용하지 않고, 카드 단위의 얇은 읽기 메타만 다룹니다.
+- 상세 진단, raw source 상태, TTL, env, ping, 수동 재확인 액션은 `/settings/data-sources` owner로 남깁니다.
+
+```ts
+type PublicSourceFreshnessMetaDto = {
+  sourceId: string;
+  kind: string;
+  lastSyncedAt: string | null;
+  freshnessStatus: "ok" | "stale" | "error" | "empty";
+  fallbackMode?: string | null;
+  assumptionNotes?: string[];
+};
+```
+
+필드 메모
+- `sourceId`: 현재 결과 카드가 직접 기대는 primary source key입니다. 모든 public surface에서 enum이 아직 단일화되지 않았으므로 `string`으로 두고, surface owner가 이미 가진 canonical key를 그대로 씁니다.
+- `kind`: source dataset kind입니다. `UnifiedKind`가 있는 surface는 그 literal을 그대로 쓰고, 그 외 surface는 현재 payload owner가 쓰는 dataset kind를 그대로 씁니다.
+- `lastSyncedAt`: 카드가 보여 주는 결과 기준의 마지막 확인 시각입니다. payload가 자기 snapshot/generated 시각을 갖고 있으면 그것을 우선하고, 없으면 `SourceStatusRow.lastSyncedAt`를 재사용합니다.
+- `freshnessStatus`: banner severity가 아니라 `FreshnessItemStatus`를 재사용한 card-level 상태입니다.
+- `fallbackMode`: stale 사실만으로 추론하지 않고, payload meta가 explicit하게 준 fallback 경로가 있을 때만 붙입니다.
+- `assumptionNotes`: 새 계산을 만들지 않고, 현재 surface가 이미 가진 `assumptions.note`, `meta.note`, policy 문구 같은 기존 note만 짧게 재사용합니다.
+
+재사용 기준
+- `SourceStatusRow`: `lastSyncedAt`, `isFresh`, `counts`, `lastError` owner
+- `FreshnessItemStatus`: `ok / stale / error / empty` 상태값 재사용
+- surface payload meta:
+  - recommend: `result.meta.fallback`, `result.meta.assumptions.*`
+  - products: `payload.meta.snapshot.generatedAt`, `payload.meta.note`, `payload.meta.fallbackUsed`, `payload.mode`
+  - subscription: `json.data.assumptions.note`
+
+금지 규칙
+- `ok / info / warn / error` 배너 severity를 그대로 카드 메타 enum으로 쓰지 않습니다.
+- stale 상태만 보고 `fallbackMode`를 임의 추론하지 않습니다.
+- env key, API 경로, raw lastError, ping 결과를 public 결과 카드에 다시 노출하지 않습니다.
+- 설정 화면의 uppercase source registry id를 public card에 그대로 노출해야 한다고 가정하지 않습니다.
+
 ---
 
 ## 10. DTO/API 개선 우선순위
