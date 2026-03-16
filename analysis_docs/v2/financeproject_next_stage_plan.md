@@ -10,9 +10,9 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **62%** (`8 / 13` 항목 완료)
+- 전체 진행률: **69%** (`9 / 13` 항목 완료)
 - Phase 1 진행률: **100%** (`4 / 4`)
-- Phase 2 진행률: **80%** (`4 / 5`)
+- Phase 2 진행률: **100%** (`5 / 5`)
 - Phase 3 진행률: **0%** (`0 / 4`)
 
 ### 0.2 상태 표기 규칙
@@ -27,7 +27,7 @@
 | Phase | 범위 | 상태 | 진행률 |
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
-| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `4 / 5` |
+| Phase 2 | Planning → Recommend 실질 연동 | `[완료]` | `5 / 5` |
 | Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[미착수]` | `0 / 4` |
 
 ### 0.4 운영 원칙
@@ -326,14 +326,14 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 - 후속 배치에서 추천 카드 근처에 예금자 보호 신호, 금리 조건 확인 필요 여부, 데이터 최신성 읽기 힌트를 짧은 trust cue로 붙여 현재 데이터 기준의 신뢰 읽기 포인트를 같이 보이게 했습니다.
 - 따라서 이 항목에 정의한 4축인 planning context strip, action context 설명, 카드 why 연결, trust cue 노출은 현재 커밋 기준으로 모두 충족한 것으로 보고 `P2-4`를 닫습니다.
 
-#### P2-5) history/report 통합 `[진행중]`
+#### P2-5) history/report 통합 `[완료]`
 recommend history와 planning runs/report의 연결성을 강화합니다.
 
 - planning run에서 파생된 recommend result 링크
 - recommend result에서 근거 planning run 링크
 - report export에서 source freshness / assumptions / trace 포함
 
-진행 메모 (2026-03-16):
+완료 메모 (2026-03-16):
 - recommend local history의 owner id는 `SavedRecommendRun.runId`로 유지하고, planning run 참조는 이미 저장되는 `profile.planning.runId`를 canonical planning ref로 쓰는 원칙을 먼저 고정했습니다.
 - recommend history에서 planning report로 돌아가는 first path는 `profile.planning.runId`가 있을 때만 `/planning/reports?runId=...`로 연결하는 경로를 1순위로 둡니다.
 - 후속 배치에서 `RecommendHistoryClient`의 기존 잘못된 `/planning/reports?runId=${run.runId}` 링크를 제거하고, `profile.planning.runId`가 있을 때만 planning report 링크를 노출하도록 바꿨습니다.
@@ -350,7 +350,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - 후속 구현에서 `PlanningReportsDashboardClient`의 saved report 생성 버튼은 현재 선택 run으로 `/api/planning/v2/reports` POST를 호출하고, query에 explicit `recommendRunId`가 있을 때만 이를 함께 저장합니다.
 - 생성 성공 후에는 현재 `/planning/reports` query에 `selected=<createdReportId>`를 붙여 embedded saved report detail이 바로 열리게 하고, 기존 `runId`, `baseRunId`, `recommendRunId` query는 그대로 유지합니다.
 - source freshness / assumptions / trace는 planning report/export가 이미 가진 `snapshot`, `assumptionsLines`, `reproducibility`, interpretation evidence 요약까지만 owner로 삼고, raw trace 복제는 후속 범위로 남깁니다.
-- 따라서 `P2-5`는 계약과 first path가 문서로 고정된 상태로 보고 `[진행중]`으로 전환합니다.
+- 따라서 `P2-5`에 정의한 4축인 history → report canonical path, report → history explicit reverse link, stored report explicit ref owner, explicit ref를 저장하는 producer path는 현재 커밋 기준으로 모두 충족한 것으로 보고 닫습니다.
 
 ### 완료 기준
 - planning 실행 후 1-click recommend 전환 가능
