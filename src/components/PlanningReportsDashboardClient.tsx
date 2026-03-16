@@ -195,6 +195,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const hasInitialRuns = (props.initialRuns?.length ?? 0) > 0;
   const queryRunId = asString(searchParams.get("runId"));
   const queryBaseRunId = asString(searchParams.get("baseRunId"));
+  const queryRecommendRunId = asString(searchParams.get("recommendRunId"));
   const preferredRunId = queryRunId || props.initialRunId || "";
   const initialPreferredRun = useMemo(
     () => props.initialRuns?.find((run) => run.id === preferredRunId) ?? null,
@@ -344,6 +345,19 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const selectedRunDetailHref = useMemo(
     () => (selectedRun ? `/planning/reports/${encodeURIComponent(selectedRun.id)}` : ""),
     [selectedRun],
+  );
+  const selectedRunHasExplicitRecommendRef = Boolean(
+    queryRecommendRunId
+    && queryRunId
+    && selectedRun?.id === queryRunId,
+  );
+  const reverseRecommendHistoryHref = useMemo(
+    () => (
+      selectedRunHasExplicitRecommendRef
+        ? `/recommend/history?open=${encodeURIComponent(queryRecommendRunId)}`
+        : ""
+    ),
+    [queryRecommendRunId, selectedRunHasExplicitRecommendRef],
   );
   const handlePrint = (): void => {
     if (typeof window === "undefined") return;
@@ -536,6 +550,13 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         description="저장된 실행(run) 기준으로 요약 대시보드를 확인합니다."
         action={(
           <div className="no-print flex items-center gap-3">
+            {reverseRecommendHistoryHref ? (
+              <Link href={reverseRecommendHistoryHref}>
+                <Button variant="outline" className="rounded-full font-bold h-9 bg-white">
+                  추천 실행으로 돌아가기
+                </Button>
+              </Link>
+            ) : null}
             <Button
               data-testid="report-print-button"
               onClick={handlePrint}
@@ -619,6 +640,16 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 </div>
               }
             />
+
+            {selectedRunHasExplicitRecommendRef ? (
+              <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
+                연결된 추천 실행 ID:
+                {" "}
+                <span className="font-mono text-emerald-900">{queryRecommendRunId}</span>
+                {" · "}
+                현재 보고 있는 리포트에서만 추천 실행으로 돌아갈 수 있습니다.
+              </div>
+            ) : null}
 
             {compareMode && (
               <div className="mt-6 p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-6">
