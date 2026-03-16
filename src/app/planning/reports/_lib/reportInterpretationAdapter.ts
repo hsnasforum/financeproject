@@ -1,5 +1,4 @@
 import { type InterpretationInput } from "../../../../lib/planning/v2/insights/interpretationVm";
-import { buildEvidence } from "../../../../lib/planning/v2/insights/evidence";
 import { type ReportVM } from "./reportViewModel";
 
 export function toInterpretationInputFromReportVM(vm: ReportVM): InterpretationInput {
@@ -19,15 +18,6 @@ export function toInterpretationInputFromReportVM(vm: ReportVM): InterpretationI
       ...vm.insight.outcomes,
       ...(vm.header.runId ? { runId: vm.header.runId } : {}),
     },
-    summaryEvidence: buildEvidence(
-      {
-        summaryCards: vm.insight.summaryMetrics,
-        evidence: {
-          summary: vm.insight.summaryEvidence,
-        },
-      },
-      undefined, // use default policy
-      vm.insight.summaryEvidence,
-    ),
+    summaryEvidence: vm.insight.summaryEvidence,
   };
 }

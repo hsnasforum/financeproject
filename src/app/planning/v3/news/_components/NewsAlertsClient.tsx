@@ -305,7 +305,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
     <PageShell>
       <div className="space-y-8">
         <ReportHeroCard
-          kicker="Alert Brief"
+          kicker="알림 브리핑"
           title="중요 알림함"
           description="토픽 급증이나 지표 변화처럼 바로 확인할 만한 신호를 모았습니다. 확인 완료나 숨김 상태를 관리하여 노이즈를 줄이세요."
           action={(
@@ -353,7 +353,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
           </ReportHeroStatGrid>
 
           <div className="mt-8 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
-            <span className="text-white/40 mr-2">Quick Filter</span>
+            <span className="text-white/40 mr-2">빠른 필터</span>
             <button
               type="button"
               onClick={() => setStatusFilter("visible")}
@@ -405,7 +405,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
           <SubSectionHeader
             title="알림 이벤트"
             description="중요한 신호를 먼저 확인하고 상태를 관리하세요."
-            action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">FILTERED: {filteredTotal}건</span>}
+            action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">필터 결과 {filteredTotal}건</span>}
           />
 
           {loading ? (

@@ -41,8 +41,8 @@ describe("InterpretationGuide", () => {
 
     expect(html).toContain('data-testid="interpretation-monthly-operating-guide"');
     expect(html).toContain('data-testid="interpretation-ai-summary"');
-    expect(html).toContain("월수입 운영 권장안");
-    expect(html).toContain("현재 배분");
+    expect(html).toContain("운영 가이드");
+    expect(html).toContain("현재 월수입 배분");
     expect(html).toContain("남는 돈 운영안");
     expect(html).toContain("상세 근거와 추가 제안 보기");
   });
