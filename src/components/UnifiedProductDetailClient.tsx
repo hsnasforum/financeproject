@@ -4,17 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { Container } from "@/components/ui/Container";
-import { SectionHeader } from "@/components/ui/SectionHeader";
-import {
-  BodyActionLink,
-  BodyEmptyState,
-  BodyInset,
-  BodySectionHeading,
-  BodyStatusInset,
-  bodyDenseActionRowClassName,
-  bodyFieldClassName,
-} from "@/components/ui/BodyTone";
+import { PageShell } from "@/components/ui/PageShell";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 type UnifiedOption = {
   sourceId?: string;
@@ -86,7 +80,6 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
   const [item, setItem] = useState<UnifiedItem | null>(null);
   const [generatedAt, setGeneratedAt] = useState<string>("");
   const [selectedOptionKey, setSelectedOptionKey] = useState<string>("");
-  const [conditionsOpen, setConditionsOpen] = useState(false);
   const [compareMessage, setCompareMessage] = useState("");
 
   useEffect(() => {
@@ -153,140 +146,157 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
     if (selectedOption && selectedOption.intrRate2 !== null && selectedOption.intrRate !== null && selectedOption.intrRate2 > selectedOption.intrRate) {
       rows.push("최고금리는 우대조건 충족 시 적용됩니다.");
     }
-    if (item?.signals?.depositProtection) rows.push(`예금자보호 신호: ${item.signals.depositProtection}`);
-    if ((item?.badges ?? []).length > 0) rows.push(`배지: ${(item?.badges ?? []).join(", ")}`);
+    if (item?.signals?.depositProtection) rows.push(`예금자보호: ${item.signals.depositProtection === "matched" ? "보호 대상" : "별도 확인 필요"}`);
     return rows;
   }, [item, selectedOption]);
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
-      <Container>
-        <SectionHeader
-          title="통합 상품 상세"
-          subtitle="unified item API 기준 상세/비교 화면입니다."
-        />
-
-        <BodyInset className="mb-4">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">ID: {id}</span>
-            {generatedAt ? <span>응답시각: {formatDateTime(generatedAt)}</span> : null}
+    <PageShell>
+      <PageHeader
+        title={item?.productName ?? "상품 상세"}
+        description={item?.providerName ?? "금융상품 통합 상세 정보를 확인합니다."}
+        action={
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest tabular-nums">
+              ID: {id.slice(0, 12)}...
+            </span>
           </div>
-        </BodyInset>
+        }
+      />
 
+      <div className="space-y-6">
         {loading ? (
-          <BodyInset>
-            <p className="text-sm text-slate-600">상세 데이터를 불러오는 중입니다...</p>
-          </BodyInset>
-        ) : null}
-
-        {!loading && error ? (
-          <BodyStatusInset tone="danger">
-            <p className="text-sm font-semibold">{error}</p>
-            <div className="mt-3">
-              <BodyActionLink href="/products/catalog">통합 카탈로그로 이동</BodyActionLink>
-            </div>
-          </BodyStatusInset>
-        ) : null}
-
-        {!loading && !error && item ? (
-          <Card>
-            <BodySectionHeading
-              title={item.productName}
-              description={
-                <>
-                  <span className="block text-sm text-slate-600">{item.providerName}</span>
-                  <span className="mt-1 block text-xs text-slate-500">stableId: {item.stableId}</span>
-                  <span className="mt-1 block text-xs text-slate-500">기준시각: {formatDateTime(item.updatedAt ?? generatedAt)}</span>
-                </>
-              }
-            />
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">{item.kind}</span>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5">{(item.sourceIds ?? [item.sourceId]).join(", ")}</span>
-              {(item.badges ?? []).map((badge) => (
-                <span key={`${item.stableId}-${badge}`} className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-700">{badge}</span>
-              ))}
-            </div>
-
-            {options.length > 0 ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
-                <label className="text-sm md:col-span-2">
-                  기간 옵션
-                  <select
-                    className={bodyFieldClassName}
-                    value={selectedOptionValue}
-                    onChange={(event) => setSelectedOptionKey(event.target.value)}
-                  >
-                    {options.map((option, index) => {
-                      const key = optionKey(option, index);
-                      return (
-                        <option key={key} value={key}>
-                          {optionLabel(option)} / {option.sourceId ?? "-"}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
-                <BodyInset className="text-sm">
-                  <p className="text-xs text-slate-500">적용금리</p>
-                  <p className="mt-1 font-bold text-slate-900">{formatRate(appliedRate)}</p>
-                </BodyInset>
-                <BodyInset className="text-sm">
-                  <p className="text-xs text-slate-500">기본/최고</p>
-                  <p className="mt-1 font-bold text-slate-900">{formatRate(baseRate)} / {formatRate(maxRate)}</p>
-                </BodyInset>
+          <div className="py-20">
+            <LoadingState title="상품 정보를 불러오는 중입니다" />
+          </div>
+        ) : error ? (
+          <EmptyState
+            title="상품을 찾을 수 없습니다"
+            description={error}
+            icon="search"
+            actionLabel="목록으로 이동"
+            onAction={() => window.location.href = "/products/catalog"}
+          />
+        ) : item ? (
+          <>
+            <Card className="rounded-[2.5rem] p-8 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2 mb-6">
+                <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{item.kind}</span>
+                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Source: {(item.sourceIds ?? [item.sourceId]).join(", ")}</span>
+                {(item.badges ?? []).map((badge) => (
+                  <span key={`${item.stableId}-${badge}`} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{badge}</span>
+                ))}
               </div>
-            ) : (
-              <BodyEmptyState
-                className="mt-4"
-                title="옵션 정보가 없습니다"
-                description="기간별 금리 옵션이 확인되지 않아 기본 상품 정보만 보여드립니다."
-              />
-            )}
 
-            <BodyInset className="mt-4 bg-white">
-              <button
-                type="button"
-                onClick={() => setConditionsOpen((prev) => !prev)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-800"
-              >
-                우대/조건
-                <span className="text-xs text-slate-500">{conditionsOpen ? "접기" : "펼치기"}</span>
-              </button>
-              {conditionsOpen ? (
-                <BodyInset className="border-0 border-t border-slate-100 rounded-none bg-slate-50 px-4 py-3">
-                  {conditions.length > 0 ? (
-                    <ul className="list-disc space-y-1 pl-4 text-sm text-slate-700">
-                      {conditions.map((row, index) => (
-                        <li key={`${item.stableId}-condition-${index}`}>{row}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <BodyEmptyState
-                      title="표시 가능한 우대/조건 정보가 없습니다"
-                      description="요약과 배지 정보가 더 수집되면 이 영역에 함께 표시됩니다."
+              <div className="grid gap-8 lg:grid-cols-3">
+                <div className="lg:col-span-2 space-y-8">
+                  <div className="space-y-4">
+                    <SubSectionHeader title="금리 및 기간 옵션" description="가장 유리한 조건을 선택하여 비교해 보세요." />
+                    {options.length > 0 ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">기간 선택</label>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all"
+                            value={selectedOptionValue}
+                            onChange={(event) => setSelectedOptionKey(event.target.value)}
+                          >
+                            {options.map((option, index) => {
+                              const key = optionKey(option, index);
+                              return (
+                                <option key={key} value={key}>
+                                  {optionLabel(option)} ({option.sourceId ?? "-"})
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="flex-1 rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">적용 금리</p>
+                            <p className="mt-2 text-2xl font-black text-emerald-700 tabular-nums">{formatRate(appliedRate)}</p>
+                          </div>
+                          <div className="flex-1 rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">기본 / 최고</p>
+                            <p className="mt-2 text-base font-black text-slate-700 tabular-nums">{formatRate(baseRate)} / {formatRate(maxRate)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center bg-slate-50/50">
+                        <p className="text-sm font-bold text-slate-400">제공된 기간 옵션 정보가 없습니다.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <SubSectionHeader title="우대 및 유의사항" />
+                    <div className="rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 lg:p-8">
+                      {conditions.length > 0 ? (
+                        <ul className="space-y-4">
+                          {conditions.map((row, index) => (
+                            <li key={`${item.stableId}-condition-${index}`} className="flex items-start gap-3">
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                              <p className="text-sm font-medium leading-relaxed text-slate-700">{row}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm font-bold text-slate-400 italic text-center py-4">공시된 우대조건 정보가 아직 없습니다.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <Card className="rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-slate-50/50">
+                    <SubSectionHeader
+                      title="비교 및 저장"
+                      description="상품을 비교함에 담고 나중에 다시 확인하세요."
                     />
-                  )}
-                </BodyInset>
-              ) : null}
-            </BodyInset>
+                    <div className="mt-8 space-y-4">
+                      <Button
+                        variant="primary"
+                        className="w-full h-14 rounded-2xl font-black shadow-lg shadow-emerald-900/20"
+                        onClick={() => {
+                          const next = addCompareIdToStorage(item.stableId || id, compareStoreConfig.max);
+                          setCompareMessage(`비교함에 추가됨 (${next.length}/${compareStoreConfig.max})`);
+                        }}
+                      >
+                        상품 비교함에 담기
+                      </Button>
+                      <Link href="/products/compare" className="block">
+                        <Button variant="outline" className="w-full h-12 rounded-2xl border-slate-200 bg-white font-black text-slate-700 hover:bg-slate-100">
+                          비교함 페이지로 이동
+                        </Button>
+                      </Link>
+                      {compareMessage && (
+                        <p className="text-center text-xs font-black text-emerald-600 animate-in fade-in slide-in-from-top-1">{compareMessage}</p>
+                      )}
+                    </div>
+                  </Card>
 
-            <div className={`mt-5 ${bodyDenseActionRowClassName}`}>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  const next = addCompareIdToStorage(item.stableId || id, compareStoreConfig.max);
-                  setCompareMessage(`비교함에 담았습니다. (${next.length}/${compareStoreConfig.max})`);
-                }}
-              >
-                비교 담기
-              </Button>
-              <BodyActionLink href="/products/compare">비교 페이지로 이동</BodyActionLink>
-              {compareMessage ? <p className="text-xs text-slate-600">{compareMessage}</p> : null}
-            </div>
-          </Card>
+                  <div className="rounded-[2rem] border border-slate-100 bg-white p-6">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">데이터 정보</p>
+                    <dl className="space-y-3 text-[11px] font-bold">
+                      <div className="flex justify-between">
+                        <dt className="text-slate-400">Stable ID</dt>
+                        <dd className="font-mono text-slate-600">{item.stableId.slice(0, 16)}...</dd>
+                      </div>
+                      <div className="flex justify-between">
+                        <dt className="text-slate-400">최종 갱신</dt>
+                        <dd className="text-slate-600 tabular-nums">{formatDateTime(item.updatedAt ?? generatedAt)}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </>
         ) : null}
-      </Container>
-    </main>
+      </div>
+    </PageShell>
   );
 }
+
+import Link from "next/link";

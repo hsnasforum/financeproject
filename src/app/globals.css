@@ -49,9 +49,6 @@
 
 body {
   background-color: var(--background);
-  background-image: url('/nb/bg-pattern.png');
-  background-repeat: repeat;
-  background-size: 400px;
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
   -webkit-font-smoothing: antialiased;

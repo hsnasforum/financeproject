@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { LoadingState } from "@/components/ui/LoadingState";
 import { DartDisclosureMonitorClient } from "@/components/DartDisclosureMonitorClient";
 import {
   addFavorite,
@@ -28,6 +30,7 @@ import {
   normalizeDartCorpName,
   normalizeDartSearchQuery,
 } from "@/lib/dart/query";
+import { cn } from "@/lib/utils";
 
 type SearchItem = {
   corpCode: string;
@@ -655,24 +658,30 @@ export function DartSearchClient() {
   }
 
   return (
-    <PageShell className="bg-surface-muted">
+    <PageShell>
       <PageHeader
         title="DART 공시 분석"
         description="관심 있는 상장 기업의 실시간 공시를 검색하고 모니터링합니다."
       />
 
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex items-center gap-2 mb-8">
         <button
           type="button"
           onClick={() => setTab("search")}
-          className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${tab === "search" ? "bg-primary text-white shadow-sm" : "bg-surface text-slate-500 hover:text-slate-900 border border-border"}`}
+          className={cn(
+            "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
+            tab === "search" ? "bg-emerald-600 text-white shadow-emerald-900/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+          )}
         >
           기업 검색
         </button>
         <button
           type="button"
           onClick={() => setTab("monitor")}
-          className={`rounded-full px-5 py-2 text-sm font-bold transition-colors ${tab === "monitor" ? "bg-primary text-white shadow-sm" : "bg-surface text-slate-500 hover:text-slate-900 border border-border"}`}
+          className={cn(
+            "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
+            tab === "monitor" ? "bg-emerald-600 text-white shadow-emerald-900/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+          )}
         >
           공시 모니터링
         </button>
@@ -680,22 +689,22 @@ export function DartSearchClient() {
 
       {tab === "search" ? (
         <>
-          <Card className="mb-6 p-6">
+          <Card className="mb-8 rounded-[2rem] p-8 shadow-sm">
             <form
-              className="flex flex-col sm:flex-row items-end sm:items-center gap-4"
+              className="flex flex-col sm:flex-row items-end gap-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (!isHydrated) return;
                 void search();
               }}
             >
-              <div className="w-full sm:flex-1 space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+              <div className="w-full sm:flex-1 space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                   회사명 검색
                 </label>
                 <input
                   data-testid="dart-search-input"
-                  className="block w-full h-12 rounded-xl border border-border bg-surface-muted px-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                  className="block w-full h-12 rounded-2xl border border-slate-200 bg-slate-50/50 px-5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white transition-all shadow-inner"
                   value={q}
                   onChange={(event) => {
                     clearLastSuccessfulSearchQuery();
@@ -710,196 +719,215 @@ export function DartSearchClient() {
                     if (!isHydrated) return;
                     void search();
                   }}
-                  placeholder="예: 삼성전자"
+                  placeholder="예: 삼성전자, 카카오, 네이버"
                 />
               </div>
               <Button
                 data-testid="dart-search-submit"
                 type={isHydrated ? "submit" : "button"}
                 variant="primary"
-                className="h-12 px-8 rounded-xl shadow-sm w-full sm:w-auto"
+                className="h-12 px-10 rounded-2xl font-black shadow-md w-full sm:w-auto"
                 disabled={!isHydrated || loading}
               >
-                {loading ? "검색 중..." : "검색"}
+                {loading ? "검색 중..." : "기업 찾기"}
               </Button>
             </form>
-            {notice ? <p className="mt-3 text-xs font-bold text-emerald-600 bg-emerald-50 p-2 rounded-lg">{notice}</p> : null}
-            {error ? <p className="mt-3 text-xs font-bold text-rose-600 bg-rose-50 p-2 rounded-lg">{error}</p> : null}
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="space-y-2">
-                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">최근 검색어</p>
-                {recentSearches.length === 0 ? (
-                  <p className="text-xs text-slate-500">
-                    검색이 성공하면 최근 검색어를 여기에 저장해 두고 다시 바로 찾을 수 있습니다.
-                  </p>
-                ) : (
-                  <div data-testid="dart-recent-searches" className="flex flex-wrap gap-2">
-                    {recentSearches.map((item) => (
-                      <button
-                        key={item.query}
-                        data-testid="dart-recent-search-chip"
-                        type="button"
-                        className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:text-slate-400"
-                        disabled={!isHydrated || loading}
-                        onClick={() => {
-                          setQ(item.query);
-                          rememberSearchDraftQuery(item.query);
-                          if (!isHydrated) return;
-                          void search(item.query);
-                        }}
-                      >
-                        {item.query}
-                      </button>
-                    ))}
-                  </div>
-                )}
+            
+            {notice ? <p className="mt-4 text-xs font-black text-emerald-600 bg-emerald-50 p-3 rounded-xl">{notice}</p> : null}
+            {error ? <p className="mt-4 text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{error}</p> : null}
+            
+            <div className="mt-6 border-t border-slate-50 pt-6">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">최근 검색어</p>
+                  {recentSearches.length === 0 ? (
+                    <p className="text-xs font-medium text-slate-400 italic">
+                      검색 기록이 없습니다.
+                    </p>
+                  ) : (
+                    <div data-testid="dart-recent-searches" className="flex flex-wrap gap-2">
+                      {recentSearches.map((item) => (
+                        <button
+                          key={item.query}
+                          data-testid="dart-recent-search-chip"
+                          type="button"
+                          className="rounded-full border border-slate-100 bg-white px-4 py-1.5 text-xs font-bold text-slate-600 transition-all hover:border-emerald-200 hover:text-emerald-600 shadow-sm disabled:opacity-50"
+                          disabled={!isHydrated || loading}
+                          onClick={() => {
+                            setQ(item.query);
+                            rememberSearchDraftQuery(item.query);
+                            if (!isHydrated) return;
+                            void search(item.query);
+                          }}
+                        >
+                          {item.query}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {recentSearches.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 self-start px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-rose-500"
+                    onClick={() => {
+                      clearRecentSearches();
+                      refreshLocalLists();
+                    }}
+                  >
+                    Clear All
+                  </Button>
+                ) : null}
               </div>
-              {recentSearches.length > 0 ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 self-start px-3 text-[11px] text-slate-500"
-                  onClick={() => {
-                    clearRecentSearches();
-                    refreshLocalLists();
-                  }}
-                >
-                  최근 검색어 비우기
-                </Button>
-              ) : null}
             </div>
           </Card>
 
           {missing ? (
-            <Card className="mb-6 border-amber-200 bg-amber-50">
-              <div data-testid="dart-missing-index">
-                <p className="text-sm font-bold text-amber-800">인덱스 구축이 필요합니다</p>
-                <div className="mt-3 space-y-1 text-xs text-amber-700/80 font-mono">
-                  <p>message: {missing.message ?? "-"}</p>
-                  <p>primaryPath: {missing.primaryPath ?? "-"}</p>
+            <Card className="mb-8 rounded-[2rem] border-amber-100 bg-amber-50/30 p-8">
+              <div data-testid="dart-missing-index" className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <p className="text-base font-black text-amber-800 tracking-tight">인덱스 구축이 필요합니다</p>
+                  <p className="mt-1 text-sm font-medium text-amber-700/70">DART 기업 코드를 효율적으로 검색하기 위해 1회성 인덱스 생성이 필요합니다.</p>
+                  <div className="mt-4 space-y-1 text-[10px] text-amber-600/60 font-mono">
+                    <p>Msg: {missing.message ?? "-"}</p>
+                    <p>Path: {missing.primaryPath ?? "-"}</p>
+                  </div>
                 </div>
-              </div>
 
-              {isDev && missing.canAutoBuild === true ? (
-                <div className="mt-4">
+                {isDev && missing.canAutoBuild === true ? (
                   <Button
                     data-testid="dart-build-index-button"
-                    size="sm"
                     variant="primary"
-                    className="bg-amber-600 hover:bg-amber-700 text-white border-none"
+                    className="bg-amber-600 hover:bg-amber-700 text-white border-none rounded-2xl px-8 h-12 font-black shadow-lg shadow-amber-200 shrink-0"
                     onClick={() => void buildIndex()}
                     disabled={buildLoading}
                   >
-                    {buildLoading ? "인덱스 생성 중..." : "인덱스 자동 생성"}
+                    {buildLoading ? "생성 중..." : "인덱스 자동 생성"}
                   </Button>
-                </div>
-              ) : null}
-            </Card>
-          ) : null}
-
-          <div className="grid gap-6 lg:grid-cols-3 items-start">
-            <Card className="lg:col-span-2 p-0 overflow-hidden">
-              <div data-testid="dart-search-results">
-                <div className="bg-surface px-6 py-4 border-b border-border/50">
-                   <h2 className="text-sm font-bold text-slate-900 uppercase tracking-widest">검색 결과</h2>
-                </div>
-                {!loading && !error && !missing && items.length === 0 && !hasSearched ? (
-                  <div
-                    data-testid="dart-search-idle"
-                    className="p-12 text-center"
-                  >
-                    <p className="text-sm font-semibold text-slate-700">회사명을 입력하고 검색해 보세요.</p>
-                    <p className="mt-2 text-xs text-slate-500">예: 삼성전자, 네이버, 카카오</p>
-                  </div>
-                ) : null}
-                {!loading && !error && !missing && items.length === 0 && hasSearched ? (
-                  <div
-                    data-testid="dart-search-empty"
-                    className="p-12 text-center"
-                  >
-                    <p className="text-sm font-semibold text-slate-700">검색 결과가 없습니다.</p>
-                    <p className="mt-2 text-xs text-slate-500">회사명 일부만 입력하거나 다른 표기를 시도해 보세요.</p>
-                  </div>
-                ) : null}
-                {items.length > 0 ? (
-                  <ul className="divide-y divide-border/50 bg-surface">
-                    {items.map((item) => (
-                      <li key={item.corpCode}>
-                        <div className="flex items-center gap-3 p-4 px-6 transition-colors hover:bg-surface-muted">
-                          <a
-                            data-testid="dart-search-item"
-                            href={buildCompanyHref(item.corpCode, activeSearchQuery || q, item.corpName)}
-                            className="group flex min-w-0 flex-1 items-center justify-between"
-                            onClick={(event) => {
-                              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-                              rememberPendingCompanyHref(buildCompanyHref(item.corpCode, activeSearchQuery || q, item.corpName));
-                            }}
-                          >
-                            <div className="min-w-0">
-                               <p className="text-sm font-bold text-slate-900 group-hover:text-primary transition-colors">{item.corpName}</p>
-                               <p className="mt-1 text-xs text-slate-500">
-                                 DART {item.corpCode}
-                                 {item.stockCode ? <span className="ml-2 px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px]">KRX {item.stockCode}</span> : <span className="ml-2 px-1.5 py-0.5 rounded bg-slate-100 text-[10px]">비상장</span>}
-                               </p>
-                            </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="ml-3 shrink-0 text-slate-300 group-hover:text-primary group-hover:translate-x-1 transition-all"><path d="m9 18 6-6-6-6"/></svg>
-                          </a>
-                          <button
-                            data-testid="dart-search-favorite-toggle"
-                            type="button"
-                            className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                              favoriteCorpCodes.has(item.corpCode)
-                                ? "border-amber-300 bg-amber-50 text-amber-700"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-amber-200 hover:text-amber-700"
-                            }`}
-                            aria-pressed={favoriteCorpCodes.has(item.corpCode)}
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              toggleFavorite(item);
-                            }}
-                          >
-                            {favoriteCorpCodes.has(item.corpCode) ? "저장됨" : "즐겨찾기"}
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
                 ) : null}
               </div>
             </Card>
+          ) : null}
+
+          <div className="grid gap-8 lg:grid-cols-3 items-start">
+            <div className="lg:col-span-2 space-y-6">
+              <Card className="rounded-[2rem] p-0 overflow-hidden shadow-sm border-slate-100">
+                <div data-testid="dart-search-results">
+                  <div className="bg-slate-50/50 px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+                     <SubSectionHeader title="검색 결과" className="mb-0" />
+                     {items.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-1 rounded-lg border border-slate-100">{items.length}건</span>}
+                  </div>
+                  
+                  {loading && items.length === 0 ? (
+                    <div className="p-20">
+                      <LoadingState title="회사 정보를 찾는 중입니다" />
+                    </div>
+                  ) : null}
+
+                  {!loading && !error && !missing && items.length === 0 && !hasSearched ? (
+                    <div data-testid="dart-search-idle" className="p-20 text-center">
+                      <p className="text-base font-black text-slate-900 tracking-tight">회사명을 입력하고 검색해 보세요</p>
+                      <p className="mt-2 text-sm font-medium text-slate-400">최신 공시와 기업 정보를 바로 확인할 수 있습니다.</p>
+                    </div>
+                  ) : null}
+
+                  {!loading && !error && !missing && items.length === 0 && hasSearched ? (
+                    <div data-testid="dart-search-empty" className="p-20 text-center bg-slate-50/30">
+                      <p className="text-base font-black text-slate-900 tracking-tight">검색 결과가 없습니다</p>
+                      <p className="mt-2 text-sm font-medium text-slate-400">정확한 회사명이나 줄임말(예: 삼성전자)로 다시 시도해 보세요.</p>
+                    </div>
+                  ) : null}
+
+                  {items.length > 0 ? (
+                    <ul className="divide-y divide-slate-50 bg-white">
+                      {items.map((item) => (
+                        <li key={item.corpCode}>
+                          <div className="flex items-center gap-4 p-5 px-8 transition-all hover:bg-emerald-50/30 group">
+                            <a
+                              data-testid="dart-search-item"
+                              href={buildCompanyHref(item.corpCode, activeSearchQuery || q, item.corpName)}
+                              className="group flex min-w-0 flex-1 items-center justify-between"
+                              onClick={(event) => {
+                                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+                                rememberPendingCompanyHref(buildCompanyHref(item.corpCode, activeSearchQuery || q, item.corpName));
+                              }}
+                            >
+                              <div className="min-w-0">
+                                 <p className="text-lg font-black text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tight">{item.corpName}</p>
+                                 <div className="mt-1 flex items-center gap-3">
+                                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">DART {item.corpCode}</span>
+                                   {item.stockCode ? (
+                                     <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-black text-slate-500">KRX {item.stockCode}</span>
+                                   ) : (
+                                     <span className="rounded-lg bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-400">비상장</span>
+                                   )}
+                                 </div>
+                              </div>
+                              <div className="ml-4 shrink-0 rounded-2xl bg-slate-50 p-2 text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                              </div>
+                            </a>
+                            <button
+                              data-testid="dart-search-favorite-toggle"
+                              type="button"
+                              className={cn(
+                                "shrink-0 rounded-full border px-4 py-2 text-[11px] font-black transition-all active:scale-95 shadow-sm",
+                                favoriteCorpCodes.has(item.corpCode)
+                                  ? "border-emerald-200 bg-emerald-500 text-white"
+                                  : "border-slate-200 bg-white text-slate-500 hover:border-emerald-300 hover:text-emerald-600"
+                              )}
+                              aria-pressed={favoriteCorpCodes.has(item.corpCode)}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                toggleFavorite(item);
+                              }}
+                            >
+                              {favoriteCorpCodes.has(item.corpCode) ? "저장됨" : "즐겨찾기"}
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              </Card>
+            </div>
 
             <div className="space-y-6">
-              <Card className="p-0 overflow-hidden">
+              <Card className="rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
                 <button
                   type="button"
                   onClick={() => setFavoritesOpen((prev) => !prev)}
-                  className="w-full flex items-center justify-between bg-surface px-5 py-4 text-sm font-bold text-slate-900 uppercase tracking-widest border-b border-border/50"
+                  className="w-full flex items-center justify-between bg-slate-50/50 px-6 py-5 border-b border-slate-100 group"
                 >
-                  <span className="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-amber-400"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                    즐겨찾기
-                  </span>
-                  <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{favorites.length}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-xl bg-amber-100 p-1.5 text-amber-500">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    </div>
+                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">즐겨찾기</span>
+                  </div>
+                  <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded-lg border border-slate-100">{favorites.length}</span>
                 </button>
                 {favoritesOpen && (
-                  <div className="bg-surface">
+                  <div className="bg-white">
                     {favorites.length === 0 ? (
-                      <p className="p-5 text-xs text-center text-slate-400">즐겨찾기한 회사가 없습니다.</p>
+                      <p className="p-10 text-xs font-bold text-center text-slate-300 italic">저장된 회사가 없습니다.</p>
                     ) : (
-                      <ul className="divide-y divide-border/50">
+                      <ul className="divide-y divide-slate-50 max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-100">
                         {favorites.map((item) => (
                           <li key={item.corpCode}>
                             <a
                               href={buildCompanyHref(item.corpCode)}
-                              className="block p-3 px-5 hover:bg-surface-muted transition-colors"
+                              className="block p-4 px-6 hover:bg-slate-50 transition-colors"
                               onClick={(event) => {
                                 if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
                                 rememberPendingCompanyHref(buildCompanyHref(item.corpCode));
                               }}
                             >
-                              <p className="text-xs font-bold text-slate-900">{item.corpName ?? item.corpCode}</p>
-                              <p className="text-[10px] text-slate-500 mt-0.5">{item.corpCode}</p>
+                              <p className="text-sm font-black text-slate-800 tracking-tight leading-tight">{item.corpName ?? item.corpCode}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{item.corpCode}</p>
                             </a>
                           </li>
                         ))}
@@ -909,47 +937,48 @@ export function DartSearchClient() {
                 )}
               </Card>
 
-              <Card className="p-0 overflow-hidden">
-                <div className="flex items-center justify-between bg-surface px-5 py-4 border-b border-border/50">
+              <Card className="rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
+                <div className="flex items-center justify-between bg-slate-50/50 px-6 py-5 border-b border-slate-100">
                   <button
                     type="button"
                     onClick={() => setRecentOpen((prev) => !prev)}
-                    className="flex-1 text-left text-sm font-bold text-slate-900 uppercase tracking-widest flex items-center gap-2"
+                    className="flex items-center gap-2 group"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    최근 기록
+                    <div className="rounded-xl bg-slate-200 p-1.5 text-slate-500">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">최근 기록</span>
                   </button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 text-[10px] px-2 text-slate-400"
+                  <button
+                    type="button"
+                    className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-rose-500 transition-colors"
                     onClick={() => {
                       clearRecent();
                       refreshLocalLists();
                     }}
                     disabled={recent.length === 0}
                   >
-                    비우기
-                  </Button>
+                    Clear
+                  </button>
                 </div>
                 {recentOpen && (
-                  <div className="bg-surface">
+                  <div className="bg-white">
                     {recent.length === 0 ? (
-                      <p className="p-5 text-xs text-center text-slate-400">최근 기록이 없습니다.</p>
+                      <p className="p-10 text-xs font-bold text-center text-slate-300 italic">조회 기록이 없습니다.</p>
                     ) : (
-                      <ul className="divide-y divide-border/50">
+                      <ul className="divide-y divide-slate-50 max-h-[320px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-100">
                         {recent.map((item) => (
                           <li key={item.corpCode}>
                             <a
                               href={buildCompanyHref(item.corpCode)}
-                              className="block p-3 px-5 hover:bg-surface-muted transition-colors"
+                              className="block p-4 px-6 hover:bg-slate-50 transition-colors"
                               onClick={(event) => {
                                 if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
                                 rememberPendingCompanyHref(buildCompanyHref(item.corpCode));
                               }}
                             >
-                              <p className="text-xs font-bold text-slate-900">{item.corpName ?? item.corpCode}</p>
-                              <p className="text-[10px] text-slate-500 mt-0.5">{item.corpCode}</p>
+                              <p className="text-sm font-black text-slate-800 tracking-tight leading-tight">{item.corpName ?? item.corpCode}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{item.corpCode}</p>
                             </a>
                           </li>
                         ))}
@@ -962,7 +991,7 @@ export function DartSearchClient() {
           </div>
         </>
       ) : (
-        <div className="mt-6">
+        <div className="mt-2 animate-in fade-in slide-in-from-bottom-2 duration-500">
           <DartDisclosureMonitorClient />
         </div>
       )}

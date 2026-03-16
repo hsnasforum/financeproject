@@ -2,49 +2,60 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 
 const links = [
   {
     href: "/settings/data-sources",
     title: "데이터 소스",
-    description: "연동 상태 및 헬스체크를 확인합니다.",
+    description: "공시/뉴스/상품 데이터 소스의 연동 상태 및 헬스체크를 관리합니다.",
   },
   {
     href: "/settings/alerts",
     title: "알림 규칙",
-    description: "DART 알림 필터 규칙과 프리셋을 관리합니다.",
+    description: "DART 공시 알림 무시 규칙과 프리셋을 생성하고 관리합니다.",
   },
   {
     href: "/settings/backup",
-    title: "백업 / 복원",
-    description: "Export/Import 번들로 로컬+서버 상태를 백업/복원합니다.",
+    title: "백업 및 복원",
+    description: "로컬 환경 설정과 서버 데이터를 파일 번들로 백업하거나 복원합니다.",
   },
   {
     href: "/settings/recovery",
-    title: "Recovery",
-    description: "안전 초기화(Reset)와 오프라인 복구(Repair)를 실행합니다.",
+    title: "시스템 복구",
+    description: "캐시 초기화, 오프라인 복구 등 시스템 정합성 문제 발생 시 활용합니다.",
   },
   {
     href: "/settings/maintenance",
-    title: "Maintenance",
-    description: "Cleanup 리텐션 정책을 관리하고 즉시 정리를 실행합니다.",
+    title: "유지 관리",
+    description: "데이터 보관 주기(Retention) 정책을 설정하고 정리 작업을 수행합니다.",
   },
 ];
 
 export default function SettingsHomePage() {
   return (
-    <PageShell className="bg-surface-muted">
+    <PageShell>
       <PageHeader
         title="환경 설정"
-        description="운영/진단/백업 관련 설정 메뉴입니다."
+        description="프로덕트 운영, 데이터 진단, 백업/복구 관련 도구 모음입니다."
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {links.map((item) => (
-          <Link key={item.href} href={item.href}>
-            <Card className="h-full transition hover:-translate-y-0.5 hover:shadow-md">
-              <h2 className="text-lg font-black text-slate-900">{item.title}</h2>
-              <p className="mt-2 text-sm text-slate-600">{item.description}</p>
+          <Link key={item.href} href={item.href} className="group">
+            <Card className="h-full rounded-[2rem] p-8 transition-all hover:-translate-y-1 hover:shadow-xl hover:border-emerald-200 active:scale-[0.98]">
+              <SubSectionHeader 
+                title={item.title} 
+                className="mb-0"
+                titleClassName="group-hover:text-emerald-600 transition-colors"
+              />
+              <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500">{item.description}</p>
+              
+              <div className="mt-8 flex justify-end">
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">
+                  Setup ▶
+                </span>
+              </div>
             </Card>
           </Link>
         ))}

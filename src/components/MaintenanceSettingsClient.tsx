@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 
 const DEV_UNLOCKED_SESSION_KEY = "dev_action_unlocked_v1";
 const DEV_CSRF_SESSION_KEY = "dev_action_csrf_v1";
@@ -279,92 +281,113 @@ export function MaintenanceSettingsClient() {
   return (
     <PageShell>
       <PageHeader
-        title="Maintenance"
-        description="tmp 산출물 보관 정책을 관리하고 cleanup을 즉시 실행합니다."
+        title="유지 관리 (Maintenance)"
+        description="임시 데이터 보관 정책을 관리하고 시스템 정리(Cleanup)를 수행합니다."
         action={
           <Link href="/settings">
-            <Button variant="outline" size="sm">설정 홈</Button>
+            <Button variant="outline" className="rounded-xl font-black">설정 홈으로</Button>
           </Link>
         }
       />
 
-      <Card>
-        <h2 className="text-base font-black text-slate-900">Dev Unlock</h2>
-        <p className="mt-2 text-sm text-slate-600">저장/실행(POST) 작업 전 unlock이 필요합니다.</p>
-        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
-          <input
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-emerald-200 transition focus:border-emerald-400 focus:ring"
-            type="password"
-            placeholder="DEV_TOKEN"
-            value={unlockToken}
-            onChange={(event) => setUnlockToken(event.target.value)}
-          />
-          <Button type="button" variant="outline" size="md" onClick={handleUnlock} disabled={unlock.loading}>
-            {unlock.loading ? "해제 중..." : unlock.unlocked ? "해제됨" : "잠금 해제"}
-          </Button>
-        </div>
-        {unlock.error ? <p className="mt-2 text-sm font-semibold text-rose-600">{unlock.error}</p> : null}
-      </Card>
-
-      <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Retention Policy</h2>
-        <p className="mt-2 text-sm text-slate-600">저장 시 `config/retention-policy.json`이 갱신됩니다.</p>
-
-        {loading ? (
-          <p className="mt-4 text-sm text-slate-500">정책 로딩 중...</p>
-        ) : (
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <label className="space-y-1 text-sm">
-              <span className="font-semibold text-slate-700">version</span>
-              <input className="h-11 w-full rounded-xl border border-slate-300 px-3" value={version} onChange={(event) => setVersion(event.target.value)} />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="font-semibold text-slate-700">feedbackMaxItems</span>
-              <input className="h-11 w-full rounded-xl border border-slate-300 px-3" value={feedbackMaxItems} onChange={(event) => setFeedbackMaxItems(event.target.value)} />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="font-semibold text-slate-700">fixHistoryMaxItems</span>
-              <input className="h-11 w-full rounded-xl border border-slate-300 px-3" value={fixHistoryMaxItems} onChange={(event) => setFixHistoryMaxItems(event.target.value)} />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="font-semibold text-slate-700">refreshLogMaxBytes</span>
-              <input className="h-11 w-full rounded-xl border border-slate-300 px-3" value={refreshLogMaxBytes} onChange={(event) => setRefreshLogMaxBytes(event.target.value)} />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="font-semibold text-slate-700">refreshLogKeepTailBytes</span>
-              <input className="h-11 w-full rounded-xl border border-slate-300 px-3" value={refreshLogKeepTailBytes} onChange={(event) => setRefreshLogKeepTailBytes(event.target.value)} />
-            </label>
-            <label className="flex items-center gap-2 pt-6 text-sm font-semibold text-slate-700">
-              <input
-                type="checkbox"
-                checked={keepBackupRestorePoint}
-                onChange={(event) => setKeepBackupRestorePoint(event.target.checked)}
-              />
-              keepBackupRestorePoint
-            </label>
+      <div className="space-y-8">
+        <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
+          <SubSectionHeader title="Dev 잠금 해제" description="정책 저장 및 정리 실행을 위해 인증이 필요합니다." />
+          <div className="mt-6 flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto] sm:items-center">
+            <input
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-5 text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all shadow-inner"
+              type="password"
+              placeholder="인증 토큰 입력"
+              value={unlockToken}
+              onChange={(event) => setUnlockToken(event.target.value)}
+            />
+            <Button 
+              type="button" 
+              className="h-11 px-8 rounded-2xl font-black shadow-md" 
+              onClick={handleUnlock} 
+              disabled={unlock.loading}
+            >
+              {unlock.loading ? "인증 중..." : unlock.unlocked ? "인증 완료" : "잠금 해제"}
+            </Button>
           </div>
-        )}
+          <div className="mt-4 flex items-center gap-2 px-1">
+            <span className={cn("w-2 h-2 rounded-full", unlock.unlocked ? "bg-emerald-500" : "bg-slate-300")} />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              인증 상태: {unlock.unlocked ? "UNLOCKED" : "LOCKED"}
+            </span>
+          </div>
+          {unlock.error ? <p className="mt-3 text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{unlock.error}</p> : null}
+        </Card>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button type="button" variant="primary" size="md" onClick={handleSavePolicy} disabled={saving || loading}>
-            {saving ? "저장 중..." : "정책 저장"}
-          </Button>
-          <Button type="button" variant="outline" size="md" onClick={handleRunCleanupNow} disabled={runningCleanup}>
-            {runningCleanup ? "정리 실행 중..." : "지금 정리 실행"}
-          </Button>
-        </div>
+        <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
+          <SubSectionHeader title="리텐션 정책 (Retention Policy)" description="항목별 최대 보관 개수 및 로그 용량을 설정합니다." />
+          <p className="mt-1 text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">저장 시 config/retention-policy.json이 갱신됩니다.</p>
 
-        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold text-slate-600">미리보기</p>
-          <pre className="mt-2 overflow-x-auto text-xs text-slate-700">{JSON.stringify(previewPolicy, null, 2)}</pre>
-        </div>
+          {loading ? (
+            <div className="py-12 text-center text-xs font-bold text-slate-400 animate-pulse">정책 로딩 중...</div>
+          ) : (
+            <div className="grid gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Policy Version</label>
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={version} onChange={(event) => setVersion(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Feedback Max Items</label>
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={feedbackMaxItems} onChange={(event) => setFeedbackMaxItems(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Fix History Max Items</label>
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={fixHistoryMaxItems} onChange={(event) => setFixHistoryMaxItems(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Log Max Bytes</label>
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={refreshLogMaxBytes} onChange={(event) => setRefreshLogMaxBytes(event.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Log Keep Tail Bytes</label>
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={refreshLogKeepTailBytes} onChange={(event) => setRefreshLogKeepTailBytes(event.target.value)} />
+              </div>
+              <div className="flex items-center pt-6">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={keepBackupRestorePoint}
+                    onChange={(event) => setKeepBackupRestorePoint(event.target.checked)}
+                  />
+                  <span className="text-sm font-black text-slate-700 group-hover:text-emerald-600 transition-colors">Keep Backup Restore Point</span>
+                </label>
+              </div>
+            </div>
+          )}
 
-        {cleanupSummary ? <p className="mt-3 text-sm text-slate-700">Cleanup summary: {cleanupSummary}</p> : null}
-        {notice ? <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p> : null}
-        {error ? <p className="mt-3 text-sm font-semibold text-rose-600">{error}</p> : null}
-      </Card>
+          <div className="mt-10 flex flex-wrap items-center gap-4 border-t border-slate-50 pt-8">
+            <Button type="button" className="h-12 px-10 rounded-2xl font-black shadow-md" onClick={handleSavePolicy} disabled={saving || loading}>
+              {saving ? "저장 중..." : "리텐션 정책 저장"}
+            </Button>
+            <Button type="button" variant="outline" className="h-12 px-8 rounded-2xl font-black shadow-sm" onClick={handleRunCleanupNow} disabled={runningCleanup}>
+              {runningCleanup ? "정리 수행 중..." : "지금 즉시 정리 실행"}
+            </Button>
+          </div>
 
-      <AuditLogCard limit={50} />
+          {(notice || error || cleanupSummary) && (
+            <div className={cn(
+              "mt-8 rounded-2xl p-5 text-sm font-black animate-in fade-in slide-in-from-bottom-2",
+              error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+            )}>
+              <p>{error || notice}</p>
+              {cleanupSummary && <p className="mt-2 text-xs font-bold opacity-80 font-mono">{cleanupSummary}</p>}
+            </div>
+          )}
+
+          <div className="mt-8 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Policy Preview (JSON)</p>
+            <pre className="overflow-x-auto text-[10px] font-bold text-slate-500 scrollbar-none">{JSON.stringify(previewPolicy, null, 2)}</pre>
+          </div>
+        </Card>
+
+        <AuditLogCard limit={50} />
+      </div>
     </PageShell>
   );
 }

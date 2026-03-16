@@ -105,7 +105,7 @@ export function BodyStatusInset({ tone = "default", children, className, ...rest
 export function BodyDialogSurface({ children, className, ...rest }: BodyDialogSurfaceProps) {
   return (
     <div
-      className={cn("w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-900/10", className)}
+      className={cn("w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10", className)}
       {...rest}
     >
       {children}
@@ -115,7 +115,7 @@ export function BodyDialogSurface({ children, className, ...rest }: BodyDialogSu
 
 export function BodyTableFrame({ children, className, ...rest }: BodyTableFrameProps) {
   return (
-    <div className={cn("overflow-x-auto rounded-xl border border-slate-200", className)} {...rest}>
+    <div className={cn("overflow-x-auto rounded-2xl border border-slate-100 bg-white", className)} {...rest}>
       {children}
     </div>
   );

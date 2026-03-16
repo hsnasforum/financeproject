@@ -25,6 +25,9 @@ import {
   type AlertRuleKind,
 } from "@/lib/dart/alertRulesStore";
 import { validateRegexPattern, type RegexValidationResult } from "@/lib/dart/ruleRegexGuard";
+import { Card } from "@/components/ui/Card";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 
 const ALERT_PREFS_STORAGE_KEY = "dart_alert_prefs_v1";
 const ALERT_PREFS_CHANGED_EVENT = "dart-alert-prefs-changed";
@@ -483,13 +486,15 @@ export function AlertRulesClient() {
   }
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-bold text-slate-900">프리셋</h2>
-        <p className="mt-1 text-xs text-slate-500">필터/규칙을 preset 단위로 저장하고 전환합니다.</p>
-        <div className="mt-3 grid gap-2 md:grid-cols-[240px_1fr_auto_auto]">
+    <div className="space-y-6">
+      <Card className="rounded-[2rem] p-8 shadow-sm">
+        <SubSectionHeader
+          title="프리셋"
+          description="필터/규칙을 preset 단위로 저장하고 전환합니다."
+        />
+        <div className="mt-6 grid gap-4 md:grid-cols-[240px_1fr_auto_auto]">
           <select
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
+            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
             value={activePreset.id}
             onChange={(event) => persistProfile({ ...profile, activePresetId: event.target.value })}
           >
@@ -498,35 +503,35 @@ export function AlertRulesClient() {
             ))}
           </select>
           <input
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
+            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
             placeholder="새 프리셋 이름"
             value={newPresetName}
             onChange={(event) => setNewPresetName(event.target.value)}
           />
           <button
             type="button"
-            className="h-10 rounded-lg bg-slate-900 px-4 text-sm font-bold text-white hover:bg-slate-800"
+            className="h-11 rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white hover:bg-emerald-700 shadow-lg shadow-emerald-900/20 transition-all active:scale-95"
             onClick={onCreatePreset}
           >
             생성
           </button>
           <button
             type="button"
-            className="h-10 rounded-lg bg-rose-50 px-4 text-sm font-bold text-rose-700 hover:bg-rose-100"
+            className="h-11 rounded-2xl bg-rose-50 px-6 text-sm font-black text-rose-700 hover:bg-rose-100 transition-colors shadow-sm"
             onClick={onDeletePreset}
           >
             삭제
           </button>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            className="h-9 rounded-full border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm"
             onClick={onExportJson}
           >
             JSON 내보내기
           </button>
-          <label className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50">
+          <label className="inline-flex h-9 cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
             JSON 가져오기
             <input
               type="file"
@@ -539,62 +544,79 @@ export function AlertRulesClient() {
             />
           </label>
         </div>
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-bold text-slate-900">필터 설정</h2>
-        <p className="mt-1 text-xs text-slate-500">active preset의 preferences를 수정합니다.</p>
-        <div className="mt-3 grid gap-2 md:grid-cols-5">
-          <input
-            type="number"
-            min={0}
-            max={100}
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
-            value={preferences.minScore}
-            onChange={(event) => updateActivePreferences({ minScore: asNumber(event.target.value, 0) })}
-            aria-label="minScore"
-          />
-          <input
-            type="number"
-            min={1}
-            max={20}
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
-            value={preferences.maxPerCorp}
-            onChange={(event) => updateActivePreferences({ maxPerCorp: asNumber(event.target.value, 2) })}
-            aria-label="maxPerCorp"
-          />
-          <input
-            type="number"
-            min={1}
-            max={200}
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
-            value={preferences.maxItems}
-            onChange={(event) => updateActivePreferences({ maxItems: asNumber(event.target.value, 20) })}
-            aria-label="maxItems"
-          />
-          <input
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700 md:col-span-2"
-            placeholder="includeCategories (comma)"
-            value={includeCategoriesText}
-            onChange={(event) => setIncludeCategoriesText(event.target.value)}
-            onBlur={() => updateActivePreferences({ includeCategories: parseCsv(includeCategoriesText) })}
+      <Card className="rounded-[2rem] p-8 shadow-sm">
+        <SubSectionHeader
+          title="필터 설정"
+          description="현재 프리셋의 상세 필터링 임계치를 설정합니다."
+        />
+        <div className="mt-6 grid gap-4 md:grid-cols-5">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">최소 점수</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+              value={preferences.minScore}
+              onChange={(event) => updateActivePreferences({ minScore: asNumber(event.target.value, 0) })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Max Per Corp</label>
+            <input
+              type="number"
+              min={1}
+              max={20}
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+              value={preferences.maxPerCorp}
+              onChange={(event) => updateActivePreferences({ maxPerCorp: asNumber(event.target.value, 2) })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">최대 항목 수</label>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+              value={preferences.maxItems}
+              onChange={(event) => updateActivePreferences({ maxItems: asNumber(event.target.value, 20) })}
+            />
+          </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">포함 카테고리</label>
+            <input
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+              placeholder="쉼표로 구분"
+              value={includeCategoriesText}
+              onChange={(event) => setIncludeCategoriesText(event.target.value)}
+              onBlur={() => updateActivePreferences({ includeCategories: parseCsv(includeCategoriesText) })}
+            />
+          </div>
+        </div>
+        <div className="mt-4 space-y-1.5">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">제외 플래그</label>
+            <input
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+              placeholder="무시할 키워드를 쉼표로 구분하여 입력"
+
+            value={excludeFlagsText}
+            onChange={(event) => setExcludeFlagsText(event.target.value)}
+            onBlur={() => updateActivePreferences({ excludeFlags: parseCsv(excludeFlagsText) })}
           />
         </div>
-        <input
-          className="mt-2 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
-          placeholder="excludeFlags (comma)"
-          value={excludeFlagsText}
-          onChange={(event) => setExcludeFlagsText(event.target.value)}
-          onBlur={() => updateActivePreferences({ excludeFlags: parseCsv(excludeFlagsText) })}
-        />
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-bold text-slate-900">규칙 추가</h2>
-        <p className="mt-1 text-xs text-slate-500">회사/카테고리/키워드/클러스터 단위 무시 규칙을 추가합니다.</p>
-        <div className={`mt-3 grid gap-2 ${kind === "keyword" ? "md:grid-cols-[180px_160px_1fr_auto]" : "md:grid-cols-[180px_1fr_auto]"}`}>
+      <Card className="rounded-[2rem] p-8 shadow-sm">
+        <SubSectionHeader
+          title="규칙 추가"
+          description="회사/카테고리/키워드/클러스터 단위 무시 규칙을 정의합니다."
+        />
+        <div className={`mt-6 grid gap-4 ${kind === "keyword" ? "md:grid-cols-[180px_160px_1fr_auto]" : "md:grid-cols-[180px_1fr_auto]"}`}>
           <select
-            className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
+            className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
             value={kind}
             onChange={(event) => {
               setKind(event.target.value as AlertRuleKind);
@@ -609,19 +631,24 @@ export function AlertRulesClient() {
           </select>
           {kind === "keyword" ? (
             <select
-              className="h-10 rounded-lg border border-slate-200 px-3 text-sm text-slate-700"
+              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
               value={keywordMatch}
               onChange={(event) => setKeywordMatch(event.target.value as AlertKeywordMatch)}
             >
-              <option value="contains">contains</option>
-              <option value="startsWith">startsWith</option>
-              <option value="regex">regex</option>
+              <option value="contains">포함</option>
+              <option value="startsWith">시작 단어</option>
+              <option value="regex">정규식 (Regex)</option>
             </select>
           ) : null}
           {renderRuleValueInput()}
           <button
             type="button"
-            className={`h-10 rounded-lg px-4 text-sm font-bold text-white ${canSaveRule ? "bg-slate-900 hover:bg-slate-800" : "cursor-not-allowed bg-slate-300"}`}
+            className={cn(
+              "h-11 rounded-2xl px-6 text-sm font-black shadow-sm transition-all active:scale-95",
+              canSaveRule
+                ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-900/20"
+                : "cursor-not-allowed bg-slate-100 text-slate-400"
+            )}
             onClick={onAddRule}
             disabled={!canSaveRule}
           >
@@ -629,55 +656,57 @@ export function AlertRulesClient() {
           </button>
         </div>
         {kind === "keyword" && keywordMatch === "regex" && validationError ? (
-          <p className="mt-2 text-xs text-rose-700">{validationError}</p>
+          <p className="mt-2 text-xs font-bold text-rose-500">{validationError}</p>
         ) : null}
-        {error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
-        <p className="mt-2 text-xs text-slate-600">
-          미리보기: 현재 샘플 {sampleItems.length}건 중 추가로 {previewHiddenCount}건 숨김 예상
-          (현재 필터/규칙 적용 후 표시 {filteredCurrent.length}건)
+        {error ? <p className="mt-2 text-xs font-bold text-rose-500">{error}</p> : null}
+        <p className="mt-4 text-[11px] font-bold text-slate-400 bg-slate-50 rounded-xl p-3">
+          미리보기: 샘플 {sampleItems.length}건 중 <span className="text-emerald-600 font-black">{previewHiddenCount}건</span> 추가 제외 예상
+          (현재 활성 규칙 기준 표시 {filteredCurrent.length}건)
         </p>
-      </section>
+      </Card>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-bold text-slate-900">규칙 목록</h2>
-          <p className="text-xs text-slate-500">{rules.length}개</p>
-        </div>
+      <Card className="rounded-[2rem] p-8 shadow-sm">
+        <SubSectionHeader
+          title="규칙 목록"
+          description={`${rules.length}개의 활성 규칙이 등록되어 있습니다.`}
+        />
         {rules.length === 0 ? (
-          <p className="mt-3 text-xs text-slate-500">등록된 규칙이 없습니다.</p>
+          <div className="py-12 text-center rounded-[2rem] border border-dashed border-slate-200 bg-slate-50/50">
+            <p className="text-sm font-black text-slate-400">등록된 무시 규칙이 없습니다.</p>
+          </div>
         ) : (
-          <div className="mt-3 overflow-x-auto">
-            <table className="min-w-full text-xs text-slate-700">
+          <div className="mt-6 overflow-x-auto">
+            <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-200 text-left text-slate-500">
-                  <th className="px-2 py-1">종류</th>
-                  <th className="px-2 py-1">매치</th>
-                  <th className="px-2 py-1">값</th>
-                  <th className="px-2 py-1">생성일</th>
-                  <th className="px-2 py-1">활성</th>
-                  <th className="px-2 py-1">삭제</th>
+                <tr className="border-b border-slate-100 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="px-3 py-3">종류</th>
+                  <th className="px-3 py-3">매치</th>
+                  <th className="px-3 py-3">값</th>
+                  <th className="px-3 py-3">생성일</th>
+                  <th className="px-3 py-3 text-center">활성</th>
+                  <th className="px-3 py-3 text-right">관리</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-50">
                 {rules.map((rule) => (
-                  <tr key={rule.id} className="border-b border-slate-100">
-                    <td className="px-2 py-2 font-semibold text-slate-900">{KIND_LABEL[rule.kind]}</td>
-                    <td className="px-2 py-2">{rule.kind === "keyword" ? MATCH_LABEL[rule.match ?? "contains"] : "-"}</td>
-                    <td className="px-2 py-2 font-mono text-[11px]">{rule.value}</td>
-                    <td className="px-2 py-2">{formatDateTime(rule.createdAt)}</td>
-                    <td className="px-2 py-2">
+                  <tr key={rule.id} className="group hover:bg-slate-50/50 transition-colors">
+                    <td className="px-3 py-4 font-black text-slate-900">{KIND_LABEL[rule.kind]}</td>
+                    <td className="px-3 py-4 font-bold text-slate-500">{rule.kind === "keyword" ? MATCH_LABEL[rule.match ?? "contains"] : "-"}</td>
+                    <td className="px-3 py-4 font-mono text-[11px] font-bold text-slate-700">{rule.value}</td>
+                    <td className="px-3 py-4 font-bold text-slate-400 text-xs">{formatDateTime(rule.createdAt)}</td>
+                    <td className="px-3 py-4 text-center">
                       <button
                         type="button"
-                        className={`rounded-md px-2 py-1 text-[11px] font-bold ${rule.enabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                        className={`rounded-full px-3 py-1 text-[10px] font-black shadow-sm transition-all ${rule.enabled ? "bg-emerald-500 text-white" : "bg-slate-100 text-slate-400"}`}
                         onClick={() => updateActivePreset((preset) => ({ ...preset, rules: toggleRule(preset.rules, rule.id) }))}
                       >
                         {rule.enabled ? "ON" : "OFF"}
                       </button>
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="px-3 py-4 text-right">
                       <button
                         type="button"
-                        className="rounded-md bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100"
+                        className="rounded-xl bg-rose-50 px-3 py-1.5 text-[11px] font-black text-rose-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-100"
                         onClick={() => updateActivePreset((preset) => ({ ...preset, rules: removeRule(preset.rules, rule.id) }))}
                       >
                         삭제
@@ -689,7 +718,7 @@ export function AlertRulesClient() {
             </table>
           </div>
         )}
-      </section>
+      </Card>
     </div>
   );
 }

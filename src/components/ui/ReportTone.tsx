@@ -3,10 +3,10 @@ import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 
 export const reportHeroActionLinkClassName =
-  "rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white/85 transition hover:bg-white/15";
+  "rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-white/80 transition hover:bg-white/10 hover:text-white active:scale-95";
 
 export const reportHeroPrimaryActionClassName =
-  "rounded-full border border-white/15 bg-white px-3 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-white/90";
+  "rounded-full border border-emerald-400/20 bg-emerald-500 px-5 py-2 text-sm font-black text-white shadow-lg shadow-emerald-900/40 transition hover:bg-emerald-400 active:scale-95";
 
 export const reportHeroAnchorLinkClassName =
   "rounded-full border border-white/15 bg-white/10 px-3 py-1 text-white/80 transition hover:bg-white/15";
@@ -15,31 +15,31 @@ export const reportHeroMetaChipClassName =
   "rounded-full border border-white/10 bg-white/10 px-3 py-1 text-white/80 transition hover:bg-white/15";
 
 export const reportSurfaceFieldClassName =
-  "mt-1 h-10 w-full rounded-xl border border-white/15 bg-slate-900/70 px-3 text-sm text-white shadow-sm outline-none transition focus:border-sky-300/60 focus:ring-2 focus:ring-sky-200/20";
+  "mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-300/60 focus:ring-2 focus:ring-emerald-200/20";
 
 export const reportSurfaceTableFrameClassName =
-  "overflow-x-auto rounded-3xl border border-white/10 bg-white/5 shadow-sm";
+  "overflow-x-auto rounded-3xl border border-slate-100 bg-white shadow-sm";
 
 export const reportSurfaceInsetClassName =
-  "rounded-2xl border border-white/10 bg-white/10 px-3 py-3 text-xs text-white/78 shadow-sm";
+  "rounded-2xl border border-slate-100 bg-slate-50/50 px-3 py-3 text-xs text-slate-600 shadow-sm";
 
 export const reportSurfaceDisclosureClassName =
-  "rounded-3xl border border-white/10 bg-white/10 px-4 py-3 shadow-sm backdrop-blur";
+  "rounded-3xl border border-slate-100 bg-slate-50/30 px-4 py-3 shadow-sm";
 
 export const reportSurfaceDisclosureSummaryClassName =
-  "cursor-pointer text-sm font-semibold text-white";
+  "cursor-pointer text-sm font-black text-slate-900 uppercase tracking-widest";
 
 export const reportSurfaceButtonClassName =
-  "rounded-lg border border-white/15 bg-slate-900/70 px-3 py-1 font-semibold text-white transition hover:bg-slate-800/80 disabled:cursor-not-allowed disabled:opacity-50";
+  "rounded-lg border border-slate-200 bg-white px-3 py-1 font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
 
 export const reportSurfaceDetailClassName =
-  "rounded-lg border border-white/10 bg-white/10 px-2 py-1 text-[11px] text-white/80";
+  "rounded-lg border border-slate-100 bg-white px-2 py-1 text-[11px] font-bold text-slate-500 shadow-sm";
 
 export const reportSurfacePopoverTriggerClassName =
-  "flex w-full items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-[11px] font-semibold text-white/85 transition-colors hover:bg-white/5";
+  "flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black text-slate-700 transition-colors hover:bg-slate-50 shadow-sm";
 
 export const reportSurfacePopoverPanelClassName =
-  "pointer-events-auto absolute max-h-[34rem] origin-top overflow-auto rounded-2xl border border-white/15 bg-slate-950/95 p-3 shadow-2xl ring-1 ring-cyan-400/20";
+  "pointer-events-auto absolute max-h-[34rem] origin-top overflow-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl ring-1 ring-slate-200/50 z-50";
 
 type ReportHeroChipTone = "neutral" | "emerald" | "sky" | "amber" | "rose" | "slate";
 
@@ -103,18 +103,18 @@ export function ReportHeroCard({
   return (
     <Card
       className={cn(
-        "overflow-hidden border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-0 text-white shadow-xl",
+        "overflow-hidden border border-slate-100 bg-white p-0 text-slate-900 shadow-sm rounded-[2.5rem]",
         className,
       )}
     >
-      <div className={cn("space-y-5 p-5 lg:p-6", contentClassName)}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className={cn("space-y-8 p-8 lg:p-10", contentClassName)}>
+        <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">{kicker}</p>
-            <h1 className="mt-2 text-2xl font-black tracking-tight text-white">{title}</h1>
-            <p className="mt-2 text-sm leading-6 text-white/75">{description}</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-600">{kicker}</p>
+            <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-900 leading-tight">{title}</h1>
+            <p className="mt-4 text-base font-medium leading-relaxed text-slate-500">{description}</p>
           </div>
-          {action ? <div className="flex flex-wrap items-center gap-2">{action}</div> : null}
+          {action ? <div className="flex flex-wrap items-center gap-3">{action}</div> : null}
         </div>
         {children}
       </div>
@@ -124,7 +124,7 @@ export function ReportHeroCard({
 
 export function ReportHeroStatGrid({ children, className }: ReportHeroStatGridProps) {
   return (
-    <div className={cn("grid gap-3 md:grid-cols-2 xl:grid-cols-4", className)}>
+    <div className={cn("grid gap-4 md:grid-cols-2 xl:grid-cols-4", className)}>
       {children}
     </div>
   );
@@ -132,10 +132,10 @@ export function ReportHeroStatGrid({ children, className }: ReportHeroStatGridPr
 
 export function ReportHeroStatCard({ label, value, description, children, className }: ReportHeroStatCardProps) {
   return (
-    <div className={cn("rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur", className)}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">{label}</p>
-      <p className="mt-2 text-lg font-black tracking-tight text-white">{value}</p>
-      {description ? <p className="mt-1 text-xs text-white/70">{description}</p> : null}
+    <div className={cn("rounded-2xl border border-slate-100 bg-slate-50/50 px-5 py-4 transition-all hover:bg-white hover:shadow-sm group", className)}>
+      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400 group-hover:text-emerald-600 transition-colors">{label}</p>
+      <p className="mt-2 text-xl font-black tracking-tight text-slate-900">{value}</p>
+      {description ? <p className="mt-1 text-xs font-bold text-slate-400">{description}</p> : null}
       {children ? <div className="mt-3">{children}</div> : null}
     </div>
   );

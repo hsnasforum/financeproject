@@ -192,7 +192,7 @@ function resolveQuickView(action: { label: string; href?: string }): { kind: Qui
   return { kind: "products", href, title: action.label };
 }
 
-function TrendRow({ label, values, color }: { label: string; values: number[]; color: string }) {
+function TrendRow({ label, values, color, formatValue }: { label: string; values: number[]; color: string; formatValue?: (v: number) => string }) {
   const current = values.length ? values[values.length - 1] : 0;
   const prev = values.length > 1 ? values[values.length - 2] : current;
   const diff = current - prev;
@@ -210,7 +210,7 @@ function TrendRow({ label, values, color }: { label: string; values: number[]; c
         </p>
       </div>
       <div className="w-24">
-        <Sparkline values={values} color={color} />
+        <Sparkline values={values} color={color} formatValue={formatValue} />
       </div>
     </motion.div>
   );
@@ -384,22 +384,22 @@ export function PlannerWizard() {
                 );
               })}
 
-              <Card className="mt-8 p-6 bg-hero-navy text-white border-none shadow-2xl relative overflow-hidden">
-                <div className="absolute -right-4 -bottom-4 h-24 w-24 bg-white/5 rounded-full blur-2xl" />
-                <p className="text-[10px] font-bold text-slate-400 uppercase mb-4 tracking-widest">UI Prefs</p>
+              <Card className="mt-8 p-6 bg-slate-50 border border-slate-100 shadow-inner relative overflow-hidden">
+                <div className="absolute -right-4 -bottom-4 h-24 w-24 bg-emerald-500/5 rounded-full blur-2xl" />
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">UI Prefs</p>
                 <div className="space-y-4">
                   <div>
-                    <p className="text-xs font-bold mb-3 text-slate-300">상품 상세 열기</p>
-                    <div className="grid grid-cols-2 gap-2 bg-black/20 p-1 rounded-xl">
+                    <p className="text-xs font-bold mb-3 text-slate-600">상품 상세 열기</p>
+                    <div className="grid grid-cols-2 gap-2 bg-slate-200/50 p-1 rounded-xl">
                       <button 
                         onClick={() => { setLinkOpenModeState("quickview"); setLinkOpenMode("quickview"); }}
-                        className={cn("py-1.5 rounded-lg text-[10px] font-bold transition-all", linkOpenMode === "quickview" ? "bg-white text-primary" : "text-slate-400")}
+                        className={cn("py-1.5 rounded-lg text-[10px] font-black transition-all", linkOpenMode === "quickview" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
                       >
                         빠른 보기
                       </button>
                       <button 
                         onClick={() => { setLinkOpenModeState("newtab"); setLinkOpenMode("newtab"); }}
-                        className={cn("py-1.5 rounded-lg text-[10px] font-bold transition-all", linkOpenMode === "newtab" ? "bg-white text-primary" : "text-slate-400")}
+                        className={cn("py-1.5 rounded-lg text-[10px] font-black transition-all", linkOpenMode === "newtab" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
                       >
                         새 탭
                       </button>
@@ -871,13 +871,13 @@ export function PlannerWizard() {
                           </Button>
                        </div>
                        
-                       <div className="bg-slate-900 text-white rounded-[2.5rem] p-8 flex items-center justify-between shadow-2xl relative overflow-hidden group">
-                          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent pointer-events-none" />
+                       <div className="bg-emerald-600 text-white rounded-[2.5rem] p-8 flex items-center justify-between shadow-xl shadow-emerald-900/20 relative overflow-hidden group">
+                          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
                           <div className="relative z-10">
-                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Next Review Recommended</p>
-                             <p className="text-3xl font-black tabular-nums tracking-tight text-primary">{plan.monitoring.nextReviewDate}</p>
+                             <p className="text-[10px] font-black text-emerald-100 uppercase tracking-[0.2em] mb-3">Next Review Recommended</p>
+                             <p className="text-3xl font-black tabular-nums tracking-tight">{plan.monitoring.nextReviewDate}</p>
                           </div>
-                          <div className="relative z-10 h-16 w-16 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-500 shadow-2xl">
+                          <div className="relative z-10 h-16 w-16 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white group-hover:scale-110 transition-transform duration-500 shadow-2xl">
                              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
                           </div>
                        </div>
@@ -974,10 +974,10 @@ export function PlannerWizard() {
                            <span className="h-px bg-slate-200 flex-1" />
                         </p>
                         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <TrendRow label="월 저축액" values={monthlySavingTrend} color="#059669" />
-                          <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#dc2626" />
-                          <TrendRow label="필요 적립액" values={goalRequiredTrend} color="#059669" />
-                          <TrendRow label="부채 상환율" values={debtRatioTrend} color="#6366f1" />
+                          <TrendRow label="월 저축액" values={monthlySavingTrend} color="#059669" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#dc2626" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="필요 적립액" values={goalRequiredTrend} color="#059669" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="부채 상환율" values={debtRatioTrend} color="#6366f1" formatValue={(v) => `${v.toFixed(1)}%`} />
                         </div>
                      </div>
                   </Card>

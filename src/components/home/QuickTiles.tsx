@@ -14,23 +14,23 @@ export function QuickTiles() {
     <section className="bg-white py-14">
       <Container className="px-4 sm:px-6 lg:px-8">
         <div className="text-center">
-          <p className="text-[15px] font-medium text-slate-400">MMD 핵심 기능</p>
+          <p className="text-sm font-black uppercase tracking-[0.2em] text-slate-400">MMD Core Features</p>
         </div>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {categoryTiles.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               prefetch={devPlanningPrefetch(item.href)}
-              className="group rounded-[28px] border border-slate-200 bg-white p-6 transition-all duration-200 hover:-translate-y-1 hover:shadow-[0_22px_44px_rgba(15,23,42,0.08)]"
+              className="group rounded-[2rem] border border-slate-100 bg-white p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-emerald-100"
             >
-              <div className={`flex h-16 w-16 items-center justify-center rounded-[22px] ${item.accent}`}>
+              <div className={`flex h-16 w-16 items-center justify-center rounded-[1.5rem] shadow-sm ${item.accent}`}>
                 <span className="text-lg font-black text-slate-900">{item.code}</span>
               </div>
-              <h3 className="mt-5 text-xl font-black tracking-[-0.03em] text-slate-950">{item.title}</h3>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
-              <p className="mt-6 text-sm font-bold text-[#2383e2]">바로 이동</p>
+              <h3 className="mt-6 text-xl font-black tracking-tight text-slate-950">{item.title}</h3>
+              <p className="mt-3 text-sm font-medium leading-relaxed text-slate-500">{item.description}</p>
+              <p className="mt-8 text-sm font-black text-emerald-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Explore ▶</p>
             </Link>
           ))}
         </div>

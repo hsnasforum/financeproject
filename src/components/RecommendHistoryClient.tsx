@@ -3,17 +3,15 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  BodyActionLink,
-  BodyEmptyState,
-  BodyInset,
-  BodySectionHeading,
-  BodyTableFrame,
   bodyCompactFieldClassName,
-  bodyDenseActionRowClassName,
-  bodyInlineActionLinkClassName,
-  bodyMetaChipClassName,
 } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 import { downloadText } from "@/lib/browser/download";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 import {
@@ -228,267 +226,303 @@ export function RecommendHistoryClient({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8">
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <BodySectionHeading
-            title="추천 실행 히스토리"
-            description={
-              <>
-                <span className="block text-sm text-slate-600">저장된 실행을 조회/삭제/내보내기하고, 2개 실행을 선택해 변경점을 비교합니다.</span>
-                <span className="mt-1 block text-xs text-amber-700">이 화면의 리포트 열기는 planning 공식 <code>/planning/reports</code> 경로를 사용합니다. legacy <code>/report</code> 는 명시적 opt-in일 때만 엽니다.</span>
-              </>
-            }
-          />
-          <BodyActionLink href="/recommend" className={bodyInlineActionLinkClassName}>
-            추천으로 돌아가기
-          </BodyActionLink>
-        </div>
-        <div className={`mt-4 text-xs ${bodyDenseActionRowClassName}`}>
-          <Button size="sm" type="button" variant="outline" onClick={refresh}>
-            새로고침
-          </Button>
-          <Button
-            size="sm"
-            onClick={clearAll}
-            disabled={runs.length === 0}
-            variant="outline"
-            className="border-rose-300 text-rose-700 hover:bg-rose-50"
-          >
-            전체 삭제
-          </Button>
-          <span className={bodyMetaChipClassName}>저장된 실행: {runs.length} / 50</span>
-        </div>
-        {notice ? <p className="mt-2 text-xs text-slate-600">{notice}</p> : null}
-      </section>
+    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4">
+        <PageHeader
+          title="추천 실행 히스토리"
+          description="저장된 실행을 조회/삭제/내보내기하고, 2개 실행을 선택해 변경점을 비교합니다."
+          action={
+            <Link href="/recommend">
+              <Button variant="primary" className="rounded-full">추천으로 돌아가기</Button>
+            </Link>
+          }
+        />
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <BodySectionHeading title="실행 목록" />
-          {runs.length === 0 ? (
-            <BodyEmptyState
-              className="mt-3"
-              description="`/recommend`에서 추천을 실행하고 저장하면 비교할 실행 기록이 여기에 쌓입니다."
-              title="저장된 실행이 없습니다."
-            />
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {runs.map((run) => {
-                const selected = selectedRunIds.includes(run.runId);
-                const active = activeRun?.runId === run.runId;
-                return (
-                  <li key={run.runId}>
-                    <BodyInset className={`p-3 ${active ? "border-slate-400" : "bg-white"}`}>
-                    <div className={`text-xs ${bodyDenseActionRowClassName}`}>
-                      <label className="inline-flex items-center gap-2 text-slate-700">
-                        <input type="checkbox" checked={selected} onChange={() => toggleRunSelection(run.runId)} />
-                        비교 선택
-                      </label>
-                      <Button size="sm" type="button" onClick={() => setActiveRunId(run.runId)} variant="outline">
-                        보기
-                      </Button>
-                      <Button size="sm" type="button" onClick={() => exportOneJson(run)} variant="outline">
-                        JSON
-                      </Button>
-                      <Button size="sm" type="button" onClick={() => exportOneCsv(run)} variant="outline">
-                        CSV
-                      </Button>
-                      <Link
-                        href={`/planning/reports?runId=${encodeURIComponent(run.runId)}`}
-                        data-testid={active ? "history-open-report" : undefined}
-                        className={bodyInlineActionLinkClassName}
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" type="button" variant="outline" className="rounded-xl h-9 font-bold" onClick={refresh}>
+                새로고침
+              </Button>
+              <Button
+                size="sm"
+                onClick={clearAll}
+                disabled={runs.length === 0}
+                variant="outline"
+                className="rounded-xl h-9 border-rose-200 text-rose-700 hover:bg-rose-50 font-bold"
+              >
+                전체 삭제
+              </Button>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">저장된 실행</span>
+              <span className="text-sm font-black text-emerald-600">{runs.length} / 50</span>
+            </div>
+          </div>
+          {notice ? <p className="mt-4 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg inline-block">{notice}</p> : null}
+        </Card>
+
+        <section className="grid gap-6 lg:grid-cols-2">
+          <Card className="p-6">
+            <SubSectionHeader title="실행 목록" />
+            {runs.length === 0 ? (
+              <EmptyState
+                className="mt-4"
+                description="`/recommend`에서 추천을 실행하고 저장하면 비교할 실행 기록이 여기에 쌓입니다."
+                title="저장된 실행이 없습니다."
+              />
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {runs.map((run) => {
+                  const selected = selectedRunIds.includes(run.runId);
+                  const active = activeRun?.runId === run.runId;
+                  return (
+                    <li key={run.runId}>
+                      <div className={cn(
+                        "rounded-2xl border p-4 transition-all",
+                        active ? "border-emerald-500 bg-emerald-50/30 ring-1 ring-emerald-500" : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
+                      )}>
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                          <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                              checked={selected}
+                              onChange={() => toggleRunSelection(run.runId)}
+                            />
+                            비교 선택
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <Button size="sm" type="button" onClick={() => setActiveRunId(run.runId)} variant="ghost" className="h-7 text-[11px] font-bold">
+                              보기
+                            </Button>
+                            <Button size="sm" type="button" onClick={() => removeOne(run.runId)} variant="ghost" className="h-7 text-[11px] font-bold text-rose-600 hover:bg-rose-50">
+                              삭제
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-black text-slate-900">{formatDateTime(run.savedAt)}</p>
+                            <p className="mt-1 text-xs font-medium text-slate-500">
+                              {run.profile.purpose} · {run.profile.kind} · {run.items.length}건
+                            </p>
+                          </div>
+                          <Link
+                            href={`/planning/reports?runId=${encodeURIComponent(run.runId)}`}
+                            className="text-[11px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
+                          >
+                            리포트 →
+                          </Link>
+                        </div>
+
+                        <div className="mt-4 flex gap-2">
+                          <Button size="sm" type="button" onClick={() => exportOneJson(run)} variant="outline" className="h-7 px-3 text-[10px] font-black rounded-lg bg-white">
+                            JSON
+                          </Button>
+                          <Button size="sm" type="button" onClick={() => exportOneCsv(run)} variant="outline" className="h-7 px-3 text-[10px] font-black rounded-lg bg-white">
+                            CSV
+                          </Button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+
+          <Card className="p-6">
+            <SubSectionHeader title="선택 실행 상세" />
+            {!activeRun ? (
+              <EmptyState
+                className="mt-4"
+                description="왼쪽 목록에서 저장된 실행 하나를 선택하여 상세 내용을 확인하세요."
+                title="실행을 선택해 주세요."
+              />
+            ) : (
+              <div className="space-y-6">
+                <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">Selected Run</p>
+                    {openedFromQuery && <Badge className="bg-white/20 text-white border-none px-2 py-0.5 text-[9px] font-black uppercase">Query Open</Badge>}
+                  </div>
+                  <p className="text-xl font-black tracking-tight">{formatDateTime(activeRun.savedAt)}</p>
+                  <p className="mt-1 text-sm font-bold text-emerald-100/80">항목 {activeRun.items.length}건 / 목적: {activeRun.profile.purpose}</p>
+
+                  <div className="mt-6 flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
+                      <span className="text-[10px] font-bold text-emerald-100 uppercase">비교 담기</span>
+                      <select
+                        className="bg-transparent text-xs font-black outline-none cursor-pointer"
+                        value={compareTopN}
+                        onChange={(e) => {
+                          const next = Number(e.target.value);
+                          setCompareTopN(next === 2 || next === 4 ? next : 3);
+                        }}
                       >
-                        planning 리포트
-                      </Link>
-                      <Button
-                        size="sm"
-                        type="button"
-                        onClick={() => removeOne(run.runId)}
-                        variant="outline"
-                        className="border-rose-300 text-rose-700 hover:bg-rose-50 hover:text-rose-700"
-                      >
-                        삭제
-                      </Button>
+                        <option className="text-slate-900" value={2}>2개</option>
+                        <option className="text-slate-900" value={3}>3개</option>
+                        <option className="text-slate-900" value={4}>4개</option>
+                      </select>
                     </div>
-                    <p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(run.savedAt)}</p>
-                    <p className="text-xs text-slate-600">
-                      {run.profile.purpose} / {run.profile.kind} / {run.items.length}건 / topN {run.profile.topN}
-                    </p>
-                    </BodyInset>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </article>
+                    <Button
+                      size="sm"
+                      onClick={() => addTopItemsToCompare(activeRun)}
+                      disabled={activeRun.items.length < 2}
+                      variant="primary"
+                      className="rounded-xl h-9 px-4 font-black bg-white text-emerald-600 hover:bg-emerald-50 border-none shadow-lg shadow-emerald-900/10"
+                    >
+                      상위 {compareTopN}개 비교함 담기
+                    </Button>
+                  </div>
+                </div>
 
-        <article className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <BodySectionHeading title="선택 실행" />
-          {!activeRun ? (
-            <BodyEmptyState
-              className="mt-3"
-              description="왼쪽 목록에서 저장된 실행 하나를 열면 상위 상품과 비교 담기 동작을 여기서 바로 이어갈 수 있습니다."
-              title="실행을 선택해 주세요."
+                <div className="overflow-hidden rounded-2xl border border-slate-100">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <th className="px-4 py-3">순위</th>
+                        <th className="px-4 py-3">상품 정보</th>
+                        <th className="px-4 py-3 text-right">금리/기간</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 bg-white">
+                      {activeRun.items
+                        .slice()
+                        .sort((a, b) => a.rank - b.rank)
+                        .slice(0, 10)
+                        .map((item) => (
+                          <tr key={`${activeRun.runId}-${item.unifiedId}`} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-4 font-black text-slate-400 text-center w-12">{item.rank}</td>
+                            <td className="px-4 py-4">
+                              <p className="font-bold text-slate-900 leading-tight">{item.productName}</p>
+                              <p className="mt-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-tight">{item.providerName}</p>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <p className="font-black text-emerald-600 tabular-nums">{formatRate(item.appliedRate)}</p>
+                              <p className="text-[10px] font-bold text-slate-400">{formatTerm(item.termMonths)}</p>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </Card>
+        </section>
+
+        <Card className="p-6">
+          <SubSectionHeader
+            title="실행 비교"
+            description="목록에서 실행 2개를 선택하면 변경, 신규, 제외 항목을 분석합니다."
+          />
+          {selectedRuns.length !== 2 || !diff ? (
+            <EmptyState
+              className="py-12"
+              description="목록에서 실행 2개를 선택하면 변경, 신규, 제외 항목과 상위 변경 테이블을 보여줍니다."
+              title="비교할 실행 2개를 선택해 주세요."
             />
           ) : (
-            <>
-              {openedFromQuery ? (
-                <p data-testid="history-open-run" className="mt-2 text-xs text-emerald-700">
-                  open run: {activeRun.runId}
-                </p>
-              ) : null}
-              <p className="mt-2 text-sm text-slate-700">
-                저장 시각: {formatDateTime(activeRun.savedAt)} / 항목 {activeRun.items.length}건
-              </p>
-              <div className={`mt-3 text-xs ${bodyDenseActionRowClassName}`}>
-                <label className="inline-flex items-center gap-2 text-slate-700">
-                  비교 담기 개수
-                  <select
-                    className={bodyCompactFieldClassName}
-                    value={compareTopN}
-                    onChange={(e) => {
-                      const next = Number(e.target.value);
-                      setCompareTopN(next === 2 || next === 4 ? next : 3);
-                    }}
-                  >
-                    <option value={2}>2개</option>
-                    <option value={3}>3개</option>
-                    <option value={4}>4개</option>
-                  </select>
-                </label>
-                <Button
-                  size="sm"
-                  type="button"
-                  onClick={() => addTopItemsToCompare(activeRun)}
-                  disabled={activeRun.items.length < 2}
-                  variant="outline"
-                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-700"
-                >
-                  상위 {compareTopN}개 비교 담기
-                </Button>
+            <div className="space-y-8">
+              <div className="rounded-[2rem] bg-emerald-50/50 p-8 border border-emerald-100 flex flex-wrap items-end justify-between gap-6">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600 mb-2">Comparison Analysis</p>
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                    {formatDateTime(diff.previous.savedAt)} <span className="mx-2 text-emerald-300">→</span> {formatDateTime(diff.current.savedAt)}
+                  </h3>
+                </div>
+                <div className="flex gap-4">
+                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-emerald-100 min-w-[100px]">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">변경</p>
+                    <p className="text-lg font-black text-emerald-600">{diff.changed.length}<span className="text-xs ml-0.5">건</span></p>
+                  </div>
+                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-emerald-100 min-w-[100px]">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">신규</p>
+                    <p className="text-lg font-black text-emerald-600">{diff.added.length}<span className="text-xs ml-0.5">건</span></p>
+                  </div>
+                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-emerald-100 min-w-[100px]">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-1">제외</p>
+                    <p className="text-lg font-black text-slate-400">{diff.removed.length}<span className="text-xs ml-0.5">건</span></p>
+                  </div>
+                </div>
               </div>
-              <BodyTableFrame className="mt-3">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-600">
-                      <th className="py-2 pr-3">순위</th>
-                      <th className="py-2 pr-3">상품</th>
-                      <th className="py-2 pr-3">금리</th>
-                      <th className="py-2 pr-3">기간</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeRun.items
-                      .slice()
-                      .sort((a, b) => a.rank - b.rank)
-                      .slice(0, 10)
-                      .map((item) => (
-                        <tr key={`${activeRun.runId}-${item.unifiedId}`} className="border-b border-slate-100 text-slate-700">
-                          <td className="py-2 pr-3">{item.rank}</td>
-                          <td className="py-2 pr-3">
-                            <p className="font-medium text-slate-900">{item.productName}</p>
-                            <p className="text-xs text-slate-500">{item.providerName}</p>
-                          </td>
-                          <td className="py-2 pr-3">{formatRate(item.appliedRate)}</td>
-                          <td className="py-2 pr-3">{formatTerm(item.termMonths)}</td>
+
+              {diff.changed.length > 0 && (
+                <div className="space-y-4">
+                  <p className="text-sm font-black text-slate-900 px-1">상위 변경 테이블</p>
+                  <div className="overflow-hidden rounded-2xl border border-slate-100">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          <th className="px-4 py-3">상품명</th>
+                          <th className="px-4 py-3">순위 변화</th>
+                          <th className="px-4 py-3">금리 변화</th>
+                          <th className="px-4 py-3 text-right">점수</th>
                         </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 bg-white">
+                        {diff.changed.slice(0, 12).map((item) => (
+                          <tr key={item.unifiedId} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="px-4 py-4">
+                              <p className="font-bold text-slate-900 leading-tight">{item.productName}</p>
+                              <p className="mt-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-tight">{item.providerName}</p>
+                            </td>
+                            <td className="px-4 py-4 text-xs font-bold text-slate-600">
+                              {item.previousRank}위 <span className="mx-1 text-slate-300">→</span> {item.currentRank}위
+                            </td>
+                            <td className="px-4 py-4 text-xs font-bold text-emerald-600 tabular-nums">
+                              {formatRate(item.previousRate)} <span className="mx-1 text-emerald-200">→</span> {formatRate(item.currentRate)}
+                            </td>
+                            <td className="px-4 py-4 text-right text-xs font-black text-slate-400 tabular-nums">
+                              {formatScore(item.previousScore)} <span className="mx-1 text-slate-200">→</span> {formatScore(item.currentScore)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-6 md:grid-cols-2">
+                <div className="rounded-2xl border border-slate-100 p-6 bg-slate-50/30">
+                  <p className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-4">신규 진입 상품</p>
+                  {diff.added.length === 0 ? (
+                    <p className="text-sm font-medium text-slate-400 italic text-center py-4">목록에 새로 추가된 상품이 없습니다.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {diff.added.slice(0, 8).map((item) => (
+                        <li key={`added-${item.unifiedId}`} className="flex items-center gap-3">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="text-sm font-bold text-slate-700">{item.productName}</span>
+                        </li>
                       ))}
-                  </tbody>
-                </table>
-              </BodyTableFrame>
-            </>
+                    </ul>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-slate-100 p-6 bg-slate-50/30">
+                  <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">순위권 제외 상품</p>
+                  {diff.removed.length === 0 ? (
+                    <p className="text-sm font-medium text-slate-400 italic text-center py-4">목록에서 제외된 상품이 없습니다.</p>
+                  ) : (
+                    <ul className="space-y-3">
+                      {diff.removed.slice(0, 8).map((item) => (
+                        <li key={`removed-${item.unifiedId}`} className="flex items-center gap-3 opacity-60">
+                          <span className="h-1.5 w-1.5 rounded-full bg-slate-300 shrink-0" />
+                          <span className="text-sm font-bold text-slate-700">{item.productName}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
-        </article>
-      </section>
-
-      <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
-        <BodySectionHeading title="실행 비교 (2개 선택)" />
-        {selectedRuns.length !== 2 || !diff ? (
-          <BodyEmptyState
-            className="mt-3"
-            description="목록에서 실행 2개를 선택하면 변경, 신규, 제외 항목과 상위 변경 테이블을 보여줍니다."
-            title="비교할 실행 2개를 선택해 주세요."
-          />
-        ) : (
-          <>
-            <p className="mt-2 text-sm text-slate-700">
-              기준: {formatDateTime(diff.previous.savedAt)} → {formatDateTime(diff.current.savedAt)}
-            </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              <BodyInset className="text-sm">
-                <p className="font-semibold text-slate-900">변경</p>
-                <p className="mt-1 text-slate-700">{diff.changed.length}건</p>
-              </BodyInset>
-              <BodyInset className="text-sm">
-                <p className="font-semibold text-slate-900">신규</p>
-                <p className="mt-1 text-slate-700">{diff.added.length}건</p>
-              </BodyInset>
-              <BodyInset className="text-sm">
-                <p className="font-semibold text-slate-900">제외</p>
-                <p className="mt-1 text-slate-700">{diff.removed.length}건</p>
-              </BodyInset>
-            </div>
-
-            {diff.changed.length > 0 ? (
-              <BodyTableFrame className="mt-4">
-                <p className="text-sm font-semibold text-slate-900">상위 변경 테이블</p>
-                <table className="mt-2 min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-600">
-                      <th className="py-2 pr-3">상품</th>
-                      <th className="py-2 pr-3">순위</th>
-                      <th className="py-2 pr-3">금리</th>
-                      <th className="py-2 pr-3">기간</th>
-                      <th className="py-2 pr-3">점수</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {diff.changed.slice(0, 12).map((item) => (
-                      <tr key={item.unifiedId} className="border-b border-slate-100 align-top text-slate-700">
-                        <td className="py-2 pr-3">
-                          <p className="font-medium text-slate-900">{item.productName}</p>
-                          <p className="text-xs text-slate-500">{item.providerName}</p>
-                        </td>
-                        <td className="py-2 pr-3">{item.previousRank}위 → {item.currentRank}위</td>
-                        <td className="py-2 pr-3">{formatRate(item.previousRate)} → {formatRate(item.currentRate)}</td>
-                        <td className="py-2 pr-3">{formatTerm(item.previousTermMonths)} → {formatTerm(item.currentTermMonths)}</td>
-                        <td className="py-2 pr-3">{formatScore(item.previousScore)} → {formatScore(item.currentScore)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </BodyTableFrame>
-            ) : null}
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div>
-                <p className="text-sm font-semibold text-slate-900">신규</p>
-                {diff.added.length === 0 ? (
-                  <p className="mt-1 text-sm text-slate-600">없음</p>
-                ) : (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                    {diff.added.slice(0, 8).map((item) => (
-                      <li key={`added-${item.unifiedId}`}>{item.productName}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">제외</p>
-                {diff.removed.length === 0 ? (
-                  <p className="mt-1 text-sm text-slate-600">없음</p>
-                ) : (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
-                    {diff.removed.slice(0, 8).map((item) => (
-                      <li key={`removed-${item.unifiedId}`}>{item.productName}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </>
-        )}
-      </section>
+        </Card>
+      </div>
     </main>
   );
 }
