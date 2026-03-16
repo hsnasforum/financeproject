@@ -193,7 +193,7 @@ export function DartCompanyPageClient() {
           <div className="flex items-center gap-2">
             <Link href={searchBackHref} onClick={() => clearPendingCompanyHref()}>
               <Button size="sm" variant="outline" className="rounded-xl font-black">
-                {fromQuery ? "결과로 돌아가기" : "검색으로 돌아가기"}
+                {fromQuery ? "검색 결과로 돌아가기" : "검색으로 돌아가기"}
               </Button>
             </Link>
             <Button size="sm" variant="outline" className={cn("rounded-xl font-black transition-all", favoriteOn ? "border-emerald-200 text-emerald-600 bg-emerald-50" : "bg-white")} onClick={toggleFavorite} disabled={!corpCode}>
@@ -203,7 +203,7 @@ export function DartCompanyPageClient() {
         }
       />
 
-      <div className="grid gap-8 lg:grid-cols-3">
+      <div className="grid gap-8 lg:grid-cols-3" data-testid="dart-company-root">
         <div className="lg:col-span-2 space-y-6">
           <Card className="rounded-[2rem] p-8 shadow-sm">
             <SubSectionHeader title="기업 기본 정보" description="OpenDART 공식 연동 데이터입니다." />
@@ -224,7 +224,7 @@ export function DartCompanyPageClient() {
                 <dl className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
                   <div className="space-y-1">
                     <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">회사명</dt>
-                    <dd className="text-base font-black text-slate-900 tracking-tight">{company.corpName ?? "-"}</dd>
+                    <dd className="text-base font-black text-slate-900 tracking-tight" data-testid="dart-company-name">{company.corpName ?? "-"}</dd>
                   </div>
                   <div className="space-y-1">
                     <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DART 코드</dt>
@@ -266,6 +266,7 @@ export function DartCompanyPageClient() {
                   <Link
                     href={monitorHref}
                     prefetch={false}
+                    data-testid="dart-monitor-action"
                     className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-700 hover:-translate-y-0.5 active:scale-95"
                     onClick={() => prepareMonitorNavigation()}
                   >
