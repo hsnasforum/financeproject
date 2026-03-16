@@ -4,6 +4,8 @@ import { Sparkline } from "@/components/Sparkline";
 import { type PlanningChartPoint } from "@/lib/planning/v2/chartPoints";
 import { formatKrw } from "@/lib/planning/i18n/format";
 import { t, type Locale } from "@/lib/planning/i18n";
+import { cn } from "@/lib/utils";
+import { BodyTableFrame } from "@/components/ui/BodyTone";
 
 type PlanningMiniChartsProps = {
   points: PlanningChartPoint[];
@@ -33,81 +35,180 @@ function summarizeMetric(points: PlanningChartPoint[], key: MetricKey): {
   end: number;
   min: number;
   max: number;
+  deltaPct: number;
 } {
   const values = points.map((item) => item[key]);
   const start = values[0] ?? 0;
   const mid = values[Math.floor((values.length - 1) / 2)] ?? start;
   const end = values[values.length - 1] ?? start;
+  const deltaPct = start === 0 ? 0 : ((end - start) / Math.abs(start)) * 100;
+
   return {
     start,
     mid,
     end,
     min: Math.min(...values),
     max: Math.max(...values),
+    deltaPct,
   };
+}
+
+function RangeVisualization({ min, max, current, color }: { min: number; max: number; current: number; color: string }) {
+  const range = max - min || 1;
+  const progress = Math.min(100, Math.max(0, ((current - min) / range) * 100));
+
+  return (
+    <div className="group/range relative mt-2">
+      <div className="h-1.5 w-full rounded-full bg-slate-100" />
+      <div
+        className="absolute inset-y-0 left-0 h-1.5 rounded-full transition-all duration-500 ease-out"
+        style={{ width: `${progress}%`, backgroundColor: color, opacity: 0.3 }}
+      />
+      <div
+        className="absolute top-1/2 -translate-y-1/2 h-3 w-1 rounded-full shadow-sm transition-all duration-500 ease-out"
+        style={{ left: `${progress}%`, backgroundColor: color }}
+      />
+    </div>
+  );
 }
 
 export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsProps) {
   const tablePoints = pickTablePoints(points);
-  const metrics: Array<{ key: MetricKey; title: string; color: string }> = [
-    { key: "netWorthKrw", title: t(locale, "CHART_LABEL_NET_WORTH"), color: "#0f766e" },
-    { key: "cashKrw", title: t(locale, "CHART_LABEL_CASH"), color: "#1d4ed8" },
-    { key: "totalDebtKrw", title: t(locale, "CHART_LABEL_TOTAL_DEBT"), color: "#b45309" },
+  const metrics: Array<{ key: MetricKey; title: string; color: string; tone: string }> = [
+    { key: "netWorthKrw", title: t(locale, "CHART_LABEL_NET_WORTH"), color: "#10b981", tone: "emerald" }, // emerald-500
+    { key: "cashKrw", title: t(locale, "CHART_LABEL_CASH"), color: "#0ea5e9", tone: "sky" }, // sky-500
+    { key: "totalDebtKrw", title: t(locale, "CHART_LABEL_TOTAL_DEBT"), color: "#f59e0b", tone: "amber" }, // amber-500
   ];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-8">
       {mode === "key" ? (
-        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-          {t(locale, "CHART_KEY_MODE_NOTICE")}
+        <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600 leading-relaxed italic">
+          💡 {t(locale, "CHART_KEY_MODE_NOTICE")}
         </p>
       ) : null}
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         {metrics.map((metric) => {
           const summary = summarizeMetric(points, metric.key);
           const values = points.map((item) => item[metric.key]);
+          const isPositive = summary.deltaPct >= 0;
+          const deltaColor = metric.tone === "amber"
+            ? (isPositive ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50")
+            : (isPositive ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50");
+
           return (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" key={metric.key}>
-              <p className="font-semibold text-slate-900">{metric.title}</p>
-              <div className="mt-2">
-                <Sparkline color={metric.color} values={values} width={220} />
+            <div className="group flex flex-col rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm transition-all hover:shadow-md" key={metric.key}>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{metric.title}</p>
+                <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black tabular-nums", deltaColor)}>
+                  {isPositive ? "+" : ""}{summary.deltaPct.toFixed(1)}%
+                </span>
               </div>
-              <p className="mt-2">
-                {t(locale, "CHART_SUMMARY_POINTS")}: {formatKrw(locale, summary.start)} / {formatKrw(locale, summary.mid)} / {formatKrw(locale, summary.end)}
-              </p>
-              <p>
-                {t(locale, "CHART_SUMMARY_MIN_MAX")}: {formatKrw(locale, summary.min)} / {formatKrw(locale, summary.max)}
-              </p>
+
+              <div className="mt-4 flex items-baseline gap-2">
+                <p className="text-2xl font-black text-slate-900 tracking-tight tabular-nums">{formatKrw(locale, summary.end)}</p>
+                <p className="text-[11px] font-bold text-slate-400">말기</p>
+              </div>
+
+              <div className="mt-8 flex h-16 items-end">
+                <Sparkline
+                  color={metric.color}
+                  values={values}
+                  width={280}
+                  height={64}
+                  fillOpacity={0.08}
+                  formatValue={(val) => formatKrw(locale, val)}
+                />
+              </div>
+
+              <div className="mt-auto pt-6">
+                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <span>Range (Min/Max)</span>
+                </div>
+                <RangeVisualization
+                  color={metric.color}
+                  current={summary.end}
+                  max={summary.max}
+                  min={summary.min}
+                />
+                <div className="mt-2 flex justify-between text-[10px] font-bold text-slate-500 tabular-nums">
+                  <span>{formatKrw(locale, summary.min)}</span>
+                  <span>{formatKrw(locale, summary.max)}</span>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between border-t border-slate-50 pt-5">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">시작</p>
+                  <p className="text-xs font-bold text-slate-600 tabular-nums">{formatKrw(locale, summary.start)}</p>
+                </div>
+                <div className="text-right space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">중간</p>
+                  <p className="text-xs font-bold text-slate-600 tabular-nums">{formatKrw(locale, summary.mid)}</p>
+                </div>
+              </div>
             </div>
           );
         })}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="min-w-full text-left text-xs text-slate-700">
-          <caption className="sr-only">
-            월별 순자산, 현금, 총부채 수치 표
-          </caption>
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-2 py-2">월</th>
-              <th className="px-2 py-2">순자산</th>
-              <th className="px-2 py-2">현금</th>
-              <th className="px-2 py-2">총부채</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tablePoints.map((point) => (
-              <tr className="border-t border-slate-200" key={point.monthIndex}>
-                <td className="px-2 py-2">{point.monthIndex}</td>
-                <td className="px-2 py-2">{formatKrw(locale, point.netWorthKrw)}</td>
-                <td className="px-2 py-2">{formatKrw(locale, point.cashKrw)}</td>
-                <td className="px-2 py-2">{formatKrw(locale, point.totalDebtKrw)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between px-2">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">상세 수치 (Sampled)</p>
+        </div>
+
+        {/* Desktop View: Table */}
+        <div className="hidden md:block">
+          <BodyTableFrame>
+            <table className="min-w-full divide-y divide-slate-100">
+              <thead className="bg-slate-50">
+                <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <th className="px-6 py-4 text-left">월 (Index)</th>
+                  <th className="px-6 py-4 text-right">순자산</th>
+                  <th className="px-6 py-4 text-right">현금</th>
+                  <th className="px-6 py-4 text-right">총부채</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 bg-white">
+                {tablePoints.map((point) => (
+                  <tr className="group/row hover:bg-slate-50/50 transition-colors" key={point.monthIndex}>
+                    <td className="px-6 py-4 text-xs font-black text-slate-400 tabular-nums">M{point.monthIndex + 1}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-emerald-600 transition-colors">{formatKrw(locale, point.netWorthKrw)}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-sky-600 transition-colors">{formatKrw(locale, point.cashKrw)}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-amber-600 transition-colors">{formatKrw(locale, point.totalDebtKrw)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </BodyTableFrame>
+        </div>
+
+        {/* Mobile View: Card List */}
+        <div className="grid gap-3 md:hidden">
+          {tablePoints.map((point) => (
+            <div className="rounded-3xl border border-slate-200/60 bg-white p-5 shadow-sm active:bg-slate-50 transition-colors" key={point.monthIndex}>
+              <div className="mb-4 flex items-center justify-between border-b border-slate-50 pb-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">시점</p>
+                <p className="text-sm font-black text-slate-900 tabular-nums">M{point.monthIndex + 1}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">순자산</p>
+                  <p className="text-[11px] font-bold text-emerald-600 tabular-nums">{formatKrw(locale, point.netWorthKrw)}</p>
+                </div>
+                <div className="border-x border-slate-100 px-1">
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">현금</p>
+                  <p className="text-[11px] font-bold text-sky-600 tabular-nums">{formatKrw(locale, point.cashKrw)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">총부채</p>
+                  <p className="text-[11px] font-bold text-amber-600 tabular-nums">{formatKrw(locale, point.totalDebtKrw)}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

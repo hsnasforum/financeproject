@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { filterAndSearch } from "@/lib/feedback/feedbackQuery";
+import { LoadingState } from "@/components/ui/LoadingState";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 
 type FeedbackCategory = "bug" | "improve" | "question";
 type FeedbackStatus = "OPEN" | "DOING" | "DONE";
@@ -186,154 +190,195 @@ export function FeedbackListClient() {
         action={
           <div className="flex items-center gap-2">
             <Link href="/feedback">
-              <Button size="sm" variant="outline">의견 작성</Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button size="sm" variant="ghost">대시보드</Button>
+              <Button size="sm" variant="outline" className="rounded-2xl font-black">의견 작성</Button>
             </Link>
           </div>
         }
       />
 
-      <Card>
-        {loading ? (
-          <p className="text-sm text-slate-500">목록 로딩 중...</p>
-        ) : error ? (
-          <p className="text-sm text-rose-600">{error}</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-slate-500">저장된 피드백이 없습니다.</p>
-        ) : (
-          <div className="space-y-3">
-            <div className="grid gap-2 md:grid-cols-3">
-              <label className="block text-xs text-slate-600">
-                <span className="mb-1 block font-semibold text-slate-700">검색</span>
-                <input
-                  value={q}
-                  onChange={(event) => setQ(event.target.value)}
-                  placeholder="메시지/URL/traceId"
-                  className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm"
-                />
-              </label>
-              <div className="text-xs text-slate-600">
-                <span className="mb-1 block font-semibold text-slate-700">상태</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {STATUS_FILTERS.map((entry) => (
-                    <button
-                      key={entry}
-                      type="button"
-                      onClick={() => setStatus(entry)}
-                      className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                        status === entry
-                          ? "border-slate-700 bg-slate-700 text-white"
-                          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                      }`}
-                    >
-                      {statusLabel(entry)}
-                    </button>
-                  ))}
+      {loading ? (
+        <LoadingState title="피드백 목록을 불러오고 있습니다" />
+      ) : error ? (
+        <Card className="rounded-[2rem] p-12 text-center border-rose-100 bg-rose-50/30">
+          <p className="text-sm font-black text-rose-600">{error}</p>
+          <Button variant="outline" size="sm" className="mt-4 rounded-xl font-black" onClick={() => window.location.reload()}>다시 시도</Button>
+        </Card>
+      ) : rows.length === 0 ? (
+        <EmptyState 
+          title="저장된 피드백이 없습니다" 
+          description="사용자의 의견이 등록되면 이곳에서 확인할 수 있습니다."
+          icon="data"
+          actionLabel="첫 의견 작성하기"
+          onAction={() => window.location.href = "/feedback"}
+        />
+      ) : (
+        <div className="space-y-6">
+          <Card className="rounded-[2rem] p-8 shadow-sm">
+            <SubSectionHeader title="필터 및 검색" description={`총 ${rows.length}건 중 ${filteredRows.length}건 표시 중`} />
+            
+            <div className="mt-6 space-y-6">
+              <div className="grid gap-6 md:grid-cols-4">
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">검색어</span>
+                  <input
+                    value={q}
+                    onChange={(event) => setQ(event.target.value)}
+                    placeholder="메시지/URL/traceId"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">상태 필터</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STATUS_FILTERS.map((entry) => (
+                      <button
+                        key={entry}
+                        type="button"
+                        onClick={() => setStatus(entry)}
+                        className={cn(
+                          "rounded-full px-3 py-1.5 text-xs font-black transition-all shadow-sm",
+                          status === entry
+                            ? "bg-emerald-600 text-white shadow-emerald-900/10"
+                            : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                        )}
+                      >
+                        {statusLabel(entry)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">우선순위</span>
+                  <select
+                    value={priority}
+                    onChange={(event) => setPriority(event.target.value as PriorityFilter)}
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                  >
+                    {PRIORITY_FILTERS.map((entry) => (
+                      <option key={entry} value={entry}>{entry}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">마감일 상태</span>
+                  <select
+                    value={dueFilter}
+                    onChange={(event) => setDueFilter(event.target.value as DueFilter)}
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                  >
+                    {DUE_FILTERS.map((entry) => (
+                      <option key={entry} value={entry}>{entry === "ALL" ? "전체 기간" : entry === "HAS_DUE" ? "마감일 있음" : entry === "NO_DUE" ? "마감일 없음" : "마감 지남"}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-              <label className="block text-xs text-slate-600">
-                <span className="mb-1 block font-semibold text-slate-700">우선순위</span>
-                <select
-                  value={priority}
-                  onChange={(event) => setPriority(event.target.value as PriorityFilter)}
-                  className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm"
-                >
-                  {PRIORITY_FILTERS.map((entry) => (
-                    <option key={entry} value={entry}>{entry}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-xs text-slate-600">
-                <span className="mb-1 block font-semibold text-slate-700">마감일</span>
-                <select
-                  value={dueFilter}
-                  onChange={(event) => setDueFilter(event.target.value as DueFilter)}
-                  className="h-9 w-full rounded-md border border-slate-300 px-3 text-sm"
-                >
-                  {DUE_FILTERS.map((entry) => (
-                    <option key={entry} value={entry}>{entry}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
 
-            <div className="text-xs text-slate-600">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="font-semibold text-slate-700">태그</span>
-                {tag ? (
-                  <button
-                    type="button"
-                    onClick={() => setTag("")}
-                    className="rounded-full border border-slate-300 px-2 py-0.5 text-[11px] text-slate-500 hover:bg-slate-50"
-                  >
-                    초기화
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {topTags.length === 0 ? (
-                  <span className="text-slate-400">태그 없음</span>
-                ) : (
-                  topTags.map((entry) => {
-                    const active = norm(tag) === norm(entry.label);
-                    return (
-                      <button
-                        key={entry.label}
-                        type="button"
-                        onClick={() => setTag(active ? "" : entry.label)}
-                        className={`rounded-full border px-2.5 py-1 text-xs ${
-                          active
-                            ? "border-emerald-300 bg-emerald-50 font-semibold text-emerald-700"
-                            : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        #{entry.label} ({entry.count})
-                      </button>
-                    );
-                  })
-                )}
+              <div className="pt-2 border-t border-slate-50">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">태그 클라우드</span>
+                  {tag && (
+                    <button
+                      type="button"
+                      onClick={() => setTag("")}
+                      className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest"
+                    >
+                      Filter Reset
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {topTags.length === 0 ? (
+                    <span className="text-xs font-bold text-slate-300 italic">등록된 태그가 없습니다.</span>
+                  ) : (
+                    topTags.map((entry) => {
+                      const active = norm(tag) === norm(entry.label);
+                      return (
+                        <button
+                          key={entry.label}
+                          type="button"
+                          onClick={() => setTag(active ? "" : entry.label)}
+                          className={cn(
+                            "rounded-full px-3 py-1.5 text-xs font-black transition-all shadow-sm",
+                            active
+                              ? "bg-emerald-500 text-white border-transparent"
+                              : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                          )}
+                        >
+                          #{entry.label} <span className={cn("ml-1 tabular-nums opacity-60", active ? "text-white" : "text-slate-400")}>{entry.count}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
+          </Card>
 
-            <p className="text-xs text-slate-500">총 {rows.length}건 · 필터 결과 {filteredRows.length}건</p>
+          {/* Mobile Card View */}
+          <div className="grid gap-4 lg:hidden">
+            {filteredRows.map((item) => (
+              <Link key={`mobile-${item.id}`} href={`/feedback/${encodeURIComponent(item.id)}`} className="block group">
+                <Card className="rounded-[2rem] p-6 shadow-sm group-hover:border-emerald-200 transition-all active:scale-[0.98]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
+                      <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{item.status}</span>
+                      <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", priorityClassName(item.priority))}>{item.priority}</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(item.createdAt).split(" ")[0]}</span>
+                  </div>
+                  
+                  <p className="mt-4 text-sm font-bold text-slate-800 leading-relaxed line-clamp-3">
+                    {item.message}
+                  </p>
+                  
+                  <div className="mt-6 flex items-center justify-between border-t border-slate-50 pt-4">
+                    <span className="text-[10px] font-bold text-slate-400 font-mono">{item.traceId ?? "-"}</span>
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">상세 보기 ▶</span>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
 
+          {/* Desktop Table View */}
+          <Card className="hidden lg:block rounded-[2rem] p-8 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
+              <table className="min-w-full text-left text-sm border-separate border-spacing-y-2">
                 <thead>
-                  <tr className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
-                    <th className="px-3 py-2 font-semibold">카테고리</th>
-                    <th className="px-3 py-2 font-semibold">상태</th>
-                    <th className="px-3 py-2 font-semibold">우선순위</th>
-                    <th className="px-3 py-2 font-semibold">마감일</th>
-                    <th className="px-3 py-2 font-semibold">시간</th>
-                    <th className="px-3 py-2 font-semibold">메시지</th>
-                    <th className="px-3 py-2 font-semibold">traceId</th>
-                    <th className="px-3 py-2 font-semibold">상세</th>
+                  <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="px-4 py-2">카테고리</th>
+                    <th className="px-4 py-2">상태</th>
+                    <th className="px-4 py-2">우선순위</th>
+                    <th className="px-4 py-2">마감일</th>
+                    <th className="px-4 py-2">시간</th>
+                    <th className="px-4 py-2">메시지</th>
+                    <th className="px-4 py-2 text-right">상세</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-transparent">
                   {filteredRows.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100 align-top last:border-0">
-                      <td className="px-3 py-2 text-xs font-semibold text-slate-700">{categoryLabel(item.category)}</td>
-                      <td className="px-3 py-2 text-xs">
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${statusClassName(item.status)}`}>
+                    <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-black text-slate-900">{categoryLabel(item.category)}</td>
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors">
+                        <span className={cn("inline-flex rounded-lg border px-2 py-0.5 text-[10px] font-black tracking-wider", statusClassName(item.status))}>
                           {item.status}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-xs">
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 font-semibold ${priorityClassName(item.priority)}`}>
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors">
+                        <span className={cn("inline-flex rounded-lg border px-2 py-0.5 text-[10px] font-black tracking-wider", priorityClassName(item.priority))}>
                           {item.priority}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-xs text-slate-600">{dueLabel(item.dueDate)}</td>
-                      <td className="px-3 py-2 text-xs text-slate-600">{formatDateTime(item.createdAt)}</td>
-                      <td className="px-3 py-2 text-sm text-slate-800">{summarizeMessage(item.message)}</td>
-                      <td className="px-3 py-2 text-xs text-slate-500">{item.traceId ?? "-"}</td>
-                      <td className="px-3 py-2 text-xs">
-                        <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="font-semibold text-emerald-700 hover:text-emerald-800">
-                          보기
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-bold text-slate-500 tabular-nums text-xs">{dueLabel(item.dueDate)}</td>
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-bold text-slate-400 tabular-nums text-xs whitespace-nowrap">{formatDateTime(item.createdAt)}</td>
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-bold text-slate-700 leading-snug">{summarizeMessage(item.message)}</td>
+                      <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors text-right">
+                        <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="text-[11px] font-black text-emerald-600 uppercase tracking-widest hover:underline whitespace-nowrap">
+                          Detail ▶
                         </Link>
                       </td>
                     </tr>
@@ -341,9 +386,9 @@ export function FeedbackListClient() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-      </Card>
+          </Card>
+        </div>
+      )}
     </PageShell>
   );
 }

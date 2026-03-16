@@ -22,7 +22,10 @@ import {
 } from "@/lib/report/reportBuilder";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { AssumptionsCallout } from "@/components/ui/AssumptionsCallout";
+import { Card } from "@/components/ui/Card";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { cn } from "@/lib/utils";
 
 const PLANNER_LAST_SNAPSHOT_KEY = "planner_last_snapshot_v1";
@@ -355,126 +358,119 @@ export function ReportClient({
   }
 
   return (
-    <div data-testid="report-root" className="report-root bg-surface-muted min-h-screen">
-      <div className="mx-auto w-full max-w-6xl px-4 py-8 md:py-12 space-y-6">
-        <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
-          <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-            <p className="font-bold">Legacy report route</p>
-            <p className="mt-1">
-              이 화면은 `planner_last_snapshot_v1` 및 추천 저장 결과를 사용하는 legacy `/report` 입니다.
-              planning 공식 리포트는 <Link className="font-semibold underline underline-offset-2" href="/planning/reports">/planning/reports</Link> 경로를 사용합니다.
+    <PageShell className="report-root">
+      <PageHeader
+        title="재무설계 & 추천 종합 리포트"
+        description="입력하신 재무 현황과 AI 추천 결과를 종합하여 분석한 맞춤형 보고서입니다."
+        action={(
+          <div className="no-print flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-full border border-slate-200 transition-all hover:border-emerald-200 shadow-sm">
+              <input
+                type="checkbox"
+                checked={includeDisclosuresFromDigest}
+                onChange={(event) => setIncludeDisclosuresFromDigest(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">공시 Digest</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-full border border-slate-200 transition-all hover:border-emerald-200 shadow-sm">
+              <input
+                type="checkbox"
+                checked={includeDailyBrief}
+                onChange={(event) => setIncludeDailyBrief(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+              />
+              <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Daily Brief</span>
+            </label>
+            <Button variant="outline" size="sm" onClick={() => window.print()} className="rounded-full font-black px-5 h-9">
+              PDF 인쇄
+            </Button>
+            <div className="flex gap-1 ml-2 pl-3 border-l border-slate-200">
+              <Button variant="ghost" size="sm" onClick={exportMarkdown} className="h-9 px-3 text-[10px] font-black text-slate-400 hover:text-slate-900 rounded-full">MD</Button>
+              <Button variant="ghost" size="sm" onClick={exportJson} className="h-9 px-3 text-[10px] font-black text-slate-400 hover:text-slate-900 rounded-full">JSON</Button>
+            </div>
+          </div>
+        )}
+      />
+
+      <div className="space-y-10">
+        <section className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+          <div className="mb-8 rounded-2xl border border-amber-100 bg-amber-50/50 px-6 py-4 text-sm font-bold text-amber-800 flex items-center gap-3 shadow-inner">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 text-[10px] font-black shrink-0">!</span>
+            <p>
+              이 화면은 legacy `/report`입니다. 공식 대시보드는 <Link className="text-amber-900 underline underline-offset-4 decoration-amber-200" href="/planning/reports">/planning/reports</Link>를 이용하세요.
             </p>
           </div>
-          <div className="no-print flex flex-col md:flex-row md:items-start justify-between gap-6 mb-8 border-b border-border/50 pb-6">
-            <div>
-              <Badge variant="outline" className="mb-3 text-[10px] uppercase tracking-widest text-amber-700 border-amber-300 bg-amber-100/70">Legacy Report</Badge>
-              <h1 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">재무설계 & 추천 종합 리포트</h1>
+
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">보고서 생성</p>
+              <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(reportModel.generatedAt)}</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <label className="flex items-center gap-2 cursor-pointer bg-surface-muted px-4 py-2 rounded-full border border-border transition-colors hover:bg-slate-100">
-                <input
-                  type="checkbox"
-                  checked={includeDisclosuresFromDigest}
-                  onChange={(event) => setIncludeDisclosuresFromDigest(event.target.checked)}
-                  className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                />
-                <span className="text-[11px] font-bold text-slate-700">공시 변화 (Digest)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer bg-surface-muted px-4 py-2 rounded-full border border-border transition-colors hover:bg-slate-100">
-                <input
-                  type="checkbox"
-                  checked={includeDailyBrief}
-                  onChange={(event) => setIncludeDailyBrief(event.target.checked)}
-                  className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                />
-                <span className="text-[11px] font-bold text-slate-700">일일 브리핑</span>
-              </label>
-              <Button variant="outline" size="sm" onClick={() => window.print()} className="h-9 rounded-full px-4 border-border hover:bg-slate-50">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mr-2"><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect width="12" height="8" x="6" y="14" rx="1"/></svg>
-                PDF 인쇄
-              </Button>
-              <div className="flex gap-1 ml-2 pl-3 border-l border-border">
-                <Button variant="ghost" size="sm" onClick={exportMarkdown} className="h-9 px-3 text-[11px] text-slate-500 hover:text-slate-900 rounded-full" title="Markdown 내보내기">MD</Button>
-                <Button variant="ghost" size="sm" onClick={exportJson} className="h-9 px-3 text-[11px] text-slate-500 hover:text-slate-900 rounded-full" title="JSON 내보내기">JSON</Button>
-              </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">추천 상품</p>
+              <p className="text-sm font-black text-slate-900 tabular-nums">{reportModel.overview.recommendationCount}개</p>
             </div>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 bg-surface-muted p-6 rounded-2xl border border-border">
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">보고서 생성 시각</p>
-              <p className="text-sm font-black text-slate-900">{formatDateTime(reportModel.generatedAt)}</p>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">플래너 갱신</p>
+              <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(reportModel.overview.plannerSavedAt)}</p>
             </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">추천 상품 수</p>
-              <p className="text-sm font-black text-slate-900">{reportModel.overview.recommendationCount}개</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">재무설계 갱신 시각</p>
-              <p className="text-sm font-black text-slate-900">{formatDateTime(reportModel.overview.plannerSavedAt)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">추천 데이터 갱신 시각</p>
-              <p className="text-sm font-black text-slate-900">{formatDateTime(reportModel.overview.recommendSavedAt)}</p>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">데이터 갱신</p>
+              <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(reportModel.overview.recommendSavedAt)}</p>
             </div>
           </div>
 
-          <AssumptionsCallout className="mt-6 bg-surface border-border">
-            <p className="font-bold text-slate-700 mb-1">{reportModel.disclaimer}</p>
-            <p>{reportModel.dataAsOfNote}</p>
-          </AssumptionsCallout>
+          <div className="mt-8 rounded-2xl border border-emerald-100 bg-emerald-50/20 p-6 shadow-inner">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2 px-1">Disclaimer & Context</p>
+            <p className="text-sm font-bold text-slate-700 leading-relaxed mb-1">{reportModel.disclaimer}</p>
+            <p className="text-xs font-medium text-slate-500 italic">※ {reportModel.dataAsOfNote}</p>
+          </div>
         </section>
 
-        <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
-          <div className="flex items-center gap-3 mb-8">
-             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-             </div>
-             <h2 className="text-xl font-black text-slate-900 tracking-tight">재무설계 진단 결과</h2>
-          </div>
+        <section className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+          <SubSectionHeader title="재무설계 진단 결과" description="입력하신 소득과 지출을 기반으로 분석한 핵심 지표입니다." />
           
           {!reportModel.planner.available || !reportModel.planner.snapshot ? (
-            <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
-              <p className="text-sm font-bold text-slate-500">{reportModel.planner.message}</p>
+            <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+              <p className="text-sm font-bold text-slate-400 italic">{reportModel.planner.message}</p>
             </div>
           ) : (
-            <div className="space-y-8">
-              <div className="flex flex-wrap gap-4 bg-slate-900 text-white p-5 rounded-2xl">
-                 <div className="flex-1">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">입력 기준: 월 소득</p>
-                   <p className="text-xl font-black tabular-nums">{reportModel.planner.snapshot.input.monthlyIncomeNet.toLocaleString()}원</p>
+            <div className="space-y-10">
+              <div className="grid gap-4 md:grid-cols-3">
+                 <div className="rounded-[1.5rem] bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 mb-1">월 순소득</p>
+                   <p className="text-2xl font-black tabular-nums tracking-tight">{reportModel.planner.snapshot.input.monthlyIncomeNet.toLocaleString()}원</p>
                  </div>
-                 <div className="w-px bg-white/20 hidden md:block" />
-                 <div className="flex-1">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">고정 지출</p>
-                   <p className="text-xl font-black text-red-400 tabular-nums">{reportModel.planner.snapshot.input.monthlyFixedExpenses.toLocaleString()}원</p>
+                 <div className="rounded-[1.5rem] bg-slate-50 p-6 border border-slate-100">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">고정 지출</p>
+                   <p className="text-xl font-black text-rose-600 tabular-nums tracking-tight">{reportModel.planner.snapshot.input.monthlyFixedExpenses.toLocaleString()}원</p>
                  </div>
-                 <div className="w-px bg-white/20 hidden md:block" />
-                 <div className="flex-1">
-                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">변동 지출</p>
-                   <p className="text-xl font-black text-red-400 tabular-nums">{reportModel.planner.snapshot.input.monthlyVariableExpenses.toLocaleString()}원</p>
+                 <div className="rounded-[1.5rem] bg-slate-50 p-6 border border-slate-100">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">변동 지출</p>
+                   <p className="text-xl font-black text-rose-600 tabular-nums tracking-tight">{reportModel.planner.snapshot.input.monthlyVariableExpenses.toLocaleString()}원</p>
                  </div>
               </div>
 
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-widest">핵심 지표 분석</h3>
-                <div data-testid="report-recommend-table" className="overflow-x-auto rounded-2xl border border-border">
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">핵심 지표 분석</p>
+                <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-surface-muted">
-                      <tr className="text-left text-slate-500">
-                        <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest">지표 명칭</th>
-                        <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest text-right">산출 값</th>
-                        <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest w-1/2">산출 근거 (계산식)</th>
+                    <thead className="bg-slate-50 text-slate-400">
+                      <tr>
+                        <th className="py-4 px-6 text-left font-black uppercase tracking-widest text-[10px]">지표 명칭</th>
+                        <th className="py-4 px-6 text-right font-black uppercase tracking-widest text-[10px]">산출 값</th>
+                        <th className="py-4 px-6 text-left font-black uppercase tracking-widest text-[10px] w-1/2">산출 근거</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border/50">
+                    <tbody className="divide-y divide-slate-50 bg-white">
                       {reportModel.planner.snapshot.result.metrics.map((metric) => (
-                        <tr key={metric.key} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-4 px-5 font-bold text-slate-800">{metric.label}</td>
-                          <td className="py-4 px-5 text-right font-black text-primary tabular-nums">
+                        <tr key={metric.key} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-6 font-black text-slate-900">{metric.label}</td>
+                          <td className="py-4 px-6 text-right font-black text-emerald-600 tabular-nums text-lg">
                             {formatMetricValue(metric.value, metric.unit)}
                           </td>
-                          <td className="py-4 px-5 text-[11px] text-slate-500 font-mono tracking-tight">{metric.formula ?? "-"}</td>
+                          <td className="py-4 px-6 text-[11px] font-bold text-slate-400 font-mono leading-relaxed">{metric.formula ?? "-"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -482,24 +478,20 @@ export function ReportClient({
                 </div>
               </div>
 
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 mb-4 uppercase tracking-widest">우선 실행 액션</h3>
+              <div className="space-y-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">우선 실행 액션</p>
                 {reportModel.planner.snapshot.result.actions.length === 0 ? (
-                  <p className="text-sm text-slate-500 bg-surface-muted p-4 rounded-xl text-center">추천된 행동이 없습니다.</p>
+                  <p className="text-sm font-bold text-slate-300 italic py-8 text-center">추천된 행동이 없습니다.</p>
                 ) : (
-                  <div className="grid md:grid-cols-2 gap-4">
+                  <div className="grid gap-4 md:grid-cols-2">
                     {reportModel.planner.snapshot.result.actions.map((action, index) => (
-                      <div key={`${action.title}-${index}`} className="flex gap-4 p-5 rounded-2xl border border-border hover:border-primary/30 transition-colors shadow-sm bg-surface">
-                        <div className={cn(
-                          "h-6 px-2 rounded font-black text-[10px] flex items-center justify-center uppercase tracking-wider",
-                          action.priority === "high" ? "bg-red-100 text-red-700" :
-                          action.priority === "mid" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                        )}>
+                      <div key={`${action.title}-${index}`} className="flex gap-4 p-6 rounded-[1.5rem] border border-slate-100 bg-slate-50/30 hover:bg-white hover:shadow-md transition-all shadow-sm">
+                        <Badge variant={action.priority === "high" ? "destructive" : action.priority === "mid" ? "warning" : "success"} className="h-6 rounded-lg px-2 text-[9px] font-black border-none uppercase tracking-widest shrink-0">
                           {action.priority}
-                        </div>
-                        <div>
-                          <p className="font-bold text-slate-900 mb-1 leading-snug">{action.title}</p>
-                          <p className="text-[11px] text-slate-600 leading-relaxed">{action.action}</p>
+                        </Badge>
+                        <div className="min-w-0">
+                          <p className="font-black text-slate-900 mb-1 leading-snug">{action.title}</p>
+                          <p className="text-xs font-bold text-slate-500 leading-relaxed line-clamp-2">{action.action}</p>
                         </div>
                       </div>
                     ))}
@@ -510,73 +502,60 @@ export function ReportClient({
           )}
         </section>
 
-        <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-3">
-               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-               </div>
-               <h2 className="text-xl font-black text-slate-900 tracking-tight">AI 최적 상품 추천</h2>
-            </div>
-            {reportModel.recommendation.run && (
-              <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest text-slate-500 border-border">
-                TOP {reportModel.recommendation.run.profile.topN} / {reportModel.recommendation.run.profile.kind}
-              </Badge>
-            )}
-          </div>
+        <section className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+          <SubSectionHeader title="AI 최적 상품 추천" description="사용자 성향과 재무 목표에 가장 적합한 금융상품을 제안합니다." />
 
           {!reportModel.recommendation.available || !reportModel.recommendation.run ? (
-            <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
-              <p className="text-sm font-bold text-slate-500">{reportModel.recommendation.message}</p>
+            <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+              <p className="text-sm font-bold text-slate-400 italic">{reportModel.recommendation.message}</p>
             </div>
           ) : (
-            <>
-              <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6 text-sm text-primary font-medium flex items-center gap-2">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
-                 고객님의 <strong>&quot;{reportModel.recommendation.run.profile.purpose}&quot;</strong> 목적에 최적화된 결과입니다.
+            <div className="space-y-8">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 px-5 py-4 text-sm font-bold text-emerald-800 flex items-center gap-3">
+                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-black shrink-0">!</span>
+                 <p>고객님의 <strong>&quot;{reportModel.recommendation.run.profile.purpose}&quot;</strong> 목적에 최적화된 상위 결과입니다.</p>
               </div>
-              <div className="overflow-x-auto rounded-2xl border border-border">
+              
+              <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-surface-muted">
-                    <tr className="text-left text-slate-500">
-                      <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest w-16 text-center">순위</th>
-                      <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest">상품명 및 금융사</th>
-                      <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest text-right">금리</th>
-                      <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest text-right">기간</th>
-                      <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest text-right">매칭 점수</th>
-                      <th className="py-3 px-5 font-bold text-xs uppercase tracking-widest text-center no-print">액션</th>
+                  <thead className="bg-slate-50 text-slate-400">
+                    <tr>
+                      <th className="py-4 px-6 text-center font-black uppercase tracking-widest text-[10px] w-16">순위</th>
+                      <th className="py-4 px-6 text-left font-black uppercase tracking-widest text-[10px]">상품명 및 금융사</th>
+                      <th className="py-4 px-6 text-right font-black uppercase tracking-widest text-[10px]">적용 금리</th>
+                      <th className="py-4 px-6 text-right font-black uppercase tracking-widest text-[10px]">납입 기간</th>
+                      <th className="py-4 px-6 text-right font-black uppercase tracking-widest text-[10px]">매칭 점수</th>
+                      <th className="py-4 px-6 text-center font-black uppercase tracking-widest text-[10px] no-print">상세</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border/50">
+                  <tbody className="divide-y divide-slate-50 bg-white">
                     {recommendationPageItems.map((item) => (
-                      <tr key={item.unifiedId} className="hover:bg-slate-50 transition-colors">
-                        <td className="py-4 px-5 text-center">
+                      <tr key={item.unifiedId} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-4 px-6 text-center">
                           <span className={cn(
-                            "inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black",
-                            item.rank === 1 ? "bg-emerald-500 text-white shadow-sm shadow-emerald-200" :
-                            item.rank === 2 ? "bg-emerald-100 text-emerald-800" :
-                            item.rank === 3 ? "bg-slate-200 text-slate-700" : "bg-surface-muted text-slate-400"
+                            "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black shadow-sm",
+                            item.rank === 1 ? "bg-emerald-500 text-white" :
+                            item.rank === 2 ? "bg-slate-200 text-slate-700" :
+                            item.rank === 3 ? "bg-slate-100 text-slate-500" : "bg-white text-slate-300 border border-slate-100"
                           )}>
                             {item.rank}
                           </span>
                         </td>
-                        <td className="py-4 px-5">
-                          <p className="font-bold text-slate-900 text-base">{item.productName}</p>
-                          <p className="text-[11px] font-medium text-slate-500 mt-1 flex items-center gap-1.5">
-                            <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[9px] uppercase">{item.providerName}</span>
-                          </p>
+                        <td className="py-4 px-6">
+                          <p className="font-black text-slate-900 text-base leading-tight">{item.productName}</p>
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-1.5">{item.providerName}</p>
                         </td>
-                        <td className="py-4 px-5 text-right font-black text-emerald-600 text-lg tabular-nums">{formatRate(item.appliedRate)}</td>
-                        <td className="py-4 px-5 text-right font-bold text-slate-700 tabular-nums">{formatTerm(item.termMonths)}</td>
-                        <td className="py-4 px-5 text-right">
-                           <Badge variant="outline" className="text-[10px] font-black border-slate-200 text-slate-600 bg-white tabular-nums px-2">
+                        <td className="py-4 px-6 text-right font-black text-emerald-600 text-xl tabular-nums tracking-tight">{formatRate(item.appliedRate)}</td>
+                        <td className="py-4 px-6 text-right font-bold text-slate-500 tabular-nums">{formatTerm(item.termMonths)}</td>
+                        <td className="py-4 px-6 text-right">
+                           <Badge variant="outline" className="bg-slate-50 text-[10px] font-black border-slate-200 text-slate-600 tabular-nums px-2 py-0.5">
                              {formatScore(item.finalScore)}
                            </Badge>
                         </td>
-                        <td className="py-4 px-5 text-center no-print">
+                        <td className="py-4 px-6 text-center no-print">
                           <Link href={`/products/catalog/${encodeURIComponent(item.unifiedId)}`}>
-                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full text-slate-400 hover:text-primary hover:bg-primary/10">
-                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                             <Button variant="ghost" size="sm" className="h-10 w-10 p-0 rounded-xl text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all">
+                               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                              </Button>
                           </Link>
                         </td>
@@ -585,13 +564,12 @@ export function ReportClient({
                   </tbody>
                 </table>
               </div>
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface-muted px-4 py-3 text-xs text-slate-700">
+
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/50 px-5 py-3 text-xs font-bold text-slate-500">
                 <p>
-                  총 <span className="font-bold">{recommendationItems.length}</span>개 중
-                  {" "}
-                  <span className="font-bold">{recommendationStart}-{recommendationEnd}</span>개 표시
+                  Showing <span className="text-slate-900 font-black">{recommendationStart}-{recommendationEnd}</span> of <span className="text-slate-900 font-black">{recommendationItems.length}</span>
                   {" · "}
-                  페이지 <span className="font-bold">{recommendationCurrentPage}</span>/<span className="font-bold">{recommendationTotalPages}</span>
+                  Page <span className="text-slate-900 font-black">{recommendationCurrentPage}</span> / {recommendationTotalPages}
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -599,98 +577,90 @@ export function ReportClient({
                     size="sm"
                     onClick={() => setRecommendationPage((prev) => Math.max(1, prev - 1))}
                     disabled={recommendationCurrentPage <= 1}
-                    className="rounded-full"
+                    className="rounded-full px-4 h-8 font-black"
                   >
-                    이전 5개
+                    이전
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setRecommendationPage((prev) => Math.min(recommendationTotalPages, prev + 1))}
                     disabled={recommendationCurrentPage >= recommendationTotalPages}
-                    className="rounded-full"
+                    className="rounded-full px-4 h-8 font-black"
                   >
-                    다음 5개
+                    다음
                   </Button>
                 </div>
               </div>
-            </>
+            </div>
           )}
         </section>
 
-        <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
-          <div className="flex items-center gap-3 mb-8">
-             <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
-             </div>
-             <h2 className="text-xl font-black text-slate-900 tracking-tight">보조금24 · 정부지원 혜택</h2>
-          </div>
+        <section className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+          <SubSectionHeader title="보조금24 · 정부지원 혜택" description="현재 재무 계획과 목적에 부합하는 주요 공공 혜택을 선별했습니다." />
 
-          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-6 text-sm text-primary font-medium">
-            현재 플래너 목표/액션에서 추론한 주제:
-            {" "}
-            <strong>{benefitTopics.map((topic) => BENEFIT_TOPICS[topic].label).join(", ")}</strong>
-            {benefitQuery ? ` · 검색어 보조: "${benefitQuery}"` : ""}
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 px-5 py-4 text-sm font-bold text-emerald-800 mb-8 shadow-inner">
+            분석 키워드: <strong>{benefitTopics.map((topic) => BENEFIT_TOPICS[topic].label).join(", ")}</strong>
+            {benefitQuery ? <span className="text-emerald-600/60 ml-2"> (Context: &quot;{benefitQuery}&quot;)</span> : ""}
           </div>
 
           {benefitsLoading ? (
-            <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
-              <p className="text-sm font-bold text-slate-500">혜택 후보를 불러오는 중입니다.</p>
+            <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+              <p className="text-sm font-bold text-slate-400 italic">혜택 정보를 탐색하는 중입니다.</p>
             </div>
           ) : benefitsError ? (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-xl text-sm font-bold">
+            <div className="bg-rose-50 border border-rose-100 text-rose-700 p-6 rounded-[1.5rem] text-sm font-black text-center">
               {benefitsError}
             </div>
           ) : scoredBenefits.length < 1 ? (
-            <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
-              <p className="text-sm font-bold text-slate-500">현재 조건에서 바로 보여줄 혜택 후보가 없습니다. `/benefits`에서 범위를 넓혀 확인해 주세요.</p>
+            <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+              <p className="text-sm font-bold text-slate-400 italic">현재 조건에서 바로 보여줄 혜택이 없습니다. `/benefits`에서 상세 검색을 시도해 보세요.</p>
             </div>
           ) : (
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid gap-6 md:grid-cols-2">
               {scoredBenefits.map((row, index) => (
-                <article key={row.item.id} className="rounded-2xl border border-border bg-surface-muted p-5 hover:bg-surface hover:shadow-sm transition-all">
+                <article key={row.item.id} className="group flex flex-col rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 hover:bg-white hover:shadow-lg transition-all shadow-sm">
                   {(() => {
                     const ctas = resolveBenefitCtas(row.item);
                     const isDetailLoading = benefitDetailLoadingId === row.item.id;
                     return (
                       <>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Top {index + 1} · Gov24</p>
-                      <h3 className="mt-1 text-base font-black text-slate-900">{row.item.title}</h3>
-                      <p className="mt-1 text-[11px] text-slate-500">{row.item.org ?? "기관 정보 미상"}</p>
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Top {index + 1} · Recommendation</p>
+                      <h3 className="mt-1 text-lg font-black text-slate-900 group-hover:text-emerald-600 transition-colors leading-snug line-clamp-2">{row.item.title}</h3>
+                      <p className="mt-1 text-[11px] font-bold text-slate-500">{row.item.org ?? "기관 정보 미상"}</p>
                     </div>
-                    <Badge variant="outline" className="bg-white text-[10px] font-bold tabular-nums">
+                    <Badge variant="outline" className="bg-white text-[10px] font-black tabular-nums border-slate-200 text-slate-600 shrink-0">
                       {row.explain.finalPoints.toFixed(1)}
                     </Badge>
                   </div>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge variant="secondary" className="bg-white text-slate-600 border-none text-[10px] font-bold">{benefitRegionLabel(row.item)}</Badge>
-                    {(row.explain.matched.topics.length > 0 ? row.explain.matched.topics : ["주제 일반"]).map((topic) => (
-                      <Badge key={`${row.item.id}-${topic}`} variant="secondary" className="bg-white text-slate-600 border-none text-[10px] font-bold">{topic}</Badge>
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    <Badge variant="secondary" className="bg-white text-slate-500 border-slate-100 text-[10px] font-black px-2">{benefitRegionLabel(row.item)}</Badge>
+                    {(row.explain.matched.topics.length > 0 ? row.explain.matched.topics : ["일반"]).map((topic) => (
+                      <Badge key={`${row.item.id}-${topic}`} variant="secondary" className="bg-emerald-50 text-emerald-700 border-none text-[10px] font-black px-2">{topic}</Badge>
                     ))}
                   </div>
 
-                  <p className="mt-4 text-sm font-bold text-slate-700 leading-relaxed">{row.explain.why.summary}</p>
-                  <p className="mt-2 text-xs text-slate-600 leading-relaxed">{row.item.summary}</p>
-                  {row.item.applyHow ? (
-                    <p className="mt-2 text-[11px] text-slate-500">신청방법: {row.item.applyHow}</p>
-                  ) : null}
+                  <div className="flex-1 space-y-3">
+                    <p className="text-sm font-bold text-slate-700 leading-relaxed border-l-4 border-emerald-500 pl-3 bg-white/50 py-2 rounded-r-lg shadow-sm">{row.explain.why.summary}</p>
+                    <p className="text-xs font-medium text-slate-500 leading-relaxed line-clamp-3">{row.item.summary}</p>
+                  </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-8 flex flex-wrap gap-3">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="rounded-full"
+                      className="rounded-xl h-10 px-5 font-black border-slate-200"
                       disabled={isDetailLoading}
                       onClick={() => void openBenefitDetail(row.item.id)}
                     >
-                      {isDetailLoading ? "불러오는 중..." : "내용 상세보기"}
+                      {isDetailLoading ? "불러오는 중..." : "상세보기"}
                     </Button>
                     {ctas.applyUrl ? (
-                      <a href={ctas.applyUrl} rel="noopener noreferrer" target="_blank">
-                        <Button variant="ghost" size="sm" className="rounded-full">신청하기</Button>
+                      <a href={ctas.applyUrl} rel="noopener noreferrer" target="_blank" className="flex-1">
+                        <Button variant="primary" size="sm" className="w-full rounded-xl h-10 font-black shadow-md shadow-emerald-900/10">바로 신청하기</Button>
                       </a>
                     ) : null}
                   </div>
@@ -702,168 +672,160 @@ export function ReportClient({
             </div>
           )}
           {benefitDetailError ? (
-            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+            <div className="mt-6 rounded-xl border border-rose-100 bg-rose-50 p-4 text-xs font-black text-rose-700 text-center">
               {benefitDetailError}
             </div>
           ) : null}
         </section>
 
-        {includeDailyBrief ? (
-          <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
-            <div className="flex items-center gap-3 mb-6">
-               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
-               </div>
-               <h2 className="text-xl font-black text-slate-900 tracking-tight">DART 공시 브리핑 <span className="text-sm font-medium text-slate-400 ml-2">(주요 10건)</span></h2>
-            </div>
-            {!dailyBrief || !Array.isArray(dailyBrief.lines) || dailyBrief.lines.length === 0 ? (
-              <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
-                <p className="text-sm font-bold text-slate-500">브리핑 파일이 없습니다. 공시 모니터링 데몬이 실행 중인지 확인하세요.</p>
+        {includeDailyBrief && dailyBrief && (
+          <section className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+            <SubSectionHeader title="DART 공시 브리핑" description="시장 주요 공시를 요약하여 브리핑해 드립니다." />
+            
+            {(!Array.isArray(dailyBrief.lines) || dailyBrief.lines.length === 0) ? (
+              <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+                <p className="text-sm font-bold text-slate-400 italic">브리핑 데이터가 준비되지 않았습니다.</p>
               </div>
             ) : (
-              <div className="space-y-4 bg-slate-50 border border-slate-200 rounded-2xl p-6">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-200 pb-2">기준 시각: {formatDateTime(dailyBrief.generatedAt)}</p>
-                <div className="space-y-3">
+              <div className="space-y-6">
+                <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-2 border border-slate-100 w-fit">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Update</span>
+                  <span className="text-[11px] font-black text-slate-700 tabular-nums">{formatDateTime(dailyBrief.generatedAt)}</span>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
                   {dailyBrief.lines.slice(0, 10).map((line, index) => (
-                    <div key={`daily-brief-${index}`} className="flex items-start gap-3">
-                      <span className="text-primary font-black tabular-nums mt-0.5">{index + 1}.</span>
-                      <p className="text-sm font-medium text-slate-700 leading-snug">{line}</p>
+                    <div key={`daily-brief-${index}`} className="flex items-start gap-4 p-5 rounded-2xl bg-slate-50/30 border border-slate-100/50 shadow-sm">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[10px] font-black text-slate-700 shrink-0 shadow-sm">{index + 1}</span>
+                      <p className="text-sm font-bold text-slate-700 leading-snug">{line}</p>
                     </div>
                   ))}
                 </div>
               </div>
             )}
           </section>
-        ) : null}
+        )}
 
-        {reportModel.disclosures.included ? (
-          <section className="print-card rounded-[2rem] border-none bg-surface p-8 shadow-card no-break">
-            <div className="flex items-center gap-3 mb-8">
-               <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-               </div>
-               <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                 {reportModel.disclosures.source === "digest" ? "공시 핵심 변화 요약" : "관심 기업 공시 현황"}
-               </h2>
-            </div>
+        {reportModel.disclosures.included && (
+          <section className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+            <SubSectionHeader 
+              title={reportModel.disclosures.source === "digest" ? "공시 핵심 변화 요약" : "관심 기업 공시 현황"} 
+              description="공시 데이터 기반의 주요 지표와 변화를 요약합니다."
+            />
 
             {!reportModel.disclosures.available ? (
-              <div className="bg-surface-muted p-8 rounded-2xl text-center border border-dashed border-border/50">
-                 <p className="text-sm font-bold text-slate-500">{reportModel.disclosures.message}</p>
+              <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+                 <p className="text-sm font-bold text-slate-400 italic">{reportModel.disclosures.message}</p>
               </div>
             ) : reportModel.disclosures.source === "digest" && reportModel.disclosures.digest ? (
-              <div className="space-y-8">
-                <div className="rounded-2xl border border-border bg-surface-muted p-6">
-                  <p className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    시장 주요 변화 (Top Highlights)
+              <div className="space-y-10">
+                <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8 shadow-inner">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-6 flex items-center gap-2 px-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    Market Highlights
                   </p>
-                  {Array.isArray(reportModel.disclosures.digest.topHighlights) &&
-                  reportModel.disclosures.digest.topHighlights.length > 0 ? (
-                    <ul className="space-y-2.5">
+                  {Array.isArray(reportModel.disclosures.digest.topHighlights) && reportModel.disclosures.digest.topHighlights.length > 0 ? (
+                    <ul className="space-y-3">
                       {reportModel.disclosures.digest.topHighlights.slice(0, 10).map((item, index) => (
-                        <li key={`${item.receiptNo ?? index}-${item.corpCode ?? index}`} className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-100 shadow-sm text-sm">
-                          <Badge variant="secondary" className={cn(
-                            "px-2 py-0.5 text-[9px] font-black shrink-0 border-none",
-                            digestLevel(item) === "HIGH" ? "bg-red-100 text-red-700" :
-                            digestLevel(item) === "MID" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
-                          )}>
+                        <li key={`${item.receiptNo ?? index}-${item.corpCode ?? index}`} className="flex items-start gap-4 p-4 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:shadow-md">
+                          <Badge variant={digestLevel(item) === "HIGH" ? "destructive" : "warning"} className="px-2 py-0.5 text-[9px] font-black shrink-0 border-none h-5">
                             {digestLevel(item)}
                           </Badge>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-slate-900 leading-tight">
-                              <span className="text-primary mr-1">[{item.corpName ?? item.corpCode ?? "-"}]</span>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-black text-slate-900 leading-tight">
+                              <span className="text-emerald-600 mr-2">[{item.corpName ?? item.corpCode ?? "-"}]</span>
                               {digestTitle(item)}
-                              {typeof item.count === "number" ? <span className="text-slate-400 font-normal ml-1">({item.count}건)</span> : ""}
+                              {typeof item.count === "number" ? <span className="text-slate-400 font-bold ml-2">({item.count}건)</span> : ""}
                             </p>
-                            <p className="text-[10px] text-slate-400 mt-1 font-mono">{item.receiptDate ?? "-"}</p>
+                            <p className="text-[10px] font-black text-slate-300 mt-2 uppercase tracking-widest tabular-nums">{item.receiptDate ?? "-"}</p>
                           </div>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-xs text-slate-500 italic">특별한 핵심 공시가 탐지되지 않았습니다.</p>
+                    <p className="text-sm font-bold text-slate-400 italic px-1">탐지된 주요 공시 변화가 없습니다.</p>
                   )}
                 </div>
 
                 {Array.isArray(reportModel.disclosures.digest.companies) && reportModel.disclosures.digest.companies.length > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest px-2">기업별 상세 요약</h3>
-                    <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-6">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">기업별 상세 요약</p>
+                    <div className="grid gap-6 md:grid-cols-2">
                       {reportModel.disclosures.digest.companies.map((company) => (
-                        <div key={company.corpCode} className="rounded-2xl border border-border bg-surface p-5 shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex justify-between items-start mb-3">
+                        <Card key={company.corpCode} className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm hover:shadow-lg transition-all">
+                          <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-4">
                             <div>
-                              <p className="text-base font-black text-slate-900">{company.corpName ?? company.corpCode}</p>
-                              <p className="text-[10px] font-mono text-slate-400 mt-0.5">{company.corpCode}</p>
+                              <p className="text-lg font-black text-slate-900 leading-tight">{company.corpName ?? company.corpCode}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest tabular-nums">{company.corpCode}</p>
                             </div>
-                            <Badge variant="outline" className="bg-slate-50 text-[10px] font-bold">신규 {company.newCount ?? 0}건</Badge>
+                            <Badge variant="outline" className="bg-slate-50 text-[10px] font-black border-slate-200 text-slate-500 h-6 px-2">
+                              New {company.newCount ?? 0}
+                            </Badge>
                           </div>
                           {company.error ? (
-                            <p className="mt-3 text-xs text-rose-600 bg-rose-50 p-2 rounded-lg font-bold">{company.error}</p>
+                            <p className="text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{company.error}</p>
                           ) : (
-                            <ul className="mt-4 space-y-2">
-                              {(Array.isArray(company.summaryLines) ? company.summaryLines : ["요약 없음"])
+                            <ul className="space-y-3">
+                              {(Array.isArray(company.summaryLines) ? company.summaryLines : ["요약 정보 없음"])
                                 .slice(0, 5)
                                 .map((line, index) => (
-                                  <li key={`${company.corpCode}-summary-${index}`} className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed">
-                                    <span className="text-slate-300 mt-1">•</span>
+                                  <li key={`${company.corpCode}-summary-${index}`} className="flex items-start gap-3 text-[13px] font-bold text-slate-600 leading-relaxed">
+                                    <span className="text-emerald-500 font-black mt-0.5">•</span>
                                     <span>{line}</span>
                                   </li>
                                 ))}
                             </ul>
                           )}
-                        </div>
+                        </Card>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {reportModel.disclosures.entries.map((entry) => (
-                  <div key={entry.corpCode} className="rounded-2xl border border-border bg-surface-muted p-5 hover:bg-surface hover:shadow-sm transition-all">
-                    <div className="flex justify-between items-start mb-4 border-b border-border/50 pb-3">
+                  <Card key={entry.corpCode} className="rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 transition-all hover:bg-white hover:shadow-lg shadow-sm">
+                    <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
                       <div>
                         <p className="text-base font-black text-slate-900">{entry.corpName ?? entry.corpCode}</p>
-                        <p className="text-[10px] font-mono text-slate-400 mt-0.5">{entry.corpCode}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest tabular-nums">{entry.corpCode}</p>
                       </div>
-                      <Badge variant="outline" className="bg-white text-[10px] font-bold">신규 {entry.newCount ?? 0}건</Badge>
+                      <Badge variant="outline" className="bg-white text-[10px] font-black border-slate-200 text-slate-500 h-6 px-2">New {entry.newCount ?? 0}</Badge>
                     </div>
                     {entry.items.length === 0 ? (
-                      <p className="text-xs text-slate-500 text-center py-4 italic">새로운 공시가 없습니다.</p>
+                      <p className="text-xs font-bold text-slate-300 text-center py-6 italic">새로운 공시 정보가 없습니다.</p>
                     ) : (
-                      <ul className="space-y-3">
+                      <ul className="space-y-4">
                         {entry.items.map((item, index) => (
-                          <li key={`${entry.corpCode}-${item.receiptNo ?? index}`} className="text-xs">
-                            <p className="font-bold text-slate-700 leading-snug line-clamp-2">{item.reportName ?? "(제목 없음)"}</p>
-                            <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                          <li key={`${entry.corpCode}-${item.receiptNo ?? index}`} className="space-y-1">
+                            <p className="text-sm font-black text-slate-700 leading-snug line-clamp-2">{item.reportName ?? "(제목 없음)"}</p>
+                            <p className="text-[10px] font-bold text-slate-400 tabular-nums uppercase tracking-widest">
                               {item.receiptDate ?? "-"} {item.receiptNo ? `[${item.receiptNo}]` : ""}
                             </p>
                           </li>
                         ))}
                       </ul>
                     )}
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
           </section>
-        ) : null}
+        )}
 
-        {runResolution.source === "fallback_latest" ? (
-          <div className="no-print bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm font-bold text-center">
-            요청한 세션을 찾지 못해 저장된 최신 추천 결과로 대체했습니다.
-          </div>
-        ) : null}
-
-        {runResolution.source === "none" || runResolution.source === "missing_query" ? (
-          <div className="no-print bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm font-bold text-center">
-            저장된 추천 결과가 없습니다. 먼저 추천을 실행한 뒤 다시 확인해 주세요.
-          </div>
-        ) : null}
+        <div className="no-print space-y-4">
+          {(runResolution.source === "fallback_latest" || runResolution.source === "none" || runResolution.source === "missing_query") && (
+            <div className="rounded-[1.5rem] border border-amber-100 bg-amber-50/50 p-6 text-center shadow-inner">
+              <p className="text-sm font-black text-amber-800 leading-relaxed">
+                {runResolution.source === "fallback_latest" 
+                  ? "요청한 세션을 찾지 못해 저장된 최신 결과로 대체했습니다." 
+                  : "저장된 추천 결과가 없습니다. 먼저 추천을 실행한 뒤 다시 확인해 주세요."}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
       {benefitDetailData ? <Gov24ServiceDetailModal data={benefitDetailData} onClose={() => setBenefitDetailData(null)} /> : null}
-    </div>
+    </PageShell>
   );
 }

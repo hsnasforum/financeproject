@@ -63,35 +63,37 @@ export function ProductResultsHeader({
     : `스캔 ${pagesFetched ?? "-"}페이지`;
 
   return (
-    <div className="flex flex-col gap-4 border-b border-border/50 py-6 md:flex-row md:items-end md:justify-between">
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={getModeVariant(mode)} className="px-2.5 py-0.5">
+    <div className="flex flex-col gap-6 border-b border-slate-100 py-8 md:flex-row md:items-end md:justify-between">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge variant={getModeVariant(mode)} className="px-3 py-1 text-[10px] font-black uppercase tracking-widest border-none">
             {modeLabel}
           </Badge>
-          <span className="text-sm font-semibold text-slate-500">{viewLabel}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{viewLabel}</span>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
-          <h2 className="text-base font-bold text-slate-900">검색 결과</h2>
-          <span className="text-3xl font-black tabular-nums text-primary">{shownCount.toLocaleString()}</span>
-          <span className="pb-1 text-sm font-semibold text-slate-500">개</span>
-          <span className="pb-1 text-sm text-slate-400">전체 {totalCount.toLocaleString()}개 중</span>
+        
+        <div className="flex flex-wrap items-baseline gap-2">
+          <h2 className="text-lg font-black text-slate-900 tracking-tight">검색 결과</h2>
+          <span className="text-4xl font-black tabular-nums text-emerald-600 tracking-tight">{shownCount.toLocaleString()}</span>
+          <span className="text-sm font-black text-slate-400 uppercase tracking-widest">items</span>
+          <span className="ml-2 text-xs font-bold text-slate-400">/ Total {totalCount.toLocaleString()} candidates</span>
         </div>
-        <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
-          <span className="rounded-full bg-slate-100 px-3 py-1">{scanLabel}</span>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-widest shadow-sm">{scanLabel}</span>
           {truncatedByMaxPages ? (
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">최대 조회 범위에서 중단됨</span>
+            <span className="rounded-full bg-rose-50 border border-rose-100 px-3 py-1 text-[10px] font-black text-rose-600 uppercase tracking-widest">Scope Truncated</span>
           ) : null}
         </div>
       </div>
 
       {showSortControl ? (
-        <label className="flex min-w-[12rem] flex-col gap-2 md:items-end">
-          <span className="text-[11px] font-semibold text-slate-500">정렬 기준</span>
+        <div className="flex min-w-[14rem] flex-col gap-2 md:items-end">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mr-1">Sort Preference</p>
           <select
             value={sortKey}
             onChange={(event) => onSortChange(event.target.value as SortKey)}
-            className="h-11 rounded-full border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-emerald-300 focus:bg-white focus:ring-4 focus:ring-emerald-500/10"
+            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 shadow-sm cursor-pointer"
           >
             <option value={ratePreference === "higher" ? "rateDesc" : "rateAsc"}>
               {ratePreference === "higher" ? "최고 금리순" : "최저 금리순"}
@@ -99,7 +101,7 @@ export function ProductResultsHeader({
             <option value="termAsc">기간 짧은 순</option>
             <option value="nameAsc">상품 이름 순</option>
           </select>
-        </label>
+        </div>
       ) : null}
     </div>
   );

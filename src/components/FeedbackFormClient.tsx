@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { cn } from "@/lib/utils";
 
 type FeedbackCategory = "bug" | "improve" | "question";
 
@@ -203,14 +204,14 @@ export function FeedbackFormClient() {
         }
       />
 
-      <Card>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <label className="block text-sm">
-            <span className="mb-1 block font-semibold text-slate-700">카테고리</span>
+      <Card className="rounded-[2rem] p-8 shadow-sm">
+        <form onSubmit={onSubmit} className="space-y-6">
+          <label className="block">
+            <span className="mb-2 block text-sm font-black text-slate-700 tracking-tight">카테고리</span>
             <select
               value={category}
               onChange={(event) => setCategory(event.target.value as FeedbackCategory)}
-              className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm"
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
               disabled={submitting}
             >
               {CATEGORY_OPTIONS.map((option) => (
@@ -221,30 +222,34 @@ export function FeedbackFormClient() {
             </select>
           </label>
 
-          <label className="block text-sm">
-            <span className="mb-1 block font-semibold text-slate-700">메시지</span>
+          <label className="block">
+            <span className="mb-2 block text-sm font-black text-slate-700 tracking-tight">메시지</span>
             <textarea
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               rows={8}
-              className="w-full rounded-md border border-slate-300 p-3 text-sm"
+              className="w-full rounded-[2rem] border border-slate-200 bg-white p-5 text-sm font-medium leading-relaxed text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
               placeholder="문제 상황 또는 개선 아이디어를 구체적으로 적어 주세요."
               disabled={submitting}
             />
-            <p className="mt-1 text-xs text-slate-500">{messageLength}/2000</p>
+            <div className="mt-2 flex justify-end">
+              <span className={cn("text-[10px] font-black uppercase tracking-widest", messageLength > 1900 ? "text-rose-500" : "text-slate-400")}>
+                {messageLength.toLocaleString()} / 2,000
+              </span>
+            </div>
           </label>
 
-          {notice ? <p className="text-sm font-semibold text-emerald-700">{notice}</p> : null}
-          {error ? <p className="text-sm font-semibold text-rose-700">{error}</p> : null}
+          {notice ? <p className="text-sm font-black text-emerald-600 bg-emerald-50 p-4 rounded-2xl">{notice}</p> : null}
+          {error ? <p className="text-sm font-black text-rose-600 bg-rose-50 p-4 rounded-2xl">{error}</p> : null}
 
-          <div className="flex items-center gap-2">
-            <Button type="submit" variant="primary" size="sm" disabled={submitting}>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <Button type="submit" variant="primary" className="h-11 px-8 rounded-2xl font-black shadow-md" disabled={submitting}>
               {submitting ? "저장 중..." : "피드백 제출"}
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => void onDownloadBundle()} disabled={downloading || submitting}>
+            <Button type="button" variant="outline" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={() => void onDownloadBundle()} disabled={downloading || submitting}>
               {downloading ? "생성 중..." : "진단 번들 다운로드"}
             </Button>
-            <p className="text-xs text-slate-500">민감정보는 입력하지 마세요.</p>
+            <p className="ml-2 text-xs font-bold text-slate-400">※ 민감정보(비밀번호 등)는 절대 입력하지 마세요.</p>
           </div>
         </form>
       </Card>

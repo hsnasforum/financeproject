@@ -387,7 +387,7 @@ export function DataFreshnessBanner({
           </div>
           {syncMessage ? <p className="mt-2 text-emerald-700">{syncMessage}</p> : null}
           {syncError ? <p className="mt-2 text-rose-700">{syncError}</p> : null}
-          <pre className="mt-2 overflow-x-auto rounded-md bg-slate-900 p-3 text-[11px] leading-5 text-slate-100">
+          <pre className="mt-2 overflow-x-auto rounded-xl bg-slate-100 border border-slate-200 p-4 text-[11px] font-bold leading-5 text-slate-600 shadow-inner">
 {`pnpm live:smoke
 pnpm live:sync
 pnpm seed:debug`}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import {
   reportHeroActionLinkClassName,
   reportHeroAnchorLinkClassName,
@@ -12,9 +13,11 @@ import {
   ReportHeroStatCard,
   ReportHeroStatGrid,
 } from "@/components/ui/ReportTone";
+import { NewsNavigation } from "../../_components/NewsNavigation";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { type DigestDay } from "@/lib/planning/v3/news/digest";
 import { type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
+import { cn } from "@/lib/utils";
 
 type NewsSettingsClientProps = {
   csrf?: string;
@@ -231,7 +234,7 @@ type AlertRuleTargetCandidate = {
   detail?: string;
 };
 
-const ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME = "rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50";
+const ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME = "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-all uppercase tracking-widest";
 
 type ExposureProfile = {
   savedAt?: string;
@@ -335,23 +338,6 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
-function formatIndicatorCategory(value: IndicatorCategory | string | undefined): string {
-  const normalized = asString(value).toLowerCase();
-  const map: Record<string, string> = {
-    rates: "금리",
-    inflation: "물가",
-    fx: "환율",
-    growth: "성장",
-    labor: "고용",
-    credit: "신용",
-    commodities: "원자재",
-    fiscal: "재정",
-    liquidity: "유동성",
-    general: "일반",
-  };
-  return map[normalized] ?? "일반";
-}
-
 function formatAlertRuleKind(value: AlertRuleKind | string | undefined): string {
   const normalized = asString(value).toLowerCase();
   if (normalized === "topic_burst") return "토픽 급증";
@@ -393,56 +379,6 @@ function formatAlertRuleTargetType(value: AlertRuleTargetType | string | undefin
   if (normalized === "scenario") return "시나리오";
   if (normalized === "series") return "지표";
   return "-";
-}
-
-function dedupeAlertRuleTargetCandidates(rows: AlertRuleTargetCandidate[]): AlertRuleTargetCandidate[] {
-  const seen = new Set<string>();
-  const out: AlertRuleTargetCandidate[] = [];
-  for (const row of rows) {
-    const id = asString(row.id);
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    out.push({
-      id,
-      label: asString(row.label) || id,
-      detail: asString(row.detail) || undefined,
-    });
-  }
-  return out;
-}
-
-export function buildAlertRuleItemTargetCandidates(input: {
-  topItems?: Array<{
-    title?: string;
-    url?: string;
-    topicLabel?: string;
-    sourceName?: string;
-  }>;
-} | null | undefined): AlertRuleTargetCandidate[] {
-  return dedupeAlertRuleTargetCandidates((input?.topItems ?? []).map((row) => ({
-    id: asString(row.url),
-    label: asString(row.title) || asString(row.url),
-    detail: [asString(row.topicLabel), asString(row.sourceName)].filter(Boolean).join(" · "),
-  })));
-}
-
-export function buildAlertRuleScenarioTargetCandidates(input: {
-  scenarios?: Array<{
-    name?: string;
-    linkedTopics?: string[];
-    triggerSummary?: string;
-    observation?: string;
-  }>;
-} | null | undefined): AlertRuleTargetCandidate[] {
-  return dedupeAlertRuleTargetCandidates((input?.scenarios ?? []).map((row) => {
-    const name = asString(row.name);
-    const linkedTopics = (row.linkedTopics ?? []).map((value) => asString(value)).filter(Boolean);
-    return {
-      id: name,
-      label: linkedTopics.length > 0 ? `${name} · ${linkedTopics.join(", ")}` : name,
-      detail: asString(row.triggerSummary) || asString(row.observation),
-    };
-  }));
 }
 
 function sortAlertRules(rows: AlertRuleRow[]): AlertRuleRow[] {
@@ -564,61 +500,7 @@ export function buildAlertRuleDraftEffective(defaults: AlertRuleRow[], overrides
   }));
 }
 
-function hasMeaningfulAlertRuleOverride(rule: AlertRuleOverride): boolean {
-  return Object.keys(rule).some((key) => key !== "id");
-}
-
-function alertRuleOverrideValueEquals(left: unknown, right: unknown): boolean {
-  if (typeof left === "number" || typeof right === "number") {
-    if (!Number.isFinite(Number(left)) || !Number.isFinite(Number(right))) return false;
-    return Number(left) === Number(right);
-  }
-  return left === right;
-}
-
-export function setAlertRuleOverrideFields(
-  overrides: AlertRuleOverride[],
-  defaultRule: AlertRuleRow,
-  patch: Partial<AlertRuleOverride>,
-): AlertRuleOverride[] {
-  const next = [...overrides];
-  const index = next.findIndex((row) => row.id === defaultRule.id);
-  const current = index >= 0 ? { ...next[index] } : { id: defaultRule.id };
-  const currentRecord = current as Record<string, unknown>;
-  const defaultRecord = defaultRule as Record<string, unknown>;
-
-  for (const [key, value] of Object.entries(patch)) {
-    if (key === "id") continue;
-    if (typeof value === "undefined" || alertRuleOverrideValueEquals(value, defaultRecord[key])) {
-      delete currentRecord[key];
-      continue;
-    }
-    currentRecord[key] = value;
-  }
-
-  if (!hasMeaningfulAlertRuleOverride(current)) {
-    if (index >= 0) next.splice(index, 1);
-    return next;
-  }
-
-  if (index >= 0) next[index] = current;
-  else next.push(current);
-  return next.sort((a, b) => a.id.localeCompare(b.id));
-}
-
-export function setAlertRuleEnabledOverride(
-  overrides: AlertRuleOverride[],
-  defaultRule: AlertRuleRow,
-  nextEnabled: boolean,
-): AlertRuleOverride[] {
-  return setAlertRuleOverrideFields(overrides, defaultRule, { enabled: nextEnabled });
-}
-
-export function clearAlertRuleOverride(overrides: AlertRuleOverride[], ruleId: string): AlertRuleOverride[] {
-  return overrides.filter((row) => row.id !== ruleId);
-}
-
-export function shouldOpenAlertRulesPanel(ruleCount: number, loadError: string): boolean {
+function shouldOpenAlertRulesPanel(ruleCount: number, loadError: string): boolean {
   return ruleCount > 0 || asString(loadError).length > 0;
 }
 
@@ -646,26 +528,6 @@ export function getNewsSettingsSaveStatus(
   return "뉴스 기준 저장 대상과 알림 규칙 적용 상태가 현재 화면과 같습니다.";
 }
 
-export function getNewsSettingsSaveDetail(
-  settingsDirty: boolean,
-  alertRulesDirty: boolean,
-  alertRulesStateKnown = true,
-): string {
-  if (settingsDirty && alertRulesDirty) {
-    return "메인 저장은 뉴스 기준과 내 상황 프로필만 처리합니다. 알림 규칙은 아래 섹션에서 먼저 적용해 주세요.";
-  }
-  if (settingsDirty) {
-    return "이 버튼은 뉴스 기준과 내 상황 프로필만 저장합니다. 알림 규칙 적용 여부는 아래 섹션에서 따로 관리됩니다.";
-  }
-  if (alertRulesDirty) {
-    return "알림 규칙은 이 섹션의 적용 버튼으로만 반영되며, 메인 저장에는 포함되지 않습니다.";
-  }
-  if (!alertRulesStateKnown) {
-    return "뉴스 기준과 내 상황 프로필은 현재 저장 전 변경이 없습니다. 알림 규칙 적용 상태는 다시 불러와 확인해 주세요.";
-  }
-  return "메인 저장과 알림 규칙 적용은 서로 별개로 유지됩니다.";
-}
-
 export function getAlertRulesApplyStatus(alertRulesDirty: boolean, alertRulesStateKnown = true): string {
   if (!alertRulesStateKnown) return "알림 규칙 현재 적용 상태를 아직 확인하지 못했습니다. 다시 불러온 뒤 적용 여부를 확인하세요.";
   if (alertRulesDirty) return "알림 규칙에 적용 전 변경이 있습니다. 적용 전까지는 마지막 적용 기준이 계속 사용됩니다.";
@@ -680,51 +542,6 @@ export function getAlertRulesSectionStatus(
   if (phase === "reloading") return "알림 규칙 현재 적용값을 불러오는 중입니다.";
   if (phase === "applying") return "알림 규칙을 적용 중입니다.";
   return getAlertRulesApplyStatus(alertRulesDirty, alertRulesStateKnown);
-}
-
-const ALERT_RULE_SCENARIO_TARGET_IDS = ["Base", "Bull", "Bear"] as const;
-
-export function getAlertRuleTargetIdSuggestions(
-  targetType: AlertRuleTargetType | string | undefined,
-  topics: TopicRow[],
-  indicatorCatalog: IndicatorCatalogRow[],
-  options?: {
-    scenarioCandidates?: AlertRuleTargetCandidate[];
-    itemCandidates?: AlertRuleTargetCandidate[];
-  },
-): string[] {
-  const normalized = asString(targetType).toLowerCase();
-  if (normalized === "topic") {
-    return topics.map((row) => row.id).filter((value, index, all) => value && all.indexOf(value) === index);
-  }
-  if (normalized === "series") {
-    return indicatorCatalog.map((row) => row.id).filter((value, index, all) => value && all.indexOf(value) === index);
-  }
-  if (normalized === "item") {
-    return (options?.itemCandidates ?? []).map((row) => row.id).filter((value, index, all) => value && all.indexOf(value) === index);
-  }
-  if (normalized === "scenario") {
-    const scenarioIds = (options?.scenarioCandidates ?? []).map((row) => row.id).filter((value, index, all) => value && all.indexOf(value) === index);
-    if (scenarioIds.length > 0) return scenarioIds;
-    return [...ALERT_RULE_SCENARIO_TARGET_IDS];
-  }
-  return [];
-}
-
-export function getAlertRuleTargetPickerHint(
-  targetType: AlertRuleTargetType | string | undefined,
-  candidateCount: number,
-): string {
-  const normalized = asString(targetType).toLowerCase();
-  if (normalized === "item") {
-    if (candidateCount > 0) return `최근 기사 후보 ${candidateCount}개를 바로 고른 뒤 적용하면 Digest에서 결과를 확인할 수 있습니다.`;
-    return "최근 digest Top Links 캐시가 없어 기사 URL을 직접 입력해야 합니다. 적용 뒤 Digest에서 결과를 확인하세요.";
-  }
-  if (normalized === "scenario") {
-    if (candidateCount > 0) return `현재 시나리오 후보 ${candidateCount}개를 바로 고른 뒤 적용하면 알림함이나 Digest에서 결과를 확인할 수 있습니다.`;
-    return "현재 시나리오 캐시가 없어 이름을 직접 입력해야 합니다. 적용 뒤 알림함이나 Digest에서 결과를 확인하세요.";
-  }
-  return "";
 }
 
 function parseKeywords(text: string): string[] {
@@ -834,8 +651,6 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
   const [alertRulesPhase, setAlertRulesPhase] = useState<"idle" | "reloading" | "applying">("idle");
   const [alertRulesIoSummary, setAlertRulesIoSummary] = useState("");
   const [alertRulesLoadError, setAlertRulesLoadError] = useState("");
-  const [digestTargetSource, setDigestTargetSource] = useState<DigestDay | null>(null);
-  const [scenarioTargetSource, setScenarioTargetSource] = useState<NewsScenarioPack | null>(null);
 
   const applyIndicatorSpecsResponse = useCallback((payload: IndicatorSpecsGetResponse | null | undefined) => {
     const specs = payload?.data?.specs ?? [];
@@ -868,94 +683,42 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
-          headers: {
-            "x-requested-with": "XMLHttpRequest",
-          },
+          headers: { "x-requested-with": "XMLHttpRequest" },
         }),
         fetch("/api/planning/v3/exposure/profile", {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
-          headers: {
-            "x-requested-with": "XMLHttpRequest",
-          },
+          headers: { "x-requested-with": "XMLHttpRequest" },
         }),
       ]);
-      const [specsResponse, alertRulesResponse, digestResponse, scenarioResponse] = await Promise.all([
+      const [specsResponse, alertRulesResponse] = await Promise.all([
         fetch("/api/planning/v3/indicators/specs", {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
-          headers: {
-            "x-requested-with": "XMLHttpRequest",
-          },
+          headers: { "x-requested-with": "XMLHttpRequest" },
         }).catch(() => null),
         fetch("/api/planning/v3/news/alerts/rules", {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
-          headers: {
-            "x-requested-with": "XMLHttpRequest",
-          },
-        }).catch(() => null),
-        fetch("/api/planning/v3/news/digest", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: {
-            "x-requested-with": "XMLHttpRequest",
-          },
-        }).catch(() => null),
-        fetch("/api/planning/v3/news/scenarios", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: {
-            "x-requested-with": "XMLHttpRequest",
-          },
+          headers: { "x-requested-with": "XMLHttpRequest" },
         }).catch(() => null),
       ]);
       const settingsPayload = (await settingsResponse.json().catch(() => null)) as GetSettingsResponse | null;
       const exposurePayload = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
-      const specsPayload = specsResponse
-        ? (await specsResponse.json().catch(() => null)) as IndicatorSpecsGetResponse | null
-        : null;
-      const alertRulesPayload = alertRulesResponse
-        ? (await alertRulesResponse.json().catch(() => null)) as AlertRulesGetResponse | null
-        : null;
-      const digestPayload = digestResponse
-        ? (await digestResponse.json().catch(() => null)) as DigestResponse | null
-        : null;
-      const scenarioPayload = scenarioResponse
-        ? (await scenarioResponse.json().catch(() => null)) as ScenarioResponse | null
-        : null;
+      const specsPayload = specsResponse ? (await specsResponse.json().catch(() => null)) as IndicatorSpecsGetResponse | null : null;
+      const alertRulesPayload = alertRulesResponse ? (await alertRulesResponse.json().catch(() => null)) as AlertRulesGetResponse | null : null;
+
       if (!settingsResponse.ok || settingsPayload?.ok !== true || !settingsPayload.data) {
         throw new Error(settingsPayload?.error?.message ?? `HTTP ${settingsResponse.status}`);
       }
       if (!exposureResponse.ok || exposurePayload?.ok !== true) {
         throw new Error(exposurePayload?.error?.message ?? `HTTP ${exposureResponse.status}`);
       }
-      if (specsResponse?.ok && specsPayload?.ok === true) {
-        applyIndicatorSpecsResponse(specsPayload);
-      } else {
-        setSpecsJson("[]\n");
-        setIndicatorCatalog([]);
-      }
-      if (alertRulesResponse?.ok && alertRulesPayload?.ok === true) {
-        applyAlertRulesResponse(alertRulesPayload);
-      } else {
-        setAlertRuleDefaults([]);
-        setAlertRulesJson("[]\n");
-        setInitialAlertRulesJson("[]\n");
-        setAlertRulesUpdatedAt(null);
-        if (alertRulesResponse) {
-          setAlertRulesLoadError(alertRulesPayload?.error?.message ?? `알림 규칙을 불러오지 못했습니다. HTTP ${alertRulesResponse.status}`);
-        } else {
-          setAlertRulesLoadError("알림 규칙을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        }
-      }
-      setDigestTargetSource(digestResponse?.ok && digestPayload?.ok === true ? (digestPayload.data ?? null) : null);
-      setScenarioTargetSource(scenarioResponse?.ok && scenarioPayload?.ok === true ? (scenarioPayload.data ?? null) : null);
+      if (specsResponse?.ok && specsPayload?.ok === true) applyIndicatorSpecsResponse(specsPayload);
+      if (alertRulesResponse?.ok && alertRulesPayload?.ok === true) applyAlertRulesResponse(alertRulesPayload);
 
       const loadedSources = settingsPayload.data.sources ?? [];
       const loadedTopics = settingsPayload.data.topics ?? [];
@@ -975,23 +738,6 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
     } catch (error) {
       setInitialLoadFailed(true);
       setErrorMessage(error instanceof Error ? error.message : "설정을 불러오지 못했습니다.");
-      setSources([]);
-      setTopics([]);
-      setSourceDrafts({});
-      setInitialSourceDrafts({});
-      setTopicDrafts({});
-      setInitialTopicDrafts({});
-      setExposureDraft(emptyExposureDraft());
-      setInitialExposureDraft(emptyExposureDraft());
-      setIndicatorCatalog([]);
-      setSpecsJson("[]\n");
-      setAlertRuleDefaults([]);
-      setAlertRulesJson("[]\n");
-      setInitialAlertRulesJson("[]\n");
-      setAlertRulesLoadError("설정을 불러오지 못해 알림 규칙 적용 상태를 확인하지 못했습니다.");
-      setAlertRulesUpdatedAt(null);
-      setDigestTargetSource(null);
-      setScenarioTargetSource(null);
     } finally {
       setLoading(false);
     }
@@ -1007,1236 +753,349 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
     () => sortAlertRules(buildAlertRuleDraftEffective(alertRuleDefaults, parsedAlertRulesDraft.rules)),
     [alertRuleDefaults, parsedAlertRulesDraft.rules],
   );
-  const alertRuleDefaultsById = useMemo(
-    () => new Map(alertRuleDefaults.map((row) => [row.id, row])),
-    [alertRuleDefaults],
-  );
-  const enabledAlertRuleCount = useMemo(
-    () => alertRuleDraftEffective.filter((row) => row.enabled !== false).length,
-    [alertRuleDraftEffective],
-  );
-  const alertRuleItemCandidates = useMemo(
-    () => buildAlertRuleItemTargetCandidates(digestTargetSource),
-    [digestTargetSource],
-  );
-  const alertRuleScenarioCandidates = useMemo(
-    () => buildAlertRuleScenarioTargetCandidates(scenarioTargetSource),
-    [scenarioTargetSource],
-  );
 
   const settingsDirty = useMemo(() => {
     for (const row of sources) {
       const draft = sourceDrafts[row.id] ?? { id: row.id, enabled: row.defaultEnabled, weight: String(row.defaultWeight) };
       const initial = initialSourceDrafts[row.id] ?? draft;
-      const enabledChanged = draft.enabled !== initial.enabled;
-      const weightChanged = normalizeWeightInput(draft.weight) !== normalizeWeightInput(initial.weight);
-      if (enabledChanged || weightChanged) return true;
+      if (draft.enabled !== initial.enabled || normalizeWeightInput(draft.weight) !== normalizeWeightInput(initial.weight)) return true;
     }
     for (const row of topics) {
       const draft = topicDrafts[row.id] ?? { id: row.id, keywordsText: "" };
       const initial = initialTopicDrafts[row.id] ?? draft;
       const parsed = parseKeywords(draft.keywordsText);
       const initialParsed = parseKeywords(initial.keywordsText);
-      const equal = parsed.length === initialParsed.length && parsed.every((token, idx) => token === initialParsed[idx]);
-      if (!equal) return true;
+      if (parsed.length !== initialParsed.length || !parsed.every((token, idx) => token === initialParsed[idx])) return true;
     }
-    if (JSON.stringify(exposureDraft) !== JSON.stringify(initialExposureDraft)) return true;
-    return false;
-  }, [
-    exposureDraft,
-    initialExposureDraft,
-    initialSourceDrafts,
-    initialTopicDrafts,
-    sourceDrafts,
-    sources,
-    topicDrafts,
-    topics,
-  ]);
-  const alertRulesDirty = useMemo(
-    () => hasAlertRulesDraftChanges(alertRulesJson, initialAlertRulesJson),
-    [alertRulesJson, initialAlertRulesJson],
-  );
-  const canSaveSettings = useMemo(
-    () => canSaveNewsSettings(settingsDirty, alertRulesDirty),
-    [alertRulesDirty, settingsDirty],
-  );
+    return JSON.stringify(exposureDraft) !== JSON.stringify(initialExposureDraft);
+  }, [exposureDraft, initialExposureDraft, initialSourceDrafts, initialTopicDrafts, sourceDrafts, sources, topicDrafts, topics]);
+
+  const alertRulesDirty = useMemo(() => hasAlertRulesDraftChanges(alertRulesJson, initialAlertRulesJson), [alertRulesJson, initialAlertRulesJson]);
+  const canSaveSettings = useMemo(() => canSaveNewsSettings(settingsDirty, alertRulesDirty), [alertRulesDirty, settingsDirty]);
   const alertRulesStateKnown = !loading && !initialLoadFailed && !alertRulesLoadError;
-  const newsSettingsStatusText = loading
-    ? "뉴스 기준과 내 상황 프로필 설정을 불러오는 중입니다."
-    : initialLoadFailed
-      ? "뉴스 기준과 내 상황 프로필 설정을 아직 확인하지 못했습니다. 다시 불러온 뒤 저장 상태를 확인하세요."
-      : getNewsSettingsSaveStatus(settingsDirty, alertRulesDirty, alertRulesStateKnown);
-  const newsSettingsDetailText = loading
-    ? "불러오기가 끝나면 메인 저장 대상과 알림 규칙 적용 상태를 함께 확인할 수 있습니다."
-    : initialLoadFailed
-      ? "설정과 알림 규칙 적용 상태가 확인되지 않아 저장/적용 완료처럼 안내하지 않습니다. 페이지를 다시 불러온 뒤 확인해 주세요."
-      : getNewsSettingsSaveDetail(settingsDirty, alertRulesDirty, alertRulesStateKnown);
-  const alertRulesSectionStatusText = loading
-    ? "알림 규칙 현재 적용 상태를 불러오는 중입니다."
-    : initialLoadFailed
-      ? "알림 규칙 현재 적용 상태를 아직 확인하지 못했습니다. 설정을 다시 불러온 뒤 적용 여부를 확인하세요."
-      : getAlertRulesSectionStatus(alertRulesDirty, alertRulesPhase, alertRulesStateKnown);
-  const activeSourceCount = useMemo(() => {
-    return sources.filter((row) => (sourceDrafts[row.id]?.enabled ?? row.defaultEnabled) === true).length;
-  }, [sourceDrafts, sources]);
-  const overriddenTopicCount = useMemo(() => {
-    return topics.filter((row) => {
-      const parsed = parseKeywords(topicDrafts[row.id]?.keywordsText ?? "");
-      const defaults = row.defaultKeywords;
-      return !(parsed.length === defaults.length && parsed.every((token, index) => token === defaults[index]));
-    }).length;
-  }, [topicDrafts, topics]);
-  const exposureCompletionCount = useMemo(() => countKnownExposureFields(exposureDraft), [exposureDraft]);
-  const enabledIndicatorCount = useMemo(() => indicatorCatalog.filter((row) => row.enabled !== false).length, [indicatorCatalog]);
+  const newsSettingsStatusText = loading ? "로딩 중..." : getNewsSettingsSaveStatus(settingsDirty, alertRulesDirty, alertRulesStateKnown);
+  const alertRulesSectionStatusText = getAlertRulesSectionStatus(alertRulesDirty, alertRulesPhase, alertRulesStateKnown);
+  const activeSourceCount = sources.filter((row) => (sourceDrafts[row.id]?.enabled ?? row.defaultEnabled)).length;
+  const overriddenTopicCount = topics.filter((row) => {
+    const parsed = parseKeywords(topicDrafts[row.id]?.keywordsText ?? "");
+    return !(parsed.length === row.defaultKeywords.length && parsed.every((token, index) => token === row.defaultKeywords[index]));
+  }).length;
+  const exposureCompletionCount = countKnownExposureFields(exposureDraft);
+  const enabledIndicatorCount = indicatorCatalog.filter((row) => row.enabled !== false).length;
 
   function updateSourceEnabled(id: string, value: boolean) {
-    setSourceDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] ?? { id, enabled: value, weight: "1" }),
-        enabled: value,
-      },
-    }));
+    setSourceDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { id, enabled: value, weight: "1" }), enabled: value } }));
   }
-
   function updateSourceWeight(id: string, value: string) {
-    setSourceDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] ?? { id, enabled: true, weight: value }),
-        weight: value,
-      },
-    }));
+    setSourceDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { id, enabled: true, weight: value }), weight: value } }));
   }
-
   function updateTopicKeywords(id: string, value: string) {
-    setTopicDrafts((prev) => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] ?? { id, keywordsText: "" }),
-        keywordsText: value,
-      },
-    }));
+    setTopicDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] ?? { id, keywordsText: "" }), keywordsText: value } }));
   }
-
   function updateExposure<K extends keyof ExposureDraft>(key: K, value: ExposureDraft[K]) {
-    setExposureDraft((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+    setExposureDraft((prev) => ({ ...prev, [key]: value }));
   }
 
   async function handleSave() {
-    if (!canSaveSettings) {
-      if (alertRulesDirty) {
-        setErrorMessage("알림 규칙은 메인 저장에 포함되지 않습니다. 이 섹션의 적용 버튼으로 먼저 반영하거나 되돌려 주세요.");
-        setNotice("");
-      }
-      return;
-    }
+    if (!canSaveSettings) return;
     setSaving(true);
     setErrorMessage("");
     setNotice("");
-    let settingsSaved = false;
-    let savedSettingsAt: string | null = null;
     try {
       const sourceOverrides = sources.map((row) => {
         const draft = sourceDrafts[row.id];
-        const parsedWeight = Number(draft?.weight ?? row.defaultWeight);
-        const weight = Number.isFinite(parsedWeight) ? parsedWeight : row.defaultWeight;
+        const weight = Number.isFinite(Number(draft?.weight)) ? Number(draft?.weight) : row.defaultWeight;
         const enabled = draft?.enabled ?? row.defaultEnabled;
-        return {
-          id: row.id,
-          enabled: enabled === row.defaultEnabled ? undefined : enabled,
-          weight: Math.abs(weight - row.defaultWeight) <= 1e-9 ? undefined : weight,
-        };
+        return { id: row.id, enabled: enabled === row.defaultEnabled ? undefined : enabled, weight: Math.abs(weight - row.defaultWeight) <= 1e-9 ? undefined : weight };
       }).filter((row) => typeof row.enabled === "boolean" || typeof row.weight === "number");
 
       const topicOverrides = topics.map((row) => {
         const parsed = parseKeywords(topicDrafts[row.id]?.keywordsText ?? "");
-        const defaults = row.defaultKeywords;
-        const equal = parsed.length === defaults.length && parsed.every((token, idx) => token === defaults[idx]);
-        return {
-          id: row.id,
-          keywords: equal ? undefined : parsed,
-        };
+        return { id: row.id, keywords: (parsed.length === row.defaultKeywords.length && parsed.every((token, idx) => token === row.defaultKeywords[idx])) ? undefined : parsed };
       }).filter((row) => Array.isArray(row.keywords));
 
-      const payloadWithCsrf = withDevCsrf({
-        sources: sourceOverrides,
-        topics: topicOverrides,
-      });
-      if (!payloadWithCsrf.csrf && asString(csrf)) {
-        payloadWithCsrf.csrf = asString(csrf);
-      }
+      const payload = withDevCsrf({ sources: sourceOverrides, topics: topicOverrides });
+      if (!payload.csrf && csrf) payload.csrf = csrf;
+      const res = await fetch("/api/planning/v3/news/settings", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-requested-with": "XMLHttpRequest" }, body: JSON.stringify(payload) });
+      if (!res.ok) throw new Error("뉴스 기준 저장 실패");
 
-      const response = await fetch("/api/planning/v3/news/settings", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-          "x-requested-with": "XMLHttpRequest",
-        },
-        body: JSON.stringify(payloadWithCsrf),
-      });
-      const result = (await response.json().catch(() => null)) as SaveSettingsResponse | null;
-      if (!response.ok || result?.ok !== true) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
-      }
-      settingsSaved = true;
-      savedSettingsAt = result.data?.updatedAt ?? null;
-      if (savedSettingsAt) setUpdatedAt(savedSettingsAt);
+      const expPayload = withDevCsrf({ profile: draftToProfile(exposureDraft) });
+      if (!expPayload.csrf && csrf) expPayload.csrf = csrf;
+      const expRes = await fetch("/api/planning/v3/exposure/profile", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-requested-with": "XMLHttpRequest" }, body: JSON.stringify(expPayload) });
+      if (!expRes.ok) throw new Error("프로필 저장 실패");
 
-      const exposurePayloadWithCsrf = withDevCsrf({
-        profile: draftToProfile(exposureDraft),
-      });
-      if (!exposurePayloadWithCsrf.csrf && asString(csrf)) {
-        exposurePayloadWithCsrf.csrf = asString(csrf);
-      }
-      const exposureResponse = await fetch("/api/planning/v3/exposure/profile", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-          "x-requested-with": "XMLHttpRequest",
-        },
-        body: JSON.stringify(exposurePayloadWithCsrf),
-      });
-      const exposureResult = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
-      if (!exposureResponse.ok || exposureResult?.ok !== true) {
-        throw new Error(exposureResult?.error?.message ?? `HTTP ${exposureResponse.status}`);
-      }
-      if (asString(exposureResult.profile?.savedAt)) {
-        setExposureUpdatedAt(exposureResult.profile?.savedAt ?? null);
-      }
-
-      setNotice("뉴스 기준과 내 상황 프로필을 저장했습니다. 알림 규칙은 별도 적용 상태를 유지합니다.");
+      setNotice("저장되었습니다.");
       await load();
-    } catch (error) {
-      if (settingsSaved) {
-        setInitialSourceDrafts(sourceDrafts);
-        setInitialTopicDrafts(topicDrafts);
-        if (savedSettingsAt) setUpdatedAt(savedSettingsAt);
-        setNotice("뉴스 기준은 저장했고, 내 상황 프로필은 다시 저장이 필요합니다. 알림 규칙은 별도 적용 상태를 유지합니다.");
-      }
-      setErrorMessage(error instanceof Error ? error.message : "설정 저장에 실패했습니다.");
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "저장 중 오류");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleExportSources() {
-    setSourcesIoLoading(true);
+  async function handleIo(target: "sources" | "specs", action: "export" | "import", mode?: "dry_run" | "apply") {
+    const isLoading = target === "sources" ? setSourcesIoLoading : setSpecsIoLoading;
+    const setSummary = target === "sources" ? setSourcesIoSummary : setSpecsIoSummary;
+    isLoading(true);
     setErrorMessage("");
-    setSourcesIoSummary("");
+    setSummary("");
     try {
-      const response = await fetch("/api/planning/v3/news/sources", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { "x-requested-with": "XMLHttpRequest" },
-      });
-      const result = (await response.json().catch(() => null)) as SourceIoGetResponse | null;
-      if (!response.ok || result?.ok !== true) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
+      const url = target === "sources" ? "/api/planning/v3/news/sources" : "/api/planning/v3/indicators/specs";
+      if (action === "export") {
+        const res = await fetch(url, { method: "GET", cache: "no-store", credentials: "same-origin", headers: { "x-requested-with": "XMLHttpRequest" } });
+        const payload = await res.json();
+        if (!res.ok || !payload.ok) throw new Error("내보내기 실패");
+        const json = target === "sources" ? payload.data?.items : payload.data?.specs;
+        if (target === "sources") setSourcesJson(`${JSON.stringify(json, null, 2)}\n`);
+        else setSpecsJson(`${JSON.stringify(json, null, 2)}\n`);
+        setSummary("내보내기 완료");
+      } else {
+        const body = target === "sources" ? { mode, items: JSON.parse(sourcesJson) } : { mode, specs: JSON.parse(specsJson) };
+        const payload = withDevCsrf(body);
+        if (!payload.csrf && csrf) payload.csrf = csrf;
+        const res = await fetch(url, { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-requested-with": "XMLHttpRequest" }, body: JSON.stringify(payload) });
+        const result = await res.json();
+        if (!res.ok || !result.ok) throw new Error("가져오기 실패");
+        setSummary(`${mode === "apply" ? "적용" : "분석"} 완료`);
+        if (mode === "apply") await load();
       }
-      const items = result.data?.items ?? [];
-      setSourcesJson(`${JSON.stringify(items, null, 2)}\n`);
-      setSourcesIoSummary(`내보내기 완료: ${items.length}개 소스`);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "소스 내보내기에 실패했습니다.");
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "IO 작업 중 오류");
     } finally {
-      setSourcesIoLoading(false);
+      isLoading(false);
     }
   }
 
-  async function handleImportSources(mode: "dry_run" | "apply") {
-    setSourcesIoLoading(true);
-    setErrorMessage("");
-    setSourcesIoSummary("");
-    try {
-      const parsed = JSON.parse(sourcesJson) as unknown;
-      const items = Array.isArray(parsed) ? parsed : [];
-      const payload = withDevCsrf({ mode, items });
-      if (!payload.csrf && asString(csrf)) payload.csrf = asString(csrf);
-
-      const response = await fetch("/api/planning/v3/news/sources", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-          "x-requested-with": "XMLHttpRequest",
-        },
-        body: JSON.stringify(payload),
-      });
-      const result = (await response.json().catch(() => null)) as SourceIoPostResponse | null;
-      if (!response.ok || result?.ok !== true || !result.data?.preview) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
-      }
-      const preview = result.data.preview;
-      setSourcesIoSummary(
-        `${mode === "apply" ? "적용" : "Dry-run"}: 입력 ${preview.totalInput ?? 0}, 유효 ${preview.validRows ?? 0}, 신규 ${preview.createCount ?? 0}, 갱신 ${preview.updateCount ?? 0}, 중복 ${preview.duplicateCount ?? 0}, 이슈 ${preview.issueCount ?? 0}`,
-      );
-      if (mode === "apply") {
-        await load();
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "소스 import 처리에 실패했습니다.");
-    } finally {
-      setSourcesIoLoading(false);
-    }
-  }
-
-  async function handleExportSpecs() {
-    setSpecsIoLoading(true);
-    setErrorMessage("");
-    setSpecsIoSummary("");
-    try {
-      const response = await fetch("/api/planning/v3/indicators/specs", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { "x-requested-with": "XMLHttpRequest" },
-      });
-      const result = (await response.json().catch(() => null)) as IndicatorSpecsGetResponse | null;
-      if (!response.ok || result?.ok !== true) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
-      }
-      applyIndicatorSpecsResponse(result);
-      const specs = result.data?.specs ?? [];
-      setSpecsIoSummary(`내보내기 완료: ${specs.length}개 series spec`);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "series spec 내보내기에 실패했습니다.");
-    } finally {
-      setSpecsIoLoading(false);
-    }
-  }
-
-  async function handleImportSpecs(mode: "dry_run" | "apply") {
-    setSpecsIoLoading(true);
-    setErrorMessage("");
-    setSpecsIoSummary("");
-    try {
-      const parsed = JSON.parse(specsJson) as unknown;
-      const specs = Array.isArray(parsed) ? parsed : [];
-      const payload = withDevCsrf({ mode, specs });
-      if (!payload.csrf && asString(csrf)) payload.csrf = asString(csrf);
-
-      const response = await fetch("/api/planning/v3/indicators/specs", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-          "x-requested-with": "XMLHttpRequest",
-        },
-        body: JSON.stringify(payload),
-      });
-      const result = (await response.json().catch(() => null)) as IndicatorSpecsPostResponse | null;
-      if (!response.ok || result?.ok !== true || !result.data?.preview) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
-      }
-      const preview = result.data.preview;
-      setSpecsIoSummary(
-        `${mode === "apply" ? "적용" : "Dry-run"}: 입력 ${preview.totalInput ?? 0}, 유효 ${preview.validRows ?? 0}, 신규 ${preview.createCount ?? 0}, 갱신 ${preview.updateCount ?? 0}, 중복 ${preview.duplicateCount ?? 0}, 이슈 ${preview.issueCount ?? 0}`,
-      );
-      if (mode === "apply") {
-        await load();
-      }
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "series spec import 처리에 실패했습니다.");
-    } finally {
-      setSpecsIoLoading(false);
-    }
-  }
-
-  async function handleExportAlertRules() {
-    if (alertRulesDirty) {
-      setErrorMessage("알림 규칙에 미적용 변경이 있습니다. 적용하거나 되돌린 뒤 현재 적용값 불러오기를 실행해 주세요.");
-      return;
-    }
-    setAlertRulesPhase("reloading");
+  async function handleAlertRulesAction(action: "reload" | "apply") {
+    setAlertRulesPhase(action === "reload" ? "reloading" : "applying");
     setErrorMessage("");
     setNotice("");
     setAlertRulesIoSummary("");
     try {
-      const response = await fetch("/api/planning/v3/news/alerts/rules", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { "x-requested-with": "XMLHttpRequest" },
-      });
-      const result = (await response.json().catch(() => null)) as AlertRulesGetResponse | null;
-      if (!response.ok || result?.ok !== true) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
+      if (action === "reload") {
+        const res = await fetch("/api/planning/v3/news/alerts/rules", { method: "GET", cache: "no-store", credentials: "same-origin", headers: { "x-requested-with": "XMLHttpRequest" } });
+        const payload = await res.json();
+        if (!res.ok || !payload.ok) throw new Error("불러오기 실패");
+        applyAlertRulesResponse(payload);
+        setAlertRulesIoSummary("최신 상태를 불러왔습니다.");
+      } else {
+        const parsed = parseAlertRuleOverridesJson(alertRulesJson);
+        if (parsed.error) throw new Error(parsed.error);
+        const payload = withDevCsrf({ rules: parsed.rules });
+        if (!payload.csrf && csrf) payload.csrf = csrf;
+        const res = await fetch("/api/planning/v3/news/alerts/rules", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json", "x-requested-with": "XMLHttpRequest" }, body: JSON.stringify(payload) });
+        const result = await res.json();
+        if (!res.ok || !result.ok) throw new Error("적용 실패");
+        applyAlertRulesResponse(result);
+        setAlertRulesIoSummary("적용 완료");
+        setNotice("알림 규칙이 적용되었습니다.");
       }
-      applyAlertRulesResponse(result);
-      const overrides = result.data?.overrides?.rules ?? [];
-      const effective = result.data?.effective ?? [];
-      const enabled = effective.filter((row) => row.enabled !== false).length;
-      setAlertRulesIoSummary(`현재 적용값 불러오기 완료: 오버라이드 ${overrides.length}개 · 활성 규칙 ${enabled}/${effective.length}개`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "알림 규칙을 불러오지 못했습니다.";
-      setErrorMessage(message);
-      setAlertRulesLoadError(message);
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "알림 규칙 작업 오류");
     } finally {
       setAlertRulesPhase("idle");
     }
-  }
-
-  async function handleReloadAlertRules() {
-    if (alertRulesDirty) {
-      setErrorMessage("알림 규칙에 미적용 변경이 있습니다. 적용하거나 되돌린 뒤 적용값 다시 불러오기를 실행해 주세요.");
-      return;
-    }
-    setAlertRulesPhase("reloading");
-    setErrorMessage("");
-    setNotice("");
-    setAlertRulesIoSummary("");
-    try {
-      const response = await fetch("/api/planning/v3/news/alerts/rules", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: { "x-requested-with": "XMLHttpRequest" },
-      });
-      const result = (await response.json().catch(() => null)) as AlertRulesGetResponse | null;
-      if (!response.ok || result?.ok !== true) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
-      }
-      applyAlertRulesResponse(result);
-      setAlertRulesIoSummary("알림 규칙 현재 적용값을 다시 불러왔습니다.");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "알림 규칙을 불러오지 못했습니다.";
-      setErrorMessage(message);
-      setAlertRulesLoadError(message);
-    } finally {
-      setAlertRulesPhase("idle");
-    }
-  }
-
-  async function handleApplyAlertRules() {
-    if (alertRulesLoadError) {
-      setErrorMessage("알림 규칙을 먼저 다시 불러온 뒤 적용해 주세요.");
-      return;
-    }
-    if (!alertRulesDirty) {
-      setErrorMessage("적용할 알림 규칙 변경이 없습니다.");
-      return;
-    }
-    setAlertRulesPhase("applying");
-    setErrorMessage("");
-    setNotice("");
-    setAlertRulesIoSummary("");
-    try {
-      const parsed = parseAlertRuleOverridesJson(alertRulesJson);
-      if (parsed.error) {
-        throw new Error(parsed.error);
-      }
-      const payload = withDevCsrf({ rules: parsed.rules });
-      if (!payload.csrf && asString(csrf)) payload.csrf = asString(csrf);
-
-      const response = await fetch("/api/planning/v3/news/alerts/rules", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: {
-          "content-type": "application/json",
-          "x-requested-with": "XMLHttpRequest",
-        },
-        body: JSON.stringify(payload),
-      });
-      const result = (await response.json().catch(() => null)) as AlertRulesPostResponse | null;
-      if (!response.ok || result?.ok !== true || !result.data) {
-        throw new Error(result?.error?.message ?? `HTTP ${response.status}`);
-      }
-      applyAlertRulesResponse(result);
-      const overrides = result.data.overrides?.rules ?? [];
-      const effective = result.data.effective ?? [];
-      const enabled = effective.filter((row) => row.enabled !== false).length;
-      setAlertRulesIoSummary(`적용 완료: 오버라이드 ${overrides.length}개 · 활성 규칙 ${enabled}/${effective.length}개`);
-      setNotice("알림 규칙을 적용했습니다. 이 변경은 메인 저장과 별도로 반영됩니다.");
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "알림 규칙 적용에 실패했습니다.");
-    } finally {
-      setAlertRulesPhase("idle");
-    }
-  }
-
-  function handleToggleAlertRuleEnabled(rule: AlertRuleRow, nextEnabled: boolean) {
-    const parsed = parseAlertRuleOverridesJson(alertRulesJson);
-    if (parsed.error) {
-      setErrorMessage(parsed.error);
-      return;
-    }
-    setErrorMessage("");
-    setAlertRulesIoSummary("");
-    const defaultRule = alertRuleDefaultsById.get(rule.id) ?? rule;
-    const next = setAlertRuleEnabledOverride(parsed.rules, defaultRule, nextEnabled);
-    setAlertRulesJson(`${JSON.stringify(next, null, 2)}\n`);
-  }
-
-  function handleEditAlertRule(rule: AlertRuleRow, patch: Partial<AlertRuleOverride>) {
-    const parsed = parseAlertRuleOverridesJson(alertRulesJson);
-    if (parsed.error) {
-      setErrorMessage(parsed.error);
-      return;
-    }
-    setErrorMessage("");
-    setAlertRulesIoSummary("");
-    const defaultRule = alertRuleDefaultsById.get(rule.id) ?? rule;
-    const next = setAlertRuleOverrideFields(parsed.rules, defaultRule, patch);
-    setAlertRulesJson(`${JSON.stringify(next, null, 2)}\n`);
-  }
-
-  function handleResetAlertRule(ruleId: string) {
-    const parsed = parseAlertRuleOverridesJson(alertRulesJson);
-    if (parsed.error) {
-      setErrorMessage(parsed.error);
-      return;
-    }
-    setErrorMessage("");
-    setAlertRulesIoSummary("");
-    const next = clearAlertRuleOverride(parsed.rules, ruleId);
-    setAlertRulesJson(`${JSON.stringify(next, null, 2)}\n`);
   }
 
   return (
     <PageShell>
-      <div className="space-y-5">
+      <div className="space-y-8">
         <ReportHeroCard
           kicker="Signal Settings"
-          title="뉴스 기준 설정"
-          description="먼저 내 상황 프로필을 입력하고, 필요할 때만 소스와 키워드를 조정하세요. JSON import/export는 고급 관리로 분리했습니다."
+          title="뉴스 및 알림 설정"
+          description="구독할 뉴스 소스를 관리하거나 관심 토픽을 설정하여 나만의 재무 브리핑을 최적화하세요. 프로필을 상세히 입력할수록 분석이 정확해집니다."
           action={(
-            <>
-              <Link href="/planning/v3/news" className={reportHeroActionLinkClassName}>
-                Digest로 돌아가기
-              </Link>
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 disabled={saving || loading || !canSaveSettings}
                 onClick={() => { void handleSave(); }}
-                className={`${reportHeroPrimaryActionClassName} disabled:cursor-not-allowed disabled:opacity-60`}
+                className={cn(
+                  reportHeroPrimaryActionClassName,
+                  "disabled:opacity-60 transition-colors bg-emerald-600 hover:bg-emerald-500 border-emerald-500/50"
+                )}
               >
-                {saving ? "저장 중..." : "뉴스 기준/내 상황 저장"}
+                {saving ? "저장 중..." : "설정 저장"}
               </button>
-            </>
+            </div>
           )}
         >
-          <p className="text-xs text-white/60">뉴스 기준 저장 시각: {formatDateTime(updatedAt)} · 내 상황 저장 시각: {formatDateTime(exposureUpdatedAt)} · 알림 규칙 적용 시각: {formatDateTime(alertRulesUpdatedAt)}</p>
-          <p className="text-xs font-semibold text-white/80">{newsSettingsStatusText}</p>
-          <ReportHeroStatGrid>
-            <ReportHeroStatCard label="활성 소스" value={`${activeSourceCount}/${sources.length || 0}`} description="현재 반영되는 뉴스 소스 수" />
-            <ReportHeroStatCard label="토픽 조정" value={`${overriddenTopicCount}개`} description="기본 키워드와 다르게 조정한 토픽" />
-            <ReportHeroStatCard label="내 상황 입력" value={`${exposureCompletionCount}/10`} description="개인화 영향 계산에 쓰는 항목" />
-            <ReportHeroStatCard label="사용 지표" value={`${enabledIndicatorCount}개`} description="카탈로그상 활성 상태" />
-          </ReportHeroStatGrid>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <a href="#news-settings-exposure" className={reportHeroAnchorLinkClassName}>내 상황 프로필</a>
-            <a href="#news-settings-sources" className={reportHeroAnchorLinkClassName}>소스 우선순위</a>
-            <a href="#news-settings-topics" className={reportHeroAnchorLinkClassName}>토픽 키워드</a>
-            <a href="#news-settings-alert-rules" className={reportHeroAnchorLinkClassName}>알림 규칙</a>
-            <a href="#news-settings-advanced" className={reportHeroAnchorLinkClassName}>고급 관리</a>
+          <NewsNavigation />
+
+          <div className="mb-8 rounded-3xl bg-emerald-500/10 p-5 border border-emerald-500/20 backdrop-blur-sm">
+            <div className="flex items-start gap-3">
+              <div className="mt-1 h-2 w-2 flex-none animate-pulse rounded-full bg-emerald-400" />
+              <p className="text-sm font-bold text-emerald-50 leading-relaxed tracking-tight">
+                {newsSettingsStatusText}
+              </p>
+            </div>
           </div>
-          {notice ? <p className="text-xs font-semibold text-emerald-300">{notice}</p> : null}
-          {errorMessage ? <p className="text-xs font-semibold text-rose-300">{errorMessage}</p> : null}
+
+          <ReportHeroStatGrid className="xl:grid-cols-4">
+            <ReportHeroStatCard
+              label="활성 소스"
+              value={`${activeSourceCount}/${sources.length}`}
+              description="반영 중인 뉴스 미디어 수"
+            />
+            <ReportHeroStatCard
+              label="토픽 최적화"
+              value={`${overriddenTopicCount}개`}
+              description="커스텀 키워드 적용 중"
+            />
+            <ReportHeroStatCard
+              label="프로필 완성도"
+              value={`${exposureCompletionCount}/10`}
+              description="개인화 영향 분석 지표"
+            />
+            <ReportHeroStatCard
+              label="지표 카탈로그"
+              value={`${enabledIndicatorCount}개`}
+              description="추적 중인 활성 지표 수"
+            />
+          </ReportHeroStatGrid>
+
+          <div className="mt-8 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
+            <span className="text-white/40 mr-2">Quick Navigation</span>
+            <a href="#news-settings-exposure" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>상황 프로필</a>
+            <a href="#news-settings-sources" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>뉴스 소스</a>
+            <a href="#news-settings-topics" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>관심 토픽</a>
+            <a href="#news-settings-alert-rules" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>알림 규칙</a>
+            <a href="#news-settings-advanced" className={cn(reportHeroAnchorLinkClassName, "bg-white/10 hover:bg-white/20 px-3 py-1 rounded-full transition-all")}>고급 설정</a>
+          </div>
+
+          {notice || errorMessage ? (
+            <div className="mt-6 rounded-2xl bg-black/20 p-4 border border-white/5">
+              {notice ? <p className="text-xs font-bold text-emerald-400 flex items-center gap-2"><span>✅</span> {notice}</p> : null}
+              {errorMessage ? <p className="text-xs font-bold text-rose-400 flex items-center gap-2"><span>❌</span> {errorMessage}</p> : null}
+            </div>
+          ) : null}
         </ReportHeroCard>
 
-        <Card id="news-settings-exposure" className="space-y-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">내 상황 프로필</h2>
-            <p className="text-xs text-slate-500">먼저 내 상황을 입력하면 뉴스 요약과 시나리오 우선순위가 더 개인화됩니다. 모르는 항목은 미입력으로 두어도 됩니다.</p>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">부채 보유</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.hasDebt} onChange={(event) => updateExposure("hasDebt", event.target.value as ExposureDraft["hasDebt"])}>
-                <option value="unknown">미입력</option>
-                <option value="yes">있음</option>
-                <option value="no">없음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">금리 유형</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.rateType} onChange={(event) => updateExposure("rateType", event.target.value as ExposureDraft["rateType"])}>
-                <option value="unknown">미입력</option>
-                <option value="fixed">고정</option>
-                <option value="variable">변동</option>
-                <option value="mixed">혼합</option>
-                <option value="none">해당 없음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">재조정 민감도</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.repricingHorizon} onChange={(event) => updateExposure("repricingHorizon", event.target.value as ExposureDraft["repricingHorizon"])}>
-                <option value="unknown">미입력</option>
-                <option value="short">단기</option>
-                <option value="medium">중기</option>
-                <option value="long">장기</option>
-                <option value="none">해당 없음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">필수지출 비중</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.essentialExpenseShare} onChange={(event) => updateExposure("essentialExpenseShare", event.target.value as ExposureDraft["essentialExpenseShare"])}>
-                <option value="unknown">미입력</option>
-                <option value="low">낮음</option>
-                <option value="medium">중간</option>
-                <option value="high">높음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">주거비 비중</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.rentOrMortgageShare} onChange={(event) => updateExposure("rentOrMortgageShare", event.target.value as ExposureDraft["rentOrMortgageShare"])}>
-                <option value="unknown">미입력</option>
-                <option value="low">낮음</option>
-                <option value="medium">중간</option>
-                <option value="high">높음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">에너지비 비중</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.energyShare} onChange={(event) => updateExposure("energyShare", event.target.value as ExposureDraft["energyShare"])}>
-                <option value="unknown">미입력</option>
-                <option value="low">낮음</option>
-                <option value="medium">중간</option>
-                <option value="high">높음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">해외소비 노출</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.foreignConsumption} onChange={(event) => updateExposure("foreignConsumption", event.target.value as ExposureDraft["foreignConsumption"])}>
-                <option value="unknown">미입력</option>
-                <option value="low">낮음</option>
-                <option value="medium">중간</option>
-                <option value="high">높음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">외화소득 노출</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.foreignIncome} onChange={(event) => updateExposure("foreignIncome", event.target.value as ExposureDraft["foreignIncome"])}>
-                <option value="unknown">미입력</option>
-                <option value="low">낮음</option>
-                <option value="medium">중간</option>
-                <option value="high">높음</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">소득 안정성</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.incomeStability} onChange={(event) => updateExposure("incomeStability", event.target.value as ExposureDraft["incomeStability"])}>
-                <option value="unknown">미입력</option>
-                <option value="stable">안정</option>
-                <option value="moderate">보통</option>
-                <option value="fragile">취약</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-xs text-slate-700">
-              <span className="font-semibold">현금완충력</span>
-              <select className="w-full rounded border border-slate-300 px-2 py-1" value={exposureDraft.monthsOfCashBuffer} onChange={(event) => updateExposure("monthsOfCashBuffer", event.target.value as ExposureDraft["monthsOfCashBuffer"])}>
-                <option value="unknown">미입력</option>
-                <option value="low">낮음</option>
-                <option value="medium">중간</option>
-                <option value="high">높음</option>
-              </select>
-            </label>
+        <Card id="news-settings-exposure" className="rounded-[2.5rem] p-8 shadow-sm">
+          <SubSectionHeader title="내 상황 프로필" description="입력할수록 뉴스 해석과 시나리오 영향 분석이 정확해집니다." />
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              { label: "부채 보유", key: "hasDebt", options: [["unknown", "미입력"], ["yes", "있음"], ["no", "없음"]] },
+              { label: "금리 유형", key: "rateType", options: [["unknown", "미입력"], ["fixed", "고정"], ["variable", "변동"], ["mixed", "혼합"], ["none", "해당 없음"]] },
+              { label: "재조정 민감도", key: "repricingHorizon", options: [["unknown", "미입력"], ["short", "단기"], ["medium", "중기"], ["long", "장기"], ["none", "해당 없음"]] },
+              { label: "필수지출 비중", key: "essentialExpenseShare", options: [["unknown", "미입력"], ["low", "낮음"], ["medium", "중간"], ["high", "높음"]] },
+              { label: "주거비 비중", key: "rentOrMortgageShare", options: [["unknown", "미입력"], ["low", "낮음"], ["medium", "중간"], ["high", "높음"]] },
+              { label: "소득 안정성", key: "incomeStability", options: [["unknown", "미입력"], ["stable", "안정"], ["moderate", "보통"], ["fragile", "취약"]] },
+            ].map((field) => (
+              <label key={field.key} className="flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{field.label}</span>
+                <select
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700 focus:border-emerald-500 outline-none transition-all"
+                  value={exposureDraft[field.key as keyof ExposureDraft]}
+                  onChange={(e) => updateExposure(field.key as keyof ExposureDraft, e.target.value as ExposureDraft[keyof ExposureDraft])}
+                >
+                  {field.options.map(([val, lab]) => <option key={val} value={val}>{lab}</option>)}
+                </select>
+              </label>
+            ))}
           </div>
         </Card>
 
-        <Card id="news-settings-sources" className="space-y-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">소스 우선순위</h2>
-            <p className="text-xs text-slate-500">자주 참고할 출처만 남기고, 신뢰도가 높다고 보는 소스의 가중치를 조금 더 높게 둘 수 있습니다.</p>
-          </div>
-          {loading ? (
-            <p className="text-sm text-slate-600">불러오는 중...</p>
-          ) : (
-            <div className="space-y-3">
+        <Card id="news-settings-sources" className="rounded-[2.5rem] p-8 shadow-sm">
+          <SubSectionHeader title="소스 우선순위" description="뉴스 소스를 켜고 끄거나, 가중치를 0~3 사이로 조정합니다." />
+          {loading ? <p className="animate-pulse text-sm text-slate-500">불러오는 중...</p> : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {sources.map((row) => (
-                <div key={row.id} className="rounded-lg border border-slate-200 p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-900">{row.name}</p>
-                      <p className="truncate text-xs text-slate-500">{row.feedUrl}</p>
-                      <p className="text-xs text-slate-500">{row.country} · {row.language} · 기본 가중치 {row.defaultWeight}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 text-xs text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={sourceDrafts[row.id]?.enabled ?? row.defaultEnabled}
-                          onChange={(event) => updateSourceEnabled(row.id, event.target.checked)}
-                        />
-                        사용
-                      </label>
-                      <label className="flex items-center gap-2 text-xs text-slate-700">
-                        가중치
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="3"
-                          value={sourceDrafts[row.id]?.weight ?? String(row.defaultWeight)}
-                          onChange={(event) => updateSourceWeight(row.id, event.target.value)}
-                          className="w-20 rounded border border-slate-300 px-2 py-1 text-xs"
-                        />
-                      </label>
-                    </div>
+                <div key={row.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-emerald-200 transition-all">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-black text-slate-900 tracking-tight">{row.name}</p>
+                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked={sourceDrafts[row.id]?.enabled ?? row.defaultEnabled} onChange={(e) => updateSourceEnabled(row.id, e.target.checked)} />
                   </div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight mb-4">{row.country} · {row.language} · DEFAULT {row.defaultWeight}</p>
+                  <label className="flex items-center justify-between border-t border-slate-50 pt-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">가중치</span>
+                    <input type="number" step="0.1" min="0" max="3" value={sourceDrafts[row.id]?.weight ?? String(row.defaultWeight)} onChange={(e) => updateSourceWeight(row.id, e.target.value)} className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:border-emerald-500" />
+                  </label>
                 </div>
               ))}
             </div>
           )}
         </Card>
 
-        <Card id="news-settings-topics" className="space-y-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">토픽 키워드 조정</h2>
-            <p className="text-xs text-slate-500">줄바꿈 또는 쉼표로 키워드를 구분하세요. 비워두면 기본 키워드를 그대로 사용합니다.</p>
+        <Card id="news-settings-topics" className="rounded-[2.5rem] p-8 shadow-sm">
+          <SubSectionHeader title="토픽 키워드" description="기본 키워드를 대체하고 싶을 때만 입력하세요 (줄바꿈/쉼표 구분)." />
+          <div className="grid gap-6 md:grid-cols-2">
+            {topics.map((row) => (
+              <div key={row.id} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+                <p className="text-base font-black text-slate-900 tracking-tight mb-2">{row.label}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-4 truncate">기본: {row.defaultKeywords.join(", ")}</p>
+                <textarea value={topicDrafts[row.id]?.keywordsText ?? ""} onChange={(e) => updateTopicKeywords(row.id, e.target.value)} placeholder="기본 키워드 대신 사용할 단어들..." rows={3} className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold text-slate-700 focus:border-emerald-500 outline-none transition-all" />
+              </div>
+            ))}
           </div>
-          {loading ? (
-            <p className="text-sm text-slate-600">불러오는 중...</p>
-          ) : (
-            <div className="space-y-4">
-              {topics.map((row) => (
-                <div key={row.id} className="rounded-lg border border-slate-200 p-3">
-                  <p className="text-sm font-bold text-slate-900">{row.label}</p>
-                  <p className="mt-1 text-xs text-slate-500">기본 키워드: {row.defaultKeywords.join(", ")}</p>
-                  <textarea
-                    value={topicDrafts[row.id]?.keywordsText ?? ""}
-                    onChange={(event) => updateTopicKeywords(row.id, event.target.value)}
-                    placeholder="로컬 오버라이드 키워드 입력"
-                    rows={4}
-                    className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-xs text-slate-700"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
         </Card>
 
-        <Card id="news-settings-advanced" className="space-y-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">고급 관리</h2>
-            <p className="text-xs text-slate-500">JSON import/export와 지표 스펙 편집은 필요할 때만 펼쳐서 사용하세요.</p>
-          </div>
+        <Card id="news-settings-advanced" className="rounded-[2.5rem] p-8 shadow-sm border border-slate-200">
+          <SubSectionHeader title="고급 관리 및 알림 규칙" description="알림 조건 오버라이드 및 소스/지표 JSON 대량 관리를 처리합니다." />
 
-          <details
-            id="news-settings-alert-rules"
-            className="rounded-xl border border-slate-200 p-3"
-            open={shouldOpenAlertRulesPanel(alertRuleDraftEffective.length, alertRulesLoadError)}
-          >
-            <summary className="cursor-pointer text-sm font-semibold text-slate-900">알림 규칙 오버라이드</summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-xs text-slate-500">먼저 아래 토글과 빠른 조정으로 규칙 조건을 바꾸고, 구조를 더 바꿔야 할 때만 아래 JSON 오버라이드를 직접 수정하세요.</p>
-              <p className="text-xs text-slate-500">현재 오버라이드 {alertRuleOverridesCount}개 · 활성 규칙 {enabledAlertRuleCount}/{alertRuleDraftEffective.length}개 · 마지막 적용 {formatDateTime(alertRulesUpdatedAt)}</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => { void handleExportAlertRules(); }}
-                  disabled={loading || initialLoadFailed || !!alertRulesLoadError || alertRulesPhase !== "idle" || alertRulesDirty}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                >
-                  {loading || alertRulesPhase === "reloading" ? "불러오는 중..." : "현재 적용값 불러오기"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleApplyAlertRules(); }}
-                  disabled={loading || initialLoadFailed || alertRulesPhase !== "idle" || !!alertRulesLoadError || !!parsedAlertRulesDraft.error || !alertRulesDirty}
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  {alertRulesPhase === "applying" ? "알림 규칙 적용 중..." : "알림 규칙 적용"}
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                <span className="font-semibold text-slate-600">적용 뒤 결과 확인</span>
-                <Link href="/planning/v3/news/alerts" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>
-                  알림함 확인
-                </Link>
-                <Link href="/planning/v3/news" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>
-                  Digest 확인
-                </Link>
-              </div>
-              <p className={`text-xs font-semibold ${alertRulesDirty ? "text-amber-700" : "text-slate-500"}`}>
-                {alertRulesSectionStatusText}
-              </p>
-              <p className="text-xs text-slate-500">마지막 적용 시각: {formatDateTime(alertRulesUpdatedAt)}</p>
-              {parsedAlertRulesDraft.error ? <p className="text-xs font-semibold text-amber-700">{parsedAlertRulesDraft.error}</p> : null}
-              {alertRulesLoadError ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs font-semibold text-amber-900">알림 규칙을 지금 불러오지 못했습니다.</p>
-                  <p className="mt-1 text-xs text-amber-800">규칙이 비어 보일 수 있으니 다시 불러온 뒤 조정해 주세요.</p>
-                  <p className="mt-1 text-xs text-amber-700">{alertRulesLoadError}</p>
-                  <button
-                    type="button"
-                    onClick={() => { void handleReloadAlertRules(); }}
-                    disabled={alertRulesPhase !== "idle" || alertRulesDirty}
-                    className="mt-3 rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-900 disabled:opacity-60"
-                  >
-                    적용값 다시 불러오기
-                  </button>
+          <details id="news-settings-alert-rules" className="group rounded-[2rem] border border-slate-200 bg-slate-50/50 p-6 mb-6" open={shouldOpenAlertRulesPanel(alertRuleDraftEffective.length, "")}>
+            <summary className="cursor-pointer list-none flex items-center justify-between">
+              <div className="flex items-center gap-3"><span className="transition-transform group-open:rotate-90 text-slate-400 text-xs">▶</span><p className="text-sm font-black text-slate-900 uppercase tracking-widest">알림 규칙 오버라이드 (JSON)</p></div>
+              <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded-full tabular-nums">OVERRIDE: {alertRuleOverridesCount}</span>
+            </summary>
+            <div className="mt-6 space-y-6">
+              <div className="rounded-xl border border-slate-200 bg-white p-5">
+                <div className="flex flex-wrap items-center gap-3 mb-4">
+                  <button type="button" onClick={() => void handleAlertRulesAction("reload")} disabled={alertRulesPhase !== "idle" || alertRulesDirty} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60 shadow-sm transition-all"> {alertRulesPhase === "reloading" ? "로딩 중..." : "적용값 불러오기"} </button>
+                  <button type="button" onClick={() => void handleAlertRulesAction("apply")} disabled={alertRulesPhase !== "idle" || !alertRulesDirty} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white hover:bg-slate-800 disabled:opacity-60 shadow-sm transition-all"> {alertRulesPhase === "applying" ? "적용 중..." : "규칙 적용"} </button>
                 </div>
-              ) : (
-                <>
-                  <textarea
-                    value={alertRulesJson}
-                    onChange={(event) => setAlertRulesJson(event.target.value)}
-                    rows={8}
-                    className="w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs text-slate-700"
-                    placeholder="Alert rule override JSON 배열"
-                  />
-                  {alertRulesIoSummary ? <p className="text-xs font-semibold text-emerald-700">{alertRulesIoSummary}</p> : null}
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold text-slate-700">현재 유효 규칙 ({alertRuleDraftEffective.length})</p>
-                    {alertRuleDraftEffective.length < 1 ? (
-                      <p className="text-xs text-slate-500">표시할 알림 규칙이 없습니다. 내보내기로 현재 상태를 다시 불러올 수 있습니다.</p>
-                    ) : (
-                      <div className="max-h-72 overflow-auto rounded border border-slate-200">
-                        <table className="min-w-full text-left text-xs">
-                          <thead className="sticky top-0 bg-slate-100 text-slate-700">
-                            <tr>
-                              <th className="px-2 py-1">규칙</th>
-                              <th className="px-2 py-1">유형</th>
-                              <th className="px-2 py-1">현재 조건</th>
-                              <th className="px-2 py-1">빠른 조정</th>
-                              <th className="px-2 py-1">오버라이드</th>
-                              <th className="px-2 py-1">사용</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {alertRuleDraftEffective.map((row) => {
-                              const hasOverride = parsedAlertRulesDraft.rules.some((override) => override.id === row.id);
-                              const targetCandidates = row.targetType === "item"
-                                ? alertRuleItemCandidates
-                                : row.targetType === "scenario"
-                                  ? alertRuleScenarioCandidates
-                                  : [];
-                              const matchedTargetCandidate = targetCandidates.find((candidate) => candidate.id === row.targetId) ?? null;
-                              return (
-                              <tr key={`alert-rule-${row.id}`} className="border-t border-slate-200 text-slate-700">
-                            <td className="px-2 py-1 align-top">
-                              <p className="font-semibold text-slate-900">{asString(row.name) || asString(row.id) || "-"}</p>
-                              <p className="text-[11px] text-slate-500">{asString(row.id) || "-"}</p>
-                            </td>
-                            <td className="px-2 py-1 align-top">{formatAlertRuleKind(row.kind)}</td>
-                            <td className="px-2 py-1 align-top">{formatAlertRuleSummary(row)}</td>
-                            <td className="px-2 py-1 align-top">
-                              <div className="flex min-w-60 flex-col gap-2">
-                                <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                  <span>중요도</span>
-                                  <select
-                                    value={row.level ?? "medium"}
-                                    onChange={(event) => handleEditAlertRule(row, {
-                                      level: event.target.value as AlertRuleLevel,
-                                    })}
-                                    className="min-w-28 rounded border border-slate-300 px-2 py-1 text-xs"
-                                  >
-                                    <option value="high">높음</option>
-                                    <option value="medium">중간</option>
-                                    <option value="low">낮음</option>
-                                  </select>
-                                </label>
-                                {row.kind === "topic_burst" ? (
-                                  <>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>토픽 범위</span>
-                                      <select
-                                        value={row.topicId ?? "*"}
-                                        onChange={(event) => handleEditAlertRule(row, {
-                                          topicId: event.target.value,
-                                        })}
-                                        className="min-w-28 rounded border border-slate-300 px-2 py-1 text-xs"
-                                      >
-                                        <option value="*">전체 토픽</option>
-                                        {topics.map((topic) => (
-                                          <option key={`alert-rule-topic-${topic.id}`} value={topic.id}>
-                                            {topic.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>급증 단계</span>
-                                      <select
-                                        value={row.minBurstLevel ?? "중"}
-                                        onChange={(event) => handleEditAlertRule(row, {
-                                          minBurstLevel: event.target.value as "중" | "상",
-                                        })}
-                                        className="min-w-28 rounded border border-slate-300 px-2 py-1 text-xs"
-                                      >
-                                        <option value="중">중 이상</option>
-                                        <option value="상">상만</option>
-                                      </select>
-                                    </label>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>당일 건수</span>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="1"
-                                        value={Number.isFinite(row.minTodayCount) ? String(row.minTodayCount) : ""}
-                                        onChange={(event) => {
-                                          const nextValue = event.target.value.trim();
-                                          if (!nextValue) {
-                                            handleEditAlertRule(row, { minTodayCount: undefined });
-                                            return;
-                                          }
-                                          const parsed = Number(nextValue);
-                                          if (!Number.isInteger(parsed) || parsed < 0) return;
-                                          handleEditAlertRule(row, { minTodayCount: parsed });
-                                        }}
-                                        className="w-24 rounded border border-slate-300 px-2 py-1 text-xs"
-                                      />
-                                    </label>
-                                  </>
-                                ) : null}
-                                {row.kind === "indicator" ? (
-                                  <>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>지표 series</span>
-                                      <div className="flex min-w-0 flex-1 justify-end">
-                                        <input
-                                          type="text"
-                                          list={`alert-rule-series-${row.id}`}
-                                          value={row.seriesId ?? ""}
-                                          onChange={(event) => {
-                                            const nextValue = event.target.value.trim();
-                                            handleEditAlertRule(row, { seriesId: nextValue || undefined });
-                                          }}
-                                          className="w-36 rounded border border-slate-300 px-2 py-1 text-xs"
-                                        />
-                                        <datalist id={`alert-rule-series-${row.id}`}>
-                                          {indicatorCatalog.map((series) => (
-                                            <option key={`alert-rule-series-option-${row.id}-${series.id}`} value={series.id}>
-                                              {series.displayLabel}
-                                            </option>
-                                          ))}
-                                        </datalist>
-                                      </div>
-                                    </label>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>지표 보기</span>
-                                      <select
-                                        value={row.metric ?? "pctChange"}
-                                        onChange={(event) => handleEditAlertRule(row, {
-                                          metric: event.target.value as AlertRuleMetric,
-                                        })}
-                                        className="min-w-28 rounded border border-slate-300 px-2 py-1 text-xs"
-                                      >
-                                        <option value="pctChange">변화율</option>
-                                        <option value="zscore">표준점수</option>
-                                        <option value="regime">추세</option>
-                                      </select>
-                                    </label>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>판정 조건</span>
-                                      <select
-                                        value={row.condition ?? "unknown"}
-                                        onChange={(event) => handleEditAlertRule(row, {
-                                          condition: event.target.value as AlertRuleCondition,
-                                        })}
-                                        className="min-w-28 rounded border border-slate-300 px-2 py-1 text-xs"
-                                      >
-                                        <option value="up">상승</option>
-                                        <option value="down">하락</option>
-                                        <option value="high">고점권</option>
-                                        <option value="low">저점권</option>
-                                        <option value="flat">횡보</option>
-                                        <option value="unknown">데이터 부족</option>
-                                      </select>
-                                    </label>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>비교 기간</span>
-                                      <input
-                                        type="number"
-                                        min="1"
-                                        max="365"
-                                        step="1"
-                                        value={Number.isFinite(row.window) ? String(row.window) : ""}
-                                        onChange={(event) => {
-                                          const nextValue = event.target.value.trim();
-                                          if (!nextValue) {
-                                            handleEditAlertRule(row, { window: undefined });
-                                            return;
-                                          }
-                                          const parsed = Number(nextValue);
-                                          if (!Number.isInteger(parsed) || parsed < 1 || parsed > 365) return;
-                                          handleEditAlertRule(row, { window: parsed });
-                                        }}
-                                        className="w-24 rounded border border-slate-300 px-2 py-1 text-xs"
-                                      />
-                                    </label>
-                                    {row.metric !== "regime" || Number.isFinite(row.threshold) ? (
-                                      <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                        <span>기준값</span>
-                                        <input
-                                          type="number"
-                                          step="0.1"
-                                          value={Number.isFinite(row.threshold) ? String(row.threshold) : ""}
-                                          onChange={(event) => {
-                                            const nextValue = event.target.value.trim();
-                                            if (!nextValue) {
-                                              handleEditAlertRule(row, { threshold: undefined });
-                                              return;
-                                            }
-                                            const parsed = Number(nextValue);
-                                            if (!Number.isFinite(parsed)) return;
-                                            handleEditAlertRule(row, { threshold: parsed });
-                                          }}
-                                          className="w-24 rounded border border-slate-300 px-2 py-1 text-xs"
-                                        />
-                                      </label>
-                                    ) : null}
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>연결 대상</span>
-                                      <select
-                                        value={row.targetType ?? "topic"}
-                                        onChange={(event) => handleEditAlertRule(row, {
-                                          targetType: event.target.value as AlertRuleTargetType,
-                                        })}
-                                        className="min-w-28 rounded border border-slate-300 px-2 py-1 text-xs"
-                                      >
-                                        <option value="topic">토픽</option>
-                                        <option value="scenario">시나리오</option>
-                                        <option value="series">지표</option>
-                                        <option value="item">기사</option>
-                                      </select>
-                                    </label>
-                                    <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                      <span>대상 ID</span>
-                                      <div className="flex min-w-0 flex-1 justify-end">
-                                        <input
-                                          type="text"
-                                          list={`alert-rule-target-${row.id}`}
-                                          value={row.targetId ?? ""}
-                                          onChange={(event) => {
-                                            const nextValue = event.target.value.trim();
-                                            handleEditAlertRule(row, { targetId: nextValue || undefined });
-                                          }}
-                                          className="w-36 rounded border border-slate-300 px-2 py-1 text-xs"
-                                          placeholder={row.targetType === "scenario"
-                                            ? "예: Bear"
-                                            : row.targetType === "topic"
-                                              ? "예: fx"
-                                              : row.targetType === "item"
-                                                ? "예: https://news.example/item"
-                                                : ""}
-                                        />
-                                        <datalist id={`alert-rule-target-${row.id}`}>
-                                          {getAlertRuleTargetIdSuggestions(row.targetType, topics, indicatorCatalog, {
-                                            scenarioCandidates: alertRuleScenarioCandidates,
-                                            itemCandidates: alertRuleItemCandidates,
-                                          }).map((targetId) => (
-                                            <option
-                                              key={`alert-rule-target-option-${row.id}-${targetId}`}
-                                              value={targetId}
-                                              label={
-                                                targetCandidates.find((candidate) => candidate.id === targetId)?.label
-                                                ?? targetId
-                                              }
-                                            />
-                                          ))}
-                                        </datalist>
-                                      </div>
-                                    </label>
-                                    {row.targetType === "item" || row.targetType === "scenario" ? (
-                                      <label className="flex items-center justify-between gap-2 text-[11px] text-slate-700">
-                                        <span>{row.targetType === "item" ? "후보 선택" : "시나리오 후보"}</span>
-                                        <select
-                                          value={matchedTargetCandidate?.id ?? ""}
-                                          onChange={(event) => {
-                                            const nextValue = event.target.value.trim();
-                                            handleEditAlertRule(row, { targetId: nextValue || undefined });
-                                          }}
-                                          className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-xs"
-                                        >
-                                          <option value="">
-                                            {targetCandidates.length > 0 ? "직접 입력 유지" : "현재 후보 없음"}
-                                          </option>
-                                          {targetCandidates.map((candidate) => (
-                                            <option key={`alert-rule-target-picker-${row.id}-${candidate.id}`} value={candidate.id}>
-                                              {candidate.label}
-                                            </option>
-                                          ))}
-                                        </select>
-                                      </label>
-                                    ) : null}
-                                    {row.targetType === "item" || row.targetType === "scenario" ? (
-                                      <p className="text-[10px] text-slate-500">
-                                        {matchedTargetCandidate
-                                          ? `${row.targetType === "item" ? "선택 기사" : "선택 시나리오"}: ${matchedTargetCandidate.label}${matchedTargetCandidate.detail ? ` · ${matchedTargetCandidate.detail}` : ""}`
-                                          : getAlertRuleTargetPickerHint(row.targetType, targetCandidates.length)}
-                                      </p>
-                                    ) : null}
-                                  </>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td className="px-2 py-1 align-top">
-                              {hasOverride ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleResetAlertRule(row.id)}
-                                  className="rounded border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-700"
-                                >
-                                  기본값 복원
-                                </button>
-                              ) : (
-                                "-"
-                              )}
-                            </td>
-                            <td className="px-2 py-1 align-top">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={row.enabled !== false}
-                                  onChange={(event) => handleToggleAlertRuleEnabled(row, event.target.checked)}
-                                />
-                                <span>{row.enabled === false ? "비활성" : "활성"}</span>
-                              </label>
-                            </td>
-                              </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          </details>
-
-          <details className="rounded-xl border border-slate-200 p-3">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-900">RSS Sources Import / Export</summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-xs text-slate-500">JSON 배열 형식: <code>{"[{\"url\":\"https://example.com/rss.xml\",\"weight\":1.2,\"enabled\":true}]"}</code> · 본문/아이템 데이터는 포함되지 않습니다.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => { void handleExportSources(); }}
-                  disabled={sourcesIoLoading}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                >
-                  내보내기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleImportSources("dry_run"); }}
-                  disabled={sourcesIoLoading}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                >
-                  Dry-run
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleImportSources("apply"); }}
-                  disabled={sourcesIoLoading}
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  적용
-                </button>
+                <div className="flex flex-wrap items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest"> <span className="text-slate-500">결과 확인:</span> <Link href="/planning/v3/news/alerts" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>알림함 ▶</Link> <Link href="/planning/v3/news" className={ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME}>Digest ▶</Link> </div>
               </div>
-              <textarea
-                value={sourcesJson}
-                onChange={(event) => setSourcesJson(event.target.value)}
-                rows={8}
-                className="w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs text-slate-700"
-                placeholder="RSS source JSON 배열"
-              />
-              {sourcesIoSummary ? <p className="text-xs font-semibold text-emerald-700">{sourcesIoSummary}</p> : null}
-            </div>
-          </details>
-
-          <details id="indicator-series-specs" className="rounded-xl border border-slate-200 p-3" open={indicatorCatalog.length > 0}>
-            <summary className="cursor-pointer text-sm font-semibold text-slate-900">Indicator SeriesSpec Import / Export</summary>
-            <div className="mt-3 space-y-3">
-              <p className="text-xs text-slate-500">series spec만 import/export 하며 키/토큰은 포함되지 않습니다. import는 strict validation + dry-run을 먼저 수행하세요.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => { void handleExportSpecs(); }}
-                  disabled={specsIoLoading}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                >
-                  내보내기
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleImportSpecs("dry_run"); }}
-                  disabled={specsIoLoading}
-                  className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 disabled:opacity-60"
-                >
-                  Dry-run
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleImportSpecs("apply"); }}
-                  disabled={specsIoLoading}
-                  className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                >
-                  적용
-                </button>
-              </div>
-              <textarea
-                value={specsJson}
-                onChange={(event) => setSpecsJson(event.target.value)}
-                rows={10}
-                className="w-full rounded border border-slate-300 px-3 py-2 font-mono text-xs text-slate-700"
-                placeholder="SeriesSpec JSON 배열"
-              />
-              {specsIoSummary ? <p className="text-xs font-semibold text-emerald-700">{specsIoSummary}</p> : null}
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-slate-700">Indicator Catalog ({indicatorCatalog.length})</p>
-                {indicatorCatalog.length < 1 ? (
-                  <p className="text-xs text-slate-500">카탈로그 데이터가 없습니다.</p>
-                ) : (
-                  <div className="max-h-72 overflow-auto rounded border border-slate-200">
-                    <table className="min-w-full text-left text-xs">
-                      <thead className="sticky top-0 bg-slate-100 text-slate-700">
-                        <tr>
-                          <th className="px-2 py-1">Series ID</th>
-                          <th className="px-2 py-1">표시 라벨</th>
-                          <th className="px-2 py-1">카테고리</th>
-                          <th className="px-2 py-1">소스</th>
-                          <th className="px-2 py-1">주기</th>
-                          <th className="px-2 py-1">사용</th>
+              <textarea value={alertRulesJson} onChange={(e) => setAlertRulesJson(e.target.value)} rows={6} className="w-full rounded-2xl border border-slate-200 bg-slate-950 p-5 font-mono text-[11px] text-emerald-400 outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner" placeholder="JSON 오버라이드 입력..." />
+              {alertRulesIoSummary && <p className="text-xs font-bold text-emerald-600">✅ {alertRulesIoSummary}</p>}
+              <div className="space-y-3">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">활성 규칙 리스트 ({alertRuleDraftEffective.length})</p>
+                <div className="max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <table className="min-w-full text-left">
+                    <thead className="sticky top-0 bg-slate-50 border-b border-slate-100"><tr className="text-[10px] font-black uppercase tracking-widest text-slate-400"><th className="px-4 py-3">유형</th><th className="px-4 py-3">조건</th><th className="px-4 py-3 text-center">상태</th></tr></thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {alertRuleDraftEffective.map((row) => (
+                        <tr key={row.id} className="group hover:bg-slate-50/50 transition-colors">
+                          <td className="px-4 py-4"><p className="text-xs font-black text-slate-900">{asString(row.name) || row.id}</p><p className="text-[10px] font-bold text-slate-400 uppercase">{formatAlertRuleKind(row.kind)}</p></td>
+                          <td className="px-4 py-4 text-xs font-medium text-slate-600 leading-relaxed">{formatAlertRuleSummary(row)}</td>
+                          <td className="px-4 py-4 text-center"><span className={cn("inline-block rounded-lg px-2 py-0.5 text-[10px] font-black tabular-nums", row.enabled !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400")}>{row.enabled !== false ? "ACTIVE" : "DISABLED"}</span></td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {indicatorCatalog.map((row) => (
-                          <tr key={`catalog-${row.id}`} className="border-t border-slate-200 text-slate-700">
-                            <td className="px-2 py-1 font-mono">{row.id}</td>
-                            <td className="px-2 py-1">{asString(row.displayLabel) || asString(row.annotation?.label) || asString(row.name)}</td>
-                            <td className="px-2 py-1">{formatIndicatorCategory(row.annotation?.category)}</td>
-                            <td className="px-2 py-1">{asString(row.sourceId)}</td>
-                            <td className="px-2 py-1">{asString(row.frequency)}</td>
-                            <td className="px-2 py-1">{row.enabled === false ? "비활성" : "활성"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </details>
-        </Card>
 
-        <Card className="sticky bottom-4 z-10 border-slate-900 bg-slate-900 text-white shadow-lg">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold">{newsSettingsStatusText}</p>
-              <p className="text-xs text-slate-300">{newsSettingsDetailText}</p>
+          <details className="group rounded-[2rem] border border-slate-200 bg-slate-50/50 p-6">
+            <summary className="cursor-pointer list-none flex items-center justify-between">
+              <div className="flex items-center gap-3"><span className="transition-transform group-open:rotate-90 text-slate-400 text-xs">▶</span><p className="text-sm font-black text-slate-900 uppercase tracking-widest">소스 및 지표 벌크 IO (고급)</p></div>
+            </summary>
+            <div className="mt-6 space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between"><p className="text-xs font-black text-slate-900 uppercase tracking-widest">뉴스 소스 데이터 (JSON)</p></div>
+                <textarea value={sourcesJson} onChange={(e) => setSourcesJson(e.target.value)} rows={4} className="w-full rounded-xl border border-slate-200 bg-slate-950 p-4 font-mono text-[10px] text-sky-400 outline-none shadow-inner" />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "export")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">내보내기</button>
+                  <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "import", "dry_run")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">가져오기 (Dry-run)</button>
+                  <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "import", "apply")} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white hover:bg-slate-800 shadow-sm transition-all">가져오기 (적용)</button>
+                </div>
+                {sourcesIoSummary && <p className="text-[11px] font-bold text-emerald-600">✅ {sourcesIoSummary}</p>}
+              </div>
+              <div className="space-y-4 pt-6 border-t border-slate-200">
+                <div className="flex items-center justify-between"><p className="text-xs font-black text-slate-900 uppercase tracking-widest">지표 Series Specs (JSON)</p></div>
+                <textarea value={specsJson} onChange={(e) => setSpecsJson(e.target.value)} rows={4} className="w-full rounded-xl border border-slate-200 bg-slate-950 p-4 font-mono text-[10px] text-sky-400 outline-none shadow-inner" />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "export")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">내보내기</button>
+                  <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "import", "dry_run")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">가져오기 (Dry-run)</button>
+                  <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "import", "apply")} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white hover:bg-slate-800 shadow-sm transition-all">가져오기 (적용)</button>
+                </div>
+                {specsIoSummary && <p className="text-[11px] font-bold text-emerald-600">✅ {specsIoSummary}</p>}
+              </div>
             </div>
-            <button
-              type="button"
-              disabled={saving || loading || !canSaveSettings}
-              onClick={() => { void handleSave(); }}
-              className="rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? "저장 중..." : "뉴스 기준/내 상황 저장"}
-            </button>
-          </div>
+          </details>
+          <div className="mt-6 p-4 rounded-2xl bg-amber-50 border border-amber-100"><p className="text-xs font-bold text-amber-800 leading-relaxed tabular-nums">알림 규칙 적용 상태: {alertRulesSectionStatusText}</p></div>
         </Card>
       </div>
     </PageShell>

@@ -1,19 +1,17 @@
+"use client";
+
 import { Card } from "@/components/ui/Card";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  reportHeroMetaChipClassName,
   ReportHeroStatCard,
   ReportHeroStatGrid,
-  reportSurfaceDisclosureClassName,
-  reportSurfaceDisclosureSummaryClassName,
-  reportSurfaceDetailClassName,
-  reportSurfacePopoverPanelClassName,
-  reportSurfacePopoverTriggerClassName,
 } from "@/components/ui/ReportTone";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
 import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
 import { type ReportVM } from "../_lib/reportViewModel";
+import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
 
 type Props = {
   vm: ReportVM;
@@ -48,7 +46,7 @@ function stageMessage(vm: ReportVM, id: keyof ReportVM["stage"]["byId"], fallbac
     return stage.errorSummary || "단계 실패로 섹션을 표시할 수 없습니다.";
   }
   if (stage.status === "SKIPPED") {
-    return stage.errorSummary || `단계가 생략되었습니다(${stage.reason ?? "UNKNOWN"}).`;
+    return stage.errorSummary || `단계가 생략되었습니다(${stage.reason ?? "미상"}).`;
   }
   if (stage.status === "RUNNING" || stage.status === "PENDING") {
     return "단계 진행 중입니다.";
@@ -60,17 +58,17 @@ function renderEvidenceValue(value: unknown): string {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value.toLocaleString("ko-KR");
   }
-  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "boolean") return value ? "예" : "아니오";
   if (typeof value === "string") return value;
-  if (value === null) return "null";
+  if (value === null) return "없음";
   return "-";
 }
 
 function guideToneClass(tone: "slate" | "amber" | "rose" | "emerald"): string {
-  if (tone === "rose") return "border-rose-300/40 bg-rose-900/30";
-  if (tone === "amber") return "border-amber-300/40 bg-amber-900/30";
-  if (tone === "emerald") return "border-emerald-300/40 bg-emerald-900/30";
-  return "border-white/10 bg-white/10";
+  if (tone === "rose") return "border-rose-100 bg-rose-50/50 text-rose-900 shadow-sm";
+  if (tone === "amber") return "border-amber-100 bg-amber-50/50 text-amber-900 shadow-sm";
+  if (tone === "emerald") return "border-emerald-100 bg-emerald-50/50 text-emerald-900 shadow-sm";
+  return "border-slate-100 bg-slate-50/50 text-slate-900 shadow-sm";
 }
 
 function formatEvidenceInput(value: string | number): string {
@@ -101,17 +99,20 @@ function actionSummaryTone(input: {
   if (worstCash <= 0 || criticalWarnings > 0 || dsrPct >= 60) {
     return {
       label: "위험 우선",
+      variant: "destructive" as const,
       reason: "현금 부족, 치명 경고, 높은 DSR 중 하나 이상이 보여 바로 조정이 필요한 상태입니다.",
     };
   }
   if (dsrPct >= 40 || totalWarnings >= 8) {
     return {
       label: "주의 구간",
+      variant: "warning" as const,
       reason: "일부 지표가 경고 구간이라 다음 액션과 월 운영안을 먼저 확인해야 합니다.",
     };
   }
   return {
     label: "양호",
+    variant: "success" as const,
     reason: "큰 위험 신호는 적지만, 다음 액션과 기준 가정을 확인하면서 유지하는 편이 안전합니다.",
   };
 }
@@ -176,21 +177,19 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
   return (
     <div className="mt-3">
       <button
-        className={reportSurfacePopoverTriggerClassName}
         data-testid={`core-metric-evidence-toggle-${itemId}`}
         onClick={() => setOpen((prev) => !prev)}
         ref={triggerRef}
         type="button"
+        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-emerald-200 hover:text-emerald-600 shadow-sm"
       >
-        <span>근거 보기</span>
-        <span className="text-white/55">{open ? "닫기" : "열기"}</span>
+        <span>근거 {open ? "닫기" : "보기"}</span>
       </button>
 
       {open && typeof document !== "undefined"
         ? createPortal(
           <div className="pointer-events-none fixed inset-0 z-[120]">
             <div
-              className={reportSurfacePopoverPanelClassName}
               data-testid={`core-metric-evidence-panel-${itemId}`}
               ref={panelRef}
               style={{
@@ -198,48 +197,49 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
                 top: `${panelPosition.top}px`,
                 width: `${panelPosition.width}px`,
               }}
+              className="pointer-events-auto absolute rounded-[2rem] border border-slate-200 bg-white/95 p-6 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-200"
             >
-              <div className="space-y-3">
-                <div className="rounded-xl border border-cyan-300/30 bg-cyan-500/10 px-3 py-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-cyan-100/80">Formula</p>
-                  <p className="mt-1 text-[11px] leading-5 text-cyan-50">{evidenceItem.formula}</p>
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">계산 공식</p>
+                  <p className="mt-1 text-xs font-bold leading-relaxed text-slate-700">{evidenceItem.formula}</p>
                 </div>
 
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/55">Inputs</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">입력값</p>
                   <ul className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {evidenceItem.inputs.map((input, index) => (
-                      <li className={`${reportSurfaceDetailClassName} px-3 py-2`} key={`${itemId}:input:${index}`}>
-                        <p className="text-white/60">{input.label}</p>
-                        <p className="mt-1 font-semibold text-white">{formatEvidenceInput(input.value)}</p>
+                      <li className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2" key={`${itemId}:input:${index}`}>
+                        <p className="text-[10px] font-bold text-slate-400">{input.label}</p>
+                        <p className="mt-0.5 text-xs font-black text-slate-900 tabular-nums">{formatEvidenceInput(input.value)}</p>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="grid gap-2 md:grid-cols-2">
-                  <div className={`${reportSurfaceDetailClassName} px-3 py-2`}>
-                    <p className="font-semibold text-white/75">Assumptions</p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">가정</p>
                     {evidenceItem.assumptions.length > 0 ? (
-                      <ul className="mt-1 list-disc space-y-1 pl-4 text-white/75">
+                      <ul className="list-disc space-y-1 pl-4 text-xs font-bold text-slate-600">
                         {evidenceItem.assumptions.map((assumption, index) => (
                           <li key={`${itemId}:assumption:${index}`}>{assumption}</li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="mt-1 text-white/60">가정 정보 없음</p>
+                      <p className="text-xs font-bold text-slate-300 italic">가정 정보 없음</p>
                     )}
                   </div>
-                  <div className={`${reportSurfaceDetailClassName} px-3 py-2`}>
-                    <p className="font-semibold text-white/75">Notes</p>
+                  <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">참고 메모</p>
                     {evidenceItem.notes && evidenceItem.notes.length > 0 ? (
-                      <ul className="mt-1 list-disc space-y-1 pl-4 text-white/75">
+                      <ul className="list-disc space-y-1 pl-4 text-xs font-bold text-slate-600">
                         {evidenceItem.notes.map((note, index) => (
                           <li key={`${itemId}:note:${index}`}>{note}</li>
                         ))}
                       </ul>
                     ) : (
-                      <p className="mt-1 text-white/60">추가 참고 없음</p>
+                      <p className="text-xs font-bold text-slate-300 italic">추가 참고 없음</p>
                     )}
                   </div>
                 </div>
@@ -260,8 +260,6 @@ export default function ReportDashboard({ vm }: Props) {
   const actionsReady = isStageSuccess(vm, "actions");
   const monteReady = isStageSuccess(vm, "monteCarlo");
   const debtReady = isStageSuccess(vm, "debt");
-  const monteStageKnown = Boolean(vm.stage.byId.monteCarlo);
-  const debtStageKnown = Boolean(vm.stage.byId.debt);
   const appliedOverrides = vm.reproducibility?.appliedOverrides ?? [];
   const normalization = vm.normalization;
   const hasNormalization = (normalization?.defaultsApplied.length ?? 0) > 0
@@ -280,37 +278,33 @@ export default function ReportDashboard({ vm }: Props) {
     120,
   ) || "저장된 실행 결과와 기본 가정 기준으로 계산했습니다.";
   const assumptionPreview = compactText(vm.assumptionsLines[0], 120);
+  const renderOverrideReason = (reason?: string) => reason?.trim() || "입력값 기준으로 조정";
 
   return (
-    <div className="space-y-5" data-testid="report-dashboard">
+    <div className="space-y-8" data-testid="report-dashboard">
       {simulateReady ? (
-        <Card className="relative overflow-visible border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white" data-testid="report-summary-cards">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-summary-cards">
+          <div className="flex flex-wrap items-start justify-between gap-6 mb-8">
             <div className="max-w-3xl">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">Action First</p>
-              <h2 className="mt-2 text-xl font-black tracking-tight">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">우선 액션</p>
+              <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900 leading-tight">
                 {leadAction ? leadAction.title : "이번 달 먼저 볼 액션부터 정리했습니다."}
               </h2>
-              <p className="mt-1 text-sm text-white/70">
+              <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">
                 {leadAction?.summary || summaryTone.reason}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <div className={`${reportHeroMetaChipClassName} text-[11px]`}>
+              <Badge variant={summaryTone.variant} className="rounded-full px-4 py-1 font-black shadow-sm">
                 {summaryTone.label}
-              </div>
-              <div className={`${reportHeroMetaChipClassName} text-[11px]`}>
-                {vm.snapshot.asOf ? `${vm.snapshot.asOf} 기준` : "저장 run 기준"}
-              </div>
-              <div className={`${reportHeroMetaChipClassName} text-[11px]`}>
-                가정 {vm.assumptionsLines.length}개
-              </div>
-              <div className={`${reportHeroMetaChipClassName} text-[11px]`}>
-                수정 가능
-              </div>
+              </Badge>
+              <Badge variant="secondary" className="rounded-full px-4 py-1 font-black border-slate-200 bg-white text-slate-500 shadow-sm">
+                {vm.snapshot.asOf ? `${vm.snapshot.asOf} 기준` : "저장된 실행 기준"}
+              </Badge>
             </div>
           </div>
-          <ReportHeroStatGrid className="mt-4">
+
+          <ReportHeroStatGrid className="mt-8">
             <ReportHeroStatCard
               description="실수령에서 지출과 상환을 뺀 현재 여력"
               label="매달 남는 돈"
@@ -339,178 +333,194 @@ export default function ReportDashboard({ vm }: Props) {
             />
           </ReportHeroStatGrid>
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">왜 이 액션인가</p>
-              <p className="mt-2 text-sm leading-6 text-white/80">
+          <div className="mt-10 grid gap-6 lg:grid-cols-2">
+            <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6 shadow-inner">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">왜 이 액션을 먼저 보나요</p>
+              <p className="mt-3 text-sm font-bold leading-relaxed text-slate-700">
                 {leadAction
-                  ? `${leadAction.summary}${leadAction.steps[0] ? ` 첫 단계는 ${leadAction.steps[0]}` : ""}`
+                  ? `${leadAction.summary}${leadAction.steps[0] ? ` 첫 단계는 ${leadAction.steps[0]}입니다.` : ""}`
                   : summaryTone.reason}
               </p>
               {leadAction?.cautions[0] ? (
-                <p className="mt-2 text-xs text-white/60">주의: {leadAction.cautions[0]}</p>
+                <div className="mt-4 flex gap-2 items-start rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 border border-amber-100">
+                  <span className="shrink-0">※</span>
+                  <span>{leadAction.cautions[0]}</span>
+                </div>
               ) : null}
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">계산 기준과 가정</p>
-              <p className="mt-2 text-sm leading-6 text-white/80">{basisPreview}</p>
+            <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6 shadow-inner">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">계산 기준</p>
+              <p className="mt-3 text-sm font-bold leading-relaxed text-slate-700">{basisPreview}</p>
               {assumptionPreview ? (
-                <p className="mt-2 text-xs text-white/60">가정 예시: {assumptionPreview}</p>
+                <p className="mt-3 text-xs font-bold text-slate-400 italic">가정 예시: {assumptionPreview}</p>
               ) : null}
             </div>
           </div>
         </Card>
       ) : (
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-sm text-white/80">
-          핵심 숫자 섹션은 시뮬레이션 단계가 완료되어야 표시됩니다. ({stageMessage(vm, "simulate", "simulate 단계 미완료")})
+        <Card className="rounded-[2rem] border-slate-100 bg-white p-8 text-center shadow-sm">
+          <p className="text-sm font-bold text-slate-400 italic">핵심 숫자 섹션은 시뮬레이션 단계가 완료되어야 표시됩니다. ({stageMessage(vm, "simulate", "simulate 단계 미완료")})</p>
         </Card>
       )}
 
       {simulateReady && monthlyOperatingGuide ? (
-        <Card className="space-y-4 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-xl" data-testid="report-monthly-operating-guide">
-          <div>
-            <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-4 text-white">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/60">Salary Operating Guide</p>
-              <h2 className="mt-2 text-xl font-black tracking-tight">월급 운영 가이드</h2>
-              <p className="mt-2 text-sm text-white/75">{monthlyOperatingGuide.headline}</p>
-              <p className="mt-2 text-xs text-white/55">{monthlyOperatingGuide.basisLabel}</p>
-            </div>
+        <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-monthly-operating-guide">
+          <div className="mb-8">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">월급 운영 요약</p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900">월급 운영 가이드</h2>
+            <p className="mt-3 text-base font-black leading-snug text-slate-700">{monthlyOperatingGuide.headline}</p>
+            <p className="mt-2 text-xs font-bold text-slate-400 italic">※ {monthlyOperatingGuide.basisLabel}</p>
           </div>
 
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/60">현재 배분</p>
-            <div className="mt-2 grid gap-3 md:grid-cols-3">
-              {monthlyOperatingGuide.currentSplit.map((item) => (
-                <article className={`rounded-2xl border p-4 shadow-sm ${guideToneClass(item.tone)}`} key={`current-${item.title}`}>
-                  <p className="text-[11px] font-semibold text-white/60">{item.title}</p>
-                  <p className="mt-1 text-lg font-black tracking-tight text-white">{formatMoney(item.amountKrw)}</p>
-                  <p className="mt-1 text-xs text-white/70">월 수입의 {formatPct("ko-KR", item.sharePct)}</p>
-                  <p className="mt-2 text-xs leading-5 text-white/82">{item.description}</p>
-                </article>
-              ))}
+          <div className="space-y-10">
+            <div className="space-y-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">현재 월수입 배분</p>
+              <div className="grid gap-4 md:grid-cols-3">
+                {monthlyOperatingGuide.currentSplit.map((item) => (
+                  <article className={cn("rounded-[1.5rem] border p-5", guideToneClass(item.tone))} key={`current-${item.title}`}>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-60">{item.title}</p>
+                    <p className="mt-2 text-lg font-black tracking-tight tabular-nums">{formatMoney(item.amountKrw)}</p>
+                    <p className="mt-1 text-[11px] font-bold opacity-70">월 수입의 {formatPct("ko-KR", item.sharePct)}</p>
+                    <p className="mt-3 text-xs font-medium leading-relaxed opacity-90">{item.description}</p>
+                  </article>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/60">{monthlyOperatingGuide.nextPlanTitle}</p>
-            <div className="mt-2 grid gap-3 md:grid-cols-3">
-              {monthlyOperatingGuide.nextPlan.map((item) => (
-                <article className={`rounded-2xl border p-4 shadow-sm ${guideToneClass(item.tone)}`} key={`plan-${item.title}`}>
-                  <p className="text-[11px] font-semibold text-white/60">{item.title}</p>
-                  {typeof item.amountKrw === "number" ? (
-                    <p className="mt-1 text-lg font-black tracking-tight text-white">{formatMoney(item.amountKrw)}</p>
-                  ) : null}
-                  {typeof item.sharePct === "number" ? (
-                    <p className="mt-1 text-xs text-white/70">
-                      {monthlyOperatingGuide.nextPlanTitle === "남는 돈 운영안" ? `남는 돈의 ${formatPct("ko-KR", item.sharePct)}` : `기준 비중 ${formatPct("ko-KR", item.sharePct)}`}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-xs leading-5 text-white/82">{item.description}</p>
-                </article>
-              ))}
+            <div className="space-y-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 ml-1">{monthlyOperatingGuide.nextPlanTitle}</p>
+              <div className="grid gap-4 md:grid-cols-3">
+                {monthlyOperatingGuide.nextPlan.map((item) => (
+                  <article className={cn("rounded-[1.5rem] border p-5", guideToneClass(item.tone))} key={`plan-${item.title}`}>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-60">{item.title}</p>
+                    {typeof item.amountKrw === "number" ? (
+                      <p className="mt-2 text-lg font-black tracking-tight tabular-nums">{formatMoney(item.amountKrw)}</p>
+                    ) : null}
+                    {typeof item.sharePct === "number" ? (
+                      <p className="mt-1 text-[11px] font-bold opacity-70">
+                        {monthlyOperatingGuide.nextPlanTitle === "남는 돈 운영안" ? `가용 재원의 ${formatPct("ko-KR", item.sharePct)}` : `권장 비중 ${formatPct("ko-KR", item.sharePct)}`}
+                      </p>
+                    ) : null}
+                    <p className="mt-3 text-xs font-medium leading-relaxed opacity-90">{item.description}</p>
+                  </article>
+                ))}
+              </div>
             </div>
           </div>
         </Card>
       ) : null}
 
-      <Card className="space-y-2 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-xl" data-testid="assumptions-overrides-panel">
-        <details className={reportSurfaceDisclosureClassName}>
-          <summary className={reportSurfaceDisclosureSummaryClassName}>
-            적용된 가정 오버라이드 ({appliedOverrides.length})
-          </summary>
-          {appliedOverrides.length > 0 ? (
-            <ul className="mt-2 space-y-1 text-xs text-white/80">
-              {appliedOverrides.map((override) => (
-                <li data-testid="assumptions-overrides-item" key={`${override.key}:${override.updatedAt}`}>
-                  <span className="font-semibold">{override.key}</span>
-                  {" = "}
-                  {override.value}
-                  {override.reason ? ` · ${override.reason}` : ""}
-                  {" · "}
-                  {override.updatedAt}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-xs text-white/60">적용된 오버라이드가 없습니다.</p>
-          )}
-        </details>
-      </Card>
-
-      {hasNormalization ? (
-        <Card className="space-y-2 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-5 text-white shadow-xl" data-testid="report-normalization-disclosure">
-          <details className={reportSurfaceDisclosureClassName}>
-            <summary className={reportSurfaceDisclosureSummaryClassName}>
-              자동 보정/기본값 적용 내역
+      <div className="grid gap-8 lg:grid-cols-2">
+        <Card className="rounded-[2rem] border-slate-100 bg-white p-6 shadow-sm" data-testid="assumptions-overrides-panel">
+          <details className="group/disclosure">
+            <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-400 group-open/disclosure:text-slate-600 list-none flex items-center gap-2">
+              <span className="transition-transform group-open/disclosure:rotate-90">▶</span>
+              적용된 가정 오버라이드 ({appliedOverrides.length})
             </summary>
-            {normalization?.defaultsApplied.length ? (
-              <div className="mt-2">
-                <p className="text-xs font-semibold text-white/80">defaultsApplied</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-white/80">
-                  {normalization.defaultsApplied.map((item) => (
-                    <li key={`default-${item}`}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {normalization?.fixesApplied.length ? (
-              <div className="mt-2">
-                <p className="text-xs font-semibold text-white/80">fixesApplied</p>
-                <ul className="mt-1 list-disc space-y-1 pl-4 text-xs text-white/80">
-                  {normalization.fixesApplied.map((fix, index) => (
-                    <li key={`${fix.path}-${index}`}>
-                      {fix.path}: {fix.message}
-                      {fix.from !== undefined || fix.to !== undefined
-                        ? ` (${renderEvidenceValue(fix.from)} -> ${renderEvidenceValue(fix.to)})`
-                        : ""}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            {appliedOverrides.length > 0 ? (
+              <ul className="mt-4 space-y-2 border-t border-slate-50 pt-4">
+                {appliedOverrides.map((override) => (
+                  <li className="text-[11px] font-bold text-slate-600 flex flex-wrap gap-2" key={`${override.key}:${override.updatedAt}`}>
+                    <span className="text-emerald-600 font-black">조정 항목</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="text-slate-900">{renderOverrideReason(override.reason)}</span>
+                    <span className="text-slate-300">/</span>
+                    <span className="text-slate-900">{override.value}</span>
+                    <span className="ml-auto text-[10px] text-slate-300 tabular-nums">{override.updatedAt}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-xs font-bold text-slate-300 italic text-center">적용된 오버라이드가 없습니다.</p>
+            )}
           </details>
         </Card>
-      ) : null}
+
+        {hasNormalization ? (
+          <Card className="rounded-[2rem] border-slate-100 bg-white p-6 shadow-sm" data-testid="report-normalization-disclosure">
+            <details className="group/disclosure">
+              <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-400 group-open/disclosure:text-slate-600 list-none flex items-center gap-2">
+                <span className="transition-transform group-open/disclosure:rotate-90">▶</span>
+                자동 보정/기본값 적용 내역
+              </summary>
+              <div className="mt-4 space-y-4 border-t border-slate-50 pt-4">
+                {normalization?.defaultsApplied.length ? (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">기본값 자동 적용</p>
+                    <ul className="list-disc space-y-1 pl-4 text-[11px] font-bold text-slate-600">
+                      {normalization.defaultsApplied.map((item) => (
+                        <li key={`default-${item}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {normalization?.fixesApplied.length ? (
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">자동 보정</p>
+                    <ul className="list-disc space-y-1 pl-4 text-[11px] font-bold text-slate-600">
+                      {normalization.fixesApplied.map((fix, index) => (
+                        <li key={`${fix.path}-${index}`}>
+                          <span className="text-emerald-600">{fix.path}</span>: {fix.message}
+                          {fix.from !== undefined || fix.to !== undefined
+                            ? <span className="ml-1 text-slate-400">({renderEvidenceValue(fix.from)} → {renderEvidenceValue(fix.to)})</span>
+                            : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          </Card>
+        ) : null}
+      </div>
 
       {simulateReady ? (
-        <Card className="space-y-3 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-rose-950 p-5 text-white shadow-xl" data-testid="planning-reports-warnings-section">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="planning-reports-warnings-section">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Watchlist</p>
-              <h2 className="mt-1 text-base font-bold text-white">주의가 필요한 부분</h2>
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">주의 목록</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">주의가 필요한 부분</h2>
             </div>
-            <span className="rounded-full border border-rose-300/40 bg-rose-900/30 px-3 py-1 text-[11px] font-semibold text-rose-100">
+            <Badge variant="destructive" className="rounded-full px-4 py-1 font-black">
               {topWarnings.length}개 우선 확인
-            </span>
+            </Badge>
           </div>
-          <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/5 shadow-sm">
-            <table className="min-w-full divide-y divide-white/10 text-sm text-white" data-testid="report-warnings-table">
-              <thead className="bg-white/10">
+          
+          <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
+            <table className="min-w-full divide-y divide-slate-100 text-sm" data-testid="report-warnings-table">
+              <thead className="bg-slate-50 text-slate-400">
                 <tr>
-                  <th className="px-3 py-2 text-left">경고</th>
-                  <th className="px-3 py-2 text-left">심각도</th>
-                  <th className="px-3 py-2 text-left">발생</th>
-                  <th className="px-3 py-2 text-left">설명</th>
-                  <th className="px-3 py-2 text-left">권장 액션</th>
+                  <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">경고 항목</th>
+                  <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">심각도</th>
+                  <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">발생 이력</th>
+                  <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">상세 설명</th>
+                  <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">권장 액션</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/10">
+              <tbody className="divide-y divide-slate-50 bg-white">
                 {topWarnings.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-3 text-white/70" colSpan={5}>
-                      경고가 없습니다.
-                    </td>
+                    <td className="px-4 py-8 text-slate-400 text-center font-bold" colSpan={5}>검출된 경고가 없습니다.</td>
                   </tr>
                 ) : topWarnings.map((warning) => (
-                  <tr key={`${warning.code}:${warning.subjectKey ?? "-"}`}>
-                    <td className="px-3 py-2">
-                      <p className="font-semibold text-white">{warning.title}</p>
-                      <p className="text-[11px] text-white/60">{warning.code}{warning.subjectLabel ? ` · ${warning.subjectLabel}` : ""}</p>
+                  <tr className="group transition-colors hover:bg-slate-50/50" key={`${warning.code}:${warning.subjectKey ?? "-"}`}>
+                    <td className="px-4 py-4">
+                      <p className="font-black text-slate-900">{warning.title}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{warning.code}{warning.subjectLabel ? ` · ${warning.subjectLabel}` : ""}</p>
                     </td>
-                    <td className="px-3 py-2">{severityText(warning.severityMax)}</td>
-                    <td className="px-3 py-2">{warning.count}회 · {warning.periodMinMax}</td>
-                    <td className="px-3 py-2 text-white/82">{warning.plainDescription}</td>
-                    <td className="px-3 py-2 text-[12px] text-white/70">{warning.suggestedActionId ?? "-"}</td>
+                    <td className="px-4 py-4">
+                      <Badge variant={warning.severityMax === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black border-none">
+                        {severityText(warning.severityMax)}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-4 text-xs font-bold text-slate-500 tabular-nums">{warning.count}회 · {warning.periodMinMax}</td>
+                    <td className="px-4 py-4 text-xs font-medium text-slate-600 leading-relaxed">{warning.plainDescription}</td>
+                    <td className="px-4 py-4">
+                      {warning.suggestedActionId ? (
+                        <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest underline underline-offset-4 decoration-emerald-200">{warning.suggestedActionId}</span>
+                      ) : <span className="text-slate-300">-</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -518,12 +528,19 @@ export default function ReportDashboard({ vm }: Props) {
           </div>
 
           {extraWarnings.length > 0 ? (
-            <details className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/82 shadow-sm">
-              <summary className="cursor-pointer font-semibold">+ {extraWarnings.length}개 더 보기</summary>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
+            <details className="group/extra mt-4 rounded-[1.5rem] border border-slate-100 bg-slate-50/50 px-5 py-4 transition-all">
+              <summary className="cursor-pointer text-xs font-black text-slate-400 group-open/extra:text-slate-600 list-none flex items-center gap-2">
+                <span className="transition-transform group-open/extra:rotate-90">▶</span>
+                추가 {extraWarnings.length}개 경고 더 보기
+              </summary>
+              <ul className="mt-4 space-y-2 border-t border-slate-100 pt-4">
                 {extraWarnings.map((warning) => (
-                  <li key={`${warning.code}:${warning.subjectKey ?? "-"}:extra`}>
-                    [{severityText(warning.severityMax)}] {warning.title} ({warning.count}회)
+                  <li className="text-[11px] font-bold text-slate-600 flex items-center gap-3" key={`${warning.code}:${warning.subjectKey ?? "-"}:extra`}>
+                    <Badge variant={warning.severityMax === "critical" ? "destructive" : "warning"} className="h-4 px-1 text-[8px] font-black border-none shrink-0">
+                      {severityText(warning.severityMax)}
+                    </Badge>
+                    <span className="font-black text-slate-900">{warning.title}</span>
+                    <span className="text-slate-300 tabular-nums">({warning.count}회)</span>
                   </li>
                 ))}
               </ul>
@@ -533,40 +550,49 @@ export default function ReportDashboard({ vm }: Props) {
       ) : null}
 
       {simulateReady ? (
-        <Card className="space-y-3 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 p-5 text-white shadow-xl" data-testid="report-goals-table">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-goals-table">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Goals</p>
-              <h2 className="mt-1 text-base font-bold text-white">목표 진행 현황</h2>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">목표</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">목표 진행 현황</h2>
             </div>
-            <span className="rounded-full border border-emerald-300/40 bg-emerald-900/30 px-3 py-1 text-[11px] font-semibold text-emerald-100">
-              총 {vm.goalsTable.length}개
-            </span>
+            <Badge variant="secondary" className="rounded-full px-4 py-1 font-black bg-emerald-50 text-emerald-700 border-none">
+              총 {vm.goalsTable.length}개 목표
+            </Badge>
           </div>
+          
           {vm.goalsTable.length === 0 ? (
-            <p className="text-sm text-white/72">목표 데이터가 없습니다.</p>
+            <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+              <p className="text-sm font-bold text-slate-300 uppercase tracking-widest">목표 데이터가 없습니다.</p>
+            </div>
           ) : (
-            <div className="overflow-x-auto rounded-2xl border border-white/10 bg-white/5 shadow-sm">
-              <table className="min-w-full divide-y divide-white/10 text-sm text-white">
-                <thead className="bg-white/10">
+            <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
+              <table className="min-w-full divide-y divide-slate-100 text-sm">
+                <thead className="bg-slate-50 text-slate-400">
                   <tr>
-                    <th className="px-3 py-2 text-left">목표명</th>
-                    <th className="px-3 py-2 text-right">목표액</th>
-                    <th className="px-3 py-2 text-right">현재</th>
-                    <th className="px-3 py-2 text-right">부족액</th>
-                    <th className="px-3 py-2 text-right">기한</th>
-                    <th className="px-3 py-2 text-left">상태</th>
+                    <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">목표명</th>
+                    <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">목표액</th>
+                    <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">현재 자산</th>
+                    <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">부족액</th>
+                    <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">기한</th>
+                    <th className="px-4 py-4 text-center font-black uppercase tracking-widest text-[10px]">상태</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/10">
+                <tbody className="divide-y divide-slate-50 bg-white">
                   {vm.goalsTable.map((goal, index) => (
-                    <tr key={`${goal.name}-${index}`}>
-                      <td className="px-3 py-2 font-semibold text-white">{goal.name}</td>
-                      <td className="px-3 py-2 text-right">{formatMoney(goal.targetAmount)}</td>
-                      <td className="px-3 py-2 text-right">{formatMoney(goal.currentAmount)}</td>
-                      <td className="px-3 py-2 text-right">{formatMoney(goal.shortfall)}</td>
-                      <td className="px-3 py-2 text-right">{goal.targetMonth > 0 ? `M${goal.targetMonth}` : "-"}</td>
-                      <td className="px-3 py-2">{goal.achieved ? "달성" : "진행 중"}</td>
+                    <tr className="group transition-colors hover:bg-slate-50/50" key={`${goal.name}-${index}`}>
+                      <td className="px-4 py-4 font-black text-slate-900">{goal.name}</td>
+                      <td className="px-4 py-4 text-right font-bold tabular-nums text-slate-700">{formatMoney(goal.targetAmount)}</td>
+                      <td className="px-4 py-4 text-right font-bold tabular-nums text-slate-700">{formatMoney(goal.currentAmount)}</td>
+                      <td className={cn("px-4 py-4 text-right font-black tabular-nums", goal.shortfall > 0 ? "text-rose-600" : "text-emerald-600")}>
+                        {goal.shortfall > 0 ? formatMoney(goal.shortfall) : "충족"}
+                      </td>
+                      <td className="px-4 py-4 text-right font-black tabular-nums text-slate-400">{goal.targetMonth > 0 ? `M${goal.targetMonth}` : "-"}</td>
+                      <td className="px-4 py-4 text-center">
+                        <Badge variant={goal.achieved ? "success" : "secondary"} className="rounded-lg px-2 py-0.5 text-[10px] font-black border-none uppercase">
+                          {goal.achieved ? "달성" : "진행 중"}
+                        </Badge>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -577,74 +603,89 @@ export default function ReportDashboard({ vm }: Props) {
       ) : null}
 
       {actionsReady ? (
-        <Card className="space-y-3 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950 p-5 text-white shadow-xl" data-testid="report-top-actions">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-top-actions">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Action Plan</p>
-              <h2 className="mt-1 text-base font-bold text-white">추천 실행 순서</h2>
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">실행 순서</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">추천 실행 순서</h2>
             </div>
-            <span className="rounded-full border border-amber-300/40 bg-amber-900/30 px-3 py-1 text-[11px] font-semibold text-amber-100">
+            <Badge variant="warning" className="rounded-full px-4 py-1 font-black shadow-sm">
               우선순위 {vm.topActions.length}개
-            </span>
+            </Badge>
           </div>
+          
           {vm.topActions.length === 0 ? (
-            <p className="text-sm text-white/72">권장 액션이 없습니다.</p>
+            <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
+              <p className="text-sm font-bold text-slate-300 uppercase tracking-widest">권장 액션이 없습니다.</p>
+            </div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-3">
               {vm.topActions.map((action) => (
-                <article className="rounded-3xl border border-white/10 bg-white/10 p-4 shadow-sm backdrop-blur" key={action.code}>
-                  <p className="text-xs font-semibold text-white/60">{severityText(action.severity)}</p>
-                  <h3 className="mt-1 text-base font-black tracking-tight text-white">{action.title}</h3>
-                  <p className="mt-2 text-xs text-white/82">{action.summary}</p>
-                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-white/82">
-                    {action.steps.slice(0, 3).map((step, index) => (
-                      <li key={`${action.code}-step-${index}`}>{step}</li>
-                    ))}
-                  </ul>
+                <article className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 shadow-inner transition-all hover:bg-white hover:shadow-md" key={action.code}>
+                  <Badge variant={action.severity === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black border-none mb-3">
+                    {severityText(action.severity)}
+                  </Badge>
+                  <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
+                  <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">{action.summary}</p>
+                  <div className="mt-6 space-y-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">핵심 단계</p>
+                    <ul className="space-y-1.5">
+                      {action.steps.slice(0, 3).map((step, index) => (
+                        <li className="flex gap-2 text-[11px] font-bold text-slate-700" key={`${action.code}-step-${index}`}>
+                          <span className="text-emerald-500 shrink-0">•</span>
+                          <span className="leading-tight">{step}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </article>
               ))}
             </div>
           )}
         </Card>
       ) : (
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-sm text-white/80">
-          실행 제안 섹션은 actions 단계가 완료되어야 표시됩니다. ({stageMessage(vm, "actions", "actions 단계 미완료")})
+        <Card className="rounded-[2rem] border-slate-100 bg-white p-8 text-center shadow-sm">
+          <p className="text-sm font-bold text-slate-400 italic">실행 제안 섹션은 actions 단계가 완료되어야 표시됩니다. ({stageMessage(vm, "actions", "actions 단계 미완료")})</p>
         </Card>
       )}
 
       {monteReady && vm.monteCarloSummary ? (
-        <Card className="space-y-3 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-sky-950 p-5 text-white shadow-xl">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Monte Carlo</p>
-            <h2 className="mt-1 text-base font-bold text-white">변동성 시뮬레이션</h2>
+        <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+          <div className="mb-8">
+            <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">확률 시뮬레이션</p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">변동성 시뮬레이션</h2>
           </div>
-          <div className="grid gap-2 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-3">
             {vm.monteCarloSummary.keyProbs.map((item) => (
-              <p className="rounded-2xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/82" key={item.key}>
-                {item.label}: <span className="font-semibold text-white">{formatPct("ko-KR", item.probability * 100)}</span>
-              </p>
+              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5" key={item.key}>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{item.label}</p>
+                <p className="text-xl font-black text-slate-900 tabular-nums">{formatPct("ko-KR", item.probability * 100)}</p>
+              </div>
             ))}
           </div>
-        </Card>
-      ) : monteStageKnown && !monteReady ? (
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-sm text-white/80">
-          변동성 시뮬레이션은 Monte Carlo 단계가 완료되어야 표시됩니다. ({stageMessage(vm, "monteCarlo", "데이터 없음")})
         </Card>
       ) : null}
 
       {debtReady && vm.debtSummary ? (
-        <Card className="space-y-3 border border-white/10 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-5 text-white shadow-xl">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">Debt Summary</p>
-            <h2 className="mt-1 text-base font-bold text-white">대출 부담 요약</h2>
+        <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
+          <div className="mb-8">
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">대출 요약</p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">대출 부담 요약</h2>
           </div>
-          <p className="text-sm text-white/82">월 상환액: <span className="font-semibold text-white">{formatMoney(vm.debtSummary.meta.totalMonthlyPaymentKrw)}</span></p>
-          <p className="text-sm text-white/82">DSR: <span className="font-semibold text-white">{formatPct("ko-KR", vm.debtSummary.meta.debtServiceRatio * 100)}</span></p>
-          <p className="text-sm text-white/82">대환 비교: <span className="font-semibold text-white">{vm.debtSummary.refinance?.length ?? 0}건</span></p>
-        </Card>
-      ) : debtStageKnown && !debtReady ? (
-        <Card className="border border-white/10 bg-gradient-to-br from-slate-900 to-slate-800 p-5 text-sm text-white/80">
-          대출 부담 요약은 debt 단계가 완료되어야 표시됩니다. ({stageMessage(vm, "debt", "데이터 없음")})
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">월 상환액</p>
+              <p className="text-xl font-black text-slate-900 tabular-nums">{formatMoney(vm.debtSummary.meta.totalMonthlyPaymentKrw)}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">현재 DSR</p>
+              <p className="text-xl font-black text-emerald-600 tabular-nums">{formatPct("ko-KR", vm.debtSummary.meta.debtServiceRatio * 100)}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">대환 비교</p>
+              <p className="text-xl font-black text-slate-900 tabular-nums">{vm.debtSummary.refinance?.length ?? 0}건 가능</p>
+            </div>
+          </div>
         </Card>
       ) : null}
     </div>

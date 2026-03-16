@@ -2,14 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Container } from "@/components/ui/Container";
+import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { SearchPill } from "@/components/ui/SearchPill";
+import { FilterSelect } from "@/components/ui/FilterSelect";
+import { FilterWrapper } from "@/components/ui/FilterWrapper";
 import { cn } from "@/lib/utils";
 import { SIDO_LIST, normalizeSido } from "@/lib/regions/kr";
 import {
@@ -348,306 +352,313 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   }, [initialQuery, run, searchParams]);
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
-      <Container>
-        <PageHeader 
-          title="공공 혜택 탐색" 
-          description="중앙부처 및 지자체에서 제공하는 다양한 혜택 정보를 한곳에서 확인해 보세요." 
-        />
-        
-        <div className="mb-8 space-y-4">
-          <Card className="rounded-[2.5rem] border-slate-200/60 p-6 shadow-sm">
-            <div className="space-y-6">
-              <div>
-                <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-slate-400">주제별 필터</p>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant={isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
-                    className="rounded-full"
-                    onClick={() => applyAndRun({ topics: [] })}
-                  >
-                    전체
-                  </Button>
-                  {BENEFIT_TOPIC_KEYS.map((topicKey) => (
-                    <Button
-                      key={topicKey}
-                      size="sm"
-                      variant={selectedTopics.includes(topicKey) && !isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
-                      className="rounded-full"
-                      onClick={() => {
-                        const current = isTopicFilterBypassed(selectedTopics) ? [] : selectedTopics;
-                        let next = current.includes(topicKey)
-                          ? current.filter((entry) => entry !== topicKey)
-                          : [...current, topicKey];
-                        if (next.length === BENEFIT_ALL_TOPICS_COUNT) next = [];
-                        applyAndRun({ topics: next });
-                      }}
-                    >
-                      {BENEFIT_TOPICS[topicKey].label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+    <PageShell>
+      <PageHeader
+        title="공공 혜택 탐색"
+        description="중앙부처 및 지자체에서 제공하는 다양한 혜택 정보를 한곳에서 확인해 보세요."
+      />
 
-              <div className="flex flex-wrap items-center gap-4">
-                <Button variant="outline" size="sm" className="rounded-full" onClick={() => setAdvancedOpen((prev) => !prev)}>
-                  키워드 검색 {advancedOpen ? "닫기" : "열기"}
+      <div className="mb-8 space-y-6">
+        <Card className="rounded-[2.5rem] p-8 shadow-sm">
+          <div className="space-y-8">
+            <div>
+              <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">주제별 필터</p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant={isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
+                  className="rounded-full px-5 font-black h-9"
+                  onClick={() => applyAndRun({ topics: [] })}
+                >
+                  전체
                 </Button>
-                <div className="h-4 w-px bg-slate-100" />
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-500">지역</span>
-                  <select
-                    className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    value={sido}
-                    onChange={(e) => applyAndRun({ sido: e.target.value, sigungu: "" })}
-                  >
-                    <option value="">전국</option>
-                    {SIDO_LIST.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </div>
-                {sido && (
-                  <select
-                    className="h-9 rounded-full border border-slate-200 bg-slate-50 px-4 text-xs font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    value={sigungu}
-                    onChange={(e) => applyAndRun({ sigungu: e.target.value })}
-                  >
-                    <option value="">시/군/구 전체</option>
-                    {facets.sigungu.map((entry) => (
-                      <option key={entry.key} value={entry.key}>{entry.key}</option>
-                    ))}
-                  </select>
-                )}
-                
-                <div className="ml-auto flex items-center gap-2">
+                {BENEFIT_TOPIC_KEYS.map((topicKey) => (
                   <Button
-                    variant="primary"
+                    key={topicKey}
                     size="sm"
-                    className="rounded-full px-6"
-                    onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0, includeFacets: true })}
+                    variant={selectedTopics.includes(topicKey) && !isTopicFilterBypassed(selectedTopics) ? "primary" : "outline"}
+                    className="rounded-full px-5 font-black h-9"
+                    onClick={() => {
+                      const current = isTopicFilterBypassed(selectedTopics) ? [] : selectedTopics;
+                      let next = current.includes(topicKey)
+                        ? current.filter((entry) => entry !== topicKey)
+                        : [...current, topicKey];
+                      if (next.length === BENEFIT_ALL_TOPICS_COUNT) next = [];
+                      applyAndRun({ topics: next });
+                    }}
                   >
-                    {loading ? "검색 중" : "필터 적용"}
+                    {BENEFIT_TOPICS[topicKey].label}
                   </Button>
-                </div>
+                ))}
               </div>
+            </div>
 
-              {advancedOpen && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <input
-                    className="h-10 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-bold shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="찾으시는 혜택 키워드를 입력해 보세요 (예: 청년, 의료비, 임대주택)"
-                  />
-                </div>
+            <FilterWrapper>
+              <Button variant="outline" className="rounded-2xl h-11 px-6 font-black" onClick={() => setAdvancedOpen((prev) => !prev)}>
+                키워드 검색 {advancedOpen ? "닫기" : "열기"}
+              </Button>
+              <div className="hidden h-8 w-px bg-slate-100 lg:block" />
+
+              <FilterSelect
+                label="지역"
+                value={sido}
+                onChange={(e) => applyAndRun({ sido: e.target.value, sigungu: "" })}
+              >
+                <option value="">전국</option>
+                {SIDO_LIST.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </FilterSelect>
+
+              {sido && (
+                <FilterSelect
+                  value={sigungu}
+                  onChange={(e) => applyAndRun({ sigungu: e.target.value })}
+                >
+                  <option value="">시/군/구 전체</option>
+                  {facets.sigungu.map((entry) => (
+                    <option key={entry.key} value={entry.key}>{entry.key}</option>
+                  ))}
+                </FilterSelect>
               )}
-            </div>
-          </Card>
-        </div>
 
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-2">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-black text-emerald-600">{totalMatched.toLocaleString()}건의 혜택</span>
-            <div className="h-3 w-px bg-slate-200" />
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant={includeNationwide ? "secondary" : "ghost"} className="h-7 rounded-full text-[10px]" onClick={() => applyAndRun({ includeNationwide: !includeNationwide })}>
-                전국 포함 {includeNationwide ? "ON" : "OFF"}
-              </Button>
-              <Button size="sm" variant={includeUnknown ? "secondary" : "ghost"} className="h-7 rounded-full text-[10px]" onClick={() => applyAndRun({ includeUnknown: !includeUnknown })}>
-                미상 포함 {includeUnknown ? "ON" : "OFF"}
-              </Button>
-            </div>
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  variant="primary"
+                  className="rounded-2xl px-10 h-11 font-black shadow-md shadow-emerald-900/20"
+                  onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0, includeFacets: true })}
+                >
+                  {loading ? "조회 중..." : "혜택 찾기"}
+                </Button>
+              </div>
+            </FilterWrapper>
+
+            {advancedOpen && (
+              <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                <SearchPill
+                  className="h-12 w-full rounded-2xl"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onClear={() => setQuery("")}
+                  placeholder="찾으시는 혜택 키워드를 입력해 보세요 (예: 청년, 의료비, 임대주택)"
+                />
+              </div>
+            )}
           </div>
-          
+        </Card>
+      </div>
+
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4 px-2">
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-black text-emerald-600">{totalMatched.toLocaleString()}건의 혜택 발견</span>
+          <div className="h-3 w-px bg-slate-200" />
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" className="h-8 rounded-full text-[10px] text-slate-400" onClick={() => setAdvancedConfigOpen((prev) => !prev)}>
-              고급 설정
+            <Button variant={includeNationwide ? "secondary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ includeNationwide: !includeNationwide })}>
+              전국 포함 {includeNationwide ? "켜짐" : "꺼짐"}
             </Button>
-            {assumption && <span className="text-[10px] italic text-slate-400">{assumption}</span>}
+            <Button variant={includeUnknown ? "secondary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ includeUnknown: !includeUnknown })}>
+              미상 포함 {includeUnknown ? "켜짐" : "꺼짐"}
+            </Button>
           </div>
         </div>
 
-        {advancedConfigOpen && (
-          <Card className="mb-6 rounded-3xl border-slate-100 bg-slate-50/50 p-4">
-             <div className="flex flex-wrap items-center gap-4 text-[11px]">
-               <div className="flex gap-2">
-                 <Button size="sm" variant={scanAll ? "primary" : "outline"} className="h-7 rounded-full text-[10px]" onClick={() => applyAndRun({ scanAll: true })}>전체 스캔</Button>
-                 <Button size="sm" variant={!scanAll ? "primary" : "outline"} className="h-7 rounded-full text-[10px]" onClick={() => applyAndRun({ scanAll: false })}>부분 스캔</Button>
-               </div>
-               <div className="flex items-center gap-2">
-                 <span className="text-slate-400">데이터 수집율</span>
-                 <span className="font-bold text-slate-700">{Math.round((meta.snapshot?.completionRate ?? 0) * 100)}%</span>
-               </div>
-               {process.env.NODE_ENV !== "production" && (
-                 <Button size="sm" variant="outline" className="h-7 rounded-full text-[10px] bg-white" onClick={() => void refreshSnapshot()}>
-                   스냅샷 강제 갱신
-                 </Button>
-               )}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" className="h-8 rounded-full text-[10px] font-black text-slate-400 hover:text-emerald-600 uppercase tracking-widest" onClick={() => setAdvancedConfigOpen((prev) => !prev)}>
+            고급 설정
+          </Button>
+          {assumption && <span className="text-[10px] font-bold text-slate-400 italic">※ {assumption}</span>}
+        </div>
+      </div>
+
+      {advancedConfigOpen && (
+        <Card className="mb-8 rounded-3xl border-slate-100 bg-white p-5 shadow-sm">
+           <div className="flex flex-wrap items-center gap-6 text-[11px]">
+             <div className="flex gap-2">
+               <Button variant={scanAll ? "primary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ scanAll: true })}>전체 스캔</Button>
+               <Button variant={!scanAll ? "primary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ scanAll: false })}>부분 스캔</Button>
              </div>
-          </Card>
-        )}
+             <div className="flex items-center gap-2">
+               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">데이터 수집율</span>
+               <span className="font-black text-slate-900 tabular-nums">{Math.round((meta.snapshot?.completionRate ?? 0) * 100)}%</span>
+             </div>
+             {process.env.NODE_ENV !== "production" && (
+               <Button variant="outline" className="h-8 rounded-full text-[10px] font-black px-4 bg-slate-50" onClick={() => void refreshSnapshot()}>
+                 스냅샷 강제 갱신
+               </Button>
+             )}
+           </div>
+        </Card>
+      )}
 
-        {error && (
-          <ErrorState message={error} onRetry={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0 })} className="mb-8" />
-        )}
+      {error && (
+        <ErrorState message={error} onRetry={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0 })} className="mb-12" />
+      )}
 
-        <div className="space-y-6">
-          {loading && items.length === 0 ? (
+      <div className="space-y-8">
+        {loading && items.length === 0 ? (
+          <div className="py-20">
             <LoadingState description="관련된 정부 혜택을 찾고 있습니다." />
-          ) : items.length > 0 ? (
-            <>
-              <div className="grid gap-4 md:grid-cols-2">
-                {items.map((item) => {
-                  const quality = getBenefitQualityBucket(item);
-                  const applyShortcut = extractShortcutFromApplyHow(item.id, item.applyHow);
-                  return (
-                    <Card key={item.id} className="group flex flex-col overflow-hidden rounded-[2rem] border-slate-200/60 bg-white p-0 shadow-sm transition-all hover:shadow-md">
-                      <div className="flex flex-1 flex-col p-6">
-                        <div className="mb-4 flex items-start justify-between gap-4">
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
-                              {item.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[item.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : "지원 혜택"}
-                            </span>
-                            <h3 className="text-lg font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors">{item.title}</h3>
-                          </div>
-                          <Badge variant="secondary" className={cn(
-                            "border-none px-2 py-0.5 text-[9px] font-bold",
-                            quality === "HIGH" ? "bg-emerald-50 text-emerald-700" :
-                            quality === "MED" ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-500"
-                          )}>
-                            {quality === "HIGH" ? "정보 충분" : quality === "MED" ? "보통" : "정보 부족"}
-                          </Badge>
+          </div>
+        ) : items.length > 0 ? (
+          <>
+            <div className="grid gap-6 md:grid-cols-2">
+              {items.map((item) => {
+                const quality = getBenefitQualityBucket(item);
+                const applyShortcut = extractShortcutFromApplyHow(item.id, item.applyHow);
+                return (
+                  <Card key={item.id} className="group flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-0 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100">
+                    <div className="flex flex-1 flex-col p-8 pb-6">
+                      <div className="mb-6 flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                            {item.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[item.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : "지원 혜택"}
+                          </span>
+                          <h3 className="text-xl font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tight">{item.title}</h3>
                         </div>
-                        
-                        <p className="mb-6 flex-1 text-sm leading-relaxed text-slate-500 line-clamp-2">{item.summary}</p>
-                        
-                        <div className="space-y-2 rounded-2xl bg-slate-50 p-4">
-                          <div className="flex items-center gap-3 text-xs">
-                            <span className="w-12 font-bold text-slate-400 shrink-0">운영기관</span>
-                            <span className="font-medium text-slate-700">{item.org || "-"}</span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs">
-                            <span className="w-12 font-bold text-slate-400 shrink-0">신청방법</span>
-                            <div className="flex flex-wrap items-center gap-1 font-medium text-slate-700">
-                              <span className="line-clamp-1">{item.applyHow || "-"}</span>
-                              {applyShortcut && (
-                                <a href={applyShortcut} target="_blank" rel="noopener noreferrer" className="text-emerald-600 underline underline-offset-2">바로가기</a>
-                              )}
-                            </div>
+                        <Badge variant="secondary" className={cn(
+                          "border-none px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
+                          quality === "HIGH" ? "bg-emerald-50 text-emerald-700" :
+                          quality === "MED" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500"
+                        )}>
+                          {quality === "HIGH" ? "정보 충분" : quality === "MED" ? "보통" : "정보 부족"}
+                        </Badge>
+                      </div>
+
+                      <p className="mb-8 flex-1 text-sm font-medium leading-relaxed text-slate-500 line-clamp-3">{item.summary}</p>
+
+                      <div className="space-y-3 rounded-2xl bg-slate-50/50 p-5 border border-slate-100/50">
+                        <div className="flex items-center gap-4 text-xs">
+                          <span className="w-14 text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0">운영기관</span>
+                          <span className="font-bold text-slate-700 truncate">{item.org || "-"}</span>
+                        </div>
+                        <div className="flex items-start gap-4 text-xs">
+                          <span className="w-14 text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0 mt-0.5">신청방법</span>
+                          <div className="flex flex-col gap-1 font-bold text-slate-700">
+                            <span className="line-clamp-1">{item.applyHow || "-"}</span>
+                            {applyShortcut && (
+                              <a href={applyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex text-emerald-600 underline underline-offset-4 decoration-emerald-200 hover:text-emerald-700 transition-colors">신청 링크 ▶</a>
+                            )}
                           </div>
                         </div>
                       </div>
-                      
-                      <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 p-4 px-6">
-                        <div className="flex gap-1.5">
-                          {item.eligibilityChips?.slice(0, 2).map((chip) => (
-                            <span key={chip} className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-500">{chip}</span>
-                          ))}
-                        </div>
-                        <Button size="sm" variant="ghost" className="h-8 rounded-full text-xs font-bold text-emerald-600 hover:bg-emerald-50" onClick={() => void openDetail(item)}>
-                          상세 보기 →
-                        </Button>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-50 bg-slate-50/30 p-5 px-8">
+                      <div className="flex gap-2">
+                        {(item.eligibilityChips ?? []).slice(0, 2).map((chip) => (
+                          <span key={chip} className="rounded-lg bg-white border border-slate-100 px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-wider shadow-sm">{chip}</span>
+                        ))}
                       </div>
-                    </Card>
-                  );
-                })}
+                      <Button variant="ghost" className="h-9 rounded-xl text-xs font-black text-emerald-600 hover:bg-emerald-50 px-4" onClick={() => void openDetail(item)}>
+                        상세 보기 →
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {nextCursor !== null && (
+              <div className="mt-12 flex justify-center">
+                <Button
+                  variant="outline"
+                  className="h-14 rounded-2xl px-16 font-black shadow-sm transition-all hover:bg-white active:scale-95"
+                  onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: nextCursor, includeFacets: false, append: true, syncUrl: false })}
+                  disabled={loading}
+                >
+                  {loading ? "로딩 중..." : "결과 더 보기"}
+                </Button>
               </div>
-              
-              {nextCursor !== null && (
-                <div className="mt-8 flex justify-center">
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    className="h-12 rounded-full px-12 font-black shadow-sm"
-                    onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: nextCursor, includeFacets: false, append: true, syncUrl: false })}
-                    disabled={loading}
-                  >
-                    {loading ? "로딩 중..." : "혜택 더 보기"}
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : !loading && !error ? (
+            )}
+          </>
+        ) : !loading && !error ? (
+          <div className="py-20">
             <EmptyState
               title="검색된 혜택이 없습니다"
               description="필터 조건을 완화하거나 다른 키워드로 검색해 보세요."
               actionLabel="필터 초기화"
               onAction={() => applyAndRun({ query: "", topics: [], sido: "", sigungu: "", includeNationwide: true, includeUnknown: true })}
             />
-          ) : null}
-        </div>
-      </Container>
-      
+          </div>
+        ) : null}
+      </div>
+
       {selected ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
           <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-slate-50/80 p-6 md:p-8 border-b border-slate-100 flex items-start justify-between">
+            <div className="bg-slate-50/80 p-8 md:p-10 border-b border-slate-100 flex items-start justify-between">
               <div className="space-y-2">
-                <Badge className="border-none bg-emerald-100 text-emerald-700 px-3 py-1 text-[10px] font-black uppercase tracking-widest">
+                <span className="rounded-lg bg-emerald-100 text-emerald-700 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm">
                   {selected.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[selected.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : "지원 혜택"}
-                </Badge>
-                <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-snug">{selected.title}</h3>
-                <p className="text-sm font-bold text-slate-500">{selected.org}</p>
+                </span>
+                <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight">{selected.title}</h3>
+                <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{selected.org}</p>
               </div>
-              <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white" onClick={() => setSelected(null)}>
+              <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white shadow-sm" onClick={() => setSelected(null)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
               </Button>
             </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+
+            <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-10 scrollbar-thin scrollbar-thumb-slate-200">
               <section>
-                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">혜택 설명</p>
-                <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 text-sm font-medium leading-relaxed text-slate-700">
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">혜택 요약</p>
+                <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8 text-sm font-medium leading-relaxed text-slate-700 shadow-inner">
                   {selected.summary}
                 </div>
               </section>
-              
+
               <section>
-                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">지원 조건</p>
-                <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">
+                <SubSectionHeader title="지원 조건" description="해당 혜택을 받기 위한 상세 요건입니다." />
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm">
                   {detailLoading ? (
-                    <div className="space-y-3 animate-pulse">
-                      <div className="h-4 w-3/4 rounded-full bg-slate-200" />
-                      <div className="h-4 w-1/2 rounded-full bg-slate-200" />
+                    <div className="space-y-4 animate-pulse">
+                      <div className="h-4 w-3/4 rounded-full bg-slate-100" />
+                      <div className="h-4 w-1/2 rounded-full bg-slate-100" />
                     </div>
                   ) : detail?.conditions?.length ? (
-                    <ul className="space-y-4">
+                    <ul className="space-y-5">
                       {detail.conditions.map((line, idx) => (
-                        <li key={idx} className="flex gap-3 text-sm font-medium text-slate-700">
-                          <span className="text-emerald-500 font-black">•</span>
+                        <li key={idx} className="flex gap-4 text-sm font-medium text-slate-700">
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
                           <span className="leading-relaxed">{line}</span>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-sm font-bold text-slate-400 italic">상세 조건 정보가 없습니다.</p>
+                    <p className="text-sm font-bold text-slate-400 italic text-center py-4">제공된 상세 조건 정보가 없습니다.</p>
                   )}
                 </div>
               </section>
 
               {selected.applyHow && (
-                <section>
-                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">신청 방법</p>
-                  <div className="rounded-3xl border border-emerald-100 bg-emerald-50/30 p-6 text-sm font-black text-emerald-800">
+                <section className="rounded-[2.5rem] bg-slate-50 p-8 md:p-10 border border-slate-100 shadow-sm transition-all">
+                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">신청 방법</p>
+                  <div className="text-sm font-bold text-slate-700 leading-relaxed">
                     <p>
                       {selected.applyHow}
-                      {selectedApplyShortcut && (
-                        <a href={selectedApplyShortcut} target="_blank" rel="noopener noreferrer" className="ml-2 text-emerald-600 underline underline-offset-4 decoration-2">바로가기</a>
-                      )}
                     </p>
+                    {selectedApplyShortcut && (
+                      <div className="mt-8">
+                        <a href={selectedApplyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-8 text-sm font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98]">
+                          신청 바로가기
+                          <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </section>
               )}
             </div>
 
-            <div className="bg-slate-50/80 p-5 px-8 border-t border-slate-100">
-               <p className="text-[10px] font-bold text-slate-400">데이터 제공: 보조금24 API</p>
+            <div className="bg-slate-50/80 p-6 px-10 border-t border-slate-100 flex items-center justify-between">
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">출처: 보조금24 Open API</p>
+               <Button variant="ghost" className="text-xs font-black text-slate-400" onClick={() => setSelected(null)}>닫기</Button>
             </div>
           </Card>
         </div>
       ) : null}
-    </main>
+    </PageShell>
   );
 }

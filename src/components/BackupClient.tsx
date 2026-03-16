@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
+import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
+import { cn } from "@/lib/utils";
 
 type ExportApiPayload = {
   ok?: boolean;
@@ -385,203 +387,238 @@ export function BackupClient() {
   return (
     <PageShell>
       <PageHeader
-        title="백업 / 복원"
-        description="로컬 상태와 서버 파일을 단일 JSON 번들로 내보내거나 복원합니다."
+        title="백업 및 복원"
+        description="로컬 상태와 서버 파일을 단일 JSON 번들로 내보내거나 선택 복원합니다."
         action={
           <Link href="/settings">
-            <Button variant="outline" size="sm">설정 홈</Button>
+            <Button variant="outline" className="rounded-xl font-black">설정 홈으로</Button>
           </Link>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <h2 className="text-lg font-black text-slate-900">Export</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            서버 whitelist 파일과 clientStorage whitelist 키를 한 파일로 내려받습니다.
+      <div className="grid gap-8 lg:grid-cols-2">
+        <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
+          <SubSectionHeader title="데이터 내보내기 (Export)" description="서버 화이트리스트 파일과 클라이언트 저장소 키를 백업합니다." />
+          <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 p-3 rounded-xl leading-relaxed">
+            대상 키 예시: {whitelistPreview}
           </p>
-          <p className="mt-2 text-xs text-slate-500">
-            clientStorage keys 예시: {whitelistPreview}
-          </p>
-          <div className="mt-5">
-            <Button type="button" variant="primary" size="sm" disabled={exporting || importing} onClick={() => void handleExport()}>
-              {exporting ? "생성 중..." : "백업 파일 다운로드"}
+          <div className="mt-8 flex items-center gap-4">
+            <Button type="button" variant="primary" className="h-12 px-8 rounded-2xl font-black shadow-md" disabled={exporting || importing} onClick={() => void handleExport()}>
+              {exporting ? "백업 번들 생성 중..." : "백업 JSON 다운로드"}
             </Button>
           </div>
         </Card>
 
-        <Card>
-          <h2 className="text-lg font-black text-slate-900">Import</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            백업 JSON을 업로드하면 diff 미리보기 후 선택 복원을 실행할 수 있습니다.
-          </p>
-          <div className="mt-5">
-            <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-              {importing ? "복원 중..." : "백업 파일 선택"}
-              <input
-                type="file"
-                accept="application/json,.json"
-                className="hidden"
-                disabled={importing || exporting || rollingBack}
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (!file) return;
-                  void handleImportPrepare(file);
-                  event.currentTarget.value = "";
-                }}
-              />
-            </label>
-          </div>
-          <p className="mt-3 text-xs text-slate-500">
-            restore point: {restorePointInfo.exists ? "있음" : "없음"}
-            {restorePointInfo.createdAt ? ` (${new Date(restorePointInfo.createdAt).toLocaleString()})` : ""}
-          </p>
-          <div className="mt-3">
+        <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
+          <SubSectionHeader title="데이터 가져오기 (Import)" description="백업 파일을 업로드하여 상태를 복원합니다." />
+          <div className="mt-6 flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95">
+                {importing ? "복원 처리 중..." : "백업 파일 선택"}
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  disabled={importing || exporting || rollingBack}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    void handleImportPrepare(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+              <div className="flex-1 rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
+                <p className="text-xs font-bold text-slate-600 tabular-nums">
+                  {restorePointInfo.exists ? `생성됨 (${new Date(restorePointInfo.createdAt!).toLocaleString("ko-KR", { hour12: false })})` : "생성된 시점 없음"}
+                </p>
+              </div>
+            </div>
+            
             <Button
               type="button"
               variant="outline"
-              size="sm"
+              className="h-11 rounded-xl font-black"
               disabled={rollingBack || importing || !restorePointInfo.exists}
               onClick={() => void handleRollback()}
             >
-              {rollingBack ? "롤백 중..." : "restore point로 되돌리기"}
+              {rollingBack ? "롤백 진행 중..." : "Restore Point로 롤백 실행"}
             </Button>
           </div>
         </Card>
       </div>
 
-      {notice ? <p className="mt-6 text-sm font-semibold text-emerald-700">{notice}</p> : null}
-      {error ? <p className="mt-2 text-sm font-semibold text-rose-700">{error}</p> : null}
+      {(notice || error) && (
+        <div className={cn(
+          "mt-8 rounded-[1.5rem] p-5 text-sm font-black animate-in fade-in slide-in-from-bottom-2",
+          error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+        )}>
+          {error || notice}
+        </div>
+      )}
 
       {pendingBundle ? (
-        <Card className="mt-6">
-          <h3 className="text-base font-black text-slate-900">복원 미리보기</h3>
-          <p className="mt-1 text-xs text-slate-600">
-            파일: {pendingFilename ?? "-"}
-          </p>
-          <div className="mt-4 grid gap-3 text-xs text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              same {serverDiff?.same.length ?? 0}
+        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border-emerald-100">
+          <SubSectionHeader title="복원 미리보기 및 설정" description={`파일명: ${pendingFilename ?? "-"}`} />
+          
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Same</p>
+              <p className="text-lg font-black text-slate-900 tabular-nums">{serverDiff?.same.length ?? 0}</p>
             </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-              changed {serverDiff?.changed.length ?? 0}
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Changed</p>
+              <p className="text-lg font-black text-amber-700 tabular-nums">{serverDiff?.changed.length ?? 0}</p>
             </div>
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-              added {serverDiff?.added.length ?? 0}
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Added</p>
+              <p className="text-lg font-black text-emerald-700 tabular-nums">{serverDiff?.added.length ?? 0}</p>
             </div>
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
-              missing {serverDiff?.missing.length ?? 0}
+            <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Missing</p>
+              <p className="text-lg font-black text-rose-700 tabular-nums">{serverDiff?.missing.length ?? 0}</p>
             </div>
           </div>
 
-          <div className="mt-4 space-y-3">
-            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={applyServerFiles}
-                onChange={(event) => setApplyServerFiles(event.target.checked)}
-              />
-              서버 파일 복원 적용
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={applyClientStorage}
-                onChange={(event) => setApplyClientStorage(event.target.checked)}
-              />
-              clientStorage 복원 적용
-            </label>
-          </div>
-
-          {applyServerFiles ? (
-            <div className="mt-5">
-              <div className="mb-2 flex items-center gap-3 text-xs text-slate-600">
-                <label className="inline-flex items-center gap-2">
+          <div className="mt-8 grid gap-6 md:grid-cols-2 border-t border-slate-100 pt-8">
+            <div className="space-y-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">복원 옵션 선택</p>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4 cursor-pointer transition-all hover:bg-white">
                   <input
                     type="checkbox"
-                    checked={selectedServerPaths.length > 0 && selectedServerPaths.length === selectablePaths.length}
-                    onChange={(event) => selectAllPaths(event.target.checked)}
+                    className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={applyServerFiles}
+                    onChange={(event) => setApplyServerFiles(event.target.checked)}
                   />
-                  전체 선택
+                  <div>
+                    <p className="text-sm font-black text-slate-800">서버 파일 복원</p>
+                    <p className="text-[11px] font-bold text-slate-400 mt-0.5">화이트리스트에 포함된 설정 및 데이터 파일을 덮어씁니다.</p>
+                  </div>
                 </label>
-                <span>{selectedServerPaths.length}개 선택됨</span>
-              </div>
-              <div className="max-h-72 space-y-1 overflow-auto rounded-lg border border-slate-200 bg-white p-2">
-                {selectablePaths.map((pathValue) => (
-                  <label key={pathValue} className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
-                    <span className="inline-flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedServerPaths.includes(pathValue)}
-                        onChange={() => togglePath(pathValue)}
-                      />
-                      <span className="font-medium">{pathValue}</span>
-                    </span>
-                    <span className="text-[11px] uppercase tracking-wide text-slate-500">
-                      {diffStatusByPath.get(pathValue) ?? "-"}
-                    </span>
-                  </label>
-                ))}
-                {selectablePaths.length < 1 ? (
-                  <p className="px-2 py-2 text-xs text-slate-500">선택 가능한 server path가 없습니다.</p>
-                ) : null}
+                <label className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4 cursor-pointer transition-all hover:bg-white">
+                  <input
+                    type="checkbox"
+                    className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={applyClientStorage}
+                    onChange={(event) => setApplyClientStorage(event.target.checked)}
+                  />
+                  <div>
+                    <p className="text-sm font-black text-slate-800">클라이언트 저장소 복원</p>
+                    <p className="text-[11px] font-bold text-slate-400 mt-0.5">localStorage의 앱 설정을 복원합니다.</p>
+                  </div>
+                </label>
               </div>
             </div>
-          ) : null}
 
-          <div className="mt-5">
+            {applyServerFiles && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">파일 상세 선택 ({selectedServerPaths.length}개)</p>
+                  <label className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-500 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-slate-300"
+                      checked={selectedServerPaths.length > 0 && selectedServerPaths.length === selectablePaths.length}
+                      onChange={(event) => selectAllPaths(event.target.checked)}
+                    />
+                    Select All
+                  </label>
+                </div>
+                <div className="max-h-60 overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 scrollbar-thin scrollbar-thumb-slate-200">
+                  {selectablePaths.map((pathValue) => (
+                    <label key={pathValue} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer group">
+                      <span className="inline-flex items-center gap-2 min-w-0">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          checked={selectedServerPaths.includes(pathValue)}
+                          onChange={() => togglePath(pathValue)}
+                        />
+                        <span className="truncate">{pathValue}</span>
+                      </span>
+                      <span className={cn(
+                        "shrink-0 text-[9px] font-black uppercase px-1.5 py-0.5 rounded",
+                        diffStatusByPath.get(pathValue) === "same" ? "text-slate-300" :
+                        diffStatusByPath.get(pathValue) === "changed" ? "bg-amber-100 text-amber-700" :
+                        diffStatusByPath.get(pathValue) === "added" ? "bg-emerald-100 text-emerald-700" :
+                        "bg-rose-100 text-rose-700"
+                      )}>
+                        {diffStatusByPath.get(pathValue) ?? "-"}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-10 flex justify-center border-t border-slate-50 pt-8">
             <Button
               type="button"
               variant="primary"
-              size="sm"
+              className="h-14 px-12 rounded-2xl font-black shadow-xl shadow-emerald-100 transition-all hover:-translate-y-0.5 active:scale-95"
               disabled={importing || rollingBack}
               onClick={() => void handleImportApply()}
             >
-              {importing ? "복원 중..." : "복원 실행(restore point 생성)"}
+              {importing ? "복원 진행 중..." : "선택 항목 복원 실행 (Restore Point 자동 생성)"}
             </Button>
           </div>
         </Card>
       ) : null}
 
       {importSummary ? (
-        <Card className="mt-6">
-          <h3 className="text-base font-black text-slate-900">복원 결과</h3>
-          <p className="mt-2 text-xs text-slate-600">
-            localStorage 적용 {importSummary.localApplied.length}건, 제거 {importSummary.localRemoved.length}건
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            서버 파일 작성 {importSummary.serverWritten.length}건, skip {importSummary.serverSkipped.length}건
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            restore point 생성: {importSummary.restorePointCreated ? "예" : "아니오"}
-          </p>
-          <p className="mt-1 text-xs text-slate-600">
-            검증 결과: {importSummary.validated ? "검증 통과" : "검증 실패/미실행"}
-          </p>
-          {importSummary.rolledBack ? (
-            <p className="mt-1 text-xs font-semibold text-amber-700">
-              롤백 완료
-            </p>
-          ) : null}
-          {importSummary.issues.length > 0 ? (
-            <div className="mt-3">
-              <p className="text-xs font-semibold text-rose-700">검증 이슈</p>
-              <ul className="mt-1 space-y-1 text-xs text-rose-700">
-                {importSummary.issues.slice(0, 10).map((issue) => (
-                  <li key={issue}>{issue}</li>
+        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-slate-50">
+          <SubSectionHeader 
+            title="복원 결과 요약" 
+            className="mb-6"
+            description={importSummary.validated ? "검증 통과 및 복원이 성공적으로 완료되었습니다." : "복원 처리가 완료되었습니다."} 
+          />
+          
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">localStorage</p>
+              <p className="text-base font-black tabular-nums mt-1 text-slate-900">+{importSummary.localApplied.length} / -{importSummary.localRemoved.length}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Server Files</p>
+              <p className="text-base font-black tabular-nums mt-1 text-slate-900">Written {importSummary.serverWritten.length}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
+              <p className="text-base font-black mt-1 text-slate-900">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
+            </div>
+            <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rollback Status</p>
+              <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-emerald-600")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
+            </div>
+          </div>
+
+          {importSummary.issues.length > 0 && (
+            <div className="rounded-2xl bg-rose-50 border border-rose-100 p-5 mb-6">
+              <p className="text-xs font-black text-rose-600 uppercase tracking-widest mb-3">검증 이슈 발견</p>
+              <ul className="space-y-1.5 text-xs font-bold text-rose-800/80">
+                {importSummary.issues.slice(0, 5).map((issue, idx) => (
+                  <li key={idx} className="flex gap-2"><span className="text-rose-500">•</span> {issue}</li>
                 ))}
               </ul>
             </div>
-          ) : null}
-          {importSummary.serverSkipped.length > 0 ? (
-            <ul className="mt-3 space-y-1 text-xs text-slate-600">
-              {importSummary.serverSkipped.slice(0, 10).map((item) => (
-                <li key={`${item.path}:${item.reason}`}>
-                  {item.path} - {item.reason}
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          )}
+
+          {importSummary.serverSkipped.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Skip Details</p>
+              <ul className="grid gap-2">
+                {importSummary.serverSkipped.slice(0, 10).map((item) => (
+                  <li key={`${item.path}:${item.reason}`} className="text-[11px] font-bold text-slate-600 bg-white border border-slate-100 p-3 rounded-xl truncate shadow-sm">
+                    <span className="text-slate-400 font-black mr-2 uppercase tracking-tight">{item.path}</span>
+                    <span className="text-slate-700">{item.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Card>
       ) : null}
     </PageShell>
