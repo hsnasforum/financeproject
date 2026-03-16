@@ -84,6 +84,11 @@
   - 공개 schema와 route inventory 사이의 불일치/미확인 구간이 정리됨
   - 후속 API/DTO 설계가 이 문서를 기준으로만 진행될 수 있음
 
+연결 메모 (2026-03-17):
+- canonical entity inventory와 owner 경계는 `analysis_docs/v2/12_planning_v3_canonical_entity_model.md`를 기준으로 잠급니다.
+- `PlannerSnapshot`와 `planning/v3` file/local owner는 같은 canonical set으로 합치지 않습니다.
+- `N2`의 API/import-export/rollback 논의는 이 문서의 entity name, owner, key, lifecycle을 그대로 재사용합니다.
+
 ## N2. planning/v3 API / import-export / rollback contract 정의
 
 - 분류: `contract-first`
