@@ -28,11 +28,11 @@ test("run pipeline shows stage timeline and reports dashboard contracts", async 
     await expect(warningsSection).toContainText("경고가 없습니다.");
   }
 
-  await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
+  await expect(page.getByRole("heading", { name: "리포트 목록" })).toHaveCount(0);
   const advancedToggle = page.getByTestId("report-advanced-toggle");
   await expect(advancedToggle).toHaveAttribute("data-ready", "true", { timeout: 30_000 });
   await advancedToggle.click();
-  await expect(page.getByTestId("report-advanced-raw")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "리포트 목록" })).toBeVisible({ timeout: 30_000 });
 });
 
 test("golden deterministic replay renders report contracts for canonical fixtures", async ({ page, request }) => {
@@ -53,7 +53,7 @@ test("golden deterministic replay renders report contracts for canonical fixture
         await evidenceToggle.click();
         await expect(page.getByTestId("evidence-panel-monthlySurplus")).toBeVisible();
       }
-      await expect(page.getByTestId("report-advanced-raw")).toBeHidden();
+      await expect(page.getByRole("heading", { name: "리포트 목록" })).toHaveCount(0);
 
       const compareToggle = page.getByTestId("compare-toggle");
       if (await compareToggle.count()) {

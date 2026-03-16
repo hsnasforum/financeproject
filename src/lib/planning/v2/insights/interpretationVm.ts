@@ -50,7 +50,11 @@ export type InterpretationInput = {
     runId?: string;
     timelinePointCount?: number;
   };
-  summaryEvidence?: EvidenceItem[];
+  summaryEvidence?: EvidenceItem[] | {
+    monthlySurplusKrw?: CalcEvidence;
+    dsrPct?: CalcEvidence;
+    emergencyFundMonths?: CalcEvidence;
+  };
   };
 export type InterpretationVM = {
   verdict: {
@@ -179,6 +183,7 @@ export function buildInterpretationVM(
   input: InterpretationInput,
   policy: PlanningInterpretationPolicy = DEFAULT_PLANNING_POLICY,
 ): InterpretationVM {
+  const rawSummaryEvidence = Array.isArray(input.summaryEvidence) ? undefined : input.summaryEvidence;
   const evidenceByDiagId = (() => {
     const items = Array.isArray(input.summaryEvidence) ? input.summaryEvidence : buildEvidence(
       {
@@ -189,6 +194,7 @@ export function buildInterpretationVM(
         },
       },
       policy,
+      input.summaryEvidence,
     );
     const byMetric = new Map(items.map((item) => [item.id, item]));
     const toDiagEvidence = (item: EvidenceItem | undefined): EvidenceItem | undefined => {
@@ -204,6 +210,11 @@ export function buildInterpretationVM(
       ["emergency-fund", toDiagEvidence(byMetric.get("emergency"))],
     ].filter((entry): entry is [string, EvidenceItem] => Boolean(entry[1])));
   })();
+  const evidenceDetailByDiagId = new Map<string, CalcEvidence>([
+    ["monthly-surplus", rawSummaryEvidence?.monthlySurplusKrw],
+    ["dsr", rawSummaryEvidence?.dsrPct],
+    ["emergency-fund", rawSummaryEvidence?.emergencyFundMonths],
+  ].filter((entry): entry is [string, CalcEvidence] => Boolean(entry[1])));
 
   const monthlySurplusKrw = asFiniteNumber(input.summary.monthlySurplusKrw);
   const emergencyFundMonths = asFiniteNumber(input.summary.emergencyFundMonths);
@@ -251,6 +262,7 @@ export function buildInterpretationVM(
         : severity === "caution"
           ? "남는 돈이 많지 않아 작은 지출 변화에도 흔들릴 수 있습니다."
           : "매달 남는 돈이 있어 계획을 이어갈 여지가 있습니다.",
+      ...(evidenceDetailByDiagId.get("monthly-surplus") ? { evidenceDetail: evidenceDetailByDiagId.get("monthly-surplus") } : {}),
       ...(evidenceByDiagId.get("monthly-surplus") ? { evidenceItem: evidenceByDiagId.get("monthly-surplus") } : {}),
     });
   }
@@ -272,9 +284,10 @@ export function buildInterpretationVM(
         : severity === "caution"
           ? "상환 부담이 적지 않아 지출이 늘면 압박이 커질 수 있습니다."
           : "수입 대비 대출 상환액이 관리 가능한 범위입니다.",
-          ...(evidenceByDiagId.get("dsr") ? { evidenceItem: evidenceByDiagId.get("dsr") } : {}),
-          });
-          }
+      ...(evidenceDetailByDiagId.get("dsr") ? { evidenceDetail: evidenceDetailByDiagId.get("dsr") } : {}),
+      ...(evidenceByDiagId.get("dsr") ? { evidenceItem: evidenceByDiagId.get("dsr") } : {}),
+    });
+  }
 
   if (typeof emergencyFundMonths === "number") {
     const severity: DiagnosticCandidate["severity"] = emergencyFundMonths < policy.emergencyFundMonths.risk
@@ -293,9 +306,10 @@ export function buildInterpretationVM(
         : severity === "caution"
           ? "조금만 더 쌓아두면 훨씬 안정적으로 버틸 수 있습니다."
           : "최소한의 비상금이 확보되어 있어 안정적입니다.",
-          ...(evidenceByDiagId.get("emergency-fund") ? { evidenceItem: evidenceByDiagId.get("emergency-fund") } : {}),
-          });
-          }
+      ...(evidenceDetailByDiagId.get("emergency-fund") ? { evidenceDetail: evidenceDetailByDiagId.get("emergency-fund") } : {}),
+      ...(evidenceByDiagId.get("emergency-fund") ? { evidenceItem: evidenceByDiagId.get("emergency-fund") } : {}),
+    });
+  }
 
   if (typeof worstCashKrw === "number") {
     const severity: DiagnosticCandidate["severity"] = worstCashKrw <= 0 ? "risk" : "info";
