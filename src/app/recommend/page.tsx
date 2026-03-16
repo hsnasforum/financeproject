@@ -130,6 +130,11 @@ type RecommendResponse = {
 
 type StoredProfile = RecommendProfileNormalized;
 type PlanningInferenceSource = "planning-summary" | "planning-context" | "none" | undefined;
+type PlanningActionContextCode = "BUILD_EMERGENCY_FUND" | "COVER_LUMP_SUM_GOAL";
+type PlanningActionContext = {
+  code: PlanningActionContextCode;
+  label: string;
+};
 
 type StoredRecommendItemV1 = {
   key: string;
@@ -202,12 +207,28 @@ function formatInferenceSourceLabel(source: PlanningInferenceSource): string | n
   }
 }
 
+function readPlanningActionContext(
+  searchParams: ReturnType<typeof useSearchParams>,
+): PlanningActionContext | null {
+  if (searchParams.get("from") !== "planning-report") return null;
+  const actionCode = searchParams.get("planning.actionCode");
+  if (actionCode === "BUILD_EMERGENCY_FUND") {
+    return { code: actionCode, label: "비상금 보강" };
+  }
+  if (actionCode === "COVER_LUMP_SUM_GOAL") {
+    return { code: actionCode, label: "목표자금 점검" };
+  }
+  return null;
+}
+
 function buildPlanningContextStrip(
   storedProfile: StoredProfile | null,
   result: RecommendResponse,
+  actionContext?: PlanningActionContext | null,
 ): {
   title: string;
   description: string;
+  actionLabel?: string;
   stageLabel?: string;
   sourceLabel?: string;
   runId?: string;
@@ -222,13 +243,17 @@ function buildPlanningContextStrip(
   const runId = planning?.runId;
   const metricsCount = typeof linkage?.metricsCount === "number" ? linkage.metricsCount : 0;
   const hasStrip = Boolean(runId || stageLabel || (inferenceSource && inferenceSource !== "none") || metricsCount > 0);
+  const actionLabel = actionContext?.label;
 
   if (!hasStrip) return null;
 
   if (inferenceSource === "planning-summary") {
     return {
-      title: "현재 플래닝 결과 기준으로 연 추천입니다",
-      description: "플래닝 리포트에서 넘긴 실행 요약을 기준으로 지금 추천을 열었습니다.",
+      title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "현재 플래닝 결과 기준으로 연 추천입니다",
+      description: actionLabel
+        ? `플래닝 리포트의 ${actionLabel} 액션에서 바로 열었고, 실행 요약을 함께 넘겨 지금 추천을 열었습니다.`
+        : "플래닝 리포트에서 넘긴 실행 요약을 기준으로 지금 추천을 열었습니다.",
+      ...(actionLabel ? { actionLabel } : {}),
       ...(stageLabel ? { stageLabel } : {}),
       ...(sourceLabel ? { sourceLabel } : {}),
       ...(runId ? { runId } : {}),
@@ -238,8 +263,11 @@ function buildPlanningContextStrip(
 
   if (inferenceSource === "planning-context") {
     return {
-      title: "현재 플래닝 입력값을 바탕으로 연 추천입니다",
-      description: `기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`,
+      title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "현재 플래닝 입력값을 바탕으로 연 추천입니다",
+      description: actionLabel
+        ? `플래닝 리포트의 ${actionLabel} 액션에서 열었고, 기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`
+        : `기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`,
+      ...(actionLabel ? { actionLabel } : {}),
       ...(stageLabel ? { stageLabel } : {}),
       ...(sourceLabel ? { sourceLabel } : {}),
       ...(runId ? { runId } : {}),
@@ -248,8 +276,11 @@ function buildPlanningContextStrip(
   }
 
   return {
-    title: "플래닝 연동 정보가 함께 들어왔습니다",
-    description: "이번 추천은 플래닝 결과와 함께 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.",
+    title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "플래닝 연동 정보가 함께 들어왔습니다",
+    description: actionLabel
+      ? `플래닝 리포트의 ${actionLabel} 액션에서 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.`
+      : "이번 추천은 플래닝 결과와 함께 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.",
+    ...(actionLabel ? { actionLabel } : {}),
     ...(stageLabel ? { stageLabel } : {}),
     ...(sourceLabel ? { sourceLabel } : {}),
     ...(runId ? { runId } : {}),
@@ -692,9 +723,13 @@ function RecommendPageInner() {
   }, [profile.kind]);
 
   const fieldIssueMap = useMemo(() => issuesToFieldMap(formIssues), [formIssues]);
+  const planningActionContext = useMemo(
+    () => readPlanningActionContext(searchParams),
+    [searchParams],
+  );
   const planningContextStrip = useMemo(
-    () => (result ? buildPlanningContextStrip(lastStored?.profile ?? null, result) : null),
-    [lastStored, result],
+    () => (result ? buildPlanningContextStrip(lastStored?.profile ?? null, result, planningActionContext) : null),
+    [lastStored, planningActionContext, result],
   );
 
   async function submit() {
@@ -930,6 +965,11 @@ function RecommendPageInner() {
                   <p className="text-sm font-medium leading-relaxed text-slate-600">{planningContextStrip.description}</p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px] font-black">
+                  {planningContextStrip.actionLabel ? (
+                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
+                      연결된 액션: {planningContextStrip.actionLabel}
+                    </span>
+                  ) : null}
                   {planningContextStrip.stageLabel ? (
                     <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
                       단계: {planningContextStrip.stageLabel}
