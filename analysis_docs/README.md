@@ -48,7 +48,7 @@
 5. `05_개선로드맵_백로그.md`로 실제 작업 티켓화
 
 운영 메모
-- `analysis_docs/**`와 관련 `analysis-docs-*` 메모는 2026-03-16 closeout 배치에서 Git 추적 대상으로 정리합니다.
+- `analysis_docs/**`와 관련 `analysis-docs-*` 메모는 2026-03-16 closeout 배치에서 Git 추적 대상으로 전환했습니다.
 - 대표본/후속기록 구분과 보존 원칙은 `work/3/16/2026-03-16-analysis-docs-ops-policy.md`를 기준으로 유지합니다.
 - 이번 배치에서는 rename, delete, merge 없이 현재 파일 구성을 그대로 보존합니다.
 - 상세 운영 기준과 `/work` 메모 규칙은 `work/3/16/2026-03-16-analysis-docs-ops-policy.md`를 기준으로 봅니다.
