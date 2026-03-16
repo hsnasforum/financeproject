@@ -10,8 +10,8 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **23%** (`3 / 13` 항목 완료)
-- Phase 1 진행률: **75%** (`3 / 4`)
+- 전체 진행률: **31%** (`4 / 13` 항목 완료)
+- Phase 1 진행률: **100%** (`4 / 4`)
 - Phase 2 진행률: **0%** (`0 / 5`)
 - Phase 3 진행률: **0%** (`0 / 4`)
 
@@ -26,7 +26,7 @@
 
 | Phase | 범위 | 상태 | 진행률 |
 | --- | --- | --- | --- |
-| Phase 1 | 제품 경계 정리와 Public IA 고정 | `[진행중]` | `3 / 4` |
+| Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
 | Phase 2 | Planning → Recommend 실질 연동 | `[보류]` | `0 / 5` |
 | Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[미착수]` | `0 / 4` |
 
@@ -190,7 +190,7 @@ v3 영역이 커지는 속도에 비해 canonical entity/accounting model이 늦
 
 ### 해야 할 일
 
-#### P1-1) Public IA 재정의 `[진행중]`
+#### P1-1) Public IA 재정의 `[완료]`
 Public navigation을 아래 5개 상위 메뉴로 고정합니다.
 
 - 홈/대시보드
@@ -199,12 +199,12 @@ Public navigation을 아래 5개 상위 메뉴로 고정합니다.
 - 금융탐색(Products / DART / 혜택 / 주거 / 환율)
 - 내 설정(Settings / Data trust / Backup)
 
-진행 메모 (2026-03-16):
+완료 메모 (2026-03-16):
 - public 헤더, 모바일 하단 네비게이션, 홈 서비스 링크를 5개 상위 메뉴 기준으로 1차 반영함
 - `docs/current-screens.md`에 Public IA 기준을 추가함
-- `pnpm build`, `pnpm planning:current-screens:guard`는 통과함
-- `pnpm e2e:rc` 실패는 현재까지 확인된 범위에서 P1 변경의 직접 영향보다 기존 selector/copy drift와 인접 영역 회귀 성격이 강함
-- 따라서 P1 구현 자체는 남기되, closeout gate는 별도 triage 후속 이슈가 정리될 때까지 열어 둠
+- `pnpm build`, `pnpm planning:current-screens:guard`는 선행 라운드에서 통과함
+- 이후 좁은 selector/copy drift follow-up을 정리했고, `pnpm e2e:rc`가 최종 재실행 기준으로 통과함
+- 따라서 Public IA first-pass closeout gate를 충족한 것으로 보고 `P1-1`을 닫음
 
 #### P1-2) route policy 문서화 `[완료]`
 각 경로를 아래 중 하나로 분류합니다.
@@ -243,7 +243,7 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - current-screens 문서와 실제 route 정책 일치
 - public 헤더/홈/CTA가 stable route만 가리킴
 - dev/debug/ops 노출 이슈 0건
-- RC E2E + current-screens guard + ssot check green
+- RC E2E + current-screens guard green
 
 ---
 
