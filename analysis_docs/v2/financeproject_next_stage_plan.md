@@ -347,6 +347,8 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `recommendRunId`가 없거나 현재 보고 있는 report가 처음 열린 report와 다르면 역링크를 숨기고, planning run id나 최신 실행 추정으로 fallback하지 않습니다.
 - 후속 배치에서 `PlanningReportMeta`와 `PlanningReportListItem`에 optional `recommendRunId`를 추가하고, `/api/planning/v2/reports` POST가 explicit `recommendRunId`를 받아 stored report meta에 저장하도록 맞춥니다.
 - 저장된 report list/detail UI는 stored `recommendRunId`가 있을 때만 `/recommend/history?open=<recommendRunId>` 역링크를 read-only로 노출하고, report id / planning run id / recommend run id를 구분해서 보여 줍니다.
+- 후속 구현에서 `PlanningReportsDashboardClient`의 saved report 생성 버튼은 현재 선택 run으로 `/api/planning/v2/reports` POST를 호출하고, query에 explicit `recommendRunId`가 있을 때만 이를 함께 저장합니다.
+- 생성 성공 후에는 현재 `/planning/reports` query에 `selected=<createdReportId>`를 붙여 embedded saved report detail이 바로 열리게 하고, 기존 `runId`, `baseRunId`, `recommendRunId` query는 그대로 유지합니다.
 - source freshness / assumptions / trace는 planning report/export가 이미 가진 `snapshot`, `assumptionsLines`, `reproducibility`, interpretation evidence 요약까지만 owner로 삼고, raw trace 복제는 후속 범위로 남깁니다.
 - 따라서 `P2-5`는 계약과 first path가 문서로 고정된 상태로 보고 `[진행중]`으로 전환합니다.
 

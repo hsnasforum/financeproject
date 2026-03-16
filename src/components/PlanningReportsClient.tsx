@@ -150,7 +150,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
       const reportRows = payload.data;
       setReports(reportRows);
       setSelectedId((currentSelectedId) => {
-        const preferredSelectedId = currentSelectedId || selectedFromQuery || initialSelectedId;
+        const preferredSelectedId = selectedFromQuery || currentSelectedId || initialSelectedId;
         if (reportRows.some((row) => row.id === preferredSelectedId)) return preferredSelectedId;
         return reportRows[0]?.id ?? "";
       });
