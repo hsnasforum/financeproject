@@ -277,9 +277,14 @@ export function RecommendHistoryClient({
                   const selected = selectedRunIds.includes(run.runId);
                   const active = activeRun?.runId === run.runId;
                   const planningRunId = run.profile.planning?.runId?.trim() ?? "";
-                  const planningReportHref = planningRunId
-                    ? `/planning/reports?runId=${encodeURIComponent(planningRunId)}`
-                    : "";
+                  let planningReportHref = "";
+                  if (planningRunId) {
+                    const params = new URLSearchParams({
+                      runId: planningRunId,
+                      recommendRunId: run.runId,
+                    });
+                    planningReportHref = `/planning/reports?${params.toString()}`;
+                  }
                   return (
                     <li key={run.runId}>
                       <div className={cn(
@@ -361,9 +366,14 @@ export function RecommendHistoryClient({
               <div className="space-y-6">
                 {(() => {
                   const activePlanningRunId = activeRun.profile.planning?.runId?.trim() ?? "";
-                  const activePlanningReportHref = activePlanningRunId
-                    ? `/planning/reports?runId=${encodeURIComponent(activePlanningRunId)}`
-                    : "";
+                  let activePlanningReportHref = "";
+                  if (activePlanningRunId) {
+                    const params = new URLSearchParams({
+                      runId: activePlanningRunId,
+                      recommendRunId: activeRun.runId,
+                    });
+                    activePlanningReportHref = `/planning/reports?${params.toString()}`;
+                  }
                   return (
                 <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
                   <div className="flex items-center justify-between gap-4 mb-4">
