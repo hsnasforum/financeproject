@@ -37,6 +37,7 @@ type ReportListItem = {
   createdAt: string;
   kind: "run" | "manual";
   runId?: string;
+  recommendRunId?: string;
 };
 
 type ReportDetail = ReportListItem & {
@@ -105,6 +106,11 @@ function severityLabel(value: ReportActionRow["severity"]): string {
   if (value === "critical") return "치명";
   if (value === "warn") return "경고";
   return "정보";
+}
+
+function buildRecommendHistoryHref(recommendRunId?: string): string {
+  const normalized = typeof recommendRunId === "string" ? recommendRunId.trim() : "";
+  return normalized ? `/recommend/history?open=${encodeURIComponent(normalized)}` : "";
 }
 
 export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
@@ -290,6 +296,10 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
   );
   const selectedVmData = selectedVm.vm;
   const selectedVmError = selectedVm.error;
+  const selectedRecommendHistoryHref = useMemo(
+    () => buildRecommendHistoryHref(selected?.recommendRunId),
+    [selected?.recommendRunId],
+  );
   const assumptionsLines = useMemo(
     () => selectedVmData?.assumptionsLines ?? [],
     [selectedVmData],
@@ -423,13 +433,23 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         </td>
                         <td className="px-4 py-3 text-slate-500 tabular-nums">{formatDateTime(report.createdAt)}</td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            className="no-print font-black text-slate-300 hover:text-rose-600 transition-colors"
-                            onClick={() => openDeleteDialog(report.id)}
-                            type="button"
-                          >
-                            삭제
-                          </button>
+                          <div className="no-print flex items-center justify-end gap-3">
+                            {report.recommendRunId ? (
+                              <Link
+                                className="font-black text-emerald-600 hover:underline"
+                                href={buildRecommendHistoryHref(report.recommendRunId)}
+                              >
+                                추천 실행
+                              </Link>
+                            ) : null}
+                            <button
+                              className="font-black text-slate-300 hover:text-rose-600 transition-colors"
+                              onClick={() => openDeleteDialog(report.id)}
+                              type="button"
+                            >
+                              삭제
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -460,6 +480,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                     <p className="text-[11px] font-bold text-slate-700">
                       ID: <span className="font-black">{selected.id}</span> · 생성: <span className="font-black tabular-nums">{formatDateTime(selected.createdAt)}</span>
                       {selected.runId ? (<> · Run: <span className="font-black">{selected.runId}</span></>) : null}
+                      {selected.recommendRunId ? (<> · 추천 실행: <span className="font-black">{selected.recommendRunId}</span></>) : null}
                     </p>
                   </div>
                 </div>
@@ -477,6 +498,14 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                   >
                     고정 링크 열기
                   </Link>
+                  {selectedRecommendHistoryHref ? (
+                    <Link
+                      className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-700 transition-all hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 shadow-sm"
+                      href={selectedRecommendHistoryHref}
+                    >
+                      추천 실행으로 돌아가기
+                    </Link>
+                  ) : null}
                 </div>
 
                 {!selected.runId ? (

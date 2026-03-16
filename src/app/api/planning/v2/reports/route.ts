@@ -11,6 +11,7 @@ import {
 
 type ReportsCreateBody = {
   runId?: unknown;
+  recommendRunId?: unknown;
   csrf?: unknown;
 } | null;
 
@@ -62,6 +63,7 @@ export async function GET(request: Request) {
         createdAt: row.createdAt,
         kind: row.kind,
         ...(row.runId ? { runId: row.runId } : {}),
+        ...(row.recommendRunId ? { recommendRunId: row.recommendRunId } : {}),
       })),
     });
   } catch (error) {
@@ -83,11 +85,14 @@ export async function POST(request: Request) {
 
   try {
     const runId = asString(body?.runId);
+    const recommendRunId = asString(body?.recommendRunId);
     if (!runId) {
       return jsonError("INPUT", "runId는 필수입니다.", { status: 400 });
     }
 
-    const created = await createReportFromRun(runId);
+    const created = await createReportFromRun(runId, {
+      ...(recommendRunId ? { recommendRunId } : {}),
+    });
     return jsonOk({ data: created }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "리포트 생성에 실패했습니다.";
