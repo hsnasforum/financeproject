@@ -430,12 +430,21 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `P3-4`와의 연결 기준도 함께 적어, 후보가 trust hub를 떠날 때는 독립 기능이 아니라 `planning / recommend / public info`의 행동 근거 보강 레이어로만 들어가도록 방향을 고정했습니다.
 - 따라서 `P3-3`의 완료 기준인 공통 판정 틀, tier 체계, 3개 후보별 판정, rollout 우선순위, `P3-4` 연결 기준은 현재 문서 기준으로 모두 충족한 것으로 보고 닫습니다.
 
-#### P3-4) DART/혜택/주거/환율의 역할 분리 `[미착수]`
+#### P3-4) DART/혜택/주거/환율의 역할 분리 `[진행중]`
 이 기능들은 보조 기능이 아니라 “행동 근거 강화 레이어”로 배치합니다.
 
 예시:
 - 추천 상품 탐색 중 환율/시장/공시 맥락 제공
 - 혜택/주거 정보는 life-event decision 보조 기능으로 연결
+
+진행 메모 (2026-03-17):
+- `DART / 혜택 / 주거 / 환율`은 trust hub 밖으로 나갈 때도 독립 기능 축을 계속 늘리는 대신, `planning / recommend / public info` 중 명시된 host surface 안에서만 읽히게 하는 role matrix를 문서로 고정했습니다.
+- `DART`는 primary host를 `public info(/public/dart, /public/dart/company)`로 두고 standalone monitor는 유지하되, 다른 화면에서는 기업 공시 확인 근거 helper로만 제한합니다.
+- `혜택`은 primary host를 `public info(/benefits)`, secondary host를 `planning`으로 두고, life-event decision support 문맥에서만 얇은 eligibility/재확인 helper로 붙이는 기준을 정했습니다.
+- `주거`는 primary host를 `public info(/housing/afford, /housing/subscription)`, secondary host를 `planning`으로 두고, 주거비 판단 보조와 공고 일정 참고 맥락으로만 연결합니다.
+- `환율`은 primary host를 `public info(/tools/fx)`, secondary host를 `planning`으로 두고, 환전·해외결제 비용 참고 맥락 외의 독립 의사결정 기능으로 확장하지 않는 기준을 적었습니다.
+- raw source 상태, sync, env, fallback diagnostics 같은 운영 정보는 계속 `/settings/data-sources` trust hub owner로 두고, public surface에는 행동 근거/비교 맥락 helper만 얇게 노출하는 공통 규칙을 명시했습니다.
+- `P3-3`에서 정한 `macro / retirement / insurance`의 tier와 host 후보도 함께 정리해, `macro`는 `planning`, `retirement`는 `planning/recommend`, `insurance`는 trust hub candidate 유지 원칙과 충돌하지 않도록 경계를 고정했습니다.
 
 ### 완료 기준
 - 추천/상품/공공 정보 화면 모두 freshness 표시
