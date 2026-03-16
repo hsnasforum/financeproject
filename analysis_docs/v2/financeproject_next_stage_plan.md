@@ -558,6 +558,15 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 
 ---
 
+## 10. 다음 사이클 연결 메모
+
+- 현재 `P1 ~ P3` 13개 항목은 문서 기준으로 모두 `[완료]` 상태입니다.
+- 이 문서는 완료된 로드맵의 closeout 기록으로 유지하고, 다음 구현 사이클의 공식 backlog는 `analysis_docs/v2/11_post_phase3_vnext_backlog.md`에서 별도로 관리합니다.
+- 다음 사이클은 기존 완료 항목을 재개방하지 않고, `planning/v3`와 운영 규칙을 `contract-first` 원칙으로 다시 좁히는 데서 시작합니다.
+- 우선순위는 `v3 canonical entity model -> API/import-export/rollback contract -> QA gate 재정의 -> beta exposure 정책 -> 소형 UX polish` 순으로 둡니다.
+
+---
+
 ## 10. 최종 제안
 
 이 프로젝트는 “무엇을 더 만들까”보다 **“이미 있는 것을 어떤 제품 경험으로 묶을까”**가 더 중요합니다.
