@@ -467,41 +467,67 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
       <div className="space-y-8" data-testid="dashboard-root">
         <ReportHeroCard
           kicker="Daily Brief"
-          title={latestRun ? "최근 플랜에서 바로 이어서 확인합니다" : "내 금융 브리핑을 여기서 시작합니다"}
+          title={latestRun ? "최근 플랜에서 바로 이어서 확인합니다" : "지금 필요한 시작점을 바로 고르세요"}
           description={latestRun
             ? `${latestRun.title || "최근 플랜"} 기준으로 월 잉여금, 말기 순자산, 실행 액션, 데이터 연결 상태를 같은 기준으로 이어봅니다.`
-            : "플래닝 결과가 아직 없어도 데이터 연결 상태, 환율, 혜택 흐름을 먼저 확인하고 첫 실행으로 이어갈 수 있습니다."}
+            : "내 재무 상태를 먼저 진단하거나, 조건에 맞는 상품을 바로 찾아보는 두 갈래 시작점을 제공합니다."}
           action={(
-            <>
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
-              >
-                {refreshing ? "새로고침 중..." : "새로고침"}
-              </button>
-              <Link
-                href={latestRun ? latestRunReportHref : "/planning"}
-                prefetch={devPlanningPrefetch(latestRun ? latestRunReportHref : "/planning")}
-                className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
-              >
-                {latestRun ? "최근 리포트 보기" : "첫 플랜 시작"}
-              </Link>
-              <Link
-                href={latestRunPlanningHref}
-                prefetch={devPlanningPrefetch(latestRunPlanningHref)}
-                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
-              >
-                다시 계산
-              </Link>
-              <Link
-                href="/planning/runs"
-                prefetch={devPlanningPrefetch("/planning/runs")}
-                className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
-              >
-                실행 기록
-              </Link>
-            </>
+            latestRun ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
+                >
+                  {refreshing ? "새로고침 중..." : "새로고침"}
+                </button>
+                <Link
+                  href={latestRunReportHref}
+                  prefetch={devPlanningPrefetch(latestRunReportHref)}
+                  className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
+                >
+                  최근 리포트 보기
+                </Link>
+                <Link
+                  href={latestRunPlanningHref}
+                  prefetch={devPlanningPrefetch(latestRunPlanningHref)}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
+                >
+                  다시 계산
+                </Link>
+                <Link
+                  href="/planning/runs"
+                  prefetch={devPlanningPrefetch("/planning/runs")}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
+                >
+                  실행 기록
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/planning"
+                  prefetch={devPlanningPrefetch("/planning")}
+                  className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
+                >
+                  내 재무 상태 진단하기
+                </Link>
+                <Link
+                  href="/recommend"
+                  prefetch={devPlanningPrefetch("/recommend")}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 active:scale-95"
+                >
+                  조건에 맞는 상품 찾기
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
+                >
+                  {refreshing ? "새로고침 중..." : "새로고침"}
+                </button>
+              </>
+            )
           )}
         >
           <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-400">
@@ -548,7 +574,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
               최저 현금 {formatKrw(latestSummary.worstCashKrw)}
             </span>
             <Link href="/recommend" className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-600 hover:bg-emerald-100 transition-colors">
-              추천 허브 →
+              조건에 맞는 상품 찾기 →
             </Link>
           </div>
           {state.warnings.length > 0 ? (
@@ -749,9 +775,9 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
 
             <Card className="p-8 space-y-8">
               <SubSectionHeader
-                title="데이터 연결 상태"
-                description="활용 중인 주요 데이터 소스 점검"
-                action={<Link href="/settings/data-sources" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-[0.15em]">Settings ▶</Link>}
+                title="데이터 신뢰 상태"
+                description="추천과 탐색에 쓰는 주요 데이터 기준 점검"
+                action={<Link href="/settings/data-sources" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-[0.15em]">데이터 신뢰 ▶</Link>}
               />
               <div className="grid gap-6 lg:grid-cols-2">
                 <div className="space-y-4">

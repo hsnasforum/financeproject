@@ -113,7 +113,7 @@ export function ExchangeSummaryCard() {
             </div>
             <p className="text-sm font-bold text-slate-900">{renderError(state.payload.error)}</p>
             <Link href="/settings/data-sources" className="mt-4 text-xs font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-widest transition-colors">
-              Source Settings →
+              데이터 신뢰 확인 →
             </Link>
           </div>
         ) : null}
