@@ -337,6 +337,14 @@ export default function ReportDashboard({ vm }: Props) {
       overallStatus: vm.stage.overallStatus,
     })
     : null;
+  const goalRecommendHref = planningStage
+    ? buildActionRecommendHref({
+      baseHref: PLANNER_ACTION_LINKS.savingRecommend.href,
+      runId: vm.header.runId,
+      stage: planningStage,
+      overallStatus: vm.stage.overallStatus,
+    })
+    : null;
 
   return (
     <div className="space-y-8" data-testid="report-dashboard">
@@ -678,36 +686,44 @@ export default function ReportDashboard({ vm }: Props) {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-3">
-              {vm.topActions.map((action) => (
-                <article className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 shadow-inner transition-all hover:bg-white hover:shadow-md" key={action.code}>
-                  <Badge variant={action.severity === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black border-none mb-3">
-                    {severityText(action.severity)}
-                  </Badge>
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
-                  <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">{action.summary}</p>
-                  <div className="mt-6 space-y-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">핵심 단계</p>
-                    <ul className="space-y-1.5">
-                      {action.steps.slice(0, 3).map((step, index) => (
-                        <li className="flex gap-2 text-[11px] font-bold text-slate-700" key={`${action.code}-step-${index}`}>
-                          <span className="text-emerald-500 shrink-0">•</span>
-                          <span className="leading-tight">{step}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  {action.code === "BUILD_EMERGENCY_FUND" && emergencyRecommendHref ? (
-                    <div className="mt-6 border-t border-slate-100 pt-4">
-                      <Link
-                        className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-700 active:scale-95"
-                        href={emergencyRecommendHref}
-                      >
-                        {PLANNER_ACTION_LINKS.emergencyRecommend.label}
-                      </Link>
+              {vm.topActions.map((action) => {
+                const actionRecommendLink = action.code === "BUILD_EMERGENCY_FUND" && emergencyRecommendHref
+                  ? { href: emergencyRecommendHref, label: PLANNER_ACTION_LINKS.emergencyRecommend.label }
+                  : action.code === "COVER_LUMP_SUM_GOAL" && goalRecommendHref
+                    ? { href: goalRecommendHref, label: PLANNER_ACTION_LINKS.savingRecommend.label }
+                    : null;
+
+                return (
+                  <article className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 shadow-inner transition-all hover:bg-white hover:shadow-md" key={action.code}>
+                    <Badge variant={action.severity === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black border-none mb-3">
+                      {severityText(action.severity)}
+                    </Badge>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
+                    <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">{action.summary}</p>
+                    <div className="mt-6 space-y-2">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">핵심 단계</p>
+                      <ul className="space-y-1.5">
+                        {action.steps.slice(0, 3).map((step, index) => (
+                          <li className="flex gap-2 text-[11px] font-bold text-slate-700" key={`${action.code}-step-${index}`}>
+                            <span className="text-emerald-500 shrink-0">•</span>
+                            <span className="leading-tight">{step}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  ) : null}
-                </article>
-              ))}
+                    {actionRecommendLink ? (
+                      <div className="mt-6 border-t border-slate-100 pt-4">
+                        <Link
+                          className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-700 active:scale-95"
+                          href={actionRecommendLink.href}
+                        >
+                          {actionRecommendLink.label}
+                        </Link>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
             </div>
           )}
         </Card>
