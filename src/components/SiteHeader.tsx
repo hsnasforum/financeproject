@@ -12,28 +12,32 @@ type NavItem = {
   label: string;
   match: "exact" | "prefix";
   excludePrefixes?: string[];
+  includePrefixes?: string[];
 };
 
-const primaryNavItems: NavItem[] = [
-  { href: "/dashboard", label: "브리핑", match: "prefix" },
-  { href: "/planning", label: "플래닝", match: "prefix", excludePrefixes: ["/planning/reports", "/planning/runs"] },
-  { href: "/planning/reports", label: "리포트", match: "prefix" },
-  { href: "/benefits", label: "혜택", match: "prefix" },
-];
-
-const secondaryNavItems: NavItem[] = [
-  { href: "/recommend", label: "추천", match: "prefix" },
-  { href: "/products/catalog", label: "상품 탐색", match: "prefix" },
-  { href: "/planning/runs", label: "실행 기록", match: "prefix" },
+const publicNavItems: NavItem[] = [
+  { href: "/dashboard", label: "홈", match: "prefix" },
+  { href: "/planning", label: "재무진단", match: "prefix" },
+  { href: "/recommend", label: "상품추천", match: "prefix" },
+  {
+    href: "/products",
+    label: "금융탐색",
+    match: "prefix",
+    includePrefixes: ["/benefits", "/public", "/housing", "/tools", "/invest", "/compare", "/gov24"],
+  },
+  { href: "/settings", label: "내 설정", match: "prefix" },
 ];
 
 const adminNavItems: NavItem[] = [
   { href: "/ops", label: "Ops", match: "prefix" },
 ];
 
-const mobileNavItems = [...primaryNavItems, ...secondaryNavItems];
+const mobileNavItems = publicNavItems;
 
 function isNavActive(pathname: string, item: NavItem): boolean {
+  if (item.includePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
+    return true;
+  }
   if (item.excludePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
     return false;
   }
@@ -59,7 +63,7 @@ export function SiteHeader() {
           <BrandLogo />
           <div className="flex flex-1 items-center justify-end gap-6">
             <nav className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50/80 p-2">
-              {primaryNavItems.map((item) => {
+              {publicNavItems.map((item) => {
                 const isActive = isNavActive(pathname, item);
                 return (
                   <Link
@@ -77,31 +81,12 @@ export function SiteHeader() {
               })}
             </nav>
 
-            <nav className="flex items-center gap-2">
-              {secondaryNavItems.map((item) => {
-                const isActive = isNavActive(pathname, item);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    prefetch={devPlanningPrefetch(item.href)}
-                    className={cn(
-                      "rounded-full border border-transparent px-3 py-2 text-[13px] font-bold text-slate-600 transition-colors hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900",
-                      isActive ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "",
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-
             <Link
               className="inline-flex h-11 items-center rounded-full bg-emerald-600 px-5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(5,150,105,0.18)] transition-transform hover:-translate-y-0.5"
               href="/planning"
               prefetch={devPlanningPrefetch("/planning")}
             >
-              플래닝 시작
+              재무진단 시작
             </Link>
           </div>
         </div>
@@ -111,16 +96,17 @@ export function SiteHeader() {
           <div className="flex items-center gap-2">
             <Link
               className="inline-flex h-10 items-center rounded-full border border-slate-200 px-4 text-sm font-bold text-slate-700"
-              href="/benefits"
+              href="/products"
+              prefetch={devPlanningPrefetch("/products")}
             >
-              혜택
+              금융탐색
             </Link>
             <Link
               className="inline-flex h-10 items-center rounded-full bg-emerald-600 px-4 text-sm font-bold text-white"
               href="/planning"
               prefetch={devPlanningPrefetch("/planning")}
             >
-              플래닝
+              재무진단
             </Link>
           </div>
         </div>

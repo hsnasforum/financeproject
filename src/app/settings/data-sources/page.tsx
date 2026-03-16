@@ -51,8 +51,8 @@ export default async function DataSourcesSettingsPage() {
   return (
     <PageShell>
       <PageHeader
-        title="데이터 소스 연동 상태"
-        description="시스템 연동 키 값의 유효성과, 각 API가 사용자 화면에서 어떤 도움으로 이어지는지 확인합니다. 최근 연결 확인은 dev에서만 함께 보고, ping이 없는 소스는 저장된 최신 기준을 read-only로 보여줍니다."
+        title="데이터 신뢰 및 연동 상태"
+        description="각 데이터가 사용자 화면에서 어떤 도움으로 이어지는지와 최신 기준이 무엇인지 함께 확인합니다. 최근 연결 확인은 dev에서만 함께 보고, ping이 없는 소스는 저장된 최신 기준을 read-only로 보여줍니다."
       />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-12">
