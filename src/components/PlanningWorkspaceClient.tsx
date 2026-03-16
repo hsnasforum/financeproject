@@ -2945,9 +2945,9 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                       <div className="mt-4 grid gap-3 sm:grid-cols-3">
                         <label className={`block text-xs ${bodyLabelClassName}`}>
                           대출 잔액
-                          <div className="mt-1 flex items-center gap-2">
+                          <div className="mt-1 flex min-w-0 items-center gap-2">
                             <input
-                              className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
+                              className={cn(bodyCompactFieldClassName, "min-w-0 flex-1 rounded-lg border-slate-200")}
                               inputMode="numeric"
                               type="text"
                               placeholder="예: 25,000,000"
@@ -2959,9 +2959,9 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                         </label>
                         <label className={`block text-xs ${bodyLabelClassName}`}>
                           금리
-                          <div className="mt-1 flex items-center gap-2">
+                          <div className="mt-1 flex min-w-0 items-center gap-2">
                             <input
-                              className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
+                              className={cn(bodyCompactFieldClassName, "min-w-0 flex-1 rounded-lg border-slate-200")}
                               type="number"
                               placeholder="예: 4.8"
                               value={debt.aprPct}
@@ -2972,9 +2972,9 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                         </label>
                         <label className={`block text-xs ${bodyLabelClassName}`}>
                           최소 상환액
-                          <div className="mt-1 flex items-center gap-2">
+                          <div className="mt-1 flex min-w-0 items-center gap-2">
                             <input
-                              className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
+                              className={cn(bodyCompactFieldClassName, "min-w-0 flex-1 rounded-lg border-slate-200")}
                               inputMode="numeric"
                               type="text"
                               min={0}
@@ -3005,9 +3005,9 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                           </label>
                           <label className={`block text-xs ${bodyLabelClassName}`}>
                             남은 개월
-                            <div className="mt-1 flex items-center gap-2">
+                            <div className="mt-1 flex min-w-0 items-center gap-2">
                               <input
-                                className={cn(bodyCompactFieldClassName, "rounded-lg border-slate-200")}
+                                className={cn(bodyCompactFieldClassName, "min-w-0 flex-1 rounded-lg border-slate-200")}
                                 type="number"
                                 min={1}
                                 placeholder="예: 60"
@@ -3158,7 +3158,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                           <label className={`block text-xs ${bodyLabelClassName}`}>
                             목표 금액
                             <input
-                              className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200")}
+                              className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
                               inputMode="numeric"
                               type="text"
                               value={formatGroupedIntegerInput(goal.targetAmount)}
@@ -3168,7 +3168,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                           <label className={`block text-xs ${bodyLabelClassName}`}>
                             현재 금액
                             <input
-                              className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200")}
+                              className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
                               inputMode="numeric"
                               type="text"
                               value={formatGroupedIntegerInput(goal.currentAmount)}
@@ -3178,7 +3178,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                           <label className={`block text-xs ${bodyLabelClassName}`}>
                             목표 시점
                             <input
-                              className={cn(bodyCompactFieldClassName, "mt-1 rounded-lg border-slate-200")}
+                              className={cn(bodyCompactFieldClassName, "mt-1 w-full rounded-lg border-slate-200")}
                               type="month"
                               value={monthOffsetToInput(goal.targetMonth)}
                               onChange={(event) => updateGoalRow(index, { ...goal, targetMonth: inputToMonthOffset(event.target.value) })}
