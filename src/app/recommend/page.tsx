@@ -619,7 +619,7 @@ function RecommendPageInner() {
         description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
       />
 
-      <div className="mb-8 space-y-6">
+      <div className="mb-8 space-y-6" data-testid="recommend-root">
         <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
         
         <Card className="rounded-[2.5rem] p-8 shadow-sm">
@@ -713,6 +713,7 @@ function RecommendPageInner() {
               <div className="mt-8 space-y-3">
                 <Button
                   variant="primary"
+                  data-testid="recommend-submit"
                   className="w-full rounded-2xl h-14 text-sm font-black shadow-lg shadow-emerald-900/20"
                   onClick={() => void submit()}
                   disabled={loading}
