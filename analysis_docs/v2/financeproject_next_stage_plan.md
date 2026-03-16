@@ -10,10 +10,10 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **85%** (`11 / 13` 항목 완료)
+- 전체 진행률: **92%** (`12 / 13` 항목 완료)
 - Phase 1 진행률: **100%** (`4 / 4`)
 - Phase 2 진행률: **100%** (`5 / 5`)
-- Phase 3 진행률: **50%** (`2 / 4`)
+- Phase 3 진행률: **75%** (`3 / 4`)
 
 ### 0.2 상태 표기 규칙
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
 | Phase 2 | Planning → Recommend 실질 연동 | `[완료]` | `5 / 5` |
-| Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[진행중]` | `2 / 4` |
+| Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[진행중]` | `3 / 4` |
 
 ### 0.4 운영 원칙
 
@@ -430,14 +430,14 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `P3-4`와의 연결 기준도 함께 적어, 후보가 trust hub를 떠날 때는 독립 기능이 아니라 `planning / recommend / public info`의 행동 근거 보강 레이어로만 들어가도록 방향을 고정했습니다.
 - 따라서 `P3-3`의 완료 기준인 공통 판정 틀, tier 체계, 3개 후보별 판정, rollout 우선순위, `P3-4` 연결 기준은 현재 문서 기준으로 모두 충족한 것으로 보고 닫습니다.
 
-#### P3-4) DART/혜택/주거/환율의 역할 분리 `[진행중]`
+#### P3-4) DART/혜택/주거/환율의 역할 분리 `[완료]`
 이 기능들은 보조 기능이 아니라 “행동 근거 강화 레이어”로 배치합니다.
 
 예시:
 - 추천 상품 탐색 중 환율/시장/공시 맥락 제공
 - 혜택/주거 정보는 life-event decision 보조 기능으로 연결
 
-진행 메모 (2026-03-17):
+완료 메모 (2026-03-17):
 - `DART / 혜택 / 주거 / 환율`은 trust hub 밖으로 나갈 때도 독립 기능 축을 계속 늘리는 대신, `planning / recommend / public info` 중 명시된 host surface 안에서만 읽히게 하는 role matrix를 문서로 고정했습니다.
 - `DART`는 primary host를 `public info(/public/dart, /public/dart/company)`로 두고 standalone monitor는 유지하되, 다른 화면에서는 기업 공시 확인 근거 helper로만 제한합니다.
 - `혜택`은 primary host를 `public info(/benefits)`, secondary host를 `planning`으로 두고, life-event decision support 문맥에서만 얇은 eligibility/재확인 helper로 붙이는 기준을 정했습니다.
@@ -448,6 +448,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - 후속 구현으로 planning report의 `ReportBenefitsSection`에서 혜택을 독립 탐색 축처럼 키우지 않고, “현재 플래닝 결과 기준으로 먼저 볼 후보를 좁혀 준다”는 secondary host copy와 `/benefits` deep-link CTA 1건을 추가해 primary host 경로를 명확히 열었습니다.
 - 이어서 planning report의 top action 근처에 `주거 판단 보조` helper를 추가해, 주거 목표 또는 주거 관련 액션 문맥이 있을 때만 `/housing/subscription?region=전국&mode=all&houseType=apt`로 이어지는 `청약 공고 다시 보기` CTA 1건을 노출했습니다.
 - 이 helper는 planning 안에서 주거비 판단을 확정하지 않고 “다음에 확인할 주거 정보”를 좁혀 주는 보조 레이어로만 설명하며, 세부 조건과 실제 계약 판단은 주거 화면에서 다시 확인하도록 톤을 제한했습니다.
+- 따라서 `P3-4`의 완료 기준인 role matrix, primary/secondary host surface 기준, trust hub owner와 public helper 경계, planning secondary host의 혜택/주거 first path는 현재 문서와 커밋 기준으로 모두 충족한 것으로 보고 닫습니다.
 
 ### 완료 기준
 - 추천/상품/공공 정보 화면 모두 freshness 표시
