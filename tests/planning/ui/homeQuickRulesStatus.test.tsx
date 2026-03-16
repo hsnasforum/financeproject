@@ -54,7 +54,7 @@ describe("home quick rules status", () => {
       />,
     );
 
-    expect(html).toContain("quick rules · 배분 가능");
+    expect(html).toContain("빠른 점검 · 배분 가능");
     expect(html).toContain("상태 읽기:");
   });
 });
