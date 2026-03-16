@@ -10,10 +10,10 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **92%** (`12 / 13` 항목 완료)
+- 전체 진행률: **100%** (`13 / 13` 항목 완료)
 - Phase 1 진행률: **100%** (`4 / 4`)
 - Phase 2 진행률: **100%** (`5 / 5`)
-- Phase 3 진행률: **75%** (`3 / 4`)
+- Phase 3 진행률: **100%** (`4 / 4`)
 
 ### 0.2 상태 표기 규칙
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
 | Phase 2 | Planning → Recommend 실질 연동 | `[완료]` | `5 / 5` |
-| Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[진행중]` | `3 / 4` |
+| Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[완료]` | `4 / 4` |
 
 ### 0.4 운영 원칙
 
@@ -367,7 +367,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 
 ### 해야 할 일
 
-#### P3-1) Data Trust Layer 신설 `[진행중]`
+#### P3-1) Data Trust Layer 신설 `[완료]`
 `/settings/data-sources`를 운영 화면이 아니라 사용자 신뢰 허브로 재해석합니다.
 
 구성:
@@ -377,12 +377,15 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - stale/fallback 안내 문구
 - 소스별 영향 범위
 
-진행 메모 (2026-03-16):
+완료 메모 (2026-03-16 ~ 2026-03-17):
 - `/settings/data-sources` 상단을 사용자 질문 중심 trust summary로 다시 열고, 이 페이지에서 먼저 봐야 할 내용과 읽는 순서를 한 화면에서 정리했습니다.
 - `DataSourceImpactCardsClient`를 상단 trust summary 바로 아래에 두어, 어떤 데이터가 어떤 사용자 질문과 화면에 도움을 주는지 먼저 읽게 정리했습니다.
 - `DataSourceStatusCard`는 production 기준으로 raw 상태 코드, env key, API 경로보다 사용자에게 보이는 영향과 현재 읽는 기준을 먼저 보여 주도록 톤을 바꿨습니다.
 - `OpenDartStatusCard`도 공시 데이터 연결 상태와 현재 읽는 기준 중심으로 문구를 바꾸고, 개발용 인덱스 관리와 파일 경로는 dev 환경 설명으로만 뒤로 내렸습니다.
 - `DataSourceHealthTable`과 detailed diagnostics는 페이지 하단의 `상세 운영 진단` 섹션으로 내려, 사용자용 trust 정보보다 뒤에서 참고용으로만 읽히게 했습니다.
+- `/products/*`, `/recommend`, `/housing/subscription`에서는 운영성 배너를 제거하고 상세 상태 확인을 `/settings/data-sources`로 넘겨, trust hub가 raw 운영 상태 owner라는 원칙을 실제 user flow에 반영했습니다.
+- `P3-2`의 public freshness helper rollout과 `P3-4`의 support-layer helper path도 모두 raw 운영 정보는 trust hub owner에 남기고, public surface에는 얇은 helper만 두는 경계를 유지한 채 닫혔습니다.
+- 따라서 `P3-1`의 완료 기준인 trust hub first-pass 재구성, public 운영 배너 제거 및 settings 이관, trust hub/public helper 경계 유지, Phase 3 후속 항목과의 원칙 일치는 현재 문서와 커밋 기준으로 모두 충족한 것으로 보고 닫습니다.
 
 #### P3-2) source freshness contract 표준화 `[완료]`
 모든 public 결과 카드에 최소 아래 메타를 붙입니다.
