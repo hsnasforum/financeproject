@@ -10,9 +10,9 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **46%** (`6 / 13` 항목 완료)
+- 전체 진행률: **54%** (`7 / 13` 항목 완료)
 - Phase 1 진행률: **100%** (`4 / 4`)
-- Phase 2 진행률: **40%** (`2 / 5`)
+- Phase 2 진행률: **60%** (`3 / 5`)
 - Phase 3 진행률: **0%** (`0 / 4`)
 
 ### 0.2 상태 표기 규칙
@@ -27,7 +27,7 @@
 | Phase | 범위 | 상태 | 진행률 |
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
-| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `2 / 5` |
+| Phase 2 | Planning → Recommend 실질 연동 | `[진행중]` | `3 / 5` |
 | Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[미착수]` | `0 / 4` |
 
 ### 0.4 운영 원칙
@@ -296,7 +296,7 @@ Dashboard 상단에서 사용자를 두 갈래로 분기합니다.
 - `/recommend` 결과 grid 위에는 planning handoff가 있을 때만 보이는 작은 context strip을 추가해, 현재 플래닝 결과 기준인지, summary 기반인지 legacy planningContext 기반인지, 어떤 실행 ID에서 왔는지를 읽을 수 있게 했습니다.
 - planning run handoff projection 저장, 추가 producer surface, explanation 확장은 `P2-3 ~ P2-5` 후속 범위로 남기고, `P2-2`의 최소 완료 기준인 consumer 활성화 + producer 경로 1건 + 결과 context 노출은 충족한 것으로 정리합니다.
 
-#### P2-3) 액션 기반 CTA 도입 `[진행중]`
+#### P2-3) 액션 기반 CTA 도입 `[완료]`
 planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 
 - “비상자금 보강” → 적금/예금 추천 with short-term liquidity preset
@@ -308,7 +308,8 @@ planning 결과의 action 카드에서 아래로 직접 이동시킵니다.
 - CTA는 `src/lib/planner/compute.ts`에 이미 있던 emergency recommend preset을 재사용하고, `planning.runId`, `planning.summary.stage`, optional `planning.summary.overallStatus` handoff query를 함께 유지합니다.
 - 후속 배치에서 `action.code === "COVER_LUMP_SUM_GOAL"`일 때만 saving recommend preset을 재사용하는 두 번째 CTA 경로를 추가했습니다.
 - 후속 배치에서 `action.code === "REDUCE_DEBT_SERVICE"`일 때만 기존 public route인 `/products/credit-loan`으로 이동하는 세 번째 CTA 경로를 추가했습니다.
-- 현재 열린 action code는 `BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL`, `REDUCE_DEBT_SERVICE` 3건뿐이며, 다른 action code 매핑과 CTA 분기 테이블은 아직 열지 않았습니다.
+- 현재 열린 action code는 `BUILD_EMERGENCY_FUND`, `COVER_LUMP_SUM_GOAL`, `REDUCE_DEBT_SERVICE` 3건이며, 이 항목에 예시로 정의한 CTA 경로 3종은 모두 현재 커밋 기준으로 충족했습니다.
+- `IMPROVE_RETIREMENT_PLAN` 같은 추가 action code 확장은 별도 후속 개선 범위로 남기고, `P2-3` 자체는 닫습니다.
 
 #### P2-4) 추천 결과 설명 강화 `[진행중]`
 현재 점수/가중치 중심 UI에 아래를 추가합니다.
