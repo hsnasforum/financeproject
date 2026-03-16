@@ -17,6 +17,7 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FilterSelect } from "@/components/ui/FilterSelect";
+import { type FreshnessItemStatus } from "@/components/data/freshness";
 import { downloadText } from "@/lib/browser/download";
 import { type NormalizedProduct } from "@/lib/finlife/types";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
@@ -46,6 +47,7 @@ import {
   type RecommendProfileNormalized,
 } from "@/lib/schemas/recommendProfile";
 import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
+import { type SourceStatusRow } from "@/lib/sources/types";
 import { cn } from "@/lib/utils";
 
 type RecommendItem = {
@@ -143,6 +145,20 @@ type TrustCue = {
   tone: "emerald" | "amber" | "slate";
   label: string;
   helper: string;
+};
+
+type StatusApiResponse = {
+  ok: boolean;
+  data?: SourceStatusRow[];
+};
+
+type RecommendCardFreshnessMeta = {
+  sourceId: string;
+  kind: RecommendItem["kind"];
+  lastSyncedAt?: string | null;
+  freshnessStatus?: FreshnessItemStatus;
+  fallbackMode?: string | null;
+  assumptionNotes: string[];
 };
 
 type StoredRecommendItemV1 = {
@@ -367,10 +383,89 @@ function buildTrustCues(input: {
   cues.push({
     tone: "slate",
     label: "데이터 최신성 읽기",
-    helper: "이 카드의 최신성 판단은 화면 상단 데이터 배너 기준으로 함께 읽어 주세요.",
+    helper: "이 카드의 결과 기준 메타와 함께 읽어 주세요. 자세한 연결 상태는 데이터 신뢰 및 연동 상태에서 확인할 수 있습니다.",
   });
 
   return cues;
+}
+
+function buildSourceStatusKey(input: { sourceId: string; kind: RecommendItem["kind"] }): string {
+  return `${input.sourceId}:${input.kind}`;
+}
+
+function deriveFreshnessStatus(row: SourceStatusRow | null): FreshnessItemStatus {
+  if (!row) return "empty";
+  if (row.lastError?.message) return "error";
+  if (row.counts <= 0) return "empty";
+  if (!row.isFresh) return "stale";
+  return "ok";
+}
+
+function formatFreshnessStatusLabel(status: FreshnessItemStatus): string {
+  switch (status) {
+    case "ok":
+      return "최신";
+    case "stale":
+      return "기준 지남";
+    case "error":
+      return "최근 확인 실패";
+    case "empty":
+      return "기준 정보 없음";
+    default:
+      return "기준 정보 없음";
+  }
+}
+
+function formatFallbackModeLabel(mode?: string | null): string | null {
+  if (!mode) return null;
+  const normalized = mode.trim().toUpperCase();
+  if (normalized === "CACHE") return "캐시 기준";
+  if (normalized === "REPLAY") return "재생 데이터 기준";
+  if (normalized === "MOCK") return "예시 데이터 기준";
+  return `${mode} 기준`;
+}
+
+function buildAssumptionNotes(
+  item: RecommendItem,
+  meta: RecommendResponse["meta"] | undefined,
+): string[] {
+  const notes: string[] = [];
+  const assumptions = meta?.assumptions;
+
+  if (item.selectedOption.rateSource === "intr_rate2" && assumptions?.rateSelectionPolicy) {
+    notes.push(assumptions.rateSelectionPolicy);
+  }
+
+  if (item.signals?.depositProtection && assumptions?.depositProtectionPolicy) {
+    notes.push(assumptions.depositProtectionPolicy);
+  }
+
+  return [...new Set(notes.filter((note) => note.trim().length > 0))].slice(0, 2);
+}
+
+function buildCardFreshnessMeta(input: {
+  item: RecommendItem;
+  meta: RecommendResponse["meta"] | undefined;
+  sourceStatusReady: boolean;
+  sourceStatusRow: SourceStatusRow | null;
+}): RecommendCardFreshnessMeta | null {
+  const { item, meta, sourceStatusReady, sourceStatusRow } = input;
+  const fallbackMode = formatFallbackModeLabel(meta?.fallback?.mode);
+  const assumptionNotes = buildAssumptionNotes(item, meta);
+  const freshnessStatus = sourceStatusReady ? deriveFreshnessStatus(sourceStatusRow) : undefined;
+  const lastSyncedAt = sourceStatusReady ? sourceStatusRow?.lastSyncedAt ?? null : undefined;
+  const hasStatusMeta = sourceStatusReady;
+
+  if (!hasStatusMeta && !fallbackMode && assumptionNotes.length === 0) return null;
+
+  return {
+    sourceId: item.sourceId,
+    kind: item.kind,
+    ...(typeof lastSyncedAt !== "undefined" ? { lastSyncedAt } : {}),
+    ...(freshnessStatus ? { freshnessStatus } : {}),
+    ...(fallbackMode ? { fallbackMode } : {}),
+    assumptionNotes,
+  };
 }
 
 function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
@@ -662,9 +757,12 @@ function RecommendPageInner() {
   const [readyToPersist, setReadyToPersist] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState<string | null>(null);
   const [formIssues, setFormIssues] = useState<Issue[]>([]);
+  const [sourceStatusRows, setSourceStatusRows] = useState<SourceStatusRow[]>([]);
+  const [sourceStatusReady, setSourceStatusReady] = useState(false);
   const lastStoredRef = useRef<StoredRecommendResultV1 | null>(null);
   const autoRunTriggeredRef = useRef(false);
   const submitInFlightRef = useRef(false);
+  const sourceStatusAbortRef = useRef<AbortController | null>(null);
 
   const showValidationIssues = useCallback((issues: Issue[]) => {
     setFormIssues(issues);
@@ -794,6 +892,50 @@ function RecommendPageInner() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   }, [profile, readyToPersist]);
 
+  useEffect(() => {
+    if (!result?.items?.length) {
+      sourceStatusAbortRef.current?.abort();
+      setSourceStatusRows([]);
+      setSourceStatusReady(false);
+      return;
+    }
+
+    sourceStatusAbortRef.current?.abort();
+    const controller = new AbortController();
+    sourceStatusAbortRef.current = controller;
+    setSourceStatusReady(false);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/sources/status", {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = (await response.json()) as StatusApiResponse;
+        if (!response.ok || !json.ok || !Array.isArray(json.data)) {
+          if (!controller.signal.aborted) {
+            setSourceStatusRows([]);
+            setSourceStatusReady(false);
+          }
+          return;
+        }
+        if (!controller.signal.aborted) {
+          setSourceStatusRows(json.data);
+          setSourceStatusReady(true);
+        }
+      } catch (fetchError) {
+        if (fetchError instanceof Error && fetchError.name === "AbortError") return;
+        if (!controller.signal.aborted) {
+          setSourceStatusRows([]);
+          setSourceStatusReady(false);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [result]);
+
   const purposeLabel = useMemo(() => {
     if (profile.purpose === "emergency") return "단기 비상금";
     if (profile.purpose === "long-term") return "장기 저축";
@@ -813,6 +955,14 @@ function RecommendPageInner() {
     () => (result ? buildPlanningContextStrip(lastStored?.profile ?? null, result, planningActionContext) : null),
     [lastStored, planningActionContext, result],
   );
+  const sourceStatusMap = useMemo(() => {
+    const next = new Map<string, SourceStatusRow>();
+    for (const row of sourceStatusRows) {
+      if (row.kind !== "deposit" && row.kind !== "saving") continue;
+      next.set(buildSourceStatusKey({ sourceId: row.sourceId, kind: row.kind }), row);
+    }
+    return next;
+  }, [sourceStatusRows]);
 
   async function submit() {
     if (loading) return;
@@ -1087,6 +1237,12 @@ function RecommendPageInner() {
               const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
               const detailProduct = buildDetailProduct(item);
               const scorePct = Math.min(100, Math.max(0, item.finalScore));
+              const freshnessMeta = buildCardFreshnessMeta({
+                item,
+                meta: result.meta,
+                sourceStatusReady,
+                sourceStatusRow: sourceStatusMap.get(buildSourceStatusKey(item)) ?? null,
+              });
               const trustCues = buildTrustCues({
                 item,
                 depositProtectionPolicy: result.meta?.assumptions.depositProtectionPolicy,
@@ -1141,6 +1297,56 @@ function RecommendPageInner() {
                   </div>
 
                   <div className="mb-8 space-y-3">
+                    {freshnessMeta ? (
+                      <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">결과 기준</p>
+                          <div className="flex flex-wrap gap-2">
+                            {freshnessMeta.freshnessStatus ? (
+                              <span
+                                className={cn(
+                                  "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm",
+                                  freshnessMeta.freshnessStatus === "ok"
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : freshnessMeta.freshnessStatus === "stale"
+                                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                                      : freshnessMeta.freshnessStatus === "error"
+                                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                                        : "border-slate-200 bg-white text-slate-500",
+                                )}
+                              >
+                                상태: {formatFreshnessStatusLabel(freshnessMeta.freshnessStatus)}
+                              </span>
+                            ) : null}
+                            {freshnessMeta.fallbackMode ? (
+                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm">
+                                {freshnessMeta.fallbackMode}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        {typeof freshnessMeta.lastSyncedAt !== "undefined" ? (
+                          <p className="text-[11px] font-bold leading-relaxed text-slate-600">
+                            {freshnessMeta.lastSyncedAt
+                              ? `기준 확인 ${formatKoreanDateTime(freshnessMeta.lastSyncedAt)}`
+                              : "기준 확인 시각 정보가 아직 없습니다."}
+                          </p>
+                        ) : null}
+                        {freshnessMeta.assumptionNotes.length > 0 ? (
+                          <ul className="space-y-2">
+                            {freshnessMeta.assumptionNotes.map((note) => (
+                              <li
+                                key={note}
+                                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600 shadow-sm"
+                              >
+                                가정: {note}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ) : null}
+
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">읽기 힌트</p>
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
