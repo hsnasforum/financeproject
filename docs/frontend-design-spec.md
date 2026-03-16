@@ -4,6 +4,7 @@
 - **Mission**: 현대적이고 일관된 완성도 높은 UI/UX 경험 제공
 - **Core Mood**: 신뢰감(Trust), 세련됨(Modern), 가볍지만 전문적임(Light & Professional)
 - **Key Principle**: 기존 레거시 디자인 보존보다 전체적인 통일성과 완성도를 최우선으로 합니다. 낡은 느낌(Old-looking)을 배제하고 모바일에서 데스크톱까지 자연스러운 반응형(Responsive) 레이아웃을 제공합니다.
+- **Reference Direction**: 토스뱅크의 정돈된 여백, 쉬운 문장, 자신감 있는 타이포그래피, 과하지 않은 인터랙션 밀도를 참고합니다. 단, 외부 서비스의 문구/레이아웃/그래픽을 그대로 복제하지 않고 이 제품의 데이터와 흐름에 맞게 다시 설계합니다.
 
 ## 2. Tech Stack & Styling
 - **Framework**: Next.js 16 (App Router), React 19
@@ -32,6 +33,10 @@
   - `Primary`: `#059669` (Emerald 600) - 최고금리, 핵심 수치, 주요 액션 강조에 통일하여 사용
   - `Background`: `#f8fafc` (Slate 50) 바탕 / `Surface`: `#ffffff` (White)
   - `Text`: `Foreground` (`#0f172a`), `Secondary` (`#475569`), `Muted` (`#94a3b8`)
+- **Background Rules**:
+  - 전역 배경은 `Slate 50` 계열의 단색 또는 매우 약한 gradient까지만 허용합니다.
+  - 바둑판, 격자, 노트지, 체크 패턴, 반복 텍스처 배경은 사용하지 않습니다.
+  - 시각적 리듬은 배경 장식이 아니라 카드 깊이, 타이포그래피, 여백, Emerald/Slate 강조, 작은 시각화로 해결합니다.
 - **Typography**: 시스템 폰트(geist-sans 계열) 기반으로 자신감 있고 읽기 쉬운 텍스트 구성
 - **Spacing & Layout**: 답답하고 촘촘한 레이아웃을 피하고, 넉넉하고 정돈된 여백(Spacing scale) 리듬 유지
 - **Radius & Shadow**:
@@ -66,6 +71,9 @@
 - **공통 상태 분리**:
   - **Hero Layout**: 홈 화면 상단은 `bg-slate-100` 배경과 `emerald-600` 기반의 강력한 Primary CTA를 배치하여 첫인상을 세련되게 전달합니다.
   - **Portal Consistency**: 대시보드와 홈 포털 카드는 `bg-slate-50`과 `White` 서피스를 교차 활용하여 정보 밀도를 유지하면서도 쾌적한 여백을 제공합니다. 모든 진입 카드에는 `rounded-[2rem]` 또는 `rounded-[2.5rem]`을 적용합니다.
+- **Background Discipline**:
+  - 진입면, 탐색면, 리포트, 설정 화면을 포함한 사용자 표면 전반에서 체크패턴/격자 배경을 재도입하지 않습니다.
+  - 페이지의 존재감은 배경 무늬가 아니라 제목, 요약 블록, 카드 위계, 상태 스트립, 소형 시각화로 만듭니다.
 - **공통 상태 분리**:  - `Loading`: 레이아웃이 크게 흔들리지 않도록 스켈레톤 또는 자리표시자 형태로 먼저 보여줍니다.
   - `Empty`: 비어 있는 이유를 짧게 설명하고, 기본 CTA 1개를 반드시 둡니다.
   - `Empty` 기본 CTA는 현재 화면의 핵심 흐름을 가장 직접 이어 주는 액션을 우선합니다. 우선순위는 `필터 초기화` -> `첫 작업 시작` -> `이전 단계로 이동`입니다.
