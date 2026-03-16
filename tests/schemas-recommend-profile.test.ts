@@ -88,7 +88,7 @@ describe("recommend profile schema", () => {
 
   it("parses query overrides with pool alias and candidate sources", () => {
     const params = new URLSearchParams(
-      "purpose=seed-money&pool=unified&candidateSources=finlife,datago_kdb&topN=5&monthlyIncome=4100000&liquidAssetsKrw=9000000",
+      "purpose=seed-money&pool=unified&candidateSources=finlife,datago_kdb&topN=5&monthlyIncome=4100000&liquidAssetsKrw=9000000&planning.runId=run_20260316_001&planning.summary.stage=DEBT&planning.summary.overallStatus=SUCCESS",
     );
     const parsed = fromSearchParams(params);
 
@@ -96,6 +96,13 @@ describe("recommend profile schema", () => {
     expect(parsed.value.purpose).toBe("seed-money");
     expect(parsed.value.candidatePool).toBe("unified");
     expect(parsed.value.candidateSources).toEqual(["finlife", "datago_kdb"]);
+    expect(parsed.value.planning).toMatchObject({
+      runId: "run_20260316_001",
+      summary: {
+        stage: "DEBT",
+        overallStatus: "SUCCESS",
+      },
+    });
     expect(parsed.value.planningContext?.monthlyIncomeKrw).toBe(4_100_000);
     expect(parsed.value.planningContext?.liquidAssetsKrw).toBe(9_000_000);
 
