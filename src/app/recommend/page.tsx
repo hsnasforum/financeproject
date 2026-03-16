@@ -245,6 +245,8 @@ function toSavedRunProfile(profile: StoredProfile): SavedRunProfile {
       term: profile.weights.term,
       liquidity: profile.weights.liquidity,
     },
+    ...(profile.planning ? { planning: profile.planning } : {}),
+    ...(profile.planningContext ? { planningContext: profile.planningContext } : {}),
   };
 }
 

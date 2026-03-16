@@ -546,6 +546,32 @@ export function fromSearchParams(params: SearchParamsInput): ParseResult<Partial
     patch.planningContext = planningContext;
   }
 
+  const planningRunId = parsePlanningRunId(readParam(params, "planning.runId"), "planning.runId", issues);
+  const planningStage = parsePlanningStage(readParam(params, "planning.summary.stage"), "planning.summary.stage", issues);
+  const planningOverallStatus = parsePlanningOverallStatus(
+    readParam(params, "planning.summary.overallStatus"),
+    "planning.summary.overallStatus",
+    issues,
+  );
+
+  if (planningRunId || planningStage || planningOverallStatus) {
+    if (!planningRunId) {
+      issues.push(issue("planning.runId", "is required when planning is provided"));
+    }
+    if (!planningStage) {
+      issues.push(issue("planning.summary.stage", "is required when planning is provided"));
+    }
+    if (planningRunId && planningStage) {
+      patch.planning = {
+        runId: planningRunId,
+        summary: {
+          stage: planningStage,
+          ...(planningOverallStatus ? { overallStatus: planningOverallStatus } : {}),
+        },
+      };
+    }
+  }
+
   return buildParseResult(patch, issues);
 }
 
@@ -571,6 +597,15 @@ export function toSearchParams(profile: RecommendProfileNormalized): URLSearchPa
   }
   if (typeof profile.planningContext?.debtBalanceKrw === "number") {
     params.set("debtBalanceKrw", String(profile.planningContext.debtBalanceKrw));
+  }
+  if (profile.planning?.runId) {
+    params.set("planning.runId", profile.planning.runId);
+  }
+  if (profile.planning?.summary.stage) {
+    params.set("planning.summary.stage", profile.planning.summary.stage);
+  }
+  if (profile.planning?.summary.overallStatus) {
+    params.set("planning.summary.overallStatus", profile.planning.summary.overallStatus);
   }
   return params;
 }
