@@ -138,6 +138,24 @@ function buildActionRecommendHref(input: {
   return `${url.pathname}${url.search}`;
 }
 
+const HOUSING_SUPPORT_KEYWORDS = ["주거", "주택", "집", "내집", "아파트", "전세", "월세", "청약"] as const;
+
+function hasHousingSupportKeyword(value: string | undefined): boolean {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) return false;
+  return HOUSING_SUPPORT_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+
+function resolveHousingSupportContext(vm: ReportVM): "goal" | "action" | null {
+  if (vm.goalsTable.some((goal) => hasHousingSupportKeyword(goal.name))) {
+    return "goal";
+  }
+  if (vm.actionRows.some((action) => hasHousingSupportKeyword(`${action.title} ${action.summary}`))) {
+    return "action";
+  }
+  return null;
+}
+
 function actionSummaryTone(input: {
   worstCashKrw?: number;
   criticalWarnings?: number;
@@ -351,6 +369,13 @@ export default function ReportDashboard({ vm }: Props) {
       actionCode: "COVER_LUMP_SUM_GOAL",
     })
     : null;
+  const housingSupportContext = resolveHousingSupportContext(vm);
+  const housingSupportTitle = housingSupportContext === "goal"
+    ? "주거 관련 목표가 있다면 청약 일정부터 다시 확인해 보세요."
+    : "현재 실행 제안에 주거 관련 확인 항목이 있어 청약 공고를 먼저 좁혀 볼 수 있습니다.";
+  const housingSupportSummary = housingSupportContext === "goal"
+    ? "플래닝에서는 다음에 볼 주거 정보를 먼저 좁혀 줍니다. 세부 조건과 실제 계약 판단은 주거 화면에서 다시 확인하세요."
+    : "여기서는 다음에 볼 주거 정보를 빠르게 좁혀 줍니다. 세부 조건과 실제 계약 판단은 주거 화면에서 다시 확인하세요.";
 
   return (
     <div className="space-y-8" data-testid="report-dashboard">
@@ -685,6 +710,24 @@ export default function ReportDashboard({ vm }: Props) {
               우선순위 {vm.topActions.length}개
             </Badge>
           </div>
+
+          {housingSupportContext ? (
+            <div className="mb-8 rounded-[1.75rem] border border-sky-100 bg-sky-50/70 p-5 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">주거 판단 보조</p>
+              <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-2xl">
+                  <p className="text-sm font-black leading-relaxed text-slate-900">{housingSupportTitle}</p>
+                  <p className="mt-2 text-xs font-bold leading-relaxed text-slate-600">{housingSupportSummary}</p>
+                </div>
+                <Link
+                  className="inline-flex items-center rounded-xl bg-sky-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-sky-900/10 transition hover:bg-sky-700 active:scale-95"
+                  href={PLANNER_ACTION_LINKS.subscriptionHousing.href}
+                >
+                  청약 공고 다시 보기
+                </Link>
+              </div>
+            </div>
+          ) : null}
           
           {vm.topActions.length === 0 ? (
             <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
