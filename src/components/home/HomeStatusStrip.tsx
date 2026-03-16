@@ -17,7 +17,7 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
       <Container className="px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[2.5rem] bg-white p-10 shadow-sm border border-slate-100">
-            <p className="text-sm font-black uppercase tracking-widest text-slate-400">MMD Ready Status</p>
+            <p className="text-sm font-black uppercase tracking-widest text-slate-400">연결 준비 상태</p>
             <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-900">지금 바로 비교할 준비가 됐는지 확인합니다.</h3>
             <div className="mt-4 flex items-center gap-2">
               <span className={cn("w-2 h-2 rounded-full", status.p0Missing > 0 ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
@@ -38,7 +38,7 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
           </div>
 
           <div className="rounded-[2.5rem] bg-white p-10 shadow-sm border border-slate-100">
-            <p className="text-sm font-black uppercase tracking-widest text-slate-400">MMD Core Flow</p>
+            <p className="text-sm font-black uppercase tracking-widest text-slate-400">핵심 이용 흐름</p>
             <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-900">플랜부터 혜택까지 한 흐름으로</h3>
             <ul className="mt-8 space-y-4 text-sm font-medium leading-relaxed text-slate-500">
               <li className="flex items-start gap-3">
@@ -51,7 +51,7 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
               </li>
               <li className="flex items-start gap-3">
                 <span className="text-emerald-600 font-black">03</span>
-                <span>실행 기록에서 저장된 run 흐름을 다시 점검</span>
+                <span>실행 기록에서 저장된 실행 흐름을 다시 점검</span>
               </li>
             </ul>
           </div>

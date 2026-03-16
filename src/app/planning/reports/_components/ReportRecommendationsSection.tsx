@@ -104,14 +104,14 @@ export default function ReportRecommendationsSection({
     <Card className="space-y-6 border border-slate-100 bg-white p-8 text-slate-900 shadow-sm rounded-[2.5rem]" data-testid="report-recommendations-section">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600">Product Match</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-600">상품 후보 비교</p>
           <h2 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">지금 내 상황에서 먼저 볼 상품 후보</h2>
           <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed max-w-2xl">
             플래닝 결과를 바탕으로 예금/적금 후보를 비교용으로 정렬했습니다. 확정 추천이 아니라 다음 확인 순서를 제안합니다.
           </p>
         </div>
         {effectivePayload?.fetchedAt ? (
-          <p className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest tabular-nums">fetchedAt: {asDateTime(effectivePayload.fetchedAt)}</p>
+          <p className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest tabular-nums">기준 시각: {asDateTime(effectivePayload.fetchedAt)}</p>
         ) : null}
       </div>
 
@@ -120,7 +120,7 @@ export default function ReportRecommendationsSection({
       {!effectiveLoading && !effectiveError && recommendation ? (
         <>
           <div className="rounded-[2rem] border border-emerald-100 bg-emerald-50/30 p-6 shadow-inner">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">Why These Products</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">왜 이 상품을 먼저 보나요</p>
             <p className="mt-3 text-xl font-black tracking-tight text-slate-900 leading-tight">{recommendation.signals.headline}</p>
             <p className="mt-3 text-sm font-bold text-slate-600 leading-relaxed">{recommendation.signals.summary}</p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -167,13 +167,13 @@ export default function ReportRecommendationsSection({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                        Top {index + 1} · {row.kind === "deposit" ? "예금" : "적금"}
+                        상위 {index + 1} · {row.kind === "deposit" ? "예금" : "적금"}
                       </p>
                       <h3 className="mt-2 text-lg font-black text-slate-900 group-hover:text-emerald-600 transition-colors leading-tight line-clamp-1">{row.productName}</h3>
                       <p className="mt-1 text-[11px] font-black text-emerald-600 uppercase tracking-widest">{row.providerName}</p>
                     </div>
                     <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-right shrink-0">
-                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Fit Score</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">적합도</p>
                       <p className="text-xl font-black text-emerald-700 tabular-nums">{row.fitScore.toFixed(1)}</p>
                     </div>
                   </div>

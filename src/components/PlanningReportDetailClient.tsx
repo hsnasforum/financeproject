@@ -160,7 +160,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
     <PageShell className="report-detail-root">
       <PageHeader
         title="리포트 상세 보기"
-        description="Run 기반 데이터 해석 및 실행 가이드 대시보드"
+        description="저장된 실행 데이터를 바탕으로 해석과 실행 가이드를 보여줍니다."
         action={(
           <div className="no-print flex items-center gap-4">
             <Button
@@ -179,7 +179,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Loading Report...</p>
+          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">리포트를 불러오는 중입니다</p>
         </div>
       ) : error ? (
         <Card className="border-rose-200 bg-rose-50 p-8 text-center rounded-[2rem]">
@@ -188,7 +188,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
         </Card>
       ) : !report ? (
         <Card className="border-slate-200 bg-slate-50 p-12 text-center rounded-[2rem]">
-          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Report Not Found</p>
+          <p className="text-sm font-black text-slate-400 uppercase tracking-widest">리포트를 찾을 수 없습니다</p>
         </Card>
       ) : (
         <div className="mx-auto max-w-5xl space-y-10">
@@ -196,26 +196,26 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
             <div className="flex flex-wrap items-start justify-between gap-6 mb-8 border-b border-slate-50 pb-8">
               <div>
                 <Badge variant="secondary" className="mb-3 px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white border-none">
-                  Run-Based Report
+                  실행 기반 리포트
                 </Badge>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">
                   {report.runId ? "플래닝 실행 분석 결과" : "수동 생성 리포트"}
                 </h1>
               </div>
               <div className="flex flex-col items-end gap-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Created At</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">생성 시각</p>
                 <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(report.createdAt)}</p>
               </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Report ID</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">리포트 ID</p>
                 <p className="text-xs font-black text-slate-700 font-mono break-all">{report.id}</p>
               </div>
               {report.runId && (
                 <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Source Run ID</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">원본 실행 ID</p>
                   <p className="text-xs font-black text-slate-700 font-mono break-all">{report.runId}</p>
                 </div>
               )}
@@ -241,8 +241,8 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
 
           <div className="no-print space-y-6 pt-10">
             <SubSectionHeader
-              title="Advanced Analysis"
-              description="데이터의 원본 문문과 원시 JSON 데이터를 확인합니다."
+              title="고급 원본 분석"
+              description="데이터 원문과 원시 JSON 데이터를 확인합니다."
             />
             
             <div className="flex flex-wrap gap-3">

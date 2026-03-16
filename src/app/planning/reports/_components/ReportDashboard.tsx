@@ -46,7 +46,7 @@ function stageMessage(vm: ReportVM, id: keyof ReportVM["stage"]["byId"], fallbac
     return stage.errorSummary || "단계 실패로 섹션을 표시할 수 없습니다.";
   }
   if (stage.status === "SKIPPED") {
-    return stage.errorSummary || `단계가 생략되었습니다(${stage.reason ?? "UNKNOWN"}).`;
+    return stage.errorSummary || `단계가 생략되었습니다(${stage.reason ?? "미상"}).`;
   }
   if (stage.status === "RUNNING" || stage.status === "PENDING") {
     return "단계 진행 중입니다.";
@@ -58,9 +58,9 @@ function renderEvidenceValue(value: unknown): string {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value.toLocaleString("ko-KR");
   }
-  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "boolean") return value ? "예" : "아니오";
   if (typeof value === "string") return value;
-  if (value === null) return "null";
+  if (value === null) return "없음";
   return "-";
 }
 
@@ -201,12 +201,12 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
             >
               <div className="space-y-4">
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Calculation Formula</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">계산 공식</p>
                   <p className="mt-1 text-xs font-bold leading-relaxed text-slate-700">{evidenceItem.formula}</p>
                 </div>
 
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Inputs</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">입력값</p>
                   <ul className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {evidenceItem.inputs.map((input, index) => (
                       <li className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2" key={`${itemId}:input:${index}`}>
@@ -219,7 +219,7 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Assumptions</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">가정</p>
                     {evidenceItem.assumptions.length > 0 ? (
                       <ul className="list-disc space-y-1 pl-4 text-xs font-bold text-slate-600">
                         {evidenceItem.assumptions.map((assumption, index) => (
@@ -231,7 +231,7 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
                     )}
                   </div>
                   <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Notes</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">참고 메모</p>
                     {evidenceItem.notes && evidenceItem.notes.length > 0 ? (
                       <ul className="list-disc space-y-1 pl-4 text-xs font-bold text-slate-600">
                         {evidenceItem.notes.map((note, index) => (
@@ -278,6 +278,7 @@ export default function ReportDashboard({ vm }: Props) {
     120,
   ) || "저장된 실행 결과와 기본 가정 기준으로 계산했습니다.";
   const assumptionPreview = compactText(vm.assumptionsLines[0], 120);
+  const renderOverrideReason = (reason?: string) => reason?.trim() || "입력값 기준으로 조정";
 
   return (
     <div className="space-y-8" data-testid="report-dashboard">
@@ -285,7 +286,7 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-summary-cards">
           <div className="flex flex-wrap items-start justify-between gap-6 mb-8">
             <div className="max-w-3xl">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Action First</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">우선 액션</p>
               <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900 leading-tight">
                 {leadAction ? leadAction.title : "이번 달 먼저 볼 액션부터 정리했습니다."}
               </h2>
@@ -298,7 +299,7 @@ export default function ReportDashboard({ vm }: Props) {
                 {summaryTone.label}
               </Badge>
               <Badge variant="secondary" className="rounded-full px-4 py-1 font-black border-slate-200 bg-white text-slate-500 shadow-sm">
-                {vm.snapshot.asOf ? `${vm.snapshot.asOf} 기준` : "저장 run 기준"}
+                {vm.snapshot.asOf ? `${vm.snapshot.asOf} 기준` : "저장된 실행 기준"}
               </Badge>
             </div>
           </div>
@@ -334,7 +335,7 @@ export default function ReportDashboard({ vm }: Props) {
 
           <div className="mt-10 grid gap-6 lg:grid-cols-2">
             <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6 shadow-inner">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Why this action?</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">왜 이 액션을 먼저 보나요</p>
               <p className="mt-3 text-sm font-bold leading-relaxed text-slate-700">
                 {leadAction
                   ? `${leadAction.summary}${leadAction.steps[0] ? ` 첫 단계는 ${leadAction.steps[0]}입니다.` : ""}`
@@ -348,7 +349,7 @@ export default function ReportDashboard({ vm }: Props) {
               ) : null}
             </div>
             <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6 shadow-inner">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Calculation Basis</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">계산 기준</p>
               <p className="mt-3 text-sm font-bold leading-relaxed text-slate-700">{basisPreview}</p>
               {assumptionPreview ? (
                 <p className="mt-3 text-xs font-bold text-slate-400 italic">가정 예시: {assumptionPreview}</p>
@@ -365,7 +366,7 @@ export default function ReportDashboard({ vm }: Props) {
       {simulateReady && monthlyOperatingGuide ? (
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-monthly-operating-guide">
           <div className="mb-8">
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Salary Operating Guide</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">월급 운영 요약</p>
             <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900">월급 운영 가이드</h2>
             <p className="mt-3 text-base font-black leading-snug text-slate-700">{monthlyOperatingGuide.headline}</p>
             <p className="mt-2 text-xs font-bold text-slate-400 italic">※ {monthlyOperatingGuide.basisLabel}</p>
@@ -420,10 +421,11 @@ export default function ReportDashboard({ vm }: Props) {
               <ul className="mt-4 space-y-2 border-t border-slate-50 pt-4">
                 {appliedOverrides.map((override) => (
                   <li className="text-[11px] font-bold text-slate-600 flex flex-wrap gap-2" key={`${override.key}:${override.updatedAt}`}>
-                    <span className="text-emerald-600 font-black">{override.key}</span>
-                    <span className="text-slate-300">=</span>
+                    <span className="text-emerald-600 font-black">조정 항목</span>
+                    <span className="text-slate-300">·</span>
+                    <span className="text-slate-900">{renderOverrideReason(override.reason)}</span>
+                    <span className="text-slate-300">/</span>
                     <span className="text-slate-900">{override.value}</span>
-                    {override.reason ? <span className="text-slate-400">({override.reason})</span> : null}
                     <span className="ml-auto text-[10px] text-slate-300 tabular-nums">{override.updatedAt}</span>
                   </li>
                 ))}
@@ -444,7 +446,7 @@ export default function ReportDashboard({ vm }: Props) {
               <div className="mt-4 space-y-4 border-t border-slate-50 pt-4">
                 {normalization?.defaultsApplied.length ? (
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Default Values Applied</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">기본값 자동 적용</p>
                     <ul className="list-disc space-y-1 pl-4 text-[11px] font-bold text-slate-600">
                       {normalization.defaultsApplied.map((item) => (
                         <li key={`default-${item}`}>{item}</li>
@@ -454,7 +456,7 @@ export default function ReportDashboard({ vm }: Props) {
                 ) : null}
                 {normalization?.fixesApplied.length ? (
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Automatic Corrections</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">자동 보정</p>
                     <ul className="list-disc space-y-1 pl-4 text-[11px] font-bold text-slate-600">
                       {normalization.fixesApplied.map((fix, index) => (
                         <li key={`${fix.path}-${index}`}>
@@ -477,7 +479,7 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="planning-reports-warnings-section">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Watchlist</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">주의 목록</p>
               <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">주의가 필요한 부분</h2>
             </div>
             <Badge variant="destructive" className="rounded-full px-4 py-1 font-black">
@@ -551,7 +553,7 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-goals-table">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Goals</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">목표</p>
               <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">목표 진행 현황</h2>
             </div>
             <Badge variant="secondary" className="rounded-full px-4 py-1 font-black bg-emerald-50 text-emerald-700 border-none">
@@ -604,7 +606,7 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-top-actions">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Action Plan</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">실행 순서</p>
               <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">추천 실행 순서</h2>
             </div>
             <Badge variant="warning" className="rounded-full px-4 py-1 font-black shadow-sm">
@@ -626,7 +628,7 @@ export default function ReportDashboard({ vm }: Props) {
                   <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
                   <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">{action.summary}</p>
                   <div className="mt-6 space-y-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Key Steps</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">핵심 단계</p>
                     <ul className="space-y-1.5">
                       {action.steps.slice(0, 3).map((step, index) => (
                         <li className="flex gap-2 text-[11px] font-bold text-slate-700" key={`${action.code}-step-${index}`}>
@@ -650,7 +652,7 @@ export default function ReportDashboard({ vm }: Props) {
       {monteReady && vm.monteCarloSummary ? (
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
           <div className="mb-8">
-            <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">Monte Carlo</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">확률 시뮬레이션</p>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">변동성 시뮬레이션</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -667,7 +669,7 @@ export default function ReportDashboard({ vm }: Props) {
       {debtReady && vm.debtSummary ? (
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
           <div className="mb-8">
-            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Debt Summary</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">대출 요약</p>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">대출 부담 요약</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">

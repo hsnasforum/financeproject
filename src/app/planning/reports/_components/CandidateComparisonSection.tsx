@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
@@ -55,10 +56,97 @@ function normalizeErrorMessage(error: unknown): string {
 
 function renderEvidenceInputValue(value: unknown): string {
   if (typeof value === "number" && Number.isFinite(value)) return value.toLocaleString("ko-KR");
-  if (typeof value === "boolean") return value ? "true" : "false";
+  if (typeof value === "boolean") return value ? "예" : "아니오";
   if (typeof value === "string") return value;
-  if (value === null) return "null";
+  if (value === null) return "없음";
   return "-";
+}
+
+function formatCandidateSourceLabel(source: string): string {
+  const normalized = source.trim().toLowerCase();
+  if (normalized === "finlife") return "금융상품 한눈에";
+  if (normalized === "mock") return "예시 데이터";
+  if (normalized === "manual") return "수기 입력";
+  if (normalized === "internal") return "내부 계산";
+  return source;
+}
+
+function CandidateEvidencePanel({ row, onClose }: { row: CandidateComparisonRow; onClose: () => void }) {
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[120] overflow-y-auto bg-slate-900/35 backdrop-blur-sm p-4 sm:p-6"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="flex min-h-full items-center justify-center">
+        <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/15 animate-in zoom-in-95 slide-in-from-bottom-2 duration-300">
+          <div className="border-b border-slate-100 bg-gradient-to-br from-emerald-50 via-white to-slate-50 px-6 py-6 sm:px-8">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600">계산 근거</p>
+                <h3 className="mt-2 text-xl font-black leading-tight tracking-tight text-slate-900 sm:text-2xl">
+                  {row.providerName}
+                </h3>
+                <p className="mt-1 text-sm font-bold leading-relaxed text-slate-600">{row.productName}</p>
+                <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">
+                  현재 비교표는 그대로 두고, 이 오버레이에서만 계산 공식과 입력값을 확인할 수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 shadow-sm transition hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+            <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/90 px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">조건 요약</p>
+              <p className="mt-2 text-sm font-bold leading-relaxed text-slate-700">{row.conditionsSummary}</p>
+            </div>
+          </div>
+
+          <div className="max-h-[min(80vh,920px)] overflow-y-auto px-6 py-6 sm:px-8">
+            <section className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">공식</p>
+              <p className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-[13px] font-bold leading-relaxed text-slate-700">
+                {row.estimateEvidence.formula}
+              </p>
+            </section>
+
+            <section className="mt-5 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">입력값</p>
+              <dl className="mt-4 grid gap-3">
+                {Object.entries(row.estimateEvidence.inputs).map(([key, value]) => (
+                  <div key={`${row.id}:${key}`} className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <dt className="text-xs font-black text-slate-500">{key}</dt>
+                    <dd className="text-right text-xs font-black tabular-nums text-slate-900">{renderEvidenceInputValue(value)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+
+            <section className="mt-5 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">가정</p>
+              <ul className="mt-4 space-y-2 pl-5 text-sm font-bold leading-relaxed text-slate-600">
+                {row.estimateEvidence.assumptions.map((assumption, index) => (
+                  <li key={`${row.id}:assumption:${index}`} className="list-disc">{assumption}</li>
+                ))}
+              </ul>
+            </section>
+
+            <p className="mt-5 text-xs font-bold leading-relaxed text-slate-500">
+              이 내용은 비교 계산의 참고 근거입니다. 실제 가입 전에는 상품 설명서와 최신 금리·우대 조건을 함께 확인해 주세요.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 function sortRows(rows: CandidateComparisonRow[], mode: string): CandidateComparisonRow[] {
@@ -97,6 +185,7 @@ export default function CandidateComparisonSection({
   const [amountKrw, setAmountKrw] = useState("10000000");
   const [taxRatePct, setTaxRatePct] = useState("15.4");
   const [page, setPage] = useState(1);
+  const [activeEvidenceRow, setActiveEvidenceRow] = useState<CandidateComparisonRow | null>(null);
   const usesSharedPayload = payloadLoading !== undefined || payloadError !== undefined || sharedPayload !== undefined;
   const effectiveLoading = usesSharedPayload ? Boolean(payloadLoading) : loading;
   const effectiveError = usesSharedPayload ? payloadError ?? "" : error;
@@ -165,6 +254,28 @@ export default function CandidateComparisonSection({
     setPage(1);
   }, [amountKrw, goalId, kindFilter, minRatePct, sortBy, taxRatePct, runId]);
 
+  useEffect(() => {
+    if (!activeEvidenceRow) return;
+    const exists = comparedRows.some((row) => row.id === activeEvidenceRow.id);
+    if (!exists) setActiveEvidenceRow(null);
+  }, [activeEvidenceRow, comparedRows]);
+
+  useEffect(() => {
+    if (!activeEvidenceRow || typeof window === "undefined") return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setActiveEvidenceRow(null);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [activeEvidenceRow]);
+
   const totalPages = Math.max(1, Math.ceil(comparedRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageRows = useMemo(() => {
@@ -184,13 +295,13 @@ export default function CandidateComparisonSection({
     <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="candidate-comparison-section" id="candidate-comparison-section">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Candidate Compare</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">후보 비교</p>
           <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">상품 후보 비교</h2>
           <p className="mt-2 text-sm font-bold text-slate-500 leading-relaxed">추천이 아닌 비교용 표입니다. 정렬/필터는 사용자가 직접 선택합니다.</p>
         </div>
         {effectivePayload?.fetchedAt ? (
           <Badge variant="secondary" className="rounded-full px-4 py-1 font-black bg-slate-50 text-slate-400 border-slate-100 tabular-nums">
-            Fetched: {formatDateTime(effectivePayload.fetchedAt)}
+            기준 시각: {formatDateTime(effectivePayload.fetchedAt)}
           </Badge>
         ) : null}
       </div>
@@ -212,7 +323,7 @@ export default function CandidateComparisonSection({
       {!effectiveLoading && !effectiveError && effectivePayload && effectivePayload.candidates.length > 0 ? (
         <div className="space-y-8">
           <div className="rounded-[2rem] bg-slate-50 p-8 border border-slate-100/50 shadow-inner">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Comparison Setup</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">비교 설정</p>
             <p className="mt-3 text-lg font-black tracking-tight text-slate-900 leading-snug">비교 기준을 바꾸면 표 결과가 실시간으로 반영됩니다.</p>
             <p className="mt-2 text-sm font-bold text-slate-500">금액, 만기, 금리 조건을 먼저 정하고 후보를 좁히는 흐름으로 보시면 됩니다.</p>
           </div>
@@ -298,33 +409,16 @@ export default function CandidateComparisonSection({
                       <p className="mt-1 text-[11px] font-bold text-slate-500 leading-snug">{row.productName}</p>
                       <p className="mt-1 text-[10px] font-medium text-slate-400 uppercase tracking-tight">{row.conditionsSummary}</p>
                       {showEstimateEvidence ? (
-                        <details className="mt-3 group/evidence">
-                          <summary className="cursor-pointer text-[10px] font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-widest list-none flex items-center gap-1">
-                            <span className="transition-transform group-open/evidence:rotate-90">▶</span>
-                            Calculation Evidence
-                          </summary>
-                          <div className="mt-3 rounded-xl bg-slate-50 p-4 border border-slate-100 text-[11px] font-bold text-slate-600 space-y-2 shadow-inner animate-in slide-in-from-top-1 duration-200">
-                            <p className="text-slate-400 font-black uppercase text-[9px] tracking-widest">Formula</p>
-                            <p className="leading-relaxed font-mono">{row.estimateEvidence.formula}</p>
-                            
-                            <p className="mt-3 text-slate-400 font-black uppercase text-[9px] tracking-widest">Inputs</p>
-                            <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
-                              {Object.entries(row.estimateEvidence.inputs).map(([key, value]) => (
-                                <li key={`${row.id}:${key}`} className="flex justify-between border-b border-slate-200/50 pb-1">
-                                  <span className="text-slate-400">{key}</span>
-                                  <span className="text-slate-900 tabular-nums">{renderEvidenceInputValue(value)}</span>
-                                </li>
-                              ))}
-                            </ul>
-                            
-                            <p className="mt-3 text-slate-400 font-black uppercase text-[9px] tracking-widest">Assumptions</p>
-                            <ul className="list-disc pl-4 space-y-0.5 text-slate-500">
-                              {row.estimateEvidence.assumptions.map((assumption, index) => (
-                                <li key={`${row.id}:assumption:${index}`}>{assumption}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        </details>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="mt-3 h-auto rounded-full border border-emerald-100 bg-emerald-50/70 px-3 py-1.5 text-[10px] font-black tracking-widest text-emerald-700 hover:border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 hover:scale-100 active:scale-100"
+                          onClick={() => setActiveEvidenceRow(row)}
+                          title="현재 비교표는 유지한 채 가운데 오버레이에서 계산 근거를 엽니다"
+                        >
+                          계산 근거 보기
+                        </Button>
                       ) : null}
                     </td>
                     <td className="px-4 py-4">
@@ -338,7 +432,7 @@ export default function CandidateComparisonSection({
                     <td className="px-4 py-4 text-right font-black text-slate-900 tabular-nums">{formatKrw("ko-KR", row.estimate.netInterestKrw)}</td>
                     <td className="px-4 py-4 text-right font-black text-emerald-600 tabular-nums text-lg tracking-tight">{formatKrw("ko-KR", row.estimate.maturityAmountKrw)}</td>
                     <td className="px-4 py-4">
-                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{row.source}</span>
+                      <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{formatCandidateSourceLabel(row.source)}</span>
                     </td>
                   </tr>
                 ))}
@@ -348,9 +442,9 @@ export default function CandidateComparisonSection({
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-8" data-testid="candidate-comparison-pagination">
             <p className="text-xs font-bold text-slate-400">
-              Showing <span className="text-slate-900 font-black">{pageStart}-{pageEnd}</span> of <span className="text-slate-900 font-black">{comparedRows.length}</span> candidates
+              전체 <span className="text-slate-900 font-black">{comparedRows.length}</span>개 중 <span className="text-slate-900 font-black">{pageStart}-{pageEnd}</span>번째 후보 표시
               {" · "}
-              Page <span className="text-slate-900 font-black">{currentPage}</span> / {totalPages}
+              페이지 <span className="text-slate-900 font-black">{currentPage}</span> / {totalPages}
             </p>
             <div className="flex items-center gap-3">
               <Button
@@ -377,16 +471,20 @@ export default function CandidateComparisonSection({
           <div className="rounded-[1.5rem] bg-emerald-50/30 p-6 border border-emerald-100/50" data-testid="candidate-comparison-assumptions">
             <div className="flex items-center gap-2 mb-3">
               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Calculation Assumptions</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">계산 가정</p>
             </div>
             <p className="text-xs font-bold text-emerald-900/70 leading-relaxed">모든 금액은 추정치입니다. 단리 계산(기간/12)과 입력 세율을 적용해 세후 이자 및 만기 수령액을 산출합니다.</p>
             <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] font-black uppercase tracking-widest text-emerald-600">
-              <p>Basis: <span className="text-slate-900 ml-1">{formatKrw("ko-KR", Math.max(100_000, asFiniteNumber(amountKrw, effectivePayload.defaults.amountKrw)))}</span></p>
-              <p>Tax Rate: <span className="text-slate-900 ml-1">{formatPct("ko-KR", Math.max(0, Math.min(100, asFiniteNumber(taxRatePct, effectivePayload.defaults.taxRatePct))))}</span></p>
-              <p>Term: <span className="text-slate-900 ml-1">{formatMonths("ko-KR", effectivePayload.defaults.termMonths)}</span></p>
+              <p>기준 금액: <span className="text-slate-900 ml-1">{formatKrw("ko-KR", Math.max(100_000, asFiniteNumber(amountKrw, effectivePayload.defaults.amountKrw)))}</span></p>
+              <p>세율: <span className="text-slate-900 ml-1">{formatPct("ko-KR", Math.max(0, Math.min(100, asFiniteNumber(taxRatePct, effectivePayload.defaults.taxRatePct))))}</span></p>
+              <p>기간: <span className="text-slate-900 ml-1">{formatMonths("ko-KR", effectivePayload.defaults.termMonths)}</span></p>
             </div>
           </div>
         </div>
+      ) : null}
+
+      {activeEvidenceRow ? (
+        <CandidateEvidencePanel row={activeEvidenceRow} onClose={() => setActiveEvidenceRow(null)} />
       ) : null}
     </Card>
   );
