@@ -107,6 +107,11 @@
   - import-export와 rollback/repair rule이 화면이 아니라 owner 기준으로 정리됨
   - permission/visibility rule이 stable/beta/internal 분류와 연결됨
 
+연결 메모 (2026-03-17):
+- owner-based route inventory와 import/export/rollback 경계는 `analysis_docs/v2/13_planning_v3_api_import_rollback_contract.md`를 기준으로 잠급니다.
+- read/projection route는 canonical export owner나 rollback owner로 승격하지 않습니다.
+- `N3`, `N4`는 이 문서의 owner family 분류와 visibility 전제조건을 그대로 재사용합니다.
+
 ## N3. QA gate 재정의와 golden dataset 기준 정리
 
 - 분류: `ops/QA gate`
