@@ -10,10 +10,10 @@
 
 ### 0.1 현재 진행률
 
-- 전체 진행률: **69%** (`9 / 13` 항목 완료)
+- 전체 진행률: **77%** (`10 / 13` 항목 완료)
 - Phase 1 진행률: **100%** (`4 / 4`)
 - Phase 2 진행률: **100%** (`5 / 5`)
-- Phase 3 진행률: **0%** (`0 / 4`)
+- Phase 3 진행률: **25%** (`1 / 4`)
 
 ### 0.2 상태 표기 규칙
 
@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | Phase 1 | 제품 경계 정리와 Public IA 고정 | `[완료]` | `4 / 4` |
 | Phase 2 | Planning → Recommend 실질 연동 | `[완료]` | `5 / 5` |
-| Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[진행중]` | `0 / 4` |
+| Phase 3 | 데이터 신뢰와 성장 기능 제품화 | `[진행중]` | `1 / 4` |
 
 ### 0.4 운영 원칙
 
@@ -384,7 +384,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `OpenDartStatusCard`도 공시 데이터 연결 상태와 현재 읽는 기준 중심으로 문구를 바꾸고, 개발용 인덱스 관리와 파일 경로는 dev 환경 설명으로만 뒤로 내렸습니다.
 - `DataSourceHealthTable`과 detailed diagnostics는 페이지 하단의 `상세 운영 진단` 섹션으로 내려, 사용자용 trust 정보보다 뒤에서 참고용으로만 읽히게 했습니다.
 
-#### P3-2) source freshness contract 표준화 `[진행중]`
+#### P3-2) source freshness contract 표준화 `[완료]`
 모든 public 결과 카드에 최소 아래 메타를 붙입니다.
 
 - `sourceId`
@@ -394,7 +394,7 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - `fallbackMode`
 - `assumptionNotes`
 
-진행 메모 (2026-03-16):
+완료 메모 (2026-03-17):
 - `P3-2`는 기존 `DataFreshnessBanner`를 public 화면에 재도입하는 배치가 아니라, 결과 카드 단위의 얇은 freshness 메타 contract를 먼저 고정하는 단계로 정의합니다.
 - card 메타의 freshness 사실 owner는 `SourceStatusRow`와 현재 surface payload가 이미 가진 snapshot / fallback / assumption 값을 우선 재사용하고, 운영 진단 상세는 계속 `/settings/data-sources` owner로 둡니다.
 - `freshnessStatus`는 banner severity(`ok / info / warn / error`)가 아니라 현재 `FreshnessItemStatus` 기반의 card-level 상태(`ok / stale / error / empty`)를 재사용하는 쪽으로 고정합니다.
@@ -409,6 +409,8 @@ recommend history와 planning runs/report의 연결성을 강화합니다.
 - fourth rollout으로 `/housing/subscription` 결과 summary에 `subscription` surface-local owner 기준 `결과 기준` helper를 추가해 `meta.generatedAt` 우선, 없으면 `meta.fetchedAt`, optional `fallback.mode`, `assumptions.note`만 작은 helper/chip 수준으로 묶어 노출했습니다.
 - `subscription` surface도 explicit source status row가 아직 없으므로 `freshnessStatus`는 생략했고, 카드마다 반복하지 않고 결과 개수 summary 옆의 공통 helper 1개로만 읽히게 유지했습니다.
 - `(sourceId, kind)` 기준 source status row 매칭이 안 되거나 `/api/sources/status` 조회가 실패하면 카드 freshness 메타는 숨기고, 결과 카드와 기존 error/empty 흐름은 그대로 유지합니다.
+- `/recommend`, `/products/*`, `/housing/subscription`의 운영성 배너는 이미 제거돼 있고, public 결과 화면은 짧은 freshness helper만 보여 주며 상세 운영 상태 확인은 `/settings/data-sources` trust hub로 넘기는 공통 규칙을 유지합니다.
+- daily refresh 장애나 source freshness 문제의 사용자 안내는 public helper + settings trust hub owner 분리 원칙으로 문서화되어 있고, raw source 상태·TTL·last error·수동 재확인은 계속 settings 화면에만 둡니다.
 
 #### P3-3) 확장 후보의 제품화 기준 수립 `[미착수]`
 현재 data-sources 화면에 있는 expansion candidate를 실제 제품 backlog로 전환합니다.
