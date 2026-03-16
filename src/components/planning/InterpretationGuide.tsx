@@ -10,7 +10,6 @@ import {
   type InterpretationInput,
 } from "@/lib/planning/v2/insights/interpretationVm";
 export type { InterpretationInput };
-import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
 import {
   DEFAULT_PLANNING_POLICY,
   type PlanningInterpretationPolicy,
@@ -25,7 +24,7 @@ export type InterpretationGuideProps = {
   aggregatedWarnings: InterpretationInput["aggregatedWarnings"];
   goals: InterpretationInput["goals"];
   outcomes?: InterpretationInput["outcomes"];
-  summaryEvidence?: EvidenceItem[];
+  summaryEvidence?: InterpretationInput["summaryEvidence"];
   monthlyOperatingGuide?: {
     headline: string;
     basisLabel: string;
@@ -170,7 +169,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
       <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
         <div className="flex items-center justify-between gap-4 mb-8">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Analysis Result</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">결과 해석</p>
             <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">한눈에 보는 결과 해석</h2>
           </div>
           <Badge variant={badge.variant} className="rounded-full px-4 py-1 font-black">
@@ -179,7 +178,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
         </div>
 
         <section className="rounded-[2rem] bg-slate-50 p-8 border border-slate-100/50 shadow-inner">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Executive Summary</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">핵심 요약</p>
           <p className="mt-3 text-xl font-black leading-snug text-slate-900">{vm.verdict.headline}</p>
           <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">
             {primaryAction
@@ -208,7 +207,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
             data-testid="interpretation-monthly-operating-guide"
           >
             <div className="px-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Operating Guide</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">운영 가이드</p>
               <p className="mt-2 text-lg font-black tracking-tight text-slate-900">{props.monthlyOperatingGuide.headline}</p>
               <p className="mt-1 text-xs font-bold text-slate-400 italic">※ {props.monthlyOperatingGuide.basisLabel}</p>
             </div>
@@ -254,7 +253,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-4 px-1">Primary Action</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-4 px-1">우선 액션</p>
           {primaryAction ? (
             <article className="rounded-3xl border border-emerald-100 bg-emerald-50/20 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
@@ -264,7 +263,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
               <p className="mt-3 text-sm font-bold text-slate-600 leading-relaxed">{primaryAction.description}</p>
               {primaryAction.steps.length > 0 ? (
                 <div className="mt-6 space-y-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Execution Steps</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">실행 단계</p>
                   <ol className="space-y-2 text-xs font-bold text-slate-700">
                     {primaryAction.steps.slice(0, 3).map((step, index) => (
                       <li key={`${primaryAction.id}-step-${index}`} className="flex gap-3">
@@ -307,7 +306,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
         </Card>
 
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-4 px-1">AI Context Summary</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-4 px-1">해석 요약</p>
           <section className="rounded-3xl border border-amber-100 bg-amber-50/20 p-6 shadow-sm" data-testid="interpretation-ai-summary">
             <p className="text-sm font-black text-amber-900 leading-snug">{narrativeSummary.headline}</p>
             <div className="mt-4 space-y-3 text-xs font-bold leading-relaxed text-slate-600">
@@ -327,7 +326,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
 
         <div className="mt-8 space-y-10" id={REPORT_SECTION_IDS.evidence}>
           <div className="px-1">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Deep Dive</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">자세히 보기</p>
             <h3 className="mt-1 text-lg font-black text-slate-900">왜 이렇게 분석했나요?</h3>
           </div>
           
