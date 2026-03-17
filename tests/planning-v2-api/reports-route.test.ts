@@ -116,8 +116,12 @@ describe("planning reports api", () => {
     const runPayload = await runRes.json() as { data?: { id?: string } };
     const runId = String(runPayload.data?.id ?? "");
     expect(runId).toBeTruthy();
+    const recommendRunId = "recommend-local-run-001";
 
-    const createRes = await reportsPOST(buildJsonRequest("POST", "/api/planning/v2/reports", { runId }));
+    const createRes = await reportsPOST(buildJsonRequest("POST", "/api/planning/v2/reports", {
+      runId,
+      recommendRunId,
+    }));
     const createPayload = await createRes.json() as { ok?: boolean; data?: { id?: string } };
     const reportId = String(createPayload.data?.id ?? "");
     expect(createRes.status).toBe(201);
@@ -125,10 +129,17 @@ describe("planning reports api", () => {
     expect(reportId).toBeTruthy();
 
     const listRes = await reportsGET(buildGetRequest("/api/planning/v2/reports"));
-    const listPayload = await listRes.json() as { ok?: boolean; data?: Array<{ id: string; runId?: string }> };
+    const listPayload = await listRes.json() as {
+      ok?: boolean;
+      data?: Array<{ id: string; runId?: string; recommendRunId?: string }>;
+    };
     expect(listRes.status).toBe(200);
     expect(listPayload.ok).toBe(true);
-    expect(listPayload.data?.some((row) => row.id === reportId && row.runId === runId)).toBe(true);
+    expect(listPayload.data?.some((row) => (
+      row.id === reportId
+      && row.runId === runId
+      && row.recommendRunId === recommendRunId
+    ))).toBe(true);
     expect(JSON.stringify(listPayload)).not.toContain(".data");
 
     const readRes = await reportGET(
@@ -137,11 +148,12 @@ describe("planning reports api", () => {
     );
     const readPayload = await readRes.json() as {
       ok?: boolean;
-      data?: { id?: string; markdown?: string };
+      data?: { id?: string; markdown?: string; recommendRunId?: string };
     };
     expect(readRes.status).toBe(200);
     expect(readPayload.ok).toBe(true);
     expect(readPayload.data?.id).toBe(reportId);
+    expect(readPayload.data?.recommendRunId).toBe(recommendRunId);
     expect(readPayload.data?.markdown).toContain("## Executive Summary");
     expect(readPayload.data?.markdown).toContain("## Warnings Summary");
     expect(readPayload.data?.markdown).toContain("## Actions Top 5");

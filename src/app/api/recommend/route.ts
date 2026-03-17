@@ -2,6 +2,7 @@ import { jsonError, jsonOk, statusFromCode } from "@/lib/http/apiResponse";
 import { pushTiming, timingsToDebugMap, type TimingEntry, withTiming } from "../../../lib/http/timing";
 import { applyDepositProtectionPolicy } from "@/lib/recommend/depositProtection";
 import { recommendCandidates, type RecommendCandidate } from "@/lib/recommend/score";
+import { determineFinancialStatus } from "@/lib/planning/engine/financialStatus";
 import {
   type DepositProtectionMode,
   type UserRecommendProfile,
@@ -18,7 +19,8 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function buildPlanningLinkageMeta(planningContext: UserRecommendProfile["planningContext"]) {
+function buildPlanningLinkageMeta(profile: Pick<UserRecommendProfile, "planning" | "planningContext">) {
+  const planningContext = profile.planningContext;
   const metrics = [
     planningContext?.monthlyIncomeKrw,
     planningContext?.monthlyExpenseKrw,
@@ -26,11 +28,37 @@ function buildPlanningLinkageMeta(planningContext: UserRecommendProfile["plannin
     planningContext?.debtBalanceKrw,
   ];
   const metricsCount = metrics.filter((value) => typeof value === "number" && Number.isFinite(value)).length;
+  const planningStage = profile.planning?.summary.stage;
+
+  if (planningStage) {
+    return {
+      readiness: "ready" as const,
+      metricsCount,
+      stageInference: planningStage,
+      inferenceSource: "planning-summary" as const,
+    };
+  }
+
+  if (metricsCount === metrics.length) {
+    const inferred = determineFinancialStatus({
+      monthlyIncome: planningContext?.monthlyIncomeKrw ?? 0,
+      monthlyExpense: planningContext?.monthlyExpenseKrw ?? 0,
+      liquidAssets: planningContext?.liquidAssetsKrw,
+      debtBalance: planningContext?.debtBalanceKrw,
+    });
+    return {
+      readiness: "ready" as const,
+      metricsCount,
+      stageInference: inferred.stage,
+      inferenceSource: "planning-context" as const,
+    };
+  }
 
   return {
-    readiness: metricsCount === 0 ? "none" : metricsCount === metrics.length ? "ready" : "partial",
+    readiness: metricsCount === 0 ? "none" : "partial",
     metricsCount,
     stageInference: "disabled" as const,
+    inferenceSource: "none" as const,
   };
 }
 
@@ -147,7 +175,7 @@ export async function POST(request: Request) {
       }));
     }
     const profile: UserRecommendProfile = parsedProfile.value;
-    const planningLinkage = buildPlanningLinkageMeta(profile.planningContext);
+    const planningLinkage = buildPlanningLinkageMeta(profile);
 
     const candidatePool = profile.candidatePool ?? "unified";
     const candidateResult = await withTiming("recommend.loadCandidates", () => getCandidates({
@@ -167,6 +195,7 @@ export async function POST(request: Request) {
             candidatePool,
             candidateSources: profile.candidateSources ?? ["finlife", "datago_kdb"],
             depositProtection: profile.depositProtection ?? "any",
+            planning: profile.planning ?? null,
             planningContext: profile.planningContext ?? null,
             planningLinkage,
             weights: profile.weights,
@@ -226,6 +255,7 @@ export async function POST(request: Request) {
           candidatePool,
           candidateSources: profile.candidateSources ?? ["finlife", "datago_kdb"],
           depositProtection: protectionMode,
+          planning: profile.planning ?? null,
           planningContext: profile.planningContext ?? null,
           planningLinkage,
           weights: recommendedBase.weights,

@@ -83,7 +83,7 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
     <Card className="mb-12 rounded-[2rem] p-8 shadow-sm">
       <SubSectionHeader 
         title="사용자 도움 연결" 
-        description="현재 환경의 API 키를 기준으로, 어떤 사용자 질문을 해결할 수 있는지 정리했습니다." 
+        description="지금 연결된 데이터를 기준으로, 어떤 사용자 질문과 화면에 도움이 되는지 정리했습니다."
       />
       
       <div className="mt-8 grid gap-6 lg:grid-cols-2">

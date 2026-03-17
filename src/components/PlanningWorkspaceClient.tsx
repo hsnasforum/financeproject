@@ -2604,12 +2604,20 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
                   {savingRun ? "저장 중..." : "결과 저장"}
                 </Button>
               ) : null}
-              <Link href={runsPageHref}>
+              <Link
+                href={runsPageHref}
+                data-ready="true"
+                data-testid="planning-runs-link"
+                className="inline-flex"
+              >
                 <Button
                   data-testid="planning-quickstart-runs-link"
                   id="planning-quickstart-runs-link"
                   variant={quickStartVm.runStatusReviewRequired ? "primary" : "outline"}
-                  className="rounded-xl font-bold"
+                  className={cn(
+                    "rounded-xl font-bold",
+                    quickStartVm.runStatusReviewRequired ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white" : "",
+                  )}
                 >
                   실행 내역
                 </Button>
@@ -2651,7 +2659,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
           <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm" data-testid="planning-workspace-quickstart-status">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">진행 상태</p>
             <p className="text-xl font-black text-emerald-600 tracking-tight">{quickStartVm.completedSummary}</p>
-            <p className="mt-2 text-[10px] font-bold text-slate-500 leading-relaxed italic">다음 · {quickStartVm.nextStepSummary}</p>
+            <p className="mt-2 text-[10px] font-bold text-slate-500 leading-relaxed italic">다음 단계 · {quickStartVm.nextStepSummary}</p>
           </div>
         </div>
       </Card>

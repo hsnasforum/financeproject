@@ -48,6 +48,13 @@ function makeInput(index: number): SavedRunInput {
       candidateSources: ["finlife"],
       depositProtection: "any",
       weights: { rate: 0.55, term: 0.3, liquidity: 0.15 },
+      planning: {
+        runId: "run_20260316_001",
+        summary: {
+          stage: "DEBT",
+          overallStatus: "SUCCESS",
+        },
+      },
       planningContext: {
         monthlyIncomeKrw: 4_200_000,
         monthlyExpenseKrw: 2_600_000,
@@ -81,6 +88,8 @@ describe("saved runs store", () => {
     const runs = listRuns(storage);
     expect(runs).toHaveLength(50);
     expect(runs[0]?.runId).toBe("run-54");
+    expect(runs[0]?.profile.planning?.runId).toBe("run_20260316_001");
+    expect(runs[0]?.profile.planning?.summary.stage).toBe("DEBT");
     expect(runs[0]?.profile.planningContext?.monthlyIncomeKrw).toBe(4_200_000);
     expect(getRun("run-54", storage)?.runId).toBe("run-54");
     expect(getRun("run-0", storage)).toBeNull();

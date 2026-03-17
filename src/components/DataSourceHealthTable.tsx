@@ -207,7 +207,7 @@ export function DataSourceHealthTable() {
                   {healthSummary && (
                     <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-inner">
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Health API Aggregation</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">health API 집계</p>
                         <p className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(healthSummary.latestCheckedAt)}</p>
                       </div>
                       <div className="space-y-3">

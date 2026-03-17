@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
@@ -14,7 +15,6 @@ import { Button } from "@/components/ui/Button";
 import { SearchPill } from "@/components/ui/SearchPill";
 import { FilterSelect } from "@/components/ui/FilterSelect";
 import { FilterWrapper } from "@/components/ui/FilterWrapper";
-import { FallbackBanner } from "@/components/FallbackBanner";
 import { cn } from "@/lib/utils";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
 import { pathToId } from "@/lib/forms/ids";
@@ -39,22 +39,34 @@ type SubscriptionItem = {
   link?: string;
 };
 
-type SearchMeta = {
-  scannedPages?: number;
-  scannedRows?: number;
-  upstreamTotalCount?: number;
-  matchedRows?: number;
-  rawMatched?: number;
-  normalizedCount?: number;
-  dropStats?: { missingTitle?: number; generatedId?: number };
-  truncated?: boolean;
-  availableRegionsTop?: string[];
-  fallback?: {
-    mode?: string;
-    reason?: string;
-    generatedAt?: string;
-    nextRetryAt?: string;
+type SubscriptionApiResponse = {
+  ok: boolean;
+  data?: {
+    items?: SubscriptionItem[];
+    assumptions?: {
+      note?: string;
+    };
   };
+  meta?: {
+    generatedAt?: string;
+    fetchedAt?: string;
+    fallback?: {
+      mode?: "LIVE" | "CACHE" | "REPLAY";
+    };
+  };
+  error?: {
+    code?: string;
+    message?: string;
+    issues?: string[];
+  };
+};
+
+type SubscriptionFreshnessMeta = {
+  sourceId: "subscription";
+  kind: "subscription";
+  lastSyncedAt?: string | null;
+  fallbackMode?: string | null;
+  assumptionNotes?: string[];
 };
 
 function todayIsoDate(): string {
@@ -71,6 +83,36 @@ function houseTypeLabel(value: "apt" | "urbty" | "remndr"): string {
   if (value === "urbty") return "오피스텔/도시형";
   if (value === "remndr") return "잔여세대";
   return "APT";
+}
+
+function formatKoreanDateTime(value?: string | null): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ko-KR", { hour12: false });
+}
+
+function formatSubscriptionFallbackMode(mode?: "LIVE" | "CACHE" | "REPLAY"): string | null {
+  if (mode === "CACHE") return "캐시 기준";
+  if (mode === "REPLAY") return "재생 데이터 기준";
+  return null;
+}
+
+function deriveSubscriptionFreshnessMeta(payload: SubscriptionApiResponse | null): SubscriptionFreshnessMeta | null {
+  if (!payload?.ok) return null;
+  const assumptionNote = payload.data?.assumptions?.note?.trim();
+  const lastSyncedAt = payload.meta?.generatedAt || payload.meta?.fetchedAt || null;
+  const fallbackMode = formatSubscriptionFallbackMode(payload.meta?.fallback?.mode);
+
+  if (!lastSyncedAt && !fallbackMode && !assumptionNote) return null;
+
+  return {
+    sourceId: "subscription",
+    kind: "subscription",
+    lastSyncedAt,
+    fallbackMode,
+    assumptionNotes: assumptionNote ? [assumptionNote] : [],
+  };
 }
 
 type SubscriptionClientProps = {
@@ -96,7 +138,7 @@ export function SubscriptionClient({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [assumption, setAssumption] = useState("");
-  const [meta, setMeta] = useState<SearchMeta>({});
+  const [freshnessMeta, setFreshnessMeta] = useState<SubscriptionFreshnessMeta | null>(null);
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
   const [houseType, setHouseType] = useState<SubscriptionHouseType>(initialHouseType);
@@ -169,7 +211,6 @@ export function SubscriptionClient({
     setLoading(true);
     setError("");
     setFormIssues([]);
-    setMeta({});
     try {
       const params = new URLSearchParams();
       if (filters.region) params.set("region", filters.region);
@@ -180,7 +221,7 @@ export function SubscriptionClient({
       if (filters.q) params.set("q", filters.q);
       params.set("houseType", filters.houseType);
       const res = await fetch(`/api/public/housing/subscription?${params.toString()}`, { cache: "no-store" });
-      const json = await res.json();
+      const json = (await res.json()) as SubscriptionApiResponse;
       if (!json?.ok) {
         const apiIssues = parseStringIssues(json?.error?.issues ?? []);
         if (apiIssues.length > 0) {
@@ -194,7 +235,7 @@ export function SubscriptionClient({
       }
       setItems(Array.isArray(json.data?.items) ? json.data.items : []);
       setAssumption(typeof json.data?.assumptions?.note === "string" ? json.data.assumptions.note : "");
-      setMeta(typeof json.meta === "object" && json.meta ? json.meta : {});
+      setFreshnessMeta(deriveSubscriptionFreshnessMeta(json));
     } catch {
       setError("청약 공고 조회 실패");
       announce("청약 공고 조회 실패");
@@ -213,6 +254,13 @@ export function SubscriptionClient({
   return (
     <PageShell>
       <PageHeader title="청약 공고 탐색" description="청약홈의 최신 분양 정보와 지역별 모집 일정을 한눈에 확인하세요." />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        데이터 신뢰 및 연동 상태는{" "}
+        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+          내 설정 &gt; 데이터 신뢰 및 연동 상태
+        </Link>
+        에서 확인할 수 있습니다.
+      </p>
       
       <div className="mb-8 space-y-4">
         <Card className="rounded-[2.5rem] p-8 shadow-sm">
@@ -304,13 +352,29 @@ export function SubscriptionClient({
         </Card>
       </div>
 
-      <div className="mb-6 flex items-center justify-between px-4">
-        <div className="flex items-center gap-3">
+      <div className="mb-6 px-4">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm font-black text-emerald-600">{items.length.toLocaleString()}건의 공고가 발견되었습니다.</span>
-          {assumption && <div className="h-3 w-px bg-slate-200" />}
-          {assumption && <span className="text-[10px] font-bold text-slate-400 italic">※ {assumption}</span>}
+          {freshnessMeta?.lastSyncedAt ? (
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-500">
+              결과 기준 {formatKoreanDateTime(freshnessMeta.lastSyncedAt)}
+            </span>
+          ) : null}
+          {freshnessMeta?.fallbackMode ? (
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-black text-slate-500">
+              {freshnessMeta.fallbackMode}
+            </span>
+          ) : null}
         </div>
-        <FallbackBanner fallback={meta.fallback} />
+        {freshnessMeta?.assumptionNotes?.[0] ? (
+          <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-500">
+            참고: {freshnessMeta.assumptionNotes[0]}
+          </p>
+        ) : assumption ? (
+          <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-500">
+            참고: {assumption}
+          </p>
+        ) : null}
       </div>
 
       {error && (

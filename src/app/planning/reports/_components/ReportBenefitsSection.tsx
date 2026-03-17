@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   Gov24ServiceDetailModal,
@@ -10,7 +11,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import {
-  reportSurfaceButtonClassName,
   reportHeroPrimaryActionClassName,
 } from "@/components/ui/ReportTone";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
@@ -18,6 +18,7 @@ import { BENEFIT_TOPICS } from "@/lib/publicApis/benefitsTopics";
 import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
 import {
   rankPlanningBenefitRecommendations,
+  type PlanningBenefitSignals,
   type PlanningBenefitProfileContext,
 } from "../_lib/recommendationSignals";
 import { type ReportVM } from "../_lib/reportViewModel";
@@ -106,6 +107,26 @@ function parseBenefitProfileContext(payload: PlanningProfilePayload | null): Pla
   return Object.keys(context).length > 0 ? context : undefined;
 }
 
+function buildBenefitsSearchHref(signals: PlanningBenefitSignals): string {
+  const params = new URLSearchParams();
+
+  if (signals.query?.trim()) {
+    params.set("query", signals.query.trim());
+  }
+  if (signals.topics.length > 0) {
+    params.set("topics", signals.topics.join(","));
+  }
+  if (signals.profileContext?.sido?.trim()) {
+    params.set("sido", signals.profileContext.sido.trim());
+  }
+  if (signals.profileContext?.sido?.trim() && signals.profileContext?.sigungu?.trim()) {
+    params.set("sigungu", signals.profileContext.sigungu.trim());
+  }
+
+  const queryString = params.toString();
+  return queryString ? `/benefits?${queryString}` : "/benefits";
+}
+
 export default function ReportBenefitsSection({ vm, profileId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -118,6 +139,10 @@ export default function ReportBenefitsSection({ vm, profileId }: Props) {
   const recommendation = useMemo(
     () => rankPlanningBenefitRecommendations(vm, items, 5, profileContext),
     [items, profileContext, vm],
+  );
+  const benefitsSearchHref = useMemo(
+    () => buildBenefitsSearchHref(recommendation.signals),
+    [recommendation.signals],
   );
 
   useEffect(() => {
@@ -221,12 +246,20 @@ export default function ReportBenefitsSection({ vm, profileId }: Props) {
 
   return (
     <Card className="space-y-6 border border-slate-100 bg-white p-8 text-slate-900 shadow-sm rounded-[2.5rem]" data-testid="report-benefits-section">
-      <div>
-        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-600">혜택 후보 비교</p>
-        <h2 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">보조금24 · 정부지원 혜택 후보</h2>
-        <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed max-w-2xl">
-          현재 플래닝 결과와 기본 프로필을 바탕으로 먼저 볼 만한 혜택을 정리했습니다.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-600">혜택 탐색 보조</p>
+          <h2 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">플래닝 기준 혜택 후보 좁히기</h2>
+          <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
+            여기서는 현재 플래닝 결과 기준으로 먼저 볼 만한 혜택 후보를 좁혀 드립니다. 신청 자격과 실제 조건은 혜택 탐색 화면에서 다시 확인해 주세요.
+          </p>
+        </div>
+        <Link
+          className={reportHeroPrimaryActionClassName}
+          href={benefitsSearchHref}
+        >
+          혜택 탐색에서 조건 다시 확인
+        </Link>
       </div>
 
       {loading ? <LoadingState title="혜택 후보를 불러오는 중입니다" /> : null}
@@ -234,9 +267,12 @@ export default function ReportBenefitsSection({ vm, profileId }: Props) {
       {!loading && !error ? (
         <>
           <div className="rounded-[2rem] border border-amber-100 bg-amber-50/30 p-6 shadow-inner">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">왜 이 혜택을 먼저 보나요</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">플래닝 기준으로 먼저 보는 후보</p>
             <p className="mt-3 text-xl font-black tracking-tight text-slate-900 leading-tight">{recommendation.signals.headline}</p>
             <p className="mt-3 text-sm font-bold text-slate-600 leading-relaxed">{recommendation.signals.summary}</p>
+            <p className="mt-3 text-xs font-bold leading-relaxed text-amber-800">
+              이 섹션은 수급 가능 여부를 확정하는 화면이 아니라, 지금 먼저 확인할 혜택 후보를 좁혀 주는 보조 레이어입니다.
+            </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {recommendation.signals.topics.map((topic) => (
                 <span key={topic} className="rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-black text-amber-700 shadow-sm">
@@ -254,7 +290,7 @@ export default function ReportBenefitsSection({ vm, profileId }: Props) {
             </ul>
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 text-sm font-bold text-amber-800 flex items-center gap-3">
                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-200 text-[10px] font-black shrink-0">!</span>
-               <p>{recommendation.signals.limitations.join(" ")}</p>
+               <p>세부 자격과 실제 신청 판단은 혜택 탐색과 원문 공고에서 다시 확인해 주세요. {recommendation.signals.limitations.join(" ")}</p>
             </div>
           </div>
 

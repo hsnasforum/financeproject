@@ -160,7 +160,7 @@ function metric(key: string, label: string, value: number | null, unit: PlannerM
   return { key, label, value, unit, formula };
 }
 
-const PLANNER_ACTION_LINKS = {
+export const PLANNER_ACTION_LINKS = {
   emergencyRecommend: {
     href: "/recommend?purpose=emergency&kind=deposit&preferredTerm=3&liquidityPref=high&rateMode=max&pool=unified&autorun=1&save=1&go=history",
     label: "비상금 예금 추천",

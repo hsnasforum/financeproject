@@ -17,6 +17,15 @@ export type FinlifeParams = {
   scanMaxPages?: number | "auto";
 };
 
+export type FinlifeCardFreshnessMeta = {
+  sourceId: string;
+  kind: "deposit" | "saving";
+  lastSyncedAt?: string | null;
+  freshnessStatus?: "ok" | "stale" | "error" | "empty";
+  fallbackMode?: string | null;
+  assumptionNotes?: string[];
+};
+
 export type NormalizedOption = {
   save_trm?: string;
   intr_rate?: number | null;

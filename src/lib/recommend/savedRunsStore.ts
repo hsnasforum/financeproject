@@ -2,6 +2,7 @@ import {
   type CandidatePool,
   type CandidateSource,
   type DepositProtectionMode,
+  type RecommendPlanningHandoff,
   type RecommendPlanningContext,
   type RecommendPurpose,
   type UserRecommendProfile,
@@ -27,6 +28,7 @@ export type SavedRunProfile = {
     term: number;
     liquidity: number;
   };
+  planning?: RecommendPlanningHandoff;
   planningContext?: RecommendPlanningContext;
 };
 
@@ -157,7 +159,12 @@ function normalizeProfile(value: unknown): SavedRunProfile | null {
     : ["finlife"];
 
   const rawWeights = isRecord(value.weights) ? value.weights : {};
+  const rawPlanning = isRecord(value.planning) ? value.planning : {};
+  const rawPlanningSummary = isRecord(rawPlanning.summary) ? rawPlanning.summary : {};
   const rawPlanningContext = isRecord(value.planningContext) ? value.planningContext : {};
+  const planningRunId = typeof rawPlanning.runId === "string" ? rawPlanning.runId.trim() : "";
+  const planningStage = rawPlanningSummary.stage;
+  const planningOverallStatus = rawPlanningSummary.overallStatus;
   const planningContext: RecommendPlanningContext = {
     ...(normalizeNumber(rawPlanningContext.monthlyIncomeKrw) !== null
       ? { monthlyIncomeKrw: Math.max(0, Math.round(normalizeNumber(rawPlanningContext.monthlyIncomeKrw) as number)) }
@@ -172,6 +179,23 @@ function normalizeProfile(value: unknown): SavedRunProfile | null {
       ? { debtBalanceKrw: Math.max(0, Math.round(normalizeNumber(rawPlanningContext.debtBalanceKrw) as number)) }
       : {}),
   };
+  const planning: RecommendPlanningHandoff | undefined = planningRunId
+    && (planningStage === "DEFICIT" || planningStage === "DEBT" || planningStage === "EMERGENCY" || planningStage === "INVEST")
+    ? {
+        runId: planningRunId,
+        summary: {
+          stage: planningStage,
+          ...(
+            planningOverallStatus === "RUNNING"
+            || planningOverallStatus === "SUCCESS"
+            || planningOverallStatus === "PARTIAL_SUCCESS"
+            || planningOverallStatus === "FAILED"
+              ? { overallStatus: planningOverallStatus }
+              : {}
+          ),
+        },
+      }
+    : undefined;
   return {
     purpose,
     kind,
@@ -187,6 +211,7 @@ function normalizeProfile(value: unknown): SavedRunProfile | null {
       term: normalizeNumber(rawWeights.term) ?? 0,
       liquidity: normalizeNumber(rawWeights.liquidity) ?? 0,
     },
+    ...(planning ? { planning } : {}),
     ...(Object.keys(planningContext).length > 0 ? { planningContext } : {}),
   };
 }
