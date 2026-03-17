@@ -306,7 +306,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
       <div className="space-y-8">
         <ReportHeroCard
           kicker="알림 브리핑"
-          title="중요 알림함"
+          title="중요 알림"
           description="토픽 급증이나 지표 변화처럼 바로 확인할 만한 신호를 모았습니다. 확인 완료나 숨김 상태를 관리하여 노이즈를 줄이세요."
           action={(
             <div className="flex flex-wrap items-center gap-2">

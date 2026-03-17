@@ -51,24 +51,36 @@ export default async function DataSourcesSettingsPage() {
   return (
     <PageShell>
       <PageHeader
-        title="데이터 소스 연동 상태"
-        description="시스템 연동 키 값의 유효성과, 각 API가 사용자 화면에서 어떤 도움으로 이어지는지 확인합니다. 최근 연결 확인은 dev에서만 함께 보고, ping이 없는 소스는 저장된 최신 기준을 read-only로 보여줍니다."
+        title="데이터 신뢰 및 연동 상태"
+        description="어떤 데이터가 어떤 화면에 쓰이는지, 마지막 확인 기준이 무엇인지, 일부 누락되면 어떤 안내가 달라지는지 한곳에서 확인합니다."
       />
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-12">
-        {sources.map((source) => {
-          const pingSource = pingMap[source.id];
-          return (
-            <DataSourceStatusCard
-              key={source.id}
-              source={source}
-              pingSource={pingSource}
-              autoEndpointHint={autoEndpointHints[source.id]}
-              canPing={canPing}
-            />
-          );
-        })}
-      </div>
+      <Card className="mb-12 rounded-[2rem] p-8 shadow-sm">
+        <SubSectionHeader
+          title="이 페이지에서 먼저 보는 것"
+          description="운영 진단보다, 지금 화면과 추천에 어떤 데이터가 어떻게 쓰이는지 먼저 읽을 수 있게 정리했습니다."
+        />
+        <div className="mt-8 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">어디에 쓰이나요</p>
+            <p className="mt-3 text-sm font-black leading-relaxed text-slate-900">
+              추천, 공시, 혜택, 주거 탐색이 각각 어떤 데이터에 기대는지 먼저 확인합니다.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">마지막 확인 기준</p>
+            <p className="mt-3 text-sm font-black leading-relaxed text-slate-900">
+              각 카드의 운영 최신 기준과 최근 연결 확인을 함께 읽어, 지금 결과를 어느 정도까지 믿어도 되는지 살핍니다.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-6">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">문제가 있으면</p>
+            <p className="mt-3 text-sm font-black leading-relaxed text-slate-900">
+              일부 데이터가 비거나 늦어도 핵심 흐름은 유지됩니다. 자세한 운영 진단은 이 페이지 하단에서만 따로 확인합니다.
+            </p>
+          </div>
+        </div>
+      </Card>
 
       <DataSourceImpactCardsClient
         cards={impactCards}
@@ -77,10 +89,33 @@ export default async function DataSourcesSettingsPage() {
         showRecentPing={canPing}
       />
 
+      <div className="mb-12 space-y-6">
+        <SubSectionHeader
+          title="데이터별 최신 기준"
+          description="각 데이터가 지금 서비스에서 준비되어 있는지와, 마지막으로 확인한 기준이 무엇인지 읽습니다."
+        />
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {sources.map((source) => {
+            const pingSource = pingMap[source.id];
+            return (
+              <DataSourceStatusCard
+                key={source.id}
+                source={source}
+                pingSource={pingSource}
+                autoEndpointHint={autoEndpointHints[source.id]}
+                canPing={canPing}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      <OpenDartStatusCard configured={openDartConfigured} />
+
       <Card className="mb-12 rounded-[2rem] p-8 shadow-sm">
         <SubSectionHeader 
           title="확장 후보" 
-          description="현재 환경에 있는 선택 API 중, 다음 단계에서 사용자 도움으로 이어질 수 있는 후보군입니다." 
+          description="현재 연동 자산 중에서, 다음 단계에서 사용자 도움으로 확장할 수 있는 후보만 따로 모았습니다."
         />
         <div className="mt-8 grid gap-6 lg:grid-cols-3">
           {expansionCandidates.map((candidate) => (
@@ -114,14 +149,19 @@ export default async function DataSourcesSettingsPage() {
       </Card>
 
       <div className="space-y-8">
-        <OpenDartStatusCard configured={openDartConfigured} />
         {canPing ? (
-          <DataSourceHealthTable />
+          <div className="space-y-4">
+            <SubSectionHeader
+              title="상세 운영 진단"
+              description="아래 내용은 개발 환경에서만 함께 보는 점검 정보입니다. 사용자용 최신 기준보다 뒤에서 참고용으로만 읽습니다."
+            />
+            <DataSourceHealthTable />
+          </div>
         ) : (
           <Card className="rounded-[2rem] p-8 shadow-sm border-dashed border-slate-200 bg-slate-50/30">
-            <SubSectionHeader title="운영 환경 진단" description="Production 환경에서는 상세 진단 노출을 제한합니다." />
+            <SubSectionHeader title="상세 운영 진단" description="Production 환경에서는 상세 진단 노출을 제한합니다." />
             <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">
-              상세 운영 진단은 dev 환경에서만 노출합니다. production에서는 위 카드의 `운영 최신 기준`만 read-only로 확인합니다.
+              개발 환경에서만 상세 진단을 열고, 일반 사용자 화면에서는 위 카드의 `운영 최신 기준`과 사용자 도움 연결만 read-only로 확인합니다.
             </p>
           </Card>
         )}

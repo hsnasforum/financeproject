@@ -7,8 +7,8 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 const links = [
   {
     href: "/settings/data-sources",
-    title: "데이터 소스",
-    description: "공시/뉴스/상품 데이터 소스의 연동 상태 및 헬스체크를 관리합니다.",
+    title: "데이터 신뢰",
+    description: "공시·뉴스·상품 데이터의 최신 기준과 연결 상태를 한 곳에서 확인합니다.",
   },
   {
     href: "/settings/alerts",
@@ -36,8 +36,8 @@ export default function SettingsHomePage() {
   return (
     <PageShell>
       <PageHeader
-        title="환경 설정"
-        description="프로덕트 운영, 데이터 진단, 백업/복구 관련 도구 모음입니다."
+        title="내 설정"
+        description="데이터 신뢰, 알림, 백업/복구 관련 도구를 한 곳에서 관리합니다."
       />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

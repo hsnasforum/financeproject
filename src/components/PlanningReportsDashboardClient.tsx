@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toInterpretationInputFromReportVM } from "@/app/planning/reports/_lib/reportInterpretationAdapter";
 import { type CandidateRecommendationsPayload } from "@/app/planning/reports/_lib/recommendationSignals";
@@ -25,6 +25,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Badge } from "@/components/ui/Badge";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
+import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { appendProfileIdQuery } from "@/lib/planning/profileScope";
 import {
   buildRequestedReportRunScope,
@@ -47,6 +48,16 @@ export type PlanningReportsDashboardClientProps = {
 type CandidateApiResponse = {
   ok?: boolean;
   data?: CandidateRecommendationsPayload;
+  error?: {
+    message?: string;
+  };
+};
+
+type CreatedReportApiResponse = {
+  ok?: boolean;
+  data?: {
+    id?: string;
+  };
   error?: {
     message?: string;
   };
@@ -191,10 +202,13 @@ function formatMetricDelta(unitKind: ReportDeltaItem["unitKind"], delta: number)
 
 
 export default function PlanningReportsDashboardClient(props: PlanningReportsDashboardClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const hasInitialRuns = (props.initialRuns?.length ?? 0) > 0;
   const queryRunId = asString(searchParams.get("runId"));
   const queryBaseRunId = asString(searchParams.get("baseRunId"));
+  const queryRecommendRunId = asString(searchParams.get("recommendRunId"));
   const preferredRunId = queryRunId || props.initialRunId || "";
   const initialPreferredRun = useMemo(
     () => props.initialRuns?.find((run) => run.id === preferredRunId) ?? null,
@@ -223,6 +237,9 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const [showRealtimeProductExplorer, setShowRealtimeProductExplorer] = useState(false);
   const [showAdvancedRaw, setShowAdvancedRaw] = useState(false);
   const [interactiveReady, setInteractiveReady] = useState(false);
+  const [saveReportWorking, setSaveReportWorking] = useState(false);
+  const [saveReportNotice, setSaveReportNotice] = useState("");
+  const [saveReportError, setSaveReportError] = useState("");
   const showInitialLoadNotice = Boolean(props.initialLoadNotice) && (loading || (!error && runs.length < 1));
 
   const selectedRun = useMemo(
@@ -345,9 +362,59 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     () => (selectedRun ? `/planning/reports/${encodeURIComponent(selectedRun.id)}` : ""),
     [selectedRun],
   );
+  const selectedRunHasExplicitRecommendRef = Boolean(
+    queryRecommendRunId
+    && queryRunId
+    && selectedRun?.id === queryRunId,
+  );
+  const reverseRecommendHistoryHref = useMemo(
+    () => (
+      selectedRunHasExplicitRecommendRef
+        ? `/recommend/history?open=${encodeURIComponent(queryRecommendRunId)}`
+        : ""
+    ),
+    [queryRecommendRunId, selectedRunHasExplicitRecommendRef],
+  );
   const handlePrint = (): void => {
     if (typeof window === "undefined") return;
     window.print();
+  };
+
+  const handleSaveReport = async (): Promise<void> => {
+    if (!selectedRun?.id || saveReportWorking) return;
+    setSaveReportWorking(true);
+    setSaveReportNotice("");
+    setSaveReportError("");
+    try {
+      const response = await fetch("/api/planning/v2/reports", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(withDevCsrf({
+          runId: selectedRun.id,
+          ...(queryRecommendRunId ? { recommendRunId: queryRecommendRunId } : {}),
+        })),
+      });
+      const payload = (await response.json().catch(() => null)) as CreatedReportApiResponse | null;
+      const createdReportId = asString(payload?.data?.id);
+      if (!response.ok || !payload?.ok || !createdReportId) {
+        throw new Error(payload?.error?.message ?? "저장된 리포트를 만들지 못했습니다.");
+      }
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set("selected", createdReportId);
+      const nextHref = nextParams.size > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
+      router.replace(nextHref, { scroll: false });
+      setShowAdvancedRaw(true);
+      setSaveReportNotice(
+        queryRecommendRunId
+          ? "저장된 리포트를 만들고 연결된 추천 실행 참조도 함께 보관했습니다."
+          : "저장된 리포트를 만들고 아래 관리 패널을 열었습니다.",
+      );
+    } catch (saveError) {
+      setSaveReportNotice("");
+      setSaveReportError(saveError instanceof Error ? saveError.message : "저장된 리포트를 만들지 못했습니다.");
+    } finally {
+      setSaveReportWorking(false);
+    }
   };
 
   useEffect(() => {
@@ -536,6 +603,13 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         description="저장된 실행(run) 기준으로 요약 대시보드를 확인합니다."
         action={(
           <div className="no-print flex items-center gap-3">
+            {reverseRecommendHistoryHref ? (
+              <Link href={reverseRecommendHistoryHref}>
+                <Button variant="outline" className="rounded-full font-bold h-9 bg-white">
+                  추천 실행으로 돌아가기
+                </Button>
+              </Link>
+            ) : null}
             <Button
               data-testid="report-print-button"
               onClick={handlePrint}
@@ -616,9 +690,41 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                   >
                     {compareMode ? "비교 끄기" : "비교 켜기"}
                   </Button>
+                  <Button
+                    data-testid="report-save-button"
+                    disabled={!selectedRun?.id || saveReportWorking}
+                    onClick={() => void handleSaveReport()}
+                    size="sm"
+                    variant="outline"
+                    className="rounded-lg h-9 font-bold bg-white"
+                  >
+                    {saveReportWorking ? "리포트 저장 중..." : "리포트 저장"}
+                  </Button>
                 </div>
               }
             />
+
+            {saveReportNotice ? (
+              <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
+                {saveReportNotice}
+              </div>
+            ) : null}
+
+            {saveReportError ? (
+              <div className="mt-4 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-700">
+                {saveReportError}
+              </div>
+            ) : null}
+
+            {selectedRunHasExplicitRecommendRef ? (
+              <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
+                연결된 추천 실행 ID:
+                {" "}
+                <span className="font-mono text-emerald-900">{queryRecommendRunId}</span>
+                {" · "}
+                현재 보고 있는 리포트에서만 추천 실행으로 돌아갈 수 있습니다.
+              </div>
+            ) : null}
 
             {compareMode && (
               <div className="mt-6 p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-6">

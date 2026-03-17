@@ -35,6 +35,10 @@ function formatDateTime(value: string | undefined): string {
   return parsed.toLocaleString("ko-KR", { hour12: false });
 }
 
+function configuredLabel(configured: boolean) {
+  return configured ? "연결됨" : "설정 필요";
+}
+
 export function OpenDartStatusCard({ configured }: { configured: boolean }) {
   const isDev = process.env.NODE_ENV !== "production";
   const [loading, setLoading] = useState(false);
@@ -96,41 +100,43 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
     <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
       <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div>
-          <SubSectionHeader title="OpenDART 연동" className="mb-0" />
-          <p className="mt-1 text-sm font-bold text-slate-500">corpCodes 인덱스 및 API 키 연동 상태를 확인합니다.</p>
+          <SubSectionHeader title="공시 데이터 연결 상태" className="mb-0" />
+          <p className="mt-1 text-sm font-bold text-slate-500">회사 검색과 공시 상세 화면에 쓰는 OpenDART 기준을 확인합니다.</p>
         </div>
         <span className={cn(
           "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
           configured ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"
         )}>
-          Key: {configured ? "CONFIGURED" : "MISSING"}
+          API 키 {configuredLabel(configured)}
         </span>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
           <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">인덱스 메타데이터</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">현재 읽는 기준</p>
             {loading ? (
               <p className="text-xs font-bold text-slate-400 animate-pulse">상태를 불러오는 중...</p>
             ) : status ? (
               <dl className="grid gap-y-3 text-xs">
                 <div className="flex justify-between border-b border-slate-100 pb-2">
-                  <dt className="font-bold text-slate-500">Index Exists</dt>
-                  <dd className={cn("font-black", exists ? "text-emerald-600" : "text-rose-600")}>{exists ? "YES" : "NO"}</dd>
-                </div>
-                <div className="flex flex-col gap-1 border-b border-slate-100 pb-2">
-                  <dt className="font-bold text-slate-500">Primary Path</dt>
-                  <dd className="font-mono text-[10px] text-slate-400 break-all">{status.primaryPath ?? "-"}</dd>
+                  <dt className="font-bold text-slate-500">인덱스 준비</dt>
+                  <dd className={cn("font-black", exists ? "text-emerald-600" : "text-rose-600")}>{exists ? "준비됨" : "확인 필요"}</dd>
                 </div>
                 <div className="flex justify-between border-b border-slate-100 pb-2">
-                  <dt className="font-bold text-slate-500">Generated At</dt>
+                  <dt className="font-bold text-slate-500">마지막 생성 기준</dt>
                   <dd className="font-bold text-slate-700 tabular-nums">{formatDateTime(status.meta?.generatedAt)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="font-bold text-slate-500">Company Count</dt>
+                  <dt className="font-bold text-slate-500">회사 수</dt>
                   <dd className="font-black text-slate-900 tabular-nums">{typeof status.meta?.count === "number" ? status.meta.count.toLocaleString() : "-"}</dd>
                 </div>
+                {isDev ? (
+                  <div className="flex flex-col gap-1 border-t border-slate-100 pt-3">
+                    <dt className="font-bold text-slate-500">개발용 파일 경로</dt>
+                    <dd className="font-mono text-[10px] text-slate-400 break-all">{status.primaryPath ?? "-"}</dd>
+                  </div>
+                ) : null}
               </dl>
             ) : (
               <p className="text-xs font-bold text-rose-500">{error || "정보 없음"}</p>
@@ -140,7 +146,6 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
           {!exists && status?.message && (
             <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
               <p className="text-xs font-bold text-amber-700 leading-relaxed">
-                <span className="mr-2">⚠️</span>
                 {status.message}
               </p>
             </div>
@@ -149,13 +154,17 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
 
         <div className="flex flex-col gap-4">
           <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 flex-1 flex flex-col">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">인덱스 관리</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">
+              {isDev ? "개발용 인덱스 관리" : "연결 안내"}
+            </p>
             <p className="text-xs font-medium text-slate-500 leading-relaxed mb-6">
-              DART 기업 검색 성능 향상을 위해 1회성 로컬 인덱스 구축이 필요합니다. 환경 변수(`OPENDART_API_KEY`)가 설정되어 있어야 합니다.
+              {isDev
+                ? "개발 환경에서는 DART 회사 검색 기준 파일을 다시 만들거나 상태를 새로고침해 연결 기준을 점검할 수 있습니다."
+                : "일반 사용자 화면에서는 위 기준만 read-only로 확인하고, 상세 재생성이나 점검은 개발 환경에서만 진행합니다."}
             </p>
             
-            <div className="mt-auto space-y-3">
-              {isDev && (
+            {isDev ? (
+              <div className="mt-auto space-y-3">
                 <>
                   <Button 
                     className="w-full h-11 rounded-2xl font-black shadow-md" 
@@ -173,11 +182,11 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
                     상태 새로고침
                   </Button>
                 </>
-              )}
-              {status?.canAutoBuild === false && status.autoBuildDisabledReason ? (
-                <p className="text-[10px] font-bold text-rose-500 text-center">{status.autoBuildDisabledReason}</p>
-              ) : null}
-            </div>
+                {status?.canAutoBuild === false && status.autoBuildDisabledReason ? (
+                  <p className="text-[10px] font-bold text-rose-500 text-center">{status.autoBuildDisabledReason}</p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>

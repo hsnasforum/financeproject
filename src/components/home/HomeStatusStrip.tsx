@@ -9,7 +9,7 @@ interface StatusProps {
 }
 
 export function HomeStatusStrip({ status }: { status: StatusProps }) {
-  const readiness = status.p0Missing > 0 ? "추가 설정 필요" : "바로 비교 가능";
+  const readiness = status.p0Missing > 0 ? "추가 확인 필요" : "바로 비교 가능";
   const readinessTone = status.p0Missing > 0 ? "text-amber-600" : "text-emerald-600";
 
   return (
@@ -17,7 +17,7 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
       <Container className="px-4 sm:px-6 lg:px-8">
         <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[2.5rem] bg-white p-10 shadow-sm border border-slate-100">
-            <p className="text-sm font-black uppercase tracking-widest text-slate-400">연결 준비 상태</p>
+            <p className="text-sm font-black uppercase tracking-widest text-slate-400">데이터 신뢰 준비 상태</p>
             <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-900">지금 바로 비교할 준비가 됐는지 확인합니다.</h3>
             <div className="mt-4 flex items-center gap-2">
               <span className={cn("w-2 h-2 rounded-full", status.p0Missing > 0 ? "bg-amber-500 animate-pulse" : "bg-emerald-500")} />
@@ -27,12 +27,12 @@ export function HomeStatusStrip({ status }: { status: StatusProps }) {
             <div className="mt-10 grid gap-4 sm:grid-cols-3">
               <StatusBox label="연결됨" value={status.configured} />
               <StatusBox label="전체" value={status.total} />
-              <StatusBox label="추가 설정" value={status.p0Missing} warning={status.p0Missing > 0} />
+              <StatusBox label="추가 확인" value={status.p0Missing} warning={status.p0Missing > 0} />
             </div>
             
             <div className="mt-10 pt-8 border-t border-slate-50 flex justify-end">
               <Link className="inline-flex h-11 items-center rounded-xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 active:scale-95" href="/settings/data-sources">
-                연결 설정 및 진단 보기
+                데이터 신뢰 기준 보기
               </Link>
             </div>
           </div>

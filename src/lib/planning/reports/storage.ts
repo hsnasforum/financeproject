@@ -26,6 +26,7 @@ type PlanningReportMeta = {
   createdAt: string;
   kind: ReportKind;
   runId?: string;
+  recommendRunId?: string;
   pathRelative: string;
 };
 
@@ -34,6 +35,7 @@ export type PlanningReportListItem = {
   createdAt: string;
   kind: ReportKind;
   runId?: string;
+  recommendRunId?: string;
   pathRelative: string;
 };
 
@@ -111,6 +113,7 @@ function isMeta(value: unknown): value is PlanningReportMeta {
   if (!asString(value.createdAt)) return false;
   if (value.kind !== "run" && value.kind !== "manual") return false;
   if (value.runId !== undefined && !asString(value.runId)) return false;
+  if (value.recommendRunId !== undefined && !asString(value.recommendRunId)) return false;
   if (!asString(value.pathRelative)) return false;
   return true;
 }
@@ -150,6 +153,7 @@ function toReportMeta(meta: PlanningReportMeta): PlanningReportListItem {
     createdAt: meta.createdAt,
     kind: meta.kind,
     ...(meta.runId ? { runId: meta.runId } : {}),
+    ...(meta.recommendRunId ? { recommendRunId: meta.recommendRunId } : {}),
     pathRelative: meta.pathRelative,
   };
 }
@@ -218,10 +222,14 @@ export async function getReport(id: string): Promise<PlanningReportData | null> 
   }
 }
 
-export async function createReportFromRun(runId: string): Promise<{ id: string }> {
+export async function createReportFromRun(
+  runId: string,
+  options: { recommendRunId?: string } = {},
+): Promise<{ id: string }> {
   assertServerOnly();
 
   const safeRunId = asString(runId);
+  const safeRecommendRunId = asString(options.recommendRunId);
   if (!safeRunId) throw new Error("runId is required");
 
   const run = await getRun(safeRunId);
@@ -246,6 +254,7 @@ export async function createReportFromRun(runId: string): Promise<{ id: string }
     createdAt,
     kind: "run",
     runId: run.id,
+    ...(safeRecommendRunId ? { recommendRunId: safeRecommendRunId } : {}),
     pathRelative: normalizeRelativePath(markdownPath),
   };
 

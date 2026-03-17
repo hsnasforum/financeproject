@@ -1,4 +1,6 @@
 import { type UnifiedSourceId } from "@/lib/sources/types";
+import { type Stage } from "@/lib/planning/engine";
+import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
 
 export type RecommendKind = "deposit" | "saving";
 export type CandidateSource = "finlife" | "datago_kdb";
@@ -24,6 +26,16 @@ export type RecommendPlanningContext = {
   debtBalanceKrw?: number;
 };
 
+export type RecommendPlanningSummary = {
+  stage: Stage;
+  overallStatus?: PlanningRunOverallStatus;
+};
+
+export type RecommendPlanningHandoff = {
+  runId: string;
+  summary: RecommendPlanningSummary;
+};
+
 export type UserRecommendProfile = {
   purpose: RecommendPurpose;
   kind: RecommendKind;
@@ -35,6 +47,7 @@ export type UserRecommendProfile = {
   candidateSources?: CandidateSource[];
   candidatePool?: CandidatePool;
   depositProtection?: DepositProtectionMode;
+  planning?: RecommendPlanningHandoff;
   planningContext?: RecommendPlanningContext;
 };
 

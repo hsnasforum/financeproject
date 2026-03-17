@@ -5,16 +5,40 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
-import { type FinlifeKind } from "@/lib/finlife/types";
+import { type FinlifeCardFreshnessMeta, type FinlifeKind } from "@/lib/finlife/types";
 import { formatOptionBonus, formatOptionRate, getOptionRates, type OptionRow } from "@/lib/finlife/optionView";
+import { cn } from "@/lib/utils";
 
 type Props = {
   row: OptionRow;
   kind: FinlifeKind;
   amountWonDefault: number;
+  freshnessMeta?: FinlifeCardFreshnessMeta;
 };
 
-export function ProductOptionRowItem({ row, kind, amountWonDefault }: Props) {
+function formatFreshnessStatusLabel(status: NonNullable<FinlifeCardFreshnessMeta["freshnessStatus"]>): string {
+  switch (status) {
+    case "ok":
+      return "최신";
+    case "stale":
+      return "기준 지남";
+    case "error":
+      return "최근 확인 실패";
+    case "empty":
+      return "기준 정보 없음";
+    default:
+      return "기준 정보 없음";
+  }
+}
+
+function formatKoreanDateTime(value?: string | null): string {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("ko-KR", { hour12: false });
+}
+
+export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMeta }: Props) {
   const [open, setOpen] = useState(false);
   const rates = getOptionRates(row.option);
   const hasBonusBadge = rates.bonus >= 0.1;
@@ -48,6 +72,41 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault }: Props) {
             <h3 className="truncate text-lg font-black text-slate-900 tracking-tight group-hover:text-emerald-600 transition-colors">
               {row.product.fin_prdt_nm ?? "-"}
             </h3>
+            {freshnessMeta ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black">
+                {freshnessMeta.lastSyncedAt ? (
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-500">
+                    기준 확인 {formatKoreanDateTime(freshnessMeta.lastSyncedAt)}
+                  </span>
+                ) : null}
+                {freshnessMeta.freshnessStatus ? (
+                  <span
+                    className={cn(
+                      "rounded-full border px-2.5 py-1",
+                      freshnessMeta.freshnessStatus === "ok"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : freshnessMeta.freshnessStatus === "stale"
+                          ? "border-amber-200 bg-amber-50 text-amber-800"
+                          : freshnessMeta.freshnessStatus === "error"
+                            ? "border-rose-200 bg-rose-50 text-rose-700"
+                            : "border-slate-200 bg-white text-slate-500",
+                    )}
+                  >
+                    상태: {formatFreshnessStatusLabel(freshnessMeta.freshnessStatus)}
+                  </span>
+                ) : null}
+                {freshnessMeta.fallbackMode ? (
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">
+                    {freshnessMeta.fallbackMode}
+                  </span>
+                ) : null}
+                {freshnessMeta.assumptionNotes?.[0] ? (
+                  <span className="line-clamp-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-500">
+                    유의: {freshnessMeta.assumptionNotes[0]}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="hidden md:flex flex-wrap items-center gap-3 text-[11px] font-bold text-slate-400 mt-1">
               <span className="text-slate-500">
                 기본 {formatOptionRate(rates.base)}

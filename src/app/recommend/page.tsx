@@ -1,13 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorAnnouncer } from "@/components/forms/ErrorAnnouncer";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
 import { SourceBadge } from "@/components/debug/SourceBadge";
-import { DataFreshnessBanner } from "@/components/data/DataFreshnessBanner";
-import { type FreshnessSourceSpec } from "@/components/data/freshness";
 import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -18,6 +17,7 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FilterSelect } from "@/components/ui/FilterSelect";
+import { type FreshnessItemStatus } from "@/components/data/freshness";
 import { downloadText } from "@/lib/browser/download";
 import { type NormalizedProduct } from "@/lib/finlife/types";
 import { announce, focusFirstError, scrollToErrorSummary } from "@/lib/forms/a11y";
@@ -36,6 +36,8 @@ import {
   type CandidatePool,
   type CandidateSource,
   type DepositProtectionMode,
+  type RecommendPlanningContext,
+  type RecommendPlanningHandoff,
   type RecommendDetailProduct,
 } from "@/lib/recommend/types";
 import {
@@ -45,6 +47,7 @@ import {
   type RecommendProfileNormalized,
 } from "@/lib/schemas/recommendProfile";
 import { parseStringIssues, type Issue } from "@/lib/schemas/issueTypes";
+import { type SourceStatusRow } from "@/lib/sources/types";
 import { cn } from "@/lib/utils";
 
 type RecommendItem = {
@@ -103,6 +106,14 @@ type RecommendResponse = {
       generatedAt?: string;
       nextRetryAt?: string;
     };
+    planning?: RecommendPlanningHandoff | null;
+    planningContext?: RecommendPlanningContext | null;
+    planningLinkage?: {
+      readiness?: "none" | "partial" | "ready";
+      metricsCount?: number;
+      stageInference?: RecommendPlanningHandoff["summary"]["stage"] | "disabled";
+      inferenceSource?: "planning-summary" | "planning-context" | "none";
+    };
   };
   message?: string;
   items?: RecommendItem[];
@@ -119,6 +130,36 @@ type RecommendResponse = {
 };
 
 type StoredProfile = RecommendProfileNormalized;
+type PlanningInferenceSource = "planning-summary" | "planning-context" | "none" | undefined;
+type PlanningActionContextCode = "BUILD_EMERGENCY_FUND" | "COVER_LUMP_SUM_GOAL";
+type PlanningActionContext = {
+  code: PlanningActionContextCode;
+  label: string;
+};
+type ActionReasonContext = {
+  sectionLabel: string;
+  helper: string;
+};
+
+type TrustCue = {
+  tone: "emerald" | "amber" | "slate";
+  label: string;
+  helper: string;
+};
+
+type StatusApiResponse = {
+  ok: boolean;
+  data?: SourceStatusRow[];
+};
+
+type RecommendCardFreshnessMeta = {
+  sourceId: string;
+  kind: RecommendItem["kind"];
+  lastSyncedAt?: string | null;
+  freshnessStatus?: FreshnessItemStatus;
+  fallbackMode?: string | null;
+  assumptionNotes: string[];
+};
 
 type StoredRecommendItemV1 = {
   key: string;
@@ -145,6 +186,287 @@ const AUTORUN_SIG_SESSION_KEY = "recommend_autorun_sig";
 const ERROR_SUMMARY_ID = "recommend_error_summary";
 
 const defaultProfile: StoredProfile = recommendProfileDefaults();
+
+function formatPlanningStageLabel(stage: RecommendPlanningHandoff["summary"]["stage"] | "disabled" | undefined): string | null {
+  switch (stage) {
+    case "DEFICIT":
+      return "적자 관리 단계";
+    case "DEBT":
+      return "부채 관리 단계";
+    case "EMERGENCY":
+      return "비상금 보강 단계";
+    case "INVEST":
+      return "여유자금 활용 단계";
+    case "disabled":
+      return "단계 판정 없음";
+    default:
+      return null;
+  }
+}
+
+function formatPlanningOverallStatusLabel(status: RecommendPlanningHandoff["summary"]["overallStatus"] | undefined): string | null {
+  switch (status) {
+    case "RUNNING":
+      return "실행 중";
+    case "SUCCESS":
+      return "성공";
+    case "PARTIAL_SUCCESS":
+      return "부분 성공";
+    case "FAILED":
+      return "실패";
+    default:
+      return null;
+  }
+}
+
+function formatInferenceSourceLabel(source: PlanningInferenceSource): string | null {
+  switch (source) {
+    case "planning-summary":
+      return "플래닝 요약 handoff 기반";
+    case "planning-context":
+      return "legacy planningContext 기반";
+    case "none":
+      return "연결 정보 없음";
+    default:
+      return null;
+  }
+}
+
+function readPlanningActionContext(
+  searchParams: ReturnType<typeof useSearchParams>,
+): PlanningActionContext | null {
+  if (searchParams.get("from") !== "planning-report") return null;
+  const actionCode = searchParams.get("planning.actionCode");
+  if (actionCode === "BUILD_EMERGENCY_FUND") {
+    return { code: actionCode, label: "비상금 보강" };
+  }
+  if (actionCode === "COVER_LUMP_SUM_GOAL") {
+    return { code: actionCode, label: "목표자금 점검" };
+  }
+  return null;
+}
+
+function buildPlanningContextStrip(
+  storedProfile: StoredProfile | null,
+  result: RecommendResponse,
+  actionContext?: PlanningActionContext | null,
+): {
+  title: string;
+  description: string;
+  actionLabel?: string;
+  stageLabel?: string;
+  sourceLabel?: string;
+  runId?: string;
+  overallStatusLabel?: string;
+} | null {
+  const planning = result.meta?.planning ?? storedProfile?.planning;
+  const linkage = result.meta?.planningLinkage;
+  const inferenceSource = linkage?.inferenceSource;
+  const stageLabel = formatPlanningStageLabel(planning?.summary.stage ?? linkage?.stageInference);
+  const sourceLabel = formatInferenceSourceLabel(inferenceSource);
+  const overallStatusLabel = formatPlanningOverallStatusLabel(planning?.summary.overallStatus);
+  const runId = planning?.runId;
+  const metricsCount = typeof linkage?.metricsCount === "number" ? linkage.metricsCount : 0;
+  const hasStrip = Boolean(runId || stageLabel || (inferenceSource && inferenceSource !== "none") || metricsCount > 0);
+  const actionLabel = actionContext?.label;
+
+  if (!hasStrip) return null;
+
+  if (inferenceSource === "planning-summary") {
+    return {
+      title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "현재 플래닝 결과 기준으로 연 추천입니다",
+      description: actionLabel
+        ? `플래닝 리포트의 ${actionLabel} 액션에서 바로 열었고, 실행 요약을 함께 넘겨 지금 추천을 열었습니다.`
+        : "플래닝 리포트에서 넘긴 실행 요약을 기준으로 지금 추천을 열었습니다.",
+      ...(actionLabel ? { actionLabel } : {}),
+      ...(stageLabel ? { stageLabel } : {}),
+      ...(sourceLabel ? { sourceLabel } : {}),
+      ...(runId ? { runId } : {}),
+      ...(overallStatusLabel ? { overallStatusLabel } : {}),
+    };
+  }
+
+  if (inferenceSource === "planning-context") {
+    return {
+      title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "현재 플래닝 입력값을 바탕으로 연 추천입니다",
+      description: actionLabel
+        ? `플래닝 리포트의 ${actionLabel} 액션에서 열었고, 기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`
+        : `기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`,
+      ...(actionLabel ? { actionLabel } : {}),
+      ...(stageLabel ? { stageLabel } : {}),
+      ...(sourceLabel ? { sourceLabel } : {}),
+      ...(runId ? { runId } : {}),
+      ...(overallStatusLabel ? { overallStatusLabel } : {}),
+    };
+  }
+
+  return {
+    title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "플래닝 연동 정보가 함께 들어왔습니다",
+    description: actionLabel
+      ? `플래닝 리포트의 ${actionLabel} 액션에서 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.`
+      : "이번 추천은 플래닝 결과와 함께 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.",
+    ...(actionLabel ? { actionLabel } : {}),
+    ...(stageLabel ? { stageLabel } : {}),
+    ...(sourceLabel ? { sourceLabel } : {}),
+    ...(runId ? { runId } : {}),
+    ...(overallStatusLabel ? { overallStatusLabel } : {}),
+  };
+}
+
+function buildActionReasonContext(
+  actionContext?: PlanningActionContext | null,
+): ActionReasonContext | null {
+  if (actionContext?.code === "BUILD_EMERGENCY_FUND") {
+    return {
+      sectionLabel: "비상금 보강에 맞는 이유",
+      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 비상금 보강 흐름에서 왜 먼저 검토할 만한지 빠르게 읽을 수 있습니다.",
+    };
+  }
+
+  if (actionContext?.code === "COVER_LUMP_SUM_GOAL") {
+    return {
+      sectionLabel: "목표자금 점검에 맞는 이유",
+      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 목표자금 점검 흐름에서 기간과 금리 균형에 어떻게 맞는지 빠르게 읽을 수 있습니다.",
+    };
+  }
+
+  return null;
+}
+
+function buildTrustCues(input: {
+  item: RecommendItem;
+  depositProtectionPolicy?: string;
+}): TrustCue[] {
+  const cues: TrustCue[] = [];
+  const { item, depositProtectionPolicy } = input;
+
+  if (item.signals?.depositProtection === "matched") {
+    cues.push({
+      tone: "emerald",
+      label: "예금자 보호 신호 확인",
+      helper: "현재 결과 기준으로 예금자 보호 신호가 함께 확인됐습니다. 가입 전 실제 적용 범위를 다시 확인해 주세요.",
+    });
+  }
+
+  if (item.signals?.depositProtection === "unknown") {
+    cues.push({
+      tone: "amber",
+      label: "예금자 보호 여부 추가 확인 필요",
+      helper: depositProtectionPolicy
+        ? `현재 결과만으로는 예금자 보호 여부가 확실하지 않습니다. ${depositProtectionPolicy} 기준과 상품 설명서를 함께 확인해 주세요.`
+        : "현재 결과만으로는 예금자 보호 여부가 확실하지 않습니다. 가입 전 상품 설명서와 보호 기준을 함께 확인해 주세요.",
+    });
+  }
+
+  if (item.selectedOption.rateSource === "intr_rate2") {
+    cues.push({
+      tone: "amber",
+      label: "우대금리 포함 가능성",
+      helper: "지금 보이는 금리는 우대조건이 반영된 값일 수 있습니다. 실제로 받을 수 있는 조건인지 한 번 더 확인해 주세요.",
+    });
+  } else if (item.selectedOption.rateSource === "intr_rate") {
+    cues.push({
+      tone: "slate",
+      label: "기본 금리 기준",
+      helper: "현재 카드는 기본 금리 기준으로 읽으면 됩니다. 우대조건이 따로 붙는지 비교해서 보세요.",
+    });
+  }
+
+  if ((item.badges ?? []).some((badge) => badge.trim().length > 0)) {
+    cues.push({
+      tone: "slate",
+      label: "상품 메모 확인",
+      helper: "카드에 붙은 메모 배지도 함께 보세요. 가입 조건이나 비교 포인트를 빠르게 읽는 데 도움이 됩니다.",
+    });
+  }
+
+  cues.push({
+    tone: "slate",
+    label: "데이터 최신성 읽기",
+    helper: "이 카드의 결과 기준 메타와 함께 읽어 주세요. 자세한 연결 상태는 데이터 신뢰 및 연동 상태에서 확인할 수 있습니다.",
+  });
+
+  return cues;
+}
+
+function buildSourceStatusKey(input: { sourceId: string; kind: RecommendItem["kind"] }): string {
+  return `${input.sourceId}:${input.kind}`;
+}
+
+function deriveFreshnessStatus(row: SourceStatusRow | null): FreshnessItemStatus {
+  if (!row) return "empty";
+  if (row.lastError?.message) return "error";
+  if (row.counts <= 0) return "empty";
+  if (!row.isFresh) return "stale";
+  return "ok";
+}
+
+function formatFreshnessStatusLabel(status: FreshnessItemStatus): string {
+  switch (status) {
+    case "ok":
+      return "최신";
+    case "stale":
+      return "기준 지남";
+    case "error":
+      return "최근 확인 실패";
+    case "empty":
+      return "기준 정보 없음";
+    default:
+      return "기준 정보 없음";
+  }
+}
+
+function formatFallbackModeLabel(mode?: string | null): string | null {
+  if (!mode) return null;
+  const normalized = mode.trim().toUpperCase();
+  if (normalized === "CACHE") return "캐시 기준";
+  if (normalized === "REPLAY") return "재생 데이터 기준";
+  if (normalized === "MOCK") return "예시 데이터 기준";
+  return `${mode} 기준`;
+}
+
+function buildAssumptionNotes(
+  item: RecommendItem,
+  meta: RecommendResponse["meta"] | undefined,
+): string[] {
+  const notes: string[] = [];
+  const assumptions = meta?.assumptions;
+
+  if (item.selectedOption.rateSource === "intr_rate2" && assumptions?.rateSelectionPolicy) {
+    notes.push(assumptions.rateSelectionPolicy);
+  }
+
+  if (item.signals?.depositProtection && assumptions?.depositProtectionPolicy) {
+    notes.push(assumptions.depositProtectionPolicy);
+  }
+
+  return [...new Set(notes.filter((note) => note.trim().length > 0))].slice(0, 2);
+}
+
+function buildCardFreshnessMeta(input: {
+  item: RecommendItem;
+  meta: RecommendResponse["meta"] | undefined;
+  sourceStatusReady: boolean;
+  sourceStatusRow: SourceStatusRow | null;
+}): RecommendCardFreshnessMeta | null {
+  const { item, meta, sourceStatusReady, sourceStatusRow } = input;
+  const fallbackMode = formatFallbackModeLabel(meta?.fallback?.mode);
+  const assumptionNotes = buildAssumptionNotes(item, meta);
+  const freshnessStatus = sourceStatusReady ? deriveFreshnessStatus(sourceStatusRow) : undefined;
+  const lastSyncedAt = sourceStatusReady ? sourceStatusRow?.lastSyncedAt ?? null : undefined;
+  const hasStatusMeta = sourceStatusReady;
+
+  if (!hasStatusMeta && !fallbackMode && assumptionNotes.length === 0) return null;
+
+  return {
+    sourceId: item.sourceId,
+    kind: item.kind,
+    ...(typeof lastSyncedAt !== "undefined" ? { lastSyncedAt } : {}),
+    ...(freshnessStatus ? { freshnessStatus } : {}),
+    ...(fallbackMode ? { fallbackMode } : {}),
+    assumptionNotes,
+  };
+}
 
 function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): {
   profilePatch: Partial<StoredProfile>;
@@ -245,6 +567,8 @@ function toSavedRunProfile(profile: StoredProfile): SavedRunProfile {
       term: profile.weights.term,
       liquidity: profile.weights.liquidity,
     },
+    ...(profile.planning ? { planning: profile.planning } : {}),
+    ...(profile.planningContext ? { planningContext: profile.planningContext } : {}),
   };
 }
 
@@ -433,9 +757,12 @@ function RecommendPageInner() {
   const [readyToPersist, setReadyToPersist] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState<string | null>(null);
   const [formIssues, setFormIssues] = useState<Issue[]>([]);
+  const [sourceStatusRows, setSourceStatusRows] = useState<SourceStatusRow[]>([]);
+  const [sourceStatusReady, setSourceStatusReady] = useState(false);
   const lastStoredRef = useRef<StoredRecommendResultV1 | null>(null);
   const autoRunTriggeredRef = useRef(false);
   const submitInFlightRef = useRef(false);
+  const sourceStatusAbortRef = useRef<AbortController | null>(null);
 
   const showValidationIssues = useCallback((issues: Issue[]) => {
     setFormIssues(issues);
@@ -565,20 +892,77 @@ function RecommendPageInner() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   }, [profile, readyToPersist]);
 
+  useEffect(() => {
+    if (!result?.items?.length) {
+      sourceStatusAbortRef.current?.abort();
+      setSourceStatusRows([]);
+      setSourceStatusReady(false);
+      return;
+    }
+
+    sourceStatusAbortRef.current?.abort();
+    const controller = new AbortController();
+    sourceStatusAbortRef.current = controller;
+    setSourceStatusReady(false);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/sources/status", {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = (await response.json()) as StatusApiResponse;
+        if (!response.ok || !json.ok || !Array.isArray(json.data)) {
+          if (!controller.signal.aborted) {
+            setSourceStatusRows([]);
+            setSourceStatusReady(false);
+          }
+          return;
+        }
+        if (!controller.signal.aborted) {
+          setSourceStatusRows(json.data);
+          setSourceStatusReady(true);
+        }
+      } catch (fetchError) {
+        if (fetchError instanceof Error && fetchError.name === "AbortError") return;
+        if (!controller.signal.aborted) {
+          setSourceStatusRows([]);
+          setSourceStatusReady(false);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [result]);
+
   const purposeLabel = useMemo(() => {
     if (profile.purpose === "emergency") return "단기 비상금";
     if (profile.purpose === "long-term") return "장기 저축";
     return "목돈 마련";
   }, [profile.purpose]);
 
-  const freshnessSources = useMemo<FreshnessSourceSpec[]>(() => {
-    if (profile.kind === "saving") {
-      return [{ sourceId: "finlife", kind: "saving", label: "FINLIFE 적금", importance: "required" }];
-    }
-    return [{ sourceId: "finlife", kind: "deposit", label: "FINLIFE 예금", importance: "required" }];
-  }, [profile.kind]);
-
   const fieldIssueMap = useMemo(() => issuesToFieldMap(formIssues), [formIssues]);
+  const planningActionContext = useMemo(
+    () => readPlanningActionContext(searchParams),
+    [searchParams],
+  );
+  const actionReasonContext = useMemo(
+    () => buildActionReasonContext(planningActionContext),
+    [planningActionContext],
+  );
+  const planningContextStrip = useMemo(
+    () => (result ? buildPlanningContextStrip(lastStored?.profile ?? null, result, planningActionContext) : null),
+    [lastStored, planningActionContext, result],
+  );
+  const sourceStatusMap = useMemo(() => {
+    const next = new Map<string, SourceStatusRow>();
+    for (const row of sourceStatusRows) {
+      if (row.kind !== "deposit" && row.kind !== "saving") continue;
+      next.set(buildSourceStatusKey({ sourceId: row.sourceId, kind: row.kind }), row);
+    }
+    return next;
+  }, [sourceStatusRows]);
 
   async function submit() {
     if (loading) return;
@@ -618,10 +1002,15 @@ function RecommendPageInner() {
         title="스마트 상품 추천"
         description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        데이터 신뢰 및 연동 상태는{" "}
+        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+          내 설정 &gt; 데이터 신뢰 및 연동 상태
+        </Link>
+        에서 확인할 수 있습니다.
+      </p>
 
-      <div className="mb-8 space-y-6">
-        <DataFreshnessBanner sources={freshnessSources} infoDisplay="compact" />
-        
+      <div className="mb-8 space-y-6" data-testid="recommend-root">
         <Card className="rounded-[2.5rem] p-8 shadow-sm">
           <ErrorSummary issues={formIssues} id={ERROR_SUMMARY_ID} className="mb-6" />
           <ErrorAnnouncer />
@@ -713,6 +1102,7 @@ function RecommendPageInner() {
               <div className="mt-8 space-y-3">
                 <Button
                   variant="primary"
+                  data-testid="recommend-submit"
                   className="w-full rounded-2xl h-14 text-sm font-black shadow-lg shadow-emerald-900/20"
                   onClick={() => void submit()}
                   disabled={loading}
@@ -803,11 +1193,60 @@ function RecommendPageInner() {
             </div>
           </div>
 
+          {planningContextStrip && (
+            <Card className="rounded-[2.5rem] border border-emerald-100 bg-emerald-50/40 p-6 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">플래닝 연동</p>
+                  <h3 className="text-lg font-black tracking-tight text-slate-900">{planningContextStrip.title}</h3>
+                  <p className="text-sm font-medium leading-relaxed text-slate-600">{planningContextStrip.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] font-black">
+                  {planningContextStrip.actionLabel ? (
+                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
+                      연결된 액션: {planningContextStrip.actionLabel}
+                    </span>
+                  ) : null}
+                  {planningContextStrip.stageLabel ? (
+                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
+                      단계: {planningContextStrip.stageLabel}
+                    </span>
+                  ) : null}
+                  {planningContextStrip.sourceLabel ? (
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
+                      연결 방식: {planningContextStrip.sourceLabel}
+                    </span>
+                  ) : null}
+                  {planningContextStrip.overallStatusLabel ? (
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
+                      실행 상태: {planningContextStrip.overallStatusLabel}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+              {planningContextStrip.runId ? (
+                <p className="mt-4 text-xs font-bold text-slate-500">
+                  플래닝 실행 ID: <span className="font-mono text-slate-700">{planningContextStrip.runId}</span>
+                </p>
+              ) : null}
+            </Card>
+          )}
+
           <div className="grid gap-6 md:grid-cols-2">
             {(result.items ?? []).map((item, index) => {
               const itemKey = `${item.sourceId}-${item.finPrdtCd}-${index}`;
               const detailProduct = buildDetailProduct(item);
               const scorePct = Math.min(100, Math.max(0, item.finalScore));
+              const freshnessMeta = buildCardFreshnessMeta({
+                item,
+                meta: result.meta,
+                sourceStatusReady,
+                sourceStatusRow: sourceStatusMap.get(buildSourceStatusKey(item)) ?? null,
+              });
+              const trustCues = buildTrustCues({
+                item,
+                depositProtectionPolicy: result.meta?.assumptions.depositProtectionPolicy,
+              });
               return (
                 <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100">
                   <div className="mb-6 flex items-start justify-between">
@@ -858,7 +1297,100 @@ function RecommendPageInner() {
                   </div>
 
                   <div className="mb-8 space-y-3">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">추천 사유</p>
+                    {freshnessMeta ? (
+                      <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">결과 기준</p>
+                          <div className="flex flex-wrap gap-2">
+                            {freshnessMeta.freshnessStatus ? (
+                              <span
+                                className={cn(
+                                  "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm",
+                                  freshnessMeta.freshnessStatus === "ok"
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : freshnessMeta.freshnessStatus === "stale"
+                                      ? "border-amber-200 bg-amber-50 text-amber-800"
+                                      : freshnessMeta.freshnessStatus === "error"
+                                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                                        : "border-slate-200 bg-white text-slate-500",
+                                )}
+                              >
+                                상태: {formatFreshnessStatusLabel(freshnessMeta.freshnessStatus)}
+                              </span>
+                            ) : null}
+                            {freshnessMeta.fallbackMode ? (
+                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600 shadow-sm">
+                                {freshnessMeta.fallbackMode}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                        {typeof freshnessMeta.lastSyncedAt !== "undefined" ? (
+                          <p className="text-[11px] font-bold leading-relaxed text-slate-600">
+                            {freshnessMeta.lastSyncedAt
+                              ? `기준 확인 ${formatKoreanDateTime(freshnessMeta.lastSyncedAt)}`
+                              : "기준 확인 시각 정보가 아직 없습니다."}
+                          </p>
+                        ) : null}
+                        {freshnessMeta.assumptionNotes.length > 0 ? (
+                          <ul className="space-y-2">
+                            {freshnessMeta.assumptionNotes.map((note) => (
+                              <li
+                                key={note}
+                                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600 shadow-sm"
+                              >
+                                가정: {note}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">읽기 힌트</p>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        {trustCues.length}개
+                      </span>
+                    </div>
+                    <ul className="space-y-2">
+                      {trustCues.map((cue) => (
+                        <li
+                          key={cue.label}
+                          className={cn(
+                            "rounded-2xl border px-4 py-3 text-[11px] font-bold leading-relaxed shadow-sm",
+                            cue.tone === "emerald"
+                              ? "border-emerald-100 bg-emerald-50/40 text-emerald-800"
+                              : cue.tone === "amber"
+                                ? "border-amber-100 bg-amber-50/50 text-amber-900"
+                                : "border-slate-100 bg-slate-50/70 text-slate-600",
+                          )}
+                        >
+                          <p className="text-[10px] font-black uppercase tracking-widest">{cue.label}</p>
+                          <p className="mt-1">{cue.helper}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="mb-8 space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          {actionReasonContext?.sectionLabel ?? "추천 사유"}
+                        </p>
+                        {actionReasonContext ? (
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                            상단 플래닝 연동 기준
+                          </span>
+                        ) : null}
+                      </div>
+                      {actionReasonContext ? (
+                        <p className="rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600">
+                          {actionReasonContext.helper}
+                        </p>
+                      ) : null}
+                    </div>
                     <ul className="space-y-3">
                       {item.reasons.slice(0, 3).map((reason, i) => (
                         <li key={i} className="flex gap-3 text-sm font-medium text-slate-600">

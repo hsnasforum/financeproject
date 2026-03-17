@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,6 +10,9 @@ import {
 } from "@/components/ui/ReportTone";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
 import { type EvidenceItem } from "@/lib/planning/v2/insights/evidence";
+import { type Stage } from "@/lib/planning/engine";
+import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
+import { PLANNER_ACTION_LINKS } from "@/lib/planner/compute";
 import { type ReportVM } from "../_lib/reportViewModel";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
@@ -83,6 +87,73 @@ function compactText(value: string | undefined, maxLength: number): string {
   if (!normalized) return "";
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function asStage(value: unknown): Stage | undefined {
+  return value === "DEFICIT" || value === "DEBT" || value === "EMERGENCY" || value === "INVEST" ? value : undefined;
+}
+
+function resolvePlanningStage(vm: ReportVM): Stage | undefined {
+  const raw = asRecord(vm.raw);
+  const run = asRecord(raw?.runJson);
+  const outputs = asRecord(run?.outputs);
+  const engine = asRecord(outputs?.engine);
+  const engineFinancialStatus = asRecord(engine?.financialStatus);
+  const simulate = asRecord(outputs?.simulate);
+  const simulateFinancialStatus = asRecord(simulate?.financialStatus);
+
+  return (
+    asStage(engineFinancialStatus?.stage)
+    ?? asStage(engine?.stage)
+    ?? asStage(simulateFinancialStatus?.stage)
+    ?? asStage(simulate?.stage)
+  );
+}
+
+function buildActionRecommendHref(input: {
+  baseHref: string;
+  runId?: string;
+  stage?: Stage;
+  overallStatus?: PlanningRunOverallStatus;
+  actionCode?: "BUILD_EMERGENCY_FUND" | "COVER_LUMP_SUM_GOAL";
+}): string {
+  const url = new URL(input.baseHref, "https://financeproject.local");
+  url.searchParams.set("from", "planning-report");
+  if (input.runId) {
+    url.searchParams.set("planning.runId", input.runId);
+  }
+  if (input.stage) {
+    url.searchParams.set("planning.summary.stage", input.stage);
+  }
+  if (input.overallStatus) {
+    url.searchParams.set("planning.summary.overallStatus", input.overallStatus);
+  }
+  if (input.actionCode) {
+    url.searchParams.set("planning.actionCode", input.actionCode);
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+const HOUSING_SUPPORT_KEYWORDS = ["주거", "주택", "집", "내집", "아파트", "전세", "월세", "청약"] as const;
+
+function hasHousingSupportKeyword(value: string | undefined): boolean {
+  const normalized = value?.replace(/\s+/g, " ").trim();
+  if (!normalized) return false;
+  return HOUSING_SUPPORT_KEYWORDS.some((keyword) => normalized.includes(keyword));
+}
+
+function resolveHousingSupportContext(vm: ReportVM): "goal" | "action" | null {
+  if (vm.goalsTable.some((goal) => hasHousingSupportKeyword(goal.name))) {
+    return "goal";
+  }
+  if (vm.actionRows.some((action) => hasHousingSupportKeyword(`${action.title} ${action.summary}`))) {
+    return "action";
+  }
+  return null;
 }
 
 function actionSummaryTone(input: {
@@ -279,6 +350,32 @@ export default function ReportDashboard({ vm }: Props) {
   ) || "저장된 실행 결과와 기본 가정 기준으로 계산했습니다.";
   const assumptionPreview = compactText(vm.assumptionsLines[0], 120);
   const renderOverrideReason = (reason?: string) => reason?.trim() || "입력값 기준으로 조정";
+  const planningStage = resolvePlanningStage(vm);
+  const emergencyRecommendHref = planningStage
+    ? buildActionRecommendHref({
+      baseHref: PLANNER_ACTION_LINKS.emergencyRecommend.href,
+      runId: vm.header.runId,
+      stage: planningStage,
+      overallStatus: vm.stage.overallStatus,
+      actionCode: "BUILD_EMERGENCY_FUND",
+    })
+    : null;
+  const goalRecommendHref = planningStage
+    ? buildActionRecommendHref({
+      baseHref: PLANNER_ACTION_LINKS.savingRecommend.href,
+      runId: vm.header.runId,
+      stage: planningStage,
+      overallStatus: vm.stage.overallStatus,
+      actionCode: "COVER_LUMP_SUM_GOAL",
+    })
+    : null;
+  const housingSupportContext = resolveHousingSupportContext(vm);
+  const housingSupportTitle = housingSupportContext === "goal"
+    ? "주거 관련 목표가 있다면 청약 일정부터 다시 확인해 보세요."
+    : "현재 실행 제안에 주거 관련 확인 항목이 있어 청약 공고를 먼저 좁혀 볼 수 있습니다.";
+  const housingSupportSummary = housingSupportContext === "goal"
+    ? "플래닝에서는 다음에 볼 주거 정보를 먼저 좁혀 줍니다. 세부 조건과 실제 계약 판단은 주거 화면에서 다시 확인하세요."
+    : "여기서는 다음에 볼 주거 정보를 빠르게 좁혀 줍니다. 세부 조건과 실제 계약 판단은 주거 화면에서 다시 확인하세요.";
 
   return (
     <div className="space-y-8" data-testid="report-dashboard">
@@ -613,6 +710,24 @@ export default function ReportDashboard({ vm }: Props) {
               우선순위 {vm.topActions.length}개
             </Badge>
           </div>
+
+          {housingSupportContext ? (
+            <div className="mb-8 rounded-[1.75rem] border border-sky-100 bg-sky-50/70 p-5 shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">주거 판단 보조</p>
+              <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-2xl">
+                  <p className="text-sm font-black leading-relaxed text-slate-900">{housingSupportTitle}</p>
+                  <p className="mt-2 text-xs font-bold leading-relaxed text-slate-600">{housingSupportSummary}</p>
+                </div>
+                <Link
+                  className="inline-flex items-center rounded-xl bg-sky-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-sky-900/10 transition hover:bg-sky-700 active:scale-95"
+                  href={PLANNER_ACTION_LINKS.subscriptionHousing.href}
+                >
+                  청약 공고 다시 보기
+                </Link>
+              </div>
+            </div>
+          ) : null}
           
           {vm.topActions.length === 0 ? (
             <div className="py-12 rounded-[2rem] border border-dashed border-slate-100 text-center">
@@ -620,26 +735,46 @@ export default function ReportDashboard({ vm }: Props) {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-3">
-              {vm.topActions.map((action) => (
-                <article className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 shadow-inner transition-all hover:bg-white hover:shadow-md" key={action.code}>
-                  <Badge variant={action.severity === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black border-none mb-3">
-                    {severityText(action.severity)}
-                  </Badge>
-                  <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
-                  <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">{action.summary}</p>
-                  <div className="mt-6 space-y-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">핵심 단계</p>
-                    <ul className="space-y-1.5">
-                      {action.steps.slice(0, 3).map((step, index) => (
-                        <li className="flex gap-2 text-[11px] font-bold text-slate-700" key={`${action.code}-step-${index}`}>
-                          <span className="text-emerald-500 shrink-0">•</span>
-                          <span className="leading-tight">{step}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </article>
-              ))}
+              {vm.topActions.map((action) => {
+                const actionCtaLink = action.code === "BUILD_EMERGENCY_FUND" && emergencyRecommendHref
+                  ? { href: emergencyRecommendHref, label: PLANNER_ACTION_LINKS.emergencyRecommend.label }
+                  : action.code === "COVER_LUMP_SUM_GOAL" && goalRecommendHref
+                    ? { href: goalRecommendHref, label: PLANNER_ACTION_LINKS.savingRecommend.label }
+                    : action.code === "REDUCE_DEBT_SERVICE"
+                      ? { href: PLANNER_ACTION_LINKS.creditLoanProducts.href, label: PLANNER_ACTION_LINKS.creditLoanProducts.label }
+                    : null;
+
+                return (
+                  <article className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 shadow-inner transition-all hover:bg-white hover:shadow-md" key={action.code}>
+                    <Badge variant={action.severity === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black border-none mb-3">
+                      {severityText(action.severity)}
+                    </Badge>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
+                    <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">{action.summary}</p>
+                    <div className="mt-6 space-y-2">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">핵심 단계</p>
+                      <ul className="space-y-1.5">
+                        {action.steps.slice(0, 3).map((step, index) => (
+                          <li className="flex gap-2 text-[11px] font-bold text-slate-700" key={`${action.code}-step-${index}`}>
+                            <span className="text-emerald-500 shrink-0">•</span>
+                            <span className="leading-tight">{step}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    {actionCtaLink ? (
+                      <div className="mt-6 border-t border-slate-100 pt-4">
+                        <Link
+                          className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-700 active:scale-95"
+                          href={actionCtaLink.href}
+                        >
+                          {actionCtaLink.label}
+                        </Link>
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
             </div>
           )}
         </Card>

@@ -12,6 +12,8 @@ import {
   reportHeroPrimaryActionClassName,
 } from "@/components/ui/ReportTone";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
+import { type Stage } from "@/lib/planning/engine";
+import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
 import {
   rankPlanningProductRecommendations,
   type CandidateRecommendationsPayload,
@@ -39,6 +41,43 @@ function asDateTime(value: string): string {
   const parsed = Date.parse(value);
   if (!Number.isFinite(parsed)) return value;
   return new Date(parsed).toLocaleString("ko-KR", { hour12: false });
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function asStage(value: unknown): Stage | undefined {
+  return value === "DEFICIT" || value === "DEBT" || value === "EMERGENCY" || value === "INVEST" ? value : undefined;
+}
+
+function resolvePlanningStage(vm: ReportVM): Stage | undefined {
+  const raw = asRecord(vm.raw);
+  const run = asRecord(raw?.runJson);
+  const outputs = asRecord(run?.outputs);
+  const engine = asRecord(outputs?.engine);
+  const engineFinancialStatus = asRecord(engine?.financialStatus);
+  const simulate = asRecord(outputs?.simulate);
+  const simulateFinancialStatus = asRecord(simulate?.financialStatus);
+
+  return (
+    asStage(engineFinancialStatus?.stage)
+    ?? asStage(engine?.stage)
+    ?? asStage(simulateFinancialStatus?.stage)
+    ?? asStage(simulate?.stage)
+  );
+}
+
+function buildRecommendHref(runId: string, stage: Stage | undefined, overallStatus?: PlanningRunOverallStatus): string {
+  if (!runId || !stage) return "/recommend";
+  const params = new URLSearchParams();
+  params.set("from", "planning-report");
+  params.set("planning.runId", runId);
+  params.set("planning.summary.stage", stage);
+  if (overallStatus) {
+    params.set("planning.summary.overallStatus", overallStatus);
+  }
+  return `/recommend?${params.toString()}`;
 }
 
 export default function ReportRecommendationsSection({
@@ -99,6 +138,10 @@ export default function ReportRecommendationsSection({
     if (!effectivePayload) return null;
     return rankPlanningProductRecommendations(vm, effectivePayload, 3);
   }, [effectivePayload, vm]);
+  const recommendHref = useMemo(
+    () => buildRecommendHref(runId, resolvePlanningStage(vm), vm.stage.overallStatus),
+    [runId, vm],
+  );
 
   return (
     <Card className="space-y-6 border border-slate-100 bg-white p-8 text-slate-900 shadow-sm rounded-[2.5rem]" data-testid="report-recommendations-section">
@@ -224,7 +267,7 @@ export default function ReportRecommendationsSection({
             </a>
             <Link
               className="inline-flex items-center rounded-xl bg-emerald-600 px-6 py-2.5 text-xs font-black text-white shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-700 active:scale-95"
-              href="/recommend"
+              href={recommendHref}
             >
               전체 추천 보기
             </Link>

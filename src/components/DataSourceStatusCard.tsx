@@ -31,6 +31,22 @@ function badgeClass(state: "configured" | "missing" | "error") {
   return "bg-rose-50 text-rose-700 border-rose-100 font-black";
 }
 
+function badgeLabel(state: "configured" | "missing" | "error") {
+  if (state === "configured") return "연결 준비됨";
+  if (state === "missing") return "설정 필요";
+  return "점검 필요";
+}
+
+function userSummary(state: "configured" | "missing" | "error") {
+  if (state === "configured") {
+    return "현재 이 데이터는 관련 화면과 안내에 연결할 준비가 되어 있습니다.";
+  }
+  if (state === "missing") {
+    return "연결 정보가 없어 일부 화면에서는 기본 안내만 보여 주거나 결과 범위가 줄어들 수 있습니다.";
+  }
+  return "최근 확인 기준에 점검이 필요해 일부 결과가 늦거나 비어 보일 수 있습니다.";
+}
+
 function formatDateTime(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
@@ -70,32 +86,35 @@ export function DataSourceStatusCard({ source, pingSource, autoEndpointHint, can
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">{source.id}</p>
           </div>
           <span className={cn("shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", badgeClass(source.status.state))}>
-            {source.status.state}
+            {badgeLabel(source.status.state)}
           </span>
         </div>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">환경 변수</p>
-            <div className="flex flex-wrap gap-1.5">
-              {source.env.map((entry) => (
-                <span key={entry.key} className="rounded-md bg-slate-50 border border-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
-                  {entry.key}{entry.optional ? "(선택)" : ""}
-                </span>
-              ))}
-            </div>
+          <div className="rounded-2xl border border-slate-100 bg-white p-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">사용자에게 보이는 영향</p>
+            <p className="text-xs font-bold text-slate-700 leading-relaxed">{userSummary(source.status.state)}</p>
           </div>
 
-          {autoEndpointHint ? (
+          {canPing ? (
             <div className="space-y-1">
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">API 경로</p>
-              <p className="text-xs font-bold text-slate-500 font-mono break-all">{autoEndpointHint}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">개발용 연결 조건</p>
+              <div className="flex flex-wrap gap-1.5">
+                {source.env.map((entry) => (
+                  <span key={entry.key} className="rounded-md bg-slate-50 border border-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">
+                    {entry.key}{entry.optional ? "(선택)" : ""}
+                  </span>
+                ))}
+              </div>
+              {autoEndpointHint ? (
+                <p className="pt-2 text-xs font-bold text-slate-500 font-mono break-all">{autoEndpointHint}</p>
+              ) : null}
             </div>
           ) : null}
 
-          {source.status.message ? (
+          {canPing && source.status.message ? (
             <div className="rounded-2xl border border-amber-100 bg-amber-50/50 p-3">
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-1">상태 메시지</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-600 mb-1">운영 메모</p>
               <p className="text-xs font-bold text-amber-700 leading-relaxed">{source.status.message}</p>
             </div>
           ) : null}
