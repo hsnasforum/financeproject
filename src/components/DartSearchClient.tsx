@@ -661,8 +661,12 @@ export function DartSearchClient() {
     <PageShell>
       <PageHeader
         title="DART 공시 분석"
-        description="관심 있는 상장 기업의 실시간 공시를 검색하고 모니터링합니다."
+        description="관심 기업을 현재 검색 기준으로 다시 찾고, 개황 확인이나 공시 모니터링으로 이어 보는 화면입니다."
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 투자 결론을 확정하는 곳이 아니라, 관심 기업의 공시 흐름과 기본 정보를 다시 확인하는 단계입니다.
+        먼저 회사를 고른 뒤 기업 개황이나 공시 모니터링으로 이어서 읽어 보세요.
+      </p>
 
       <div className="flex items-center gap-2 mb-8">
         <button
@@ -729,7 +733,7 @@ export function DartSearchClient() {
                 className="h-12 px-10 rounded-2xl font-black shadow-md w-full sm:w-auto"
                 disabled={!isHydrated || loading}
               >
-                {loading ? "검색 중..." : "기업 찾기"}
+                {loading ? "검색 중..." : "지금 기준으로 찾기"}
               </Button>
             </form>
             
@@ -776,7 +780,7 @@ export function DartSearchClient() {
                       refreshLocalLists();
                     }}
                   >
-                    Clear All
+                    기록 비우기
                   </Button>
                 ) : null}
               </div>
@@ -787,12 +791,21 @@ export function DartSearchClient() {
             <Card className="mb-8 rounded-[2rem] border-amber-100 bg-amber-50/30 p-8">
               <div data-testid="dart-missing-index" className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                  <p className="text-base font-black text-amber-800 tracking-tight">인덱스 구축이 필요합니다</p>
-                  <p className="mt-1 text-sm font-medium text-amber-700/70">DART 기업 코드를 효율적으로 검색하기 위해 1회성 인덱스 생성이 필요합니다.</p>
-                  <div className="mt-4 space-y-1 text-[10px] text-amber-600/60 font-mono">
-                    <p>Msg: {missing.message ?? "-"}</p>
-                    <p>Path: {missing.primaryPath ?? "-"}</p>
-                  </div>
+                  <p className="text-base font-black text-amber-800 tracking-tight">검색 준비가 더 필요합니다</p>
+                  <p className="mt-1 text-sm font-medium leading-relaxed text-amber-700/80">
+                    DART 기업 코드를 아직 불러오지 못해 회사 검색을 바로 진행할 수 없습니다. 잠시 후 다시 시도해 보세요.
+                  </p>
+                  {isDev && (missing.message || missing.primaryPath) ? (
+                    <details className="mt-4 rounded-xl border border-amber-200/80 bg-white/70 px-3 py-2">
+                      <summary className="cursor-pointer list-none text-[11px] font-semibold text-amber-700 marker:hidden">
+                        개발용 인덱스 정보
+                      </summary>
+                      <div className="mt-2 space-y-1 text-[11px] font-medium leading-relaxed text-amber-800">
+                        {missing.message ? <p>상태 메시지: {missing.message}</p> : null}
+                        {missing.primaryPath ? <p>주 경로: <span className="font-mono">{missing.primaryPath}</span></p> : null}
+                      </div>
+                    </details>
+                  ) : null}
                 </div>
 
                 {isDev && missing.canAutoBuild === true ? (
@@ -803,7 +816,7 @@ export function DartSearchClient() {
                     onClick={() => void buildIndex()}
                     disabled={buildLoading}
                   >
-                    {buildLoading ? "생성 중..." : "인덱스 자동 생성"}
+                    {buildLoading ? "준비 중..." : "검색 준비 자동 생성"}
                   </Button>
                 ) : null}
               </div>
@@ -815,7 +828,7 @@ export function DartSearchClient() {
               <Card className="rounded-[2rem] p-0 overflow-hidden shadow-sm border-slate-100">
                 <div data-testid="dart-search-results">
                   <div className="bg-slate-50/50 px-8 py-5 border-b border-slate-100 flex items-center justify-between">
-                     <SubSectionHeader title="검색 결과" className="mb-0" />
+                     <SubSectionHeader title="검색 결과" description="기업 개황이나 공시 모니터링으로 이어 갈 회사를 고르세요." className="mb-0" />
                      {items.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-1 rounded-lg border border-slate-100">{items.length}건</span>}
                   </div>
                   
@@ -828,7 +841,7 @@ export function DartSearchClient() {
                   {!loading && !error && !missing && items.length === 0 && !hasSearched ? (
                     <div data-testid="dart-search-idle" className="p-20 text-center">
                       <p className="text-base font-black text-slate-900 tracking-tight">회사명을 입력하고 검색해 보세요</p>
-                      <p className="mt-2 text-sm font-medium text-slate-400">최신 공시와 기업 정보를 바로 확인할 수 있습니다.</p>
+                      <p className="mt-2 text-sm font-medium text-slate-400">현재 공시 기준으로 회사 개황과 최근 공시 흐름을 이어서 확인할 수 있습니다.</p>
                     </div>
                   ) : null}
 

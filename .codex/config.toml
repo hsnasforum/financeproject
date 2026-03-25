@@ -23,6 +23,14 @@ enabled = true
 path = "/home/xpdlqj/code/finance/.codex/skills/dart-data-source-hardening/SKILL.md"
 enabled = true
 
+[[skills.config]]
+path = "/home/xpdlqj/code/finance/.codex/skills/planning-v3-batch-contract-narrowing/SKILL.md"
+enabled = true
+
+[[skills.config]]
+path = "/home/xpdlqj/.codex/skills/frontend-skill/SKILL.md"
+enabled = true
+
 # 메타: 어떤 스킬을 붙일지 정리할 때 사용하는 스킬
 [[skills.config]]
 path = "/home/xpdlqj/code/finance/.codex/skills/finance-skill-routing/SKILL.md"

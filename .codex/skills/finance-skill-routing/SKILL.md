@@ -27,6 +27,8 @@ For implementation or verification rounds, start with:
   - add when routes, hrefs, redirects, navigation, middleware route guards, or `docs/current-screens.md` change
 - `dart-data-source-hardening`
   - add when DART, public/open data, data-source settings, env, freshness, fallback, or partial-failure handling change
+- `planning-v3-batch-contract-narrowing`
+  - add when a planning v3 `N2` round touches batch detail or summary, categorized or cashflow, balances/monthly, draft/profile, batch list or batch center, synthetic stored-only batch handling, or batch override helper narrowing
 
 ## Usually not needed
 
@@ -41,8 +43,9 @@ For implementation or verification rounds, start with:
 2. Decide whether the task is an implementation/verification round or an analysis-only round.
 3. For implementation or verification, attach the default pair first.
 4. Add conditional skills only when the touched surface clearly matches their trigger.
-5. Keep the final set minimal; do not add a skill just because it is available.
-6. Record only actually used skills in the `/work` closeout.
+5. When the newest `/work` note is part of a repeated planning v3 batch-family narrowing stream, prefer attaching `planning-v3-batch-contract-narrowing` before inventing route-local rules for stored-first, legacy fallback, public `createdAt`, or synthetic stored-only behavior.
+6. Keep the final set minimal; do not add a skill just because it is available.
+7. Record only actually used skills in the `/work` closeout.
 
 ## Output
 

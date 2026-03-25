@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,6 +17,10 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 function readJson(filePath: string): unknown {
   return JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+}
+
+function hashSha256(text: string): string {
+  return createHash("sha256").update(text, "utf-8").digest("hex");
 }
 
 describe("planning v3 batchesStore/importCsvToBatch", () => {
@@ -89,6 +94,205 @@ describe("planning v3 batchesStore/importCsvToBatch", () => {
     expect(parsed.version).toBe(1);
     const fileIds = (parsed.items ?? []).map((row) => String(row.id ?? ""));
     expect(fileIds).toEqual([...fileIds].sort((left, right) => left.localeCompare(right)));
+  });
+
+  it("persists batch-level diagnostics/provenance metadata without touching row schema", async () => {
+    const csvText = [
+      "거래일,금액,적요",
+      "2026/03/01,1000000,급여",
+      "2026.13.01,100,잘못된날짜",
+      "2026-03-03,abc,잘못된금액",
+      "2026-03-04,\"(123,000)\",관리비",
+    ].join("\n");
+
+    const imported = await importCsvToBatch({
+      csvText,
+      provenance: { fileName: "handoff-bootstrap.csv" },
+    });
+
+    expect(imported.metadataHandoff).toEqual({
+      diagnostics: {
+        rows: 4,
+        parsed: 2,
+        skipped: 2,
+      },
+      provenance: {
+        fileNameProvided: true,
+        fileName: "handoff-bootstrap.csv",
+      },
+      sourceBinding: {
+        artifactSha256: hashSha256(csvText),
+        attestedFileName: "handoff-bootstrap.csv",
+        originKind: "writer-handoff",
+      },
+    });
+    expect((imported.batchMeta as Record<string, unknown>).importMetadata).toBeUndefined();
+
+    const storedMeta = await getBatchMeta(imported.batchMeta.id);
+    expect(storedMeta).toMatchObject({
+      id: imported.batchMeta.id,
+      rowCount: 2,
+      importMetadata: {
+        diagnostics: {
+          rows: 4,
+          parsed: 2,
+          skipped: 2,
+        },
+        provenance: {
+          fileNameProvided: true,
+          fileName: "handoff-bootstrap.csv",
+        },
+        sourceBinding: {
+          artifactSha256: hashSha256(csvText),
+          attestedFileName: "handoff-bootstrap.csv",
+          originKind: "writer-handoff",
+        },
+      },
+    });
+
+    const listedMeta = (await listBatches()).find((row) => row.id === imported.batchMeta.id);
+    expect(listedMeta?.importMetadata).toEqual(storedMeta?.importMetadata);
+
+    const indexPath = path.join(root, "planning-v3", "batches", "index.json");
+    const parsedIndex = readJson(indexPath) as {
+      items?: Array<Record<string, unknown>>;
+    };
+    const savedItem = (parsedIndex.items ?? []).find((row) => row.id === imported.batchMeta.id) ?? {};
+    expect(savedItem.importMetadata).toEqual({
+      diagnostics: {
+        rows: 4,
+        parsed: 2,
+        skipped: 2,
+      },
+      provenance: {
+        fileNameProvided: true,
+        fileName: "handoff-bootstrap.csv",
+      },
+      sourceBinding: {
+        artifactSha256: hashSha256(csvText),
+        attestedFileName: "handoff-bootstrap.csv",
+        originKind: "writer-handoff",
+      },
+    });
+
+    const batchFilePath = path.join(root, "planning-v3", "batches", `${imported.batchMeta.id}.ndjson`);
+    const raw = fs.readFileSync(batchFilePath, "utf-8");
+    const storedRows = raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(raw.includes("handoff-bootstrap.csv")).toBe(false);
+    expect(storedRows.every((row) => row.fileName === undefined && row.diagnostics === undefined && row.provenance === undefined && row.importMetadata === undefined)).toBe(true);
+  });
+
+  it("stores fileNameProvided false when provenance is omitted", async () => {
+    const imported = await importCsvToBatch({
+      csvText: [
+        "date,amount,description",
+        "2026-03-01,1000000,salary",
+        "2026-03-02,-15000,coffee",
+      ].join("\n"),
+    });
+
+    expect(imported.metadataHandoff).toEqual({
+      diagnostics: {
+        rows: 2,
+        parsed: 2,
+        skipped: 0,
+      },
+      provenance: {
+        fileNameProvided: false,
+      },
+    });
+    expect((imported.batchMeta as Record<string, unknown>).importMetadata).toBeUndefined();
+
+    const storedMeta = await getBatchMeta(imported.batchMeta.id);
+    expect(storedMeta?.importMetadata).toEqual({
+      diagnostics: {
+        rows: 2,
+        parsed: 2,
+        skipped: 0,
+      },
+      provenance: {
+        fileNameProvided: false,
+      },
+    });
+    expect(storedMeta?.importMetadata?.sourceBinding).toBeUndefined();
+
+    const listedMeta = (await listBatches()).find((row) => row.id === imported.batchMeta.id);
+    expect(listedMeta?.importMetadata).toEqual(storedMeta?.importMetadata);
+
+    const indexPath = path.join(root, "planning-v3", "batches", "index.json");
+    const parsedIndex = readJson(indexPath) as {
+      items?: Array<Record<string, unknown>>;
+    };
+    const savedItem = (parsedIndex.items ?? []).find((row) => row.id === imported.batchMeta.id) ?? {};
+    expect(savedItem.importMetadata).toEqual({
+      diagnostics: {
+        rows: 2,
+        parsed: 2,
+        skipped: 0,
+      },
+      provenance: {
+        fileNameProvided: false,
+      },
+    });
+  });
+
+  it("normalizes blank provenance fileName into fileNameProvided false", async () => {
+    const imported = await importCsvToBatch({
+      csvText: [
+        "date,amount,description",
+        "2026-03-01,1000000,salary",
+        "2026-03-02,-15000,coffee",
+      ].join("\n"),
+      provenance: { fileName: "   " },
+    });
+
+    expect(imported.metadataHandoff).toEqual({
+      diagnostics: {
+        rows: 2,
+        parsed: 2,
+        skipped: 0,
+      },
+      provenance: {
+        fileNameProvided: false,
+      },
+    });
+    expect((imported.batchMeta as Record<string, unknown>).importMetadata).toBeUndefined();
+
+    const storedMeta = await getBatchMeta(imported.batchMeta.id);
+    expect(storedMeta?.importMetadata).toEqual({
+      diagnostics: {
+        rows: 2,
+        parsed: 2,
+        skipped: 0,
+      },
+      provenance: {
+        fileNameProvided: false,
+      },
+    });
+    expect(storedMeta?.importMetadata?.sourceBinding).toBeUndefined();
+
+    const listedMeta = (await listBatches()).find((row) => row.id === imported.batchMeta.id);
+    expect(listedMeta?.importMetadata).toEqual(storedMeta?.importMetadata);
+
+    const indexPath = path.join(root, "planning-v3", "batches", "index.json");
+    const parsedIndex = readJson(indexPath) as {
+      items?: Array<Record<string, unknown>>;
+    };
+    const savedItem = (parsedIndex.items ?? []).find((row) => row.id === imported.batchMeta.id) ?? {};
+    expect(savedItem.importMetadata).toEqual({
+      diagnostics: {
+        rows: 2,
+        parsed: 2,
+        skipped: 0,
+      },
+      provenance: {
+        fileNameProvided: false,
+      },
+    });
   });
 
   it("supports meta + transactions roundtrip", async () => {

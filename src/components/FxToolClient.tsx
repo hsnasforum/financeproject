@@ -52,12 +52,12 @@ export function FxToolClient() {
     <PageShell>
       <PageHeader
         title="환율 자동 계산기"
-        description="외화 자산이나 지출 항목을 실시간 기준 환율로 원화 환산하여 합계를 계산합니다."
+        description="현재 조회 기준 환율로 외화 자산이나 지출 항목을 원화로 비교해 봅니다."
       />
 
       <div className="grid gap-8 lg:grid-cols-3 items-start">
         <Card className="rounded-[2rem] p-8 shadow-sm lg:col-span-1">
-          <SubSectionHeader title="환산 설정" description="외화 기호와 금액을 입력하세요." />
+          <SubSectionHeader title="환산 설정" description="비교할 외화 자산이나 지출 항목을 입력하세요." />
           
           <div className="mt-6 space-y-6">
             <div className="space-y-2">
@@ -72,6 +72,9 @@ export function FxToolClient() {
               />
               <p className="text-[10px] font-medium text-slate-400 leading-relaxed px-1">
                 기호:금액 형식으로 입력하며 여러 건은 콤마(,)로 구분합니다.
+              </p>
+              <p className="text-[10px] font-bold text-slate-500 leading-relaxed px-1">
+                결과는 비교용 참고값이며 실제 환전·결제 금액은 수수료와 적용 시점에 따라 달라질 수 있습니다.
               </p>
             </div>
 
@@ -93,11 +96,11 @@ export function FxToolClient() {
 
         <div className="lg:col-span-2 space-y-6">
           <Card className={cn("rounded-[2rem] p-8 shadow-sm transition-all border-2", rows.length > 0 ? "border-emerald-100 bg-white" : "border-dashed border-slate-100 bg-slate-50/30")}>
-            <SubSectionHeader title="환산 결과" description={rows.length > 0 ? "최신 매매기준율이 적용된 결과입니다." : "환산 버튼을 누르면 여기에 결과가 표시됩니다."} />
+            <SubSectionHeader title="현재 기준 환산 결과" description={rows.length > 0 ? "현재 조회 기준 환율로 계산한 비교 결과입니다." : "환산 버튼을 누르면 여기에 비교 결과가 표시됩니다."} />
             
             {rows.length === 0 ? (
               <div className="py-20 text-center">
-                <p className="text-sm font-black text-slate-400 uppercase tracking-[0.2em]">Ready to Calculate</p>
+                <p className="text-sm font-black text-slate-400 tracking-[0.08em]">비교할 외화 항목을 입력하면 여기에 결과가 표시됩니다.</p>
               </div>
             ) : (
               <div className="mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -105,8 +108,8 @@ export function FxToolClient() {
                   {rows.map((row) => (
                     <div key={`${row.currency}-${row.amount}`} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 group hover:border-emerald-200 transition-all">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{row.currency} 자산</span>
-                        <span className="text-[10px] font-bold text-slate-400 tabular-nums">Rate: {row.rate ?? "-"}</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{row.currency} 항목</span>
+                        <span className="text-[10px] font-bold text-slate-400 tabular-nums">기준 환율 {row.rate ?? "-"}</span>
                       </div>
                       <div className="flex items-end justify-between gap-2">
                         <p className="text-sm font-bold text-slate-500 tracking-tight">{row.amount.toLocaleString()} {row.currency}</p>
@@ -122,7 +125,7 @@ export function FxToolClient() {
                 <div className="rounded-3xl bg-emerald-600 p-8 shadow-xl shadow-emerald-900/20 text-white">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">Total Estimate</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">현재 기준 합계</p>
                       <p className="text-sm font-black text-white">원화 환산 합계</p>
                     </div>
                     <p className="text-3xl font-black tabular-nums tracking-tight">

@@ -820,14 +820,15 @@ export function PlanningWorkspaceClient({
 
   const applyHydratedProfileEditorState = useCallback((
     nextState: ProfileJsonEditorState,
-    nextProfileName = profileName,
+    nextProfileName?: string,
   ): void => {
-    setProfileName(nextProfileName);
+    const resolvedProfileName = (nextProfileName ?? nextState.form.name ?? "기본 프로필") || "기본 프로필";
+    setProfileName(resolvedProfileName);
     setProfileForm(nextState.form);
     setProfileJson(nextState.json);
     setProfileJsonDraft(nextState.jsonDraft);
     setProfileJsonError(nextState.jsonError);
-  }, [profileName]);
+  }, []);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,

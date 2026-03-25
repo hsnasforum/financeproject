@@ -158,8 +158,12 @@ export default function ProductsCatalogPage() {
     <PageShell>
       <PageHeader
         title="통합 상품 탐색"
-        description="FINLIFE와 KDB 데이터를 통합한 전 금융권 상품 카탈로그입니다."
+        description="예금·적금 후보를 현재 검색과 필터 기준으로 비교해 보는 통합 카탈로그입니다."
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 확정 추천이 아니라, 현재 조건 기준으로 비교할 후보를 좁혀 보는 단계입니다.
+        최고 금리만 보지 말고 기간, 우대조건, 예금자보호, 가입 조건은 상세에서 다시 확인하세요.
+      </p>
 
       <div className="sticky top-0 z-30 mb-10 space-y-4">
         <Card className="rounded-[2.5rem] p-8 shadow-lg backdrop-blur-md bg-white/95 border-slate-100">
@@ -182,14 +186,14 @@ export default function ProductsCatalogPage() {
                 <div className="flex items-center gap-3">
                   <SearchPill
                     className="h-12 w-full rounded-2xl"
-                    placeholder="은행명 또는 상품명을 입력하세요"
+                    placeholder="은행명 또는 상품명으로 비교 후보를 좁혀 보세요"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                     onClear={() => setQ("")}
                     isLoading={loading && rows.length === 0}
                   />
                   <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-emerald-900/20" onClick={() => void run({ append: false })} disabled={loading}>
-                    {loading ? "조회 중" : "검색"}
+                    {loading ? "조회 중" : "지금 기준으로 보기"}
                   </Button>
                 </div>
               </div>
@@ -236,7 +240,7 @@ export default function ProductsCatalogPage() {
                 <div className="flex items-center gap-3 rounded-2xl bg-emerald-50/50 px-4 py-2 border border-emerald-100/50">
                   <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-200" />
                   <span className="text-sm font-black text-emerald-700">
-                    {filteredRows.length.toLocaleString()} <span className="text-[10px] font-black text-emerald-600/50 uppercase tracking-widest ml-1">results</span>
+                    {filteredRows.length.toLocaleString()} <span className="text-[10px] font-black text-emerald-600/60 uppercase tracking-widest ml-1">비교 후보</span>
                   </span>
                 </div>
               </div>
@@ -248,6 +252,9 @@ export default function ProductsCatalogPage() {
       {compareNotice && (
         <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 text-center animate-in fade-in slide-in-from-top-2">
           <p className="text-sm font-black text-emerald-700">{compareNotice}</p>
+          <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-700/80">
+            지금은 후보를 담아 두는 단계이며, 나란히 다시 보는 일은 비교 화면에서 이어집니다.
+          </p>
         </div>
       )}
 
@@ -263,7 +270,7 @@ export default function ProductsCatalogPage() {
       <div className="space-y-8">
         {loading && filteredRows.length === 0 ? (
           <div className="py-20">
-            <LoadingState title="최적의 상품 목록을 분석하고 있습니다" />
+            <LoadingState title="현재 조건 기준으로 비교 후보를 불러오고 있습니다" />
           </div>
         ) : filteredRows.length > 0 ? (
           <>
@@ -294,18 +301,21 @@ export default function ProductsCatalogPage() {
                   </div>
 
                   <div className="mt-8 space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">대표 옵션</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">지금 비교 중인 대표 옵션</p>
                     {item.options?.slice(0, 2).map((option, idx) => (
                       <div key={idx} className="flex items-center justify-between rounded-xl bg-slate-50/50 p-4 border border-slate-100/50">
                         <span className="text-xs font-black text-slate-600 tabular-nums">{option.termMonths ? `${option.termMonths}개월` : option.saveTrm}</span>
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">MAX</span>
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">대표 금리</span>
                           <span className="text-base font-black text-emerald-600 tabular-nums">{formatRate(option.intrRate2)}</span>
                         </div>
                       </div>
                     ))}
+                    <p className="text-[11px] font-medium leading-relaxed text-slate-500">
+                      대표 옵션은 지금 후보를 빠르게 훑어 보는 미리보기입니다. 1차 비교용으로만 보고, 실제 가입 조건과 우대 여부는 상세에서 다시 확인하세요.
+                    </p>
                     {item.options && item.options.length > 2 && (
-                      <p className="text-center text-[10px] font-black text-slate-300 uppercase tracking-widest pt-1">+{item.options.length - 2} more options</p>
+                      <p className="text-center text-[10px] font-black text-slate-300 uppercase tracking-widest pt-1">+{item.options.length - 2}개 옵션 더 있음</p>
                     )}
                   </div>
 
@@ -314,20 +324,23 @@ export default function ProductsCatalogPage() {
                       href={`/products/catalog/${encodeURIComponent(item.stableId)}`}
                       className="flex-1 rounded-2xl bg-emerald-600 py-4 text-center text-xs font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-700 active:scale-95"
                     >
-                      상세 보기
+                      상세에서 다시 확인
                     </Link>
                     <Button
                       variant="outline"
                       className="flex-1 rounded-2xl h-12 font-black border-slate-200"
                       onClick={() => {
                         const next = addCompareIdToStorage(item.stableId, compareStoreConfig.max);
-                        setCompareNotice(`비교함에 담았습니다. (${next.length}/${compareStoreConfig.max})`);
+                        setCompareNotice(`비교함에 담았습니다. 다른 후보와의 나란히 비교는 /products/compare에서 이어집니다. (${next.length}/${compareStoreConfig.max})`);
                         setTimeout(() => setCompareNotice(""), 3000);
                       }}
                     >
-                      비교 담기
+                      비교 후보 담기
                     </Button>
                   </div>
+                  <p className="mt-3 text-[10px] font-medium leading-relaxed text-slate-400">
+                    비교 후보 담기는 지금 결론을 정하는 버튼이 아니라, 비교 화면에서 다시 볼 후보를 모아 두는 단계입니다.
+                  </p>
                 </Card>
               ))}
             </div>
@@ -336,7 +349,7 @@ export default function ProductsCatalogPage() {
           <div className="py-20">
             <EmptyState
               title="검색 결과가 없습니다"
-              description="필터 조건을 완화하거나 다른 검색어를 입력해 보세요."
+              description="필터를 완화하거나 다른 검색어로 비교 후보를 다시 불러와 보세요."
               actionLabel="필터 초기화"
               onAction={() => {
                 setTermMonths("");
@@ -356,7 +369,7 @@ export default function ProductsCatalogPage() {
             className="rounded-2xl h-14 px-16 font-black shadow-sm transition-all hover:bg-white active:scale-95"
             onClick={() => void run({ append: true, cursor: nextCursor })}
           >
-            더 많은 상품 불러오기
+            비교 후보 더 보기
           </Button>
         </div>
       )}

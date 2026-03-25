@@ -9,12 +9,14 @@ import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAcc
 import { categorizeTransactions } from "@/lib/planning/v3/service/categorizeTransactions";
 import { computeCashflowBreakdown } from "@/lib/planning/v3/service/computeCashflowBreakdown";
 import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
-import { readBatch, readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
 import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
-import { getBatchMeta, getBatchTransactions } from "@/lib/planning/v3/store/batchesStore";
 import { listRules } from "@/lib/planning/v3/store/categoryRulesStore";
 import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
-import { getOverrides, listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
+import {
+  getBatchTxnOverrides,
+  getStoredFirstBatchSummaryProjectionRows,
+  loadStoredFirstBatchTransactions,
+} from "@/lib/planning/v3/transactions/store";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -55,99 +57,31 @@ function toDescription(value: unknown): string | undefined {
   return text.slice(0, 80);
 }
 
-function toStoredTransactions(batchId: string, rows: Array<{
-  txnId?: string;
-  accountId?: string;
-  date: string;
-  amountKrw: number;
-  description?: string;
-  kind?: "income" | "expense" | "transfer";
-  category?: string;
-  categoryId?: string;
-  source: "csv";
-  transfer?: {
-    direction: "out" | "in";
-    counterpartyAccountId?: string;
-    matchedTxnId?: string;
-    confidence: "high" | "medium" | "low";
-  };
-  meta?: { rowIndex: number };
-}>): StoredTransaction[] {
-  return rows
-    .map((row) => {
-      const txnId = asString(row.txnId).toLowerCase();
-      if (!txnId) return null;
-      return {
-        ...row,
-        txnId,
-        batchId,
-      };
-    })
-    .filter((row): row is StoredTransaction => row !== null)
-    .sort((left, right) => {
-      if (left.date !== right.date) return left.date.localeCompare(right.date);
-      if (left.amountKrw !== right.amountKrw) return left.amountKrw - right.amountKrw;
-      return left.txnId.localeCompare(right.txnId);
-    });
-}
-
 export async function GET(request: Request, context: RouteContext) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
   const { id } = await context.params;
   try {
-    const [
-      detail,
-      batchTransactions,
-      storedMeta,
-      storedTransactions,
-      rules,
-      scopedOverrides,
-      mergedOverrides,
-      accountOverrides,
-      transferOverrides,
-    ] = await Promise.all([
-      readBatch(id),
-      readBatchTransactions(id),
-      getBatchMeta(id),
-      getBatchTransactions(id),
+    const [loaded, rules, overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
+      loadStoredFirstBatchTransactions(id),
       listRules(),
-      getOverrides(id).catch(() => ({})),
-      listOverrides().catch(() => ({})),
+      getBatchTxnOverrides(id).catch(() => ({})),
       getAccountMappingOverrides(id).catch(() => ({})),
       getTransferOverrides(id).catch(() => ({})),
     ]);
 
-    let transactions: StoredTransaction[] = [];
-    let meta: unknown = null;
-
-    if (detail && batchTransactions) {
-      transactions = toStoredTransactions(detail.batch.id, batchTransactions.transactions);
-      meta = {
-        id: detail.batch.id,
-        createdAt: detail.batch.createdAt,
-        total: detail.batch.total,
-        ok: detail.batch.ok,
-        failed: detail.batch.failed,
-        ...(detail.batch.accountId ? { accountId: detail.batch.accountId } : {}),
-      };
-    } else if (storedMeta) {
-      transactions = storedTransactions;
-      meta = storedMeta;
-    }
-
-    if (!meta) {
+    if (!loaded) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." } },
         { status: 404 },
       );
     }
 
-    const overridesByTxnId = {
-      ...mergedOverrides,
-      ...scopedOverrides,
-    };
+    // Categorized has no raw row payload, so it follows the same stored-first
+    // visible binding projection as summary when same-id coexistence is present.
+    const transactions: StoredTransaction[] = getStoredFirstBatchSummaryProjectionRows(loaded);
+
     const mappedTransactions = applyAccountMappingOverrides(transactions, accountOverrides);
     const transferDetected = detectTransfers({
       batchId: id,
@@ -175,7 +109,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     return NextResponse.json({
       ok: true,
-      meta,
+      meta: loaded.meta,
       data: categorized.map((row) => ({
         batchId: row.batchId,
         txnId: row.txnId,

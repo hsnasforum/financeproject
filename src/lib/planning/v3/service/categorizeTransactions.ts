@@ -1,6 +1,7 @@
 import { type CategoryId, type CategoryRule, type CategorizedTransactionRow } from "../domain/types";
 import { type StoredTransaction } from "../domain/transactions";
 import { type TxnOverride } from "../domain/types";
+import { normalizeCategoryId } from "./categorySemantics";
 
 type CategorizeTransactionsInput = {
   transactions: StoredTransaction[];
@@ -26,30 +27,6 @@ function sortRules(rules: CategoryRule[]): CategoryRule[] {
       if (left.priority !== right.priority) return right.priority - left.priority;
       return left.id.localeCompare(right.id);
     });
-}
-
-function toCategoryId(value: unknown): CategoryId | null {
-  const text = asString(value).toLowerCase();
-  const allowed: CategoryId[] = [
-    "income",
-    "transfer",
-    "fixed",
-    "variable",
-    "debt",
-    "tax",
-    "insurance",
-    "housing",
-    "food",
-    "transport",
-    "shopping",
-    "health",
-    "education",
-    "etc",
-    "unknown",
-  ];
-  if ((allowed as string[]).includes(text)) return text as CategoryId;
-  if (text === "saving" || text === "invest") return "etc";
-  return null;
 }
 
 function pickRuleCategory(description: string, rules: CategoryRule[]): CategoryId | null {
@@ -84,7 +61,8 @@ export function categorizeTransactions(input: CategorizeTransactionsInput): Cate
 
     const txnId = asString(tx.txnId).toLowerCase();
     const override = txnId ? input.overridesByTxnId[txnId] : undefined;
-    const overrideCategory = toCategoryId(override?.categoryId ?? override?.category);
+    const overrideCategory = normalizeCategoryId(override?.categoryId)
+      ?? normalizeCategoryId(override?.category, { allowLegacyIncomeCategory: true });
     const description = normalizeText(tx.description);
 
     if (overrideCategory) {

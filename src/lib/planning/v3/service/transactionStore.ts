@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import { type AccountTransaction } from "../domain/types";
-import { type V3ImportBatch, type V3TransactionRecord } from "../domain/transactions";
+import { type ImportBatchMeta, type V3ImportBatch, type V3TransactionRecord } from "../domain/transactions";
 import { parseCsvTransactions } from "../providers/csv/csvProvider";
 import { detectEncodingIssue, normalizeNewlines, parseCsvText, stripUtf8Bom } from "../providers/csv/csvParse";
 import { inferCsvMapping } from "../providers/csv/inferMapping";
@@ -12,6 +12,11 @@ import { maskPreviewDescription, previewCsv, type CsvPreviewRow } from "../provi
 import { type CsvColumnMapping } from "../providers/csv/types";
 import { validateCsvMapping } from "../providers/csv/validateMapping";
 import { roundKrw } from "@/lib/planning/calc/roundingPolicy";
+import {
+  getBatchMeta,
+  restoreStoredBatchAccountBindingSnapshot,
+  updateStoredBatchAccountBinding,
+} from "../store/batchesStore";
 import { dedupeTransactions } from "./dedupe";
 import { buildTxnId, isTxnId, normalizeDescriptionForTxnId } from "./txnId";
 
@@ -89,6 +94,158 @@ export type UpdateBatchAccountResult = {
   updatedTransactionCount: number;
 };
 
+export type LegacyBatchAccountAppendVerificationStatus =
+  | "parsed-row-committed"
+  | "malformed-tail"
+  | "no-committed-row-observed";
+
+export type LegacyBatchAccountAppendVerificationResult = {
+  status: LegacyBatchAccountAppendVerificationStatus;
+  latestParsedBatch?: V3ImportBatch;
+};
+
+export type SameIdCoexistencePostWriteFailureOutcome =
+  | "repair-required"
+  | "rollback-recovery-unproven";
+
+export type SameIdCoexistencePostWriteFailureReason =
+  | "stored-rollback-not-attempted"
+  | "stored-rollback-failed"
+  | "legacy-parsed-row-committed"
+  | "legacy-malformed-tail"
+  | "legacy-no-committed-row-observed";
+
+export type SameIdCoexistencePostWriteFailureClassification = {
+  outcome: SameIdCoexistencePostWriteFailureOutcome;
+  reason: SameIdCoexistencePostWriteFailureReason;
+  successAllowed: false;
+};
+
+export type SameIdCoexistenceOperatorEvidenceSnapshot = {
+  batchId: string;
+  targetAccountId: string;
+  outcome: SameIdCoexistencePostWriteFailureOutcome;
+  reason: SameIdCoexistencePostWriteFailureReason;
+  successAllowed: false;
+  rollback: {
+    attempted: boolean;
+    succeeded: boolean;
+  };
+  legacyVerification: {
+    status: LegacyBatchAccountAppendVerificationStatus;
+    noWriteProof: "not-proven";
+    latestParsedBatch?: Pick<V3ImportBatch, "id" | "createdAt" | "accountId" | "accountHint">;
+  };
+  storedCurrentBinding?: {
+    accountId: string | null;
+  };
+};
+
+export type StoredCurrentBindingEvidenceSummary = {
+  accountId: string | null;
+};
+
+export type StoredPreWriteSnapshotCompareStatus =
+  | "matched-prewrite"
+  | "drifted-from-prewrite"
+  | "snapshot-missing";
+
+export type StoredPreWriteSnapshotCompareResult = {
+  status: StoredPreWriteSnapshotCompareStatus;
+  preWriteAccountId: string | null;
+  currentAccountId: string | null;
+};
+
+export type SameIdCoexistenceSecondaryFailureRouteLocalWorkerResult = {
+  legacyVerification: LegacyBatchAccountAppendVerificationResult;
+  failure: SameIdCoexistencePostWriteFailureClassification;
+  operatorEvidence: SameIdCoexistenceOperatorEvidenceSnapshot;
+  storedPreWriteCompare?: StoredPreWriteSnapshotCompareResult;
+};
+
+export type SameIdCoexistenceOperatorRepairPayload = {
+  batchId: string;
+  targetAccountId: string;
+  outcome: SameIdCoexistencePostWriteFailureOutcome;
+  reason: SameIdCoexistencePostWriteFailureReason;
+  successAllowed: false;
+  rollback: {
+    attempted: boolean;
+    succeeded: boolean;
+  };
+  legacyVerification: SameIdCoexistenceOperatorEvidenceSnapshot["legacyVerification"];
+  storedCurrentBinding?: SameIdCoexistenceOperatorEvidenceSnapshot["storedCurrentBinding"];
+  storedPreWriteCompare?: StoredPreWriteSnapshotCompareResult;
+};
+
+export type SameIdCoexistenceSecondaryFailureWorkerInput = {
+  batchId: string;
+  targetAccountId: string;
+  storedRollbackAttempted: boolean;
+  storedRollbackSucceeded: boolean;
+  storedPreWriteAccountId?: string | null;
+};
+
+export type SameIdCoexistenceLegacySecondWriteErrorSummary = {
+  stage: "legacy-second-write";
+  code: "legacy-second-write-failed" | "legacy-batch-missing";
+  message: string;
+};
+
+export type SameIdCoexistenceRouteLocalSequencingTrace = {
+  storedPreWriteAccountId: string | null;
+  storedWrite: {
+    attempted: boolean;
+    succeeded: boolean;
+    accountIdAfterWrite: string | null;
+  };
+  legacyWrite: {
+    attempted: boolean;
+    succeeded: boolean;
+    accountIdAfterWrite: string | null;
+    updatedTransactionCount: number;
+  };
+  storedRollback: {
+    attempted: boolean;
+    succeeded: boolean;
+    accountIdAfterRollback: string | null;
+  };
+};
+
+export type SameIdCoexistenceRouteLocalSequencingResult =
+  | {
+      status: "writes-completed";
+      batchId: string;
+      targetAccountId: string;
+      trace: SameIdCoexistenceRouteLocalSequencingTrace;
+    }
+  | {
+      status: "secondary-failure";
+      batchId: string;
+      targetAccountId: string;
+      trace: SameIdCoexistenceRouteLocalSequencingTrace;
+      legacySecondWriteError?: SameIdCoexistenceLegacySecondWriteErrorSummary;
+      secondaryFailureWorkerInput: SameIdCoexistenceSecondaryFailureWorkerInput;
+      secondaryFailure: SameIdCoexistenceSecondaryFailureRouteLocalWorkerResult;
+      operatorRepairPayload: SameIdCoexistenceOperatorRepairPayload;
+    };
+
+export type SameIdCoexistenceWritesCompletedSequenceResult = Extract<
+  SameIdCoexistenceRouteLocalSequencingResult,
+  { status: "writes-completed" }
+>;
+
+export type SameIdCoexistenceSecondaryFailureSequenceResult = Extract<
+  SameIdCoexistenceRouteLocalSequencingResult,
+  { status: "secondary-failure" }
+>;
+
+export type SameIdCoexistenceUserFacingInternalFailure = {
+  code: "INTERNAL";
+  message: string;
+  successAllowed: false;
+};
+
 export class TransactionStoreInputError extends Error {
   readonly details: Array<{ field: string; message: string }>;
 
@@ -121,6 +278,52 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function cloneImportBatchAccounts(
+  accounts: ImportBatchMeta["accounts"],
+): ImportBatchMeta["accounts"] {
+  const existing = Array.isArray(accounts) ? accounts : [];
+  if (existing.length < 1) return undefined;
+  return existing.map((entry) => ({ ...entry }));
+}
+
+function getPrimaryImportBatchAccountId(
+  accounts: ImportBatchMeta["accounts"],
+): string | null {
+  return asString(accounts?.[0]?.id) || null;
+}
+
+export function summarizeSameIdCoexistenceLegacySecondWriteError(
+  error: unknown,
+): SameIdCoexistenceLegacySecondWriteErrorSummary {
+  if (error instanceof TransactionStoreInputError && error.message === "legacy batch not found") {
+    return {
+      stage: "legacy-second-write",
+      code: "legacy-batch-missing",
+      message: "기존 배치를 찾을 수 없습니다.",
+    };
+  }
+
+  return {
+    stage: "legacy-second-write",
+    code: "legacy-second-write-failed",
+    message: "기존 배치 append 저장에 실패했습니다.",
+  };
+}
+
+export function buildSameIdCoexistenceUserFacingInternalFailure(): SameIdCoexistenceUserFacingInternalFailure {
+  return {
+    code: "INTERNAL",
+    message: "배치 계좌 연결에 실패했습니다.",
+    successAllowed: false,
+  };
+}
+
+export function toSameIdCoexistenceUserFacingInternalFailure(
+  _input: SameIdCoexistenceSecondaryFailureSequenceResult,
+): SameIdCoexistenceUserFacingInternalFailure {
+  return buildSameIdCoexistenceUserFacingInternalFailure();
 }
 
 function toSha256(text: string): string {
@@ -166,6 +369,30 @@ function resolveRecordsPath(cwd = process.cwd()): string {
 async function appendNdjsonLine(filePath: string, payload: unknown): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.appendFile(filePath, `${JSON.stringify(payload)}\n`, "utf-8");
+}
+
+function getLastNonEmptyNdjsonLine(raw: string): string | null {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return lines.length > 0 ? lines[lines.length - 1] : null;
+}
+
+function normalizeBatchLine(line: string): V3ImportBatch | null {
+  try {
+    return normalizeImportBatch(JSON.parse(line) as unknown);
+  } catch {
+    return null;
+  }
+}
+
+function hasExpectedLegacyBatchAccountBinding(batch: V3ImportBatch | undefined, accountId: string): boolean {
+  return Boolean(
+    batch
+      && asString(batch.accountId) === accountId
+      && asString(batch.accountHint) === accountId,
+  );
 }
 
 function parseIso(value: unknown): string {
@@ -776,6 +1003,344 @@ export async function updateBatchAccount(batchId: string, accountId: string): Pr
     batch: updated,
     updatedTransactionCount: changedRecords,
   };
+}
+
+export async function verifyLegacyBatchAccountAppendPostWrite(input: {
+  batchId: string;
+  accountId: string;
+}): Promise<LegacyBatchAccountAppendVerificationResult> {
+  assertServerOnly();
+
+  const safeBatchId = sanitizeRecordId(input.batchId);
+  const safeAccountId = normalizeAccountId(input.accountId);
+  const raw = await fs.readFile(resolveBatchesPath(), "utf-8").catch(() => "");
+  const tailLine = getLastNonEmptyNdjsonLine(raw);
+  const batches = await readBatches();
+  const latestParsedBatch = batches.find((entry) => entry.id === safeBatchId);
+
+  if (tailLine && !normalizeBatchLine(tailLine)) {
+    return {
+      status: "malformed-tail",
+      ...(latestParsedBatch ? { latestParsedBatch } : {}),
+    };
+  }
+
+  if (hasExpectedLegacyBatchAccountBinding(latestParsedBatch, safeAccountId)) {
+    return {
+      status: "parsed-row-committed",
+      latestParsedBatch,
+    };
+  }
+
+  return {
+    status: "no-committed-row-observed",
+    ...(latestParsedBatch ? { latestParsedBatch } : {}),
+  };
+}
+
+export function classifySameIdCoexistencePostWriteFailure(input: {
+  storedRollbackAttempted: boolean;
+  storedRollbackSucceeded: boolean;
+  legacyVerification: LegacyBatchAccountAppendVerificationResult;
+}): SameIdCoexistencePostWriteFailureClassification {
+  if (!input.storedRollbackAttempted) {
+    return {
+      outcome: "repair-required",
+      reason: "stored-rollback-not-attempted",
+      successAllowed: false,
+    };
+  }
+
+  if (!input.storedRollbackSucceeded) {
+    return {
+      outcome: "repair-required",
+      reason: "stored-rollback-failed",
+      successAllowed: false,
+    };
+  }
+
+  if (input.legacyVerification.status === "parsed-row-committed") {
+    return {
+      outcome: "repair-required",
+      reason: "legacy-parsed-row-committed",
+      successAllowed: false,
+    };
+  }
+
+  if (input.legacyVerification.status === "malformed-tail") {
+    return {
+      outcome: "repair-required",
+      reason: "legacy-malformed-tail",
+      successAllowed: false,
+    };
+  }
+
+  return {
+    outcome: "rollback-recovery-unproven",
+    reason: "legacy-no-committed-row-observed",
+    successAllowed: false,
+  };
+}
+
+function toLegacyBatchEvidenceSummary(
+  batch: V3ImportBatch | undefined,
+): SameIdCoexistenceOperatorEvidenceSnapshot["legacyVerification"]["latestParsedBatch"] | undefined {
+  if (!batch) return undefined;
+  return {
+    id: batch.id,
+    createdAt: batch.createdAt,
+    ...(asString(batch.accountId) ? { accountId: asString(batch.accountId) } : {}),
+    ...(asString(batch.accountHint) ? { accountHint: asString(batch.accountHint) } : {}),
+  };
+}
+
+export function buildSameIdCoexistenceOperatorEvidenceSnapshot(input: {
+  batchId: string;
+  targetAccountId: string;
+  storedRollbackAttempted: boolean;
+  storedRollbackSucceeded: boolean;
+  legacyVerification: LegacyBatchAccountAppendVerificationResult;
+  storedCurrentBindingAccountId?: string | null;
+}): SameIdCoexistenceOperatorEvidenceSnapshot {
+  const classification = classifySameIdCoexistencePostWriteFailure({
+    storedRollbackAttempted: input.storedRollbackAttempted,
+    storedRollbackSucceeded: input.storedRollbackSucceeded,
+    legacyVerification: input.legacyVerification,
+  });
+  const safeBatchId = sanitizeRecordId(input.batchId);
+  const safeTargetAccountId = normalizeAccountId(input.targetAccountId);
+  const storedCurrentBindingProvided = input.storedCurrentBindingAccountId !== undefined;
+  const storedCurrentBindingAccountId = asString(input.storedCurrentBindingAccountId);
+  const latestParsedBatch = toLegacyBatchEvidenceSummary(input.legacyVerification.latestParsedBatch);
+
+  return {
+    batchId: safeBatchId,
+    targetAccountId: safeTargetAccountId,
+    outcome: classification.outcome,
+    reason: classification.reason,
+    successAllowed: false,
+    rollback: {
+      attempted: input.storedRollbackAttempted,
+      succeeded: input.storedRollbackSucceeded,
+    },
+    legacyVerification: {
+      status: input.legacyVerification.status,
+      noWriteProof: "not-proven",
+      ...(latestParsedBatch ? { latestParsedBatch } : {}),
+    },
+    ...(storedCurrentBindingProvided
+      ? {
+          storedCurrentBinding: {
+            accountId: storedCurrentBindingAccountId || null,
+          },
+        }
+      : {}),
+  };
+}
+
+export async function readStoredCurrentBatchBindingEvidence(
+  batchId: string,
+): Promise<StoredCurrentBindingEvidenceSummary | null> {
+  const meta = await getBatchMeta(batchId).catch(() => null);
+  if (!meta) return null;
+  return {
+    accountId: asString(meta.accounts?.[0]?.id) || null,
+  };
+}
+
+export function compareStoredPreWriteSnapshotToCurrentBinding(input: {
+  preWriteAccountId?: string | null;
+  currentBinding?: StoredCurrentBindingEvidenceSummary | null;
+}): StoredPreWriteSnapshotCompareResult {
+  const preWriteAccountId = asString(input.preWriteAccountId);
+  if (!preWriteAccountId) {
+    return {
+      status: "snapshot-missing",
+      preWriteAccountId: null,
+      currentAccountId: input.currentBinding?.accountId ?? null,
+    };
+  }
+
+  const currentAccountId = asString(input.currentBinding?.accountId);
+  if (preWriteAccountId === currentAccountId) {
+    return {
+      status: "matched-prewrite",
+      preWriteAccountId,
+      currentAccountId: currentAccountId || null,
+    };
+  }
+
+  return {
+    status: "drifted-from-prewrite",
+    preWriteAccountId,
+    currentAccountId: currentAccountId || null,
+  };
+}
+
+export async function runSameIdCoexistenceSecondaryFailureRouteLocalWorker(input: {
+  batchId: string;
+  targetAccountId: string;
+  storedRollbackAttempted: boolean;
+  storedRollbackSucceeded: boolean;
+  storedCurrentBindingAccountId?: string | null;
+  storedPreWriteAccountId?: string | null;
+}): Promise<SameIdCoexistenceSecondaryFailureRouteLocalWorkerResult> {
+  const legacyVerification = await verifyLegacyBatchAccountAppendPostWrite({
+    batchId: input.batchId,
+    accountId: input.targetAccountId,
+  });
+  const storedCurrentBinding = input.storedCurrentBindingAccountId !== undefined
+    ? { accountId: asString(input.storedCurrentBindingAccountId) || null }
+    : await readStoredCurrentBatchBindingEvidence(input.batchId);
+  const failure = classifySameIdCoexistencePostWriteFailure({
+    storedRollbackAttempted: input.storedRollbackAttempted,
+    storedRollbackSucceeded: input.storedRollbackSucceeded,
+    legacyVerification,
+  });
+  const operatorEvidence = buildSameIdCoexistenceOperatorEvidenceSnapshot({
+    batchId: input.batchId,
+    targetAccountId: input.targetAccountId,
+    storedRollbackAttempted: input.storedRollbackAttempted,
+    storedRollbackSucceeded: input.storedRollbackSucceeded,
+    storedCurrentBindingAccountId: storedCurrentBinding?.accountId,
+    legacyVerification,
+  });
+  const storedPreWriteCompare = input.storedPreWriteAccountId !== undefined
+    ? compareStoredPreWriteSnapshotToCurrentBinding({
+      preWriteAccountId: input.storedPreWriteAccountId,
+      currentBinding: storedCurrentBinding,
+    })
+    : undefined;
+
+  return {
+    legacyVerification,
+    failure,
+    operatorEvidence,
+    ...(storedPreWriteCompare ? { storedPreWriteCompare } : {}),
+  };
+}
+
+export function buildSameIdCoexistenceOperatorRepairPayload(
+  input: SameIdCoexistenceSecondaryFailureRouteLocalWorkerResult,
+): SameIdCoexistenceOperatorRepairPayload {
+  return {
+    batchId: input.operatorEvidence.batchId,
+    targetAccountId: input.operatorEvidence.targetAccountId,
+    outcome: input.failure.outcome,
+    reason: input.failure.reason,
+    successAllowed: false,
+    rollback: {
+      attempted: input.operatorEvidence.rollback.attempted,
+      succeeded: input.operatorEvidence.rollback.succeeded,
+    },
+    legacyVerification: input.operatorEvidence.legacyVerification,
+    ...(input.operatorEvidence.storedCurrentBinding
+      ? { storedCurrentBinding: input.operatorEvidence.storedCurrentBinding }
+      : {}),
+    ...(input.storedPreWriteCompare ? { storedPreWriteCompare: input.storedPreWriteCompare } : {}),
+  };
+}
+
+export async function runSameIdCoexistenceStoredThenLegacyRouteLocalSequence(input: {
+  batchId: string;
+  targetAccountId: string;
+}): Promise<SameIdCoexistenceRouteLocalSequencingResult> {
+  assertServerOnly();
+
+  const safeBatchId = sanitizeRecordId(input.batchId);
+  const safeTargetAccountId = normalizeAccountId(input.targetAccountId);
+  const storedPreWriteMeta = await getBatchMeta(safeBatchId).catch(() => null);
+  if (!storedPreWriteMeta) {
+    throw new TransactionStoreInputError("stored batch meta not found", [
+      { field: "batchId", message: "배치를 찾을 수 없습니다." },
+    ]);
+  }
+
+  const storedPreWriteAccounts = cloneImportBatchAccounts(storedPreWriteMeta.accounts);
+  const trace: SameIdCoexistenceRouteLocalSequencingTrace = {
+    storedPreWriteAccountId: getPrimaryImportBatchAccountId(storedPreWriteAccounts),
+    storedWrite: {
+      attempted: false,
+      succeeded: false,
+      accountIdAfterWrite: null,
+    },
+    legacyWrite: {
+      attempted: false,
+      succeeded: false,
+      accountIdAfterWrite: null,
+      updatedTransactionCount: 0,
+    },
+    storedRollback: {
+      attempted: false,
+      succeeded: false,
+      accountIdAfterRollback: null,
+    },
+  };
+
+  trace.storedWrite.attempted = true;
+  const storedUpdated = await updateStoredBatchAccountBinding(safeBatchId, safeTargetAccountId);
+  if (!storedUpdated) {
+    throw new TransactionStoreInputError("stored batch meta not found", [
+      { field: "batchId", message: "배치를 찾을 수 없습니다." },
+    ]);
+  }
+  trace.storedWrite.succeeded = true;
+  trace.storedWrite.accountIdAfterWrite = getPrimaryImportBatchAccountId(storedUpdated.accounts);
+
+  try {
+    trace.legacyWrite.attempted = true;
+    const legacyUpdated = await updateBatchAccount(safeBatchId, safeTargetAccountId);
+    if (!legacyUpdated) {
+      throw new TransactionStoreInputError("legacy batch not found", [
+        { field: "batchId", message: "배치를 찾을 수 없습니다." },
+      ]);
+    }
+
+    trace.legacyWrite.succeeded = true;
+    trace.legacyWrite.accountIdAfterWrite = asString(legacyUpdated.batch.accountId) || null;
+    trace.legacyWrite.updatedTransactionCount = legacyUpdated.updatedTransactionCount;
+
+    return {
+      status: "writes-completed",
+      batchId: safeBatchId,
+      targetAccountId: safeTargetAccountId,
+      trace,
+    };
+  } catch (error) {
+    const legacySecondWriteError = summarizeSameIdCoexistenceLegacySecondWriteError(error);
+    trace.storedRollback.attempted = true;
+    const rollbackMeta = await restoreStoredBatchAccountBindingSnapshot(
+      safeBatchId,
+      storedPreWriteAccounts,
+    ).catch(() => null);
+    trace.storedRollback.succeeded = rollbackMeta !== null;
+    trace.storedRollback.accountIdAfterRollback = rollbackMeta
+      ? getPrimaryImportBatchAccountId(rollbackMeta.accounts)
+      : null;
+
+    const secondaryFailureWorkerInput: SameIdCoexistenceSecondaryFailureWorkerInput = {
+      batchId: safeBatchId,
+      targetAccountId: safeTargetAccountId,
+      storedRollbackAttempted: trace.storedRollback.attempted,
+      storedRollbackSucceeded: trace.storedRollback.succeeded,
+      storedPreWriteAccountId: trace.storedPreWriteAccountId,
+    };
+    const secondaryFailure = await runSameIdCoexistenceSecondaryFailureRouteLocalWorker(
+      secondaryFailureWorkerInput,
+    );
+    const operatorRepairPayload = buildSameIdCoexistenceOperatorRepairPayload(secondaryFailure);
+
+    return {
+      status: "secondary-failure",
+      batchId: safeBatchId,
+      targetAccountId: safeTargetAccountId,
+      trace,
+      legacySecondWriteError,
+      secondaryFailureWorkerInput,
+      secondaryFailure,
+      operatorRepairPayload,
+    };
+  }
 }
 
 export async function mergeBatches(fromBatchId: string, intoBatchId: string): Promise<MergeBatchesResult> {

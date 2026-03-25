@@ -9,6 +9,7 @@ import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
 type BatchListRow = {
   batchId: string;
+  // `/api/planning/v3/batches` follows summary-style omission for hidden createdAt.
   createdAt?: string;
   stats?: {
     months?: number;

@@ -1,6 +1,8 @@
 import { type Account, type AccountTransaction, type MonthlyCashflow, type TxnOverride } from "../domain/types";
+import { resolveExpenseFlowCategory } from "../policy/expenseFlowCategoryPolicy";
 import { roundKrw } from "../../calc";
 import { applyTxnOverrides } from "./applyOverrides";
+import { resolveTxnCategoryId } from "./categorySemantics";
 import { classifyTransactions } from "./classify";
 
 type AggregateMonthlyCashflowOptions = {
@@ -99,12 +101,14 @@ export function aggregateMonthlyCashflow(
     } else {
       current.expenseKrw += amount;
       const outflowAmount = Math.abs(amount);
-      if (tx.category === "fixed") {
+      const categoryId = resolveTxnCategoryId(tx);
+      const expenseFlowCategory = resolveExpenseFlowCategory(categoryId);
+      if (expenseFlowCategory === "fixed") {
         current.fixedOutflowKrw += outflowAmount;
-      } else if (tx.category === "variable") {
-        current.variableOutflowKrw += outflowAmount;
       } else {
         current.variableOutflowKrw += outflowAmount;
+      }
+      if (categoryId === null || categoryId === "unknown") {
         current.unknownOutflowCount += 1;
       }
     }

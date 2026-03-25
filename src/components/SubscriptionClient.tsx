@@ -253,9 +253,9 @@ export function SubscriptionClient({
 
   return (
     <PageShell>
-      <PageHeader title="청약 공고 탐색" description="청약홈의 최신 분양 정보와 지역별 모집 일정을 한눈에 확인하세요." />
+      <PageHeader title="청약 공고 탐색" description="현재 지역·기간·유형 기준으로 공고 후보를 다시 찾고, 상세와 원문에서 자격·일정을 확인합니다." />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
-        데이터 신뢰 및 연동 상태는{" "}
+        지금 보이는 공고는 현재 조회 조건 기준 비교용 후보입니다. 신청 자격, 제출 서류, 공급 조건은 상세와 공고문에서 다시 확인하세요. 데이터 신뢰 및 연동 상태는{" "}
         <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
           내 설정 &gt; 데이터 신뢰 및 연동 상태
         </Link>
@@ -344,7 +344,7 @@ export function SubscriptionClient({
               <div className="flex items-center gap-3">
                 <Button type="button" variant="outline" className="rounded-2xl h-12 px-6 font-black" onClick={() => { setFrom(daysAgoIsoDate(30)); setTo(todayIsoDate()); }}>최근 30일</Button>
                 <Button type="submit" variant="primary" className="rounded-2xl h-12 px-12 font-black shadow-md" disabled={loading}>
-                  {loading ? "조회 중..." : "공고 검색"}
+                  {loading ? "조회 중..." : "현재 조건으로 보기"}
                 </Button>
               </div>
             </div>
@@ -354,7 +354,7 @@ export function SubscriptionClient({
 
       <div className="mb-6 px-4">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-black text-emerald-600">{items.length.toLocaleString()}건의 공고가 발견되었습니다.</span>
+          <span className="text-sm font-black text-emerald-600">현재 조건 기준 {items.length.toLocaleString()}건의 공고를 보고 있습니다.</span>
           {freshnessMeta?.lastSyncedAt ? (
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-500">
               결과 기준 {formatKoreanDateTime(freshnessMeta.lastSyncedAt)}
@@ -410,7 +410,7 @@ export function SubscriptionClient({
 
                 <div className="mt-8 flex gap-2">
                   <Button variant="outline" className="flex-1 rounded-2xl h-11 text-sm font-black" onClick={() => void openDetail(item)}>
-                    상세 정보
+                    요약 보기
                   </Button>
                   {item.link && (
                     <a
@@ -419,7 +419,7 @@ export function SubscriptionClient({
                       rel="noopener noreferrer"
                       className="flex items-center justify-center flex-1 rounded-2xl bg-emerald-600 text-white text-sm font-black shadow-md shadow-emerald-900/10 transition-all hover:bg-emerald-700 active:scale-95"
                     >
-                      공고문 보기
+                      공고문 다시 확인
                     </a>
                   )}
                 </div>
@@ -429,7 +429,7 @@ export function SubscriptionClient({
         ) : !loading && !error ? (
           <EmptyState
             title="검색 결과가 없습니다"
-            description="조건을 완화하거나 전체 보기로 다시 검색해 보세요."
+            description="지역, 기간, 유형 조건을 넓히거나 전체 보기로 다시 찾아보세요."
             actionLabel="전체 보기"
             onAction={() => {
               const f = daysAgoIsoDate(90);
@@ -460,6 +460,16 @@ export function SubscriptionClient({
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
+              <div className="rounded-[2rem] border border-slate-100 bg-slate-50/70 p-5">
+                <p className="text-sm font-black text-slate-800">상세를 읽는 기준</p>
+                <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+                  이 요약은 공고문을 읽기 전 빠르게 다시 보는 정보입니다.
+                </p>
+                <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">
+                  신청 자격, 제출 서류, 공급 조건은 아래 정보와 공고 전문에서 함께 확인하세요.
+                </p>
+              </div>
+
               <section>
                 <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">주요 일정</p>
                 <div className="grid grid-cols-2 gap-4">
@@ -475,7 +485,7 @@ export function SubscriptionClient({
               </section>
               
               <section>
-                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">상세 정보</p>
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">다음에 확인할 정보</p>
                 <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">
                   {detailLoading ? (
                     <div className="space-y-3 animate-pulse">

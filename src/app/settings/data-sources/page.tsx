@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getDataSourceStatuses } from "@/lib/dataSources/registry";
 import { loadDataSourceImpactSnapshot } from "@/lib/dataSources/impactSnapshot";
 import { buildDataSourceExpansionCandidates, buildDataSourceUserImpactCards } from "@/lib/dataSources/userImpact";
@@ -52,47 +53,75 @@ export default async function DataSourcesSettingsPage() {
     <PageShell>
       <PageHeader
         title="데이터 신뢰 및 연동 상태"
-        description="어떤 데이터가 어떤 화면에 쓰이는지, 마지막 확인 기준이 무엇인지, 일부 누락되면 어떤 안내가 달라지는지 한곳에서 확인합니다."
+        description="추천, 공시, 혜택, 주거 화면이 지금 어떤 데이터 기준으로 보이는지 먼저 확인하고, 필요할 때만 세부 점검까지 이어서 읽는 화면입니다."
       />
 
       <Card className="mb-12 rounded-[2rem] p-8 shadow-sm">
         <SubSectionHeader
-          title="이 페이지에서 먼저 보는 것"
-          description="운영 진단보다, 지금 화면과 추천에 어떤 데이터가 어떻게 쓰이는지 먼저 읽을 수 있게 정리했습니다."
+          title="먼저 확인할 신뢰 요약"
+          description="상단에서는 지금 결과를 어떤 데이터 기준으로 읽는지 먼저 보고, 필요한 경우에만 카드별 세부 확인과 운영 진단으로 이어서 읽도록 정리했습니다."
         />
         <div className="mt-8 grid gap-4 lg:grid-cols-3">
           <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">어디에 쓰이나요</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">1. 지금 어떤 기준으로 읽나요</p>
             <p className="mt-3 text-sm font-black leading-relaxed text-slate-900">
-              추천, 공시, 혜택, 주거 탐색이 각각 어떤 데이터에 기대는지 먼저 확인합니다.
+              추천, 공시, 혜택, 주거 탐색이 각각 어떤 데이터 기준으로 보이는지 먼저 확인합니다.
             </p>
           </div>
           <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">마지막 확인 기준</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">2. 비거나 늦으면 무엇이 달라지나요</p>
             <p className="mt-3 text-sm font-black leading-relaxed text-slate-900">
-              각 카드의 운영 최신 기준과 최근 연결 확인을 함께 읽어, 지금 결과를 어느 정도까지 믿어도 되는지 살핍니다.
+              카드별 사용자 영향과 최근 연결 확인을 함께 읽어, 지금 결과를 어디까지 참고하면 되는지 살핍니다.
             </p>
           </div>
           <div className="rounded-3xl border border-slate-100 bg-slate-50/60 p-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">문제가 있으면</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">3. 더 자세한 점검은 어디서 보나요</p>
             <p className="mt-3 text-sm font-black leading-relaxed text-slate-900">
-              일부 데이터가 비거나 늦어도 핵심 흐름은 유지됩니다. 자세한 운영 진단은 이 페이지 하단에서만 따로 확인합니다.
+              일부 데이터가 비거나 늦어도 핵심 흐름은 유지됩니다. raw 운영 진단은 이 페이지 하단에서만 따로 확인합니다.
             </p>
           </div>
         </div>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Link
+            href="#impact-summary"
+            className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            질문별 기준 먼저 보기
+          </Link>
+          <Link
+            href="#source-status"
+            className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            데이터별 상태 확인
+          </Link>
+          <Link
+            href="#open-dart-status"
+            className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            공시 데이터 기준 보기
+          </Link>
+          <Link
+            href="#operations-diagnostics"
+            className="inline-flex h-10 items-center rounded-2xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+          >
+            운영 진단은 아래에서 보기
+          </Link>
+        </div>
       </Card>
 
-      <DataSourceImpactCardsClient
-        cards={impactCards}
-        readOnlyHealthByCardId={impactSnapshot.impactReadOnlyByCardId}
-        sourceLabels={Object.fromEntries(sourceLabels)}
-        showRecentPing={canPing}
-      />
+      <div id="impact-summary">
+        <DataSourceImpactCardsClient
+          cards={impactCards}
+          readOnlyHealthByCardId={impactSnapshot.impactReadOnlyByCardId}
+          sourceLabels={Object.fromEntries(sourceLabels)}
+          showRecentPing={canPing}
+        />
+      </div>
 
-      <div className="mb-12 space-y-6">
+      <div id="source-status" className="mb-12 space-y-6">
         <SubSectionHeader
           title="데이터별 최신 기준"
-          description="각 데이터가 지금 서비스에서 준비되어 있는지와, 마지막으로 확인한 기준이 무엇인지 읽습니다."
+          description="자주 쓰는 데이터부터 사용자 영향, 지금 읽는 기준, 최근 연결 확인 순서로 차례로 읽습니다."
         />
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {sources.map((source) => {
@@ -110,12 +139,14 @@ export default async function DataSourcesSettingsPage() {
         </div>
       </div>
 
-      <OpenDartStatusCard configured={openDartConfigured} />
+      <div id="open-dart-status">
+        <OpenDartStatusCard configured={openDartConfigured} />
+      </div>
 
       <Card className="mb-12 rounded-[2rem] p-8 shadow-sm">
         <SubSectionHeader 
           title="확장 후보" 
-          description="현재 연동 자산 중에서, 다음 단계에서 사용자 도움으로 확장할 수 있는 후보만 따로 모았습니다."
+          description="위 신뢰 기준을 읽은 뒤, 다음 단계에서 사용자 도움으로 확장할 수 있는 후보만 보조 메모처럼 따로 모았습니다."
         />
         <div className="mt-8 grid gap-6 lg:grid-cols-3">
           {expansionCandidates.map((candidate) => (
@@ -148,20 +179,20 @@ export default async function DataSourcesSettingsPage() {
         </div>
       </Card>
 
-      <div className="space-y-8">
+      <div id="operations-diagnostics" className="space-y-8">
         {canPing ? (
           <div className="space-y-4">
             <SubSectionHeader
               title="상세 운영 진단"
-              description="아래 내용은 개발 환경에서만 함께 보는 점검 정보입니다. 사용자용 최신 기준보다 뒤에서 참고용으로만 읽습니다."
+              description="위 신뢰 기준과 확장 후보를 다 본 뒤에만 여는 개발용 진단입니다. 사용자용 최신 기준과 분리해 뒤에서 참고용으로만 읽습니다."
             />
             <DataSourceHealthTable />
           </div>
         ) : (
           <Card className="rounded-[2rem] p-8 shadow-sm border-dashed border-slate-200 bg-slate-50/30">
-            <SubSectionHeader title="상세 운영 진단" description="Production 환경에서는 상세 진단 노출을 제한합니다." />
+            <SubSectionHeader title="상세 운영 진단" description="Production 환경에서는 상세 운영 진단을 직접 노출하지 않고, 위 신뢰 기준과 도움 안내까지만 남깁니다." />
             <p className="mt-2 text-sm font-medium leading-relaxed text-slate-500">
-              개발 환경에서만 상세 진단을 열고, 일반 사용자 화면에서는 위 카드의 `운영 최신 기준`과 사용자 도움 연결만 read-only로 확인합니다.
+              일반 사용자 화면에서는 위 신뢰 기준과 다음 단계 도움 안내까지만 read-only로 확인하고, raw 진단과 운영 점검 흐름은 개발 환경에서만 따로 엽니다.
             </p>
           </Card>
         )}

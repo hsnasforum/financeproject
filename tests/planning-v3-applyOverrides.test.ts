@@ -35,7 +35,8 @@ describe("planning v3 applyTxnOverrides", () => {
 
     const applied = applyTxnOverrides(transactions, overrides);
     expect(applied[0]?.kind).toBe("transfer");
-    expect(applied[0]?.category).toBe("saving");
+    expect(applied[0]?.category).toBe("transfer");
+    expect(applied[0]?.categoryId).toBe("transfer");
     expect(applied[1]?.kind).toBe("expense");
     expect(applied[1]?.category).toBe("variable");
   });
@@ -68,5 +69,46 @@ describe("planning v3 applyTxnOverrides", () => {
 
     const applied = applyTxnOverrides(transactions, overrides);
     expect(applied).toEqual(transactions);
+  });
+
+  it("preserves detailed categoryId while keeping fixed and variable semantics derivable", () => {
+    const transactions: AccountTransaction[] = [
+      {
+        txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+        date: "2026-03-01",
+        amountKrw: -1000,
+        source: "csv",
+        kind: "expense",
+        category: "unknown",
+      },
+      {
+        txnId: "bbbbbbbbbbbbbbbbbbbbbbbb",
+        date: "2026-03-02",
+        amountKrw: -500,
+        source: "csv",
+        kind: "expense",
+        category: "unknown",
+      },
+    ];
+    const overrides: Record<string, TxnOverride> = {
+      aaaaaaaaaaaaaaaaaaaaaaaa: {
+        batchId: "batch-1",
+        txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+        categoryId: "housing",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+      },
+      bbbbbbbbbbbbbbbbbbbbbbbb: {
+        batchId: "batch-1",
+        txnId: "bbbbbbbbbbbbbbbbbbbbbbbb",
+        categoryId: "health",
+        updatedAt: "2026-03-03T00:00:00.000Z",
+      },
+    };
+
+    const applied = applyTxnOverrides(transactions, overrides);
+    expect(applied[0]?.category).toBe("housing");
+    expect(applied[0]?.categoryId).toBe("housing");
+    expect(applied[1]?.category).toBe("health");
+    expect(applied[1]?.categoryId).toBe("health");
   });
 });

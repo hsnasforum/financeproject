@@ -165,7 +165,7 @@ export function FeedbackFormClient() {
         return;
       }
       setMessage("");
-      setNotice("피드백이 저장되었습니다. 감사합니다.");
+      setNotice("의견이 저장되었습니다. 이후 피드백 목록과 상세 화면에서 접수 내용과 진행 상태를 다시 확인할 수 있습니다.");
     } catch {
       setError("네트워크 오류로 저장하지 못했습니다.");
     } finally {
@@ -184,7 +184,7 @@ export function FeedbackFormClient() {
         return;
       }
       downloadText("diagnostics_bundle.json", JSON.stringify(snapshot, null, 2), "application/json;charset=utf-8");
-      setNotice("진단 번들을 다운로드했습니다.");
+      setNotice("진단 번들을 다운로드했습니다. 오류 재현이나 지원 대응에 직접 공유가 필요할 때만 함께 전달해 주세요.");
     } catch {
       setError("진단 번들 다운로드 중 오류가 발생했습니다.");
     } finally {
@@ -195,8 +195,8 @@ export function FeedbackFormClient() {
   return (
     <PageShell>
       <PageHeader
-        title="사용자 피드백"
-        description="개선 아이디어, 버그, 질문을 남겨 주세요."
+        title="의견과 도움 요청 남기기"
+        description="문제 상황이나 개선 아이디어를 기록으로 남기면 이후 목록과 상세 화면에서 다시 확인할 수 있습니다."
         action={
           <Link href="/dashboard">
             <Button variant="outline" size="sm">대시보드로 이동</Button>
@@ -206,6 +206,16 @@ export function FeedbackFormClient() {
 
       <Card className="rounded-[2rem] p-8 shadow-sm">
         <form onSubmit={onSubmit} className="space-y-6">
+          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/70 p-5">
+            <p className="text-sm font-black text-slate-800">무엇을 남기나요?</p>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+              이 화면은 즉시 답변을 받는 곳이 아니라, 문제 상황과 개선 아이디어를 기록으로 남겨 두는 support entry 화면입니다.
+            </p>
+            <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">
+              저장 뒤에는 피드백 목록과 상세 화면에서 접수 시각, 진행 상태, 첨부 진단 정보를 다시 볼 수 있습니다. 진단 번들은 오류 재현이나 지원 대응에 직접 공유가 필요할 때만 내려받으세요.
+            </p>
+          </div>
+
           <label className="block">
             <span className="mb-2 block text-sm font-black text-slate-700 tracking-tight">카테고리</span>
             <select
@@ -244,12 +254,12 @@ export function FeedbackFormClient() {
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <Button type="submit" variant="primary" className="h-11 px-8 rounded-2xl font-black shadow-md" disabled={submitting}>
-              {submitting ? "저장 중..." : "피드백 제출"}
+              {submitting ? "저장 중..." : "내용 저장하기"}
             </Button>
             <Button type="button" variant="outline" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={() => void onDownloadBundle()} disabled={downloading || submitting}>
-              {downloading ? "생성 중..." : "진단 번들 다운로드"}
+              {downloading ? "생성 중..." : "공유용 진단 번들"}
             </Button>
-            <p className="ml-2 text-xs font-bold text-slate-400">※ 민감정보(비밀번호 등)는 절대 입력하지 마세요.</p>
+            <p className="ml-2 text-xs font-bold text-slate-400">진단 번들은 직접 공유가 필요할 때만 내려받고, 민감정보(비밀번호, 계좌번호 전체 등)는 남기지 마세요.</p>
           </div>
         </form>
       </Card>

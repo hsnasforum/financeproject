@@ -22,15 +22,15 @@ describe("planning v3 news settings ui", () => {
   it("renders alert rule override section in advanced settings", () => {
     const html = renderToStaticMarkup(<NewsSettingsClient csrf="" />);
 
-    expect(html).toContain("뉴스 및 알림 설정");
+    expect(html).toContain("뉴스 기준 설정");
     expect(html).toContain("고급 관리 및 알림 규칙");
     expect(html).toContain("알림 규칙 오버라이드 (JSON)");
     expect(html).toContain("href=\"#news-settings-alert-rules\"");
     expect(html).toContain("로딩 중...");
     expect(html).toContain("알림 규칙 현재 적용 상태를 아직 확인하지 못했습니다.");
-    expect(html).toContain("설정 저장");
+    expect(html).toContain("뉴스 기준/내 상황 저장");
     expect(html).toContain("href=\"/planning/v3/news/alerts\"");
-    expect(html).toContain("알림함 ▶");
+    expect(html).toContain("알림함 확인");
   });
 
   it("builds draft effective rows from JSON overrides", () => {

@@ -155,7 +155,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     setSyncState(statusJson.meta?.sync?.state ?? "needs_sync");
     setSyncing((statusJson.meta?.sync?.state ?? "needs_sync") === "syncing");
     if (snapshot?.truncatedByHardCap) {
-      setSyncMetaNote(`완주율 ${snapshot.completionRate ? `${Math.round(snapshot.completionRate * 1000) / 10}%` : "?"} (hard cap ${snapshot.hardCapPages ?? "?"}, needed ${snapshot.neededPagesEstimate ?? "?"})`);
+      setSyncMetaNote(`일부 혜택은 순차 반영 중일 수 있습니다. 현재 반영 범위 ${snapshot.completionRate ? `${Math.round(snapshot.completionRate * 1000) / 10}%` : "?"}`);
     } else {
       setSyncMetaNote("");
     }
@@ -278,11 +278,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
     <PageShell>
       <PageHeader
         title="보조금24"
-        description="나에게 맞는 정부 혜택을 간편하게 찾아보세요."
+        description="입력한 조건을 기준으로 정부 혜택 후보를 다시 찾고, 신청 전에 무엇을 확인할지 정리하는 화면입니다."
         action={
           <div className="flex items-center gap-2">
             <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border transition-all", syncing ? "bg-emerald-50 text-emerald-600 border-emerald-200 animate-pulse" : "bg-slate-100 text-slate-400 border-slate-200")}>
-              {syncing || syncState === "syncing" ? "데이터 동기화 중" : "데이터 준비 완료"}
+              {syncing || syncState === "syncing" ? "기준 데이터 갱신 중" : "기준 데이터 확인됨"}
             </span>
             {process.env.NODE_ENV !== "production" && (
               <Button type="button" size="sm" variant="outline" className="rounded-xl font-black h-8" onClick={() => void runManualSync()} disabled={syncing}>
@@ -292,6 +292,10 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
           </div>
         }
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 확정 수급 판정이 아니라, 입력한 조건을 기준으로 다시 읽을 혜택 후보를 찾는 단계입니다.
+        결과를 열면 신청 방법과 온라인 신청 가능 여부를 상세에서 다시 확인하세요.
+      </p>
 
       <div className="space-y-6">
         {/* Status Strip */}
@@ -299,20 +303,20 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] font-bold text-slate-500">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              스냅샷 <span className="text-slate-900 font-black ml-0.5">{snapshotTotal?.toLocaleString() ?? "?"}건</span>
+              현재 참고 중인 혜택 <span className="text-slate-900 font-black ml-0.5">{snapshotTotal?.toLocaleString() ?? "?"}건</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-              완주율 <span className="text-slate-900 font-black ml-0.5">{completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
+              반영 범위 <span className="text-slate-900 font-black ml-0.5">{completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
             </div>
             {syncUniqueCount !== null && (
               <div className="flex items-center gap-2 text-slate-400">
-                수집 <span className="font-black ml-0.5">{syncUniqueCount.toLocaleString()}건</span>
+                반영된 항목 <span className="font-black ml-0.5">{syncUniqueCount.toLocaleString()}건</span>
               </div>
             )}
             {snapshotGeneratedAt && (
               <div className="ml-auto text-[10px] text-slate-400 font-medium">
-                최근 갱신: {new Date(snapshotGeneratedAt).toLocaleString("ko-KR", { hour12: false })}
+                기준 확인: {new Date(snapshotGeneratedAt).toLocaleString("ko-KR", { hour12: false })}
               </div>
             )}
           </div>
@@ -541,7 +545,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                 </Button>
               ) : (
                 <Button type="button" variant="primary" className="rounded-2xl font-black h-12 px-12 shadow-md" onClick={() => void searchSimpleFind({ cursor: 0 })} disabled={loading}>
-                  {loading ? "검색 중..." : "결과 확인하기"}
+                  {loading ? "검색 중..." : "지금 기준으로 보기"}
                 </Button>
               )}
             </div>
@@ -555,6 +559,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                 <div className="space-y-2">
                   <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">검색 조건 요약</p>
                   <SubSectionHeader title={summaryLine} className="mb-0" />
+                  <p className="text-xs font-medium leading-relaxed text-slate-500">
+                    조건을 바꾸면 결과도 함께 달라집니다. 상세에서 신청 방법과 제한 조건을 다시 확인하세요.
+                  </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <input
                       className="h-11 min-w-[280px] rounded-2xl border border-slate-200 bg-slate-50/50 px-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all"
@@ -563,7 +570,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                       onChange={(e) => setResultQuery(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && void searchSimpleFind({ cursor: 0 })}
                     />
-                    <Button type="button" variant="primary" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={() => void searchSimpleFind({ cursor: 0 })} disabled={loading}>검색</Button>
+                    <Button type="button" variant="primary" className="h-11 px-6 rounded-2xl font-black shadow-sm" onClick={() => void searchSimpleFind({ cursor: 0 })} disabled={loading}>지금 기준으로 다시 찾기</Button>
                     <Button type="button" variant="outline" className="h-11 px-6 rounded-2xl font-black" onClick={() => { setStep(1); setItems([]); setTotalMatched(0); setNextCursor(null); }}>조건 변경</Button>
                   </div>
                 </div>
@@ -586,17 +593,17 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
             </Card>
 
             {loading && items.length === 0 ? (
-              <LoadingState title="맞춤 혜택을 찾고 있습니다" description="오픈 API에서 최신 데이터를 가져오는 중입니다." />
+              <LoadingState title="현재 조건에 맞는 혜택 후보를 찾고 있습니다" description="오픈 API에서 최신 데이터를 가져오는 중입니다." />
             ) : items.length === 0 ? (
               <Card className="rounded-[2rem] p-20 text-center border-dashed border-slate-200 bg-slate-50/30">
                 <p className="text-lg font-black text-slate-900">검색된 혜택이 없습니다</p>
-                <p className="mt-2 text-sm font-medium text-slate-500">다른 키워드로 검색하거나 검색 조건을 변경해 보세요.</p>
+                <p className="mt-2 text-sm font-medium text-slate-500">조건이나 키워드를 조금 바꿔서 혜택 후보를 다시 찾아보세요.</p>
                 <Button variant="outline" className="mt-8 rounded-2xl font-black" onClick={() => { setStep(1); setItems([]); }}>다시 찾기</Button>
               </Card>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between px-2">
-                  <p className="text-sm font-bold text-slate-500">총 <span className="text-slate-900 font-black">{totalMatched.toLocaleString()}건</span>의 혜택이 발견되었습니다.</p>
+                  <p className="text-sm font-bold text-slate-500">현재 조건 기준 <span className="text-slate-900 font-black">{totalMatched.toLocaleString()}건</span>의 혜택 후보를 읽는 중입니다.</p>
                 </div>
                 <div className="grid gap-4">
                   {items.map((item) => {
@@ -625,7 +632,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
 
                         <div className="mt-8 flex items-center gap-3">
                           <Button variant="primary" className="h-11 px-8 rounded-2xl font-black shadow-md" onClick={() => void openDetail(item)} disabled={detailLoading}>
-                            상세 내용 보기
+                            상세에서 다시 확인
                           </Button>
                           {quickUrl ? (
                             <a 
@@ -648,7 +655,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                 {nextCursor !== null && (
                   <div className="flex justify-center pt-8">
                     <Button variant="outline" className="rounded-2xl font-black h-12 px-12" onClick={() => void searchSimpleFind({ cursor: nextCursor, append: true })} disabled={loading}>
-                      {loading ? "혜택을 더 불러오는 중..." : "결과 더 보기"}
+                      {loading ? "혜택을 더 불러오는 중..." : "혜택 후보 더 보기"}
                     </Button>
                   </div>
                 )}

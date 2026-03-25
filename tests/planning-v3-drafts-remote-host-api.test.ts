@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as draftPreviewPOST } from "../src/app/api/planning/v3/draft/preview/route";
 import { DELETE as draftDeleteGET, GET as draftDetailGET } from "../src/app/api/planning/v3/drafts/[id]/route";
 import { GET as draftsGET, POST as draftsPOST } from "../src/app/api/planning/v3/drafts/route";
-import { createDraft } from "../src/lib/planning/v3/draft/store";
+import { createDraft } from "../src/lib/planning/v3/drafts/draftStore";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;

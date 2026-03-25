@@ -64,4 +64,35 @@ describe("planning v3 aggregateMonthlyCashflow v2", () => {
       },
     ]);
   });
+
+  it("uses extracted expense-flow policy for detailed category ids", () => {
+    const result = aggregateMonthlyCashflow([
+      {
+        date: "2026-03-01",
+        amountKrw: -300_000,
+        description: "manual override housing",
+        source: "csv",
+        kind: "expense",
+        categoryId: "housing",
+        meta: { rowIndex: 1 },
+      },
+      {
+        date: "2026-03-02",
+        amountKrw: -120_000,
+        description: "manual override health",
+        source: "csv",
+        kind: "expense",
+        categoryId: "health",
+        meta: { rowIndex: 2 },
+      },
+    ]);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        ym: "2026-03",
+        fixedOutflowKrw: 300_000,
+        variableOutflowKrw: 120_000,
+      }),
+    ]);
+  });
 });
