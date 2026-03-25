@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as draftPreviewPOST } from "../src/app/api/planning/v3/draft/preview/route";
 import { createProfile } from "../src/lib/planning/store/profileStore";
-import { createDraft } from "../src/lib/planning/v3/draft/store";
+import { createDraft } from "../src/lib/planning/v3/drafts/draftStore";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;

@@ -6,19 +6,16 @@ import {
 } from "@/lib/dev/devGuards";
 import {
   applyAccountMappingOverrides,
-  buildTxnId,
   computeMonthlyBalances,
   detectTransfers,
   getAccountMappingOverrides,
-  getBatchTransactions,
+  getBatchTxnOverrides,
   getOpeningBalances,
   getTransferOverrides,
+  loadStoredFirstBatchTransactions,
   listAccounts,
-  listOverrides,
-  normalizeDescriptionForTxnId,
-  readBatchTransactions,
-  type StoredTransaction,
 } from "@/lib/planning/v3/balances/monthly";
+import { applyStoredFirstBatchAccountBinding } from "@/lib/planning/v3/transactions/store";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -50,23 +47,6 @@ function withReadGuard(request: Request): Response | null {
   }
 }
 
-function toStoredTransactions(batchId: string, rows: Awaited<ReturnType<typeof readBatchTransactions>>): StoredTransaction[] {
-  if (!rows) return [];
-  return rows.transactions.map((tx) => {
-    const txnId = asString(tx.txnId).toLowerCase() || buildTxnId({
-      dateIso: tx.date,
-      amountKrw: tx.amountKrw,
-      descNorm: normalizeDescriptionForTxnId(tx.description),
-      ...(asString(tx.accountId) ? { accountId: asString(tx.accountId) } : {}),
-    });
-    return {
-      ...tx,
-      txnId,
-      batchId,
-    };
-  });
-}
-
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
@@ -83,26 +63,25 @@ export async function GET(request: Request) {
 
   try {
     const [
-      storedByBatch,
-      legacyByBatch,
+      readableBatch,
       openingBalances,
       overridesByTxnId,
       accounts,
       accountOverrides,
       transferOverrides,
     ] = await Promise.all([
-      getBatchTransactions(batchId),
-      readBatchTransactions(batchId),
+      loadStoredFirstBatchTransactions(batchId),
       getOpeningBalances(),
-      listOverrides(),
+      getBatchTxnOverrides(batchId).catch(() => ({})),
       listAccounts(),
       getAccountMappingOverrides(batchId).catch(() => ({})),
       getTransferOverrides(batchId).catch(() => ({})),
     ]);
 
-    const transactions = storedByBatch.length > 0
-      ? storedByBatch
-      : toStoredTransactions(batchId, legacyByBatch);
+    // Balances keeps the same stored-first visible binding as detail/cashflow/summary.
+    const transactions = readableBatch
+      ? applyStoredFirstBatchAccountBinding(readableBatch)
+      : [];
     if (transactions.length < 1) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." } },

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { upsertLegacyUnscopedTxnOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 import {
   GET as getBatchOverrides,
   POST as postBatchOverride,
@@ -95,5 +96,27 @@ describe("planning v3 batch txn-overrides API", () => {
     expect(payload.ok).toBe(true);
     expect(payload.data?.aaaaaaaaaaaaaaaaaaaaaaaa?.kind).toBe("income");
     expect(payload.data?.aaaaaaaaaaaaaaaaaaaaaaaa?.categoryId).toBe("income");
+  });
+
+  it("does not leak legacy unscoped overrides into batch-scoped owner reads", async () => {
+    const txnId = "aaaaaaaaaaaaaaaaaaaaaaaa";
+
+    await upsertLegacyUnscopedTxnOverride(txnId, { kind: "expense", category: "fixed" });
+    await postBatchOverride(requestPost("batch-a", {
+      csrf: "test",
+      txnId,
+      categoryId: "food",
+    }), context());
+
+    const get = await getBatchOverrides(requestGet("batch-a"), context());
+    expect(get.status).toBe(200);
+    const payload = await get.json() as {
+      ok?: boolean;
+      data?: Record<string, { batchId?: string; category?: string; categoryId?: string }>;
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.[txnId]?.batchId).toBe("batch-a");
+    expect(payload.data?.[txnId]?.categoryId).toBe("food");
+    expect(payload.data?.[txnId]?.category).toBe("food");
   });
 });

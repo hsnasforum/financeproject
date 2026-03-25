@@ -1114,7 +1114,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             <Card className="space-y-3">
               <BodySectionHeading title="Batch" />
               <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-3">
-                <div><dt className="font-semibold">createdAt</dt><dd>{formatDateTime(detail.batch.createdAt)}</dd></div>
+                <div><dt className="font-semibold">createdAt</dt><dd>{detail.batch.createdAt ? formatDateTime(detail.batch.createdAt) : "-"}</dd></div>
                 <div><dt className="font-semibold">file</dt><dd>{detail.batch.fileName ?? "-"}</dd></div>
                 <div><dt className="font-semibold">accountId</dt><dd className="font-mono text-xs">{detail.batch.accountId ?? "-"}</dd></div>
                 <div><dt className="font-semibold">sha256</dt><dd className="font-mono text-xs">{detail.batch.sha256 ?? "-"}</dd></div>

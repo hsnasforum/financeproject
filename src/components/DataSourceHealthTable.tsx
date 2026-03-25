@@ -126,8 +126,12 @@ export function DataSourceHealthTable() {
 
   return (
     <div className="mt-8 space-y-8">
+      <p className="text-xs font-bold leading-relaxed text-slate-400">
+        아래부터는 사용자용 신뢰 helper가 아니라, 운영자가 raw 진단과 read-only 메타를 다시 읽는 점검 구간입니다.
+      </p>
+
       <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
-        <SubSectionHeader title="Fallback & 쿨다운 진단" description="최근 데이터 재생 상태와 재시도 대기 시점을 확인합니다." />
+        <SubSectionHeader title="운영 fallback · 쿨다운 진단" description="사용자용 최신 기준이 아니라, source별 fallback 재생 상태와 재시도 대기 시점을 운영 기준으로 확인합니다." />
         {opendartConfigured !== null ? (
           <p className="mt-1 text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">OpenDART Configured: {opendartConfigured ? "YES" : "NO"}</p>
         ) : null}
@@ -173,7 +177,7 @@ export function DataSourceHealthTable() {
       </Card>
 
       <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
-        <SubSectionHeader title="사용자 도움 기준 요약" description="Health API가 사용자 인터페이스에 주입하는 최신 데이터 집계 상태입니다." />
+        <SubSectionHeader title="운영용 read-only 메타 요약" description="Health API가 사용자 화면에 주입한 최신 기준 메타를 운영 관점에서 다시 확인하는 구간입니다." />
         
         {impactCards.length === 0 ? (
           <div className="py-12 text-center rounded-3xl border border-dashed border-slate-200">
@@ -233,7 +237,7 @@ export function DataSourceHealthTable() {
       </Card>
 
       <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
-        <SubSectionHeader title="최근 오류 로그" description="시스템에서 발생한 최근 20건의 API 오류를 분석합니다." />
+        <SubSectionHeader title="운영 최근 오류 로그" description="시스템에서 발생한 최근 20건의 API 오류를 사용자 안내가 아니라 운영 incident 기준으로 추적합니다." />
         
         {recentErrorsError ? <p className="text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl mb-4">{recentErrorsError}</p> : null}
         

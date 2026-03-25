@@ -9,10 +9,12 @@ import { onlyDev } from "@/lib/dev/onlyDev";
 import { type StoredTransaction } from "@/lib/planning/v3/domain/transactions";
 import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
 import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
-import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
-import { getBatchTransactions } from "@/lib/planning/v3/store/batchesStore";
 import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
 import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
+import {
+  getStoredFirstBatchSummaryProjectionRows,
+  loadStoredFirstBatchTransactions,
+} from "@/lib/planning/v3/transactions/store";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -48,17 +50,6 @@ function isInvalidIdError(error: unknown): boolean {
   return error instanceof Error && error.message === "Invalid record id";
 }
 
-function toStored(batchId: string, rows: Awaited<ReturnType<typeof readBatchTransactions>>): StoredTransaction[] {
-  if (!rows) return [];
-  return rows.transactions
-    .map((row) => ({
-      ...row,
-      txnId: asString(row.txnId).toLowerCase(),
-      batchId,
-    }))
-    .filter((row) => row.txnId.length > 0);
-}
-
 export async function GET(request: Request, context: RouteContext) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -68,14 +59,17 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const [legacy, stored, accountOverrides, transferOverrides] = await Promise.all([
-      readBatchTransactions(id),
-      getBatchTransactions(id),
+    const [loaded, accountOverrides, transferOverrides] = await Promise.all([
+      loadStoredFirstBatchTransactions(id),
       getAccountMappingOverrides(id).catch(() => ({})),
       getTransferOverrides(id).catch(() => ({})),
     ]);
 
-    const transactions = stored.length > 0 ? stored : toStored(id, legacy);
+    // Transfers is a support surface, but visible detection stats still need to
+    // follow the stored-first binding projection when same-id coexistence exists.
+    const transactions: StoredTransaction[] = loaded
+      ? getStoredFirstBatchSummaryProjectionRows(loaded)
+      : [];
     if (transactions.length < 1) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." } },

@@ -6,6 +6,7 @@ import { POST as draftProfilePOST } from "../src/app/api/planning/v3/draft/profi
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { buildTxnId } from "../src/lib/planning/v3/service/txnId";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
+import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 
 const env = process.env as Record<string, string | undefined>;
@@ -49,6 +50,32 @@ async function expectOriginMismatch(response: Response | Promise<Response>) {
   const payload = await resolved.json() as { ok?: boolean; error?: { code?: string } };
   expect(payload.ok).toBe(false);
   expect(payload.error?.code).toBe("ORIGIN_MISMATCH");
+}
+
+async function saveStoredShadowBatch(input: {
+  batchId: string;
+  accountId: string;
+  createdAt: string;
+  omitRowAccountId?: boolean;
+  rows: Array<{
+    txnId: string;
+    date: string;
+    amountKrw: number;
+    description: string;
+  }>;
+}) {
+  await saveBatch({
+    id: input.batchId,
+    createdAt: input.createdAt,
+    source: "csv",
+    rowCount: input.rows.length,
+    accounts: [{ id: input.accountId }],
+  }, input.rows.map((row) => ({
+    ...row,
+    batchId: input.batchId,
+    ...(input.omitRowAccountId ? {} : { accountId: input.accountId }),
+    source: "csv" as const,
+  })));
 }
 
 describe("POST /api/planning/v3/draft/profile", () => {
@@ -162,7 +189,7 @@ describe("POST /api/planning/v3/draft/profile", () => {
     expect(payload.error?.message).toContain("최소 3개월");
   });
 
-  it("reflects overrides and remains stable across includeTransfers option", async () => {
+  it("ignores legacy unscoped overrides and only applies batch-scoped overrides", async () => {
     const batch = await appendBatchFromCsv({
       accountId,
       csvText: [
@@ -196,6 +223,7 @@ describe("POST /api/planning/v3/draft/profile", () => {
     };
     expect(baselinePayload.patch?.monthlyEssentialExpenses).toBe(0);
 
+    const txnIds: string[] = [];
     for (const dateIso of ["2026-01-02", "2026-02-02", "2026-03-02"]) {
       const txnId = buildTxnId({
         dateIso,
@@ -203,7 +231,28 @@ describe("POST /api/planning/v3/draft/profile", () => {
         descNorm: "마트",
         accountId,
       });
+      txnIds.push(txnId);
       await upsertOverride(txnId, { category: "fixed" });
+    }
+
+    const legacyIgnored = await draftProfilePOST(requestJson({
+      csrf: "test",
+      source: "csv",
+      batchId: batch.batch.id,
+      includeTransfers: 0,
+    }));
+    expect(legacyIgnored.status).toBe(200);
+    const legacyIgnoredPayload = await legacyIgnored.json() as {
+      patch?: { monthlyEssentialExpenses?: number; monthlyIncomeNet?: number };
+    };
+    expect(legacyIgnoredPayload.patch?.monthlyEssentialExpenses).toBe(0);
+
+    for (const txnId of txnIds) {
+      await upsertOverride({
+        batchId: batch.batch.id,
+        txnId,
+        categoryId: "housing",
+      });
     }
 
     const overridden = await draftProfilePOST(requestJson({
@@ -282,5 +331,107 @@ describe("POST /api/planning/v3/draft/profile", () => {
         refererOrigin: EVIL_ORIGIN,
       },
     )));
+  });
+
+  it("prefers latest stored batch when batchId is omitted and stored batch exists", async () => {
+    await appendBatchFromCsv({
+      accountId,
+      csvText: [
+        "date,amount,description",
+        "2026-01-01,2000000,급여",
+        "2026-01-02,-500000,월세",
+        "2026-02-01,2100000,급여",
+        "2026-02-02,-510000,월세",
+        "2026-03-01,2200000,급여",
+        "2026-03-02,-520000,월세",
+      ].join("\n"),
+      mapping: {
+        dateKey: "date",
+        amountKey: "amount",
+        descKey: "description",
+      },
+      fileName: "legacy-fallback.csv",
+    });
+
+    const storedBatchId = "storedfirstbatch01";
+    await saveStoredShadowBatch({
+      batchId: storedBatchId,
+      accountId,
+      createdAt: "2026-04-05T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaa", date: "2026-02-01", amountKrw: 4000000, description: "급여" },
+        { txnId: "bbbbbbbbbbbbbbbb", date: "2026-02-02", amountKrw: -1000000, description: "월세" },
+        { txnId: "cccccccccccccccc", date: "2026-03-01", amountKrw: 4100000, description: "급여" },
+        { txnId: "dddddddddddddddd", date: "2026-03-02", amountKrw: -1000000, description: "월세" },
+        { txnId: "eeeeeeeeeeeeeeee", date: "2026-04-01", amountKrw: 4200000, description: "급여" },
+        { txnId: "ffffffffffffffff", date: "2026-04-02", amountKrw: -1000000, description: "월세" },
+      ],
+    });
+
+    const response = await draftProfilePOST(requestJson({
+      csrf: "test",
+      source: "csv",
+    }));
+    expect(response.status).toBe(200);
+    const payload = await response.json() as {
+      ok?: boolean;
+      batchId?: string;
+      patch?: { monthlyIncomeNet?: number };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.batchId).toBe(storedBatchId);
+    expect(payload.patch?.monthlyIncomeNet).toBe(4100000);
+  });
+
+  it("keeps same-id coexistence draft profile on the stored-first visible batch view", async () => {
+    const legacy = await appendBatchFromCsv({
+      accountId,
+      csvText: [
+        "date,amount,description",
+        "2026-01-01,2000000,급여",
+        "2026-01-02,-500000,월세",
+        "2026-02-01,2100000,급여",
+        "2026-02-02,-500000,월세",
+        "2026-03-01,2200000,급여",
+        "2026-03-02,-500000,월세",
+      ].join("\n"),
+      mapping: {
+        dateKey: "date",
+        amountKey: "amount",
+        descKey: "description",
+      },
+      fileName: "legacy-coexist-draft.csv",
+    });
+
+    await saveStoredShadowBatch({
+      batchId: legacy.batch.id,
+      accountId,
+      createdAt: "2026-04-05T00:00:00.000Z",
+      omitRowAccountId: true,
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaa", date: "2026-02-01", amountKrw: 4000000, description: "급여" },
+        { txnId: "bbbbbbbbbbbbbbbb", date: "2026-02-02", amountKrw: -1000000, description: "월세" },
+        { txnId: "cccccccccccccccc", date: "2026-03-01", amountKrw: 4100000, description: "급여" },
+        { txnId: "dddddddddddddddd", date: "2026-03-02", amountKrw: -1000000, description: "월세" },
+        { txnId: "eeeeeeeeeeeeeeee", date: "2026-04-01", amountKrw: 4200000, description: "급여" },
+        { txnId: "ffffffffffffffff", date: "2026-04-02", amountKrw: -1000000, description: "월세" },
+      ],
+    });
+
+    const response = await draftProfilePOST(requestJson({
+      csrf: "test",
+      source: "csv",
+      batchId: legacy.batch.id,
+    }));
+    expect(response.status).toBe(200);
+    const payload = await response.json() as {
+      ok?: boolean;
+      batchId?: string;
+      patch?: { monthlyIncomeNet?: number; monthlyEssentialExpenses?: number };
+    };
+    expect(payload.ok).toBe(true);
+    expect(payload.batchId).toBe(legacy.batch.id);
+    expect(payload.patch?.monthlyIncomeNet).toBe(4100000);
+    expect(payload.patch?.monthlyEssentialExpenses).toBe(1000000);
   });
 });

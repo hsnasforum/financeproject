@@ -84,17 +84,20 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:items-center" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-300" onClick={(e) => e.stopPropagation()}>
         <div className="p-8 lg:p-10 border-b border-slate-100 flex items-start justify-between bg-slate-50/50">
-          <div className="space-y-1">
+          <div className="space-y-2">
             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{summary} 상세 정보</span>
             <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">{product.fin_prdt_nm ?? "상품 상세"}</h2>
             <p className="text-sm font-bold text-slate-500">{product.kor_co_nm ?? "-"}</p>
+            <p className="max-w-2xl text-xs font-medium leading-relaxed text-slate-500">
+              이 창은 확정 추천이 아니라, 현재 비교 기준으로 금리, 가입 조건, 우대사항을 다시 확인하는 단계입니다.
+            </p>
           </div>
           <Button variant="outline" className="rounded-2xl h-10 px-4 font-black" onClick={() => onOpenChange(false)}>닫기</Button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-8 lg:p-10 space-y-10 scrollbar-thin scrollbar-thumb-slate-200">
           <section className="space-y-4">
-            <SubSectionHeader title="상품 안내" />
+            <SubSectionHeader title="상품 안내" description="현재 비교 기준에서 먼저 읽어야 할 기본 조건과 공시 정보입니다." />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {presentBySpecs(kind, product.raw, config?.productFields).map((entry) => (
                 <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4" key={`overview-${entry.label}`}>
@@ -106,7 +109,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
           </section>
 
           <section className="space-y-4">
-            <SubSectionHeader title="우대조건 및 유의사항" />
+            <SubSectionHeader title="다음 확인 포인트" description="실제 가입 전에 다시 볼 우대조건과 제한 사항입니다." />
             <div className="rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 lg:p-8">
               {notes.length === 0 ? (
                 <p className="text-sm font-bold text-slate-400 italic text-center py-4">공시된 추가 유의사항 정보가 없습니다.</p>
@@ -127,7 +130,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
           </section>
 
           <section className="space-y-6">
-            <SubSectionHeader title="금리 및 기간 옵션" description="기간별 공시된 금리 정보입니다." />
+            <SubSectionHeader title="금리 및 기간 옵션" description="현재 비교 중인 후보의 기간별 공시 옵션입니다." />
             <div className="flex flex-wrap gap-2">
               {product.options.map((option, index) => (
                 <button
@@ -186,7 +189,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
             <section className="space-y-6 rounded-[2.5rem] bg-slate-50 border border-slate-100 p-8 lg:p-10 shadow-sm">
               <SubSectionHeader
                 title="금리 계산기"
-                description="기본 세율 15.4% 기준 예상 수령액입니다."
+                description="입력한 금액과 세율 가정으로 보는 단순 비교값입니다."
               />
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

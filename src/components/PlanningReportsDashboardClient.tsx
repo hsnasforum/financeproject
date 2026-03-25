@@ -600,13 +600,13 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     <PageShell className="bg-slate-50">
       <PageHeader
         title="플래닝 리포트"
-        description="저장된 실행(run) 기준으로 요약 대시보드를 확인합니다."
+        description="저장된 실행을 다시 읽고, 필요하면 다른 실행과 비교하거나 추천 비교 기록으로 이어 보는 화면입니다."
         action={(
           <div className="no-print flex items-center gap-3">
             {reverseRecommendHistoryHref ? (
               <Link href={reverseRecommendHistoryHref}>
                 <Button variant="outline" className="rounded-full font-bold h-9 bg-white">
-                  추천 실행으로 돌아가기
+                  추천 비교 기록 보기
                 </Button>
               </Link>
             ) : null}
@@ -620,14 +620,17 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
               PDF 인쇄
             </Button>
             <Link href={planningHref}>
-              <Button variant="primary" className="rounded-full font-bold h-9">플래닝 돌아가기</Button>
+              <Button variant="primary" className="rounded-full font-bold h-9">플래닝으로 돌아가기</Button>
             </Link>
             <Link href={runsHref}>
-              <Button variant="outline" className="rounded-full font-bold h-9 bg-white">실행 기록</Button>
+              <Button variant="outline" className="rounded-full font-bold h-9 bg-white">실행 기록 보기</Button>
             </Link>
           </div>
         )}
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 확정 답안을 보는 곳이 아니라, 저장 당시 진단 결과를 다시 읽고 다음 비교나 후속 확인 경로를 정리하는 단계입니다.
+      </p>
 
       {showInitialLoadNotice && (
         <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-100 text-sm font-bold text-amber-800">
@@ -643,11 +646,11 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         <div className="space-y-6">
           <EmptyState
             title="저장된 실행 기록이 없습니다"
-            description="/planning에서 실행 후 저장하면 이 화면에서 리포트를 확인할 수 있습니다."
+            description="/planning에서 실행을 저장하면, 이 화면에서 리포트를 다시 읽고 다른 실행과 비교할 수 있습니다."
           />
           <Card className="p-8 text-center bg-slate-50/50 border-dashed rounded-[2.5rem]">
             <p className="text-sm font-bold text-slate-900">막히지 않게 바로 이어서 시작할 수 있습니다.</p>
-            <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">프로필 입력 후 실행하고 저장하면 공식 리포트와 비교 화면이 열립니다.</p>
+            <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">프로필 입력 후 실행을 저장하면, 여기서 저장된 리포트를 다시 읽고 실행 비교까지 이어 볼 수 있습니다.</p>
             <div className="mt-6 flex justify-center gap-3">
               <Link href={planningHref}>
                 <Button variant="primary" className="rounded-xl px-6">플래닝 시작</Button>
@@ -666,7 +669,8 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         <div className="space-y-6" data-testid="report-dashboard">
           <Card className="p-6">
             <SubSectionHeader
-              title="실행 및 비교 선택"
+              title="보고 있는 실행 선택"
+              description="저장된 실행을 고르고, 필요하면 기준 실행과 비교하거나 리포트로 따로 보관할 수 있습니다."
               action={
                 <div className="no-print flex flex-wrap items-center gap-3">
                   <select
@@ -688,7 +692,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                     variant={compareMode ? "primary" : "outline"}
                     className="rounded-lg h-9 font-bold"
                   >
-                    {compareMode ? "비교 끄기" : "비교 켜기"}
+                    {compareMode ? "비교 닫기" : "비교 열기"}
                   </Button>
                   <Button
                     data-testid="report-save-button"
@@ -698,7 +702,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                     variant="outline"
                     className="rounded-lg h-9 font-bold bg-white"
                   >
-                    {saveReportWorking ? "리포트 저장 중..." : "리포트 저장"}
+                    {saveReportWorking ? "리포트 보관 중..." : "저장된 리포트로 보관"}
                   </Button>
                 </div>
               }
@@ -718,11 +722,15 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
 
             {selectedRunHasExplicitRecommendRef ? (
               <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
-                연결된 추천 실행 ID:
-                {" "}
-                <span className="font-mono text-emerald-900">{queryRecommendRunId}</span>
-                {" · "}
-                현재 보고 있는 리포트에서만 추천 실행으로 돌아갈 수 있습니다.
+                <p>이 리포트는 추천 비교 기록과 함께 열렸습니다. 필요하면 위 버튼으로 돌아가 저장 당시 비교 후보를 다시 확인해 보세요.</p>
+                <details className="mt-3 rounded-xl border border-emerald-200/80 bg-white/70 px-3 py-2">
+                  <summary className="cursor-pointer list-none text-[11px] font-semibold text-emerald-700 marker:hidden">
+                    공유·복구용 보조 정보
+                  </summary>
+                  <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-800">
+                    추천 비교 기록 식별자 (recommendRunId): <span className="font-mono text-emerald-900">{queryRecommendRunId}</span>
+                  </p>
+                </details>
               </div>
             ) : null}
 
@@ -749,9 +757,9 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 </div>
 
                 {!baselineRun ? (
-                  <p className="text-sm font-bold text-slate-400 italic">다른 실행을 저장하면 비교할 수 있습니다.</p>
+                  <p className="text-sm font-bold text-slate-400 italic">비교할 다른 실행을 저장하면, 지금 보는 리포트와 무엇이 달라졌는지 같은 자리에서 읽을 수 있습니다.</p>
                 ) : reportDeltaRows.length < 1 ? (
-                  <p className="text-sm font-bold text-slate-400 italic">비교 가능한 핵심 변화가 없습니다.</p>
+                  <p className="text-sm font-bold text-slate-400 italic">핵심 지표 차이는 크지 않지만, 상세 리포트에서 가정과 경고 차이는 다시 확인할 수 있습니다.</p>
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="delta-cards">
                     {reportDeltaRows.map((item) => (
@@ -817,8 +825,8 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
 
           <Card className="p-6">
             <SubSectionHeader
-              title="추가 분석 및 리포트"
-              description="핵심 리포트 외 필요한 보조 자료를 선택하여 불러옵니다."
+              title="추가 분석 및 다음 확인"
+              description="핵심 리포트를 읽은 뒤, 추천 비교 자료나 혜택 후보처럼 이어서 확인할 보조 자료를 선택합니다."
             />
             <div className="flex flex-wrap gap-2">
               <Button
@@ -828,7 +836,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 variant={showCandidateInsights ? "outline" : "primary"}
                 className="rounded-xl h-10 px-5 font-bold"
               >
-                {showCandidateInsights ? "상품 비교 완료" : "상품 비교 분석"}
+                {showCandidateInsights ? "추천 비교 자료 열림" : "추천 비교 자료 열기"}
               </Button>
               <Button
                 disabled={!selectedRunVmData || showBenefitInsights}
@@ -837,7 +845,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 variant={showBenefitInsights ? "outline" : "primary"}
                 className="rounded-xl h-10 px-5 font-bold"
               >
-                {showBenefitInsights ? "혜택 후보 완료" : "혜택 후보 분석"}
+                {showBenefitInsights ? "혜택 후보 열림" : "혜택 후보 열기"}
               </Button>
               <Button
                 disabled={showRealtimeProductExplorer}
@@ -846,7 +854,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 variant={showRealtimeProductExplorer ? "outline" : "primary"}
                 className="rounded-xl h-10 px-5 font-bold"
               >
-                {showRealtimeProductExplorer ? "상품 탐색 열림" : "상품 탐색기 열기"}
+                {showRealtimeProductExplorer ? "상품 탐색 열림" : "상품 탐색 열기"}
               </Button>
             </div>
           </Card>

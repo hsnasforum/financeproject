@@ -1,6 +1,6 @@
 # .codex/agents/manager.toml
 model = "gpt-5.4"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 approval_policy = "on-request"
 

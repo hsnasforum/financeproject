@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { type ImportBatchMeta, type StoredTransaction } from "../domain/transactions";
+import {
+  type ImportBatchMeta,
+  type StoredImportMetadataHandoff,
+  type StoredImportProvenanceHandoff,
+  type StoredImportSourceBinding,
+  type StoredTransaction,
+} from "../domain/transactions";
 import { roundKrw } from "../../calc/roundingPolicy";
 import { parseCsvTransactions } from "../providers/csv/csvProvider";
 import { detectEncodingIssue, normalizeNewlines, parseCsvText, stripUtf8Bom } from "../providers/csv/csvParse";
@@ -15,6 +21,7 @@ export type ImportCsvToBatchInput = {
   csvText: string;
   mapping?: Partial<CsvColumnMapping>;
   sanitizeTextFields?: boolean;
+  provenance?: StoredImportProvenanceHandoff;
   options?: {
     accountId?: string;
     accountName?: string;
@@ -26,6 +33,7 @@ export type ImportCsvToBatchResult = {
   batchMeta: ImportBatchMeta;
   transactions: StoredTransaction[];
   mappingUsed: CsvColumnMapping;
+  metadataHandoff: StoredImportMetadataHandoff;
 };
 
 export class ImportCsvToBatchInputError extends Error {
@@ -154,6 +162,53 @@ function inferYmRange(transactions: StoredTransaction[]): { ymMin?: string; ymMa
   };
 }
 
+function normalizeImportProvenance(input: ImportCsvToBatchInput["provenance"]): StoredImportProvenanceHandoff {
+  const fileName = asString(input?.fileName);
+  return {
+    fileNameProvided: Boolean(fileName),
+    ...(fileName ? { fileName } : {}),
+  };
+}
+
+function buildStoredImportSourceBinding(input: {
+  csvNormalizedText: string;
+  provenance: StoredImportProvenanceHandoff;
+}): StoredImportSourceBinding | undefined {
+  if (!input.provenance.fileName) return undefined;
+  return {
+    artifactSha256: sha256(input.csvNormalizedText),
+    attestedFileName: input.provenance.fileName,
+    originKind: "writer-handoff",
+  };
+}
+
+function buildStoredImportMetadataHandoff(input: {
+  csvNormalizedText: string;
+  parsed: {
+    stats: {
+      rows: number;
+      parsed: number;
+      skipped: number;
+    };
+  };
+  provenance?: ImportCsvToBatchInput["provenance"];
+}): StoredImportMetadataHandoff {
+  const normalizedProvenance = normalizeImportProvenance(input.provenance);
+  const sourceBinding = buildStoredImportSourceBinding({
+    csvNormalizedText: input.csvNormalizedText,
+    provenance: normalizedProvenance,
+  });
+  return {
+    diagnostics: {
+      rows: input.parsed.stats.rows,
+      parsed: input.parsed.stats.parsed,
+      skipped: input.parsed.stats.skipped,
+    },
+    provenance: normalizedProvenance,
+    ...(sourceBinding ? { sourceBinding } : {}),
+  };
+}
+
 export async function importCsvToBatch(input: ImportCsvToBatchInput): Promise<ImportCsvToBatchResult> {
   const csvText = asString(input.csvText);
   if (!csvText) {
@@ -191,6 +246,14 @@ export async function importCsvToBatch(input: ImportCsvToBatchInput): Promise<Im
       { field: "csvEncoding", message: "CSV 인코딩을 확인해 주세요." },
     ]);
   }
+
+  // Build the future stored-owner snapshot once so the persisted batch metadata
+  // and the returned handoff stay in sync without widening public responses yet.
+  const metadataHandoff = buildStoredImportMetadataHandoff({
+    csvNormalizedText: preparedCsvText,
+    parsed,
+    provenance: input.provenance,
+  });
 
   const batchId = buildBatchId(preparedCsvText, mappingUsed, input.options);
   const dedupedMap = new Map<string, StoredTransaction>();
@@ -245,11 +308,15 @@ export async function importCsvToBatch(input: ImportCsvToBatchInput): Promise<Im
     ...(accountList.length > 0 ? { accounts: accountList } : {}),
   };
 
-  await saveBatch(batchMeta, transactions);
+  await saveBatch({
+    ...batchMeta,
+    importMetadata: metadataHandoff,
+  }, transactions);
 
   return {
     batchMeta,
     transactions,
     mappingUsed,
+    metadataHandoff,
   };
 }

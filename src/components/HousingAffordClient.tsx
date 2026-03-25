@@ -146,15 +146,15 @@ export function HousingAffordClient({
   const ctaLinks = useMemo(() => {
     const links: Array<{ href: string; label: string }> = [];
     if (mode === "buy") {
-      links.push({ href: "/products/mortgage-loan", label: "주담대 상품 보기" });
+      links.push({ href: "/products/mortgage-loan", label: "주담대 조건 다시 보기" });
     } else {
-      links.push({ href: "/products/rent-house-loan", label: "전월세 대출 보기" });
+      links.push({ href: "/products/rent-house-loan", label: "전월세 대출 조건 다시 보기" });
     }
     if ((result.housingRatioPct ?? 0) >= 30) {
-      links.push({ href: "/housing/subscription?region=전국&mode=all&houseType=apt", label: "청약 공고 보기" });
+      links.push({ href: "/housing/subscription?region=전국&mode=all&houseType=apt", label: "청약 공고 다시 보기" });
     }
     if (result.residualCashFlow < 0 || (result.housingRatioPct ?? 0) >= 40) {
-      links.push({ href: "/gov24", label: "지원금/혜택 찾아보기" });
+      links.push({ href: "/gov24", label: "지원금·혜택 다시 보기" });
     }
     return links;
   }, [mode, result.housingRatioPct, result.residualCashFlow]);
@@ -167,10 +167,20 @@ export function HousingAffordClient({
     <PageShell>
       <PageHeader
         title="주거비 부담 계산기"
-        description="전월세/매매 조건별 월 주거비와 잔여현금흐름을 즉시 계산합니다."
+        description="현재 입력한 전월세·매매 조건으로 월 주거비와 잔여현금흐름을 비교해 봅니다."
       />
 
       <div className="space-y-6">
+        <Card className="rounded-[2rem] border border-slate-100 bg-slate-50/70 p-6 shadow-sm">
+          <p className="text-sm font-black text-slate-800">결과를 읽는 기준</p>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+            이 계산은 현재 입력한 소득, 지출, 주거 조건을 기준으로 비교한 참고 결과입니다.
+          </p>
+          <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">
+            실제 대출 가능 금액, 금리, 청약 자격, 지원 조건은 다음 단계 화면에서 다시 확인해 주세요.
+          </p>
+        </Card>
+
         <Card className="rounded-[2rem] p-8 shadow-sm">
           <SubSectionHeader title="기본 정보 및 소득" description="월 소득과 고정 지출을 입력하세요." />
           <ErrorSummary issues={parsedInput.issues} id={ERROR_SUMMARY_ID} className="mt-4" />
@@ -351,7 +361,7 @@ export function HousingAffordClient({
 
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="rounded-[2rem] p-8 shadow-sm lg:col-span-2 border-emerald-100 bg-white">
-            <SubSectionHeader title="상세 계산 결과" description="조건별 비용 구조와 지표 분석입니다." />
+            <SubSectionHeader title="현재 조건 기준 계산 결과" description="입력한 소득·지출·주거 조건으로 비교한 결과입니다." />
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
               <div className="rounded-3xl border border-emerald-50 bg-slate-50/50 p-6">
@@ -421,7 +431,7 @@ export function HousingAffordClient({
                     </div>
                     <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
                       <span>0%</span>
-                      <span>Target 25%</span>
+                      <span>권장 25%</span>
                       <span>100%</span>
                     </div>
                   </div>
@@ -432,8 +442,8 @@ export function HousingAffordClient({
             {/* Cashflow Breakdown Bar */}
             <div className="mt-8 space-y-3 rounded-3xl bg-slate-50 p-8 border border-slate-100 shadow-sm">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Cashflow Composition</p>
-                <p className="text-xs font-black text-emerald-600">Total Income: {fmtKrw(Number(incomeNetInput))}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">월 현금흐름 구성</p>
+                <p className="text-xs font-black text-emerald-600">월 소득 기준 {fmtKrw(Number(incomeNetInput))}</p>
               </div>
 
               <div className="h-4 w-full flex overflow-hidden rounded-full bg-slate-200 mt-4">
@@ -467,7 +477,7 @@ export function HousingAffordClient({
 
           <div className="space-y-6">
             <Card className="rounded-[2rem] p-8 shadow-sm">
-              <SubSectionHeader title="리스크 및 경고" description={`${result.warnings.length}개의 항목 확인됨`} />
+              <SubSectionHeader title="다시 확인할 리스크와 경고" description={`현재 조건에서 ${result.warnings.length}개 항목을 다시 볼 수 있습니다.`} />
               {result.warnings.length > 0 ? (
                 <ul className="mt-6 space-y-3">
                   {result.warnings.map((warning, idx) => (
@@ -486,8 +496,8 @@ export function HousingAffordClient({
 
             <Card className="rounded-[2rem] p-8 shadow-xl shadow-emerald-900/20 bg-emerald-600 text-white border-none">
               <SubSectionHeader
-                title="추천 액션"
-                description="분석 결과에 따른 다음 단계입니다."
+                title="다음에 확인할 곳"
+                description="현재 계산 뒤에 이어서 볼 수 있는 비교 화면입니다."
                 titleClassName="text-white"
                 descriptionClassName="text-emerald-100/70"
               />

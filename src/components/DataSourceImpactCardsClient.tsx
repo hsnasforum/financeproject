@@ -81,9 +81,9 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
 
   return (
     <Card className="mb-12 rounded-[2rem] p-8 shadow-sm">
-      <SubSectionHeader 
-        title="사용자 도움 연결" 
-        description="지금 연결된 데이터를 기준으로, 어떤 사용자 질문과 화면에 도움이 되는지 정리했습니다."
+      <SubSectionHeader
+        title="질문별 데이터 기준 요약"
+        description="먼저 궁금한 질문을 고르고, 그 결과가 어떤 데이터 기준으로 읽히는지와 최근 연결 확인이 비었을 때 어디까지 참고하면 되는지 순서대로 읽습니다."
       />
       
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
@@ -94,8 +94,8 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
             <div key={card.id} className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 flex flex-col" data-testid={`data-source-impact-${card.id}`}>
               <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
                 <div className="flex-1">
-                  <p className="text-base font-black text-slate-900 tracking-tight">{card.title}</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">{card.question}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{card.title}</p>
+                  <p className="mt-3 text-base font-black leading-relaxed text-slate-900 tracking-tight">{card.question}</p>
                 </div>
                 <span className={cn("shrink-0 rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", impactBadgeClass(card.state))}>
                   {impactBadgeLabel(card.state)}
@@ -106,7 +106,7 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
               
               <div className="grid gap-3 sm:grid-cols-2 mb-6">
                 <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">활용 기준</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">지금 읽는 기준</p>
                   <p className="text-xs font-bold text-slate-700 leading-relaxed">{card.basis}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-100 bg-white p-3">
@@ -191,7 +191,9 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
                 </div>
               ) : null}
 
-              <div className="mt-auto flex flex-wrap gap-2 pt-4 border-t border-slate-100">
+              <div className="mt-auto pt-4 border-t border-slate-100">
+                <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">이어서 볼 화면</p>
+                <div className="flex flex-wrap gap-2">
                 {card.routes.map((route) => (
                   <Link
                     key={`${card.id}-${route.href}`}
@@ -201,6 +203,7 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
                     {route.label}
                   </Link>
                 ))}
+                </div>
               </div>
             </div>
           );

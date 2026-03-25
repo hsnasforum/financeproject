@@ -222,9 +222,9 @@ function formatPlanningOverallStatusLabel(status: RecommendPlanningHandoff["summ
 function formatInferenceSourceLabel(source: PlanningInferenceSource): string | null {
   switch (source) {
     case "planning-summary":
-      return "플래닝 요약 handoff 기반";
+      return "플래닝 요약 참고";
     case "planning-context":
-      return "legacy planningContext 기반";
+      return "이전 플래닝 입력 참고";
     case "none":
       return "연결 정보 없음";
     default:
@@ -274,10 +274,10 @@ function buildPlanningContextStrip(
 
   if (inferenceSource === "planning-summary") {
     return {
-      title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "현재 플래닝 결과 기준으로 연 추천입니다",
+      title: actionLabel ? `${actionLabel} 흐름에서 함께 보는 추천입니다` : "현재 플래닝 결과 흐름에서 함께 보는 추천입니다",
       description: actionLabel
-        ? `플래닝 리포트의 ${actionLabel} 액션에서 바로 열었고, 실행 요약을 함께 넘겨 지금 추천을 열었습니다.`
-        : "플래닝 리포트에서 넘긴 실행 요약을 기준으로 지금 추천을 열었습니다.",
+        ? `플래닝 리포트의 ${actionLabel} 액션에서 바로 열었고, 실행 요약을 참고로 넘겨 현재 플래닝 맥락과 함께 지금 조건의 비교 후보를 읽게 돕습니다.`
+        : "플래닝 리포트에서 넘긴 실행 요약을 참고해 현재 플래닝 맥락과 함께 지금 조건의 비교 후보를 읽게 돕습니다.",
       ...(actionLabel ? { actionLabel } : {}),
       ...(stageLabel ? { stageLabel } : {}),
       ...(sourceLabel ? { sourceLabel } : {}),
@@ -288,10 +288,10 @@ function buildPlanningContextStrip(
 
   if (inferenceSource === "planning-context") {
     return {
-      title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "현재 플래닝 입력값을 바탕으로 연 추천입니다",
+      title: actionLabel ? `${actionLabel} 흐름에서 참고하는 추천입니다` : "현재 플래닝 입력 흐름을 참고한 추천입니다",
       description: actionLabel
-        ? `플래닝 리포트의 ${actionLabel} 액션에서 열었고, 기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`
-        : `기존 planningContext ${metricsCount}개 입력으로 현재 단계를 읽어 추천을 열었습니다.`,
+        ? `플래닝 리포트의 ${actionLabel} 액션에서 열었고, 기존 planningContext ${metricsCount}개 입력을 참고해 현재 단계를 읽고 지금 조건의 비교 후보를 함께 확인하게 돕습니다.`
+        : `기존 planningContext ${metricsCount}개 입력을 참고해 현재 단계를 읽고 지금 조건의 비교 후보를 함께 확인하게 돕습니다.`,
       ...(actionLabel ? { actionLabel } : {}),
       ...(stageLabel ? { stageLabel } : {}),
       ...(sourceLabel ? { sourceLabel } : {}),
@@ -301,10 +301,10 @@ function buildPlanningContextStrip(
   }
 
   return {
-    title: actionLabel ? `${actionLabel} 액션에서 연 추천입니다` : "플래닝 연동 정보가 함께 들어왔습니다",
+    title: actionLabel ? `${actionLabel} 흐름에서 함께 열린 추천입니다` : "플래닝 연동 참고 흐름과 함께 열린 추천입니다",
     description: actionLabel
-      ? `플래닝 리포트의 ${actionLabel} 액션에서 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.`
-      : "이번 추천은 플래닝 결과와 함께 열렸지만, 단계 판정은 아직 충분하지 않을 수 있습니다.",
+      ? `플래닝 리포트의 ${actionLabel} 액션에서 열렸지만, 단계 판정은 아직 충분하지 않을 수 있어 연결 맥락을 참고하는 보조 정보로 읽어 주세요.`
+      : "이번 추천은 플래닝 결과와 함께 열렸지만, 단계 판정은 아직 충분하지 않을 수 있어 연결 맥락을 참고하는 보조 정보로 읽어 주세요.",
     ...(actionLabel ? { actionLabel } : {}),
     ...(stageLabel ? { stageLabel } : {}),
     ...(sourceLabel ? { sourceLabel } : {}),
@@ -319,14 +319,14 @@ function buildActionReasonContext(
   if (actionContext?.code === "BUILD_EMERGENCY_FUND") {
     return {
       sectionLabel: "비상금 보강에 맞는 이유",
-      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 비상금 보강 흐름에서 왜 먼저 검토할 만한지 빠르게 읽을 수 있습니다.",
+      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 비상금 보강 흐름에서 먼저 비교해 볼 후보인지 빠르게 읽을 수 있습니다.",
     };
   }
 
   if (actionContext?.code === "COVER_LUMP_SUM_GOAL") {
     return {
       sectionLabel: "목표자금 점검에 맞는 이유",
-      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 목표자금 점검 흐름에서 기간과 금리 균형에 어떻게 맞는지 빠르게 읽을 수 있습니다.",
+      helper: "상단 플래닝 연동 정보와 함께 보면, 이 추천이 목표자금 점검 흐름에서 기간과 금리 균형을 비교할 때 참고할 후보인지 빠르게 읽을 수 있습니다.",
     };
   }
 
@@ -999,10 +999,12 @@ function RecommendPageInner() {
   return (
     <PageShell>
       <PageHeader
-        title="스마트 상품 추천"
-        description="내 저축 목적과 성향에 딱 맞는 예적금 상품을 AI가 분석하여 추천해 드립니다."
+        title="상품 추천 비교"
+        description="지금 입력한 조건과 플래닝 연동 정보를 기준으로 예적금 후보를 먼저 비교해 보는 화면입니다."
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        먼저 비교 후보 보기로 현재 조건의 후보를 확인하고, 결과 순서가 아쉬울 때만 가중치 설정으로 점수 기준을 조정해 보세요.{" "}
+        이 화면은 확정 답안을 고르는 곳이 아니라, 현재 조건 기준으로 비교할 후보와 다음 확인 포인트를 정리하는 단계입니다.{" "}
         데이터 신뢰 및 연동 상태는{" "}
         <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
           내 설정 &gt; 데이터 신뢰 및 연동 상태
@@ -1085,7 +1087,7 @@ function RecommendPageInner() {
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">분석 요약</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">비교 시작 요약</p>
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -1097,6 +1099,9 @@ function RecommendPageInner() {
                     <span className="text-xs font-black text-slate-900">Top {profile.topN}</span>
                   </div>
                 </div>
+                <p className="text-[11px] font-bold leading-relaxed text-slate-500">
+                  먼저 현재 조건으로 비교 후보를 열고, 순서를 더 조정하고 싶을 때만 가중치 설정을 열어 보세요.
+                </p>
               </div>
               
               <div className="mt-8 space-y-3">
@@ -1107,7 +1112,7 @@ function RecommendPageInner() {
                   onClick={() => void submit()}
                   disabled={loading}
                 >
-                  {loading ? "분석 중" : "추천 시작하기"}
+                  {loading ? "후보 정리 중" : "비교 후보 보기"}
                 </Button>
                 <button
                   className="w-full text-[10px] font-bold text-slate-400 hover:text-emerald-600 transition-colors uppercase tracking-widest"
@@ -1121,6 +1126,12 @@ function RecommendPageInner() {
 
           {advancedOpen && (
             <div className="mt-8 border-t border-slate-100 pt-8 animate-in fade-in slide-in-from-top-4 duration-500">
+              <div className="mb-6 space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">가중치 설정</p>
+                <p className="text-xs font-medium leading-relaxed text-slate-500">
+                  비교 후보를 먼저 본 뒤, 금리·기간·유동성 중 어떤 기준을 더 앞에 둘지만 조정하는 보조 설정입니다.
+                </p>
+              </div>
               <div className="grid gap-8 md:grid-cols-3">
                 <label className="space-y-3">
                   <div className="flex justify-between">
@@ -1180,15 +1191,25 @@ function RecommendPageInner() {
       {result && (
         <div className="space-y-8">
           <div className="flex flex-wrap items-center justify-between gap-4 px-2">
-            <h2 className="text-xl font-black text-slate-900">추천 결과 <span className="ml-1 text-emerald-600">{result.items?.length}</span></h2>
-            <div className="flex items-center gap-3">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">추천 결과 <span className="ml-1 text-emerald-600">{result.items?.length}</span></h2>
+              <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
+                점수는 현재 선택한 조건과 가중치 기준 비교값입니다. 우열 확정이 아니라 비교 참고용으로 읽고, 가입 전 실제 금리와 조건은 다시 확인해 주세요.
+              </p>
+            </div>
+            <div className="flex items-start gap-3">
               {feedback && (
                 <span className="text-xs font-bold text-emerald-600 animate-in fade-in duration-300">{feedback}</span>
               )}
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={saveCurrentRun}>결과 저장</Button>
-                <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunJson}>JSON</Button>
-                <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunCsv}>CSV</Button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={saveCurrentRun}>결과 저장</Button>
+                  <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunJson}>JSON</Button>
+                  <Button size="sm" variant="outline" className="rounded-full px-4 font-black" onClick={exportCurrentRunCsv}>CSV</Button>
+                </div>
+                <p className="max-w-[22rem] text-[11px] font-medium leading-relaxed text-slate-500 md:text-right">
+                  결과 저장은 이 비교를 나중에 다시 보기 위한 기록용이고, JSON·CSV는 필요할 때만 내려받는 보조 기능입니다.
+                </p>
               </div>
             </div>
           </div>
@@ -1200,6 +1221,11 @@ function RecommendPageInner() {
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">플래닝 연동</p>
                   <h3 className="text-lg font-black tracking-tight text-slate-900">{planningContextStrip.title}</h3>
                   <p className="text-sm font-medium leading-relaxed text-slate-600">{planningContextStrip.description}</p>
+                  {(planningContextStrip.sourceLabel || planningContextStrip.overallStatusLabel || planningContextStrip.runId) && (
+                    <p className="text-xs font-medium leading-relaxed text-slate-500">
+                      먼저 위 설명과 액션·단계 같은 현재 맥락을 보고, 연결 근거·실행 상태·실행 ID는 확인이 필요할 때만 참고하세요.
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px] font-black">
                   {planningContextStrip.actionLabel ? (
@@ -1209,24 +1235,24 @@ function RecommendPageInner() {
                   ) : null}
                   {planningContextStrip.stageLabel ? (
                     <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
-                      단계: {planningContextStrip.stageLabel}
+                      현재 단계: {planningContextStrip.stageLabel}
                     </span>
                   ) : null}
                   {planningContextStrip.sourceLabel ? (
                     <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
-                      연결 방식: {planningContextStrip.sourceLabel}
+                      연결 근거: {planningContextStrip.sourceLabel}
                     </span>
                   ) : null}
                   {planningContextStrip.overallStatusLabel ? (
                     <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 shadow-sm">
-                      실행 상태: {planningContextStrip.overallStatusLabel}
+                      실행 상태 참고: {planningContextStrip.overallStatusLabel}
                     </span>
                   ) : null}
                 </div>
               </div>
               {planningContextStrip.runId ? (
                 <p className="mt-4 text-xs font-bold text-slate-500">
-                  플래닝 실행 ID: <span className="font-mono text-slate-700">{planningContextStrip.runId}</span>
+                  플래닝 실행 ID · 연결 확인용: <span className="font-mono text-slate-700">{planningContextStrip.runId}</span>
                 </p>
               ) : null}
             </Card>
@@ -1377,7 +1403,7 @@ function RecommendPageInner() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                          {actionReasonContext?.sectionLabel ?? "추천 사유"}
+                          {actionReasonContext?.sectionLabel ?? "비교 근거"}
                         </p>
                         {actionReasonContext ? (
                           <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
@@ -1436,7 +1462,7 @@ function RecommendPageInner() {
         <div className="py-20">
           <EmptyState
             title="아직 추천 결과가 없습니다"
-            description="상단의 옵션을 선택하고 '추천 결과 보기' 버튼을 눌러보세요."
+            description="상단 조건을 고르면 현재 기준으로 비교할 후보와 확인 포인트를 보여줍니다."
             icon="search"
           />
         </div>
@@ -1444,7 +1470,7 @@ function RecommendPageInner() {
 
       {loading && (
         <div className="py-20">
-          <LoadingState description="최적의 금융 상품을 분석하고 있습니다." />
+          <LoadingState description="현재 조건에 맞는 비교 후보를 정리하고 있습니다." />
         </div>
       )}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
 import { Button } from "@/components/ui/Button";
@@ -70,8 +71,41 @@ function optionLabel(option: UnifiedOption): string {
   return saveTrm || "기간 미상";
 }
 
+function optionSelectLabel(option: UnifiedOption): string {
+  return `${optionLabel(option)} · 대표 ${formatRate(option.intrRate2 ?? option.intrRate ?? null)}`;
+}
+
 function optionKey(option: UnifiedOption, index: number): string {
   return `${option.sourceId ?? "na"}:${option.termMonths ?? "na"}:${option.saveTrm ?? ""}:${index}`;
+}
+
+function formatKindLabel(value?: string): string {
+  if (value === "deposit") return "정기예금";
+  if (value === "saving") return "정기적금";
+  return value?.trim() || "-";
+}
+
+function ProductIdentifierDisclosure({
+  stableId,
+  checkedAt,
+}: {
+  stableId: string;
+  checkedAt: string;
+}) {
+  return (
+    <details className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+      <summary className="cursor-pointer list-none text-[11px] font-semibold text-slate-500 marker:hidden">
+        공유·복구용 보조 정보
+      </summary>
+      <div className="mt-3 space-y-2 text-[11px] font-medium leading-relaxed text-slate-500">
+        <p>직접 공유, 복구, 지원 대응이 필요할 때만 상품 식별자를 확인해 주세요.</p>
+        <p>
+          상품 식별자: <span className="font-mono break-all text-slate-700">{stableId}</span>
+        </p>
+        <p>기준 확인 시각: {checkedAt}</p>
+      </div>
+    </details>
+  );
 }
 
 export function UnifiedProductDetailClient({ id }: { id: string }) {
@@ -154,15 +188,11 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
     <PageShell>
       <PageHeader
         title={item?.productName ?? "상품 상세"}
-        description={item?.providerName ?? "금융상품 통합 상세 정보를 확인합니다."}
-        action={
-          <div className="flex items-center gap-2">
-            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-black text-slate-400 uppercase tracking-widest tabular-nums">
-              ID: {id.slice(0, 12)}...
-            </span>
-          </div>
-        }
+        description={item ? `${item.providerName} 상품의 상세 조건을 현재 비교 기준으로 다시 확인하는 화면입니다.` : "상품의 상세 조건을 현재 비교 기준으로 다시 확인하는 화면입니다."}
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 확정 답안을 고르는 곳이 아니라, 지금 보고 있는 상품에서 금리, 우대조건, 예금자보호, 가입 조건을 다시 확인하는 단계입니다.
+      </p>
 
       <div className="space-y-6">
         {loading ? (
@@ -181,8 +211,8 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
           <>
             <Card className="rounded-[2.5rem] p-8 shadow-sm">
               <div className="flex flex-wrap items-center gap-2 mb-6">
-                <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{item.kind}</span>
-                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Source: {(item.sourceIds ?? [item.sourceId]).join(", ")}</span>
+                <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{formatKindLabel(item.kind)}</span>
+                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">기준 확인 {formatDateTime(generatedAt || item.updatedAt)}</span>
                 {(item.badges ?? []).map((badge) => (
                   <span key={`${item.stableId}-${badge}`} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{badge}</span>
                 ))}
@@ -191,7 +221,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
               <div className="grid gap-8 lg:grid-cols-3">
                 <div className="lg:col-span-2 space-y-8">
                   <div className="space-y-4">
-                    <SubSectionHeader title="금리 및 기간 옵션" description="가장 유리한 조건을 선택하여 비교해 보세요." />
+                    <SubSectionHeader title="금리 및 기간 옵션" description="현재 비교 중인 기간과 금리 기준을 다시 확인하세요." />
                     {options.length > 0 ? (
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
@@ -205,7 +235,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                               const key = optionKey(option, index);
                               return (
                                 <option key={key} value={key}>
-                                  {optionLabel(option)} ({option.sourceId ?? "-"})
+                                  {optionSelectLabel(option)}
                                 </option>
                               );
                             })}
@@ -230,7 +260,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                   </div>
 
                   <div className="space-y-4">
-                    <SubSectionHeader title="우대 및 유의사항" />
+                    <SubSectionHeader title="다음 확인 포인트" description="가입 전에 다시 볼 항목만 먼저 정리했습니다." />
                     <div className="rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 lg:p-8">
                       {conditions.length > 0 ? (
                         <ul className="space-y-4">
@@ -251,8 +281,8 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                 <div className="space-y-6">
                   <Card className="rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-slate-50/50">
                     <SubSectionHeader
-                      title="비교 및 저장"
-                      description="상품을 비교함에 담고 나중에 다시 확인하세요."
+                      title="다음에 할 일"
+                      description="비교함에 담거나 비교 화면에서 다른 후보와 나란히 다시 확인하세요."
                     />
                     <div className="mt-8 space-y-4">
                       <Button
@@ -260,14 +290,14 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                         className="w-full h-14 rounded-2xl font-black shadow-lg shadow-emerald-900/20"
                         onClick={() => {
                           const next = addCompareIdToStorage(item.stableId || id, compareStoreConfig.max);
-                          setCompareMessage(`비교함에 추가됨 (${next.length}/${compareStoreConfig.max})`);
+                          setCompareMessage(`비교함에 담았습니다. 비교 화면에서 다른 후보와 나란히 다시 확인할 수 있습니다. (${next.length}/${compareStoreConfig.max})`);
                         }}
                       >
-                        상품 비교함에 담기
+                        비교 후보 담기
                       </Button>
                       <Link href="/products/compare" className="block">
                         <Button variant="outline" className="w-full h-12 rounded-2xl border-slate-200 bg-white font-black text-slate-700 hover:bg-slate-100">
-                          비교함 페이지로 이동
+                          비교함에서 나란히 보기
                         </Button>
                       </Link>
                       {compareMessage && (
@@ -277,17 +307,15 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                   </Card>
 
                   <div className="rounded-[2rem] border border-slate-100 bg-white p-6">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">데이터 정보</p>
-                    <dl className="space-y-3 text-[11px] font-bold">
-                      <div className="flex justify-between">
-                        <dt className="text-slate-400">Stable ID</dt>
-                        <dd className="font-mono text-slate-600">{item.stableId.slice(0, 16)}...</dd>
-                      </div>
-                      <div className="flex justify-between">
-                        <dt className="text-slate-400">최종 갱신</dt>
-                        <dd className="text-slate-600 tabular-nums">{formatDateTime(item.updatedAt ?? generatedAt)}</dd>
-                      </div>
-                    </dl>
+                    <p className="text-[11px] font-medium leading-relaxed text-slate-500">
+                      식별자는 기본 화면의 핵심 정보가 아니라, 직접 공유나 복구, 지원 대응이 필요할 때만 확인하는 보조 정보입니다.
+                    </p>
+                    <div className="mt-4">
+                      <ProductIdentifierDisclosure
+                        stableId={item.stableId}
+                        checkedAt={formatDateTime(item.updatedAt ?? generatedAt)}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -298,5 +326,3 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
     </PageShell>
   );
 }
-
-import Link from "next/link";

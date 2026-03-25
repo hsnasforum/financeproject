@@ -11,6 +11,7 @@ type ImportBody = {
   csvText?: unknown;
   mapping?: unknown;
   options?: unknown;
+  fileName?: unknown;
   csrf?: unknown;
 } | null;
 
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
     const imported = await importCsvToBatch({
       csvText,
       ...(mapping ? { mapping } : {}),
+      ...(asString(body?.fileName) ? { provenance: { fileName: asString(body?.fileName) } } : {}),
       ...(options ? { options } : {}),
     });
 
