@@ -5,9 +5,11 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import {
+  getStoredFirstPublicCreatedAtString,
   type ImportBatchMeta,
   listLegacyBatches,
-  listStoredBatches,
+  listStoredBatchListCandidates,
+  toStoredFirstPublicImportBatchMeta,
 } from "@/lib/planning/v3/transactions/store";
 
 function asString(value: unknown): string {
@@ -28,6 +30,11 @@ type LegacyBatchRow = {
   total: number;
   ok: number;
   failed: number;
+};
+
+type MergedBatchListMeta = {
+  meta: ImportBatchMeta;
+  metadataSource: "stored" | "synthetic" | "legacy-derived";
 };
 
 function toMetaFromLegacy(batch: LegacyBatchRow): ImportBatchMeta {
@@ -52,14 +59,14 @@ function toLegacyFromMeta(meta: ImportBatchMeta, fileName?: string): LegacyBatch
   };
 }
 
-function sortByCreatedAtDesc(items: ImportBatchMeta[]): ImportBatchMeta[] {
+function sortByCreatedAtDesc(items: MergedBatchListMeta[]): MergedBatchListMeta[] {
   return [...items].sort((left, right) => {
-    const leftTs = Date.parse(left.createdAt);
-    const rightTs = Date.parse(right.createdAt);
+    const leftTs = Date.parse(left.meta.createdAt);
+    const rightTs = Date.parse(right.meta.createdAt);
     if (Number.isFinite(leftTs) && Number.isFinite(rightTs) && leftTs !== rightTs) {
       return rightTs - leftTs;
     }
-    return right.id.localeCompare(left.id);
+    return right.meta.id.localeCompare(left.meta.id);
   });
 }
 
@@ -97,39 +104,64 @@ export async function GET(request: Request) {
         ...(limit ? { limit: Math.max(limit, 200) } : {}),
         ...(asString(url.searchParams.get("cursor")) ? { cursor: asString(url.searchParams.get("cursor")) } : {}),
       }),
-      listStoredBatches(),
+      listStoredBatchListCandidates(),
     ]);
 
     const legacyItems = legacyListed.items as LegacyBatchRow[];
     const legacyById = new Map(legacyItems.map((item) => [item.id, item]));
-    const mergedById = new Map<string, ImportBatchMeta>();
+    const mergedById = new Map<string, MergedBatchListMeta>();
 
     for (const item of legacyItems) {
-      mergedById.set(item.id, toMetaFromLegacy(item));
+      mergedById.set(item.id, {
+        meta: toMetaFromLegacy(item),
+        metadataSource: "legacy-derived",
+      });
     }
     for (const item of storedListed) {
-      const existing = mergedById.get(item.id);
+      const existing = mergedById.get(item.meta.id);
       if (!existing) {
-        mergedById.set(item.id, item);
+        mergedById.set(item.meta.id, item);
         continue;
       }
-      const existingTs = Date.parse(existing.createdAt);
-      const nextTs = Date.parse(item.createdAt);
+      const existingTs = Date.parse(existing.meta.createdAt);
+      const nextTs = Date.parse(item.meta.createdAt);
       if (!Number.isFinite(existingTs) || (Number.isFinite(nextTs) && nextTs > existingTs)) {
-        mergedById.set(item.id, item);
+        mergedById.set(item.meta.id, item);
       }
     }
 
     const mergedMeta = sortByCreatedAtDesc([...mergedById.values()]).slice(0, limit);
-    const items = mergedMeta.map((meta) => {
-      const legacy = legacyById.get(meta.id);
-      return legacy ?? toLegacyFromMeta(meta);
+    const data = mergedMeta.map((row) => {
+      const publicMeta = toStoredFirstPublicImportBatchMeta({
+        meta: row.meta,
+        metadataSource: row.metadataSource,
+      });
+      const createdAt = getStoredFirstPublicCreatedAtString({
+        createdAt: row.meta.createdAt,
+        policy: { metadataSource: row.metadataSource },
+      });
+      return {
+        ...publicMeta,
+        createdAt,
+      };
+    });
+    const items = mergedMeta.map((row) => {
+      const createdAt = getStoredFirstPublicCreatedAtString({
+        createdAt: row.meta.createdAt,
+        policy: { metadataSource: row.metadataSource },
+      });
+      const legacy = legacyById.get(row.meta.id);
+      return {
+        ...(legacy ?? toLegacyFromMeta(row.meta)),
+        // Transaction batch list keeps the legacy string contract for createdAt.
+        createdAt,
+      };
     });
 
     return NextResponse.json({
       ok: true,
       items,
-      data: mergedMeta,
+      data,
       ...(legacyListed.nextCursor ? { nextCursor: legacyListed.nextCursor } : {}),
     });
   } catch {

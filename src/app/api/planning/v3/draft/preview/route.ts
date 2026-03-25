@@ -7,7 +7,7 @@ import {
 import { loadCanonicalProfile } from "@/lib/planning/v2/loadCanonicalProfile";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
 import { applyDraftToProfile } from "@/lib/planning/v3/draft/service";
-import { getLegacyDraft, getPreviewDraft } from "@/lib/planning/v3/draft/store";
+import { getLegacyDraft, getProfileDraftBridge } from "@/lib/planning/v3/draft/store";
 import { type V3DraftRecord } from "@/lib/planning/v3/domain/draft";
 import { type EvidenceRow } from "@/lib/planning/v3/domain/types";
 import { getProfile } from "@/lib/planning/v3/profiles/store";
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
     if (hasInlinePatch) {
       draft = toInlineDraft(body?.draftPatch as Record<string, unknown>, draftId || undefined);
     } else {
-      draft = await getPreviewDraft(draftId);
+      draft = await getProfileDraftBridge(draftId);
       if (!draft) {
         const legacyDraft = await getLegacyDraft(draftId);
         if (legacyDraft) {

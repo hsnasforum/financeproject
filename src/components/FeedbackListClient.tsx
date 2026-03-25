@@ -60,10 +60,16 @@ function categoryLabel(category: FeedbackCategory): string {
 }
 
 function statusLabel(status: StatusFilter): string {
-  if (status === "ALL") return "ALL";
-  if (status === "OPEN") return "OPEN";
-  if (status === "DOING") return "DOING";
-  return "DONE";
+  if (status === "ALL") return "전체";
+  if (status === "OPEN") return "접수됨";
+  if (status === "DOING") return "확인 중";
+  return "정리됨";
+}
+
+function statusDisplayLabel(status: FeedbackStatus): string {
+  if (status === "OPEN") return "접수됨";
+  if (status === "DOING") return "확인 중";
+  return "정리됨";
 }
 
 function parseStatusParam(value: string | null): StatusFilter {
@@ -185,45 +191,49 @@ export function FeedbackListClient() {
   return (
     <PageShell>
       <PageHeader
-        title="피드백 목록"
-        description="저장된 사용자 피드백과 진단 첨부 여부를 확인합니다."
+        title="저장한 피드백 다시 보기"
+        description="저장해 둔 의견과 질문을 다시 열어 접수 상태와 다음 확인 포인트를 이어서 확인합니다."
         action={
           <div className="flex items-center gap-2">
             <Link href="/feedback">
-              <Button size="sm" variant="outline" className="rounded-2xl font-black">의견 작성</Button>
+              <Button size="sm" variant="outline" className="rounded-2xl font-black">새 의견 남기기</Button>
             </Link>
           </div>
         }
       />
 
       {loading ? (
-        <LoadingState title="피드백 목록을 불러오고 있습니다" />
+        <LoadingState title="제출한 내용을 불러오고 있습니다" />
       ) : error ? (
         <Card className="rounded-[2rem] p-12 text-center border-rose-100 bg-rose-50/30">
           <p className="text-sm font-black text-rose-600">{error}</p>
           <Button variant="outline" size="sm" className="mt-4 rounded-xl font-black" onClick={() => window.location.reload()}>다시 시도</Button>
         </Card>
       ) : rows.length === 0 ? (
-        <EmptyState 
-          title="저장된 피드백이 없습니다" 
-          description="사용자의 의견이 등록되면 이곳에서 확인할 수 있습니다."
+        <EmptyState
+          title="아직 저장된 피드백이 없습니다"
+          description="먼저 의견이나 질문을 기록해 두면 이 목록에서 접수 상태와 다음 확인 포인트를 다시 이어서 볼 수 있습니다."
           icon="data"
-          actionLabel="첫 의견 작성하기"
+          actionLabel="첫 기록 남기기"
           onAction={() => window.location.href = "/feedback"}
         />
       ) : (
         <div className="space-y-6">
           <Card className="rounded-[2rem] p-8 shadow-sm">
-            <SubSectionHeader title="필터 및 검색" description={`총 ${rows.length}건 중 ${filteredRows.length}건 표시 중`} />
-            
+            <SubSectionHeader title="제출 내역 다시 보기" description={`총 ${rows.length}건 중 ${filteredRows.length}건을 현재 조건으로 보고 있습니다.`} />
+
             <div className="mt-6 space-y-6">
+              <p className="text-sm font-medium leading-relaxed text-slate-600">
+                상세 화면에서는 남긴 내용, 첨부 진단, 진행 상태와 다음 확인 메모를 한 번에 이어서 다시 볼 수 있습니다.
+              </p>
+
               <div className="grid gap-6 md:grid-cols-4">
                 <div className="space-y-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">검색어</span>
                   <input
                     value={q}
                     onChange={(event) => setQ(event.target.value)}
-                    placeholder="메시지/URL/traceId"
+                    placeholder="메시지, 접속 화면, 추적 ID"
                     className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
                   />
                 </div>
@@ -278,14 +288,14 @@ export function FeedbackListClient() {
 
               <div className="pt-2 border-t border-slate-50">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">태그 클라우드</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">자주 붙은 태그</span>
                   {tag && (
                     <button
                       type="button"
                       onClick={() => setTag("")}
                       className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest"
                     >
-                      Filter Reset
+                      태그 초기화
                     </button>
                   )}
                 </div>
@@ -325,7 +335,7 @@ export function FeedbackListClient() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-wrap gap-2">
                       <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
-                      <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{item.status}</span>
+                      <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{statusDisplayLabel(item.status)}</span>
                       <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", priorityClassName(item.priority))}>{item.priority}</span>
                     </div>
                     <span className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(item.createdAt).split(" ")[0]}</span>
@@ -336,8 +346,8 @@ export function FeedbackListClient() {
                   </p>
                   
                   <div className="mt-6 flex items-center justify-between border-t border-slate-50 pt-4">
-                    <span className="text-[10px] font-bold text-slate-400 font-mono">{item.traceId ?? "-"}</span>
-                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">상세 보기 ▶</span>
+                    <span className="text-[10px] font-bold text-slate-400">{statusDisplayLabel(item.status)} 상태와 확인 메모 이어보기</span>
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">상세 기록 보기 →</span>
                   </div>
                 </Card>
               </Link>
@@ -365,7 +375,7 @@ export function FeedbackListClient() {
                       <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-black text-slate-900">{categoryLabel(item.category)}</td>
                       <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors">
                         <span className={cn("inline-flex rounded-lg border px-2 py-0.5 text-[10px] font-black tracking-wider", statusClassName(item.status))}>
-                          {item.status}
+                          {statusDisplayLabel(item.status)}
                         </span>
                       </td>
                       <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors">
@@ -378,7 +388,7 @@ export function FeedbackListClient() {
                       <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-bold text-slate-700 leading-snug">{summarizeMessage(item.message)}</td>
                       <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors text-right">
                         <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="text-[11px] font-black text-emerald-600 uppercase tracking-widest hover:underline whitespace-nowrap">
-                          Detail ▶
+                          상세 기록 보기 →
                         </Link>
                       </td>
                     </tr>

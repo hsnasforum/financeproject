@@ -355,8 +355,12 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
     <PageShell>
       <PageHeader
         title="공공 혜택 탐색"
-        description="중앙부처 및 지자체에서 제공하는 다양한 혜택 정보를 한곳에서 확인해 보세요."
+        description="중앙부처와 지자체 혜택을 현재 검색과 지역 기준으로 다시 찾고 비교해 보는 화면입니다."
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 확정 지원 판정이 아니라, 지금 조건에서 다시 확인할 혜택 후보를 좁혀 보는 단계입니다.
+        신청 전에는 상세에서 지원 조건과 신청 방법을 다시 확인하세요.
+      </p>
 
       <div className="mb-8 space-y-6">
         <Card className="rounded-[2.5rem] p-8 shadow-sm">
@@ -428,7 +432,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                   className="rounded-2xl px-10 h-11 font-black shadow-md shadow-emerald-900/20"
                   onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0, includeFacets: true })}
                 >
-                  {loading ? "조회 중..." : "혜택 찾기"}
+                  {loading ? "조회 중..." : "지금 기준으로 찾기"}
                 </Button>
               </div>
             </FilterWrapper>
@@ -449,8 +453,18 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       </div>
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4 px-2">
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-black text-emerald-600">{totalMatched.toLocaleString()}건의 혜택 후보</span>
+          <p className="text-xs font-medium leading-relaxed text-slate-500">
+            현재 검색과 지역 기준으로 다시 읽는 결과입니다. 상세에서 지원 조건과 신청 방법을 다시 확인하세요.
+          </p>
+          {meta.snapshot?.generatedAt ? (
+            <p className="text-[11px] font-medium text-slate-400">
+              기준 확인: {new Date(meta.snapshot.generatedAt).toLocaleString("ko-KR", { hour12: false })}
+            </p>
+          ) : null}
+        </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm font-black text-emerald-600">{totalMatched.toLocaleString()}건의 혜택 발견</span>
           <div className="h-3 w-px bg-slate-200" />
           <div className="flex items-center gap-2">
             <Button variant={includeNationwide ? "secondary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ includeNationwide: !includeNationwide })}>
@@ -478,7 +492,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                <Button variant={!scanAll ? "primary" : "outline"} className="h-8 rounded-full text-[10px] font-black px-4" onClick={() => applyAndRun({ scanAll: false })}>부분 스캔</Button>
              </div>
              <div className="flex items-center gap-2">
-               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">데이터 수집율</span>
+               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">현재 반영 범위</span>
                <span className="font-black text-slate-900 tabular-nums">{Math.round((meta.snapshot?.completionRate ?? 0) * 100)}%</span>
              </div>
              {process.env.NODE_ENV !== "production" && (
@@ -497,7 +511,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       <div className="space-y-8">
         {loading && items.length === 0 ? (
           <div className="py-20">
-            <LoadingState description="관련된 정부 혜택을 찾고 있습니다." />
+            <LoadingState description="현재 조건에 맞는 정부 혜택 후보를 찾고 있습니다." />
           </div>
         ) : items.length > 0 ? (
           <>
@@ -550,7 +564,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                         ))}
                       </div>
                       <Button variant="ghost" className="h-9 rounded-xl text-xs font-black text-emerald-600 hover:bg-emerald-50 px-4" onClick={() => void openDetail(item)}>
-                        상세 보기 →
+                        조건 다시 확인
                       </Button>
                     </div>
                   </Card>
@@ -575,7 +589,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
           <div className="py-20">
             <EmptyState
               title="검색된 혜택이 없습니다"
-              description="필터 조건을 완화하거나 다른 키워드로 검색해 보세요."
+              description="지역, 주제, 키워드를 조금 넓혀서 혜택 후보를 다시 찾아보세요."
               actionLabel="필터 초기화"
               onAction={() => applyAndRun({ query: "", topics: [], sido: "", sigungu: "", includeNationwide: true, includeUnknown: true })}
             />
@@ -601,14 +615,14 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
             <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-10 scrollbar-thin scrollbar-thumb-slate-200">
               <section>
-                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">혜택 요약</p>
+                <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">현재 읽는 혜택 요약</p>
                 <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8 text-sm font-medium leading-relaxed text-slate-700 shadow-inner">
                   {selected.summary}
                 </div>
               </section>
 
               <section>
-                <SubSectionHeader title="지원 조건" description="해당 혜택을 받기 위한 상세 요건입니다." />
+                <SubSectionHeader title="다음 확인 포인트" description="신청 전에 다시 볼 지원 요건입니다." />
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm">
                   {detailLoading ? (
                     <div className="space-y-4 animate-pulse">
@@ -632,8 +646,11 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
               {selected.applyHow && (
                 <section className="rounded-[2.5rem] bg-slate-50 p-8 md:p-10 border border-slate-100 shadow-sm transition-all">
-                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">신청 방법</p>
+                  <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">다음 신청 확인</p>
                   <div className="text-sm font-bold text-slate-700 leading-relaxed">
+                    <p className="mb-4 text-xs font-medium leading-relaxed text-slate-500">
+                      온라인 신청 링크가 있더라도 실제 제출 전에는 대상 조건과 준비 서류를 다시 확인하세요.
+                    </p>
                     <p>
                       {selected.applyHow}
                     </p>

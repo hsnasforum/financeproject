@@ -8,16 +8,20 @@ import {
 } from "../domain/types";
 import { type DraftProfileEvidence } from "../domain/draftTypes";
 import { DRAFT_PROFILE_POLICY, type DraftProfilePolicy } from "../policy/draftProfilePolicy";
+import { EXPENSE_FLOW_CATEGORY_POLICY } from "../policy/expenseFlowCategoryPolicy";
 import { roundKrw } from "../../calc";
 import { applyAccountMappingOverrides } from "./applyAccountMappingOverrides";
 import { categorizeTransactions } from "./categorizeTransactions";
 import { computeCashflowBreakdown } from "./computeCashflowBreakdown";
 import { detectTransfers } from "./detectTransfers";
-import { readBatchTransactions } from "./transactionStore";
 import { getAccountMappingOverrides } from "../store/accountMappingOverridesStore";
 import { listRules } from "../store/categoryRulesStore";
 import { getTransferOverrides } from "../store/txnTransferOverridesStore";
-import { getOverrides, listOverrides } from "../store/txnOverridesStore";
+import {
+  applyStoredFirstBatchAccountBinding,
+  getBatchTxnOverrides,
+  loadStoredFirstBatchTransactions,
+} from "../transactions/store";
 
 type YmStat = {
   ym: string;
@@ -98,8 +102,10 @@ function toStoredTransactions(batchId: string, rows: Array<{
     confidence: "high" | "medium" | "low";
   };
   meta?: { rowIndex: number };
+  classificationReason?: string;
+  matchedRuleId?: string;
 }>): StoredTransaction[] {
-  return rows
+  return [...rows]
     .map((row) => {
       const txnId = asString(row.txnId).toLowerCase();
       if (!txnId) return null;
@@ -117,35 +123,25 @@ function toStoredTransactions(batchId: string, rows: Array<{
     });
 }
 
-function mergeOverrides(
-  scoped: Record<string, TxnOverride>,
-  global: Record<string, TxnOverride>,
-): Record<string, TxnOverride> {
-  return {
-    ...global,
-    ...scoped,
-  };
-}
-
 async function loadPipeline(batchId: string): Promise<LoadedPipeline> {
-  const loaded = await readBatchTransactions(batchId);
+  const loaded = await loadStoredFirstBatchTransactions(batchId);
   if (!loaded) {
     throw new GenerateDraftPatchFromBatchError("NOT_FOUND", "batch not found");
   }
 
-  const [rules, scopedOverrides, globalOverrides, accountOverrides, transferOverrides] = await Promise.all([
+  const [rules, overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
     listRules(),
-    getOverrides(batchId).catch(() => ({})),
-    listOverrides().catch(() => ({})),
+    getBatchTxnOverrides(batchId).catch(() => ({})),
     getAccountMappingOverrides(batchId).catch(() => ({})),
     getTransferOverrides(batchId).catch(() => ({})),
   ]);
 
-  const transactions = toStoredTransactions(loaded.batch.id, loaded.transactions);
   return {
-    transactions,
+    // Draft patch generation shares the same stored-first visible binding view as
+    // balances/detail/cashflow, while the command-side coexistence writer stays guarded.
+    transactions: applyStoredFirstBatchAccountBinding(loaded),
     rules,
-    overridesByTxnId: mergeOverrides(scopedOverrides, globalOverrides),
+    overridesByTxnId,
     transferOverrides,
     accountOverrides,
   };
@@ -224,6 +220,7 @@ export async function generateDraftPatchFromBatch(
   }
 
   const policy = input.policy ?? DRAFT_PROFILE_POLICY;
+  const expenseFlowPolicy = EXPENSE_FLOW_CATEGORY_POLICY;
   const loaded = await loadPipeline(batchId);
 
   const mapped = applyAccountMappingOverrides(loaded.transactions, loaded.accountOverrides);
@@ -249,7 +246,7 @@ export async function generateDraftPatchFromBatch(
   const recentMonths = Math.max(1, Math.trunc(policy.recentMonths || 0));
   const monthsSlice = breakdown.slice(Math.max(0, breakdown.length - recentMonths));
   const ymStats: YmStat[] = monthsSlice.map((row) => {
-    const fixedExpenseKrw = policy.fixedCategoryIds
+    const fixedExpenseKrw = expenseFlowPolicy.fixedExpenseCategoryIds
       .reduce((sum, categoryId) => sum + asRoundedInt(row.byCategory[categoryId]), 0);
     const expenseKrw = asRoundedInt(row.expenseKrw);
     const variableExpenseKrw = Math.max(0, expenseKrw - fixedExpenseKrw);
@@ -270,7 +267,7 @@ export async function generateDraftPatchFromBatch(
   const fixedMedianKrw = medianRounded(ymStats.map((row) => row.fixedExpenseKrw));
   const variableMedianKrw = medianRounded(ymStats.map((row) => row.variableExpenseKrw));
   const debtMedianKrw = medianRounded(ymStats.map((row) => row.debtExpenseKrw));
-  const assumptions = buildAssumptions(ymStats.length, policy.fixedCategoryIds);
+  const assumptions = buildAssumptions(ymStats.length, [...expenseFlowPolicy.fixedExpenseCategoryIds]);
 
   return {
     draftPatch: {

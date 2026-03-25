@@ -6,7 +6,7 @@ import {
 } from "@/lib/dev/devGuards";
 import { getProfile } from "@/lib/planning/v3/profiles/store";
 import { preflightDraftPatch } from "@/lib/planning/v3/draft/service";
-import { getProfileDraft } from "@/lib/planning/v3/draft/store";
+import { getProfileDraft } from "@/lib/planning/v3/store/draftStore";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 
 type RouteContext = {

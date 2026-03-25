@@ -4,7 +4,7 @@ import { roundKrw } from "../../calc";
 import { atomicWriteFile, atomicWriteJson } from "../../storage/atomicWrite";
 import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
-import { type ImportBatchMeta, type StoredTransaction } from "../domain/transactions";
+import { type ImportBatchMeta, type StoredImportMetadata, type StoredTransaction } from "../domain/transactions";
 
 type BatchesIndexState = {
   version: 1;
@@ -14,6 +14,7 @@ type BatchesIndexState = {
 const SAFE_YM_PATTERN = /^\d{4}-\d{2}$/;
 const SAFE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const SAFE_TXN_ID_PATTERN = /^[a-f0-9]{12,64}$/;
+const SAFE_SHA256_PATTERN = /^[a-f0-9]{64}$/;
 
 function assertServerOnly(): void {
   if (typeof window !== "undefined") {
@@ -55,10 +56,64 @@ function sanitizeOptionalName(value: unknown): string | undefined {
   return normalized.slice(0, 80);
 }
 
+function sanitizeOptionalFileName(value: unknown): string | undefined {
+  const normalized = asString(value).replace(/[\u0000-\u001F\u007F]/g, "");
+  if (!normalized) return undefined;
+  return normalized.slice(0, 200);
+}
+
+function sanitizeOptionalSha256(value: unknown): string | undefined {
+  const normalized = asString(value).toLowerCase();
+  if (!SAFE_SHA256_PATTERN.test(normalized)) return undefined;
+  return normalized;
+}
+
 function normalizeYm(value: unknown): string | undefined {
   const ym = asString(value);
   if (!ym || !SAFE_YM_PATTERN.test(ym)) return undefined;
   return ym;
+}
+
+function normalizeStoredImportMetadata(value: unknown): StoredImportMetadata | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!isRecord(value.diagnostics)) return undefined;
+
+  try {
+    const diagnostics = {
+      rows: parseNonNegativeInt(value.diagnostics.rows),
+      parsed: parseNonNegativeInt(value.diagnostics.parsed),
+      skipped: parseNonNegativeInt(value.diagnostics.skipped),
+    };
+    const provenance = isRecord(value.provenance) ? value.provenance : null;
+    const fileName = provenance ? sanitizeOptionalFileName(provenance.fileName) : undefined;
+    const fileNameProvided = provenance && typeof provenance.fileNameProvided === "boolean"
+      ? provenance.fileNameProvided
+      : undefined;
+    const sourceBinding = isRecord(value.sourceBinding) ? value.sourceBinding : null;
+    const artifactSha256 = sourceBinding ? sanitizeOptionalSha256(sourceBinding.artifactSha256) : undefined;
+    const attestedFileName = sourceBinding ? sanitizeOptionalFileName(sourceBinding.attestedFileName) : undefined;
+    const originKind = sourceBinding?.originKind === "writer-handoff"
+      ? "writer-handoff"
+      : undefined;
+    return {
+      diagnostics,
+      provenance: {
+        ...(fileNameProvided === undefined ? {} : { fileNameProvided }),
+        ...(fileName ? { fileName } : {}),
+      },
+      ...(artifactSha256 && attestedFileName && originKind
+        ? {
+            sourceBinding: {
+              artifactSha256,
+              attestedFileName,
+              originKind,
+            },
+          }
+        : {}),
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveBatchesRootDir(cwd = process.cwd()): string {
@@ -102,6 +157,7 @@ function normalizeBatchMeta(value: unknown): ImportBatchMeta | null {
         })
         .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       : [];
+    const importMetadata = normalizeStoredImportMetadata(value.importMetadata);
 
     return {
       id,
@@ -111,6 +167,7 @@ function normalizeBatchMeta(value: unknown): ImportBatchMeta | null {
       ...(normalizeYm(value.ymMin) ? { ymMin: normalizeYm(value.ymMin) } : {}),
       ...(normalizeYm(value.ymMax) ? { ymMax: normalizeYm(value.ymMax) } : {}),
       ...(accounts.length > 0 ? { accounts } : {}),
+      ...(importMetadata ? { importMetadata } : {}),
     };
   } catch {
     return null;
@@ -182,6 +239,44 @@ function sortMetaById(items: ImportBatchMeta[]): ImportBatchMeta[] {
   return [...items].sort((left, right) => left.id.localeCompare(right.id));
 }
 
+function buildUpdatedBatchAccounts(
+  current: ImportBatchMeta["accounts"],
+  accountId: string,
+): NonNullable<ImportBatchMeta["accounts"]> {
+  const existing = Array.isArray(current) ? current : [];
+  const nextPrimary = existing.find((entry) => entry.id === accountId);
+
+  return [
+    nextPrimary ? { ...nextPrimary } : { id: accountId },
+    ...existing
+      .filter((entry) => entry.id !== accountId)
+      .map((entry) => ({ ...entry })),
+  ];
+}
+
+function cloneBatchAccounts(
+  current: ImportBatchMeta["accounts"],
+): NonNullable<ImportBatchMeta["accounts"]> {
+  const existing = Array.isArray(current) ? current : [];
+  return existing.map((entry) => ({ ...entry }));
+}
+
+function withClonedBatchAccounts(
+  current: ImportBatchMeta,
+  accounts: ImportBatchMeta["accounts"],
+): ImportBatchMeta {
+  const nextAccounts = cloneBatchAccounts(accounts);
+  if (nextAccounts.length < 1) {
+    const updated: ImportBatchMeta = { ...current };
+    delete updated.accounts;
+    return updated;
+  }
+  return {
+    ...current,
+    accounts: nextAccounts,
+  };
+}
+
 function sortTransactionsDeterministic(items: StoredTransaction[]): StoredTransaction[] {
   return [...items].sort((left, right) => {
     if (left.date !== right.date) return left.date.localeCompare(right.date);
@@ -221,11 +316,87 @@ export async function listBatches(): Promise<ImportBatchMeta[]> {
   return sortMetaById(state.items);
 }
 
+export async function listBatchTransactionFileIds(): Promise<string[]> {
+  assertServerOnly();
+  try {
+    const entries = await fs.readdir(resolveBatchesRootDir(), { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ndjson"))
+      .map((entry) => entry.name.slice(0, -".ndjson".length))
+      .map((name) => {
+        try {
+          return sanitizeRecordId(name);
+        } catch {
+          return null;
+        }
+      })
+      .filter((name): name is string => Boolean(name))
+      .sort((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
+}
+
+export async function getBatchTransactionsFileModifiedAt(batchId: string): Promise<string | undefined> {
+  assertServerOnly();
+  const safeBatchId = sanitizeRecordId(batchId);
+  try {
+    const stat = await fs.stat(resolveBatchTransactionsPath(safeBatchId));
+    if (!stat.isFile() || !Number.isFinite(stat.mtimeMs)) return undefined;
+    return new Date(stat.mtimeMs).toISOString();
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getBatchMeta(batchId: string): Promise<ImportBatchMeta | null> {
   assertServerOnly();
   const safeBatchId = sanitizeRecordId(batchId);
   const state = await readIndexState();
   return state.items.find((item) => item.id === safeBatchId) ?? null;
+}
+
+export async function updateStoredBatchAccountBinding(batchId: string, accountId: string): Promise<ImportBatchMeta | null> {
+  assertServerOnly();
+
+  const safeBatchId = sanitizeRecordId(batchId);
+  const safeAccountId = sanitizeRecordId(accountId);
+  const state = await readIndexState();
+  const current = state.items.find((item) => item.id === safeBatchId) ?? null;
+  if (!current) return null;
+
+  const nextAccounts = buildUpdatedBatchAccounts(current.accounts, safeAccountId);
+  const updated: ImportBatchMeta = {
+    ...current,
+    accounts: nextAccounts,
+  };
+
+  await writeIndexState({
+    version: 1,
+    items: state.items.map((item) => (item.id === safeBatchId ? updated : item)),
+  });
+
+  return updated;
+}
+
+export async function restoreStoredBatchAccountBindingSnapshot(
+  batchId: string,
+  accounts: ImportBatchMeta["accounts"],
+): Promise<ImportBatchMeta | null> {
+  assertServerOnly();
+
+  const safeBatchId = sanitizeRecordId(batchId);
+  const state = await readIndexState();
+  const current = state.items.find((item) => item.id === safeBatchId) ?? null;
+  if (!current) return null;
+
+  const updated = withClonedBatchAccounts(current, accounts);
+  await writeIndexState({
+    version: 1,
+    items: state.items.map((item) => (item.id === safeBatchId ? updated : item)),
+  });
+
+  return updated;
 }
 
 export async function saveBatch(meta: ImportBatchMeta, transactions: StoredTransaction[]): Promise<void> {

@@ -57,6 +57,28 @@ Use this skill to turn a change summary into a concrete verification set for thi
   - add a narrow CLI or entrypoint smoke for the changed script
   - prefer repository wrappers such as `pnpm build`, `pnpm start`, `pnpm cleanup:next-artifacts` over raw `next build/start` unless the wrapper itself is under diagnosis
 
+## Finance Project recurring sets
+
+- Planning v3 batch detail or summary helper changes:
+  - `pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts`
+  - `pnpm build`
+- Planning v3 categorized or cashflow route changes:
+  - `pnpm test tests/planning-v3-categorized-api.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts`
+  - add `tests/planning-v3-txnOverridesStore.test.ts` when override helpers or compat aliases change
+  - `pnpm build`
+- Planning v3 balances or draft profile consumer alignment:
+  - `pnpm test tests/planning-v3-balances-api.test.ts tests/planning-v3-draft-profile-api.test.ts tests/planning-v3-generateDraftPatchFromBatch.test.ts`
+  - `pnpm build`
+- Planning v3 batch list, batch center, or list consumer changes:
+  - `pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-batch-center-api.test.ts`
+  - add `pnpm lint` when TSX client or page code changed
+  - `pnpm build`
+- Docs-only planning or release-governance rounds:
+  - `git diff --check -- <changed files>`
+- Skill, prompt, or multi-agent config files:
+  - `pnpm multi-agent:guard`
+  - `git diff --check -- <changed files>`
+
 ## Decision rules
 
 - A changed `href`, page path, redirect target, or route guard is not "text only". Treat it as route/build impact.
@@ -69,6 +91,8 @@ Use this skill to turn a change summary into a concrete verification set for thi
 - If the change touches `docs/current-screens.md` expectations, do not stop at `pnpm test` alone.
 - If build can fail because of route contracts or page imports, include `pnpm build` even when unit tests exist.
 - If the change touches shared Next runtime hygiene (`.next/lock`, `.next-e2e*`, `.next-host*`, standalone shadow artifacts), include wrapper/helper validation and do not rely on raw `next build/start` alone.
+- If the round is docs-only or audit-only, prefer `git diff --check -- <changed files>` and do not add broader gates unless executable scripts or runtime files changed.
+- If a planning v3 batch-family round changes helper contracts and one or more user-facing routes, start from the recurring sets above instead of hand-assembling a new ad hoc matrix.
 
 ## Output format
 

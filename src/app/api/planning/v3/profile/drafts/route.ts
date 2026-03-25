@@ -8,7 +8,7 @@ import {
   createDraftFromBatch,
   isGenerateDraftInputError,
   listProfileDrafts,
-} from "@/lib/planning/v3/draft/store";
+} from "@/lib/planning/v3/store/draftStore";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 
 type CreateDraftBody = {

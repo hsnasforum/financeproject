@@ -11,10 +11,14 @@ import {
   type BuildDraftPatchFromCashflowOptions,
 } from "@/lib/planning/v3/service/buildDraftPatchFromCashflow";
 import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
-import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
 import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
 import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
-import { listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
+import {
+  applyStoredFirstBatchAccountBinding,
+  getBatchTxnOverrides,
+  getStoredFirstBatchBindingAccountId,
+  loadStoredFirstBatchTransactions,
+} from "@/lib/planning/v3/transactions/store";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -104,14 +108,17 @@ export async function GET(request: Request, context: RouteContext) {
   }
 
   try {
-    const loaded = await readBatchTransactions(id);
+    const loaded = await loadStoredFirstBatchTransactions(id);
     if (!loaded) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." } },
         { status: 404 },
       );
     }
-    if (!asString(loaded.batch.accountId)) {
+    // Cashflow keeps the same reader-visible stored-first binding as detail/summary,
+    // even while same-id coexistence keeps POST /account explicitly guarded.
+    const accountId = getStoredFirstBatchBindingAccountId(loaded);
+    if (!accountId) {
       return NextResponse.json(
         { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." } },
         { status: 400 },
@@ -119,11 +126,11 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const [overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
-      listOverrides(),
+      getBatchTxnOverrides(id).catch(() => ({})),
       getAccountMappingOverrides(id).catch(() => ({})),
       getTransferOverrides(id).catch(() => ({})),
     ]);
-    const mapped = applyAccountMappingOverrides(loaded.transactions, accountOverrides);
+    const mapped = applyAccountMappingOverrides(applyStoredFirstBatchAccountBinding(loaded), accountOverrides);
     const transferDetected = detectTransfers({
       batchId: id,
       transactions: mapped,

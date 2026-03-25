@@ -8,10 +8,12 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import {
   TxnOverridesStoreInputError,
-  deleteOverride,
-  getOverrides,
-  listOverrides,
-  upsertOverride,
+  deleteBatchTxnOverride,
+  deleteLegacyUnscopedTxnOverride,
+  getBatchTxnOverrides,
+  listLegacyUnscopedTxnOverrides,
+  upsertBatchTxnOverride,
+  upsertLegacyUnscopedTxnOverride,
 } from "@/lib/planning/v3/store/txnOverridesStore";
 
 type PatchBody = {
@@ -87,12 +89,12 @@ export async function GET(request: Request) {
   try {
     const batchId = asString(new URL(request.url).searchParams.get("batchId"));
     if (batchId) {
-      const items = await getOverrides(batchId);
-      return NextResponse.json({ ok: true, items, batchId });
+      const items = await getBatchTxnOverrides(batchId);
+      return NextResponse.json({ ok: true, items, batchId, scope: "batch-scoped" });
     }
 
-    const items = await listOverrides();
-    return NextResponse.json({ ok: true, items, batchId: null });
+    const items = await listLegacyUnscopedTxnOverrides();
+    return NextResponse.json({ ok: true, items, batchId: null, scope: "legacy-unscoped" });
   } catch {
     return NextResponse.json(
       { ok: false, error: { code: "INTERNAL", message: "거래 오버라이드 목록 조회에 실패했습니다." } },
@@ -125,20 +127,21 @@ export async function PATCH(request: Request) {
   try {
     const batchId = asString(body.batchId);
     const hasCategoryId = asString(body.categoryId).length > 0;
+    const scope = batchId && hasCategoryId ? "batch-scoped" : "legacy-unscoped";
     const override = batchId && hasCategoryId
-      ? await upsertOverride({
+      ? await upsertBatchTxnOverride({
           batchId,
           txnId: body.txnId,
           categoryId: body.categoryId,
           ...(body.note !== undefined ? { note: body.note } : {}),
         })
-      : await upsertOverride(body.txnId, {
+      : await upsertLegacyUnscopedTxnOverride(body.txnId, {
           ...(body.kind !== undefined ? { kind: body.kind } : {}),
           ...(body.category !== undefined ? { category: body.category } : {}),
           ...(body.categoryId !== undefined ? { categoryId: body.categoryId } : {}),
           ...(body.note !== undefined ? { note: body.note } : {}),
         });
-    return NextResponse.json({ ok: true, override });
+    return NextResponse.json({ ok: true, override, scope });
   } catch (error) {
     if (error instanceof TxnOverridesStoreInputError) {
       return NextResponse.json(
@@ -175,12 +178,13 @@ export async function DELETE(request: Request) {
   try {
     const batchId = asString(query.get("batchId") ?? body?.batchId);
     const txnId = asString(query.get("txnId") ?? body?.txnId);
+    const scope = batchId && txnId ? "batch-scoped" : "legacy-unscoped";
     if (batchId && txnId) {
-      await deleteOverride({ batchId, txnId });
+      await deleteBatchTxnOverride({ batchId, txnId });
     } else {
-      await deleteOverride(txnId);
+      await deleteLegacyUnscopedTxnOverride(txnId);
     }
-    return NextResponse.json({ ok: true, deleted: true });
+    return NextResponse.json({ ok: true, deleted: true, scope });
   } catch (error) {
     if (error instanceof TxnOverridesStoreInputError) {
       return NextResponse.json(

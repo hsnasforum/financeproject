@@ -16,6 +16,8 @@ import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
 type BatchRow = {
   id: string;
+  // `/api/planning/v3/transactions/batches` keeps a string createdAt contract.
+  // Hidden public createdAt arrives as "" and this client renders it as "-".
   createdAt: string;
   kind: "csv";
   fileName?: string;
@@ -65,7 +67,7 @@ function asNumber(value: unknown): number {
 
 function isBatchRow(value: unknown): value is BatchRow {
   if (!isRecord(value)) return false;
-  if (!asString(value.id) || !asString(value.createdAt)) return false;
+  if (!asString(value.id)) return false;
   if (value.kind !== "csv") return false;
   return true;
 }
@@ -426,7 +428,7 @@ export function TransactionsBatchListClient() {
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((row) => (
                     <tr data-testid={`v3-batch-row-${row.id}`} key={row.id}>
-                      <td className="px-3 py-2 font-mono text-xs text-slate-800">{formatDateTime(row.createdAt)}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-800">{row.createdAt ? formatDateTime(row.createdAt) : "-"}</td>
                       <td className="px-3 py-2 text-slate-700">{row.fileName ?? "-"}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{row.total.toLocaleString("ko-KR")}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{row.ok.toLocaleString("ko-KR")}</td>

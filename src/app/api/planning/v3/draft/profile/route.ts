@@ -10,8 +10,12 @@ import {
   ProfileDraftFromCashflowInputError,
 } from "@/lib/planning/v3/draft/service";
 import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
-import { listBatches, readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
-import { listOverrides } from "@/lib/planning/v3/store/txnOverridesStore";
+import {
+  applyStoredFirstBatchAccountBinding,
+  getBatchTxnOverrides,
+  getLatestStoredFirstBatchId,
+  loadStoredFirstBatchTransactions,
+} from "@/lib/planning/v3/transactions/store";
 
 type DraftProfileBody = {
   source?: unknown;
@@ -89,8 +93,7 @@ export async function POST(request: Request) {
 
   try {
     if (!batchId) {
-      const listed = await listBatches({ limit: 1 });
-      batchId = listed.items[0]?.id ?? null;
+      batchId = await getLatestStoredFirstBatchId();
     }
     if (!batchId) {
       return NextResponse.json(
@@ -100,8 +103,8 @@ export async function POST(request: Request) {
     }
 
     const [loaded, overridesByTxnId] = await Promise.all([
-      readBatchTransactions(batchId),
-      listOverrides(),
+      loadStoredFirstBatchTransactions(batchId),
+      getBatchTxnOverrides(batchId).catch(() => ({})),
     ]);
     if (!loaded) {
       return NextResponse.json(
@@ -110,7 +113,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const monthly = aggregateMonthlyCashflow(loaded.transactions, {
+    // Draft profile does not expose accountId directly, but it still reads the
+    // stored-first visible binding view before aggregating the user-facing patch.
+    const monthly = aggregateMonthlyCashflow(applyStoredFirstBatchAccountBinding(loaded), {
       includeTransfers,
       overridesByTxnId,
     });
@@ -122,7 +127,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      batchId: loaded.batch.id,
+      batchId: loaded.batchId,
       patch: built.patch,
       evidence: built.evidence,
     });
