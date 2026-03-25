@@ -6,9 +6,9 @@ import {
 } from "@/lib/dev/devGuards";
 import {
   TxnOverridesStoreInputError,
-  deleteOverride,
-  getOverrides,
-  upsertOverride,
+  deleteBatchTxnOverride,
+  getBatchTxnOverrides,
+  upsertBatchTxnOverride,
 } from "@/lib/planning/v3/store/txnOverridesStore";
 
 type RouteContext = {
@@ -85,7 +85,7 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    const items = await getOverrides(id);
+    const items = await getBatchTxnOverrides(id);
     return NextResponse.json({ ok: true, data: items });
   } catch (error) {
     if (error instanceof TxnOverridesStoreInputError) {
@@ -145,11 +145,11 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     if (mappedKind === "auto" && !categoryId) {
-      await deleteOverride({ batchId: id, txnId });
+      await deleteBatchTxnOverride({ batchId: id, txnId });
       return NextResponse.json({ ok: true, data: { deleted: true } });
     }
 
-    const override = await upsertOverride({
+    const override = await upsertBatchTxnOverride({
       batchId: id,
       txnId,
       ...(mappedKind && mappedKind !== "auto" ? { kind: mappedKind } : {}),

@@ -3,9 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  deleteOverride,
-  listOverrides,
-  upsertOverride,
+  deleteLegacyUnscopedTxnOverride,
+  listInternalBridgeTxnOverrides,
+  listLegacyUnscopedTxnOverrides,
+  upsertBatchTxnOverride,
+  upsertLegacyUnscopedTxnOverride,
 } from "../src/lib/planning/v3/store/txnOverridesStore";
 
 const env = process.env as Record<string, string | undefined>;
@@ -38,11 +40,11 @@ describe("planning v3 txnOverridesStore", () => {
   });
 
   it("upserts/deletes overrides and writes deterministic key order", async () => {
-    await upsertOverride(TXN_B, { kind: "expense", category: "variable" });
+    await upsertLegacyUnscopedTxnOverride(TXN_B, { kind: "expense", category: "variable" });
     vi.setSystemTime(new Date("2026-03-02T00:00:00.000Z"));
-    await upsertOverride(TXN_A, { kind: "income", category: "fixed" });
+    await upsertLegacyUnscopedTxnOverride(TXN_A, { kind: "income", category: "fixed" });
 
-    const listed = await listOverrides();
+    const listed = await listInternalBridgeTxnOverrides();
     expect(Object.keys(listed)).toEqual([TXN_A, TXN_B]);
     expect(listed[TXN_A]?.kind).toBe("income");
     expect(listed[TXN_B]?.category).toBe("variable");
@@ -55,9 +57,24 @@ describe("planning v3 txnOverridesStore", () => {
     expect(indexB).toBeGreaterThanOrEqual(0);
     expect(indexA).toBeLessThan(indexB);
 
-    await deleteOverride(TXN_A);
-    const afterDelete = await listOverrides();
+    await deleteLegacyUnscopedTxnOverride(TXN_A);
+    const afterDelete = await listInternalBridgeTxnOverrides();
     expect(afterDelete[TXN_A]).toBeUndefined();
     expect(afterDelete[TXN_B]).toBeDefined();
+  });
+
+  it("keeps legacy listing separate from merged internal bridge listing", async () => {
+    await upsertLegacyUnscopedTxnOverride(TXN_A, { kind: "expense", category: "variable" });
+    await upsertBatchTxnOverride({ batchId: "batch-a", txnId: TXN_B, kind: "income", categoryId: "income" });
+
+    const legacyOnly = await listLegacyUnscopedTxnOverrides();
+    const merged = await listInternalBridgeTxnOverrides();
+
+    expect(Object.keys(legacyOnly)).toEqual([TXN_A]);
+    expect(legacyOnly[TXN_A]?.batchId).toBe("legacy");
+    expect(legacyOnly[TXN_B]).toBeUndefined();
+
+    expect(Object.keys(merged)).toEqual([TXN_A, TXN_B]);
+    expect(merged[TXN_B]?.batchId).toBe("batch-a");
   });
 });

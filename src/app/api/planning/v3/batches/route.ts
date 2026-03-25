@@ -9,7 +9,8 @@ import {
   getBatchSummary,
   type ImportBatchMeta,
   listLegacyBatches,
-  listStoredBatches,
+  listStoredBatchListCandidates,
+  toStoredFirstPublicImportBatchMeta,
 } from "@/lib/planning/v3/batches/store";
 
 type LegacyBatchRow = {
@@ -17,6 +18,11 @@ type LegacyBatchRow = {
   createdAt: string;
   kind: "csv";
   total: number;
+};
+
+type MergedBatchListMeta = {
+  meta: ImportBatchMeta;
+  metadataSource: "stored" | "synthetic" | "legacy-derived";
 };
 
 function asString(value: unknown): string {
@@ -38,14 +44,14 @@ function toMetaFromLegacy(batch: LegacyBatchRow): ImportBatchMeta {
   };
 }
 
-function sortByCreatedAtDesc(items: ImportBatchMeta[]): ImportBatchMeta[] {
+function sortByCreatedAtDesc(items: MergedBatchListMeta[]): MergedBatchListMeta[] {
   return [...items].sort((left, right) => {
-    const leftTs = Date.parse(left.createdAt);
-    const rightTs = Date.parse(right.createdAt);
+    const leftTs = Date.parse(left.meta.createdAt);
+    const rightTs = Date.parse(right.meta.createdAt);
     if (Number.isFinite(leftTs) && Number.isFinite(rightTs) && leftTs !== rightTs) {
       return rightTs - leftTs;
     }
-    return left.id.localeCompare(right.id);
+    return left.meta.id.localeCompare(right.meta.id);
   });
 }
 
@@ -80,35 +86,40 @@ export async function GET(request: Request) {
   try {
     const [legacyListed, storedListed] = await Promise.all([
       listLegacyBatches({ limit: Math.max(limit, 200) }),
-      listStoredBatches(),
+      listStoredBatchListCandidates(),
     ]);
 
     const legacyById = new Map((legacyListed.items as LegacyBatchRow[]).map((item) => [item.id, toMetaFromLegacy(item)]));
-    const mergedById = new Map<string, ImportBatchMeta>();
+    const mergedById = new Map<string, MergedBatchListMeta>();
 
     for (const row of legacyById.values()) {
-      mergedById.set(row.id, row);
+      mergedById.set(row.id, {
+        meta: row,
+        metadataSource: "legacy-derived",
+      });
     }
     for (const row of storedListed) {
-      const existing = mergedById.get(row.id);
+      const existing = mergedById.get(row.meta.id);
       if (!existing) {
-        mergedById.set(row.id, row);
+        mergedById.set(row.meta.id, row);
         continue;
       }
-      const existingTs = Date.parse(existing.createdAt);
-      const nextTs = Date.parse(row.createdAt);
+      const existingTs = Date.parse(existing.meta.createdAt);
+      const nextTs = Date.parse(row.meta.createdAt);
       if (!Number.isFinite(existingTs) || (Number.isFinite(nextTs) && nextTs > existingTs)) {
-        mergedById.set(row.id, row);
+        mergedById.set(row.meta.id, row);
       }
     }
 
     const mergedMeta = sortByCreatedAtDesc([...mergedById.values()]).slice(0, limit);
+    // Batch center follows summary-style public metadata exposure:
+    // hidden createdAt stays omitted instead of downgrading to "".
     const summaryRows = await Promise.all(mergedMeta.map(async (row) => {
       try {
-        const summary = await getBatchSummary(row.id);
+        const summary = await getBatchSummary(row.meta.id);
         return {
-          batchId: row.id,
-          createdAt: summary.createdAt ?? row.createdAt,
+          batchId: row.meta.id,
+          ...(asString(summary.createdAt) ? { createdAt: asString(summary.createdAt) } : {}),
           stats: {
             months: summary.range?.months ?? summary.monthly.length,
             txns: summary.counts.txns,
@@ -117,9 +128,13 @@ export async function GET(request: Request) {
           },
         };
       } catch {
+        const publicMeta = toStoredFirstPublicImportBatchMeta({
+          meta: row.meta,
+          metadataSource: row.metadataSource,
+        });
         return {
-          batchId: row.id,
-          createdAt: row.createdAt,
+          batchId: row.meta.id,
+          ...(asString(publicMeta.createdAt) ? { createdAt: asString(publicMeta.createdAt) } : {}),
         };
       }
     }));

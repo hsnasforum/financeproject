@@ -188,7 +188,7 @@ export function DartCompanyPageClient() {
     <PageShell>
       <PageHeader
         title={title}
-        description="DART 기업 개황 및 공시 모니터링 정보를 확인합니다."
+        description="선택한 기업의 개황을 현재 기준으로 다시 읽고, 필요하면 공시 모니터링으로 이어 보는 화면입니다."
         action={
           <div className="flex items-center gap-2">
             <Link href={searchBackHref} onClick={() => clearPendingCompanyHref()}>
@@ -202,11 +202,15 @@ export function DartCompanyPageClient() {
           </div>
         }
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 투자 결론을 내리는 곳이 아니라, 회사 기본 정보와 공시 확인 출발점을 다시 읽는 단계입니다.
+        개황을 본 뒤 최근 공시 흐름이 더 필요하면 아래에서 모니터링으로 이어 가세요.
+      </p>
 
       <div className="grid gap-8 lg:grid-cols-3" data-testid="dart-company-root">
         <div className="lg:col-span-2 space-y-6">
           <Card className="rounded-[2rem] p-8 shadow-sm">
-            <SubSectionHeader title="기업 기본 정보" description="OpenDART 공식 연동 데이터입니다." />
+            <SubSectionHeader title="기업 기본 정보" description="현재 조회 기준으로 다시 확인한 OpenDART 기업 개황입니다." />
             
             {loading ? (
               <div className="py-12">
@@ -253,15 +257,21 @@ export function DartCompanyPageClient() {
                     </dd>
                   </div>
                   <div className="space-y-1">
-                    <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">데이터 출처</dt>
+                    <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">기준 데이터</dt>
                     <dd className="text-xs font-bold text-slate-400 uppercase tracking-widest">{company.source ?? "OpenDART"}</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">기준 확인 시각</dt>
+                    <dd className="text-sm font-bold text-slate-700">
+                      {company.fetchedAt ? new Date(company.fetchedAt).toLocaleString("ko-KR", { hour12: false }) : "-"}
+                    </dd>
                   </div>
                 </dl>
 
                 <div className="pt-8 border-t border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">공시 모니터링</p>
-                    <p className="text-xs font-medium text-slate-500">이 기업의 실시간 공시 알림을 받고 싶으신가요?</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">다음 확인</p>
+                    <p className="text-xs font-medium text-slate-500">개황을 본 뒤 최근 공시 흐름까지 이어서 확인할 수 있습니다.</p>
                   </div>
                   <Link
                     href={monitorHref}
@@ -270,7 +280,7 @@ export function DartCompanyPageClient() {
                     className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-700 hover:-translate-y-0.5 active:scale-95"
                     onClick={() => prepareMonitorNavigation()}
                   >
-                    공시 모니터링 탭으로 이동
+                    공시 흐름 이어서 보기
                   </Link>
                 </div>
               </div>
@@ -314,7 +324,7 @@ export function DartCompanyPageClient() {
                 onClick={() => { clearRecent(); refreshLists(); }}
                 disabled={recent.length === 0}
               >
-                Clear
+                기록 비우기
               </button>
             </div>
             <div className="bg-white">

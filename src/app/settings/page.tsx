@@ -8,27 +8,27 @@ const links = [
   {
     href: "/settings/data-sources",
     title: "데이터 신뢰",
-    description: "공시·뉴스·상품 데이터의 최신 기준과 연결 상태를 한 곳에서 확인합니다.",
+    description: "공시·뉴스·상품 데이터가 어떤 기준으로 보이는지 먼저 확인하는 설정 영역입니다.",
   },
   {
     href: "/settings/alerts",
     title: "알림 규칙",
-    description: "DART 공시 알림 무시 규칙과 프리셋을 생성하고 관리합니다.",
+    description: "DART 알림 규칙과 프리셋을 조정하는 설정 영역입니다.",
   },
   {
     href: "/settings/backup",
     title: "백업 및 복원",
-    description: "로컬 환경 설정과 서버 데이터를 파일 번들로 백업하거나 복원합니다.",
+    description: "백업 파일 내보내기와 복원 준비를 확인하는 설정 영역입니다.",
   },
   {
     href: "/settings/recovery",
     title: "시스템 복구",
-    description: "캐시 초기화, 오프라인 복구 등 시스템 정합성 문제 발생 시 활용합니다.",
+    description: "문제가 생겼을 때 복구 절차를 확인하는 설정 영역입니다.",
   },
   {
     href: "/settings/maintenance",
     title: "유지 관리",
-    description: "데이터 보관 주기(Retention) 정책을 설정하고 정리 작업을 수행합니다.",
+    description: "보관 정책과 정리 작업을 확인하는 설정 영역입니다.",
   },
 ];
 
@@ -37,8 +37,12 @@ export default function SettingsHomePage() {
     <PageShell>
       <PageHeader
         title="내 설정"
-        description="데이터 신뢰, 알림, 백업/복구 관련 도구를 한 곳에서 관리합니다."
+        description="내 설정에서 필요한 영역을 먼저 고르고, 세부 기준과 실행은 각 설정 화면에서 이어서 확인하는 구조입니다."
       />
+      <p className="mb-6 text-sm font-medium leading-relaxed text-slate-500">
+        이 화면은 설정을 끝내는 곳이 아니라 시작할 영역을 고르는 안내 화면입니다.
+        최신 기준 확인이나 복구 작업 같은 세부 내용은 각 카드에서 이어서 확인하세요.
+      </p>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {links.map((item) => (
@@ -53,7 +57,7 @@ export default function SettingsHomePage() {
               
               <div className="mt-8 flex justify-end">
                 <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">
-                  Setup ▶
+                  이 설정 열기 ▶
                 </span>
               </div>
             </Card>

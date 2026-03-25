@@ -4,7 +4,7 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { deleteProfileDraft, getProfileDraft } from "@/lib/planning/v3/draft/store";
+import { deleteProfileDraft, getProfileDraft } from "@/lib/planning/v3/store/draftStore";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 
 type RouteContext = {

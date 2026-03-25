@@ -8,9 +8,6 @@ import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { cn } from "@/lib/utils";
 import {
-  reportHeroActionLinkClassName,
-  reportHeroMetaChipClassName,
-  reportHeroPrimaryActionClassName,
   ReportHeroCard,
   ReportHeroStatCard,
   ReportHeroStatGrid,
@@ -466,11 +463,11 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
     <PageShell>
       <div className="space-y-8" data-testid="dashboard-root">
         <ReportHeroCard
-          kicker="Daily Brief"
-          title={latestRun ? "최근 플랜에서 바로 이어서 확인합니다" : "지금 필요한 시작점을 바로 고르세요"}
+          kicker="시작 요약"
+          title={latestRun ? "최근 플랜 기준으로 재무 상태부터 다시 확인하세요" : "재무 상태 진단부터 시작하세요"}
           description={latestRun
-            ? `${latestRun.title || "최근 플랜"} 기준으로 월 잉여금, 말기 순자산, 실행 액션, 데이터 연결 상태를 같은 기준으로 이어봅니다.`
-            : "내 재무 상태를 먼저 진단하거나, 조건에 맞는 상품을 바로 찾아보는 두 갈래 시작점을 제공합니다."}
+            ? `${latestRun.title || "최근 플랜"} 기준으로 먼저 리포트에서 현재 재무 상태를 다시 확인하고, 필요하면 추천 허브에서 조건에 맞는 상품 비교로 이어갈 수 있습니다.`
+            : "먼저 플래닝에서 현재 재무 상태를 진단하고, 필요하면 추천 허브에서 조건에 맞는 상품 비교로 이어갈 수 있습니다."}
           action={(
             latestRun ? (
               <>
@@ -486,21 +483,21 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                   prefetch={devPlanningPrefetch(latestRunReportHref)}
                   className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
                 >
-                  최근 리포트 보기
+                  재무 상태 다시 보기
+                </Link>
+                <Link
+                  href="/recommend"
+                  prefetch={devPlanningPrefetch("/recommend")}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 active:scale-95"
+                >
+                  조건에 맞는 상품 비교
                 </Link>
                 <Link
                   href={latestRunPlanningHref}
                   prefetch={devPlanningPrefetch(latestRunPlanningHref)}
                   className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
                 >
-                  다시 계산
-                </Link>
-                <Link
-                  href="/planning/runs"
-                  prefetch={devPlanningPrefetch("/planning/runs")}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
-                >
-                  실행 기록
+                  같은 조건으로 다시 계산
                 </Link>
               </>
             ) : (
@@ -510,14 +507,14 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                   prefetch={devPlanningPrefetch("/planning")}
                   className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
                 >
-                  내 재무 상태 진단하기
+                  재무 상태 진단 시작
                 </Link>
                 <Link
                   href="/recommend"
                   prefetch={devPlanningPrefetch("/recommend")}
                   className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 active:scale-95"
                 >
-                  조건에 맞는 상품 찾기
+                  조건에 맞는 상품 비교
                 </Link>
                 <button
                   type="button"
@@ -536,7 +533,9 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             </p>
             <div className="h-1 w-1 rounded-full bg-slate-200" />
             <p className="text-emerald-600">
-              다음 액션: {latestSummary.topAction || "리포트에서 우선 액션을 확인하세요."}
+              {latestRun
+                ? "먼저 재무 상태를 다시 확인하고, 상품 비교는 필요할 때 추천 허브로 이어집니다."
+                : "먼저 재무 상태 진단을 시작하고, 상품 비교는 필요할 때 추천 허브에서 이어집니다."}
             </p>
           </div>
           <ReportHeroStatGrid className="xl:grid-cols-5">
@@ -574,7 +573,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
               최저 현금 {formatKrw(latestSummary.worstCashKrw)}
             </span>
             <Link href="/recommend" className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-600 hover:bg-emerald-100 transition-colors">
-              조건에 맞는 상품 찾기 →
+              상품 비교로 이어보기 →
             </Link>
           </div>
           {state.warnings.length > 0 ? (
@@ -593,7 +592,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
           <Card className="p-8 space-y-8">
             <SubSectionHeader
               title="최근 플랜"
-              description="저장된 실행을 기준으로 결과를 다시 열고 비교합니다."
+              description="저장된 실행 결과를 먼저 다시 열고, 필요하면 같은 조건으로 다시 계산합니다."
               action={
                 <Link
                   href="/planning/runs"
@@ -609,7 +608,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             ) : state.runs.length < 1 ? (
               <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-slate-50/50 px-5 py-16 text-center">
                 <p className="text-sm font-black text-slate-900">저장된 실행이 아직 없습니다.</p>
-                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">플래닝을 한 번 저장하면 이곳에서 리포트와 재실행으로 바로 이어집니다.</p>
+                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">플래닝을 한 번 저장하면 이곳에서 먼저 리포트를 다시 열고, 필요하면 같은 조건으로 다시 계산할 수 있습니다.</p>
               </div>
             ) : (
               <div className="grid gap-6 lg:grid-cols-3">
@@ -630,14 +629,14 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                           href={`/planning/reports?runId=${encodeURIComponent(run.id)}`}
                           prefetch={devPlanningPrefetch("/planning/reports")}
                         >
-                          Report →
+                          리포트 다시 보기 →
                         </Link>
                         <Link
                           className="text-xs font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest"
                           href={`/planning?profileId=${encodeURIComponent(run.profileId)}`}
                           prefetch={devPlanningPrefetch("/planning")}
                         >
-                          Re-run
+                          같은 조건으로 다시 계산
                         </Link>
                       </div>
                     </div>
@@ -650,7 +649,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
           <Card className="p-8 space-y-8">
             <SubSectionHeader
               title="플랜 액션과 비교 후보"
-              description="최근 실행에 저장된 액션과 후보 비교 정보를 다시 이어봅니다."
+              description="저장된 액션을 다시 확인하고, 후보 비교는 허브에서 이어서 살펴봅니다."
               action={
                 <Link
                   href={latestRun ? latestRunReportHref : "/recommend"}
@@ -672,7 +671,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                             <p className="text-sm font-black text-slate-900 group-hover:text-emerald-600 transition-colors">{action.title}</p>
                             <p className="mt-1 text-xs font-medium text-slate-500 leading-relaxed">{action.summary}</p>
                           </div>
-                          <Link className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest" href={action.href}>Explore ▶</Link>
+                          <Link className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest" href={action.href}>액션 이어보기 →</Link>
                         </div>
                         {action.steps.length > 0 ? (
                           <div className="mt-4 space-y-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-tight">
@@ -720,7 +719,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             ) : (
               <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-slate-50/50 px-5 py-16 text-center">
                 <p className="text-sm font-black text-slate-900">저장된 액션과 후보가 없습니다.</p>
-                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">먼저 플랜을 저장하거나 추천 허브에서 직접 비교를 시작할 수 있습니다.</p>
+                <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">먼저 플랜을 저장하면 이곳에서 저장된 액션을 다시 보고, 필요하면 추천 허브에서 직접 비교를 이어갈 수 있습니다.</p>
               </div>
             )}
           </Card>
@@ -827,15 +826,15 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
           <Card className="p-8 space-y-8">
             <SubSectionHeader
               title="바로 이동"
-              description="현재 프로젝트의 핵심 기능 바로가기"
+              description="필요한 화면을 빠르게 여는 바로가기 모음"
             />
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               {[
-                { href: "/planning", title: "플래닝", description: "흐름 기반 액션" },
-                { href: "/planning/reports", title: "리포트", description: "공식 리포트" },
-                { href: "/recommend", title: "추천 허브", description: "상품/혜택 비교" },
-                { href: "/products/catalog", title: "상품 탐색", description: "금융 카탈로그" },
-                { href: "/public/dart", title: "공시 탐색", description: "기업 공시 데이터" },
+                { href: "/planning", title: "플래닝", description: "플래닝 화면 바로 열기" },
+                { href: "/planning/reports", title: "리포트", description: "저장한 리포트 빠르게 보기" },
+                { href: "/recommend", title: "추천 허브", description: "비교 허브 바로 열기" },
+                { href: "/products/catalog", title: "상품 탐색", description: "상품 카탈로그 둘러보기" },
+                { href: "/public/dart", title: "공시 탐색", description: "기업 공시 바로 확인하기" },
               ].map((item) => (
                 <Link className="group rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:border-emerald-200 hover:bg-white" href={item.href} key={item.href}>
                   <p className="text-base font-black text-slate-900 group-hover:text-emerald-600 transition-colors">{item.title}</p>
@@ -848,7 +847,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
           <Card className="p-8 space-y-8">
             <SubSectionHeader
               title="최근 피드백"
-              description="사용자 메모와 개선 요청 흐름"
+              description="최근에 남긴 메모와 개선 요청 흐름을 다시 확인하세요"
               action={<Link href="/feedback/list" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-[0.15em]">View Feed →</Link>}
             />
             {state.feedback.length > 0 ? (
@@ -856,16 +855,18 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 {state.feedback.slice(0, 4).map((item) => (
                   <Link className="block rounded-[1.5rem] border border-slate-100 bg-slate-50/50 p-5 transition-all hover:border-emerald-100 hover:bg-white group" href={`/feedback/${encodeURIComponent(item.id)}`} key={item.id}>
                     <div className="flex items-center justify-between gap-4">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{item.category || "feedback"}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{item.category || "메모"}</p>
                       <p className="text-[10px] font-bold text-slate-300 tabular-nums">{formatDate(item.createdAt)}</p>
                     </div>
                     <p className="mt-3 text-sm font-bold text-slate-700 line-clamp-2 leading-relaxed group-hover:text-slate-900 transition-colors">{truncate(item.message, 72)}</p>
+                    <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-600">자세한 내용 다시 보기</p>
                   </Link>
                 ))}
               </div>
             ) : (
               <div className="py-10 text-center rounded-[2rem] border border-dashed border-slate-200">
                 <p className="text-xs font-bold text-slate-300 italic">최근 피드백이 아직 없습니다.</p>
+                <p className="mt-2 text-[11px] font-medium leading-relaxed text-slate-400">메모와 개선 요청이 쌓이면 이곳에서 최근 흐름을 다시 이어볼 수 있습니다.</p>
               </div>
             )}
           </Card>

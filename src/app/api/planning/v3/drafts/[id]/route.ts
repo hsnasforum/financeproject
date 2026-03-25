@@ -7,7 +7,7 @@ import {
 import {
   deleteDraft,
   getDraft,
-} from "@/lib/planning/v3/draft/store";
+} from "@/lib/planning/v3/drafts/draftStore";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 
 type RouteContext = {

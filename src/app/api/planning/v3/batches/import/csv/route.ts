@@ -31,14 +31,15 @@ function withWriteGuard(request: Request, csrfValue: unknown): Response | null {
   }
 }
 
-async function readCsvPayload(request: Request): Promise<{ csvText: string; csrf?: string }> {
+async function readCsvPayload(request: Request): Promise<{ csvText: string; fileName?: string; csrf?: string }> {
   const contentType = asString(request.headers.get("content-type")).toLowerCase();
   if (contentType.includes("multipart/form-data")) {
     const form = await request.formData();
     const file = form.get("file");
     const csvText = file instanceof File ? await file.text() : "";
+    const fileName = file instanceof File ? asString(file.name) : "";
     const csrf = asString(form.get("csrf"));
-    return { csvText, ...(csrf ? { csrf } : {}) };
+    return { csvText, ...(fileName ? { fileName } : {}), ...(csrf ? { csrf } : {}) };
   }
 
   if (contentType.includes("text/plain") || contentType.includes("text/csv")) {
@@ -47,9 +48,10 @@ async function readCsvPayload(request: Request): Promise<{ csvText: string; csrf
   }
 
   try {
-    const body = await request.json() as { csvText?: unknown; csrf?: unknown } | null;
+    const body = await request.json() as { csvText?: unknown; fileName?: unknown; csrf?: unknown } | null;
     return {
       csvText: asString(body?.csvText),
+      ...(asString(body?.fileName) ? { fileName: asString(body?.fileName) } : {}),
       ...(asString(body?.csrf) ? { csrf: asString(body?.csrf) } : {}),
     };
   } catch {
@@ -73,6 +75,7 @@ export async function POST(request: Request) {
     const imported = await importCsvToBatch({
       csvText: payload.csvText,
       sanitizeTextFields: true,
+      ...(payload.fileName ? { provenance: { fileName: payload.fileName } } : {}),
     });
     const summary = await getBatchSummary(imported.batchMeta.id);
 

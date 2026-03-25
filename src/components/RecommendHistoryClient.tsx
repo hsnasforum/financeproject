@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import {
-  bodyCompactFieldClassName,
-} from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -51,6 +48,50 @@ function formatDateTime(value: string): string {
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return "-";
   return parsed.toLocaleString("ko-KR", { hour12: false });
+}
+
+function formatPurposeLabel(value: SavedRecommendRun["profile"]["purpose"]): string {
+  if (value === "emergency") return "단기 비상금";
+  if (value === "long-term") return "장기 저축";
+  return "목돈 마련";
+}
+
+function formatKindLabel(value: SavedRecommendRun["profile"]["kind"]): string {
+  return value === "saving" ? "정기 적금" : "정기 예금";
+}
+
+function formatLiquidityLabel(value: SavedRecommendRun["profile"]["liquidityPref"]): string {
+  if (value === "high") return "유동성 우선";
+  if (value === "low") return "만기 유지 우선";
+  return "중간 유동성 고려";
+}
+
+function formatRateModeLabel(value: SavedRecommendRun["profile"]["rateMode"]): string {
+  if (value === "base") return "기본 금리 우선";
+  if (value === "simple") return "우대 조건 없는 단순 상품";
+  return "최고 금리 우선";
+}
+
+function formatDepositProtectionLabel(value: SavedRecommendRun["profile"]["depositProtection"]): string {
+  if (value === "require") return "예금자 보호 필수";
+  if (value === "prefer") return "예금자 보호 우선";
+  return "예금자 보호 조건 무관";
+}
+
+function buildRunConditionSummary(profile: SavedRecommendRun["profile"]): string {
+  return [
+    `${profile.preferredTerm}개월 선호`,
+    formatLiquidityLabel(profile.liquidityPref),
+    formatRateModeLabel(profile.rateMode),
+    formatDepositProtectionLabel(profile.depositProtection),
+  ].join(" · ");
+}
+
+function buildNextActionHelper(planningRunId?: string): string {
+  if (planningRunId) {
+    return "저장해 둔 비교 후보를 다시 읽고, 필요하면 저장 당시 플래닝 근거까지 이어서 확인할 수 있습니다.";
+  }
+  return "저장해 둔 비교 후보를 다시 읽은 뒤, 필요할 때만 새 비교를 열어 다음 후보를 더 좁혀 볼 수 있습니다.";
 }
 
 function formatRate(value: number | null): string {
@@ -137,6 +178,42 @@ function computeDiff(previous: SavedRecommendRun, current: SavedRecommendRun): R
     added: [...added].sort((a, b) => a.rank - b.rank),
     removed: [...removed].sort((a, b) => a.rank - b.rank),
   };
+}
+
+function RunIdentifierDisclosure({
+  runId,
+  planningRunId,
+  tone,
+}: {
+  runId: string;
+  planningRunId?: string;
+  tone: "slate" | "emerald";
+}) {
+  const openedClassName = tone === "emerald"
+    ? "rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
+    : "rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3";
+  const summaryClassName = tone === "emerald"
+    ? "cursor-pointer list-none text-[11px] font-semibold text-white/75 marker:hidden"
+    : "cursor-pointer list-none text-[11px] font-semibold text-slate-500 marker:hidden";
+  const bodyClassName = tone === "emerald"
+    ? "mt-3 space-y-2 text-[11px] font-medium leading-relaxed text-emerald-50/90"
+    : "mt-3 space-y-2 text-[11px] font-medium leading-relaxed text-slate-500";
+  const idClassName = tone === "emerald" ? "font-mono text-white" : "font-mono text-slate-700";
+
+  return (
+    <details className={openedClassName}>
+      <summary className={summaryClassName}>공유·복구용 보조 정보</summary>
+      <div className={bodyClassName}>
+        <p>직접 공유나 복구, 지원 대응이 꼭 필요할 때만 raw 식별자를 열어 확인해 주세요.</p>
+        <p>
+          추천 기록 식별자 (runId): <span className={idClassName}>{runId}</span>
+        </p>
+        <p>
+          플래닝 연결 식별자 (planningRunId): {planningRunId ? <span className={idClassName}>{planningRunId}</span> : "연결된 값 없음"}
+        </p>
+      </div>
+    </details>
+  );
 }
 
 export function RecommendHistoryClient({
@@ -229,11 +306,11 @@ export function RecommendHistoryClient({
     <main className="min-h-screen bg-slate-50 py-8 md:py-12">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4">
         <PageHeader
-          title="추천 실행 히스토리"
-          description="저장된 실행을 조회/삭제/내보내기하고, 2개 실행을 선택해 변경점을 비교합니다."
+          title="추천 비교 기록"
+          description="저장해 둔 추천 결과를 다시 읽고, 필요할 때만 다음 비교나 플래닝 근거 확인으로 이어 가는 기록 화면입니다."
           action={
             <Link href="/recommend">
-              <Button variant="primary" className="rounded-full">추천으로 돌아가기</Button>
+              <Button variant="primary" className="rounded-full">새 추천 비교 열기</Button>
             </Link>
           }
         />
@@ -259,16 +336,22 @@ export function RecommendHistoryClient({
               <span className="text-sm font-black text-emerald-600">{runs.length} / 50</span>
             </div>
           </div>
+          <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">
+            이 기록은 확정 답안을 저장하는 곳이 아니라, 조건이나 시점을 바꿔 다시 본 결과를 비교해 보는 용도입니다.
+          </p>
           {notice ? <p className="mt-4 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg inline-block">{notice}</p> : null}
         </Card>
 
         <section className="grid gap-6 lg:grid-cols-2">
           <Card className="p-6">
-            <SubSectionHeader title="실행 목록" />
+            <SubSectionHeader
+              title="실행 목록"
+              description="언제 저장했고 어떤 목적과 조건이었는지 먼저 확인한 뒤, 비교할 실행 2개를 고르세요."
+            />
             {runs.length === 0 ? (
               <EmptyState
                 className="mt-4"
-                description="`/recommend`에서 추천을 실행하고 저장하면 비교할 실행 기록이 여기에 쌓입니다."
+                description="먼저 `/recommend`에서 추천 비교를 저장하면, 이후에는 이 화면에서 저장 기록을 다시 읽고 조건 차이를 비교할 수 있습니다."
                 title="저장된 실행이 없습니다."
               />
             ) : (
@@ -303,7 +386,7 @@ export function RecommendHistoryClient({
                           </label>
                           <div className="flex items-center gap-1">
                             <Button size="sm" type="button" onClick={() => setActiveRunId(run.runId)} variant="ghost" className="h-7 text-[11px] font-bold">
-                              보기
+                              상세 열기
                             </Button>
                             <Button size="sm" type="button" onClick={() => removeOne(run.runId)} variant="ghost" className="h-7 text-[11px] font-bold text-rose-600 hover:bg-rose-50">
                               삭제
@@ -312,30 +395,40 @@ export function RecommendHistoryClient({
                         </div>
 
                         <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-black text-slate-900">{formatDateTime(run.savedAt)}</p>
-                            <p className="mt-1 text-xs font-medium text-slate-500">
-                              {run.profile.purpose} · {run.profile.kind} · {run.items.length}건
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">저장 시점</p>
+                            <p className="mt-1 text-sm font-black text-slate-900">{formatDateTime(run.savedAt)}</p>
+                            <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400">저장 조건</p>
+                            <p className="mt-1 text-xs font-bold text-slate-700">
+                              {formatPurposeLabel(run.profile.purpose)} · {formatKindLabel(run.profile.kind)} · 상위 {run.items.length}건 저장
                             </p>
-                            <p className="mt-2 text-[11px] font-bold text-slate-500">
-                              추천 실행 ID: <span className="font-mono text-slate-700">{run.runId}</span>
+                            <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">
+                              {buildRunConditionSummary(run.profile)}
                             </p>
-                            <p className="mt-1 text-[11px] font-bold text-slate-500">
-                              플래닝 실행 ID: {planningRunId ? <span className="font-mono text-slate-700">{planningRunId}</span> : "연결된 실행 없음"}
+                            <p className="mt-3 text-[11px] font-medium leading-relaxed text-slate-500">
+                              {buildNextActionHelper(planningRunId)}
                             </p>
                           </div>
-                          {planningRunId ? (
-                            <Link
-                              href={planningReportHref}
-                              className="text-[11px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
-                            >
-                              플래닝 리포트 →
-                            </Link>
-                          ) : (
-                            <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">
-                              연결된 플래닝 실행 없음
-                            </span>
-                          )}
+                          <div className="max-w-[15rem] text-right">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">다음에 할 일</p>
+                            {planningRunId ? (
+                              <>
+                                <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">
+                                  저장 당시 플래닝 보고서로 이어 가면 왜 이 후보를 확인했는지 판단 근거를 다시 읽을 수 있습니다.
+                                </p>
+                                <Link
+                                  href={planningReportHref}
+                                  className="mt-3 inline-flex text-[11px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
+                                >
+                                  저장 당시 플래닝 보기 →
+                                </Link>
+                              </>
+                            ) : (
+                              <p className="mt-1 text-[11px] font-medium leading-relaxed text-slate-500">
+                                연결된 플래닝 실행은 없지만, 이 기록 안에서 저장 조건과 후보를 다시 읽어 다음 비교 전 판단 기준을 정리할 수 있습니다.
+                              </p>
+                            )}
+                          </div>
                         </div>
 
                         <div className="mt-4 flex gap-2">
@@ -346,6 +439,10 @@ export function RecommendHistoryClient({
                             CSV
                           </Button>
                         </div>
+
+                        <div className="mt-4 border-t border-slate-200/70 pt-4">
+                          <RunIdentifierDisclosure runId={run.runId} planningRunId={planningRunId} tone="slate" />
+                        </div>
                       </div>
                     </li>
                   );
@@ -355,7 +452,10 @@ export function RecommendHistoryClient({
           </Card>
 
           <Card className="p-6">
-            <SubSectionHeader title="선택 실행 상세" />
+            <SubSectionHeader
+              title="선택 실행 상세"
+              description="저장 시점, 목적, 조건, 다음 행동을 먼저 읽고 필요할 때만 보조 식별자를 확인하는 영역입니다."
+            />
             {!activeRun ? (
               <EmptyState
                 className="mt-4"
@@ -377,60 +477,76 @@ export function RecommendHistoryClient({
                   return (
                 <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
                   <div className="flex items-center justify-between gap-4 mb-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">Selected Run</p>
-                    {openedFromQuery && <Badge className="bg-white/20 text-white border-none px-2 py-0.5 text-[9px] font-black uppercase">Query Open</Badge>}
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">현재 선택한 기록</p>
+                    {openedFromQuery && <Badge className="bg-white/20 text-white border-none px-2 py-0.5 text-[9px] font-black uppercase">링크로 열기</Badge>}
                   </div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100/80">저장 시점</p>
                   <p className="text-xl font-black tracking-tight">{formatDateTime(activeRun.savedAt)}</p>
-                  <p className="mt-1 text-sm font-bold text-emerald-100/80">항목 {activeRun.items.length}건 / 목적: {activeRun.profile.purpose}</p>
-                  <div className="mt-4 space-y-1 text-[11px] font-bold text-emerald-50/90">
-                    <p>
-                      추천 실행 ID: <span className="font-mono text-white">{activeRun.runId}</span>
+                  <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-100/80">저장 조건</p>
+                  <p className="mt-1 text-sm font-bold text-emerald-100/90">
+                    {formatPurposeLabel(activeRun.profile.purpose)} · {formatKindLabel(activeRun.profile.kind)} · 상위 {activeRun.items.length}건 저장
+                  </p>
+                  <p className="mt-1 text-xs font-medium leading-relaxed text-emerald-50/90">
+                    {buildRunConditionSummary(activeRun.profile)}
+                  </p>
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-emerald-50/90">
+                    저장 당시 조건에서 왜 이 후보들이 남았는지 다시 읽고, 필요할 때만 다음 행동으로 이어 보세요.
+                  </p>
+                  <div className="mt-6 rounded-2xl border border-white/15 bg-white/10 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100/80">다음에 할 일</p>
+                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-50/90">
+                      {buildNextActionHelper(activePlanningRunId)}
                     </p>
-                    <p>
-                      플래닝 실행 ID: {activePlanningRunId ? <span className="font-mono text-white">{activePlanningRunId}</span> : "연결된 실행 없음"}
-                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
+                        <span className="text-[10px] font-bold text-emerald-100 uppercase">비교 담기</span>
+                        <select
+                          className="bg-transparent text-xs font-black outline-none cursor-pointer"
+                          value={compareTopN}
+                          onChange={(e) => {
+                            const next = Number(e.target.value);
+                            setCompareTopN(next === 2 || next === 4 ? next : 3);
+                          }}
+                        >
+                          <option className="text-slate-900" value={2}>2개</option>
+                          <option className="text-slate-900" value={3}>3개</option>
+                          <option className="text-slate-900" value={4}>4개</option>
+                        </select>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => addTopItemsToCompare(activeRun)}
+                        disabled={activeRun.items.length < 2}
+                        variant="primary"
+                        className="rounded-xl h-9 px-4 font-black bg-white text-emerald-600 hover:bg-emerald-50 border-none shadow-lg shadow-emerald-900/10"
+                      >
+                        상위 {compareTopN}개 비교 후보 담기
+                      </Button>
+                      {activePlanningRunId ? (
+                        <Link href={activePlanningReportHref}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl h-9 px-4 font-black border-white/30 bg-white/10 text-white hover:bg-white/20"
+                          >
+                            저장 당시 플래닝 보기
+                          </Button>
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
 
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
-                      <span className="text-[10px] font-bold text-emerald-100 uppercase">비교 담기</span>
-                      <select
-                        className="bg-transparent text-xs font-black outline-none cursor-pointer"
-                        value={compareTopN}
-                        onChange={(e) => {
-                          const next = Number(e.target.value);
-                          setCompareTopN(next === 2 || next === 4 ? next : 3);
-                        }}
-                      >
-                        <option className="text-slate-900" value={2}>2개</option>
-                        <option className="text-slate-900" value={3}>3개</option>
-                        <option className="text-slate-900" value={4}>4개</option>
-                      </select>
+                  <div className="mt-4 border-t border-white/10 pt-4">
+                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-50/90">
+                      식별자는 첫 화면에서 바로 읽어야 할 핵심 정보가 아니라, 공유나 복구, 지원 대응이 필요할 때만 확인하는 보조 정보입니다.
+                    </p>
+                    <div className="mt-3">
+                      <RunIdentifierDisclosure
+                        runId={activeRun.runId}
+                        planningRunId={activePlanningRunId}
+                        tone="emerald"
+                      />
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => addTopItemsToCompare(activeRun)}
-                      disabled={activeRun.items.length < 2}
-                      variant="primary"
-                      className="rounded-xl h-9 px-4 font-black bg-white text-emerald-600 hover:bg-emerald-50 border-none shadow-lg shadow-emerald-900/10"
-                    >
-                      상위 {compareTopN}개 비교함 담기
-                    </Button>
-                    {activePlanningRunId ? (
-                      <Link href={activePlanningReportHref}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-xl h-9 px-4 font-black border-white/30 bg-white/10 text-white hover:bg-white/20"
-                        >
-                          플래닝 리포트로 이동
-                        </Button>
-                      </Link>
-                    ) : (
-                      <span className="text-[11px] font-bold text-emerald-100/70">
-                        연결된 플래닝 실행이 없어 리포트 이동 링크를 숨깁니다.
-                      </span>
-                    )}
                   </div>
                 </div>
                   );
@@ -474,12 +590,12 @@ export function RecommendHistoryClient({
         <Card className="p-6">
           <SubSectionHeader
             title="실행 비교"
-            description="목록에서 실행 2개를 선택하면 변경, 신규, 제외 항목을 분석합니다."
+            description="조건이나 저장 시점이 달라졌을 때 어떤 후보가 바뀌었는지 비교합니다."
           />
           {selectedRuns.length !== 2 || !diff ? (
             <EmptyState
               className="py-12"
-              description="목록에서 실행 2개를 선택하면 변경, 신규, 제외 항목과 상위 변경 테이블을 보여줍니다."
+              description="목록에서 실행 2개를 선택하면 변경, 신규, 제외 항목과 상위 변화 포인트를 비교용으로 보여줍니다."
               title="비교할 실행 2개를 선택해 주세요."
             />
           ) : (

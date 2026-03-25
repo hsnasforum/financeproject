@@ -30,6 +30,7 @@ Use this skill to write a repository-consistent `/work/<month>/<day>/YYYY-MM-DD-
 4. If route, verification policy, security rule, or operator flow changed, mention related docs updated or still pending.
 5. Never claim an unrun test or build was completed.
 6. Always keep a short `사용 skill` section. If skills were used, list each name and why it mattered; otherwise write `- 없음`.
+7. Normalize new notes to the standard title and section order even if nearby notes drifted.
 
 ## Recommended structure
 
@@ -41,6 +42,8 @@ Use this skill to write a repository-consistent `/work/<month>/<day>/YYYY-MM-DD-
 - `## 검증`
 - `## 남은 리스크`
 
+Use these section names exactly unless the user explicitly asks for a different format.
+
 ## Writing rules
 
 - Prefer concrete facts over long narrative
@@ -48,11 +51,16 @@ Use this skill to write a repository-consistent `/work/<month>/<day>/YYYY-MM-DD-
 - Include exact commands in `검증`
 - Include only skills that were actually used, not merely available in the session
 - Keep the `## 사용 skill` section even when no skill was used, and write `- 없음`
+- Keep `## 사용 skill` near the top in the recommended order; do not move it to the end just because another note did
+- Keep the title date prefix and do not omit `YYYY-MM-DD`
+- Prefer the standard headings above over aliases such as `변경 대상 파일` or `수행 내용`
 - If something is blocked, mark it clearly and say why
 - If the change affects docs/current-screens, release gates, or ops rules, say so explicitly
 
 ## Minimal checklist
 
+- Does the title start with `# YYYY-MM-DD`?
+- Are the standard section names and order preserved?
 - Are the changed files named?
 - Are used skills named only when they were actually used?
 - Are the reasons tied to the user-visible or operator-visible problem?

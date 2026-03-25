@@ -28,6 +28,35 @@ export type V3ImportBatch = {
   failed: number;
 };
 
+export type StoredImportDiagnosticsSummary = {
+  rows: number;
+  parsed: number;
+  skipped: number;
+};
+
+export type StoredImportProvenanceHandoff = Pick<V3ImportSource, "fileName"> & {
+  fileNameProvided?: boolean;
+};
+
+export type StoredImportSourceBinding = {
+  artifactSha256: string;
+  attestedFileName: string;
+  originKind: "writer-handoff";
+};
+
+export type StoredImportMetadata = {
+  diagnostics: StoredImportDiagnosticsSummary;
+  provenance: StoredImportProvenanceHandoff;
+  sourceBinding?: StoredImportSourceBinding;
+};
+
+export type StoredImportMetadataHandoff = StoredImportMetadata;
+
+export type StoredTransaction = AccountTransaction & {
+  txnId: string;
+  batchId: string;
+};
+
 export type ImportBatchMeta = {
   id: string;
   createdAt: string;
@@ -39,9 +68,5 @@ export type ImportBatchMeta = {
     id: string;
     name?: string;
   }>;
-};
-
-export type StoredTransaction = AccountTransaction & {
-  txnId: string;
-  batchId: string;
+  importMetadata?: StoredImportMetadata;
 };

@@ -91,16 +91,16 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
       <Container className="px-4 py-14 sm:px-6 md:py-20 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="max-w-2xl">
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">더 쉬운 금융 판단</p>
+            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">시작 가이드</p>
             <h1 className="mt-5 text-[2.75rem] font-black leading-[1.12] tracking-[-0.04em] text-slate-950 md:text-[4.4rem]">
-              한눈에 비교하고
+              재무 상태를 먼저 보고
               <br />
-              내 돈 흐름에 맞게
+              조건에 맞는 상품을
               <br />
-              바로 움직이는 MMD
+              바로 비교하는 MMD
             </h1>
             <p className="mt-5 max-w-lg text-lg font-medium leading-relaxed text-slate-500">
-              플래닝, 추천, 리포트를 한 흐름으로 묶어 지금 필요한 선택만 바로 보여줍니다.
+              먼저 플래닝으로 현재 흐름을 진단하고, 바로 비교가 필요하면 추천 허브에서 지금 조건에 맞는 후보를 살펴보세요.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-3">
@@ -109,15 +109,19 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
                 href="/planning"
                 prefetch={devPlanningPrefetch("/planning")}
               >
-                플래닝 시작하기
+                재무 상태 진단 시작
               </Link>
               <Link
                 className="inline-flex h-14 items-center rounded-2xl bg-white border border-slate-200 px-10 text-base font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:-translate-y-0.5 active:scale-95"
-                href="/products/catalog"
+                href="/recommend"
+                prefetch={devPlanningPrefetch("/recommend")}
               >
-                전체 상품 보기
+                조건에 맞는 상품 비교
               </Link>
             </div>
+            <p className="mt-4 max-w-lg text-sm font-medium leading-relaxed text-slate-500">
+              진단이 먼저면 플래닝에서 시작하고, 비교가 먼저면 추천 허브에서 바로 이어서 볼 수 있습니다.
+            </p>
           </div>
 
           <div className="relative flex min-h-[320px] items-center justify-center lg:min-h-[420px]">

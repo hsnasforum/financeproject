@@ -666,7 +666,7 @@ export function PlanningRunsClient({
     <PageShell className="bg-slate-50">
       <PageHeader
         title="실행 기록"
-        description="저장된 실행 기록을 조회/비교/내보내기 할 수 있습니다."
+        description="저장된 실행을 다시 읽고 비교하며, 필요하면 상세 리포트와 다음 확인 단계로 이어 보는 화면입니다."
         action={(
           <div className="no-print flex items-center gap-3">
             <Button
@@ -679,18 +679,21 @@ export function PlanningRunsClient({
               PDF 인쇄
             </Button>
             <Link href={appendProfileIdQuery("/planning", filterProfileId)}>
-              <Button variant="primary" className="rounded-full font-bold h-9">플래닝 돌아가기</Button>
+              <Button variant="primary" className="rounded-full font-bold h-9">플래닝으로 돌아가기</Button>
             </Link>
           </div>
         )}
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        이 화면은 확정 답안 목록이 아니라, 저장된 실행을 다시 읽고 서로 비교하거나 상세 리포트로 이어 보는 기록 관리 단계입니다.
+      </p>
 
       <Card className="mb-6 border-amber-100 bg-amber-50/50 p-4 rounded-2xl">
         <div className="flex gap-3">
           <span className="text-amber-500 font-bold">!</span>
           <div>
-            <p className="text-sm font-bold text-amber-900">가정/확률 결과는 보장값이 아닙니다.</p>
-            <p className="mt-0.5 text-xs text-amber-700/80">실행 기록 비교 시 snapshot/asOf, health 경고, override 차이를 함께 확인하세요.</p>
+            <p className="text-sm font-bold text-amber-900">실행 기록은 저장 당시 조건 기준 비교 기록입니다.</p>
+            <p className="mt-0.5 text-xs text-amber-700/80">서로 비교할 때는 snapshot/asOf, health 경고, override 차이가 왜 생겼는지 함께 확인하세요.</p>
           </div>
         </div>
       </Card>
@@ -709,7 +712,8 @@ export function PlanningRunsClient({
       <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
         <Card className="p-6">
           <SubSectionHeader
-            title="목록 필터"
+            title="실행 목록"
+            description="프로필별로 저장된 실행을 좁혀 보고, 상세로 열 실행과 비교할 두 실행을 고릅니다."
             action={
               <div className="no-print flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -761,6 +765,7 @@ export function PlanningRunsClient({
                   <tr>
                     <td className="px-4 py-12 text-center" colSpan={8}>
                       <p className="text-sm font-bold text-slate-400">저장된 실행 기록이 없습니다.</p>
+                      <p className="mt-2 text-xs font-medium text-slate-400">플래닝에서 실행을 저장하면 여기서 비교와 상세 확인을 이어 할 수 있습니다.</p>
                     </td>
                   </tr>
                 ) : runs.map((run) => {
@@ -805,7 +810,7 @@ export function PlanningRunsClient({
                           className="text-emerald-600 font-bold hover:underline"
                           href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(run.id)}`, run.profileId)}
                         >
-                          대시보드
+                          리포트 보기
                         </Link>
                         <button
                           className="text-rose-600 font-bold hover:underline"
@@ -825,16 +830,22 @@ export function PlanningRunsClient({
 
         <div className="space-y-6">
           <Card className="p-6">
-            <SubSectionHeader title="실행 기록 상세" />
+            <SubSectionHeader
+              title="실행 기록 상세"
+              description="선택한 실행이 언제 저장됐는지와 핵심 결과를 먼저 보고, 다음 단계로 상세 리포트로 이어 갑니다."
+            />
             {!selectedRun ? (
               <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                목록에서 실행 기록을 선택하세요.
+                목록에서 실행을 하나 고르면 저장 시점과 다음 확인 경로를 여기서 바로 읽을 수 있습니다.
               </p>
             ) : (
               <div className="space-y-6">
                 <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100 mb-4">Run Details</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100 mb-4">선택한 실행</p>
                   <h3 className="text-xl font-black tracking-tight">{selectedRun.title || selectedRun.id.slice(0, 8)}</h3>
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-emerald-50/90">
+                    저장 당시 결과를 다시 읽고, 필요하면 상세 리포트에서 추천 비교 자료와 후속 행동까지 이어 볼 수 있습니다.
+                  </p>
                   <div className="mt-4 grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-[10px] font-bold text-emerald-100/70 uppercase">생성 시각</p>
@@ -855,6 +866,9 @@ export function PlanningRunsClient({
                       상세 리포트 보기 →
                     </Link>
                   </div>
+                  <p className="mt-3 text-[11px] font-medium leading-relaxed text-emerald-100/80">
+                    상세 리포트에서는 실행 비교, 추천 비교 자료, 추가 혜택 후보를 이어서 확인할 수 있습니다.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -873,12 +887,12 @@ export function PlanningRunsClient({
 
           <Card className="p-6" data-testid="run-action-center" id={RUN_SECTION_IDS.actionCenter}>
             <SubSectionHeader
-              title="Action Center"
-              description="운영 체크리스트 상태와 메모를 관리합니다."
+              title="후속 행동 정리"
+              description="저장된 액션 체크리스트의 진행 상태와 메모를 정리하는 영역입니다."
             />
             {!selectedRun ? (
               <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                실행 기록을 선택하면 액션이 표시됩니다.
+                실행을 선택하면 저장 당시 후속 행동과 메모를 여기서 이어 정리할 수 있습니다.
               </p>
             ) : actionCenterLoading ? (
               <p className="py-12 text-center text-sm font-bold text-slate-400 italic">로딩 중...</p>
@@ -946,10 +960,13 @@ export function PlanningRunsClient({
           </Card>
 
           <Card className="p-6">
-            <SubSectionHeader title="실행 비교 요약" />
+            <SubSectionHeader
+              title="실행 비교 요약"
+              description="선택한 두 실행 사이에서 무엇이 달라졌는지 먼저 짧게 읽고, 필요하면 상세 비교 리포트로 이어 갑니다."
+            />
             {!compareResult ? (
               <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                목록에서 실행 두 개를 선택하세요.
+                목록에서 실행 두 개를 선택하면 저장 시점 차이와 핵심 변화 포인트를 여기서 먼저 볼 수 있습니다.
               </p>
             ) : (
               <div className="space-y-4">
@@ -979,7 +996,7 @@ export function PlanningRunsClient({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  상세 비교 리포트 열기 (HTML)
+                  상세 비교 리포트 열기
                 </a>
               </div>
             )}
@@ -996,7 +1013,7 @@ export function PlanningRunsClient({
           <div className="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10">
             <h3 className="text-base font-black text-slate-900" id="planning-runs-delete-title">실행 기록 삭제 확인</h3>
             <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
-              아래 확인 문구를 정확히 입력해야 삭제가 진행됩니다.
+              삭제해도 바로 영구 삭제되지 않고 휴지통으로 이동합니다. 필요하면 바로 복구할 수 있습니다.
             </p>
             <div className="mt-4 px-3 py-2 font-mono text-[10px] text-rose-600 bg-rose-50 rounded-lg border border-rose-100">{deleteExpectedConfirm}</div>
             <input
@@ -1023,7 +1040,7 @@ export function PlanningRunsClient({
                 variant="primary"
                 className="rounded-xl h-10 px-6 font-bold"
               >
-                {deleteWorking ? "삭제 중..." : "삭제 진행"}
+                {deleteWorking ? "휴지통으로 이동 중..." : "휴지통으로 이동"}
               </Button>
             </div>
           </div>
@@ -1039,7 +1056,7 @@ export function PlanningRunsClient({
           <div className="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10">
             <h3 className="text-base font-black text-slate-900" id="planning-runs-restore-title">실행 기록 복구 확인</h3>
             <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
-              방금 삭제한 실행 기록을 바로 복구할 수 있습니다. 확인 문구를 입력하세요.
+              방금 휴지통으로 옮긴 실행을 다시 목록으로 돌립니다. 확인 문구를 입력하면 바로 복구됩니다.
             </p>
             <div className="mt-4 px-3 py-2 font-mono text-[10px] text-emerald-600 bg-emerald-50 rounded-lg border border-emerald-100">{restoreExpectedConfirm}</div>
             <input

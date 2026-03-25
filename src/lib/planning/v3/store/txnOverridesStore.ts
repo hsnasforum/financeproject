@@ -250,10 +250,18 @@ async function writeLegacyState(state: OverridesState): Promise<void> {
   });
 }
 
-export async function getOverrides(batchId: unknown): Promise<Record<string, TxnOverride>> {
+// Batch-scoped override owner. User-facing reads/writes should stay on this surface.
+export async function getBatchTxnOverrides(batchId: unknown): Promise<Record<string, TxnOverride>> {
   assertServerOnly();
   const safeBatchId = normalizeBatchId(batchId);
   const state = await readBatchState(safeBatchId);
+  return sortedObject(state.items);
+}
+
+// Legacy unscoped bridge / internal-dev path.
+export async function listLegacyUnscopedTxnOverrides(): Promise<Record<string, TxnOverride>> {
+  assertServerOnly();
+  const state = await readLegacyState();
   return sortedObject(state.items);
 }
 
@@ -274,7 +282,8 @@ async function readBatchStateByFile(filePath: string): Promise<OverridesState> {
   return readBatchState(batchId);
 }
 
-export async function listOverrides(): Promise<Record<string, TxnOverride>> {
+// Internal/dev merged bridge helper. User-facing reads should not rely on this.
+export async function listInternalBridgeTxnOverrides(): Promise<Record<string, TxnOverride>> {
   assertServerOnly();
   const merged: Record<string, TxnOverride> = {};
 
@@ -295,6 +304,11 @@ export async function listOverrides(): Promise<Record<string, TxnOverride>> {
 
   return sortedObject(merged);
 }
+
+// Backward-compatible aliases for existing callers while the bridge boundary is narrowed.
+export const getOverrides = getBatchTxnOverrides;
+export const listLegacyOverrides = listLegacyUnscopedTxnOverrides;
+export const listOverrides = listInternalBridgeTxnOverrides;
 
 export async function upsertOverride(input: UpsertBatchInput): Promise<TxnOverride>;
 export async function upsertOverride(txnId: unknown, patch: UpsertLegacyPatch): Promise<TxnOverride>;
@@ -386,4 +400,23 @@ export async function deleteOverride(arg1: { batchId: unknown; txnId: unknown } 
     delete legacy.items[txnId];
     await writeLegacyState(legacy);
   }
+}
+
+export async function upsertBatchTxnOverride(input: UpsertBatchInput): Promise<TxnOverride> {
+  return upsertOverride(input);
+}
+
+export async function upsertLegacyUnscopedTxnOverride(
+  txnId: unknown,
+  patch: UpsertLegacyPatch,
+): Promise<TxnOverride> {
+  return upsertOverride(txnId, patch);
+}
+
+export async function deleteBatchTxnOverride(input: { batchId: unknown; txnId: unknown }): Promise<void> {
+  await deleteOverride(input);
+}
+
+export async function deleteLegacyUnscopedTxnOverride(txnId: unknown): Promise<void> {
+  await deleteOverride(txnId);
 }

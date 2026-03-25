@@ -118,6 +118,12 @@ function priorityClassName(priority: FeedbackPriority): string {
   return "bg-slate-100 text-slate-700 border-slate-300";
 }
 
+function statusDisplayLabel(status: FeedbackStatus): string {
+  if (status === "OPEN") return "접수됨";
+  if (status === "DOING") return "확인 중";
+  return "정리됨";
+}
+
 type Props = {
   id: string;
 };
@@ -495,14 +501,14 @@ export function FeedbackDetailClient({ id }: Props) {
     <PageShell>
       <PageHeader
         title="피드백 상세"
-        description="제출 메시지와 첨부된 진단 스냅샷을 확인합니다."
+        description="남긴 내용과 접수 시점을 다시 읽고, 진행 상태와 다음 확인 메모를 한 화면에서 이어서 정리합니다."
         action={
           <div className="flex items-center gap-2">
             <Link href="/feedback/list">
-              <Button size="sm" variant="outline">목록</Button>
+              <Button size="sm" variant="outline">내역</Button>
             </Link>
             <Link href="/feedback">
-              <Button size="sm" variant="ghost">작성</Button>
+              <Button size="sm" variant="ghost">새 의견</Button>
             </Link>
           </div>
         }
@@ -510,7 +516,7 @@ export function FeedbackDetailClient({ id }: Props) {
 
       <Card>
         {loading ? (
-          <p className="text-sm text-slate-500">상세 로딩 중...</p>
+          <p className="text-sm text-slate-500">제출한 내용을 불러오고 있습니다.</p>
         ) : error ? (
           <p className="text-sm text-rose-600">{error}</p>
         ) : !item ? (
@@ -519,19 +525,69 @@ export function FeedbackDetailClient({ id }: Props) {
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-lg bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
-              <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{item.status}</span>
+              <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{statusDisplayLabel(item.status)}</span>
               <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", priorityClassName(item.priority))}>{item.priority}</span>
               <span className="text-[11px] font-bold text-slate-400 tabular-nums">{formatDateTime(item.createdAt)}</span>
-              <span className="text-[11px] font-bold text-slate-400 font-mono ml-auto">ID: {item.id}</span>
             </div>
 
             <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8">
               <p className="text-base font-medium leading-relaxed text-slate-800 whitespace-pre-wrap">{item.message}</p>
             </div>
 
+            <div className="rounded-[2rem] border border-slate-100 bg-slate-50/70 p-6">
+              <p className="text-sm font-black text-slate-800">이 화면에서 먼저 보는 정보</p>
+              <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
+                이 기록은 확정 답변이 아니라 제출 당시 상황을 다시 읽고, 이후 확인 메모와 첨부 진단을 한곳에서 이어 보는 저장본입니다.
+              </p>
+              <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">
+                먼저 아래의 진행 상태와 다음 확인 메모를 확인하고, 직접 공유나 지원 대응이 필요할 때만 공유·지원용 보조 정보와 내보내기를 함께 사용하세요.
+              </p>
+            </div>
+
+            <details className="group rounded-[2rem] border border-slate-100 bg-white shadow-sm overflow-hidden">
+              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-slate-900 group-open:bg-slate-50 transition-colors list-none">
+                <span>공유·지원용 보조 정보</span>
+                <span className="text-[10px] font-bold text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="border-t border-slate-50 p-6">
+                <p className="mb-4 text-xs font-bold leading-relaxed text-slate-500">
+                  기록 ID, 추적 ID, 접속 화면 같은 정보는 직접 공유하거나 지원 문의를 이어갈 때만 확인하면 됩니다.
+                </p>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">기록 ID</span>
+                  <p className="text-xs font-bold text-slate-600 break-all bg-slate-50 p-2 rounded-lg font-mono">{item.id}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">추적 ID</span>
+                  <p className="text-xs font-bold text-slate-600 font-mono bg-slate-50 p-2 rounded-lg break-all">{item.traceId ?? "-"}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">접속 화면</span>
+                  <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.url ?? "-"}>{item.url ?? "-"}</p>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">앱 버전</span>
+                  <p className="text-xs font-bold text-slate-600 bg-slate-50 p-2 rounded-lg">{item.appVersion ?? "-"}</p>
+                </div>
+                <div className="space-y-1 md:col-span-2 lg:col-span-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">브라우저 정보</span>
+                  <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.userAgent ?? "-"}>{item.userAgent ?? "-"}</p>
+                </div>
+                </div>
+              </div>
+            </details>
+
             {opsAction ? (
-              <div className="rounded-[2rem] border border-rose-100 bg-rose-50/30 p-6">
-                <p className="text-[10px] font-black text-rose-800 uppercase tracking-widest mb-3">운영 이슈(OPS) 복구 액션</p>
+              <details className="group rounded-[2rem] border border-rose-100 bg-rose-50/30 overflow-hidden">
+                <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-rose-800 list-none">
+                  <span>개발용 복구 액션</span>
+                  <span className="text-[10px] font-bold text-rose-500 group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="border-t border-rose-100 p-6">
+                <p className="text-xs font-bold leading-relaxed text-rose-700 mb-3">
+                  사용자용 기본 정보와 분리해 둔 개발 환경 보조 영역입니다. 직접 복구나 지원 대응이 필요할 때만 펼쳐서 확인합니다.
+                </p>
                 <div className="flex flex-wrap items-center gap-2">
                   {isDevEnv ? (
                     <>
@@ -578,47 +634,29 @@ export function FeedbackDetailClient({ id }: Props) {
                     message={opsMessage}
                   />
                 ) : null}
-              </div>
+                </div>
+              </details>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 pt-4">
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Context URL</span>
-                <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.url ?? "-"}>{item.url ?? "-"}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">User Agent</span>
-                <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.userAgent ?? "-"}>{item.userAgent ?? "-"}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">App Version</span>
-                <p className="text-xs font-bold text-slate-600 bg-slate-50 p-2 rounded-lg">{item.appVersion ?? "-"}</p>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Trace ID</span>
-                <p className="text-xs font-bold text-slate-600 font-mono bg-slate-50 p-2 rounded-lg">{item.traceId ?? "-"}</p>
-              </div>
-            </div>
-
             <div className="mt-8 space-y-6 rounded-[2rem] border border-slate-100 bg-slate-50/30 p-8">
-              <SubSectionHeader title="관리 메타데이터" description="티켓 상태, 우선순위, 태그 및 작업 내역을 관리합니다." />
+              <SubSectionHeader title="진행 상태와 다음 확인 메모" description="지금 어디까지 확인했는지와 이후에 무엇을 더 보면 되는지 정리합니다." />
               
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">상태</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">진행 상태</span>
                   <select
                     value={status}
                     onChange={(event) => setStatus(event.target.value as FeedbackStatus)}
                     className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
                     disabled={saving}
                   >
-                    <option value="OPEN">OPEN</option>
-                    <option value="DOING">DOING</option>
-                    <option value="DONE">DONE</option>
+                    <option value="OPEN">접수됨</option>
+                    <option value="DOING">확인 중</option>
+                    <option value="DONE">정리됨</option>
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">우선순위</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">확인 우선순위</span>
                   <select
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as FeedbackPriority)}
@@ -632,7 +670,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">마감일</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">다음 확인 일정</span>
                   <input
                     type="date"
                     value={dueDate}
@@ -642,7 +680,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   />
                 </div>
                 <div className="space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">태그 (콤마 구분)</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">분류 태그 (콤마 구분)</span>
                   <input
                     value={tagsInput}
                     onChange={(event) => setTagsInput(event.target.value)}
@@ -654,25 +692,25 @@ export function FeedbackDetailClient({ id }: Props) {
               </div>
               
               <div className="space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">관리 메모</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">확인 메모</span>
                 <textarea
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   rows={4}
                   className="w-full rounded-[1.5rem] border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
-                  placeholder="진행 상황이나 특이사항을 기록하세요."
+                  placeholder="다음에 다시 볼 포인트나 특이사항을 기록하세요."
                   disabled={saving}
                 />
               </div>
 
               <div className="space-y-4 pt-4 border-t border-slate-100">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">체크리스트</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">다음 확인 항목</span>
                 <div className="flex items-center gap-3">
                   <input
                     value={taskInput}
                     onChange={(event) => setTaskInput(event.target.value)}
                     className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
-                    placeholder="추가할 할 일을 입력하세요"
+                    placeholder="다음에 다시 확인할 일을 입력하세요"
                     disabled={saving}
                     onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
                   />
@@ -681,7 +719,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   </Button>
                 </div>
                 {tasks.length === 0 ? (
-                  <p className="text-xs font-bold text-slate-400 italic bg-white/50 p-4 rounded-xl text-center">등록된 체크리스트 항목이 없습니다.</p>
+                  <p className="text-xs font-bold text-slate-400 italic bg-white/50 p-4 rounded-xl text-center">아직 정리된 다음 확인 항목이 없습니다.</p>
                 ) : (
                   <ul className="grid gap-2">
                     {tasks.map((task) => (
@@ -710,46 +748,62 @@ export function FeedbackDetailClient({ id }: Props) {
 
               <div className="flex items-center justify-end pt-4">
                 <Button size="sm" variant="primary" className="h-11 px-12 rounded-2xl font-black shadow-md" onClick={() => { void handleSave(); }} disabled={saving}>
-                  {saving ? "저장 중..." : "설정 저장"}
+                  {saving ? "저장 중..." : "변경 저장"}
                 </Button>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-6">
-              <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={() => { void handleCopy(); }}>
-                JSON 복사
-              </Button>
-              <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={handleDownload}>
-                JSON 다운로드
-              </Button>
-              <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={handleGenerateIssueTemplate}>
-                GitHub Issue 템플릿 생성
-              </Button>
-              {notice ? <p className="text-xs font-black text-emerald-600 animate-in fade-in slide-in-from-left-2">{notice}</p> : null}
-            </div>
+            {notice ? (
+              <p className="text-sm font-black text-emerald-600 bg-emerald-50 p-4 rounded-2xl">
+                {notice}
+              </p>
+            ) : null}
 
-            {issueMarkdown ? (
-              <div className="space-y-3 pt-6 border-t border-slate-100">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400" htmlFor="issue_markdown">
-                  Issue Markdown Preview
-                </label>
-                <textarea
-                  id="issue_markdown"
-                  value={issueMarkdown}
-                  onChange={(event) => setIssueMarkdown(event.target.value)}
-                  rows={12}
-                  className="w-full rounded-[1.5rem] border border-slate-200 bg-slate-900 p-5 font-mono text-xs leading-relaxed text-slate-300 focus:ring-1 focus:ring-emerald-500 transition-all"
-                />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button size="sm" variant="primary" className="rounded-xl font-black shadow-md" onClick={() => { void handleCopyIssueTemplate(); }}>
-                    템플릿 복사
+            <details className="group rounded-[2rem] border border-slate-100 bg-white shadow-sm overflow-hidden">
+              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-slate-900 group-open:bg-slate-50 transition-colors list-none">
+                <span>공유·지원용 내보내기</span>
+                <span className="text-[10px] font-bold text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="space-y-4 border-t border-slate-50 p-6">
+                <p className="text-xs font-bold leading-relaxed text-slate-500">
+                  JSON과 이슈 템플릿은 화면 내용을 그대로 옮겨야 하거나 직접 공유·지원 대응이 필요할 때만 사용합니다.
+                </p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={() => { void handleCopy(); }}>
+                    JSON 복사
                   </Button>
-                  <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm" onClick={handleDownloadIssueTemplate}>
-                    마크다운 다운로드
+                  <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={handleDownload}>
+                    JSON 다운로드
+                  </Button>
+                  <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm h-10 px-4" onClick={handleGenerateIssueTemplate}>
+                    GitHub Issue 템플릿 생성
                   </Button>
                 </div>
+
+                {issueMarkdown ? (
+                  <div className="space-y-3 pt-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400" htmlFor="issue_markdown">
+                      Issue Markdown Preview
+                    </label>
+                    <textarea
+                      id="issue_markdown"
+                      value={issueMarkdown}
+                      onChange={(event) => setIssueMarkdown(event.target.value)}
+                      rows={12}
+                      className="w-full rounded-[1.5rem] border border-slate-200 bg-slate-900 p-5 font-mono text-xs leading-relaxed text-slate-300 focus:ring-1 focus:ring-emerald-500 transition-all"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button size="sm" variant="primary" className="rounded-xl font-black shadow-md" onClick={() => { void handleCopyIssueTemplate(); }}>
+                        템플릿 복사
+                      </Button>
+                      <Button size="sm" variant="outline" className="rounded-xl font-black bg-white shadow-sm" onClick={handleDownloadIssueTemplate}>
+                        마크다운 다운로드
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </details>
 
             <details className="group mt-10 rounded-[2rem] border border-slate-100 bg-white shadow-sm overflow-hidden">
               <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-slate-900 group-open:bg-slate-50 transition-colors list-none">

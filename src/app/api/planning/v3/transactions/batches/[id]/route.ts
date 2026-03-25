@@ -6,17 +6,15 @@ import {
 } from "@/lib/dev/devGuards";
 import {
   applyTxnOverrides,
-  buildTxnId,
+  buildStoredFirstVisibleBatchShell,
   classifyTransactions,
-  getBatchMeta,
-  getBatchTransactions,
-  listOverrides,
-  normalizeDescriptionForTxnId,
-  readBatch,
-  readBatchTransactions,
-  type ImportBatchMeta,
-  type StoredTransaction,
+  getStoredBatchDeleteSurfaceState,
+  getBatchTxnOverrides,
+  getStoredFirstBatchDetailProjectionRows,
+  loadStoredFirstBatchTransactions,
+  toStoredFirstPublicMeta,
 } from "@/lib/planning/v3/transactions/store";
+import { resolveTxnCategoryId } from "@/lib/planning/v3/service/categorySemantics";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -61,35 +59,6 @@ function toDisplayKind(value: unknown, amountKrw: number): "income" | "expense" 
   const kind = asString(value);
   if (kind === "income" || kind === "expense" || kind === "transfer") return kind;
   return amountKrw >= 0 ? "income" : "expense";
-}
-
-function toDisplayCategory(value: unknown): "fixed" | "variable" | "saving" | "invest" | "unknown" {
-  const category = asString(value);
-  if (category === "fixed" || category === "variable" || category === "saving" || category === "invest" || category === "unknown") {
-    return category;
-  }
-  return "unknown";
-}
-
-function toImportBatchMeta(batch: {
-  id: string;
-  createdAt: string;
-  total: number;
-  accountId?: string;
-}, monthsSummary: Array<{ ym: string }>): ImportBatchMeta {
-  const sortedMonths = monthsSummary
-    .map((row) => asString(row.ym))
-    .filter((row) => /^\d{4}-\d{2}$/.test(row))
-    .sort((left, right) => left.localeCompare(right));
-
-  return {
-    id: batch.id,
-    createdAt: batch.createdAt,
-    source: "csv",
-    rowCount: Math.max(0, Math.trunc(Number(batch.total) || 0)),
-    ...(sortedMonths.length > 0 ? { ymMin: sortedMonths[0], ymMax: sortedMonths[sortedMonths.length - 1] } : {}),
-    ...(asString(batch.accountId) ? { accounts: [{ id: asString(batch.accountId) }] } : {}),
-  };
 }
 
 function summarizeMonths(rows: Array<{ date: string; amountKrw: number }>): Array<{
@@ -158,6 +127,84 @@ function summarizeAccountMonthlyNet(rows: Array<{ accountId?: string; date: stri
   });
 }
 
+function toBatchDetailTransactions(rows: Array<
+  Parameters<typeof resolveTxnCategoryId>[0] & {
+    txnId?: string;
+    accountId?: string;
+    date: string;
+    amountKrw: number;
+    description?: string;
+  }
+>): Array<{
+  txnId: string;
+  accountId?: string;
+  date: string;
+  amountKrw: number;
+  description?: string;
+  kind: "income" | "expense" | "transfer";
+  category: string;
+  categoryId?: string;
+}> {
+  return rows
+    .map((row) => {
+      const txnId = asString(row.txnId).toLowerCase();
+      if (!txnId) return null;
+      const categoryId = resolveTxnCategoryId(row);
+      return {
+        txnId,
+        ...(asString(row.accountId) ? { accountId: asString(row.accountId) } : {}),
+        date: row.date,
+        amountKrw: Math.round(Number(row.amountKrw) || 0),
+        ...(toDisplayDescription(row.description) ? { description: toDisplayDescription(row.description) } : {}),
+        kind: toDisplayKind(row.kind, row.amountKrw),
+        category: categoryId ?? "unknown",
+        ...(categoryId ? { categoryId } : {}),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row));
+}
+
+function toBatchDetailSample(rows: Array<{
+  date: string;
+  amountKrw: number;
+  description?: string;
+  meta?: { rowIndex?: number };
+}>): Array<{
+  line: number;
+  dateIso: string;
+  amountKrw: number;
+  descMasked?: string;
+  ok: true;
+}> {
+  return rows.slice(0, 20).map((row) => ({
+    line: row.meta?.rowIndex ?? 0,
+    dateIso: row.date,
+    amountKrw: row.amountKrw,
+    ...(toDisplayDescription(row.description) ? { descMasked: toDisplayDescription(row.description) } : {}),
+    ok: true,
+  }));
+}
+
+function toBatchDetailStats(
+  batch: Pick<ReturnType<typeof buildStoredFirstVisibleBatchShell>, "total" | "ok" | "failed">,
+  rowMonthsSummary: Array<{ ym: string }>,
+): {
+  total: number;
+  ok: number;
+  failed: number;
+  inferredMonths?: number;
+} {
+  // Detail `stats` reuses the same visible count boundary as the batch shell:
+  // - total/ok/failed stay aligned with the currently resolved visible batch
+  // - inferredMonths always reflects current raw/recovered row aggregation
+  return {
+    total: batch.total,
+    ok: batch.ok,
+    failed: batch.failed,
+    ...(rowMonthsSummary.length > 0 ? { inferredMonths: rowMonthsSummary.length } : {}),
+  };
+}
+
 export async function GET(request: Request, context: RouteContext) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
@@ -165,127 +212,41 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    const [detail, batchTransactions, overridesByTxnId, storedMeta, storedTransactions] = await Promise.all([
-      readBatch(id),
-      readBatchTransactions(id),
-      listOverrides(),
-      getBatchMeta(id),
-      getBatchTransactions(id),
+    const [loaded, overridesByTxnId] = await Promise.all([
+      loadStoredFirstBatchTransactions(id),
+      getBatchTxnOverrides(id).catch(() => ({})),
     ]);
-
-    if (detail) {
-      const rawTransactions = batchTransactions?.transactions ?? [];
-      const classified = classifyTransactions({ transactions: rawTransactions });
-      const overridden = applyTxnOverrides(classified, overridesByTxnId);
-      const transactions = overridden
-        .map((row) => {
-          const txnId = asString(row.txnId).toLowerCase();
-          if (!txnId) return null;
-          return {
-            txnId,
-            date: row.date,
-            amountKrw: Math.round(Number(row.amountKrw) || 0),
-            ...(toDisplayDescription(row.description) ? { description: toDisplayDescription(row.description) } : {}),
-            kind: toDisplayKind(row.kind, row.amountKrw),
-            category: toDisplayCategory(row.category),
-          };
-        })
-        .filter((row): row is NonNullable<typeof row> => Boolean(row));
-
-      const data: StoredTransaction[] = rawTransactions
-        .map((row) => {
-          const txnId = asString(row.txnId).toLowerCase() || buildTxnId({
-            dateIso: row.date,
-            amountKrw: row.amountKrw,
-            descNorm: normalizeDescriptionForTxnId(row.description),
-            ...(asString(row.accountId) ? { accountId: asString(row.accountId) } : {}),
-          });
-          return {
-            ...row,
-            txnId,
-            batchId: detail.batch.id,
-          };
-        })
-        .sort((left, right) => {
-          if (left.date !== right.date) return left.date.localeCompare(right.date);
-          if (left.amountKrw !== right.amountKrw) return left.amountKrw - right.amountKrw;
-          return left.txnId.localeCompare(right.txnId);
-        });
-
-      return NextResponse.json({
-        ok: true,
-        batch: detail.batch,
-        sample: detail.sample,
-        stats: detail.stats,
-        monthsSummary: detail.monthsSummary,
-        accountMonthlyNet: detail.accountMonthlyNet,
-        transactions,
-        meta: toImportBatchMeta(detail.batch, detail.monthsSummary),
-        data,
-      });
-    }
-
-    if (!storedMeta) {
+    if (!loaded) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." } },
         { status: 404 },
       );
     }
 
+    // Detail keeps the raw snapshot for `data`, but the visible batch shell and derived
+    // projections follow the same stored-first binding semantics that keep coexistence guarded.
+    const { rawRows, derivedRows } = getStoredFirstBatchDetailProjectionRows(loaded);
     const classified = classifyTransactions({
-      transactions: storedTransactions,
+      transactions: derivedRows,
     });
     const overridden = applyTxnOverrides(classified, overridesByTxnId);
-    const transactions = overridden
-      .map((row) => {
-        const txnId = asString(row.txnId).toLowerCase();
-        if (!txnId) return null;
-        return {
-          txnId,
-          date: row.date,
-          amountKrw: Math.round(Number(row.amountKrw) || 0),
-          ...(toDisplayDescription(row.description) ? { description: toDisplayDescription(row.description) } : {}),
-          kind: toDisplayKind(row.kind, row.amountKrw),
-          category: toDisplayCategory(row.category),
-        };
-      })
-      .filter((row): row is NonNullable<typeof row> => Boolean(row));
-
-    const monthsSummary = summarizeMonths(storedTransactions);
-    const accountMonthlyNet = summarizeAccountMonthlyNet(storedTransactions);
-    const batch = {
-      id: storedMeta.id,
-      createdAt: storedMeta.createdAt,
-      kind: "csv" as const,
-      total: storedMeta.rowCount,
-      ok: storedMeta.rowCount,
-      failed: 0,
-      ...(storedMeta.accounts?.[0]?.id ? { accountId: storedMeta.accounts[0].id } : {}),
-      ...(storedMeta.accounts?.[0]?.id ? { accountHint: storedMeta.accounts[0].id } : {}),
-    };
-    const sample = storedTransactions.slice(0, 20).map((row) => ({
-      line: row.meta?.rowIndex ?? 0,
-      dateIso: row.date,
-      amountKrw: row.amountKrw,
-      ...(toDisplayDescription(row.description) ? { descMasked: toDisplayDescription(row.description) } : {}),
-      ok: true,
-    }));
+    const transactions = toBatchDetailTransactions(overridden);
+    const rowMonthsSummary = summarizeMonths(rawRows);
+    const accountMonthlyNet = summarizeAccountMonthlyNet(derivedRows);
+    const sample = toBatchDetailSample(derivedRows);
+    const batch = buildStoredFirstVisibleBatchShell(loaded);
+    const stats = toBatchDetailStats(batch, rowMonthsSummary);
 
     return NextResponse.json({
       ok: true,
       batch,
       sample,
-      stats: {
-        total: storedMeta.rowCount,
-        ok: storedMeta.rowCount,
-        failed: 0,
-        ...(monthsSummary.length > 0 ? { inferredMonths: monthsSummary.length } : {}),
-      },
-      monthsSummary,
+      stats,
+      monthsSummary: rowMonthsSummary,
       accountMonthlyNet,
       transactions,
-      meta: storedMeta,
-      data: storedTransactions,
+      meta: toStoredFirstPublicMeta(loaded),
+      data: rawRows,
     });
   } catch (error) {
     if (isInvalidIdError(error)) {
@@ -309,11 +270,32 @@ export async function DELETE(request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    const existing = await getBatchMeta(id);
-    if (!existing) {
+    const deleteSurface = await getStoredBatchDeleteSurfaceState(id);
+    if (deleteSurface === "missing") {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." } },
         { status: 404 },
+      );
+    }
+    if (
+      deleteSurface === "legacy-only"
+      || deleteSurface === "synthetic-stored-only-legacy-collision"
+      || deleteSurface === "stored-meta-legacy-coexistence"
+    ) {
+      const message = deleteSurface === "legacy-only"
+        ? "기존 배치만 남아 있는 경우 이 삭제 경로는 지원하지 않습니다."
+        : deleteSurface === "stored-meta-legacy-coexistence"
+          ? "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장된 배치 정보와 파일만 제거됩니다."
+          : "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장 파일만 제거됩니다.";
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "INPUT",
+            message,
+          },
+        },
+        { status: 400 },
       );
     }
     const { deleteBatch } = await import("@/lib/planning/v3/store/batchesStore");
