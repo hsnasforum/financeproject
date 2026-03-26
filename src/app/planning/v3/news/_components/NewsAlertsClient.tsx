@@ -7,8 +7,6 @@ import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import {
   reportHeroActionLinkClassName,
-  reportHeroFilterChipClassName,
-  reportHeroToggleButtonClassName,
   ReportHeroCard,
   ReportHeroStatCard,
   ReportHeroStatGrid,
@@ -141,6 +139,30 @@ function targetTypeLabel(value: AlertEvent["targetType"]): string {
   if (value === "item") return "기사";
   if (value === "scenario") return "시나리오";
   return "지표";
+}
+
+function alertsHeaderToggleClassName(active: boolean): string {
+  return cn(
+    "rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors",
+    active
+      ? "border-slate-300 bg-white text-slate-900 shadow-sm"
+      : "border-transparent bg-transparent text-slate-600 hover:bg-white hover:text-slate-900",
+  );
+}
+
+function alertsHeaderChipClassName(active: boolean, tone: "neutral" | "emerald" | "sky" | "rose" | "slate" = "neutral"): string {
+  const activeToneClassName = {
+    neutral: "border-slate-300 bg-white text-slate-900 shadow-sm",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm",
+    sky: "border-sky-200 bg-sky-50 text-sky-700 shadow-sm",
+    rose: "border-rose-200 bg-rose-50 text-rose-700 shadow-sm",
+    slate: "border-slate-300 bg-slate-200 text-slate-800 shadow-sm",
+  }[tone];
+
+  return cn(
+    "rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
+    active ? activeToneClassName : "border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-900",
+  );
 }
 
 function buildAlertLead(event: AlertEvent): string {
@@ -313,18 +335,18 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
               <Link href={NEWS_ALERT_RULES_SETTINGS_HREF} className={reportHeroActionLinkClassName}>
                 알림 설정
               </Link>
-              <div className="ml-2 flex items-center bg-white/10 rounded-lg p-1">
+              <div className="ml-2 flex items-center rounded-lg border border-slate-200 bg-slate-100 p-1">
                 <button
                   type="button"
                   onClick={() => setDays(7)}
-                  className={reportHeroToggleButtonClassName(days === 7)}
+                  className={alertsHeaderToggleClassName(days === 7)}
                 >
                   7일
                 </button>
                 <button
                   type="button"
                   onClick={() => setDays(30)}
-                  className={reportHeroToggleButtonClassName(days === 30)}
+                  className={alertsHeaderToggleClassName(days === 30)}
                 >
                   30일
                 </button>
@@ -353,47 +375,47 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
           </ReportHeroStatGrid>
 
           <div className="mt-8 flex flex-wrap items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em]">
-            <span className="text-white/40 mr-2">빠른 필터</span>
+            <span className="mr-2 text-slate-400">빠른 필터</span>
             <button
               type="button"
               onClick={() => setStatusFilter("visible")}
-              className={reportHeroFilterChipClassName(statusFilter === "visible")}
+              className={alertsHeaderChipClassName(statusFilter === "visible")}
             >
               표시중
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter("pending")}
-              className={reportHeroFilterChipClassName(statusFilter === "pending", "emerald")}
+              className={alertsHeaderChipClassName(statusFilter === "pending", "emerald")}
             >
               미확인
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter("acknowledged")}
-              className={reportHeroFilterChipClassName(statusFilter === "acknowledged", "sky")}
+              className={alertsHeaderChipClassName(statusFilter === "acknowledged", "sky")}
             >
               확인 완료
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter("hidden")}
-              className={reportHeroFilterChipClassName(statusFilter === "hidden", "slate")}
+              className={alertsHeaderChipClassName(statusFilter === "hidden", "slate")}
             >
               숨김
             </button>
-            <div className="mx-2 h-3 w-px bg-white/20" />
+            <div className="mx-2 h-3 w-px bg-slate-200" />
             <button
               type="button"
               onClick={() => setLevelFilter("high")}
-              className={reportHeroFilterChipClassName(levelFilter === "high", "rose")}
+              className={alertsHeaderChipClassName(levelFilter === "high", "rose")}
             >
               중요
             </button>
             <button
               type="button"
               onClick={() => setSourceFilter("all")}
-              className={reportHeroFilterChipClassName(sourceFilter === "all")}
+              className={alertsHeaderChipClassName(sourceFilter === "all")}
             >
               전체 출처
             </button>

@@ -237,9 +237,25 @@ export function ProfileDraftsListClient({
   return (
     <PageShell>
       <div className="space-y-5">
-        <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Drafts</h1>
-          <p className="text-sm text-slate-600">배치 기반 초안을 로컬에 저장하고 review 할 수 있습니다.</p>
+        <Card className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Import-to-Planning Beta</p>
+            <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Drafts</h1>
+            <p className="text-sm text-slate-600">
+              배치 기반 초안을 로컬에 저장하고 review 할 수 있습니다. 이 화면은 stable planning handoff 직전 검토 축입니다.
+            </p>
+            <p className="text-xs text-slate-500">
+              개별 초안 상세에서 preflight/apply를 거친 뒤 stable `/planning/reports`로 결과를 확인합니다.
+            </p>
+          </div>
+          <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href="/planning/v3/balances">
+              balances 다시 확인
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/transactions/batches">
+              최근 배치 확인
+            </BodyActionLink>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className={bodyLabelClassName} htmlFor="v3-profile-draft-batch-id">
               batchId
@@ -274,13 +290,16 @@ export function ProfileDraftsListClient({
               새로고침
             </Button>
           </div>
-          <div className={bodyActionLinkGroupClassName}>
-            <BodyActionLink href="/planning/v3/import/csv">
-              CSV 업로드
-            </BodyActionLink>
-            <BodyActionLink href="/planning/v3/batches">
-              배치 센터
-            </BodyActionLink>
+          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Support / Internal</p>
+            <div className={bodyActionLinkGroupClassName}>
+              <BodyActionLink className="text-xs text-slate-600" href="/planning/v3/import/csv">
+                raw CSV Import
+              </BodyActionLink>
+              <BodyActionLink className="text-xs text-slate-600" href="/planning/v3/batches">
+                raw 배치 센터
+              </BodyActionLink>
+            </div>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>

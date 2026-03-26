@@ -430,6 +430,13 @@
 - `15` 문서는 이제 current inventory SSOT와 `N3` gate 기준 위에서 next-cycle policy overlay SSOT로 park할 수 있는 상태로 읽고, next `N4` cut은 docs-only sync가 아니라 nav/홈/헤더 노출 변경, public beta entry group 변경, raw `/planning/v3/batches*`와 user-facing `/planning/v3/transactions/batches*` 혼합 같은 future reopen trigger가 실제로 생길 때만 다시 연다.
 - 남은 `[검증 필요]`는 current overlay wording drift라기보다, future implementation round에서 위 distinction과 route group 경계를 실제 노출 변경에도 그대로 보존하는지 여부다. next `N4` cut이 다시 열리더라도 broad visibility 구현보다 이 preservation check가 더 작다.
 
+연결 메모 (2026-03-25 import-to-planning beta Phase 1 kickoff alignment):
+- `analysis_docs/v3/03_financeproject_v3_다음단계_실행계획.md`는 `N4`의 broad visibility 구현이 아니라 current 저장소 기준 공식 beta entry overlay를 잠그는 docs-only kickoff baseline으로 읽는다.
+- 이 baseline은 `docs/current-screens.md`의 `Public Beta inventory`를 바꾸지 않고, 그 위에 `official beta entry 4개`, `deep-link only`, `non-entry/internal` 우선순위를 덧씌우는 좁은 정렬이다.
+- official entry는 `/planning/v3/transactions`, `/planning/v3/transactions/batches`, `/planning/v3/balances`, `/planning/v3/profile/drafts` 4개로만 잠그고, 대표 funnel은 `transactions -> batches -> balances -> profile/drafts -> preflight/apply -> stable report` 하나로 고정한다.
+- `/planning/v3/start`는 current code 기준 news/exposure/journal readiness checklist 성격이 더 강하므로, 이번 라운드에서는 official entry 승격이 아니라 `non-entry/onboarding wrapper 후보`로 남긴다.
+- next `N4` reopen trigger는 broad route promotion이 아니라, 실제 nav/href/current-screens classification 변경, `/planning/v3/start` 역할 재정의, 또는 위 official entry overlay를 구현 배치에 반영하는 시점으로만 좁힌다.
+
 ## N5. public/stable UX polish backlog
 
 - 분류: `product UX polish`
@@ -864,6 +871,24 @@
 - `src/app/planning/**` 구현, route/href contract, planning run/report/trash result-flow contract, compare/filter/store semantics, settings trust/ops policy, freshness/source/build/store policy, stable/public IA는 바뀌지 않는다. 이번 closeout은 새 spike를 만들지 않고 경계만 문서에 잠그는 작업이다.
 - 따라서 current smallest viable next candidate는 현재 `none for now`로 둔다. current next question도 더 이상 “다음 micro spike를 무엇으로 둘 것인가”가 아니라, trigger-specific reopen이 실제로 생겼는지 여부로 바뀐다. [검증 필요]
 - future reopen trigger는 planning run/report/trash contract, route/href contract, result-flow/IA question, 또는 기타 trigger-specific docs-first question으로만 한정한다. wording sync나 closeout memo 보강, current inventory 재확인만으로는 reopen trigger가 아니다. [검증 필요]
+
+연결 메모 (2026-03-26 planning stable representative-funnel followthrough closeout docs-only sync):
+- 2026-03-26 `/work` chain 기준으로 `Import-to-Planning Beta` representative funnel follow-through는 `stable /planning -> stable /planning/runs -> stable /planning/reports -> stable /planning/reports/[id]`까지 current implementation과 representative e2e로 닫혔다. `/planning/runs`는 history/comparison tier, `/planning/reports`는 기본 destination tier, `/planning/reports/[id]`는 saved detail tier로 계속 분리해 읽는다. [현행 확인]
+- reports dashboard 안의 selected saved detail helper도 valid/stale/pending, focus/visibility revalidation, manual recheck까지 current code 기준으로 landed baseline이 생겼다. 따라서 current next question은 더 이상 planning stable surface 내부 새 helper micro spike가 아니다. [현행 확인]
+- 이번 closeout에서 planning stable surface 안에 추가로 `none for now`로 잠그는 것은 stable `/planning` quickstart helper micro batch, stable `/planning/runs` helper wording micro batch, stable `/planning/reports` selected-detail helper micro batch, stable `/planning/reports/[id]` destination wording micro batch다. wording sync나 closeout memo 보강만으로는 reopen trigger가 아니다. [권장]
+- future reopen trigger는 planning stable route/href/query contract를 실제로 바꿔야 하는 요구, stable `/planning` quickstart semantics 또는 runs-to-report handoff semantics를 실제로 바꿔야 하는 요구, saved detail validation/freshness/polling policy를 다시 열어야 하는 요구, representative funnel 다음 공식 축 선정으로만 좁힌다. stable/public IA 재설계, broad v3 promotion, current-screens inventory 재분류는 계속 비범위다. [권장]
+
+연결 메모 (2026-03-26 planning stable post-closeout next official axis reselection audit):
+- planning stable representative funnel closeout 자체는 그대로 parked baseline으로 유지한다. 따라서 planning stable surface 내부 current smallest viable next candidate는 계속 `none for now`이고, 이미 green으로 닫힌 helper micro batch를 다시 current next candidate로 되돌리지 않는다. [현행 확인]
+- post-closeout next-axis map은 `Stream B. Contract & QA`와 `Stream C. Ops & Readiness`로만 좁혀 읽는다. current code 기준에서 representative e2e(`tests/e2e/v3-draft-apply.spec.ts`, `tests/e2e/planning-quickstart-preview.spec.ts`, `tests/e2e/flow-history-to-report.spec.ts`)와 base gate(`pnpm build`, `pnpm lint`, `pnpm test`)는 product-flow beta proof asset이고, `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`는 별도 ops/readiness asset이다. [현행 확인]
+- current smallest viable next official axis는 `Stream B. Contract & QA`로 두는 편이 맞다. current smallest official question은 representative funnel targeted beta gate/evidence bundle을 existing asset 기준으로 어디까지 고정할지이며, `Stream C`는 operator readiness 후속 축으로 남긴다. [권장]
+- 위 재선정은 `N1 ~ N5` 전체 우선순위를 다시 쓰는 것이 아니라, current import-to-planning beta docs-first 후속 질문을 어디에 둘지 좁히는 local audit로 읽는다. DART isolated green rerun 상태도 이 판단과 충돌하지 않는다. [해석]
+
+연결 메모 (2026-03-26 planning stable targeted beta gate-evidence-bundle alignment docs-only sync):
+- current `Stream B. Contract & QA` proof set은 base gate `pnpm build`, `pnpm lint`, `pnpm test`와 representative e2e asset `tests/e2e/v3-draft-apply.spec.ts`, `tests/e2e/planning-quickstart-preview.spec.ts`, `tests/e2e/flow-history-to-report.spec.ts` 3개를 함께 읽는 편이 맞다. 이 묶음이 current import-to-planning beta targeted gate/evidence bundle baseline이다. [권장]
+- `pnpm planning:current-screens:guard`와 `pnpm planning:ssot:check`는 항상 기본 gate가 아니라 route inventory/href/catalog 영향이 있을 때만 붙는 conditional gate다. [현행 확인]
+- `tests/e2e/planning-v2-fast.spec.ts`와 `pnpm e2e:rc`는 adjacent stable/public regression asset이지, current representative funnel targeted proof set 자체는 아니다. 따라서 이번 라운드에서는 새 script, 새 CI matrix, 새 release rule을 만들지 않고 existing asset 층위만 문서로 고정한다. [권장]
+- `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`는 계속 `Stream C. Ops & Readiness` asset으로 defer한다. product-flow beta proof와 operator readiness를 같은 gate로 묶지 않는다. [권장]
 
 ---
 

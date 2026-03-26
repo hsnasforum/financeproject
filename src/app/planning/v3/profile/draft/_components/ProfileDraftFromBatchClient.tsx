@@ -171,7 +171,11 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Draft Patch From Batch</h1>
+          <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Draft Preview</h1>
+          <p className="text-sm text-slate-700">
+            이 화면은 compat/raw draft preview surface입니다. official beta funnel은 저장된 profile drafts에서
+            개별 초안을 검토한 뒤 preflight를 거쳐 planning 실행 저장과 stable report 확인으로 닫습니다.
+          </p>
           <p className="text-sm font-semibold text-amber-700">이 초안은 저장/적용되지 않으며 다운로드만 제공합니다.</p>
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-sm font-semibold text-slate-700" htmlFor="v3-draft-batch-id">
@@ -199,15 +203,24 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
           </div>
           <div className={bodyActionLinkGroupClassName}>
             <BodyActionLink href="/planning/v3/profile/drafts">
-              저장된 profile drafts
+              official profile drafts
             </BodyActionLink>
             <BodyActionLink href="/planning/v3/transactions/batches">
-              배치 목록
-            </BodyActionLink>
-            <BodyActionLink href="/planning/v3/drafts/profile">
-              기존 draft 생성 화면
+              official batch entry
             </BodyActionLink>
           </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Support / Internal</p>
+            <div className={bodyActionLinkGroupClassName}>
+              <BodyActionLink href="/planning/v3/drafts/profile">
+                compat draft 생성 화면
+              </BodyActionLink>
+            </div>
+          </div>
+          <p className="text-xs text-slate-500">
+            stable report는 이 화면의 직접 entry가 아니라 저장된 draft를 preflight/apply 하고 planning 실행을 저장한
+            뒤 확인하는 도착점입니다.
+          </p>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
 

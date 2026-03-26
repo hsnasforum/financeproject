@@ -666,7 +666,7 @@ export function PlanningRunsClient({
     <PageShell className="bg-slate-50">
       <PageHeader
         title="실행 기록"
-        description="저장된 실행을 다시 읽고 비교하며, 필요하면 상세 리포트와 다음 확인 단계로 이어 보는 화면입니다."
+        description="플래닝에서 저장한 실행을 다시 읽고 서로 비교한 뒤, 필요한 실행만 상세 리포트로 이어 보는 기록/비교 화면입니다."
         action={(
           <div className="no-print flex items-center gap-3">
             <Button
@@ -685,7 +685,7 @@ export function PlanningRunsClient({
         )}
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
-        이 화면은 확정 답안 목록이 아니라, 저장된 실행을 다시 읽고 서로 비교하거나 상세 리포트로 이어 보는 기록 관리 단계입니다.
+        이 화면은 첫 진입점이 아니라, 저장된 실행을 다시 읽고 비교한 뒤 상세 리포트로 이어 보는 후속 기록 단계입니다.
       </p>
 
       <Card className="mb-6 border-amber-100 bg-amber-50/50 p-4 rounded-2xl">
@@ -713,7 +713,7 @@ export function PlanningRunsClient({
         <Card className="p-6">
           <SubSectionHeader
             title="실행 목록"
-            description="프로필별로 저장된 실행을 좁혀 보고, 상세로 열 실행과 비교할 두 실행을 고릅니다."
+            description="프로필별로 저장된 실행을 좁혀 보고, 서로 비교할 실행과 상세 리포트로 이어 갈 실행을 고릅니다."
             action={
               <div className="no-print flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -764,8 +764,8 @@ export function PlanningRunsClient({
                 {runs.length === 0 ? (
                   <tr>
                     <td className="px-4 py-12 text-center" colSpan={8}>
-                      <p className="text-sm font-bold text-slate-400">저장된 실행 기록이 없습니다.</p>
-                      <p className="mt-2 text-xs font-medium text-slate-400">플래닝에서 실행을 저장하면 여기서 비교와 상세 확인을 이어 할 수 있습니다.</p>
+                      <p className="text-sm font-bold text-slate-400">아직 저장된 실행 기록이 없습니다.</p>
+                      <p className="mt-2 text-xs font-medium text-slate-400">먼저 /planning에서 실행을 저장하면 여기서 실행을 다시 확인하거나 비교하고, 필요한 실행만 상세 리포트로 이어 볼 수 있습니다.</p>
                     </td>
                   </tr>
                 ) : runs.map((run) => {
@@ -832,11 +832,11 @@ export function PlanningRunsClient({
           <Card className="p-6">
             <SubSectionHeader
               title="실행 기록 상세"
-              description="선택한 실행이 언제 저장됐는지와 핵심 결과를 먼저 보고, 다음 단계로 상세 리포트로 이어 갑니다."
+              description="선택한 실행의 저장 결과를 다시 읽고, 필요하면 바로 리포트 화면으로 이어 갑니다."
             />
             {!selectedRun ? (
               <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                목록에서 실행을 하나 고르면 저장 시점과 다음 확인 경로를 여기서 바로 읽을 수 있습니다.
+                실행이 준비되면 목록에서 하나를 선택해 저장 결과를 다시 읽고, 필요하면 바로 리포트 화면으로 이어가세요.
               </p>
             ) : (
               <div className="space-y-6">
@@ -844,7 +844,7 @@ export function PlanningRunsClient({
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100 mb-4">선택한 실행</p>
                   <h3 className="text-xl font-black tracking-tight">{selectedRun.title || selectedRun.id.slice(0, 8)}</h3>
                   <p className="mt-3 text-sm font-medium leading-relaxed text-emerald-50/90">
-                    저장 당시 결과를 다시 읽고, 필요하면 상세 리포트에서 추천 비교 자료와 후속 행동까지 이어 볼 수 있습니다.
+                    선택한 실행의 저장 결과를 다시 읽고, 필요하면 바로 리포트 화면에서 자세한 근거와 후속 행동을 이어 확인할 수 있습니다.
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-4">
                     <div>
@@ -861,13 +861,13 @@ export function PlanningRunsClient({
                     <Button size="sm" variant="outline" className="h-8 text-[10px] font-black rounded-lg border-white/20 bg-white/5 hover:bg-white/10" onClick={() => void copyRunJsonAction(selectedRun)}>JSON 복사</Button>
                     <Link
                       className="inline-flex items-center h-8 rounded-lg bg-white px-3 text-[10px] font-black text-emerald-600 hover:bg-emerald-50 transition-colors shadow-sm"
-                      href={appendProfileIdQuery(`/planning/reports/${encodeURIComponent(selectedRun.id)}`, selectedRun.profileId)}
+                      href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(selectedRun.id)}`, selectedRun.profileId)}
                     >
-                      상세 리포트 보기 →
+                      리포트 화면 보기 →
                     </Link>
                   </div>
                   <p className="mt-3 text-[11px] font-medium leading-relaxed text-emerald-100/80">
-                    상세 리포트에서는 실행 비교, 추천 비교 자료, 추가 혜택 후보를 이어서 확인할 수 있습니다.
+                    리포트 화면은 이 실행 하나의 저장 결과를 다시 읽는 기본 도착점입니다. 저장된 상세 리포트는 그 화면에서 따로 보관해 열 수 있고, 다른 실행 비교는 이 화면에서 이어서 고릅니다.
                   </p>
                 </div>
 
@@ -962,11 +962,11 @@ export function PlanningRunsClient({
           <Card className="p-6">
             <SubSectionHeader
               title="실행 비교 요약"
-              description="선택한 두 실행 사이에서 무엇이 달라졌는지 먼저 짧게 읽고, 필요하면 상세 비교 리포트로 이어 갑니다."
+              description="선택한 두 실행의 차이를 먼저 읽고, 필요하면 상세 비교 리포트로 이어 갑니다."
             />
             {!compareResult ? (
               <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-                목록에서 실행 두 개를 선택하면 저장 시점 차이와 핵심 변화 포인트를 여기서 먼저 볼 수 있습니다.
+                목록에서 실행 두 개를 선택하면 두 실행의 차이를 여기서 먼저 읽고, 필요하면 상세 비교 리포트로 이어갈 수 있습니다.
               </p>
             ) : (
               <div className="space-y-4">
@@ -990,6 +990,9 @@ export function PlanningRunsClient({
                     </span>
                   </div>
                 </div>
+                <p className="text-[11px] font-medium leading-relaxed text-slate-500">
+                  두 실행의 차이를 여기서 먼저 읽고, 필요하면 상세 비교 리포트에서 변화 근거와 비교 자료를 더 확인합니다.
+                </p>
                 <a
                   className="block w-full text-center py-3 rounded-xl bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98]"
                   href={`/api/planning/v2/runs/${encodeURIComponent(compareResult.other.id)}/report?compareTo=${encodeURIComponent(compareResult.base.id)}`}
