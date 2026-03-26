@@ -880,9 +880,9 @@
 
 연결 메모 (2026-03-26 planning stable post-closeout next official axis reselection audit):
 - planning stable representative funnel closeout 자체는 그대로 parked baseline으로 유지한다. 따라서 planning stable surface 내부 current smallest viable next candidate는 계속 `none for now`이고, 이미 green으로 닫힌 helper micro batch를 다시 current next candidate로 되돌리지 않는다. [현행 확인]
-- post-closeout next-axis map은 `Stream B. Contract & QA`와 `Stream C. Ops & Readiness`로만 좁혀 읽는다. current code 기준에서 representative e2e(`tests/e2e/v3-draft-apply.spec.ts`, `tests/e2e/planning-quickstart-preview.spec.ts`, `tests/e2e/flow-history-to-report.spec.ts`)와 base gate(`pnpm build`, `pnpm lint`, `pnpm test`)는 product-flow beta proof asset이고, `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`는 별도 ops/readiness asset이다. [현행 확인]
-- current smallest viable next official axis는 `Stream B. Contract & QA`로 두는 편이 맞다. current smallest official question은 representative funnel targeted beta gate/evidence bundle을 existing asset 기준으로 어디까지 고정할지이며, `Stream C`는 operator readiness 후속 축으로 남긴다. [권장]
-- 위 재선정은 `N1 ~ N5` 전체 우선순위를 다시 쓰는 것이 아니라, current import-to-planning beta docs-first 후속 질문을 어디에 둘지 좁히는 local audit로 읽는다. DART isolated green rerun 상태도 이 판단과 충돌하지 않는다. [해석]
+- post-closeout map은 `Stream B. Contract & QA`와 `Stream C. Ops & Readiness`를 구분해 기록한 baseline 층으로만 남긴다. current code 기준에서 representative e2e(`tests/e2e/v3-draft-apply.spec.ts`, `tests/e2e/planning-quickstart-preview.spec.ts`, `tests/e2e/flow-history-to-report.spec.ts`)와 base gate(`pnpm build`, `pnpm lint`, `pnpm test`)는 product-flow beta proof asset이고, `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`는 별도 ops/readiness asset이다. [현행 확인]
+- current default next step은 `Stream B`나 `Stream C`를 새 official axis로 다시 여는 것이 아니라 `parked baseline 유지`다. 후속 reopen은 restore validator / whitelist contract 또는 archive persistence semantics를 실제로 바꿔야 하거나, promotion policy trigger가 실제로 생길 때만 검토한다. [권장]
+- 위 정리는 `N1 ~ N5` 참조 문서를 지우는 것이 아니라, current import-to-planning beta 라운드의 기본 상태가 broad backlog 진행이 아니라 trigger-specific reopen 대기라는 뜻으로 읽는다. DART isolated green rerun 상태도 이 판단과 충돌하지 않는다. [해석]
 
 연결 메모 (2026-03-26 planning stable targeted beta gate-evidence-bundle alignment docs-only sync):
 - current `Stream B. Contract & QA` proof set은 base gate `pnpm build`, `pnpm lint`, `pnpm test`와 representative e2e asset `tests/e2e/v3-draft-apply.spec.ts`, `tests/e2e/planning-quickstart-preview.spec.ts`, `tests/e2e/flow-history-to-report.spec.ts` 3개를 함께 읽는 편이 맞다. 이 묶음이 current import-to-planning beta targeted gate/evidence bundle baseline이다. [권장]
@@ -890,51 +890,53 @@
 - `tests/e2e/planning-v2-fast.spec.ts`와 `pnpm e2e:rc`는 adjacent stable/public regression asset이지, current representative funnel targeted proof set 자체는 아니다. 따라서 이번 라운드에서는 새 script, 새 CI matrix, 새 release rule을 만들지 않고 existing asset 층위만 문서로 고정한다. [권장]
 - `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`는 계속 `Stream C. Ops & Readiness` asset으로 defer한다. product-flow beta proof와 operator readiness를 같은 gate로 묶지 않는다. [권장]
 
----
+연결 메모 (2026-03-26 planning stable ops-readiness baseline execution audit):
+- `/tmp/finance-v3-ops-audit` disposable sandbox에서 `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore` preview/apply, `pnpm v3:support-bundle`를 실제로 실행했다. sandbox는 live repo root `.data`를 직접 바꾸지 않도록 whitelist 대상 `.data/{news,indicators,alerts,journal,exposure,planning_v3_drafts}`만 복사해 만들었다. [현행 확인]
+- `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip`는 preview/apply 모두 `errors=0 warnings=124` 상태를 기록했다. warning은 `.data/news/**`, `.data/alerts/**`, `.data/indicators/specOverrides.json` 같은 허용 경로 내 확장 파일을 current baseline에서 `UNKNOWN_ALLOWED_PATH` warning-only inventory notice로 읽은 결과다. apply 뒤에는 backup=`/tmp/finance-v3-ops-audit/.data.bak-20260326124215`, post-restore `doctor ok=true`도 남았다. [현행 확인]
+- 따라서 `Stream C. Ops & Readiness`는 “operator baseline execution evidence가 없는 상태”를 벗어났고, product-flow beta proof와 분리된 ops/readiness baseline으로 닫힌다. operator safety follow-up closeout 기준 safest archive placement rule은 current `.data` 밖 절대 경로이며, `docs/runbook.md`에 이미 landed 했다. [권장]
+- 이번 baseline execution은 route inventory/current-screens/public exposure를 건드리지 않았다. [현행 확인]
 
-## 4. 권장 우선순위
-
-다음 사이클 공식 우선순위는 아래 순서로 고정합니다.
-
-1. `N1` planning/v3 canonical entity model 정의
-2. `N2` planning/v3 API / import-export / rollback contract 정의
-3. `N3` QA gate 재정의와 golden dataset 기준 정리
-4. `N4` planning/v3 beta exposure / visibility policy
-5. `N5` public/stable UX polish backlog
-
-정리:
-- `planning/v3`는 public beta 노출 확대보다 canonical model과 contract를 먼저 닫습니다.
-- `QA gate 재정의`는 v3 계약 정의에 종속되지만, release policy와 stable/beta/ops-dev 경계를 다시 세우는 별도 backlog이므로 독립 항목으로 둡니다.
-- 사용자 문구 polish는 독립 대형 축이 아니라 후순위의 작은 보조 backlog로 둡니다.
+연결 메모 (2026-03-26 planning stable promotion-exposure policy sync):
+- `Stream B` proof set baseline과 `Stream C` ops baseline이 모두 남은 현재, promotion / exposure 질문은 broad v3 rewrite가 아니라 official entry / public beta inventory / stable destination tier를 실제로 바꿔야 하는 정책 trigger가 생겼는지로 좁혀 읽는 편이 맞다. [권장]
+- `docs/current-screens.md`는 stable `/planning*` 경로를 `Public Stable`, `/planning/v3/*`를 `Public Beta`로 유지하고 있고, official entry/deep-link/stable destination을 분리해 읽는 overlay note도 남겨 current backlog 판단과 충돌하지 않는다. [현행 확인]
+- official entry는 representative beta funnel entry(`/planning/v3/transactions` redirect alias, `/planning/v3/transactions/batches`)와 stable destination tier(`/planning`, `/planning/runs`, `/planning/reports`, `/planning/reports/[id]`)로 계속 분리해 읽고, `/planning/v3/start`와 other broad v3 surfaces는 current official entry policy 밖에 둔다. [권장]
+- 따라서 broad route promotion, current-screens 재분류, stable/public IA 재설계는 계속 reopen trigger가 생길 때만 다시 연다. [권장]
 
 ---
 
-## 5. 선행 조건과 연결 규칙
+## 4. 현재 공식 판단
 
-- `N1`이 닫히기 전:
-  새 v3 stable route, broad beta exposure, public-facing copy 확장 금지
-- `N2`가 닫히기 전:
-  import/export/rollback behavior를 화면별 예외로 늘리지 않음
-- `N3`가 닫히기 전:
-  stable/beta/ops-dev를 같은 release gate로 다루지 않음
-- `N4`가 닫히기 전:
-  v3 route를 public stable처럼 문서/헤더/홈에 노출하지 않음
-- `N5`는 항상:
-  contract-first backlog를 막지 않는 small-batch 보조 개선으로만 연다
+- current import-to-planning beta 라운드의 기본 상태는 새 broad implementation backlog를 여는 것이 아니라 `parked baseline 유지`다.
+- representative funnel closeout, targeted beta gate/evidence bundle baseline, ops/readiness baseline, promotion/exposure policy sync는 모두 `/work` evidence와 route policy 문서 기준으로 닫힌 상태로 읽는다.
+- operator safety follow-up audit도 current baseline 기준 restore blocker가 아닌 warning-only inventory 해석과 archive placement runbook rule까지 닫힌 closeout 상태로 읽는다.
+- `N1 ~ N5` 문서는 현재 활성 next batch 순서를 뜻하기보다, 필요 시 reopen trigger가 생겼을 때 참조할 archived decomposition으로 둔다.
+
+---
+
+## 5. reopen trigger
+
+- representative funnel route/href/query contract를 실제로 바꿔야 할 때
+- stable `/planning`, `/planning/runs`, `/planning/reports`, `/planning/reports/[id]` handoff semantics를 실제로 바꿔야 할 때
+- targeted proof set 자체를 바꿔야 하는 새 공식 요구가 생길 때
+- restore validator / whitelist contract 또는 archive persistence semantics를 실제로 바꿔야 할 때
+- official entry, public beta inventory, stable destination tier를 다시 정해야 하는 정책 trigger가 생길 때
+
+기본값:
+
+- wording sync, closeout memo 보강, current inventory 재확인만으로는 reopen하지 않는다.
 
 ---
 
 ## 6. 현재 로드맵과의 연결
 
-- `financeproject_next_stage_plan.md`는 `P1 ~ P3` 완료 로드맵으로 유지합니다.
-- 다음 구현 사이클의 공식 backlog는 이 문서(`11_post_phase3_vnext_backlog.md`)를 기준으로 시작합니다.
-- 기존 완료 항목은 reopen하지 않고, 필요하면 `N1 ~ N5` backlog 아래의 후속 계약/정책/노출 작업으로만 이어집니다.
+- `financeproject_next_stage_plan.md`는 `P1 ~ P3` 완료 로드맵으로 유지한다.
+- `analysis_docs/v2/12`부터 `analysis_docs/v2/16`까지의 `N1 ~ N5` 문서는 archived reference decomposition으로 유지하되, 현재 기본 next step으로 자동 승격하지 않는다.
+- 실제 후속 라운드는 broad contract-first backlog를 순서대로 다시 여는 대신, trigger-specific reopen으로만 시작한다.
 
 ---
 
 ## 7. 이번 단계 결론
 
-- post-Phase-3의 공식 backlog는 `N1 ~ N5` 다섯 항목으로 제한합니다.
-- 다음 사이클의 1순위는 `planning/v3 canonical entity model 정의`입니다.
-- public beta 노출 확대보다 canonical contract와 QA gate를 먼저 고정합니다.
-- UX polish는 별도 대형 축이 아니라 보조 backlog로 내립니다.
+- post-Phase-3의 current import-to-planning beta 라운드는 사실상 한 바퀴 닫혔다.
+- 현재 가장 안전한 운영 방식은 `representative funnel park + Stream B/Stream C baseline 유지 + explicit trigger가 있을 때만 reopen`이다.
+- broad v3 promotion, stable/public IA 재설계, `/planning/v3/start` 승격, 새 CI matrix 추가는 계속 비범위다.

@@ -298,26 +298,24 @@
 
 [권장]
 
-- post-closeout next-axis map은 아래 2개 층으로만 읽는다.
-  - `Stream B. Contract & QA`: representative funnel targeted beta gate + evidence bundle 선정
-  - `Stream C. Ops & Readiness`: `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle` 운영/복구 루틴 정리
-- current smallest viable next official axis는 `Stream B. Contract & QA` 1개로 고정하는 편이 맞다.
-- `Stream B`를 지금 열 경우 current smallest official question은 아래 1개다.
-  - 이미 landed한 representative e2e와 base gate를 묶어 `transactions -> preflight/apply -> stable /planning -> /planning/runs -> /planning/reports -> /planning/reports/[id]`를 증명하는 targeted beta gate/evidence bundle을 어디까지로 고정할 것인가
-- `Stream C`를 지금 열 경우 current smallest official question은 아래 1개지만, 이번 라운드의 next official axis로는 후순위로 둔다.
-  - `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`를 operator readiness로 어떻게 실행/기록할지, 그리고 support bundle / feedback triage 접점을 어디서 닫을지
-- `Stream B`의 current non-goal은 아래처럼 잠근다.
-  - `pnpm v3:doctor`/`export`/`restore` 실운영 루틴 확정
-  - restore apply rehearsal, backup/rollback policy 확정
-  - support bundle 배포/feedback triage 운영 규칙 확정
+- post-closeout map은 아래 2개 층을 구분해 기록 완료 상태로만 읽는다.
+  - `Stream B. Contract & QA`: representative funnel targeted beta gate + evidence bundle baseline
+  - `Stream C. Ops & Readiness`: `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle` operator baseline
+- current default next step은 새 official axis를 고르는 것이 아니라 `parked baseline 유지`다.
+- operator safety follow-up audit은 이미 closeout 완료 항목으로 읽고, 후속 reopen은 아래 trigger-specific 경우로만 좁힌다.
+  - restore validator / whitelist contract 또는 archive persistence semantics를 실제로 바꿔야 할 때
+  - `promotion policy trigger audit`: official entry / public beta inventory / stable destination tier를 실제로 바꿔야 하는 trigger가 생겼는지 확인
+- 아래 항목은 current non-goal로 계속 잠근다.
+  - 새 targeted beta gate 체계나 package script 추가
+  - `pnpm v3:doctor`/`export`/`restore` 실운영 루틴 일반화
+  - support bundle 배포/feedback triage 운영 규칙 확장
   - broad v3 promotion
   - stable/public IA 재설계
 
 [해석]
 
-- `Stream B`는 이미 landed한 user-path asset을 묶어 “무엇을 베타 증거로 인정할지”만 정하면 되므로, broad reopen 없이 가장 작게 열 수 있다.
-- 반면 `Stream C`는 export/restore/support bundle처럼 `.data` 백업/복구와 operator workflow를 포함하므로, readiness와 recovery semantics를 함께 다뤄야 해 현재 단계의 smallest docs-only cut보다 한 층 넓다.
-- 따라서 representative funnel closeout 뒤의 current next question은 새 helper micro batch가 아니라 `Stream B` targeted beta gate/evidence bundle 선정으로 좁히고, `Stream C`는 후속 공식 축으로 보류하는 편이 안전하다.
+- targeted beta gate/evidence bundle은 이미 baseline PASS 기록까지 남겼고, `Stream C`도 baseline execution evidence를 확보했으므로 둘 다 “지금 바로 새 축으로 다시 열어야 하는 미완 상태”는 아니다.
+- 따라서 representative funnel closeout 뒤의 current next question은 새 helper micro batch나 새 official axis 선정이 아니라, trigger-specific reopen 또는 operator safety residual risk가 실제로 생겼는지 여부로만 좁히는 편이 맞다.
 
 ### 3.4 2026-03-26 targeted beta gate / evidence bundle alignment
 
@@ -366,82 +364,102 @@
 - 아직 dedicated script가 없는 상태에서 새 command나 CI matrix를 먼저 만들면, representative funnel proof와 stable/public smoke, 그리고 `Stream C` ops readiness를 한 덩어리로 묶어 읽게 될 위험이 크다.
 - 따라서 지금은 `targeted beta gate set`과 `evidence bundle asset map`을 문서로만 잠그고, 실행 방식의 집계 자동화는 별도 후속 라운드에서 다루는 편이 맞다.
 
+### 3.5 2026-03-26 Stream C ops-readiness baseline execution audit
+
+[현행 확인]
+
+- `/tmp/finance-v3-ops-audit` disposable sandbox를 만들고 `planning`, `src`, `package.json`, `tsconfig*.json`, `node_modules`, 그리고 whitelist 대상 `.data/{news,indicators,alerts,journal,exposure,planning_v3_drafts}`만 복사해 live repo root `.data`를 직접 바꾸지 않는 실행 조건을 만들었다.
+- `pnpm v3:doctor`는 sandbox에서 PASS했고, `ok=true checks=8 files=652 errors=0 warnings=0`를 남겼다.
+- `pnpm v3:export`는 PASS했고, archive=`/tmp/finance-v3-ops-audit/.data/exports/v3-data-backup-20260326124207.zip`, `scanned=787 exported=787 skipped=0`을 남겼다.
+- `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip`는 preview 기준으로 PASS했고, `errors=0 warnings=124`를 남겼다.
+- 같은 archive로 `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip --apply`도 PASS했고, `restoredFiles=787`, backup=`/tmp/finance-v3-ops-audit/.data.bak-20260326124215`, post-restore `doctor ok=true errors=0 warnings=0`를 남겼다.
+- `pnpm v3:support-bundle -- --out=.data/exports/v3-support-bundle-20260326124216.zip`는 PASS했고, `scan allowed=787`, `doctor ok=true`, `archiveBytes=3401`을 남겼다.
+- preview warning 124건은 `.data/news/**`, `.data/alerts/**`, `.data/indicators/specOverrides.json` 같은 허용 경로 내 확장 파일을 restore가 structure-only inventory로 읽은 결과이며, current baseline 기준 restore blocker가 아니라 `UNKNOWN_ALLOWED_PATH` warning-only inventory notice다.
+- `restore --apply`는 현재 `.data` 전체를 먼저 `.data.bak-*`로 rename하기 때문에, archive를 `.data/exports` 아래에 둘 경우 apply 뒤 원래 archive path는 backup 쪽으로 이동한다. safest archive placement rule은 current `.data` 밖 절대 경로이고, 이 operator rule은 `docs/runbook.md`에 이미 landed 했다.
+- 이번 baseline execution은 route/href/current-screens/public exposure를 건드리지 않았다.
+
+[권장]
+
+- Stage 3 baseline은 아래 형태로 닫는다.
+  - `doctor/export/restore preview/apply/support-bundle` PASS baseline
+  - restore warning inventory 분류와 archive placement 운영 규칙은 `/work`와 `docs/runbook.md`에 closeout memo로 고정
+- restore warning inventory와 archive placement note는 product-flow reopen reason이 아니라 닫힌 operator memo로만 남긴다.
+- `pnpm v3:doctor`, `pnpm v3:export`, `pnpm v3:restore`, `pnpm v3:support-bundle`는 계속 operator readiness 층으로 두고, targeted beta gate나 full `pnpm e2e:rc`와 섞지 않는다.
+
+[해석]
+
+- Stage 3의 목적은 operator readiness 명령의 현재 입력 조건과 failure mode를 baseline으로 남기는 것이지, broad product UI batch를 다시 여는 것이 아니다.
+- 이번 라운드에서는 live repo root 대신 disposable sandbox에서 preview/apply까지 실제로 닫았고, follow-up audit에서 operator memo도 landed 했다. 따라서 current baseline question은 새 구현 후보가 아니라 `parked baseline 유지`로 읽는 편이 맞다.
+
+### 3.6 2026-03-26 promotion / exposure policy sync
+
+[현행 확인]
+
+- Stage 1 representative funnel closeout, Stage 2 targeted beta proof set baseline, Stage 3 ops/readiness baseline이 모두 기록됐다.
+- `docs/current-screens.md`는 stable `/planning`, `/planning/runs`, `/planning/reports`, `/planning/reports/[id]`를 `Public Stable`로 유지하고, `/planning/v3/*`는 계속 `Public Beta`로 둔다.
+- 같은 문서에 official beta entry 4개, deep-link only, stable destination tier를 분리해 읽는 overlay note도 남겼다.
+- official beta entry는 `/planning/v3/transactions` redirect alias와 `/planning/v3/transactions/batches`로, stable destination tier는 `/planning`, `/planning/runs`, `/planning/reports`, `/planning/reports/[id]`로 계속 분리해 읽는다.
+- `/planning/v3/start`, `news/journal/exposure/scenarios` 같은 broad v3 surface는 current official entry policy 밖에 남아 있다.
+
+[권장]
+
+- promotion / exposure 질문은 이제 “broad v3를 더 노출할 것인가”가 아니라 “official entry, public beta inventory, stable destination tier를 실제로 바꿔야 하는 정책 trigger가 생겼는가”로만 좁혀 읽는다.
+- current default는 아래 잠금 상태를 유지한다.
+  - broad route promotion 없음
+  - current-screens 재분류 없음
+  - stable/public IA 재설계 없음
+- 이후 promotion trigger가 생겨도 broad rewrite가 아니라 명시적인 policy delta만 검토한다.
+
+[해석]
+
+- Stream B와 Stream C baseline이 모두 남은 뒤에도 current route inventory를 넓혀야 할 직접 근거는 없다.
+- 따라서 current-screens inventory, backlog memo, v3 execution plan은 모두 “stable entry는 stable planning에 두고, planning v3는 public beta inventory로 유지한다”는 같은 정책을 가리키는 편이 맞다.
+
 ---
 
-## 4. Phase 1 kickoff 계획
+## 4. 지금 기준 다음 단계
 
-### 4.1 목표
-
-[권장]
-
-Phase 1의 목표는 “무엇을 보여 줄지”를 먼저 잠그는 것이다.  
-즉, broad v3 정리가 아니라 **entry/funnel/gate 기준선**을 닫는 단계다.
-
-### 4.2 이번 Phase 1에서 잠글 항목
+### 4.1 기본 next step
 
 [권장]
 
-1. 공식 제품 문장 1개
-2. official entry 4개 route
-3. deep-link only route 목록
-4. internal/experimental route 목록
-5. 대표 사용자 시나리오 1개
-6. beta 기본 게이트 세트
-7. stable 조건부 게이트 세트
+- 기본 next step은 새 구현 배치나 새 official axis 선정이 아니라 `parked baseline 유지`다.
+- representative funnel, targeted beta gate/evidence bundle, ops/readiness baseline, promotion/exposure policy overlay는 현재 문서와 `/work` evidence 기준으로 모두 닫힌 상태로 읽는다.
+- `v3:restore` warning 124건 warning-only inventory와 archive placement runbook rule도 이미 closeout 완료 항목으로 읽고, 별도 future candidate로 다시 세우지 않는다.
 
-### 4.3 이번 Phase 1에서 아직 열지 않을 항목
+### 4.2 후속 reopen이 필요해진다면
 
 [권장]
 
-- cloud/multi-user
-- auth/tenant/encryption 본구현
-- news/journal/exposure/scenarios 전면 승격
-- stable IA/nav 전면 개편
-- v3 전체 공개 승격
+아래처럼 trigger-specific일 때만 다시 연다.
 
-### 4.4 broad v3 route promotion을 지금 열면 위험한 이유
+1. restore validator / whitelist contract 또는 archive persistence semantics를 실제로 바꿔야 할 때
+2. `promotion policy trigger audit`
 
-[권장]
+현재 판단:
 
-1. `docs/current-screens.md`의 inventory는 route 존재 사실이고, official beta entry는 노출 우선순위 overlay인데 이를 섞으면 current-screens 재분류를 성급히 열게 된다.
-2. `/planning/v3/start`, `news*`, `journal`, `exposure`, `scenarios`는 현재 import-to-planning funnel과 다른 제품 메시지를 갖고 있어 공식 entry로 올리면 베타 가치 제안이 분산된다.
-3. 현재 `/planning/v3/transactions`조차 독립 page가 아니라 `transactions/batches` redirect alias이므로, broad promotion은 실체보다 넓은 진입 정책을 먼저 약속하는 문제가 생긴다.
-4. stable `/planning/reports`와의 handoff를 닫기 전에 broad v3 entry를 늘리면 “무엇을 먼저 검증할 것인가”보다 “무엇을 다 보여 줄 것인가”가 앞서게 된다.
+- 둘 다 기본 next step은 아니다.
+- wording sync, closeout memo 보강, current inventory 재확인만으로는 reopen trigger가 되지 않는다.
 
----
-
-## 5. 워크스트림별 착수 순서
-
-### Stream A. Product Flow
+## 5. parked 상태에서 다시 열 조건과 비범위
 
 [권장]
 
-첫 구현 배치는 아래 순서로 좁힌다.
+reopen trigger:
 
-1. `/planning/v3/transactions` entry wording / redirect alias
-2. `/planning/v3/transactions/batches`와 `/planning/v3/transactions/batches/[id]` handoff
-3. `/planning/v3/balances`, `/planning/v3/profile/drafts`, `/planning/v3/profile/drafts/[id]`, `/planning/v3/profile/drafts/[id]/preflight` follow-through
-4. stable `/planning` arrival, stable `/planning/runs`, stable `/planning/reports`, stable `/planning/reports/[id]` destination/helper chain
-5. current representative funnel closeout 이후 `none for now` stop line 확인
+1. representative funnel route/href/query/result-flow contract를 실제로 바꿔야 할 때
+2. stable `/planning`, `/planning/runs`, `/planning/reports`, `/planning/reports/[id]` handoff semantics를 실제로 바꿔야 할 때
+3. targeted proof set 자체를 바꿔야 하는 새 공식 요구가 생길 때
+4. restore validator / whitelist contract 또는 archive persistence semantics를 실제로 바꿔야 할 때
+5. official entry, public beta inventory, stable destination tier를 다시 정해야 하는 정책 trigger가 생길 때
 
-### Stream B. Contract & QA
+비범위:
 
-[권장]
-
-1. base gate를 `pnpm build`, `pnpm lint`, `pnpm test`로 고정
-2. representative e2e asset을 `tests/e2e/v3-draft-apply.spec.ts`, `tests/e2e/planning-quickstart-preview.spec.ts`, `tests/e2e/flow-history-to-report.spec.ts` 3개로 고정
-3. 위 6개 asset을 current targeted beta gate/evidence bundle proof set으로 문서에 고정
-4. `pnpm planning:current-screens:guard`, `pnpm planning:ssot:check`는 conditional gate로만 유지
-5. `pnpm v3:doctor`/`export`/`restore`/`support-bundle`는 별도 ops/readiness 층으로 유지
-
-### Stream C. Ops & Readiness
-
-[권장]
-
-1. `pnpm v3:doctor` 기준선 확인
-2. `pnpm v3:export`, `pnpm v3:restore` preview/apply 안전 루틴 확인
-3. `pnpm v3:support-bundle`과 support bundle / feedback triage 접점 정리
-4. 이 축은 `Stream B` targeted beta gate 선정 이후의 후속 공식 축으로 다룬다
+- broad v3 route promotion
+- stable/public IA 전면 재설계
+- `/planning/v3/start` 즉시 승격
+- `news/journal/exposure/scenarios` 메인 entry 승격
+- 새 CI matrix 즉시 추가
 
 ---
 
@@ -483,14 +501,21 @@ Phase 1의 목표는 “무엇을 보여 줄지”를 먼저 잠그는 것이다
 - route policy와 catalog guard를 함께 건드릴 때
   - `pnpm planning:ssot:check`
 
-### 6.5 Stream C로 defer하는 ops/readiness asset
+### 6.5 Stream C ops/readiness baseline evidence
 
 [권장]
 
 - `pnpm v3:doctor`
 - `pnpm v3:export`
-- `pnpm v3:restore`
-- `pnpm v3:support-bundle`
+- `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip`
+- `pnpm v3:restore -- --in=.data/exports/v3-data-backup-20260326124207.zip --apply`
+- `pnpm v3:support-bundle -- --out=.data/exports/v3-support-bundle-20260326124216.zip`
+- 실행 조건: workdir=`/tmp/finance-v3-ops-audit` disposable sandbox
+
+[해석]
+
+- current baseline은 `doctor/export/restore preview/apply/support-bundle` PASS, `restore` warning-only inventory notice, 그리고 `docs/runbook.md`에 landed 한 archive placement rule 기준으로 남긴다.
+- archive를 `.data/exports` 아래에 둘 경우 apply 뒤 원래 archive path는 `.data.bak-*` 쪽으로 이동하므로, safest placement는 current `.data` 밖 절대 경로다.
 
 ---
 
@@ -500,21 +525,21 @@ Phase 1의 목표는 “무엇을 보여 줄지”를 먼저 잠그는 것이다
 
 - `Import-to-Planning Beta` representative funnel follow-through chain은 현재 기준으로 closeout 가능한 상태다.
 - current smallest viable next candidate는 이 체인 안에서 `none for now`로 둔다.
-- current smallest viable next official axis는 `Stream B. Contract & QA`다.
-- `Stream B`의 current smallest official question은 representative funnel targeted beta gate/evidence bundle을 existing asset 기준으로 어디까지 고정할지다.
-- current targeted beta gate는 base gate 3개와 representative e2e asset 3개를 묶은 proof set으로 읽고, `pnpm e2e:rc`나 `planning-v2-fast` 같은 broader regression asset과는 구분한다.
-- `Stream C. Ops & Readiness`는 별도 후속 축으로 남기고, product-flow beta proof와 ops/readiness routine을 같은 층위로 섞지 않는다.
+- current targeted beta gate는 base gate 3개와 representative e2e asset 3개를 묶은 proof set으로 고정돼 있고, `pnpm e2e:rc`나 `planning-v2-fast` 같은 broader regression asset과는 구분한다.
+- `Stream C. Ops & Readiness`도 `doctor/export/restore preview/apply/support-bundle` baseline까지 기록됐다.
+- `operator safety follow-up audit` 결과도 `/work`와 `docs/runbook.md` 기준으로 닫힌 상태로 읽는다.
+- current promotion / exposure question은 “broad rewrite”가 아니라 “official entry, public beta inventory, stable destination tier를 실제로 바꿔야 하는 정책 trigger가 생겼는가”로 좁혀진다.
+- product-flow beta proof와 ops/readiness routine은 계속 다른 층으로 유지한다.
 
 ### 다음 질문
 
 1. representative funnel 안에서 route/href/query/result-flow contract를 실제로 바꿔야 하는 trigger-specific reopen이 생겼는가
-2. existing build/lint/test/e2e 자산 중 무엇을 import-to-planning beta targeted gate/evidence bundle로 고정할 것인가
-3. `Stream C` ops/readiness 축은 `Stream B` 이후 어느 범위에서 따로 열 것인가
+2. restore validator / whitelist contract 또는 archive persistence semantics를 실제로 바꿔야 하는 trigger가 생겼는가 [검증 필요]
+3. official entry / public beta inventory / stable destination tier를 실제로 바꿔야 하는 promotion policy trigger가 생겼는가
 
 ### current non-goal
 
 - reports/runs/helper micro spike 재개
-- `Stream B`와 `Stream C`를 같은 라운드에 동시 착수
 - 새 package script 추가
 - 새 CI matrix 설계
 - broad v3 route promotion
@@ -528,15 +553,15 @@ Phase 1의 목표는 “무엇을 보여 줄지”를 먼저 잠그는 것이다
 
 [권장]
 
-지금 `financeproject v3`의 다음 단계는  
-“무엇을 더 만들 것인가”보다  
-“무엇을 먼저 베타 제품으로 고정할 것인가”를 잠그는 작업이다.
+지금 `financeproject v3`의 현재 기준선은
+“무엇을 더 만들 것인가”보다
+“무엇을 그대로 잠가 두고 어떤 trigger에서만 다시 열 것인가”를 분명히 하는 상태다.
 
-따라서 다음 단계는 아래처럼 진행하는 것이 가장 안전하다.
+따라서 현재 기본 결론은 아래처럼 유지하는 것이 가장 안전하다.
 
 > **`analysis_docs/v3/01`, `02`의 결론을 기준으로  
-> official beta entry는 그대로 유지하되,  
+> official beta entry overlay는 그대로 유지하되,
 > `transactions -> batches -> balances -> profile/drafts -> preflight/apply -> stable /planning -> /planning/runs -> /planning/reports -> /planning/reports/[id]`  
-> representative funnel follow-through를 closeout 상태로 잠그고,  
-> current next question은 새 helper micro batch가 아니라 `Stream B. Contract & QA` targeted beta gate/evidence bundle 선정으로 넘기고,  
-> `Stream C. Ops & Readiness`는 별도 후속 축으로 분리한다.**
+> representative funnel follow-through는 parked baseline으로 두고,
+> targeted beta gate/evidence bundle과 Stream C ops/readiness baseline은 모두 기록 완료 상태로 남기며,
+> broad promotion / exposure는 explicit policy trigger가 생길 때만 다시 연다.**

@@ -102,6 +102,13 @@
 - `/planning/v3/transactions/batches`
 - `/planning/v3/transactions/batches/[id]`
 
+## Planning v3 노출 overlay 메모 (2026-03-26)
+- 위 `Planning v3 화면` 목록은 route 존재 사실 기준의 `Public Beta` inventory다.
+- official beta entry overlay는 `/planning/v3/transactions`, `/planning/v3/transactions/batches`, `/planning/v3/balances`, `/planning/v3/profile/drafts` 4개로만 읽는다.
+- deep-link only는 `/planning/v3/transactions/batches/[id]`, `/planning/v3/profile/drafts/[id]`, `/planning/v3/profile/drafts/[id]/preflight`로 유지한다.
+- stable destination tier는 `Public Stable`인 `/planning`, `/planning/runs`, `/planning/reports`, `/planning/reports/[id]`다.
+- `/planning/v3/start`, `/planning/v3/news*`, `/planning/v3/journal`, `/planning/v3/exposure`, `/planning/v3/scenarios`, raw `/planning/v3/batches`, `/planning/v3/import/csv`, `/planning/v3/drafts*`, `/planning/v3/accounts`는 current official entry policy 밖의 non-entry/internal 또는 onboarding wrapper 후보로 둔다.
+
 ## Ops/Admin 화면 (Local-only Ops / local-only 또는 packaged runtime)
 - `/ops`
 - `/ops/about`
