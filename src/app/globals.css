@@ -55,6 +55,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Keep planning/v3 user-facing surfaces at a 12px minimum without
+   rewriting individual utility classes across the subtree. */
+.planning-v3-font-floor .text-\[10px\],
+.planning-v3-font-floor .text-\[11px\] {
+  font-size: 0.75rem !important;
+}
+
 .hero-card-stage {
   perspective: 1600px;
 }

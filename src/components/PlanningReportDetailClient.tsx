@@ -166,16 +166,22 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
     };
   }, [vm]);
 
+  const detailHelperText = report?.runId
+    ? report.recommendRunId
+      ? "선택한 실행의 저장 결과와 연결된 추천 비교 참조를 다시 읽는 상세 화면입니다. 아래 해석 가이드와 근거를 확인하고, 필요하면 추천 비교 기록이나 원문으로 이어가세요."
+      : "선택한 실행의 저장 결과를 다시 읽는 상세 화면입니다. 아래 해석 가이드와 근거를 확인하고, 필요하면 PDF나 원문으로 이어가세요."
+    : "저장해 둔 리포트를 다시 읽는 상세 화면입니다. 아래 해석 가이드와 근거를 확인하고, 필요하면 PDF나 원문으로 이어가세요.";
+
   return (
     <PageShell className="report-detail-root">
       <PageHeader
-        title="리포트 상세 보기"
-        description="저장된 실행 데이터를 바탕으로 해석과 실행 가이드를 보여줍니다."
+        title="플래닝 리포트 상세"
+        description="저장된 실행 결과를 다시 읽고, 필요한 근거와 후속 행동을 확인하는 상세 도착 화면입니다."
         action={(
           <div className="no-print flex items-center gap-4">
             {recommendHistoryHref ? (
               <Link className="text-sm font-black text-emerald-600 hover:text-emerald-700 transition-colors" href={recommendHistoryHref}>
-                추천 실행으로 돌아가기
+                추천 비교 기록으로 돌아가기
               </Link>
             ) : null}
             <Button
@@ -186,10 +192,13 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
             >
               PDF 인쇄
             </Button>
-            <Link className="text-sm font-black text-slate-400 hover:text-emerald-600 transition-colors" href="/planning/reports">목록으로</Link>
+            <Link className="text-sm font-black text-slate-400 hover:text-emerald-600 transition-colors" href="/planning/reports">리포트 목록으로</Link>
           </div>
         )}
       />
+      <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
+        여기는 새 실행을 시작하는 곳이 아니라, 실행 기록 화면이나 저장된 리포트 목록에서 선택한 결과를 자세히 다시 읽는 상세 도착점입니다.
+      </p>
 
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-4">
@@ -221,6 +230,10 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">생성 시각</p>
                 <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(report.createdAt)}</p>
               </div>
+            </div>
+
+            <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-5 py-4 text-sm font-bold leading-relaxed text-emerald-900">
+              {detailHelperText}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">

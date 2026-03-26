@@ -1,18 +1,29 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ProfileDraftFromBatchClient } from "../src/app/planning/v3/profile/draft/_components/ProfileDraftFromBatchClient";
 import { ProfileDraftDetailClient } from "../src/app/planning/v3/profile/drafts/[id]/_components/ProfileDraftDetailClient";
 import { ProfileDraftPreflightClient } from "../src/app/planning/v3/profile/drafts/[id]/preflight/_components/ProfileDraftPreflightClient";
 import { ProfileDraftsListClient } from "../src/app/planning/v3/profile/drafts/_components/ProfileDraftsListClient";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: () => undefined,
+  }),
+}));
+
 describe("planning v3 profile drafts UI", () => {
   it("renders batch entry links toward saved profile drafts flow", () => {
     const html = renderToStaticMarkup(<ProfileDraftFromBatchClient initialBatchId="batch-1" />);
 
-    expect(html).toContain("저장된 profile drafts");
+    expect(html).toContain("compat/raw draft preview surface");
+    expect(html).toContain("official profile drafts");
     expect(html).toContain('href="/planning/v3/profile/drafts"');
-    expect(html).toContain("배치 목록");
+    expect(html).toContain("official batch entry");
     expect(html).toContain('href="/planning/v3/transactions/batches"');
+    expect(html).toContain("Support / Internal");
+    expect(html).toContain("compat draft 생성 화면");
+    expect(html).toContain('href="/planning/v3/drafts/profile"');
+    expect(html).toContain("planning 실행을 저장한 뒤 확인하는 도착점입니다.");
   });
 
   it("renders drafts list with row and delete action", () => {
@@ -40,10 +51,14 @@ describe("planning v3 profile drafts UI", () => {
     const html = renderToStaticMarkup(<ProfileDraftsListClient disableAutoLoad initialRows={[]} />);
 
     expect(html).toContain("저장된 profile draft가 없습니다.");
+    expect(html).toContain("stable planning handoff 직전 검토 축");
+    expect(html).toContain('href="/planning/v3/balances"');
+    expect(html).toContain("balances 다시 확인");
+    expect(html).toContain("Support / Internal");
     expect(html).toContain('href="/planning/v3/import/csv"');
-    expect(html).toContain("CSV 업로드");
+    expect(html).toContain("raw CSV Import");
     expect(html).toContain('href="/planning/v3/batches"');
-    expect(html).toContain("배치 센터");
+    expect(html).toContain("raw 배치 센터");
   });
 
   it("renders loading guidance before drafts list fetch resolves", () => {
@@ -88,11 +103,17 @@ describe("planning v3 profile drafts UI", () => {
       <ProfileDraftPreflightClient id="d_1" initialProfileId="profile-base" />,
     );
 
+    expect(html).toContain("apply 직전 영향 범위 확인 surface");
     expect(html).toContain("프리플라이트 실행");
     expect(html).toContain("URL 반영");
     expect(html).toContain('data-testid="v3-preflight-errors"');
     expect(html).toContain("프리플라이트를 실행하면 오류와 경고가 이 영역에 정리됩니다.");
     expect(html).toContain('href="/planning/v3/profile/drafts/d_1/preflight?profileId=profile-base"');
+    expect(html).toContain('href="/planning/reports"');
+    expect(html).toContain("stable report 확인");
+    expect(html).toContain("stable report 확인은 planning에서 실행을 저장한 뒤 이어지는");
+    expect(html).toContain("Support / Internal");
+    expect(html).toContain('href="/planning/v3/profile/draft"');
   });
 
   it("renders standalone preflight failure guidance after a failed run", () => {
@@ -171,12 +192,22 @@ describe("planning v3 profile drafts UI", () => {
     );
 
     expect(html).toContain('data-testid="v3-draft-apply-guidance"');
+    expect(html).toContain("stable planning handoff 직전의 개별 초안 검토 surface");
+    expect(html).toContain('href="/planning/v3/profile/drafts/d_1/preflight"');
+    expect(html).toContain("preflight 확인");
+    expect(html).toContain('href="/planning/reports"');
+    expect(html).toContain("stable report 확인");
     expect(html).toContain('href="/planning/v3/profile/drafts"');
     expect(html).toContain("초안 목록");
+    expect(html).toContain("Support / Internal");
+    expect(html).toContain('href="/planning/v3/profile/draft"');
+    expect(html).toContain("compat raw draft preview");
     expect(html).toContain('href="/planning/v3/batches"');
-    expect(html).toContain("배치 센터");
+    expect(html).toContain("raw 배치 센터");
     expect(html).toContain('href="/planning/v3/import/csv"');
-    expect(html).toContain("CSV 업로드");
+    expect(html).toContain("raw CSV Import");
+    expect(html).toContain("stable report는 v3 공식 entry가 아니라 preflight/apply 뒤 planning 실행 저장 다음 확인하는 도착점입니다.");
+    expect(html).toContain("다음 단계: 기준 프로필을 고른 뒤 preflight로 영향 범위를 확인하고, apply 뒤 planning에서 실행을 저장하면 stable report 도착점으로 이어집니다.");
     expect(html).toContain("프리플라이트를 먼저 실행하면 이 기준으로 적용 가능 여부가 정리됩니다.");
     expect(html).toContain("프리플라이트를 실행하면 적용을 막는 오류가 이 영역에 정리됩니다.");
     expect(html).toContain("프리플라이트를 실행하면 검토가 필요한 경고가 이 영역에 정리됩니다.");

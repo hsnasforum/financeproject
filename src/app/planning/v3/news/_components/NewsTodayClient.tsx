@@ -505,9 +505,9 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           <div className="mb-8 rounded-3xl bg-emerald-500/10 p-5 border border-emerald-500/20 backdrop-blur-sm">
             <div className="flex items-start gap-3">
               <div className="mt-1 h-2 w-2 flex-none animate-pulse rounded-full bg-emerald-400" />
-              <p className="text-sm font-bold text-emerald-50 leading-relaxed tracking-tight">
-                {priorityMessage}
-              </p>
+	              <p className="text-sm font-bold text-emerald-950 leading-relaxed tracking-tight">
+	                {priorityMessage}
+	              </p>
             </div>
           </div>
 

@@ -22,7 +22,13 @@ async function resolvePendingSuggestions(page: import("@playwright/test").Page):
   }
 }
 
-async function prepareBeginnerQuickStart(page: import("@playwright/test").Page): Promise<void> {
+async function readSelectedProfileId(page: import("@playwright/test").Page): Promise<string> {
+  const profileId = await page.evaluate(() => window.localStorage.getItem("planning:v2:selectedProfileId") ?? "");
+  expect(profileId).not.toBe("");
+  return profileId;
+}
+
+async function prepareBeginnerQuickStart(page: import("@playwright/test").Page): Promise<string> {
   await expect(page.getByRole("heading", { name: /플래닝 v2|Planning v2/i })).toBeVisible({ timeout: 30_000 });
 
   const quickStartGate = page.getByTestId("planning-quickstart-gate");
@@ -64,12 +70,14 @@ async function prepareBeginnerQuickStart(page: import("@playwright/test").Page):
   await resolvePendingSuggestions(page);
 
   const quickStartStatus = page.getByTestId("planning-workspace-quickstart-status");
-  await expect(page.getByText("프로필 저장 완료. 다음 단계는 첫 실행 시작입니다.")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("프로필 저장 완료. 다음 단계는 첫 실행이며, 결과 저장 뒤 리포트를 확인할 수 있습니다.")).toBeVisible({ timeout: 30_000 });
   await expect(appliedState).toContainText("프로필 저장 완료. 이제 첫 실행만 남았습니다.");
   await expect(page.getByTestId("planning-quickstart-followthrough-summary")).toContainText("초안 적용 완료 · 프로필 저장 완료");
   await expect(page.getByTestId("planning-quickstart-next-step")).toHaveText("이제 첫 실행 시작");
   await expect(quickStartStatus).toContainText("프로필 저장 완료");
   await expect(quickStartStatus).toContainText("다음 단계 · 첫 실행 시작");
+
+  return readSelectedProfileId(page);
 }
 
 async function completeFirstQuickStartRun(page: import("@playwright/test").Page): Promise<void> {
@@ -83,12 +91,12 @@ async function completeFirstQuickStartRun(page: import("@playwright/test").Page)
   await expect(page.getByTestId("run-stages-timeline")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("stage-simulate-status")).toBeVisible({ timeout: 30_000 });
 
-  await expect(page.getByText("첫 실행을 완료했습니다. 이제 리포트나 실행 내역에서 비교를 이어가세요.")).toBeVisible({ timeout: 30_000 });
-  await expect(appliedState).toContainText("첫 실행까지 완료했습니다. 이제 리포트와 비교로 이어가면 됩니다.");
-  await expect(page.getByTestId("planning-quickstart-followthrough-summary")).toContainText("초안 적용 완료 · 프로필 저장 완료 · 첫 실행 완료");
-  await expect(page.getByTestId("planning-quickstart-next-step")).toHaveText("리포트 보기");
-  await expect(quickStartStatus).toContainText("프로필 저장 완료 · 첫 실행 완료");
-  await expect(quickStartStatus).toContainText("다음 단계 · 리포트 열기 또는 실행 내역 비교");
+  await expect(page.getByText("첫 실행과 결과 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다.")).toBeVisible({ timeout: 30_000 });
+  await expect(appliedState).toContainText("첫 실행과 결과 저장까지 완료했습니다. 이제 저장된 리포트를 확인하면 됩니다.");
+  await expect(page.getByTestId("planning-quickstart-followthrough-summary")).toContainText("초안 적용 완료 · 프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료");
+  await expect(page.getByTestId("planning-quickstart-next-step")).toHaveText("저장된 리포트 확인");
+  await expect(quickStartStatus).toContainText("프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료");
+  await expect(quickStartStatus).toContainText("다음 단계 · 저장된 리포트 확인 또는 실행 내역 비교");
   await expect(page.getByTestId("planning-quickstart-report-button")).toBeVisible({ timeout: 30_000 });
 }
 
@@ -132,6 +140,29 @@ test("planning quickstart previews before applying beginner draft", async ({ pag
   await page.goto("/planning");
   await prepareBeginnerQuickStart(page);
   await completeFirstQuickStartRun(page);
+});
+
+test("planning arrival with profileId query focuses the next-step run target", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("planning:v2:beginnerMode", "true");
+    window.localStorage.removeItem("planning:v2:selectedProfileId");
+  });
+
+  await page.goto("/planning");
+  const profileId = await prepareBeginnerQuickStart(page);
+
+  await page.goto(`/planning?profileId=${encodeURIComponent(profileId)}`);
+
+  const restoredState = page.getByTestId("planning-quickstart-restored-state");
+  const quickStartStatus = page.getByTestId("planning-workspace-quickstart-status");
+  const firstRunButton = page.getByTestId("planning-quickstart-run-cta");
+
+  await expect(restoredState).toContainText("현재 워크스페이스 상태 기준으로 프로필 저장이 확인됐습니다.");
+  await expect(restoredState).toContainText("첫 실행 시작");
+  await expect(quickStartStatus).toContainText("프로필 저장 완료");
+  await expect(quickStartStatus).toContainText("다음 단계 · 첫 실행 시작");
+  await expect(firstRunButton).toBeVisible({ timeout: 30_000 });
+  await expect(firstRunButton).toBeFocused();
 });
 
 test("planning quickstart keeps review fallback focused on runs history when profile hash verification is unavailable", async ({ page }) => {

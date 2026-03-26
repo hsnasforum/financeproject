@@ -61,7 +61,8 @@ describe("workspaceQuickStart", () => {
     expect(vm.progressItems).toEqual([
       { label: "프로필 저장", state: "done", stateLabel: "완료" },
       { label: "첫 실행", state: "current", stateLabel: "다음" },
-      { label: "리포트/비교", state: "pending", stateLabel: "대기" },
+      { label: "결과 저장", state: "pending", stateLabel: "대기" },
+      { label: "리포트 확인", state: "pending", stateLabel: "대기" },
     ]);
     expect(vm.tone).toBe("border-amber-200 bg-amber-50");
     expect(vm.selectedRunReportHref).toBe("/planning/reports?profileId=profile-1");
@@ -90,7 +91,8 @@ describe("workspaceQuickStart", () => {
     expect(vm.progressItems).toEqual([
       { label: "프로필 저장", state: "done", stateLabel: "완료" },
       { label: "첫 실행", state: "current", stateLabel: "확인 필요" },
-      { label: "리포트/비교", state: "pending", stateLabel: "대기" },
+      { label: "결과 저장", state: "pending", stateLabel: "대기" },
+      { label: "리포트 확인", state: "pending", stateLabel: "대기" },
     ]);
     expect(vm.tone).toBe("border-amber-200 bg-amber-50");
     expect(vm.runStatusReviewRequired).toBe(true);
@@ -111,13 +113,14 @@ describe("workspaceQuickStart", () => {
     });
 
     expect(vm.title).toContain("결과 저장까지 완료");
-    expect(vm.description).toBe("최근 저장 상태: 성공 · 리포트와 실행 기록에서 비교를 이어갈 수 있습니다.");
-    expect(vm.completedSummary).toBe("프로필 저장 완료 · 첫 실행 완료");
-    expect(vm.nextStepSummary).toBe("리포트 열기 또는 실행 내역 비교");
+    expect(vm.description).toBe("최근 저장 상태: 성공 · 저장된 결과는 리포트에서 다시 보고, 실행 기록에서 비교를 이어갈 수 있습니다.");
+    expect(vm.completedSummary).toBe("프로필 저장 완료 · 첫 실행 완료 · 결과 저장 완료");
+    expect(vm.nextStepSummary).toBe("저장된 리포트 확인 또는 실행 내역 비교");
     expect(vm.progressItems).toEqual([
       { label: "프로필 저장", state: "done", stateLabel: "완료" },
       { label: "첫 실행", state: "done", stateLabel: "완료" },
-      { label: "리포트/비교", state: "current", stateLabel: "다음" },
+      { label: "결과 저장", state: "done", stateLabel: "완료" },
+      { label: "리포트 확인", state: "current", stateLabel: "다음" },
     ]);
     expect(vm.tone).toBe("border-slate-200 bg-slate-50");
     expect(vm.selectedRunReportHref).toBe("/planning/reports?profileId=profile-1&runId=run-1");
@@ -154,7 +157,8 @@ describe("workspaceQuickStart", () => {
     expect(vm.progressItems).toEqual([
       { label: "프로필 저장", state: "current", stateLabel: "다음" },
       { label: "첫 실행", state: "pending", stateLabel: "대기" },
-      { label: "리포트/비교", state: "pending", stateLabel: "대기" },
+      { label: "결과 저장", state: "pending", stateLabel: "대기" },
+      { label: "리포트 확인", state: "pending", stateLabel: "대기" },
     ]);
     expect(vm.tone).toBe("border-amber-200 bg-amber-50");
   });

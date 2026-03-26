@@ -141,4 +141,31 @@ describe("planning reports page fallback", () => {
     expect(mocked.redirect).not.toHaveBeenCalled();
     expect(mocked.resolveFallbackReportRunScope).not.toHaveBeenCalled();
   });
+
+  it("renders stable destination empty state when no saved runs exist yet", async () => {
+    mocked.resolveRequestedReportRunContext.mockResolvedValue({
+      requestedRun: null,
+      effectiveProfileId: "profile-1",
+    });
+    mocked.resolveRequestedReportRunScope.mockResolvedValue({
+      effectiveProfileId: "profile-1",
+      requestedRun: null,
+      runs: [],
+      initialRunId: "",
+    });
+
+    const html = renderToStaticMarkup(await PlanningReportsPage({
+      searchParams: Promise.resolve({
+        profileId: "profile-1",
+      }),
+    }));
+
+    expect(html).toContain("플래닝 리포트");
+    expect(html).toContain("저장된 실행 결과를 다시 읽는 도착 화면이지만");
+    expect(html).toContain("아직 저장된 실행이 없습니다");
+    expect(html).toContain("먼저 /planning에서 실행을 저장해 두면");
+    expect(html).toContain("실행 기록 화면과 비교할 수 있습니다.");
+    expect(html).toContain("플래닝으로 돌아가 실행 저장하기");
+    expect(html).toContain("href=\"/planning?profileId=profile-1\"");
+  });
 });

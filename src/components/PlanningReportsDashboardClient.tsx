@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { toInterpretationInputFromReportVM } from "@/app/planning/reports/_lib/reportInterpretationAdapter";
 import { type CandidateRecommendationsPayload } from "@/app/planning/reports/_lib/recommendationSignals";
 import {
@@ -61,6 +61,10 @@ type CreatedReportApiResponse = {
   error?: {
     message?: string;
   };
+};
+
+type SavedReportLookup = {
+  id?: string;
 };
 
 type GoalRow = {
@@ -209,6 +213,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const queryRunId = asString(searchParams.get("runId"));
   const queryBaseRunId = asString(searchParams.get("baseRunId"));
   const queryRecommendRunId = asString(searchParams.get("recommendRunId"));
+  const querySelectedReportId = asString(searchParams.get("selected"));
   const preferredRunId = queryRunId || props.initialRunId || "";
   const initialPreferredRun = useMemo(
     () => props.initialRuns?.find((run) => run.id === preferredRunId) ?? null,
@@ -240,6 +245,9 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const [saveReportWorking, setSaveReportWorking] = useState(false);
   const [saveReportNotice, setSaveReportNotice] = useState("");
   const [saveReportError, setSaveReportError] = useState("");
+  const [savedReportId, setSavedReportId] = useState(querySelectedReportId);
+  const [validatedSavedReportId, setValidatedSavedReportId] = useState("");
+  const [invalidSavedReportId, setInvalidSavedReportId] = useState("");
   const showInitialLoadNotice = Boolean(props.initialLoadNotice) && (loading || (!error && runs.length < 1));
 
   const selectedRun = useMemo(
@@ -358,10 +366,28 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     () => appendProfileIdQuery("/planning/runs", resolvedProfileId),
     [resolvedProfileId],
   );
-  const selectedRunDetailHref = useMemo(
-    () => (selectedRun ? `/planning/reports/${encodeURIComponent(selectedRun.id)}` : ""),
-    [selectedRun],
+  const hasValidSavedReportDetail = Boolean(savedReportId) && savedReportId === validatedSavedReportId;
+  const hasInvalidSavedReportDetail = Boolean(savedReportId) && savedReportId === invalidSavedReportId;
+  const hasPendingSavedReportDetail = Boolean(savedReportId) && !hasValidSavedReportDetail && !hasInvalidSavedReportDetail;
+  const showSavedReportRecheckAction = Boolean(savedReportId) && !hasPendingSavedReportDetail;
+  const savedReportDetailHref = useMemo(
+    () => (hasValidSavedReportDetail ? `/planning/reports/${encodeURIComponent(savedReportId)}` : ""),
+    [hasValidSavedReportDetail, savedReportId],
   );
+  const savedReportDetailHelper = useMemo(() => {
+    if (hasPendingSavedReportDetail) {
+      return "저장된 상세 리포트를 확인하는 중입니다. 현재 기본 리포트 화면은 계속 볼 수 있고, 상세 링크는 확인이 끝난 뒤에만 열립니다.";
+    }
+    if (hasInvalidSavedReportDetail) {
+      return "저장된 상세 리포트를 찾지 못했지만 현재 리포트 화면은 계속 볼 수 있습니다. 필요하면 이 실행을 다시 보관해 새 상세 리포트를 열어 주세요.";
+    }
+    if (!savedReportDetailHref) return "";
+    return saveReportNotice
+      ? "기본 리포트 화면은 여기서 계속 읽고, 필요하면 방금 보관한 상세 리포트에서 원문과 보관 정보를 따로 확인할 수 있습니다."
+      : "보관해 둔 상세 리포트는 이 기본 화면과 분리된 상세 확인 단계입니다. 필요하면 아래 보조 링크로 열어 원문과 보관 정보를 다시 확인하세요.";
+  }, [hasInvalidSavedReportDetail, hasPendingSavedReportDetail, savedReportDetailHref, saveReportNotice]);
+  const showSavedReportNotice = Boolean(saveReportNotice) || hasValidSavedReportDetail || hasInvalidSavedReportDetail || hasPendingSavedReportDetail;
+  const showSavedReportDetailCta = Boolean(savedReportDetailHref);
   const selectedRunHasExplicitRecommendRef = Boolean(
     queryRecommendRunId
     && queryRunId
@@ -379,6 +405,21 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     if (typeof window === "undefined") return;
     window.print();
   };
+  const handleSavedReportManualRecheck = (): void => {
+    const normalizedSavedReportId = savedReportId.trim();
+    if (!normalizedSavedReportId) return;
+    if (
+      normalizedSavedReportId !== validatedSavedReportId
+      && normalizedSavedReportId !== invalidSavedReportId
+    ) {
+      return;
+    }
+    setValidatedSavedReportId("");
+    setInvalidSavedReportId("");
+  };
+  const requestSavedReportRevalidation = useEffectEvent(() => {
+    handleSavedReportManualRecheck();
+  });
 
   const handleSaveReport = async (): Promise<void> => {
     if (!selectedRun?.id || saveReportWorking) return;
@@ -402,6 +443,9 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       const nextParams = new URLSearchParams(searchParams.toString());
       nextParams.set("selected", createdReportId);
       const nextHref = nextParams.size > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
+      setSavedReportId(createdReportId);
+      setValidatedSavedReportId(createdReportId);
+      setInvalidSavedReportId("");
       router.replace(nextHref, { scroll: false });
       setShowAdvancedRaw(true);
       setSaveReportNotice(
@@ -420,6 +464,77 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   useEffect(() => {
     setInteractiveReady(true);
   }, []);
+
+  useEffect(() => {
+    setSavedReportId(querySelectedReportId);
+  }, [querySelectedReportId]);
+
+  useEffect(() => {
+    if (!savedReportId || !hasValidSavedReportDetail) return;
+
+    const handleWindowFocus = () => {
+      requestSavedReportRevalidation();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      requestSavedReportRevalidation();
+    };
+
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [hasValidSavedReportDetail, savedReportId]);
+
+  useEffect(() => {
+    const normalizedSavedReportId = savedReportId.trim();
+    if (!normalizedSavedReportId) {
+      setValidatedSavedReportId("");
+      setInvalidSavedReportId("");
+      return;
+    }
+    if (
+      normalizedSavedReportId === validatedSavedReportId
+      || normalizedSavedReportId === invalidSavedReportId
+    ) {
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+
+    async function validateSavedReport(): Promise<void> {
+      try {
+        const response = await fetch(`/api/planning/v2/reports/${encodeURIComponent(normalizedSavedReportId)}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const rawPayload = await response.json().catch(() => null);
+        const payload = parsePlanningV2Response<SavedReportLookup>(rawPayload);
+        if (!active || controller.signal.aborted) return;
+        const foundReportId = payload.ok ? asString(payload.data?.id) : "";
+        if (response.ok && payload.ok && foundReportId === normalizedSavedReportId) {
+          setValidatedSavedReportId(normalizedSavedReportId);
+          setInvalidSavedReportId("");
+          return;
+        }
+      } catch {
+        if (controller.signal.aborted || !active) return;
+      }
+
+      if (!active || controller.signal.aborted) return;
+      setValidatedSavedReportId("");
+      setInvalidSavedReportId(normalizedSavedReportId);
+    }
+
+    void validateSavedReport();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [invalidSavedReportId, savedReportId, validatedSavedReportId]);
 
   useEffect(() => {
     if (!queryBaseRunId) return;
@@ -600,7 +715,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     <PageShell className="bg-slate-50">
       <PageHeader
         title="플래닝 리포트"
-        description="저장된 실행을 다시 읽고, 필요하면 다른 실행과 비교하거나 추천 비교 기록으로 이어 보는 화면입니다."
+        description="저장된 실행 결과를 다시 읽고, 필요하면 실행 기록 화면의 다른 실행과 비교하는 화면입니다."
         action={(
           <div className="no-print flex items-center gap-3">
             {reverseRecommendHistoryHref ? (
@@ -629,7 +744,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         )}
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
-        이 화면은 확정 답안을 보는 곳이 아니라, 저장 당시 진단 결과를 다시 읽고 다음 비교나 후속 확인 경로를 정리하는 단계입니다.
+        여기는 새 실행을 시작하는 곳이 아니라, 저장된 결과를 다시 확인하고 다음 비교나 후속 확인으로 이어지는 도착점입니다.
       </p>
 
       {showInitialLoadNotice && (
@@ -645,15 +760,15 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       ) : runs.length < 1 ? (
         <div className="space-y-6">
           <EmptyState
-            title="저장된 실행 기록이 없습니다"
-            description="/planning에서 실행을 저장하면, 이 화면에서 리포트를 다시 읽고 다른 실행과 비교할 수 있습니다."
+            title="아직 저장된 실행이 없습니다"
+            description="먼저 /planning에서 실행을 저장해 두면, 여기서 저장된 결과를 다시 보고 실행 기록 화면과 비교할 수 있습니다."
           />
           <Card className="p-8 text-center bg-slate-50/50 border-dashed rounded-[2.5rem]">
-            <p className="text-sm font-bold text-slate-900">막히지 않게 바로 이어서 시작할 수 있습니다.</p>
-            <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">프로필 입력 후 실행을 저장하면, 여기서 저장된 리포트를 다시 읽고 실행 비교까지 이어 볼 수 있습니다.</p>
+            <p className="text-sm font-bold text-slate-900">먼저 /planning에서 실행 저장을 마치면 됩니다.</p>
+            <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">실행을 저장한 뒤 이 화면으로 돌아오면 저장된 결과를 다시 읽고, 실행 기록 화면에서는 다른 실행과 비교할 수 있습니다.</p>
             <div className="mt-6 flex justify-center gap-3">
               <Link href={planningHref}>
-                <Button variant="primary" className="rounded-xl px-6">플래닝 시작</Button>
+                <Button variant="primary" className="rounded-xl px-6">플래닝으로 가서 실행 저장하기</Button>
               </Link>
               <Link href={runsHref}>
                 <Button variant="outline" className="rounded-xl px-6 bg-white">실행 기록 열기</Button>
@@ -670,7 +785,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
           <Card className="p-6">
             <SubSectionHeader
               title="보고 있는 실행 선택"
-              description="저장된 실행을 고르고, 필요하면 기준 실행과 비교하거나 리포트로 따로 보관할 수 있습니다."
+              description="저장된 실행 하나를 다시 읽고, 필요하면 기준 실행과 비교하거나 리포트로 따로 보관할 수 있습니다."
               action={
                 <div className="no-print flex flex-wrap items-center gap-3">
                   <select
@@ -708,9 +823,66 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
               }
             />
 
-            {saveReportNotice ? (
-              <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
-                {saveReportNotice}
+            {showSavedReportNotice ? (
+              <div
+                className={cn(
+                  "mt-4 rounded-2xl border px-4 py-3 text-xs font-bold",
+                  hasInvalidSavedReportDetail
+                    ? "border-amber-100 bg-amber-50 text-amber-800"
+                    : hasPendingSavedReportDetail
+                      ? "border-slate-200 bg-slate-50 text-slate-700"
+                    : "border-emerald-100 bg-emerald-50 text-emerald-800",
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    {saveReportNotice ? <p>{saveReportNotice}</p> : null}
+                    {savedReportDetailHelper ? (
+                      <p
+                        className={cn(
+                          "text-[11px] font-medium leading-relaxed",
+                          hasInvalidSavedReportDetail
+                            ? "text-amber-700"
+                            : hasPendingSavedReportDetail
+                              ? "text-slate-600"
+                              : "text-emerald-700",
+                        )}
+                      >
+                        {savedReportDetailHelper}
+                      </p>
+                    ) : null}
+                  </div>
+                  {showSavedReportDetailCta || showSavedReportRecheckAction ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {showSavedReportDetailCta ? (
+                        <Link
+                          className="inline-flex items-center rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[11px] font-black text-emerald-700 transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+                          data-testid="report-saved-detail-link"
+                          href={savedReportDetailHref}
+                        >
+                          저장된 상세 리포트 열기
+                        </Link>
+                      ) : null}
+                      {showSavedReportRecheckAction ? (
+                        <Button
+                          className={cn(
+                            "h-8 rounded-xl bg-white px-3 text-[11px] font-black",
+                            hasInvalidSavedReportDetail
+                              ? "border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+                              : "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100",
+                          )}
+                          data-testid="report-saved-detail-recheck-button"
+                          onClick={handleSavedReportManualRecheck}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          상태 다시 확인
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import {
   BodyActionLink,
+  bodyActionLinkGroupClassName,
+  BodySectionHeading,
   BodyStatusInset,
   BodyTableFrame,
   bodyCompactFieldClassName,
@@ -50,6 +52,13 @@ type ImportSuccessResponse = {
     ok?: number;
     failed?: number;
   };
+};
+
+type Props = {
+  initialRows?: BatchRow[];
+  initialAccounts?: Account[];
+  disableAutoLoad?: boolean;
+  initialLoadFailed?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -158,13 +167,19 @@ function resolveImportedBatchId(payload: ImportSuccessResponse): string {
   return "";
 }
 
-export function TransactionsBatchListClient() {
+export function TransactionsBatchListClient({
+  initialRows = [],
+  initialAccounts = [],
+  disableAutoLoad = false,
+  initialLoadFailed = false,
+}: Props) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<BatchRow[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [accountLoading, setAccountLoading] = useState(true);
-  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [loading, setLoading] = useState(!disableAutoLoad && initialRows.length < 1 && !initialLoadFailed);
+  const [loadFailed, setLoadFailed] = useState(initialLoadFailed);
+  const [rows, setRows] = useState<BatchRow[]>(initialRows);
+  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
+  const [accountLoading, setAccountLoading] = useState(!disableAutoLoad && initialAccounts.length < 1);
+  const [selectedAccountId, setSelectedAccountId] = useState(() => initialAccounts[0]?.id ?? "");
   const [message, setMessage] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -173,6 +188,7 @@ export function TransactionsBatchListClient() {
 
   const loadRows = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     setMessage("");
 
     try {
@@ -183,10 +199,11 @@ export function TransactionsBatchListClient() {
       const json = await response.json().catch(() => null);
       if (!response.ok || !isListResponse(json)) {
         setRows([]);
-        setMessage("배치 목록을 불러오지 못했습니다.");
+        setLoadFailed(true);
         return;
       }
 
+      setLoadFailed(false);
       setRows(json.items.map((item) => ({
         id: item.id,
         createdAt: item.createdAt,
@@ -198,7 +215,7 @@ export function TransactionsBatchListClient() {
       })));
     } catch {
       setRows([]);
-      setMessage("배치 목록을 불러오지 못했습니다.");
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -284,21 +301,70 @@ export function TransactionsBatchListClient() {
   }, [router, selectedFile, selectedAccountId, uploading]);
 
   useEffect(() => {
+    if (disableAutoLoad) return;
     void loadRows();
     void loadAccounts();
-  }, [loadRows, loadAccounts]);
+  }, [disableAutoLoad, loadRows, loadAccounts]);
 
   return (
     <PageShell>
       <div className="space-y-5">
-        <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Transaction Batches</h1>
-          <p className="text-sm text-slate-600">CSV 업로드 후 로컬 배치로 저장하고, 월별 집계 상태를 확인할 수 있습니다.</p>
+        <Card className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Import-to-Planning Beta</p>
+            <h1 className="text-2xl font-black text-slate-900">거래내역 가져오기 시작</h1>
+            <p className="max-w-3xl text-sm text-slate-600">
+              이 화면은 official beta entry 기준의 시작 surface입니다. CSV를 배치로 가져오고, 최근 배치를 확인한 뒤
+              <span className="font-semibold text-slate-800"> balances 확인</span>,
+              <span className="font-semibold text-slate-800"> profile drafts 확인</span>으로 이어지는 1차 funnel만 먼저 정리합니다.
+            </p>
+          </div>
+
+          <div className={bodyActionLinkGroupClassName}>
+            <a
+              className="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 no-underline shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100"
+              href="#transactions-upload"
+            >
+              CSV 업로드
+            </a>
+            {recentBatch ? (
+              <BodyActionLink href={`/planning/v3/transactions/batches/${encodeURIComponent(recentBatch.id)}`}>
+                최근 배치 확인
+              </BodyActionLink>
+            ) : (
+              <a
+                className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                href="#transactions-batch-list"
+              >
+                최근 배치 확인
+              </a>
+            )}
+            <BodyActionLink href="/planning/v3/balances">
+              balances 확인
+            </BodyActionLink>
+            <BodyActionLink href="/planning/v3/profile/drafts">
+              profile drafts 확인
+            </BodyActionLink>
+          </div>
+
+          <BodyStatusInset>
+            <p className="text-sm font-semibold">stable report는 직접 entry가 아니라 handoff 도착점입니다.</p>
+            <p className="mt-1 text-xs">
+              이 화면에서는 import와 batch 확인까지만 시작하고, preflight/apply 이후에 stable
+              {" "}
+              <BodyActionLink className="text-xs" href="/planning/reports">
+                `/planning/reports`
+              </BodyActionLink>
+              {" "}로 결과를 확인합니다.
+            </p>
+          </BodyStatusInset>
         </Card>
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">CSV 업로드</h2>
-          <p className="text-sm text-slate-600">로컬 CSV 파일을 읽어 새 배치를 만듭니다. 원문 CSV/원문 거래 설명은 화면에 표시하지 않습니다.</p>
+        <Card className="space-y-3" id="transactions-upload">
+          <BodySectionHeading
+            description="로컬 CSV 파일을 읽어 새 배치를 만듭니다. 원문 CSV와 원문 거래 설명은 화면에 그대로 노출하지 않습니다."
+            title="1. CSV 업로드"
+          />
 
           <div className="flex flex-wrap items-center gap-2">
             <label className="text-sm font-semibold text-slate-700">
@@ -320,7 +386,7 @@ export function TransactionsBatchListClient() {
                 ))}
               </select>
             </label>
-            <BodyActionLink href="/planning/v3/accounts">
+            <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/accounts">
               계좌 관리
             </BodyActionLink>
           </div>
@@ -347,7 +413,7 @@ export function TransactionsBatchListClient() {
               size="sm"
               type="button"
             >
-              {uploading ? "업로드 중..." : "업로드"}
+              {uploading ? "업로드 중..." : "CSV 업로드"}
             </Button>
           </div>
 
@@ -383,34 +449,70 @@ export function TransactionsBatchListClient() {
           ) : null}
         </Card>
 
-        <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">가져온 배치 목록</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              onClick={() => {
-                void loadRows();
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              새로고침
-            </Button>
+        <Card className="space-y-3" id="transactions-batch-list">
+          <BodySectionHeading
+            action={(
+              <Button
+                onClick={() => {
+                  void loadRows();
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                새로고침
+              </Button>
+            )}
+            description="가져온 배치에서 바로 상세 확인으로 들어가고, 이후 balances와 profile drafts handoff를 이어갑니다."
+            title="2. 최근 배치 확인"
+          />
+
+          <div className={bodyActionLinkGroupClassName}>
             {recentBatch ? (
               <BodyActionLink href={`/planning/v3/transactions/batches/${encodeURIComponent(recentBatch.id)}`}>
-                최근 배치로 이동
+                최근 배치 확인
               </BodyActionLink>
             ) : null}
-            <BodyActionLink href="/planning/v3/batches">
-              Batch Center
+            <BodyActionLink href="/planning/v3/balances">
+              balances 확인
             </BodyActionLink>
-            <BodyActionLink href="/planning/v3/import/csv">
-              CSV Import
+            <BodyActionLink href="/planning/v3/profile/drafts">
+              profile drafts 확인
             </BodyActionLink>
           </div>
+
+          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Support / Internal</p>
+            <div className={`${bodyActionLinkGroupClassName} text-xs`}>
+              <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/accounts">
+                계좌 관리
+              </BodyActionLink>
+              <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/batches">
+                Batch Center
+              </BodyActionLink>
+              <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/import/csv">
+                raw CSV Import
+              </BodyActionLink>
+            </div>
+          </div>
+
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
           {loading ? <p className="text-sm text-slate-600">목록을 불러오는 중...</p> : null}
-          {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 배치가 없습니다.</p> : null}
+          {!loading && loadFailed ? <p className="text-sm text-slate-600">배치 목록을 불러오지 못했습니다.</p> : null}
+          {!loading && !loadFailed && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 배치가 없습니다.</p> : null}
+
+          <div className="rounded-2xl border border-slate-100 bg-white/70 px-4 py-3">
+            <p className="text-sm font-semibold text-slate-900">다음 handoff</p>
+            <p className="mt-1 text-sm text-slate-600">
+              최근 배치를 확인한 뒤
+              {" "}
+              <span className="font-semibold text-slate-800">balances</span>
+              {" "}에서 월별 흐름을 보고,
+              {" "}
+              <span className="font-semibold text-slate-800">profile drafts</span>
+              {" "}에서 초안을 검토한 다음 preflight/apply를 거쳐 stable report로 이동합니다.
+            </p>
+          </div>
 
           {rows.length > 0 ? (
             <BodyTableFrame>

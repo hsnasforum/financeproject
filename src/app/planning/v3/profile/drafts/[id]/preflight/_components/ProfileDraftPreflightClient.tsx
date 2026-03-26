@@ -137,6 +137,10 @@ export function ProfileDraftPreflightClient({ id, initialProfileId = "", initial
       <div className="space-y-5">
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Draft Preflight (Diff Only)</h1>
+          <p className="text-sm text-slate-700">
+            이 화면은 apply 직전 영향 범위 확인 surface입니다. draft 검토를 마친 뒤 변경 수, 경고, 오류를 확인하고
+            planning에 반영할 준비를 맞춘 다음 stable report 도착점으로 이어지기 전 마지막 체크를 수행합니다.
+          </p>
           <div className={bodyActionLinkGroupClassName}>
             <BodyActionLink href={`/planning/v3/profile/drafts/${encodeURIComponent(id)}`}>
               초안 상세
@@ -144,6 +148,21 @@ export function ProfileDraftPreflightClient({ id, initialProfileId = "", initial
             <BodyActionLink href="/planning/v3/profile/drafts">
               초안 목록
             </BodyActionLink>
+            <BodyActionLink href="/planning/reports">
+              stable report 확인
+            </BodyActionLink>
+          </div>
+          <p className="text-xs text-slate-500">
+            실제 apply는 초안 상세 화면에서 실행합니다. stable report 확인은 planning에서 실행을 저장한 뒤 이어지는
+            최종 도착점입니다.
+          </p>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Support / Internal</p>
+            <div className={bodyActionLinkGroupClassName}>
+              <BodyActionLink href="/planning/v3/profile/draft">
+                compat raw draft preview
+              </BodyActionLink>
+            </div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-slate-700">
