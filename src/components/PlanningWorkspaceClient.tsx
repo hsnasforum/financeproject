@@ -53,6 +53,7 @@ import {
 import {
   buildWorkspaceLiveSummary,
   buildWorkspaceQuickStartVm,
+  focusWorkspaceQuickStartTarget,
   isWorkspaceQuickStartProfileDone,
   resolveWorkspaceSelectedProfileSyncState,
   stableStringifyWorkspaceValue,
@@ -790,6 +791,8 @@ export function PlanningWorkspaceClient({
   const isMountedRef = useRef(true);
   const previousBeginnerModeRef = useRef(beginnerMode);
   const advancedExecutionOptionsRef = useRef<WorkspaceAdvancedExecutionOptions | null>(null);
+  const arrivalHandoffCompletedRef = useRef(false);
+  const arrivalHandoffCancelledRef = useRef(false);
   const [saveWarningConfirmed, setSaveWarningConfirmed] = useState(false);
   const [feedbackModalOpen, setFeedbackModalOpen] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
@@ -833,6 +836,10 @@ export function PlanningWorkspaceClient({
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === selectedProfileId) ?? null,
     [profiles, selectedProfileId],
+  );
+  const initialArrivalProfileId = useMemo(
+    () => normalizeProfileId(initialSelectedProfileId),
+    [initialSelectedProfileId],
   );
   const runsPageHref = useMemo(
     () => appendProfileIdQuery("/planning/runs", selectedProfileId),
@@ -1317,8 +1324,8 @@ export function PlanningWorkspaceClient({
     clearPendingSuggestions();
     pushWorkspaceNotice(
       selectedProfileId
-        ? "간단 시작 입력을 적용했습니다. 현재 프로필과 편집값이 달라졌을 수 있으니 저장 여부를 먼저 확인해 주세요."
-        : "간단 시작 입력을 적용했습니다. 다음 단계는 프로필 저장이며, 아래 새로 만들기를 누르면 첫 실행 시작으로 이어집니다.",
+        ? "간단 시작 입력을 적용했습니다. 현재 프로필과 편집값이 달라졌을 수 있으니 저장 여부를 먼저 확인하고 첫 실행으로 이어가세요."
+        : "간단 시작 입력을 적용했습니다. 다음 단계는 프로필 저장이며, 저장 뒤 첫 실행과 결과 저장을 거쳐 리포트를 확인할 수 있습니다.",
     );
   }
 
@@ -1526,12 +1533,12 @@ export function PlanningWorkspaceClient({
           : "프로필 수정에 실패했습니다.";
       const successMessage = mode === "create"
         ? beginnerMode
-          ? "프로필 저장 완료. 다음 단계는 첫 실행 시작입니다."
+          ? "프로필 저장 완료. 다음 단계는 첫 실행이며, 결과 저장 뒤 리포트를 확인할 수 있습니다."
           : "프로필을 저장했습니다."
         : mode === "duplicate"
           ? "프로필을 복제했습니다."
           : beginnerMode
-            ? "프로필 저장 완료. 다음 단계는 첫 실행 시작입니다."
+            ? "프로필 저장 완료. 다음 단계는 첫 실행이며, 결과 저장 뒤 리포트를 확인할 수 있습니다."
             : "프로필을 수정했습니다.";
       const payloadName = mode === "duplicate" ? `${profileName || "프로필"} (copy)` : profileName;
       const payloadProfile = normalizeDraftWithDisclosure(profile as unknown as FormDraft, profileName);
@@ -1947,7 +1954,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
       setShowAllActions(false);
 
       const runCompletedNotice = beginnerMode
-        ? "첫 실행을 완료했습니다. 이제 리포트나 실행 내역에서 비교를 이어가세요."
+        ? "첫 실행과 결과 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다."
         : "실행을 완료했습니다.";
       if (completedRunState.notices.length > 0) {
         pushWorkspaceNotice([runCompletedNotice, ...completedRunState.notices.map((notice) => `- ${notice}`)].join("\n"));
@@ -2090,7 +2097,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
       if (!options?.silent) {
         pushWorkspaceNotice(
           beginnerMode
-            ? "결과 저장을 완료했습니다. 이제 리포트와 실행 기록에서 비교할 수 있습니다."
+            ? "결과 저장을 완료했습니다. 이제 저장된 리포트를 확인하고 실행 기록에서 비교를 이어갈 수 있습니다."
             : "실행 기록 저장을 완료했습니다. /planning/runs에서 비교할 수 있습니다.",
         );
       }
@@ -2432,7 +2439,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
     if (profileSyncState === "missing") {
       return {
         label: "먼저 프로필 저장",
-        description: "아래 프로필 영역에서 새로 만들기를 누르면 저장 직후 첫 실행 시작으로 이어집니다.",
+        description: "아래 프로필 영역에서 새로 만들기를 누르면 저장 뒤 첫 실행으로 넘어가고, 결과 저장 뒤 리포트를 확인할 수 있습니다.",
         targetId: "planning-profile-create-button",
       };
     }
@@ -2460,20 +2467,20 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
     if (!quickStartVm.beginnerStepRunDone) {
       return {
         label: "이제 첫 실행 시작",
-        description: "아래 간단 진행 카드의 첫 실행 시작을 누르면 요약, 액션, 경고를 한 번에 계산합니다.",
+        description: "아래 간단 진행 카드의 첫 실행 시작을 누르면 요약, 액션, 경고를 한 번에 계산하고, 결과 저장 뒤 저장된 리포트 확인으로 이어집니다.",
         targetId: "planning-quickstart-run-cta",
       };
     }
     if (!quickStartVm.beginnerStepSaveDone) {
       return {
         label: "이제 결과 저장",
-        description: "첫 실행이 끝났습니다. 아래 결과 저장 버튼으로 현재 상태를 보관하면 비교와 리포트로 이어집니다.",
+        description: "첫 실행이 끝났습니다. 아래 결과 저장 버튼으로 현재 상태를 보관하면 저장된 리포트와 실행 내역 비교로 이어집니다.",
         targetId: "planning-quickstart-save-run-button",
       };
     }
     return {
-      label: "리포트 보기",
-      description: "저장까지 끝났습니다. 아래 리포트 버튼으로 결과와 비교 화면을 이어서 볼 수 있습니다.",
+      label: "저장된 리포트 확인",
+      description: "저장까지 끝났습니다. 아래 리포트 버튼으로 저장된 결과를 다시 보고, 실행 내역에서는 비교를 이어갈 수 있습니다.",
       targetId: "planning-quickstart-report-button",
     };
   }, [
@@ -2481,6 +2488,51 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
     quickStartVm.beginnerStepRunDone,
     quickStartVm.beginnerStepSaveDone,
     quickStartVm.runStatusReviewRequired,
+  ]);
+
+  useEffect(() => {
+    arrivalHandoffCompletedRef.current = false;
+    arrivalHandoffCancelledRef.current = false;
+  }, [initialArrivalProfileId]);
+
+  useEffect(() => {
+    if (!initialArrivalProfileId) return;
+
+    function cancelArrivalHandoff(): void {
+      if (arrivalHandoffCompletedRef.current) return;
+      arrivalHandoffCancelledRef.current = true;
+    }
+
+    window.addEventListener("pointerdown", cancelArrivalHandoff, true);
+    window.addEventListener("keydown", cancelArrivalHandoff, true);
+    window.addEventListener("wheel", cancelArrivalHandoff, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", cancelArrivalHandoff, true);
+      window.removeEventListener("keydown", cancelArrivalHandoff, true);
+      window.removeEventListener("wheel", cancelArrivalHandoff, true);
+    };
+  }, [initialArrivalProfileId]);
+
+  useEffect(() => {
+    if (!initialArrivalProfileId) return;
+    if (loadingProfiles) return;
+    if (arrivalHandoffCompletedRef.current || arrivalHandoffCancelledRef.current) return;
+    if (!quickStartNextStep.targetId) return;
+    if (selectedProfileId !== initialArrivalProfileId) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      if (arrivalHandoffCompletedRef.current || arrivalHandoffCancelledRef.current) return;
+      const moved = focusWorkspaceQuickStartTarget(quickStartNextStep.targetId);
+      if (moved) {
+        arrivalHandoffCompletedRef.current = true;
+      }
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [
+    initialArrivalProfileId,
+    loadingProfiles,
+    quickStartNextStep.targetId,
+    selectedProfileId,
   ]);
 
   useEffect(() => {
@@ -2678,7 +2730,7 @@ function handleSnapshotNotFoundCode(code: unknown): boolean {
       {beginnerMode ? (
         <BodyInset className="mb-6">
           <p className="text-xs font-semibold text-slate-800">5분 진행 안내</p>
-          <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-3">
+          <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-2 xl:grid-cols-4">
             {quickStartVm.progressItems.map((item) => (
               <p key={item.label} className={`rounded-lg border px-3 py-2 ${quickStartProgressToneClassName(item.state)}`}>
                 {item.label} · {item.stateLabel}

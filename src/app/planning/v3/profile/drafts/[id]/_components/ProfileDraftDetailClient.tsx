@@ -400,16 +400,38 @@ export function ProfileDraftDetailClient({
       <div className="space-y-5">
         <Card className="space-y-3">
           <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Draft Detail</h1>
+          <p className="text-sm text-slate-700">
+            이 화면은 stable planning handoff 직전의 개별 초안 검토 surface입니다. 다음 단계는 draft 검토 후
+            preflight에서 영향 범위를 확인하고, apply 뒤 planning에서 실행을 저장한 다음 stable report를 확인하는
+            흐름입니다.
+          </p>
           <div className={bodyActionLinkGroupClassName}>
+            <BodyActionLink href={`/planning/v3/profile/drafts/${encodeURIComponent(id)}/preflight`}>
+              preflight 확인
+            </BodyActionLink>
+            <BodyActionLink href="/planning/reports">
+              stable report 확인
+            </BodyActionLink>
             <BodyActionLink href="/planning/v3/profile/drafts">
               초안 목록
             </BodyActionLink>
-            <BodyActionLink href="/planning/v3/batches">
-              배치 센터
-            </BodyActionLink>
-            <BodyActionLink href="/planning/v3/import/csv">
-              CSV 업로드
-            </BodyActionLink>
+          </div>
+          <p className="text-xs text-slate-500">
+            stable report는 v3 공식 entry가 아니라 preflight/apply 뒤 planning 실행 저장 다음 확인하는 도착점입니다.
+          </p>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Support / Internal</p>
+            <div className={bodyActionLinkGroupClassName}>
+              <BodyActionLink href="/planning/v3/profile/draft">
+                compat raw draft preview
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/batches">
+                raw 배치 센터
+              </BodyActionLink>
+              <BodyActionLink href="/planning/v3/import/csv">
+                raw CSV Import
+              </BodyActionLink>
+            </div>
           </div>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
@@ -471,7 +493,7 @@ export function ProfileDraftDetailClient({
 
             <Card className="space-y-3">
               <BodySectionHeading
-                description="기준 프로필을 선택해 적용 전에 오류, 경고, 변경 항목을 먼저 확인합니다."
+                description="다음 단계: 기준 프로필을 고른 뒤 preflight로 영향 범위를 확인하고, apply 뒤 planning에서 실행을 저장하면 stable report 도착점으로 이어집니다."
                 title="Preflight (Diff Only)"
               />
               <div className="flex flex-col gap-2 sm:flex-row sm:items-end">

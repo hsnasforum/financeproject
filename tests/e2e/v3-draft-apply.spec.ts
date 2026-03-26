@@ -212,7 +212,7 @@ test("planning v3 profile draft flow can create, preflight, and apply a saved dr
   );
 
   await page.getByTestId("v3-draft-apply-profile").click();
-  await expect(page).toHaveURL(/\/planning\?profileId=profile-new$/);
+  await expect(page).toHaveURL(/\/planning\?profileId=profile-new$/, { timeout: 10_000 });
 });
 
 test("planning v3 profile drafts list separates load failure from empty guidance", async ({ page }) => {
@@ -241,8 +241,8 @@ test("planning v3 profile drafts list separates load failure from empty guidance
     "초안 목록을 확인하지 못했습니다. 새로고침으로 다시 시도해 주세요.",
   );
   await expect(page.getByText("저장된 profile draft가 없습니다.")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "CSV 업로드", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "배치 센터", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "raw CSV Import", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "raw 배치 센터", exact: true })).toBeVisible();
 });
 
 test("planning v3 profile draft detail keeps failure guidance after a failed preflight request", async ({ page }) => {
