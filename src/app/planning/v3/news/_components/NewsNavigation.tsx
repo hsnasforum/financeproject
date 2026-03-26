@@ -23,8 +23,8 @@ export function NewsNavigation() {
         options={NAV_OPTIONS}
         activeTab={activeTab}
         onChange={(id) => router.push(id)}
-        tone="dark"
-        className="bg-white/10"
+        tone="light"
+        className="border border-slate-200 bg-slate-100/90 shadow-sm"
       />
     </div>
   );

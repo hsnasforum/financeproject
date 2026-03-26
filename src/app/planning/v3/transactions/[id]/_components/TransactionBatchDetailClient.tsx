@@ -6,7 +6,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
   BodyActionLink,
+  bodyActionLinkGroupClassName,
   BodyInset,
+  BodyStatusInset,
   BodySectionHeading,
   BodyTableFrame,
   bodyChoiceRowClassName,
@@ -1017,23 +1019,58 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
   return (
     <PageShell>
       <div className="space-y-5" data-testid="v3-batch-detail">
-        <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Detail</h1>
-          <p className="text-sm text-slate-600">id: <span className="font-mono">{id}</span></p>
-          <div className="flex flex-wrap items-center gap-2">
+        <Card className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Import-to-Planning Beta</p>
+            <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Detail</h1>
+            <p className="text-sm text-slate-600">
+              id: <span className="font-mono">{id}</span>
+            </p>
+            <p className="max-w-3xl text-sm text-slate-600">
+              이 화면은 deep-link only 배치 상세/보정 surface입니다. 현재 배치를 확인하고 보정한 뒤,
+              <span className="font-semibold text-slate-800"> balances 확인</span>으로 projection을 읽고
+              <span className="font-semibold text-slate-800"> profile drafts 검토</span>로 넘어가는 follow-through를 우선합니다.
+            </p>
+          </div>
+
+          <div className={bodyActionLinkGroupClassName}>
             <BodyActionLink href="/planning/v3/transactions">
-              배치 목록
+              official entry로 돌아가기
             </BodyActionLink>
-            <BodyActionLink href="/planning/v3/accounts">
-              계좌 관리
+            <BodyActionLink href="/planning/v3/balances">
+              balances 확인
             </BodyActionLink>
-            <BodyActionLink href="/planning/v3/categories/rules">
-              카테고리 룰
-            </BodyActionLink>
-            <BodyActionLink href="/planning/v3/import/csv">
-              CSV Import
+            <BodyActionLink href="/planning/v3/profile/drafts">
+              profile drafts 검토
             </BodyActionLink>
           </div>
+
+          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Support / Internal</p>
+            <div className={bodyActionLinkGroupClassName}>
+              <BodyActionLink className="text-xs text-slate-600" href="/planning/v3/accounts">
+                계좌 관리
+              </BodyActionLink>
+              <BodyActionLink className="text-xs text-slate-600" href="/planning/v3/categories/rules">
+                카테고리 룰
+              </BodyActionLink>
+              <BodyActionLink className="text-xs text-slate-600" href="/planning/v3/import/csv">
+                raw CSV Import
+              </BodyActionLink>
+            </div>
+          </div>
+
+          <BodyStatusInset>
+            <p className="text-sm font-semibold">stable report는 이 화면의 직접 entry가 아닙니다.</p>
+            <p className="mt-1 text-xs">
+              balances 확인과 profile draft 검토, preflight/apply를 거친 뒤 stable
+              {" "}
+              <BodyActionLink className="text-xs" href="/planning/reports">
+                `/planning/reports`
+              </BodyActionLink>
+              {" "}에서 결과를 확인합니다.
+            </p>
+          </BodyStatusInset>
           {message ? <p className="text-sm font-semibold text-rose-700">{message}</p> : null}
         </Card>
 
@@ -1616,7 +1653,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                 <Card className="space-y-3">
                   <BodySectionHeading title="Draft 리뷰" />
                   <p className="text-sm text-slate-700">
-                    현재 집계 결과로 v3 Draft를 생성한 뒤 리뷰 페이지에서 merged profile 미리보기 및 JSON export를 진행할 수 있습니다.
+                    현재 집계 결과로 profile draft를 생성한 뒤 초안 목록/상세에서 검토하고, preflight/apply 후 stable report로 넘어가는 representative funnel을 닫습니다.
                   </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button
@@ -1630,8 +1667,17 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                     >
                       {draftSaving ? "Draft 생성 중..." : "Draft 리뷰로 이동"}
                     </Button>
+                    <BodyActionLink href="/planning/v3/profile/drafts">
+                      profile drafts 검토
+                    </BodyActionLink>
+                    <BodyActionLink href="/planning/v3/balances">
+                      balances 다시 확인
+                    </BodyActionLink>
                     {draftMessage ? <p className="text-sm font-semibold text-slate-700">{draftMessage}</p> : null}
                   </div>
+                  <p className="text-xs text-slate-500">
+                    stable `/planning/reports`는 draft apply 이후 결과 확인용 도착점으로만 사용합니다.
+                  </p>
                 </Card>
               </>
             ) : null}
