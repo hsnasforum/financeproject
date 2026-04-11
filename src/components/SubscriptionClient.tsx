@@ -256,7 +256,7 @@ export function SubscriptionClient({
       <PageHeader title="청약 공고 탐색" description="현재 지역·기간·유형 기준으로 공고 후보를 다시 찾고, 상세와 원문에서 자격·일정을 확인합니다." />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
         지금 보이는 공고는 현재 조회 조건 기준 비교용 후보입니다. 신청 자격, 제출 서류, 공급 조건은 상세와 공고문에서 다시 확인하세요. 데이터 신뢰 및 연동 상태는{" "}
-        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+        <Link href="/settings/data-sources" className="font-black text-primary hover:text-navy">
           내 설정 &gt; 데이터 신뢰 및 연동 상태
         </Link>
         에서 확인할 수 있습니다.
@@ -285,7 +285,7 @@ export function SubscriptionClient({
                 error={fieldIssueMap.houseType?.[0]}
               />
 
-              <div className="hidden h-8 w-px bg-slate-100 lg:block" />
+              <div className="hidden h-8 w-px bg-surface-muted lg:block" />
 
               <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-4">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">조회 기간</span>
@@ -295,7 +295,7 @@ export function SubscriptionClient({
                       id={pathToId("from")}
                       type="date"
                       className={cn(
-                        "h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums",
+                        "h-11 rounded-2xl border border-slate-200 bg-surface-muted px-4 text-xs font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-primary transition-all tabular-nums",
                         fieldIssueMap.from?.[0] && "border-rose-300 bg-rose-50/30"
                       )}
                       value={from}
@@ -311,7 +311,7 @@ export function SubscriptionClient({
                       id={pathToId("to")}
                       type="date"
                       className={cn(
-                        "h-11 rounded-2xl border border-slate-200 bg-slate-50 px-4 text-xs font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums",
+                        "h-11 rounded-2xl border border-slate-200 bg-surface-muted px-4 text-xs font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-primary transition-all tabular-nums",
                         fieldIssueMap.to?.[0] && "border-rose-300 bg-rose-50/30"
                       )}
                       value={to}
@@ -354,9 +354,9 @@ export function SubscriptionClient({
 
       <div className="mb-6 px-4">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm font-black text-emerald-600">현재 조건 기준 {items.length.toLocaleString()}건의 공고를 보고 있습니다.</span>
+          <span className="text-sm font-black text-primary">현재 조건 기준 {items.length.toLocaleString()}건의 공고를 보고 있습니다.</span>
           {freshnessMeta?.lastSyncedAt ? (
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-500">
+            <span className="rounded-full border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black text-slate-500">
               결과 기준 {formatKoreanDateTime(freshnessMeta.lastSyncedAt)}
             </span>
           ) : null}
@@ -387,17 +387,17 @@ export function SubscriptionClient({
         ) : items.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
-              <Card key={item.id} className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100 hover:-translate-y-1">
+              <Card key={item.id} className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-primary/10 hover:-translate-y-1">
                 <div className="mb-6">
-                  <span className="rounded-lg bg-slate-100 border border-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">
+                  <span className="rounded-lg bg-surface-muted border border-slate-200 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">
                     {item.region || "지역 미상"}
                   </span>
-                  <h3 className="mt-4 text-xl font-black leading-tight text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-2 tracking-tight">
+                  <h3 className="mt-4 text-xl font-black leading-tight text-navy group-hover:text-primary transition-colors line-clamp-2 tracking-tight">
                     {item.title}
                   </h3>
                 </div>
                 
-                <div className="space-y-3 rounded-[1.5rem] bg-slate-50/50 p-5 border border-slate-50 mt-auto">
+                <div className="space-y-3 rounded-[1.5rem] bg-surface-muted/50 p-5 border border-slate-50 mt-auto">
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="font-black text-slate-400 uppercase tracking-widest">접수 기간</span>
                     <span className="font-black text-slate-700 tabular-nums">{item.applyStart} ~ {item.applyEnd}</span>
@@ -417,7 +417,7 @@ export function SubscriptionClient({
                       href={item.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center flex-1 rounded-2xl bg-emerald-600 text-white text-sm font-black shadow-md shadow-emerald-900/10 transition-all hover:bg-emerald-700 active:scale-95"
+                      className="flex items-center justify-center flex-1 rounded-2xl bg-primary text-white text-sm font-black shadow-md shadow-navy/10 transition-all hover:bg-navy active:scale-95"
                     >
                       공고문 다시 확인
                     </a>
@@ -447,12 +447,12 @@ export function SubscriptionClient({
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
           <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-slate-50/80 p-6 md:p-8 border-b border-slate-100 flex items-start justify-between">
+            <div className="bg-surface-muted/80 p-6 md:p-8 border-b border-slate-100 flex items-start justify-between">
               <div className="space-y-2">
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-navy">
                   {selected.region} · {houseTypeLabel(houseType)}
                 </span>
-                <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-snug">{selected.title}</h3>
+                <h3 className="text-xl md:text-2xl font-black text-navy tracking-tight leading-snug">{selected.title}</h3>
               </div>
               <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white" onClick={() => setSelected(null)}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -460,7 +460,7 @@ export function SubscriptionClient({
             </div>
             
             <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
-              <div className="rounded-[2rem] border border-slate-100 bg-slate-50/70 p-5">
+              <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/70 p-5">
                 <p className="text-sm font-black text-slate-800">상세를 읽는 기준</p>
                 <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
                   이 요약은 공고문을 읽기 전 빠르게 다시 보는 정보입니다.
@@ -473,20 +473,20 @@ export function SubscriptionClient({
               <section>
                 <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">주요 일정</p>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-5">
+                  <div className="rounded-3xl border border-slate-100 bg-surface-muted/50 p-5">
                     <p className="text-[10px] font-bold text-slate-400">접수 시작</p>
-                    <p className="mt-1 text-lg font-black text-slate-900">{selected.applyStart || "-"}</p>
+                    <p className="mt-1 text-lg font-black text-navy">{selected.applyStart || "-"}</p>
                   </div>
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-5">
+                  <div className="rounded-3xl border border-slate-100 bg-surface-muted/50 p-5">
                     <p className="text-[10px] font-bold text-slate-400">접수 종료</p>
-                    <p className="mt-1 text-lg font-black text-slate-900">{selected.applyEnd || "-"}</p>
+                    <p className="mt-1 text-lg font-black text-navy">{selected.applyEnd || "-"}</p>
                   </div>
                 </div>
               </section>
               
               <section>
                 <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">다음에 확인할 정보</p>
-                <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">
+                <div className="rounded-3xl border border-slate-100 bg-surface-muted/50 p-6">
                   {detailLoading ? (
                     <div className="space-y-3 animate-pulse">
                       <div className="h-4 w-3/4 rounded-full bg-slate-200" />
@@ -520,7 +520,7 @@ export function SubscriptionClient({
                   <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400">기타 유의사항</p>
                   <div className="space-y-2">
                     {Object.entries(selected.details).map(([k, v]) => (
-                      <div key={k} className="flex justify-between rounded-xl bg-slate-50 px-4 py-3 text-xs">
+                      <div key={k} className="flex justify-between rounded-xl bg-surface-muted px-4 py-3 text-xs">
                         <span className="font-bold text-slate-400">{k}</span>
                         <span className="font-black text-slate-700">{v}</span>
                       </div>
@@ -530,14 +530,14 @@ export function SubscriptionClient({
               )}
             </div>
 
-            <div className="bg-slate-50/80 p-6 border-t border-slate-100 flex items-center justify-between">
+            <div className="bg-surface-muted/80 p-6 border-t border-slate-100 flex items-center justify-between">
                <p className="text-[10px] font-bold text-slate-400">데이터 제공: 청약홈 Open API</p>
                {selected.link && (
                  <a
                    href={selected.link}
                    target="_blank"
                    rel="noopener noreferrer"
-                   className="rounded-full bg-emerald-600 px-6 py-2.5 text-xs font-black text-white shadow-md shadow-emerald-600/20 transition hover:bg-emerald-700"
+                   className="rounded-full bg-primary px-6 py-2.5 text-xs font-black text-white shadow-md shadow-primary/20 transition hover:bg-navy"
                  >
                    공고 전문 보기
                  </a>

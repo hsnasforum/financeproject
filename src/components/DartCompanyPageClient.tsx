@@ -196,7 +196,7 @@ export function DartCompanyPageClient() {
                 {fromQuery ? "검색 결과로 돌아가기" : "검색으로 돌아가기"}
               </Button>
             </Link>
-            <Button size="sm" variant="outline" className={cn("rounded-xl font-black transition-all", favoriteOn ? "border-emerald-200 text-emerald-600 bg-emerald-50" : "bg-white")} onClick={toggleFavorite} disabled={!corpCode}>
+            <Button size="sm" variant="outline" className={cn("rounded-xl font-black transition-all", favoriteOn ? "border-primary/20 text-primary bg-primary/5" : "bg-white")} onClick={toggleFavorite} disabled={!corpCode}>
               {favoriteOn ? "★ 즐겨찾기 해제" : "☆ 즐겨찾기 추가"}
             </Button>
           </div>
@@ -221,14 +221,14 @@ export function DartCompanyPageClient() {
                 title={corpCode ? "정보를 불러오지 못했습니다" : "회사 선택이 필요합니다"}
                 description={error}
                 icon="search"
-                className="mt-6 rounded-3xl border-slate-100 bg-slate-50/50 p-10"
+                className="mt-6 rounded-3xl border-slate-100 bg-surface-muted/50 p-10"
               />
             ) : company ? (
               <div className="mt-8 space-y-8">
                 <dl className="grid gap-x-8 gap-y-6 sm:grid-cols-2">
                   <div className="space-y-1">
                     <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">회사명</dt>
-                    <dd className="text-base font-black text-slate-900 tracking-tight" data-testid="dart-company-name">{company.corpName ?? "-"}</dd>
+                    <dd className="text-base font-black text-navy tracking-tight" data-testid="dart-company-name">{company.corpName ?? "-"}</dd>
                   </div>
                   <div className="space-y-1">
                     <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">DART 코드</dt>
@@ -250,7 +250,7 @@ export function DartCompanyPageClient() {
                     <dt className="text-[10px] font-black text-slate-400 uppercase tracking-widest">홈페이지</dt>
                     <dd>
                       {homepageHref ? (
-                        <a href={homepageHref} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-emerald-600 underline underline-offset-4 decoration-emerald-200 hover:text-emerald-700 transition-colors">
+                        <a href={homepageHref} target="_blank" rel="noopener noreferrer" className="text-sm font-black text-primary underline underline-offset-4 decoration-primary/20 hover:text-navy transition-colors">
                           {company.homepage || homepageHref}
                         </a>
                       ) : <span className="text-sm font-bold text-slate-400 italic">제공 정보 없음</span>}
@@ -277,7 +277,7 @@ export function DartCompanyPageClient() {
                     href={monitorHref}
                     prefetch={false}
                     data-testid="dart-monitor-action"
-                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-6 text-sm font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-700 hover:-translate-y-0.5 active:scale-95"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-primary px-6 text-sm font-black text-white shadow-lg shadow-navy/20 transition-all hover:bg-navy hover:-translate-y-0.5 active:scale-95"
                     onClick={() => prepareMonitorNavigation()}
                   >
                     공시 흐름 이어서 보기
@@ -290,8 +290,8 @@ export function DartCompanyPageClient() {
 
         <div className="space-y-6">
           <Card className="rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
-            <div className="bg-slate-50/50 px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-              <span className="text-sm font-black text-slate-900 uppercase tracking-widest">즐겨찾기 기업</span>
+            <div className="bg-surface-muted/50 px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <span className="text-sm font-black text-navy uppercase tracking-widest">즐겨찾기 기업</span>
               <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded-lg border border-slate-100">{favorites.length}</span>
             </div>
             <div className="bg-white">
@@ -303,7 +303,7 @@ export function DartCompanyPageClient() {
                     <li key={item.corpCode}>
                       <Link
                         href={buildDartCompanyHref(item.corpCode, undefined, item.corpName)}
-                        className={cn("block p-4 px-6 hover:bg-slate-50 transition-colors", item.corpCode === corpCode ? "bg-emerald-50/30 border-l-4 border-emerald-500" : "")}
+                        className={cn("block p-4 px-6 hover:bg-surface-muted transition-colors", item.corpCode === corpCode ? "bg-primary/30 border-l-4 border-primary" : "")}
                       >
                         <p className="text-sm font-black text-slate-800 tracking-tight leading-tight">{item.corpName ?? item.corpCode}</p>
                         <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{item.corpCode}</p>
@@ -316,8 +316,8 @@ export function DartCompanyPageClient() {
           </Card>
 
           <Card className="rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
-            <div className="bg-slate-50/50 px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-              <span className="text-sm font-black text-slate-900 uppercase tracking-widest">최근 조회 기록</span>
+            <div className="bg-surface-muted/50 px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+              <span className="text-sm font-black text-navy uppercase tracking-widest">최근 조회 기록</span>
               <button
                 type="button"
                 className="text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-rose-500 transition-colors"
@@ -336,7 +336,7 @@ export function DartCompanyPageClient() {
                     <li key={item.corpCode}>
                       <Link
                         href={buildDartCompanyHref(item.corpCode, undefined, item.corpName)}
-                        className={cn("block p-4 px-6 hover:bg-slate-50 transition-colors", item.corpCode === corpCode ? "bg-emerald-50/30 border-l-4 border-emerald-500" : "")}
+                        className={cn("block p-4 px-6 hover:bg-surface-muted transition-colors", item.corpCode === corpCode ? "bg-primary/30 border-l-4 border-primary" : "")}
                       >
                         <p className="text-sm font-black text-slate-800 tracking-tight leading-tight">{item.corpName ?? item.corpCode}</p>
                         <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{item.corpCode}</p>

@@ -311,8 +311,8 @@ export function TransactionsBatchListClient({
       <div className="space-y-5">
         <Card className="space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Import-to-Planning Beta</p>
-            <h1 className="text-2xl font-black text-slate-900">거래내역 가져오기 시작</h1>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Import-to-Planning Beta</p>
+            <h1 className="text-2xl font-black text-navy">거래내역 가져오기 시작</h1>
             <p className="max-w-3xl text-sm text-slate-600">
               이 화면은 official beta entry 기준의 시작 surface입니다. CSV를 배치로 가져오고, 최근 배치를 확인한 뒤
               <span className="font-semibold text-slate-800"> balances 확인</span>,
@@ -322,7 +322,7 @@ export function TransactionsBatchListClient({
 
           <div className={bodyActionLinkGroupClassName}>
             <a
-              className="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 no-underline shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100"
+              className="inline-flex items-center rounded-xl border border-primary/20 bg-primary/5 px-3 py-1.5 text-sm font-semibold text-navy no-underline shadow-sm transition hover:border-primary/30 hover:bg-primary/10"
               href="#transactions-upload"
             >
               CSV 업로드
@@ -333,7 +333,7 @@ export function TransactionsBatchListClient({
               </BodyActionLink>
             ) : (
               <a
-                className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:border-primary/20 hover:bg-primary/5 hover:text-navy"
                 href="#transactions-batch-list"
               >
                 최근 배치 확인
@@ -481,7 +481,7 @@ export function TransactionsBatchListClient({
             </BodyActionLink>
           </div>
 
-          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-surface-muted px-4 py-3">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Support / Internal</p>
             <div className={`${bodyActionLinkGroupClassName} text-xs`}>
               <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/accounts">
@@ -502,7 +502,7 @@ export function TransactionsBatchListClient({
           {!loading && !loadFailed && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 배치가 없습니다.</p> : null}
 
           <div className="rounded-2xl border border-slate-100 bg-white/70 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">다음 handoff</p>
+            <p className="text-sm font-semibold text-navy">다음 handoff</p>
             <p className="mt-1 text-sm text-slate-600">
               최근 배치를 확인한 뒤
               {" "}
@@ -517,7 +517,7 @@ export function TransactionsBatchListClient({
           {rows.length > 0 ? (
             <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-batch-list">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                   <tr>
                     <th className="px-3 py-2 text-left">생성일</th>
                     <th className="px-3 py-2 text-left">file</th>

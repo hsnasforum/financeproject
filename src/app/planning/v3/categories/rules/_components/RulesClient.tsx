@@ -197,7 +197,7 @@ export function RulesClient() {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-2">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Category Rules</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Category Rules</h1>
           <div className={bodyDenseActionRowClassName}>
             <BodyActionLink href="/planning/v3/transactions">
               배치 목록
@@ -211,7 +211,7 @@ export function RulesClient() {
         </Card>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">룰 추가/수정</h2>
+          <h2 className="text-sm font-bold text-navy">룰 추가/수정</h2>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="text-sm font-semibold text-slate-700">
               rule id (optional)
@@ -288,11 +288,11 @@ export function RulesClient() {
         </Card>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">룰 목록</h2>
+          <h2 className="text-sm font-bold text-navy">룰 목록</h2>
           {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : null}
           <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+              <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="px-3 py-2 text-left">id</th>
                   <th className="px-3 py-2 text-left">category</th>

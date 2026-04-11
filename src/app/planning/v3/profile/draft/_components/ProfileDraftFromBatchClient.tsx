@@ -171,7 +171,7 @@ export function ProfileDraftFromBatchClient({ initialBatchId = "" }: Props) {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Draft Preview</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Batch Draft Preview</h1>
           <p className="text-sm text-slate-700">
             이 화면은 compat/raw draft preview surface입니다. official beta funnel은 저장된 profile drafts에서
             개별 초안을 검토한 뒤 preflight를 거쳐 planning 실행 저장과 stable report 확인으로 닫습니다.

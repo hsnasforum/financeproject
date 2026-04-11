@@ -57,12 +57,12 @@ export function SiteHeader() {
   const showAdminStrip = isOpsLikePath(pathname);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-md">
       <Container className="px-4 sm:px-6 lg:px-8">
         <div className="hidden h-[88px] items-center justify-between gap-8 lg:flex">
           <BrandLogo />
           <div className="flex flex-1 items-center justify-end gap-6">
-            <nav className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50/80 p-2">
+            <nav className="flex items-center gap-1 rounded-full border border-slate-200/80 bg-[#f5f7fa]/80 p-2">
               {publicNavItems.map((item) => {
                 const isActive = isNavActive(pathname, item);
                 return (
@@ -71,8 +71,8 @@ export function SiteHeader() {
                     href={item.href}
                     prefetch={devPlanningPrefetch(item.href)}
                     className={cn(
-                      "rounded-full px-4 py-2 text-[14px] font-extrabold tracking-[-0.02em] text-slate-700 transition-colors hover:text-emerald-700",
-                      isActive ? "bg-white text-emerald-700 shadow-sm" : "",
+                      "rounded-full px-4 py-2 text-[14px] font-extrabold tracking-[-0.02em] text-slate-700 transition-colors hover:text-primary",
+                      isActive ? "bg-white text-primary shadow-sm ring-1 ring-primary/10" : "",
                     )}
                   >
                     {item.label}
@@ -82,7 +82,7 @@ export function SiteHeader() {
             </nav>
 
             <Link
-              className="inline-flex h-11 items-center rounded-full bg-emerald-600 px-5 text-sm font-extrabold text-white shadow-[0_12px_24px_rgba(5,150,105,0.18)] transition-transform hover:-translate-y-0.5"
+              className="inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-extrabold text-white shadow-[0_14px_28px_-10px_rgba(30,58,138,0.55)] transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
               href="/planning"
               prefetch={devPlanningPrefetch("/planning")}
             >
@@ -95,14 +95,14 @@ export function SiteHeader() {
           <BrandLogo />
           <div className="flex items-center gap-2">
             <Link
-              className="inline-flex h-10 items-center rounded-full border border-slate-200 px-4 text-sm font-bold text-slate-700"
+              className="inline-flex h-10 items-center rounded-full border border-slate-200 px-4 text-sm font-bold text-slate-700 transition-colors hover:border-primary/10 hover:text-primary"
               href="/products"
               prefetch={devPlanningPrefetch("/products")}
             >
               금융탐색
             </Link>
             <Link
-              className="inline-flex h-10 items-center rounded-full bg-emerald-600 px-4 text-sm font-bold text-white"
+              className="inline-flex h-10 items-center rounded-full bg-primary px-4 text-sm font-bold text-white shadow-[0_10px_20px_-8px_rgba(30,58,138,0.5)]"
               href="/planning"
               prefetch={devPlanningPrefetch("/planning")}
             >
@@ -121,8 +121,8 @@ export function SiteHeader() {
                 href={item.href}
                 prefetch={devPlanningPrefetch(item.href)}
                 className={cn(
-                  "rounded-full px-3 py-1.5 whitespace-nowrap text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 hover:text-emerald-600",
-                  isNavActive(pathname, item) ? "bg-emerald-50 text-emerald-600" : "",
+                  "rounded-full px-3 py-1.5 whitespace-nowrap text-sm font-bold text-slate-700 transition-colors hover:bg-surface-muted hover:text-primary",
+                  isNavActive(pathname, item) ? "bg-primary/10 text-primary" : "",
                 )}
               >
                 {item.label}

@@ -47,16 +47,16 @@ export default function SettingsHomePage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {links.map((item) => (
           <Link key={item.href} href={item.href} className="group">
-            <Card className="h-full rounded-[2rem] p-8 transition-all hover:-translate-y-1 hover:shadow-xl hover:border-emerald-200 active:scale-[0.98]">
+            <Card className="h-full rounded-[2rem] p-8 transition-all hover:-translate-y-1 hover:shadow-xl hover:border-primary/20 active:scale-[0.98]">
               <SubSectionHeader 
                 title={item.title} 
                 className="mb-0"
-                titleClassName="group-hover:text-emerald-600 transition-colors"
+                titleClassName="group-hover:text-primary transition-colors"
               />
               <p className="mt-4 text-sm font-medium leading-relaxed text-slate-500">{item.description}</p>
               
               <div className="mt-8 flex justify-end">
-                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">
+                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest group-hover:text-primary transition-colors">
                   이 설정 열기 ▶
                 </span>
               </div>

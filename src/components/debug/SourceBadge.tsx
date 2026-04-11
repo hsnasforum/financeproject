@@ -7,7 +7,7 @@ type Props = {
 export function SourceBadge({ sourceId }: Props) {
   const label = sourceId === "finlife" ? "FINLIFE" : sourceId === "datago_kdb" ? "KDB" : sourceId;
   const className = sourceId === "finlife"
-    ? "bg-slate-100 text-slate-800 border-slate-300"
+    ? "bg-surface-muted text-slate-800 border-slate-300"
     : sourceId === "datago_kdb"
         ? "bg-amber-100 text-amber-900 border-amber-300"
         : "bg-zinc-100 text-zinc-700 border-zinc-300";

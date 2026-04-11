@@ -117,7 +117,7 @@ export default async function PlanningReportsPrototypePage(props: PlanningReport
         <PageHeader
           title="MMD 재무설계 상담 프로토타입"
           description="상담형 미리보기 화면에 표시할 실행 기록(run)이 없습니다."
-          action={<Link className="font-semibold text-emerald-700" href={planningHref}>플래닝으로 이동</Link>}
+          action={<Link className="font-semibold text-navy" href={planningHref}>플래닝으로 이동</Link>}
         />
         <EmptyState
           title="저장된 실행 기록이 없습니다"

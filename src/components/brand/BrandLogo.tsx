@@ -13,7 +13,7 @@ export function BrandLogo() {
         </div>
       </div>
       <div className="flex flex-col">
-        <span className="text-[17px] font-black leading-none tracking-[-0.05em] text-slate-900 transition-colors group-hover:text-emerald-600">
+        <span className="text-[17px] font-black leading-none tracking-[-0.05em] text-navy transition-colors group-hover:text-primary">
           MMD
         </span>
         <span className="mt-1 text-[9px] font-black tracking-[0.16em] text-slate-400 uppercase">

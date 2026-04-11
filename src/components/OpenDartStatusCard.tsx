@@ -119,7 +119,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
         <div className="flex flex-col gap-1 sm:items-end">
           <span className={cn(
             "rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
-            configured ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-amber-50 text-amber-700 border-amber-100"
+            configured ? "bg-primary/5 text-navy border-primary/10" : "bg-amber-50 text-amber-700 border-amber-100"
           )}>
             API 키 {configuredLabel(configured)}
           </span>
@@ -131,7 +131,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
-          <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6">
+          <div className="rounded-3xl border border-slate-100 bg-surface-muted/50 p-6">
             <div className="mb-4 rounded-2xl border border-slate-100 bg-white p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">사용자에게 먼저 보이는 기준</p>
               <p className="mb-2 text-[10px] font-bold leading-relaxed text-slate-400">
@@ -155,7 +155,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
               <dl className="grid gap-y-3 text-xs">
                 <div className="flex justify-between border-b border-slate-100 pb-2">
                   <dt className="font-bold text-slate-500">1. 인덱스 준비 상태</dt>
-                  <dd className={cn("font-black", exists ? "text-emerald-600" : "text-rose-600")}>{exists ? "준비됨" : "확인 필요"}</dd>
+                  <dd className={cn("font-black", exists ? "text-primary" : "text-rose-600")}>{exists ? "준비됨" : "확인 필요"}</dd>
                 </div>
                 <div className="border-b border-slate-100 pb-2">
                   <div className="flex justify-between gap-3">
@@ -169,7 +169,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
                 <div>
                   <div className="flex justify-between gap-3">
                     <dt className="font-bold text-slate-500">3. 반영된 회사 수</dt>
-                    <dd className="font-black text-slate-900 tabular-nums">{typeof status.meta?.count === "number" ? status.meta.count.toLocaleString() : "-"}</dd>
+                    <dd className="font-black text-navy tabular-nums">{typeof status.meta?.count === "number" ? status.meta.count.toLocaleString() : "-"}</dd>
                   </div>
                   <dd className="mt-1 text-[10px] font-bold leading-relaxed text-slate-400">
                     위 수는 현재 공시 검색과 상세 화면에 반영된 회사 범위를 읽는 기준입니다.
@@ -214,7 +214,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 flex-1 flex flex-col">
+          <div className="rounded-3xl border border-slate-100 bg-surface-muted/50 p-6 flex-1 flex flex-col">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">
               {isDev ? "필요할 때만 여는 개발용 관리" : "개발 환경 전용 연결 안내"}
             </p>
@@ -289,7 +289,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
       {(buildNotice || buildError) && (
         <div className={cn(
           "mt-6 rounded-2xl p-4 text-xs font-black",
-          buildNotice ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+          buildNotice ? "bg-primary/5 text-navy" : "bg-rose-50 text-rose-700"
         )}>
           <p className="text-[10px] font-black uppercase tracking-widest opacity-70">개발용 인덱스 점검 결과</p>
           <p className="mt-2">{buildNotice || buildError}</p>

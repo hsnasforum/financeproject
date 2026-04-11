@@ -83,7 +83,7 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {freshnessBadge ? (
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 font-semibold text-slate-700">
+          <span className="rounded-full border border-slate-200 bg-surface-muted px-2 py-1 font-semibold text-slate-700">
             <span data-testid="snapshot-stale-badge">{freshnessBadge}</span>
           </span>
         ) : null}
@@ -121,25 +121,25 @@ export default function SnapshotPicker(props: SnapshotPickerProps) {
           Copy snapshotId
         </Button>
         <Link
-          className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+          className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-navy"
           data-testid="planning-snapshot-ops-link"
           href="/ops/assumptions"
         >
           /ops/assumptions
         </Link>
         <Link
-          className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+          className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 px-4 text-xs font-bold text-slate-700 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-navy"
           href="/ops/assumptions/history"
         >
           /ops/assumptions/history
         </Link>
       </div>
       {copyMessage ? (
-        <p className={`text-xs font-semibold ${copyError ? "text-rose-700" : "text-emerald-700"}`}>{copyMessage}</p>
+        <p className={`text-xs font-semibold ${copyError ? "text-rose-700" : "text-navy"}`}>{copyMessage}</p>
       ) : null}
 
       {props.advancedEnabled && detailsOpen ? (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" id="snapshot-details-panel">
+        <div className="rounded-lg border border-slate-200 bg-surface-muted p-3 text-xs text-slate-700" id="snapshot-details-panel">
           <p>id: <span className="font-semibold">{selected?.id ?? "-"}</span></p>
           <p>asOf: <span className="font-semibold">{selected?.asOf ?? "-"}</span></p>
           <p>fetchedAt: <span className="font-semibold">{selected?.fetchedAt ?? "-"}</span></p>

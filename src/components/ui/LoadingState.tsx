@@ -23,8 +23,8 @@ export function LoadingState({
       role="status"
       aria-live="polite"
     >
-      <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin" />
-      <p className="text-base font-black text-slate-900">{title}</p>
+      <div className="mx-auto mb-4 h-10 w-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
+      <p className="text-base font-black text-navy">{title}</p>
       <p className="mt-2 text-sm font-bold text-slate-500">{description}</p>
     </div>
   );

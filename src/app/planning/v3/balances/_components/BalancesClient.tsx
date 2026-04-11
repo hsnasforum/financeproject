@@ -82,7 +82,7 @@ const BALANCES_SECTION_REVEAL: Variants = {
 };
 
 const balancesActionLinkClassName =
-  "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900";
+  "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:bg-surface-muted hover:text-navy";
 
 export function BalancesClient() {
   const [loading, setLoading] = useState(true);
@@ -250,11 +250,11 @@ export function BalancesClient() {
             <ReportHeroStatCard label="행 수" value={`${rows.length}개`} description={includeTransfers ? "transfer 포함 계산" : "transfer 제외 계산"} />
           </ReportHeroStatGrid>
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
-            <div className="rounded-[1.75rem] border border-emerald-200/90 bg-emerald-50/90 px-5 py-4">
+            <div className="rounded-[1.75rem] border border-primary/10 bg-primary/10 px-5 py-4">
               <div className="flex items-start gap-3">
-                <div className="mt-1 h-2.5 w-2.5 flex-none animate-pulse rounded-full bg-emerald-500" />
+                <div className="mt-1 h-2.5 w-2.5 flex-none animate-pulse rounded-full bg-primary" />
                 <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-700">현재 작업 기준</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-navy">현재 작업 기준</p>
                   <p className="text-sm font-bold leading-relaxed tracking-tight text-slate-800">
                     {selectedBatch
                       ? `${selectedBatch.id} 기준으로 ${selectedBatch.rowCount.toLocaleString("ko-KR")}건 거래를 월별 잔액으로 정리합니다.`
@@ -267,7 +267,7 @@ export function BalancesClient() {
               </div>
             </div>
 
-            <div className="rounded-[1.75rem] border border-slate-200/90 bg-slate-50/80 px-5 py-4">
+            <div className="rounded-[1.75rem] border border-slate-200/90 bg-surface-muted/80 px-5 py-4">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">빠른 상태 요약</p>
               <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold text-slate-600">
                 <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5">
@@ -301,18 +301,18 @@ export function BalancesClient() {
                 description="먼저 계산할 배치를 고르고, transfer 포함 여부를 정하면 아래 표가 같은 기준으로 다시 계산됩니다."
                 className="mb-0 items-start"
                 action={(
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                  <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-navy">
                     핵심 작업
                   </span>
                 )}
               />
 
-              <div className="mt-5 rounded-[1.5rem] border border-slate-200/90 bg-slate-50/80 px-4 py-4">
+              <div className="mt-5 rounded-[1.5rem] border border-slate-200/90 bg-surface-muted/80 px-4 py-4">
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
                   <label className="text-sm font-semibold text-slate-700">
                     배치 선택
                     <select
-                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                      className="mt-2 w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-navy shadow-sm outline-none transition focus:border-primary/30 focus:ring-2 focus:ring-primary/10"
                       onChange={(event) => {
                         setSelectedBatchId(event.currentTarget.value);
                       }}
@@ -364,14 +364,14 @@ export function BalancesClient() {
                 title="월별 잔액 표"
                 description="opening, net, closing 흐름을 한 표에서 비교합니다. selector와 data-testid 계약은 유지됩니다."
                 className="mb-0 items-start"
-                action={<span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-500">행 {rows.length}개</span>}
+                action={<span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-black text-slate-500">행 {rows.length}개</span>}
               />
 
-              <div className="mt-5 rounded-[1.5rem] border border-slate-200/90 bg-slate-50/70 px-3 py-3 md:px-4">
+              <div className="mt-5 rounded-[1.5rem] border border-slate-200/90 bg-surface-muted/70 px-3 py-3 md:px-4">
                 {loading ? <p className="px-1 py-4 text-sm font-medium text-slate-600">불러오는 중...</p> : null}
                 {!loading && rows.length < 1 ? (
                   <div className="rounded-[1.25rem] border border-dashed border-slate-200 bg-white px-5 py-8 text-center">
-                    <p className="text-sm font-bold text-slate-900">표시할 잔액 데이터가 없습니다.</p>
+                    <p className="text-sm font-bold text-navy">표시할 잔액 데이터가 없습니다.</p>
                     <p className="mt-2 text-xs font-medium text-slate-500">배치를 고른 뒤 다시 계산하면 월별 잔액 흐름이 여기에 표시됩니다.</p>
                   </div>
                 ) : null}
@@ -379,7 +379,7 @@ export function BalancesClient() {
                 {rows.length > 0 ? (
                   <div className="overflow-x-auto rounded-[1.25rem] border border-slate-200 bg-white shadow-sm">
                     <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-balance-table">
-                      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                      <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">월</th>
                           <th className="px-3 py-2 text-left">계좌</th>
@@ -393,13 +393,13 @@ export function BalancesClient() {
                         {rows.map((row) => (
                           <tr
                             key={`${row.ym}-${row.accountId}`}
-                            className="transition-colors hover:bg-emerald-50/40"
+                            className="transition-colors hover:bg-primary/10"
                           >
                             <td className="px-3 py-2 font-mono text-xs text-slate-700">{row.ym}</td>
                             <td className="px-3 py-2 text-slate-800">{accountNameById.get(row.accountId) ?? row.accountId}</td>
                             <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.openingKrw)}</td>
                             <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.netChangeKrw)}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(row.closingKrw)}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-navy">{formatKrw(row.closingKrw)}</td>
                             <td className="px-3 py-2 text-right text-slate-700">{formatKrw(asNumber(row.transferKrw ?? 0))}</td>
                           </tr>
                         ))}
@@ -416,7 +416,7 @@ export function BalancesClient() {
             className="space-y-4"
           >
             <motion.div
-              className="rounded-[2rem] border border-slate-200/90 bg-slate-50/90 px-5 py-5 shadow-sm shadow-slate-200/30"
+              className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30"
               whileHover={{ y: -2 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
             >
@@ -428,16 +428,16 @@ export function BalancesClient() {
               <div className="mt-5 space-y-3 text-sm text-slate-600">
                 <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 shadow-sm">
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">배치 ID</p>
-                  <p className="mt-2 break-all text-sm font-bold text-slate-900">{selectedBatch?.id ?? "아직 선택되지 않았습니다."}</p>
+                  <p className="mt-2 break-all text-sm font-bold text-navy">{selectedBatch?.id ?? "아직 선택되지 않았습니다."}</p>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
                   <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">행 수</p>
-                    <p className="mt-2 text-lg font-black tracking-tight text-slate-900">{selectedBatch ? `${selectedBatch.rowCount}건` : "-"}</p>
+                    <p className="mt-2 text-lg font-black tracking-tight text-navy">{selectedBatch ? `${selectedBatch.rowCount}건` : "-"}</p>
                   </div>
                   <div className="rounded-[1.5rem] border border-slate-200 bg-white px-4 py-3 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">월 범위</p>
-                    <p className="mt-2 text-sm font-bold text-slate-900">
+                    <p className="mt-2 text-sm font-bold text-navy">
                       {selectedBatch?.ymMin && selectedBatch?.ymMax ? `${selectedBatch.ymMin} ~ ${selectedBatch.ymMax}` : "월 정보 없음"}
                     </p>
                   </div>
@@ -466,7 +466,7 @@ export function BalancesClient() {
             ) : (
               <motion.div
                 variants={BALANCES_SECTION_REVEAL}
-                className="rounded-[2rem] border border-slate-200/90 bg-slate-50/90 px-5 py-5 shadow-sm shadow-slate-200/30"
+                className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30"
                 whileHover={{ y: -2 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
               >

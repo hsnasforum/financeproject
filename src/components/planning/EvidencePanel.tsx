@@ -106,12 +106,12 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
   const cls = className ? ` ${className}` : "";
   const rootClassName = tone === "dark"
     ? `${reportSurfaceDisclosureClassName} text-slate-600`
-    : "rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700";
+    : "rounded-lg border border-slate-200 bg-surface-muted px-3 py-2 text-xs text-slate-700";
   const summaryClassName = tone === "dark"
     ? reportSurfaceDisclosureSummaryClassName
-    : "cursor-pointer font-semibold text-slate-900";
+    : "cursor-pointer font-semibold text-navy";
   const plainSummaryClassName = tone === "dark"
-    ? `${reportSurfaceInsetClassName} p-3 text-slate-900`
+    ? `${reportSurfaceInsetClassName} p-3 text-navy`
     : "rounded-xl border border-slate-200 bg-white px-3 py-3";
   const sectionLabelClassName = tone === "dark" ? "text-[11px] font-black uppercase tracking-widest text-slate-400" : "text-[11px] font-semibold text-slate-600";
   const inputItemClassName = tone === "dark" ? `${reportSurfaceDetailClassName} px-3 py-2` : "rounded-lg bg-white px-3 py-2";
@@ -132,7 +132,7 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
               const summary = buildPlainSummary(entry, locale, formatNumber);
               return (
                 <div className={plainSummaryClassName}>
-                  <p className={tone === "dark" ? "text-[11px] font-black uppercase tracking-widest text-emerald-600" : "text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500"}>
+                  <p className={tone === "dark" ? "text-[11px] font-black uppercase tracking-widest text-primary" : "text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500"}>
                     쉽게 말하면
                   </p>
                   <p className={tone === "dark" ? "mt-2 leading-relaxed font-bold text-slate-800" : "mt-2 leading-5 text-slate-800"}>{summary.headline}</p>
@@ -153,7 +153,7 @@ export default function EvidencePanel({ item, items, className, locale = "ko-KR"
                 {entry.inputs.map((input, index) => (
                   <li className={inputItemClassName} key={`${entry.id}:input:${index}`}>
                     <span className={tone === "dark" ? "text-slate-400 font-black uppercase tracking-widest text-[9px]" : "text-slate-500"}>{input.label}</span>
-                    <span className={tone === "dark" ? "ml-2 font-black text-slate-900 tabular-nums" : "ml-2 font-semibold text-slate-900"}>
+                    <span className={tone === "dark" ? "ml-2 font-black text-navy tabular-nums" : "ml-2 font-semibold text-navy"}>
                       {formatInputValue(input, locale, formatNumber)}
                     </span>
                   </li>

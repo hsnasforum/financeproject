@@ -46,7 +46,7 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMet
   return (
     <>
       <div
-        className="group relative flex flex-col md:flex-row md:items-center gap-6 py-6 px-6 transition-all duration-300 hover:bg-slate-50 rounded-[2rem] cursor-pointer"
+        className="group relative flex flex-col md:flex-row md:items-center gap-6 py-6 px-6 transition-all duration-300 hover:bg-surface-muted rounded-[2rem] cursor-pointer"
         onClick={() => setOpen(true)}
       >
         <div className="flex flex-1 items-center gap-5 min-w-0">
@@ -60,7 +60,7 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMet
           <div className="flex flex-1 flex-col gap-1 overflow-hidden">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{row.product.kor_co_nm ?? "-"}</span>
-              <Badge variant="secondary" className="bg-slate-100 text-[9px] font-black uppercase tracking-wider text-slate-600 border border-slate-200 px-1.5 h-4 shadow-none">
+              <Badge variant="secondary" className="bg-surface-muted text-[9px] font-black uppercase tracking-wider text-slate-600 border border-slate-200 px-1.5 h-4 shadow-none">
                 옵션 기준
               </Badge>
               {row.option.save_trm ? (
@@ -69,13 +69,13 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMet
                 </Badge>
               ) : null}
             </div>
-            <h3 className="truncate text-lg font-black text-slate-900 tracking-tight group-hover:text-emerald-600 transition-colors">
+            <h3 className="truncate text-lg font-black text-navy tracking-tight group-hover:text-primary transition-colors">
               {row.product.fin_prdt_nm ?? "-"}
             </h3>
             {freshnessMeta ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black">
                 {freshnessMeta.lastSyncedAt ? (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-500">
+                  <span className="rounded-full border border-slate-200 bg-surface-muted px-2.5 py-1 text-slate-500">
                     기준 확인 {formatKoreanDateTime(freshnessMeta.lastSyncedAt)}
                   </span>
                 ) : null}
@@ -84,7 +84,7 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMet
                     className={cn(
                       "rounded-full border px-2.5 py-1",
                       freshnessMeta.freshnessStatus === "ok"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        ? "border-primary/20 bg-primary/5 text-navy"
                         : freshnessMeta.freshnessStatus === "stale"
                           ? "border-amber-200 bg-amber-50 text-amber-800"
                           : freshnessMeta.freshnessStatus === "error"
@@ -114,7 +114,7 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMet
               {hasBonusBadge ? (
                 <>
                   <span className="h-1 w-1 rounded-full bg-slate-200" />
-                  <span className="text-emerald-600 uppercase tracking-widest font-black text-[10px]">우대 {formatOptionBonus(rates.bonus)}</span>
+                  <span className="text-primary uppercase tracking-widest font-black text-[10px]">우대 {formatOptionBonus(rates.bonus)}</span>
                 </>
               ) : null}
             </div>
@@ -124,11 +124,11 @@ export function ProductOptionRowItem({ row, kind, amountWonDefault, freshnessMet
         <div className="flex items-center justify-between md:justify-end gap-8 shrink-0 mt-2 md:mt-0">
           <div className="flex flex-col items-end">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">최고 금리</span>
-            <span className="text-3xl font-black text-emerald-600 tabular-nums tracking-tight">{formatOptionRate(rates.best)}</span>
+            <span className="text-3xl font-black text-primary tabular-nums tracking-tight">{formatOptionRate(rates.best)}</span>
           </div>
 
           <div className="hidden md:flex items-center">
-            <Button size="sm" variant="outline" className="h-10 rounded-xl px-4 text-xs font-black border-slate-200 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 transition-all" onClick={(e) => {
+            <Button size="sm" variant="outline" className="h-10 rounded-xl px-4 text-xs font-black border-slate-200 hover:border-primary/20 hover:bg-primary/5 hover:text-navy transition-all" onClick={(e) => {
               e.stopPropagation();
               setOpen(true);
             }}>

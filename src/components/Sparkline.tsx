@@ -50,7 +50,7 @@ export function Sparkline({
   }, [values, width, height]);
 
   if (!values.length) {
-    return <div className={cn("rounded bg-slate-100", className)} style={{ width, height }} />;
+    return <div className={cn("rounded bg-surface-muted", className)} style={{ width, height }} />;
   }
 
   const handleMouseMove = (e: React.MouseEvent | React.FocusEvent) => {
@@ -151,7 +151,7 @@ export function Sparkline({
               transform: "translateX(-50%)"
             }}
           >
-            <div className="relative bg-white border border-slate-200 text-slate-900 text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5">
+            <div className="relative bg-white border border-slate-200 text-navy text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5">
               <span className="text-slate-400 uppercase tracking-tighter text-[9px]">Point {hoveredPoint.index + 1}</span>
               <span className="tabular-nums text-slate-700">{formatValue(hoveredPoint.value, hoveredPoint.index)}</span>
               {/* Arrow with border effect */}

@@ -62,7 +62,7 @@ export default async function OpsPlanningEvalPage() {
           </Card>
 
           <Card>
-            <h2 className="text-base font-bold text-slate-900">실패 케이스 ({failedCases.length})</h2>
+            <h2 className="text-base font-bold text-navy">실패 케이스 ({failedCases.length})</h2>
             {failedCases.length === 0 ? (
               <p className="mt-2 text-sm text-slate-600">실패 케이스가 없습니다.</p>
             ) : (

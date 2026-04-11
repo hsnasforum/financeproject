@@ -25,9 +25,9 @@ const FilterField = React.forwardRef<HTMLInputElement, FilterFieldProps>(
         )}
         <div
           className={cn(
-            "flex items-center overflow-hidden rounded-full border border-slate-200 bg-slate-50 transition-all duration-300 w-full",
-            "focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 focus-within:bg-white",
-            hasValue && "border-emerald-200 bg-emerald-50/20"
+            "flex items-center overflow-hidden rounded-full border border-slate-200 bg-surface-muted transition-all duration-300 w-full",
+            "focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 focus-within:bg-white",
+            hasValue && "border-primary/20 bg-primary/20"
           )}
         >
           <input
@@ -40,7 +40,7 @@ const FilterField = React.forwardRef<HTMLInputElement, FilterFieldProps>(
             {...props}
           />
           {unit && (
-            <span className="bg-slate-100 px-3 py-2 text-[10px] font-black text-slate-500 border-l border-slate-200 whitespace-nowrap">
+            <span className="bg-surface-muted px-3 py-2 text-[10px] font-black text-slate-500 border-l border-slate-200 whitespace-nowrap">
               {unit}
             </span>
           )}

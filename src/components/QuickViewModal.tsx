@@ -107,7 +107,7 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
   const body = useMemo(() => {
     if (kind === "recommend") {
       return (
-        <div className="rounded border bg-slate-50 p-3 text-sm text-slate-700">
+        <div className="rounded border bg-surface-muted p-3 text-sm text-slate-700">
           추천 페이지에서 필터/점수 근거를 더 자세히 확인할 수 있습니다.
         </div>
       );
@@ -149,8 +149,8 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
               className={cn(
                 "rounded-full px-4 py-2 text-xs font-black transition-all shadow-sm active:scale-95",
                 productsTab === "deposit"
-                  ? "bg-emerald-600 text-white shadow-emerald-900/10"
-                  : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  ? "bg-primary text-white shadow-navy/10"
+                  : "bg-white border border-slate-200 text-slate-500 hover:bg-surface-muted"
               )}
               onClick={() => setProductsTab("deposit")}
             >
@@ -161,8 +161,8 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
               className={cn(
                 "rounded-full px-4 py-2 text-xs font-black transition-all shadow-sm active:scale-95",
                 productsTab === "saving"
-                  ? "bg-emerald-600 text-white shadow-emerald-900/10"
-                  : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  ? "bg-primary text-white shadow-navy/10"
+                  : "bg-white border border-slate-200 text-slate-500 hover:bg-surface-muted"
               )}
               onClick={() => setProductsTab("saving")}
             >
@@ -188,8 +188,8 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
     >
       <div role="dialog" aria-modal="true" aria-labelledby="quickview-title" className="mx-auto my-8 w-full max-w-3xl rounded-[2.5rem] bg-white p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <h2 id="quickview-title" className="text-2xl font-black text-slate-900 tracking-tight leading-tight">{title}</h2>
-          <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all shadow-sm" onClick={onClose}>
+          <h2 id="quickview-title" className="text-2xl font-black text-navy tracking-tight leading-tight">{title}</h2>
+          <button type="button" className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600 hover:bg-surface-muted transition-all shadow-sm" onClick={onClose}>
             닫기
           </button>
         </div>
@@ -200,7 +200,7 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
 
         <div className="mt-8 flex flex-wrap gap-2 border-t border-slate-100 pt-6">
           <a
-            className="inline-flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-8 text-sm font-black text-white shadow-xl shadow-emerald-900/20 transition-all hover:bg-emerald-700 active:scale-95"
+            className="inline-flex h-12 items-center justify-center rounded-2xl bg-primary px-8 text-sm font-black text-white shadow-xl shadow-navy/20 transition-all hover:bg-navy active:scale-95"
             href={hrefForNewTab}
             target="_blank"
             rel="noopener noreferrer"

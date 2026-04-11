@@ -389,13 +389,13 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
         )}
       />
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-navy">
           {notice}
         </Card>
       ) : null}
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">현재 스냅샷</h2>
+        <h2 className="text-base font-black text-navy">현재 스냅샷</h2>
         <p className="mt-2 text-sm text-slate-600">엔진은 네트워크를 호출하지 않고, 마지막 저장된 스냅샷만 사용합니다.</p>
 
         {!hasCsrf ? (
@@ -418,25 +418,25 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
         ) : null}
 
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">snapshotId: <span className="font-semibold">{snapshotId || "-"}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">asOf: <span className="font-semibold">{snapshot?.asOf ?? "-"}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">fetchedAt: <span className="font-semibold">{formatDateTime(snapshot?.fetchedAt)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">ECOS configured: <span className="font-semibold">{props.ecosConfigured ? "true" : "false"}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">snapshotId: <span className="font-semibold">{snapshotId || "-"}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">asOf: <span className="font-semibold">{snapshot?.asOf ?? "-"}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">fetchedAt: <span className="font-semibold">{formatDateTime(snapshot?.fetchedAt)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">ECOS configured: <span className="font-semibold">{props.ecosConfigured ? "true" : "false"}</span></div>
         </div>
 
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-3">
           {visibleMetrics.length > 0 ? visibleMetrics.map((metric) => (
-            <div key={metric.key} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+            <div key={metric.key} className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
               {metric.label}: <span className="font-semibold">{formatMetric(metric.value)}</span>
             </div>
           )) : (
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-slate-500">표시 가능한 금리/물가 값이 없습니다.</div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2 text-slate-500">표시 가능한 금리/물가 값이 없습니다.</div>
           )}
         </div>
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <div>
-            <h3 className="text-sm font-black text-slate-900">Warnings ({snapshot?.warnings.length ?? 0})</h3>
+            <h3 className="text-sm font-black text-navy">Warnings ({snapshot?.warnings.length ?? 0})</h3>
             {snapshot && snapshot.warnings.length > 0 ? (
               <ul className="mt-2 space-y-1 text-xs text-rose-700">
                 {snapshot.warnings.map((warning, index) => (
@@ -449,7 +449,7 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
           </div>
 
           <div>
-            <h3 className="text-sm font-black text-slate-900">Sources ({snapshot?.sources.length ?? 0})</h3>
+            <h3 className="text-sm font-black text-navy">Sources ({snapshot?.sources.length ?? 0})</h3>
             <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
               <input
                 checked={showSourceDetails}
@@ -477,7 +477,7 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-base font-black text-slate-900">Overrides</h2>
+            <h2 className="text-base font-black text-navy">Overrides</h2>
             <p className="mt-1 text-xs text-slate-600">스냅샷 가정을 런타임에 덮어쓸 값을 저장합니다. 값은 % 단위입니다.</p>
             <p className="mt-1 text-[11px] text-slate-500">스냅샷 히스토리는 공유되고, 오버라이드는 profileId별로 분리 저장됩니다.</p>
           </div>
@@ -547,7 +547,7 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
         {overrides.length > 0 ? (
           <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-xs">
-              <thead className="bg-slate-50">
+              <thead className="bg-surface-muted">
                 <tr>
                   <th className="px-2 py-2 text-left">Key</th>
                   <th className="px-2 py-2 text-left">Value(%)</th>
@@ -616,7 +616,7 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
           aria-labelledby="ops-assumptions-reset-title"
         >
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-assumptions-reset-title" className="text-base font-black text-slate-900">오버라이드 초기화 확인</h3>
+            <h3 id="ops-assumptions-reset-title" className="text-base font-black text-navy">오버라이드 초기화 확인</h3>
             <p className="mt-2 text-sm text-slate-700">
               저장된 가정 오버라이드를 모두 초기화합니다. 계속 진행할까요?
             </p>

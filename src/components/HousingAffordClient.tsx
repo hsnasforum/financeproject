@@ -171,7 +171,7 @@ export function HousingAffordClient({
       />
 
       <div className="space-y-6">
-        <Card className="rounded-[2rem] border border-slate-100 bg-slate-50/70 p-6 shadow-sm">
+        <Card className="rounded-[2rem] border border-slate-100 bg-surface-muted/70 p-6 shadow-sm">
           <p className="text-sm font-black text-slate-800">결과를 읽는 기준</p>
           <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
             이 계산은 현재 입력한 소득, 지출, 주거 조건을 기준으로 비교한 참고 결과입니다.
@@ -191,7 +191,7 @@ export function HousingAffordClient({
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">계산 모드</label>
               <select
                 id={pathToId("mode")}
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                 value={mode}
                 onChange={(e) => setMode(e.target.value === "buy" ? "buy" : "rent")}
                 aria-invalid={Boolean(fieldIssueMap.mode?.[0])}
@@ -208,7 +208,7 @@ export function HousingAffordClient({
               <div className="relative">
                 <NumberField
                   id={pathToId("incomeNet")}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                   value={toNumberOrNull(incomeNetInput)}
                   onValueChange={(value) => setIncomeNetInput(value === null ? "" : String(value))}
                   aria-invalid={Boolean(fieldIssueMap.incomeNet?.[0])}
@@ -224,7 +224,7 @@ export function HousingAffordClient({
               <div className="relative">
                 <NumberField
                   id={pathToId("outflow")}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                   value={toNumberOrNull(outflowInput)}
                   onValueChange={(value) => setOutflowInput(value === null ? "" : String(value))}
                   aria-invalid={Boolean(fieldIssueMap.outflow?.[0])}
@@ -251,7 +251,7 @@ export function HousingAffordClient({
                   <div className="relative">
                     <NumberField
                       id={pathToId("deposit")}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                       value={toNumberOrNull(depositInput)}
                       onValueChange={(value) => setDepositInput(value === null ? "" : String(value))}
                       aria-invalid={Boolean(fieldIssueMap.deposit?.[0])}
@@ -266,7 +266,7 @@ export function HousingAffordClient({
                   <div className="relative">
                     <NumberField
                       id={pathToId("monthlyRent")}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                       value={toNumberOrNull(monthlyRentInput)}
                       onValueChange={(value) => setMonthlyRentInput(value === null ? "" : String(value))}
                       aria-invalid={Boolean(fieldIssueMap.monthlyRent?.[0])}
@@ -281,7 +281,7 @@ export function HousingAffordClient({
                   <div className="relative">
                     <NumberField
                       id={pathToId("opportunityAprPct")}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                       value={toNumberOrNull(opportunityAprPctInput)}
                       onValueChange={(value) => setOpportunityAprPctInput(value === null ? "" : String(value))}
                       aria-invalid={Boolean(fieldIssueMap.opportunityAprPct?.[0])}
@@ -299,7 +299,7 @@ export function HousingAffordClient({
                   <div className="relative">
                     <NumberField
                       id={pathToId("purchasePrice")}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                       value={toNumberOrNull(purchasePriceInput)}
                       onValueChange={(value) => setPurchasePriceInput(value === null ? "" : String(value))}
                       aria-invalid={Boolean(fieldIssueMap.purchasePrice?.[0])}
@@ -314,7 +314,7 @@ export function HousingAffordClient({
                   <div className="relative">
                     <NumberField
                       id={pathToId("equity")}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                       value={toNumberOrNull(equityInput)}
                       onValueChange={(value) => setEquityInput(value === null ? "" : String(value))}
                       aria-invalid={Boolean(fieldIssueMap.equity?.[0])}
@@ -329,7 +329,7 @@ export function HousingAffordClient({
                   <div className="relative">
                     <NumberField
                       id={pathToId("loanAprPct")}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                       value={toNumberOrNull(loanAprPctInput)}
                       onValueChange={(value) => setLoanAprPctInput(value === null ? "" : String(value))}
                       aria-invalid={Boolean(fieldIssueMap.loanAprPct?.[0])}
@@ -344,7 +344,7 @@ export function HousingAffordClient({
                   <div className="relative">
                     <NumberField
                       id={pathToId("termMonths")}
-                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                      className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                       value={toNumberOrNull(termMonthsInput)}
                       onValueChange={(value) => setTermMonthsInput(value === null ? "" : String(value))}
                       aria-invalid={Boolean(fieldIssueMap.termMonths?.[0])}
@@ -360,13 +360,13 @@ export function HousingAffordClient({
         </Card>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          <Card className="rounded-[2rem] p-8 shadow-sm lg:col-span-2 border-emerald-100 bg-white">
+          <Card className="rounded-[2rem] p-8 shadow-sm lg:col-span-2 border-primary/10 bg-white">
             <SubSectionHeader title="현재 조건 기준 계산 결과" description="입력한 소득·지출·주거 조건으로 비교한 결과입니다." />
 
             <div className="mt-8 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-3xl border border-emerald-50 bg-slate-50/50 p-6">
+              <div className="rounded-3xl border border-primary/5 bg-surface-muted/50 p-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">월 총 주거비</p>
-                <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{fmtKrw(result.monthlyHousingCost)}</p>
+                <p className="mt-1 text-2xl font-black text-navy tabular-nums">{fmtKrw(result.monthlyHousingCost)}</p>
 
                 <div className="mt-6 space-y-3 border-t border-slate-100 pt-4">
                   {mode === "rent" ? (
@@ -395,13 +395,13 @@ export function HousingAffordClient({
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-emerald-50 bg-slate-50/50 p-6">
+              <div className="rounded-3xl border border-primary/5 bg-surface-muted/50 p-6">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">주거비율 및 잔여현금</p>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <p className="text-2xl font-black text-slate-900 tabular-nums">{fmtPct(result.housingRatioPct)}</p>
+                  <p className="text-2xl font-black text-navy tabular-nums">{fmtPct(result.housingRatioPct)}</p>
                   <span className={cn(
                     "rounded-lg px-2 py-0.5 text-[10px] font-black uppercase tracking-widest border",
-                    (result.housingRatioPct ?? 0) <= 25 ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                    (result.housingRatioPct ?? 0) <= 25 ? "bg-primary/5 text-primary border-primary/10" :
                     (result.housingRatioPct ?? 0) <= 35 ? "bg-amber-50 text-amber-600 border-amber-100" :
                     "bg-rose-50 text-rose-600 border-rose-100"
                   )}>
@@ -412,7 +412,7 @@ export function HousingAffordClient({
                 <div className="mt-6 space-y-3 border-t border-slate-100 pt-4">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-500">잔여 현금흐름</span>
-                    <span className={cn("font-black tabular-nums", result.residualCashFlow < 0 ? "text-rose-600" : "text-emerald-600")}>
+                    <span className={cn("font-black tabular-nums", result.residualCashFlow < 0 ? "text-rose-600" : "text-primary")}>
                       {fmtKrw(result.residualCashFlow)}
                     </span>
                   </div>
@@ -423,7 +423,7 @@ export function HousingAffordClient({
                       <div
                         className={cn(
                           "h-full transition-all duration-500",
-                          (result.housingRatioPct ?? 0) <= 25 ? "bg-emerald-500" :
+                          (result.housingRatioPct ?? 0) <= 25 ? "bg-primary" :
                           (result.housingRatioPct ?? 0) <= 35 ? "bg-amber-500" : "bg-rose-500"
                         )}
                         style={{ width: `${Math.min(100, result.housingRatioPct ?? 0)}%` }}
@@ -440,10 +440,10 @@ export function HousingAffordClient({
             </div>
 
             {/* Cashflow Breakdown Bar */}
-            <div className="mt-8 space-y-3 rounded-3xl bg-slate-50 p-8 border border-slate-100 shadow-sm">
+            <div className="mt-8 space-y-3 rounded-3xl bg-surface-muted p-8 border border-slate-100 shadow-sm">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">월 현금흐름 구성</p>
-                <p className="text-xs font-black text-emerald-600">월 소득 기준 {fmtKrw(Number(incomeNetInput))}</p>
+                <p className="text-xs font-black text-primary">월 소득 기준 {fmtKrw(Number(incomeNetInput))}</p>
               </div>
 
               <div className="h-4 w-full flex overflow-hidden rounded-full bg-slate-200 mt-4">
@@ -453,7 +453,7 @@ export function HousingAffordClient({
                   title="기타 지출"
                 />
                 <div
-                  className="h-full bg-emerald-500"
+                  className="h-full bg-primary"
                   style={{ width: `${Math.min(100, (housingCostVal / incomeVal) * 100)}%` }}
                   title="주거비"
                 />
@@ -465,11 +465,11 @@ export function HousingAffordClient({
                   <span className="text-[10px] font-bold text-slate-500">기타 지출 ({Math.round((otherOutflowVal / incomeVal) * 100)}%)</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="h-2 w-2 rounded-full bg-primary" />
                   <span className="text-[10px] font-bold text-slate-500">주거비 ({Math.round((housingCostVal / incomeVal) * 100)}%)</span>
                 </div>
                 <div className="flex items-center gap-2 ml-auto">
-                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">잔여 {Math.max(0, Math.round((result.residualCashFlow / incomeVal) * 100))}%</span>
+                  <span className="text-[10px] font-black text-primary uppercase tracking-widest">잔여 {Math.max(0, Math.round((result.residualCashFlow / incomeVal) * 100))}%</span>
                 </div>
               </div>
             </div>
@@ -494,12 +494,12 @@ export function HousingAffordClient({
               )}
             </Card>
 
-            <Card className="rounded-[2rem] p-8 shadow-xl shadow-emerald-900/20 bg-emerald-600 text-white border-none">
+            <Card className="rounded-[2rem] p-8 shadow-xl shadow-navy/20 bg-primary text-white border-none">
               <SubSectionHeader
                 title="다음에 확인할 곳"
                 description="현재 계산 뒤에 이어서 볼 수 있는 비교 화면입니다."
                 titleClassName="text-white"
-                descriptionClassName="text-emerald-100/70"
+                descriptionClassName="text-primary/80"
               />
               <div className="mt-6 grid gap-2">
                 {ctaLinks.map((link) => (

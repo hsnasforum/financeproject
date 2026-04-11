@@ -22,7 +22,7 @@ function severityBadge(severity: UserInsight["severity"]): { label: string; clas
   }
   return {
     label: "양호",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    className: "border-primary/20 bg-primary/5 text-navy",
   };
 }
 
@@ -52,14 +52,14 @@ export default function ResultInterpretationCard({ insight }: Props) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Quick Summary</p>
-          <h2 className="mt-1 text-base font-bold text-slate-900">한눈에 보는 결과</h2>
+          <h2 className="mt-1 text-base font-bold text-navy">한눈에 보는 결과</h2>
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-bold ${badge.className}`}>{badge.label}</span>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-emerald-50/60 p-4">
+      <section className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-primary/10 p-4">
         <p className="text-xs font-semibold text-slate-500">먼저 이 문장만 보세요</p>
-        <p className="mt-2 text-base font-bold leading-6 text-slate-900">{insight.headline}</p>
+        <p className="mt-2 text-base font-bold leading-6 text-navy">{insight.headline}</p>
       </section>
 
       <div>
@@ -77,9 +77,9 @@ export default function ResultInterpretationCard({ insight }: Props) {
       <div>
         <p className="text-xs font-semibold text-slate-700">지금 가장 먼저 할 일</p>
         {primaryStep ? (
-          <article className="mt-2 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-4 text-xs">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700">Priority 1</p>
-            <p className="mt-1 text-sm font-bold text-slate-900">{primaryStep.title}</p>
+          <article className="mt-2 rounded-2xl border border-primary/20 bg-primary/10 px-4 py-4 text-xs">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-navy">Priority 1</p>
+            <p className="mt-1 text-sm font-bold text-navy">{primaryStep.title}</p>
             <p className="mt-2 text-slate-700">{primaryStep.why}</p>
           </article>
         ) : (
@@ -90,7 +90,7 @@ export default function ResultInterpretationCard({ insight }: Props) {
             {secondarySteps.map((step, index) => (
               <article className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-xs" key={`${step.title}-${index}`}>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">Next {index + 2}</p>
-                <p className="mt-1 font-semibold text-slate-900">{step.title}</p>
+                <p className="mt-1 font-semibold text-navy">{step.title}</p>
                 <p className="mt-1 text-slate-700">{step.why}</p>
               </article>
             ))}
@@ -98,14 +98,14 @@ export default function ResultInterpretationCard({ insight }: Props) {
         ) : null}
       </div>
 
-      <details className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-        <summary className="cursor-pointer font-semibold text-slate-900">전문 경고와 세부 근거 보기</summary>
+      <details className="rounded-lg border border-slate-200 bg-surface-muted px-3 py-2 text-xs text-slate-700">
+        <summary className="cursor-pointer font-semibold text-navy">전문 경고와 세부 근거 보기</summary>
         <div className="mt-2 space-y-2">
           {insight.translatedWarnings.length === 0 ? (
             <p>추가로 확인할 전문 경고는 없습니다.</p>
           ) : insight.translatedWarnings.map((warning) => (
             <article className="rounded-lg border border-slate-200 bg-white px-3 py-2" key={`${warning.code}:${warning.level}`}>
-              <p className="text-xs font-semibold text-slate-900">
+              <p className="text-xs font-semibold text-navy">
                 [{warningLevelText(warning.level)}] {warning.title}
               </p>
               <p className="mt-1">무슨 뜻인가요: {warning.meaning}</p>

@@ -712,7 +712,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   }, [selectedRun?.id, showCandidateInsights]);
 
   return (
-    <PageShell className="bg-slate-50">
+    <PageShell className="bg-surface-muted">
       <PageHeader
         title="플래닝 리포트"
         description="저장된 실행 결과를 다시 읽고, 필요하면 실행 기록 화면의 다른 실행과 비교하는 화면입니다."
@@ -763,8 +763,8 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             title="아직 저장된 실행이 없습니다"
             description="먼저 /planning에서 실행을 저장해 두면, 여기서 저장된 결과를 다시 보고 실행 기록 화면과 비교할 수 있습니다."
           />
-          <Card className="p-8 text-center bg-slate-50/50 border-dashed rounded-[2.5rem]">
-            <p className="text-sm font-bold text-slate-900">먼저 /planning에서 실행 저장을 마치면 됩니다.</p>
+          <Card className="p-8 text-center bg-surface-muted/50 border-dashed rounded-[2.5rem]">
+            <p className="text-sm font-bold text-navy">먼저 /planning에서 실행 저장을 마치면 됩니다.</p>
             <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">실행을 저장한 뒤 이 화면으로 돌아오면 저장된 결과를 다시 읽고, 실행 기록 화면에서는 다른 실행과 비교할 수 있습니다.</p>
             <div className="mt-6 flex justify-center gap-3">
               <Link href={planningHref}>
@@ -830,8 +830,8 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                   hasInvalidSavedReportDetail
                     ? "border-amber-100 bg-amber-50 text-amber-800"
                     : hasPendingSavedReportDetail
-                      ? "border-slate-200 bg-slate-50 text-slate-700"
-                    : "border-emerald-100 bg-emerald-50 text-emerald-800",
+                      ? "border-slate-200 bg-surface-muted text-slate-700"
+                    : "border-primary/10 bg-primary/5 text-navy",
                 )}
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -845,7 +845,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                             ? "text-amber-700"
                             : hasPendingSavedReportDetail
                               ? "text-slate-600"
-                              : "text-emerald-700",
+                              : "text-navy",
                         )}
                       >
                         {savedReportDetailHelper}
@@ -856,7 +856,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                     <div className="flex flex-wrap items-center gap-2">
                       {showSavedReportDetailCta ? (
                         <Link
-                          className="inline-flex items-center rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[11px] font-black text-emerald-700 transition-colors hover:border-emerald-300 hover:bg-emerald-100"
+                          className="inline-flex items-center rounded-xl border border-primary/20 bg-white px-3 py-2 text-[11px] font-black text-navy transition-colors hover:border-primary/30 hover:bg-primary/10"
                           data-testid="report-saved-detail-link"
                           href={savedReportDetailHref}
                         >
@@ -869,7 +869,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                             "h-8 rounded-xl bg-white px-3 text-[11px] font-black",
                             hasInvalidSavedReportDetail
                               ? "border-amber-200 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
-                              : "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-100",
+                              : "border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-surface-muted",
                           )}
                           data-testid="report-saved-detail-recheck-button"
                           onClick={handleSavedReportManualRecheck}
@@ -893,21 +893,21 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             ) : null}
 
             {selectedRunHasExplicitRecommendRef ? (
-              <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
+              <div className="mt-4 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-xs font-bold text-navy">
                 <p>이 리포트는 추천 비교 기록과 함께 열렸습니다. 필요하면 위 버튼으로 돌아가 저장 당시 비교 후보를 다시 확인해 보세요.</p>
-                <details className="mt-3 rounded-xl border border-emerald-200/80 bg-white/70 px-3 py-2">
-                  <summary className="cursor-pointer list-none text-[11px] font-semibold text-emerald-700 marker:hidden">
+                <details className="mt-3 rounded-xl border border-primary/10 bg-white/70 px-3 py-2">
+                  <summary className="cursor-pointer list-none text-[11px] font-semibold text-navy marker:hidden">
                     공유·복구용 보조 정보
                   </summary>
-                  <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-800">
-                    추천 비교 기록 식별자 (recommendRunId): <span className="font-mono text-emerald-900">{queryRecommendRunId}</span>
+                  <p className="mt-2 text-[11px] font-medium leading-relaxed text-navy">
+                    추천 비교 기록 식별자 (recommendRunId): <span className="font-mono text-navy">{queryRecommendRunId}</span>
                   </p>
                 </details>
               </div>
             ) : null}
 
             {compareMode && (
-              <div className="mt-6 p-6 rounded-2xl bg-slate-50 border border-slate-100 space-y-6">
+              <div className="mt-6 p-6 rounded-2xl bg-surface-muted border border-slate-100 space-y-6">
                 <div className="flex flex-wrap items-center gap-3">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400" htmlFor="report-baseline-selector">
                     기준 실행
@@ -938,7 +938,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                       <div className="p-4 rounded-xl bg-white border border-slate-100 shadow-sm" key={item.key}>
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{item.label}</p>
                         <div className="flex items-baseline justify-between">
-                          <p className={cn("text-lg font-black tabular-nums", item.delta > 0 ? "text-emerald-600" : item.delta < 0 ? "text-rose-600" : "text-slate-900")}>
+                          <p className={cn("text-lg font-black tabular-nums", item.delta > 0 ? "text-success" : item.delta < 0 ? "text-danger" : "text-navy")}>
                             {formatMetricDelta(item.unitKind, item.delta)}
                           </p>
                           <span className="text-[10px] font-bold text-slate-400">{directionLabel(item.direction)}</span>
@@ -966,7 +966,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                 summaryEvidence={interpretationInput.summaryEvidence}
               />
             ) : (
-              <div className="p-6 rounded-[2rem] bg-slate-100 text-sm font-bold text-slate-500 text-center">
+              <div className="p-6 rounded-[2rem] bg-surface-muted text-sm font-bold text-slate-500 text-center">
                 해석 가이드는 simulate 단계 성공 시에만 표시됩니다.
               </div>
             )
@@ -1074,7 +1074,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             <SubSectionHeader title="발생 경고 (Warnings)" />
             <div className="overflow-hidden rounded-2xl border border-slate-100 mt-4">
               <table className="min-w-full text-sm" data-testid="report-warnings-table">
-                <thead className="bg-slate-50 border-b border-slate-100">
+                <thead className="bg-surface-muted border-b border-slate-100">
                   <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     <th className="px-4 py-3 text-left">Code</th>
                     <th className="px-4 py-3 text-left">Message</th>
@@ -1088,7 +1088,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                     </tr>
                   ) : warningRows.map((row) => (
                     <tr key={`${row.code}:${row.message}`}>
-                      <td className="px-4 py-4 font-black text-slate-900">{row.code}</td>
+                      <td className="px-4 py-4 font-black text-navy">{row.code}</td>
                       <td className="px-4 py-4 font-medium text-slate-600 leading-relaxed">{row.message}</td>
                       <td className="px-4 py-4 text-right tabular-nums font-bold text-slate-400">{row.count.toLocaleString("ko-KR")}</td>
                     </tr>
@@ -1102,7 +1102,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             <SubSectionHeader title="목표 달성 여부 (Goals)" />
             <div className="overflow-hidden rounded-2xl border border-slate-100 mt-4">
               <table className="min-w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-100">
+                <thead className="bg-surface-muted border-b border-slate-100">
                   <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                     <th className="px-4 py-3 text-left">Goal Name</th>
                     <th className="px-4 py-3 text-left">Status</th>
@@ -1116,7 +1116,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                     </tr>
                   ) : goalRows.map((row, index) => (
                     <tr key={`${row.name}:${index}`}>
-                      <td className="px-4 py-4 font-black text-slate-900">{row.name}</td>
+                      <td className="px-4 py-4 font-black text-navy">{row.name}</td>
                       <td className="px-4 py-4 font-bold">
                         <Badge variant={row.achieved ? "secondary" : "destructive"} className="px-2 py-0.5 text-[10px] h-5">
                           {row.achieved ? "달성" : "미달"}
@@ -1135,21 +1135,21 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
           <Card className="p-6" data-testid="report-top-actions">
             <SubSectionHeader title="최우선 권고 액션 (Top Actions)" />
             {topActions.length < 1 ? (
-              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 mt-4">
+              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-surface-muted/50 rounded-2xl border border-dashed border-slate-200 mt-4">
                 권고 액션 정보가 없습니다.
               </p>
             ) : (
               <div className="grid gap-4 mt-4">
                 {topActions.map((action, index) => (
-                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-100 relative overflow-hidden" key={`${action.title}:${index}`}>
-                    <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+                  <div className="p-5 rounded-2xl bg-surface-muted border border-slate-100 relative overflow-hidden" key={`${action.title}:${index}`}>
+                    <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
                     <div className="flex items-start justify-between gap-4 mb-3">
-                      <p className="text-base font-black text-slate-900 tracking-tight">
+                      <p className="text-base font-black text-navy tracking-tight">
                         {index + 1}. {action.title}
                       </p>
                       <Badge variant="secondary" className={cn("text-[9px] uppercase font-black",
                         action.severity === 'critical' ? "bg-rose-100 text-rose-700" :
-                        action.severity === 'warn' ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                        action.severity === 'warn' ? "bg-amber-100 text-amber-700" : "bg-primary/10 text-navy"
                       )}>
                         {severityLabel(action.severity)}
                       </Badge>
@@ -1158,7 +1158,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                       <ul className="space-y-2">
                         {action.steps.map((step, stepIndex) => (
                           <li key={`${action.title}:${stepIndex}`} className="flex gap-3 text-xs font-medium text-slate-600 leading-relaxed">
-                            <span className="text-emerald-500 font-black">•</span>
+                            <span className="text-primary font-black">•</span>
                             {step}
                           </li>
                         ))}
@@ -1172,7 +1172,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             )}
           </Card>
 
-          <div className="no-print p-4 rounded-2xl border border-slate-200 bg-slate-50/50">
+          <div className="no-print p-4 rounded-2xl border border-slate-200 bg-surface-muted/50">
             <Button
               aria-expanded={showAdvancedRaw}
               data-ready={interactiveReady ? "true" : "false"}

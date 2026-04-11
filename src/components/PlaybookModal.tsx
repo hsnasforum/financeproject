@@ -41,7 +41,7 @@ export function PlaybookModal({ open, onClose, playbookId }: PlaybookModalProps)
       <div role="dialog" aria-modal="true" aria-labelledby="playbook-title" className="mx-auto my-8 w-full max-w-3xl rounded-xl bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 id="playbook-title" className="text-xl font-semibold">{playbook.title}</h2>
-          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50" onClick={onClose}>
+          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-surface-muted" onClick={onClose}>
             닫기
           </button>
         </div>
@@ -84,7 +84,7 @@ export function PlaybookModal({ open, onClose, playbookId }: PlaybookModalProps)
               <p className="font-medium">관련 페이지</p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {playbook.relatedLinks.map((link) => (
-                  <a key={link.href + link.label} href={link.href} target="_blank" rel="noopener noreferrer" className="rounded border px-3 py-1.5 text-xs hover:bg-slate-50">
+                  <a key={link.href + link.label} href={link.href} target="_blank" rel="noopener noreferrer" className="rounded border px-3 py-1.5 text-xs hover:bg-surface-muted">
                     {link.label}
                   </a>
                 ))}

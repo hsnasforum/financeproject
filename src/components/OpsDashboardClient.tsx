@@ -255,13 +255,13 @@ function formatDateTime(value: string): string {
 function statusBadgeClass(ok: boolean, warnCount: number): string {
   if (!ok) return "border-rose-200 bg-rose-50 text-rose-700";
   if (warnCount > 0) return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 function issueBadgeClass(severity: DoctorIssue["severity"]): string {
   if (severity === "risk") return "border-rose-200 bg-rose-50 text-rose-700";
   if (severity === "warn") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-slate-200 bg-slate-100 text-slate-700";
+  return "border-slate-200 bg-surface-muted text-slate-700";
 }
 
 function severityText(severity: DoctorIssue["severity"]): string {
@@ -282,13 +282,13 @@ function schedulerModeText(mode: string): string {
 function schedulerStatusBadgeClass(level: "OK" | "WARN" | "RISK"): string {
   if (level === "RISK") return "border-rose-200 bg-rose-50 text-rose-700";
   if (level === "WARN") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 function schedulerDeltaBadgeClass(delta: number): string {
   if (delta > 0) return "border-rose-200 bg-rose-50 text-rose-700";
-  if (delta < 0) return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  return "border-slate-200 bg-slate-100 text-slate-600";
+  if (delta < 0) return "border-primary/20 bg-primary/5 text-navy";
+  return "border-slate-200 bg-surface-muted text-slate-600";
 }
 
 function formatDelta(delta: number): string {
@@ -1069,7 +1069,7 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
       {!hasCsrf ? <ErrorState className="mb-4" message="Dev unlock/CSRF가 필요합니다." /> : null}
       {error ? <ErrorState className="mb-4" message={error} onRetry={() => void loadDashboard()} retryLabel="다시 시도" /> : null}
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-navy">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>{notice}</span>
             <Link href="/ops/audit" className="underline">/ops/audit</Link>
@@ -1100,10 +1100,10 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
           <div
             className={`pointer-events-auto min-w-[280px] max-w-[440px] rounded-xl border px-3 py-2 text-sm shadow-xl ${
               toast.type === "success"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-900"
+                ? "border-primary/30 bg-primary/5 text-navy"
                 : toast.type === "error"
                   ? "border-rose-300 bg-rose-50 text-rose-900"
-                  : "border-slate-300 bg-slate-50 text-slate-900"
+                  : "border-slate-300 bg-surface-muted text-navy"
             }`}
           >
             <div className="flex items-center justify-between gap-3">
@@ -1121,9 +1121,9 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
         </div>
       ) : null}
       {autoRunSummary ? (
-        <Card className="mb-4 border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+        <Card className="mb-4 border border-slate-200 bg-surface-muted p-3 text-sm text-slate-700">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-semibold text-slate-900">
+            <p className="font-semibold text-navy">
               최근 자동 실행: {formatDateTime(autoRunSummary.ranAt)}
             </p>
             <span className="text-xs text-slate-600">
@@ -1143,10 +1143,10 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
           ) : null}
         </Card>
       ) : null}
-      <Card className="mb-4 border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700" data-testid="ops-scheduler-summary">
+      <Card className="mb-4 border border-slate-200 bg-surface-muted p-3 text-sm text-slate-700" data-testid="ops-scheduler-summary">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <p className="font-semibold text-slate-900">스케줄러 최근 실행</p>
+            <p className="font-semibold text-navy">스케줄러 최근 실행</p>
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${schedulerStatusBadgeClass(schedulerSummary?.level ?? "OK")}`}>
               {schedulerSummary?.level === "RISK" ? "위험" : schedulerSummary?.level === "WARN" ? "주의" : "정상"}
             </span>
@@ -1285,7 +1285,7 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
                     return (
                       <li
                         key={`${row.eventType}:${row.at}:${index}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5"
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-surface-muted px-2 py-1.5"
                       >
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-semibold text-slate-800">{row.meta?.reset ? "초기화" : "변경"}</span>
@@ -1322,7 +1322,7 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
                   className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2 py-1.5"
                 >
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${row.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${row.ok ? "border-primary/20 bg-primary/5 text-navy" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
                       {row.ok ? "SUCCESS" : "FAILED"}
                     </span>
                     <span className="font-semibold text-slate-800">{schedulerModeText(row.mode)}</span>
@@ -1338,13 +1338,13 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
                 <div className="mt-2 grid gap-2 md:grid-cols-2">
                   <div>
                     <p className="text-[11px] font-semibold text-slate-600">stdout</p>
-                    <pre className="mt-1 max-h-36 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-700">
+                    <pre className="mt-1 max-h-36 overflow-auto rounded border border-slate-200 bg-surface-muted p-2 text-[11px] text-slate-700">
                       {schedulerLogs.stdout.length > 0 ? schedulerLogs.stdout.join("\n") : "-"}
                     </pre>
                   </div>
                   <div>
                     <p className="text-[11px] font-semibold text-slate-600">stderr</p>
-                    <pre className="mt-1 max-h-36 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-700">
+                    <pre className="mt-1 max-h-36 overflow-auto rounded border border-slate-200 bg-surface-muted p-2 text-[11px] text-slate-700">
                       {schedulerLogs.stderr.length > 0 ? schedulerLogs.stderr.join("\n") : "-"}
                     </pre>
                   </div>
@@ -1362,16 +1362,16 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
       {report ? (
         <Card className="mb-4 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">운영 상태 요약</h2>
+            <h2 className="text-base font-black text-navy">운영 상태 요약</h2>
             <span className={`inline-flex items-center rounded-full border px-2 py-1 text-xs font-bold ${statusBadgeClass(report.summary.fail < 1, report.summary.warn)}`} data-testid="ops-status-badge">
               {summaryLabel}
             </span>
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-4 text-sm">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">generatedAt: <span className="font-semibold">{formatDateTime(report.generatedAt)}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">PASS: <span className="font-semibold">{report.summary.pass}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">WARN: <span className="font-semibold">{report.summary.warn}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">FAIL: <span className="font-semibold">{report.summary.fail}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">generatedAt: <span className="font-semibold">{formatDateTime(report.generatedAt)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">PASS: <span className="font-semibold">{report.summary.pass}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">WARN: <span className="font-semibold">{report.summary.warn}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">FAIL: <span className="font-semibold">{report.summary.fail}</span></div>
           </div>
         </Card>
       ) : null}
@@ -1387,17 +1387,17 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
 
       {issues.length > 0 ? (
         <Card className="mb-4 p-4" data-testid="ops-issues">
-          <h2 className="text-base font-black text-slate-900">우선순위 이슈 큐</h2>
+          <h2 className="text-base font-black text-navy">우선순위 이슈 큐</h2>
           <div className="mt-3 space-y-2">
             {issues.map((issue) => {
               const fixHref = issue.fix?.href;
               const fixActionId = isOpsActionId(issue.fix?.actionId) ? issue.fix.actionId : undefined;
               const fixLabel = issue.fix?.label ?? "Fix";
               return (
-                <div key={issue.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid={`ops-issue-${toSafeDomId(issue.id)}`}>
+                <div key={issue.id} className="rounded-lg border border-slate-200 bg-surface-muted p-3" data-testid={`ops-issue-${toSafeDomId(issue.id)}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{issue.title}</p>
+                    <p className="text-sm font-semibold text-navy">{issue.title}</p>
                     <p className="text-xs text-slate-600">{issue.id}</p>
                   </div>
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-bold ${issueBadgeClass(issue.severity)}`}>
@@ -1435,14 +1435,14 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4">
-          <h2 className="text-base font-black text-slate-900">원클릭 액션</h2>
-          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <h2 className="text-base font-black text-navy">원클릭 액션</h2>
+          <div className="mt-3 rounded-lg border border-slate-200 bg-surface-muted p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-semibold text-slate-700">자동 실행 대상 선택</p>
               <div className="flex items-center gap-2">
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
                   autoRunPolicy.enabled
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    ? "border-primary/30 bg-primary/5 text-navy"
                     : "border-slate-300 bg-white text-slate-600"
                 }`}>
                   {autoRunPolicy.enabled ? "스케줄 ON" : "스케줄 OFF"}
@@ -1580,7 +1580,7 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
         </Card>
 
         <Card className="p-4">
-          <h2 className="text-base font-black text-slate-900">최근 이벤트 미리보기</h2>
+          <h2 className="text-base font-black text-navy">최근 이벤트 미리보기</h2>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <div>
               <p className="text-xs font-semibold text-slate-700">Audit</p>
@@ -1611,10 +1611,10 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
           data-testid="ops-preview-modal"
         >
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-danger-title" className="text-base font-black text-slate-900">{confirmModal.title}</h3>
+            <h3 id="ops-danger-title" className="text-base font-black text-navy">{confirmModal.title}</h3>
             <p className="mt-2 text-sm text-slate-700">{confirmModal.description}</p>
             {confirmModal.type === "action" && confirmModal.summary ? (
-              <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
+              <div className="mt-3 rounded-md border border-slate-200 bg-surface-muted p-2 text-xs text-slate-700">
                 {confirmModal.summary.counts ? (
                   <p>
                     {Object.entries(confirmModal.summary.counts).map(([key, value]) => `${key}=${value}`).join(", ")}
@@ -1629,8 +1629,8 @@ export function OpsDashboardClient({ csrf }: { csrf: string }) {
               </div>
             ) : null}
             {confirmModal.type === "autoRun" ? (
-              <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
-                <p className="font-semibold text-slate-900">
+              <div className="mt-3 rounded-md border border-slate-200 bg-surface-muted p-2 text-xs text-slate-700">
+                <p className="font-semibold text-navy">
                   실행 대상: {confirmModal.actions.length}개
                 </p>
                 <ul className="mt-1 space-y-1">

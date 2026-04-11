@@ -294,7 +294,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                 value={draft.q}
                 onChange={(event) => setDraft((prev) => ({ ...prev, q: event.target.value }))}
                 placeholder="예: 금리, 환율"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 outline-none transition-all"
+                className="w-full rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-sm text-slate-800 focus:border-primary outline-none transition-all"
               />
             </label>
 
@@ -303,7 +303,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
               <select
                 value={draft.topic}
                 onChange={(event) => setDraft((prev) => ({ ...prev, topic: event.target.value }))}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 outline-none transition-all"
+                className="w-full rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-sm text-slate-800 focus:border-primary outline-none transition-all"
               >
                 <option value="">전체</option>
                 {topics.map((topic) => (
@@ -319,7 +319,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
               <select
                 value={draft.source}
                 onChange={(event) => setDraft((prev) => ({ ...prev, source: event.target.value }))}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 outline-none transition-all"
+                className="w-full rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-sm text-slate-800 focus:border-primary outline-none transition-all"
               >
                 <option value="">전체</option>
                 {sources.map((source) => (
@@ -335,7 +335,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
               <select
                 value={draft.days}
                 onChange={(event) => setDraft((prev) => ({ ...prev, days: safeDays(Number(event.target.value)) }))}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 outline-none transition-all"
+                className="w-full rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-sm text-slate-800 focus:border-primary outline-none transition-all"
               >
                 <option value={7}>최근 7일</option>
                 <option value={14}>최근 14일</option>
@@ -354,7 +354,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                     burst: value === "상" || value === "중" || value === "하" ? value : "all",
                   }));
                 }}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 outline-none transition-all"
+                className="w-full rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-sm text-slate-800 focus:border-primary outline-none transition-all"
               >
                 <option value="all">전체</option>
                 <option value="상">상</option>
@@ -369,7 +369,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                 value={draft.minScore}
                 onChange={(event) => setDraft((prev) => ({ ...prev, minScore: event.target.value }))}
                 placeholder="예: 1.2"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 outline-none transition-all"
+                className="w-full rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-sm text-slate-800 focus:border-primary outline-none transition-all"
               />
             </label>
 
@@ -384,7 +384,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                     setDraft(DEFAULT_FILTERS);
                     setApplied(DEFAULT_FILTERS);
                   }}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-surface-muted transition-colors"
                 >
                   필터 초기화
                 </button>
@@ -401,10 +401,10 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
           {freshness ? (
             <div className={cn(
               "mt-4 rounded-xl border px-4 py-3 transition-colors",
-              freshness.status === "stale" ? "border-amber-200 bg-amber-50/50" : "border-slate-100 bg-slate-50/50"
+              freshness.status === "stale" ? "border-amber-200 bg-amber-50/50" : "border-slate-100 bg-surface-muted/50"
             )}>
               <div className="flex items-center gap-2 mb-1">
-                <span className={cn("h-1.5 w-1.5 rounded-full", freshness.status === "stale" ? "bg-amber-500" : "bg-emerald-500")} />
+                <span className={cn("h-1.5 w-1.5 rounded-full", freshness.status === "stale" ? "bg-amber-500" : "bg-primary")} />
                 <p className={cn("text-[10px] font-black uppercase tracking-widest", freshness.status === "stale" ? "text-amber-700" : "text-slate-500")}>
                   {freshness.status === "stale" ? "STALE INDEX NOTICE" : "INDEX STATUS: CURRENT"}
                 </p>
@@ -426,14 +426,14 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
           <SubSectionHeader
             title="살펴볼 기사"
             description="현재 필터 조건에 부합하는 탐색 결과입니다."
-            action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">TOTAL: {total.toLocaleString("ko-KR")}</span>}
+            action={<span className="text-[10px] font-black text-slate-400 bg-surface-muted px-2 py-0.5 rounded-full tabular-nums">TOTAL: {total.toLocaleString("ko-KR")}</span>}
           />
 
           {loading ? (
             <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
           ) : items.length < 1 ? (
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
-              <p className="text-sm font-bold text-slate-900">조건에 맞는 항목이 없습니다.</p>
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-surface-muted p-12 text-center">
+              <p className="text-sm font-bold text-navy">조건에 맞는 항목이 없습니다.</p>
               <p className="mt-2 text-xs font-medium text-slate-500">필터를 줄이거나 최근 30일 기준으로 다시 보면 더 넓게 확인할 수 있습니다.</p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
                 <button
@@ -442,11 +442,11 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                     setDraft(DEFAULT_FILTERS);
                     setApplied(DEFAULT_FILTERS);
                   }}
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all"
                 >
                   필터 초기화
                 </button>
-                <Link href="/planning/v3/news/trends" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+                <Link href="/planning/v3/news/trends" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all">
                   최근 흐름 보기
                 </Link>
               </div>
@@ -456,10 +456,10 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
               {items.map((item) => (
                 <li key={item.id} className="group rounded-[2rem] border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-all">
                   <div className="flex flex-wrap items-center gap-3 mb-3">
-                    <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">{buildExploreLead(item)}</span>
+                    <span className="text-[10px] font-black text-navy uppercase tracking-widest">{buildExploreLead(item)}</span>
                     <div className="flex items-center gap-2 ml-auto">
                       <span className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(item.publishedAt)}</span>
-                      <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">SCORE {item.score.toFixed(2)}</span>
+                      <span className="text-[10px] font-black text-slate-400 bg-surface-muted px-2 py-0.5 rounded-full tabular-nums">SCORE {item.score.toFixed(2)}</span>
                     </div>
                   </div>
 
@@ -467,7 +467,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                     href={item.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-base font-black text-slate-900 leading-snug tracking-tight hover:text-emerald-700 transition-colors"
+                    className="block text-base font-black text-navy leading-snug tracking-tight hover:text-navy transition-colors"
                   >
                     {item.title}
                   </a>
@@ -480,15 +480,15 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                     <button
                       type="button"
                       onClick={() => setAdvanced((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                      className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                      className="rounded-lg border border-slate-200 bg-surface-muted px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-surface-muted hover:text-slate-700 transition-colors"
                     >
                       {advanced[item.id] ? "분석 상세 닫기" : "점수 분석 상세"}
                     </button>
-                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="ml-auto text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest">원문 보기 ▶</a>
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="ml-auto text-[10px] font-black text-primary hover:underline uppercase tracking-widest">원문 보기 ▶</a>
                   </div>
 
                   {advanced[item.id] && (
-                    <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 p-4 text-[10px] font-bold text-slate-500 tabular-nums border border-slate-100">
+                    <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl bg-surface-muted p-4 text-[10px] font-bold text-slate-500 tabular-nums border border-slate-100">
                       <div className="space-y-1">
                         <p>소스: {Number(item.scoreParts?.source ?? 0).toFixed(2)}</p>
                         <p>최근성: {Number(item.scoreParts?.recency ?? 0).toFixed(2)}</p>

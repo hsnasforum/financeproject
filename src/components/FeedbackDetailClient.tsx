@@ -106,7 +106,7 @@ function categoryLabel(category: FeedbackCategory): string {
 }
 
 function statusClassName(status: FeedbackStatus): string {
-  if (status === "DONE") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "DONE") return "bg-primary/5 text-navy border-primary/20";
   if (status === "DOING") return "bg-amber-50 text-amber-700 border-amber-200";
   return "bg-sky-50 text-sky-700 border-sky-200";
 }
@@ -115,7 +115,7 @@ function priorityClassName(priority: FeedbackPriority): string {
   if (priority === "P0") return "bg-rose-50 text-rose-700 border-rose-200";
   if (priority === "P1") return "bg-amber-50 text-amber-700 border-amber-200";
   if (priority === "P2") return "bg-sky-50 text-sky-700 border-sky-200";
-  return "bg-slate-100 text-slate-700 border-slate-300";
+  return "bg-surface-muted text-slate-700 border-slate-300";
 }
 
 function statusDisplayLabel(status: FeedbackStatus): string {
@@ -171,7 +171,7 @@ function readDevCsrf(): string | null {
 function riskBadgeClass(risk: "LOW" | "MEDIUM" | "HIGH"): string {
   if (risk === "HIGH") return "border-rose-200 bg-rose-50 text-rose-700";
   if (risk === "MEDIUM") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 export function FeedbackDetailClient({ id }: Props) {
@@ -524,17 +524,17 @@ export function FeedbackDetailClient({ id }: Props) {
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-lg bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
+              <span className="rounded-lg bg-surface-muted border border-slate-200 px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
               <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{statusDisplayLabel(item.status)}</span>
               <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", priorityClassName(item.priority))}>{item.priority}</span>
               <span className="text-[11px] font-bold text-slate-400 tabular-nums">{formatDateTime(item.createdAt)}</span>
             </div>
 
-            <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8">
+            <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-8">
               <p className="text-base font-medium leading-relaxed text-slate-800 whitespace-pre-wrap">{item.message}</p>
             </div>
 
-            <div className="rounded-[2rem] border border-slate-100 bg-slate-50/70 p-6">
+            <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/70 p-6">
               <p className="text-sm font-black text-slate-800">이 화면에서 먼저 보는 정보</p>
               <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
                 이 기록은 확정 답변이 아니라 제출 당시 상황을 다시 읽고, 이후 확인 메모와 첨부 진단을 한곳에서 이어 보는 저장본입니다.
@@ -545,7 +545,7 @@ export function FeedbackDetailClient({ id }: Props) {
             </div>
 
             <details className="group rounded-[2rem] border border-slate-100 bg-white shadow-sm overflow-hidden">
-              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-slate-900 group-open:bg-slate-50 transition-colors list-none">
+              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-navy group-open:bg-surface-muted transition-colors list-none">
                 <span>공유·지원용 보조 정보</span>
                 <span className="text-[10px] font-bold text-slate-400 group-open:rotate-180 transition-transform">▼</span>
               </summary>
@@ -556,23 +556,23 @@ export function FeedbackDetailClient({ id }: Props) {
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <div className="space-y-1">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">기록 ID</span>
-                  <p className="text-xs font-bold text-slate-600 break-all bg-slate-50 p-2 rounded-lg font-mono">{item.id}</p>
+                  <p className="text-xs font-bold text-slate-600 break-all bg-surface-muted p-2 rounded-lg font-mono">{item.id}</p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">추적 ID</span>
-                  <p className="text-xs font-bold text-slate-600 font-mono bg-slate-50 p-2 rounded-lg break-all">{item.traceId ?? "-"}</p>
+                  <p className="text-xs font-bold text-slate-600 font-mono bg-surface-muted p-2 rounded-lg break-all">{item.traceId ?? "-"}</p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">접속 화면</span>
-                  <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.url ?? "-"}>{item.url ?? "-"}</p>
+                  <p className="text-xs font-bold text-slate-600 truncate bg-surface-muted p-2 rounded-lg" title={item.url ?? "-"}>{item.url ?? "-"}</p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">앱 버전</span>
-                  <p className="text-xs font-bold text-slate-600 bg-slate-50 p-2 rounded-lg">{item.appVersion ?? "-"}</p>
+                  <p className="text-xs font-bold text-slate-600 bg-surface-muted p-2 rounded-lg">{item.appVersion ?? "-"}</p>
                 </div>
                 <div className="space-y-1 md:col-span-2 lg:col-span-4">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">브라우저 정보</span>
-                  <p className="text-xs font-bold text-slate-600 truncate bg-slate-50 p-2 rounded-lg" title={item.userAgent ?? "-"}>{item.userAgent ?? "-"}</p>
+                  <p className="text-xs font-bold text-slate-600 truncate bg-surface-muted p-2 rounded-lg" title={item.userAgent ?? "-"}>{item.userAgent ?? "-"}</p>
                 </div>
                 </div>
               </div>
@@ -630,7 +630,7 @@ export function FeedbackDetailClient({ id }: Props) {
                 {opsMessage ? (
                   <DevUnlockShortcutMessage
                     className="mt-3 text-[11px] font-bold text-slate-600 bg-white/50 p-2 rounded-lg"
-                    linkClassName="text-emerald-600 underline"
+                    linkClassName="text-primary underline"
                     message={opsMessage}
                   />
                 ) : null}
@@ -638,7 +638,7 @@ export function FeedbackDetailClient({ id }: Props) {
               </details>
             ) : null}
 
-            <div className="mt-8 space-y-6 rounded-[2rem] border border-slate-100 bg-slate-50/30 p-8">
+            <div className="mt-8 space-y-6 rounded-[2rem] border border-slate-100 bg-surface-muted/30 p-8">
               <SubSectionHeader title="진행 상태와 다음 확인 메모" description="지금 어디까지 확인했는지와 이후에 무엇을 더 보면 되는지 정리합니다." />
               
               <div className="grid gap-6 md:grid-cols-2">
@@ -647,7 +647,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   <select
                     value={status}
                     onChange={(event) => setStatus(event.target.value as FeedbackStatus)}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                     disabled={saving}
                   >
                     <option value="OPEN">접수됨</option>
@@ -660,7 +660,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   <select
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as FeedbackPriority)}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                     disabled={saving}
                   >
                     <option value="P0">P0</option>
@@ -675,7 +675,7 @@ export function FeedbackDetailClient({ id }: Props) {
                     type="date"
                     value={dueDate}
                     onChange={(event) => setDueDate(event.target.value)}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none tabular-nums"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none tabular-nums"
                     disabled={saving}
                   />
                 </div>
@@ -684,7 +684,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   <input
                     value={tagsInput}
                     onChange={(event) => setTagsInput(event.target.value)}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                     placeholder="ux, api, bug"
                     disabled={saving}
                   />
@@ -697,7 +697,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   rows={4}
-                  className="w-full rounded-[1.5rem] border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                  className="w-full rounded-[1.5rem] border border-slate-200 bg-white p-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                   placeholder="다음에 다시 볼 포인트나 특이사항을 기록하세요."
                   disabled={saving}
                 />
@@ -709,7 +709,7 @@ export function FeedbackDetailClient({ id }: Props) {
                   <input
                     value={taskInput}
                     onChange={(event) => setTaskInput(event.target.value)}
-                    className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                     placeholder="다음에 다시 확인할 일을 입력하세요"
                     disabled={saving}
                     onKeyDown={(e) => e.key === "Enter" && handleAddTask()}
@@ -728,7 +728,7 @@ export function FeedbackDetailClient({ id }: Props) {
                           type="checkbox"
                           checked={task.done}
                           onChange={() => handleToggleTask(task.id)}
-                          className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 transition-all"
+                          className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary transition-all"
                           disabled={saving}
                         />
                         <span className={cn("flex-1 text-sm font-bold transition-all", task.done ? "text-slate-300 line-through" : "text-slate-700")}>{task.text}</span>
@@ -754,13 +754,13 @@ export function FeedbackDetailClient({ id }: Props) {
             </div>
 
             {notice ? (
-              <p className="text-sm font-black text-emerald-600 bg-emerald-50 p-4 rounded-2xl">
+              <p className="text-sm font-black text-primary bg-primary/5 p-4 rounded-2xl">
                 {notice}
               </p>
             ) : null}
 
             <details className="group rounded-[2rem] border border-slate-100 bg-white shadow-sm overflow-hidden">
-              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-slate-900 group-open:bg-slate-50 transition-colors list-none">
+              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-navy group-open:bg-surface-muted transition-colors list-none">
                 <span>공유·지원용 내보내기</span>
                 <span className="text-[10px] font-bold text-slate-400 group-open:rotate-180 transition-transform">▼</span>
               </summary>
@@ -790,7 +790,7 @@ export function FeedbackDetailClient({ id }: Props) {
                       value={issueMarkdown}
                       onChange={(event) => setIssueMarkdown(event.target.value)}
                       rows={12}
-                      className="w-full rounded-[1.5rem] border border-slate-200 bg-slate-900 p-5 font-mono text-xs leading-relaxed text-slate-300 focus:ring-1 focus:ring-emerald-500 transition-all"
+                      className="w-full rounded-[1.5rem] border border-slate-200 bg-slate-900 p-5 font-mono text-xs leading-relaxed text-slate-300 focus:ring-1 focus:ring-primary transition-all"
                     />
                     <div className="flex flex-wrap items-center gap-2">
                       <Button size="sm" variant="primary" className="rounded-xl font-black shadow-md" onClick={() => { void handleCopyIssueTemplate(); }}>
@@ -806,12 +806,12 @@ export function FeedbackDetailClient({ id }: Props) {
             </details>
 
             <details className="group mt-10 rounded-[2rem] border border-slate-100 bg-white shadow-sm overflow-hidden">
-              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-slate-900 group-open:bg-slate-50 transition-colors list-none">
+              <summary className="flex cursor-pointer items-center justify-between p-6 text-sm font-black text-navy group-open:bg-surface-muted transition-colors list-none">
                 <span>진단 스냅샷 {item.snapshot ? "보기" : "(첨부 데이터 없음)"}</span>
                 <span className="text-[10px] font-bold text-slate-400 group-open:rotate-180 transition-transform">▼</span>
               </summary>
               <div className="p-6 border-t border-slate-50 bg-slate-900">
-                <pre className="overflow-x-auto text-[11px] leading-relaxed text-emerald-400/90 font-mono scrollbar-thin scrollbar-thumb-slate-700">
+                <pre className="overflow-x-auto text-[11px] leading-relaxed text-primary/80 font-mono scrollbar-thin scrollbar-thumb-slate-700">
                   {item.snapshot ? snapshotPretty : "첨부된 진단 데이터가 존재하지 않습니다."}
                 </pre>
               </div>

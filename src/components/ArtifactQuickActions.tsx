@@ -116,7 +116,7 @@ export function ArtifactQuickActions({ artifactName, label }: ArtifactQuickActio
   }, [artifactName, content, filename]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+    <div className="rounded-xl border border-slate-200 bg-surface-muted/70 p-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[11px] font-bold text-slate-700">{label}</p>
         <div className="flex items-center gap-1.5">
@@ -124,7 +124,7 @@ export function ArtifactQuickActions({ artifactName, label }: ArtifactQuickActio
             type="button"
             disabled={disabled}
             onClick={() => { void handleCopy(); }}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
           >
             복사
           </button>
@@ -132,7 +132,7 @@ export function ArtifactQuickActions({ artifactName, label }: ArtifactQuickActio
             type="button"
             disabled={disabled}
             onClick={handleDownload}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
           >
             다운로드
           </button>
@@ -146,7 +146,7 @@ export function ArtifactQuickActions({ artifactName, label }: ArtifactQuickActio
       ) : null}
 
       {actionMessage ? (
-        <p className={`mt-2 text-[11px] ${actionMessage.kind === "ok" ? "text-emerald-700" : "text-rose-600"}`}>
+        <p className={`mt-2 text-[11px] ${actionMessage.kind === "ok" ? "text-navy" : "text-rose-600"}`}>
           {actionMessage.text}
         </p>
       ) : null}

@@ -159,14 +159,14 @@ export function WeeklyPlanPanel({ csrf }: WeeklyPlanPanelProps) {
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">토픽 ID 리스트</span>
-            <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full tabular-nums">COUNT {topicCount}</span>
+            <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-0.5 rounded-full tabular-nums">COUNT {topicCount}</span>
           </div>
           <textarea
             value={topicsText}
             onChange={(event) => setTopicsText(event.target.value)}
             rows={5}
             placeholder="예: rates, inflation, fx"
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all"
+            className="w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-primary transition-all"
             disabled={loading || saving}
           />
         </div>
@@ -181,7 +181,7 @@ export function WeeklyPlanPanel({ csrf }: WeeklyPlanPanelProps) {
             onChange={(event) => setSeriesText(event.target.value)}
             rows={5}
             placeholder="예: kr_base_rate, kr_usdkrw"
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-emerald-500 transition-all"
+            className="w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:border-primary transition-all"
             disabled={loading || saving}
           />
         </div>
@@ -190,13 +190,13 @@ export function WeeklyPlanPanel({ csrf }: WeeklyPlanPanelProps) {
       <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-slate-50 pt-6">
         <div className="flex-1 min-w-[200px]">
           {errorMessage ? <p className="text-xs font-bold text-rose-600">❌ {errorMessage}</p> : null}
-          {notice ? <p className="text-xs font-bold text-emerald-600">✅ {notice}</p> : null}
+          {notice ? <p className="text-xs font-bold text-primary">✅ {notice}</p> : null}
         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 transition-all"
+            className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-surface-muted transition-all"
             disabled={loading || saving}
           >
             기존 계획 불러오기

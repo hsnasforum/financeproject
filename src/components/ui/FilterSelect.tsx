@@ -36,8 +36,8 @@ const FilterSelect = React.forwardRef<HTMLSelectElement, FilterSelectProps>(
           <select
             ref={ref}
             className={cn(
-              "w-full border border-slate-200 bg-slate-50 font-bold outline-none transition-all duration-300",
-              "focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 focus:bg-white",
+              "w-full border border-slate-200 bg-surface-muted font-bold outline-none transition-all duration-300",
+              "focus:border-primary focus:ring-2 focus:ring-primary/10 focus:bg-white",
               "appearance-none pr-8 cursor-pointer",
               isSm ? "h-9 rounded-full px-4 text-xs" : "h-12 rounded-2xl px-4 text-sm shadow-sm",
               error && "border-rose-300 focus:border-rose-500 focus:ring-rose-100 bg-rose-50/30",

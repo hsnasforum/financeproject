@@ -474,7 +474,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
             <ReportHeroStatCard label="저장된 기록" value={savedEntriesValue} description={savedEntriesDescription} />
             <ReportHeroStatCard label="watch series" value={`${selectedWatchSeriesIds.length}개`} description="선택 시나리오 기준" />
           </ReportHeroStatGrid>
-          {notice ? <p className="text-xs font-semibold text-emerald-300">{notice}</p> : null}
+          {notice ? <p className="text-xs font-semibold text-primary/30">{notice}</p> : null}
           {errorMessage ? <p className="text-xs font-semibold text-rose-300">{errorMessage}</p> : null}
           {entriesLoadError ? <p className="text-xs font-semibold text-rose-300">{entriesLoadError}</p> : null}
         </ReportHeroCard>
@@ -482,7 +482,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
         <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
           <Card className="space-y-3">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">오늘 점검</h2>
+              <h2 className="text-sm font-bold text-navy">오늘 점검</h2>
               <p className="text-xs text-slate-500">기준일을 고르고, 먼저 체크리스트를 점검한 뒤 기록을 남기면 흐름이 단순해집니다.</p>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -501,7 +501,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
               </label>
             </div>
 
-            <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div className="space-y-2 rounded-md border border-slate-200 bg-surface-muted p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-xs font-bold text-slate-800">일일 체크리스트</p>
@@ -512,12 +512,12 @@ export function JournalClient({ csrf }: JournalClientProps) {
                   type="button"
                   disabled={routineSaving || routineLoading || !routine}
                   onClick={() => { void handleSaveRoutine(); }}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {routineSaving ? "저장 중..." : "체크리스트 저장"}
                 </button>
               </div>
-              {routineNotice ? <p className="text-xs font-semibold text-emerald-700">{routineNotice}</p> : null}
+              {routineNotice ? <p className="text-xs font-semibold text-navy">{routineNotice}</p> : null}
               {routineErrorMessage ? <p className="text-xs font-semibold text-rose-700">{routineErrorMessage}</p> : null}
               {routineLoading ? (
                 <p className="text-xs text-slate-600">체크리스트 불러오는 중...</p>
@@ -543,24 +543,24 @@ export function JournalClient({ csrf }: JournalClientProps) {
 
           <Card className="space-y-3">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">저장 전 요약</h2>
+              <h2 className="text-sm font-bold text-navy">저장 전 요약</h2>
               <p className="text-xs text-slate-500">오늘 기록에 어떤 내용이 담기는지 먼저 확인하고 저장할 수 있습니다.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {draftSummary.map((item) => (
-                <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div key={item.label} className="rounded-xl border border-slate-200 bg-surface-muted p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{item.label}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-900">{item.value}개</p>
+                  <p className="mt-1 text-sm font-bold text-navy">{item.value}개</p>
                 </div>
               ))}
             </div>
-            <div className="rounded-md bg-slate-50 p-3">
+            <div className="rounded-md bg-surface-muted p-3">
               <p className="text-xs font-semibold text-slate-700">선택된 시나리오</p>
               <p className="mt-1 text-xs text-slate-600">{draft.selectedScenarioIds.join(", ") || "없음"}</p>
               <p className="mt-2 text-xs font-semibold text-slate-700">watch series</p>
               <p className="mt-1 text-xs text-slate-600">{selectedWatchSeriesIds.join(", ") || "없음"}</p>
             </div>
-            <div className="rounded-md bg-slate-50 p-3">
+            <div className="rounded-md bg-surface-muted p-3">
               <p className="text-xs font-semibold text-slate-700">저장될 영향 스냅샷</p>
               {selectedImpactSnapshot.length < 1 ? (
                 <p className="mt-1 text-xs text-slate-500">선택한 시나리오의 개인 영향 등급이 없으면 비어 있습니다.</p>
@@ -579,7 +579,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
 
         <Card className="space-y-4">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">저널 작성</h2>
+            <h2 className="text-sm font-bold text-navy">저널 작성</h2>
             <p className="text-xs text-slate-500">생각 정리, 실행 선택, 근거 연결을 순서대로 채우면 기록이 읽기 쉬워집니다.</p>
           </div>
 
@@ -655,7 +655,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
                         key={id}
                         type="button"
                         onClick={() => toggleScenario(id)}
-                        className={`rounded border px-2 py-1 text-xs font-semibold ${selected ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}
+                        className={`rounded border px-2 py-1 text-xs font-semibold ${selected ? "border-primary bg-primary/5 text-navy" : "border-slate-300 text-slate-600 hover:bg-surface-muted"}`}
                       >
                         {id}
                       </button>
@@ -671,7 +671,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
               type="button"
               disabled={saving || loading}
               onClick={() => { void handleSave(); }}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
             >
               {saving ? "저장 중..." : "저널 저장"}
             </button>
@@ -680,7 +680,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
 
         <Card className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-bold text-slate-900">저장된 엔트리</h2>
+            <h2 className="text-sm font-bold text-navy">저장된 엔트리</h2>
             <p className="text-xs text-slate-500">최근 기록이 위로 옵니다.</p>
           </div>
           {loading ? (
@@ -694,7 +694,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
               {entries.map((entry) => (
                 <li key={entry.id} className="rounded-lg border border-slate-200 p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">{entry.date}</p>
+                    <p className="text-sm font-semibold text-navy">{entry.date}</p>
                     <p className="text-xs text-slate-500">업데이트: {formatDateTime(entry.updatedAt)}</p>
                   </div>
                   <p className="mt-2 text-xs text-slate-700">시나리오 연결 {entry.linkedScenarioIds.length}건 · watch {entry.watchSeriesIds.length}건</p>

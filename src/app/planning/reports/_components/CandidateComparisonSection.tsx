@@ -83,11 +83,11 @@ function CandidateEvidencePanel({ row, onClose }: { row: CandidateComparisonRow;
     >
       <div className="flex min-h-full items-center justify-center">
         <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-2xl shadow-slate-900/15 animate-in zoom-in-95 slide-in-from-bottom-2 duration-300">
-          <div className="border-b border-slate-100 bg-gradient-to-br from-emerald-50 via-white to-slate-50 px-6 py-6 sm:px-8">
+          <div className="border-b border-slate-100 bg-gradient-to-br from-primary/5 via-white to-slate-50 px-6 py-6 sm:px-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-600">계산 근거</p>
-                <h3 className="mt-2 text-xl font-black leading-tight tracking-tight text-slate-900 sm:text-2xl">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-primary">계산 근거</p>
+                <h3 className="mt-2 text-xl font-black leading-tight tracking-tight text-navy sm:text-2xl">
                   {row.providerName}
                 </h3>
                 <p className="mt-1 text-sm font-bold leading-relaxed text-slate-600">{row.productName}</p>
@@ -98,12 +98,12 @@ function CandidateEvidencePanel({ row, onClose }: { row: CandidateComparisonRow;
               <button
                 type="button"
                 onClick={onClose}
-                className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 shadow-sm transition hover:bg-slate-50"
+                className="shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 shadow-sm transition hover:bg-surface-muted"
               >
                 닫기
               </button>
             </div>
-            <div className="mt-4 rounded-2xl border border-emerald-100 bg-white/90 px-4 py-3">
+            <div className="mt-4 rounded-2xl border border-primary/10 bg-white/90 px-4 py-3">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">조건 요약</p>
               <p className="mt-2 text-sm font-bold leading-relaxed text-slate-700">{row.conditionsSummary}</p>
             </div>
@@ -112,7 +112,7 @@ function CandidateEvidencePanel({ row, onClose }: { row: CandidateComparisonRow;
           <div className="max-h-[min(80vh,920px)] overflow-y-auto px-6 py-6 sm:px-8">
             <section className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">공식</p>
-              <p className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-[13px] font-bold leading-relaxed text-slate-700">
+              <p className="mt-3 rounded-2xl border border-slate-200 bg-surface-muted px-4 py-3 font-mono text-[13px] font-bold leading-relaxed text-slate-700">
                 {row.estimateEvidence.formula}
               </p>
             </section>
@@ -121,9 +121,9 @@ function CandidateEvidencePanel({ row, onClose }: { row: CandidateComparisonRow;
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">입력값</p>
               <dl className="mt-4 grid gap-3">
                 {Object.entries(row.estimateEvidence.inputs).map(([key, value]) => (
-                  <div key={`${row.id}:${key}`} className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <div key={`${row.id}:${key}`} className="flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-surface-muted px-4 py-3">
                     <dt className="text-xs font-black text-slate-500">{key}</dt>
-                    <dd className="text-right text-xs font-black tabular-nums text-slate-900">{renderEvidenceInputValue(value)}</dd>
+                    <dd className="text-right text-xs font-black tabular-nums text-navy">{renderEvidenceInputValue(value)}</dd>
                   </div>
                 ))}
               </dl>
@@ -295,12 +295,12 @@ export default function CandidateComparisonSection({
     <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="candidate-comparison-section" id="candidate-comparison-section">
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">후보 비교</p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">상품 후보 비교</h2>
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary">후보 비교</p>
+          <h2 className="mt-2 text-2xl font-black tracking-tight text-navy">상품 후보 비교</h2>
           <p className="mt-2 text-sm font-bold text-slate-500 leading-relaxed">추천이 아닌 비교용 표입니다. 정렬/필터는 사용자가 직접 선택합니다.</p>
         </div>
         {effectivePayload?.fetchedAt ? (
-          <Badge variant="secondary" className="rounded-full px-4 py-1 font-black bg-slate-50 text-slate-400 border-slate-100 tabular-nums">
+          <Badge variant="secondary" className="rounded-full px-4 py-1 font-black bg-surface-muted text-slate-400 border-slate-100 tabular-nums">
             기준 시각: {formatDateTime(effectivePayload.fetchedAt)}
           </Badge>
         ) : null}
@@ -322,17 +322,17 @@ export default function CandidateComparisonSection({
 
       {!effectiveLoading && !effectiveError && effectivePayload && effectivePayload.candidates.length > 0 ? (
         <div className="space-y-8">
-          <div className="rounded-[2rem] bg-slate-50 p-8 border border-slate-100/50 shadow-inner">
+          <div className="rounded-[2rem] bg-surface-muted p-8 border border-slate-100/50 shadow-inner">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">비교 설정</p>
-            <p className="mt-3 text-lg font-black tracking-tight text-slate-900 leading-snug">비교 기준을 바꾸면 표 결과가 실시간으로 반영됩니다.</p>
+            <p className="mt-3 text-lg font-black tracking-tight text-navy leading-snug">비교 기준을 바꾸면 표 결과가 실시간으로 반영됩니다.</p>
             <p className="mt-2 text-sm font-bold text-slate-500">금액, 만기, 금리 조건을 먼저 정하고 후보를 좁히는 흐름으로 보시면 됩니다.</p>
           </div>
 
-          <div className="grid gap-4 rounded-3xl border border-slate-100 bg-slate-50/30 p-6 shadow-sm md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-4 rounded-3xl border border-slate-100 bg-surface-muted/30 p-6 shadow-sm md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">종류</span>
               <select
-                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10"
                 value={kindFilter}
                 onChange={(event) => setKindFilter(event.target.value as "all" | "deposit" | "saving")}
               >
@@ -343,7 +343,7 @@ export default function CandidateComparisonSection({
             </label>
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">기준 목표</span>
-              <select className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" value={goalId} onChange={(event) => setGoalId(event.target.value)}>
+              <select className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10" value={goalId} onChange={(event) => setGoalId(event.target.value)}>
                 <option value="">선택 안 함</option>
                 {effectivePayload.goals.map((goal) => (
                   <option key={goal.id} value={goal.id}>{goal.name}</option>
@@ -354,7 +354,7 @@ export default function CandidateComparisonSection({
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">비교 금액</span>
               <div className="relative">
                 <input
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 tabular-nums"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10 tabular-nums"
                   inputMode="numeric"
                   min={100000}
                   type="text"
@@ -366,15 +366,15 @@ export default function CandidateComparisonSection({
             </label>
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">세율(%)</span>
-              <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 tabular-nums" type="number" min={0} max={100} step="0.1" value={taxRatePct} onChange={(event) => setTaxRatePct(event.target.value)} />
+              <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10 tabular-nums" type="number" min={0} max={100} step="0.1" value={taxRatePct} onChange={(event) => setTaxRatePct(event.target.value)} />
             </label>
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">최소 금리</span>
-              <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 tabular-nums" type="number" min={0} step="0.1" value={minRatePct} onChange={(event) => setMinRatePct(event.target.value)} />
+              <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10 tabular-nums" type="number" min={0} step="0.1" value={minRatePct} onChange={(event) => setMinRatePct(event.target.value)} />
             </label>
             <label className="space-y-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">정렬 기준</span>
-              <select className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <select className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
                 <option value="rate_desc">기본금리 높은 순</option>
                 <option value="net_interest_desc">세후 추정이자 높은 순</option>
                 <option value="term_asc">기간 짧은 순</option>
@@ -385,7 +385,7 @@ export default function CandidateComparisonSection({
 
           <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
-              <thead className="bg-slate-50 text-slate-400">
+              <thead className="bg-surface-muted text-slate-400">
                 <tr>
                   <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">기관 및 상품명</th>
                   <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">종류</th>
@@ -403,9 +403,9 @@ export default function CandidateComparisonSection({
                     <td className="px-4 py-8 text-slate-400 text-center font-bold" colSpan={8}>필터 조건에 맞는 후보가 없습니다.</td>
                   </tr>
                 ) : pageRows.map((row) => (
-                  <tr className="group transition-colors hover:bg-slate-50/50" key={row.id}>
+                  <tr className="group transition-colors hover:bg-surface-muted/50" key={row.id}>
                     <td className="px-4 py-4">
-                      <p className="font-black text-slate-900">{row.providerName}</p>
+                      <p className="font-black text-navy">{row.providerName}</p>
                       <p className="mt-1 text-[11px] font-bold text-slate-500 leading-snug">{row.productName}</p>
                       <p className="mt-1 text-[10px] font-medium text-slate-400 uppercase tracking-tight">{row.conditionsSummary}</p>
                       {showEstimateEvidence ? (
@@ -413,7 +413,7 @@ export default function CandidateComparisonSection({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="mt-3 h-auto rounded-full border border-emerald-100 bg-emerald-50/70 px-3 py-1.5 text-[10px] font-black tracking-widest text-emerald-700 hover:border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 hover:scale-100 active:scale-100"
+                          className="mt-3 h-auto rounded-full border border-primary/10 bg-primary/10 px-3 py-1.5 text-[10px] font-black tracking-widest text-navy hover:border-primary/20 hover:bg-primary/10 hover:text-navy hover:scale-100 active:scale-100"
                           onClick={() => setActiveEvidenceRow(row)}
                           title="현재 비교표는 유지한 채 가운데 오버레이에서 계산 근거를 엽니다"
                         >
@@ -422,15 +422,15 @@ export default function CandidateComparisonSection({
                       ) : null}
                     </td>
                     <td className="px-4 py-4">
-                      <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none font-black text-[10px]">
+                      <Badge variant="secondary" className="bg-surface-muted text-slate-600 border-none font-black text-[10px]">
                         {row.kind === "deposit" ? "예금" : "적금"}
                       </Badge>
                     </td>
                     <td className="px-4 py-4 text-right font-black text-slate-400 tabular-nums">{formatMonths("ko-KR", row.appliedTermMonths)}</td>
-                    <td className="px-4 py-4 text-right font-black text-slate-900 tabular-nums">{formatPct("ko-KR", row.baseRatePct)}</td>
-                    <td className="px-4 py-4 text-right font-black text-emerald-600 tabular-nums">{typeof row.bonusRatePct === "number" ? formatPct("ko-KR", row.bonusRatePct) : "-"}</td>
-                    <td className="px-4 py-4 text-right font-black text-slate-900 tabular-nums">{formatKrw("ko-KR", row.estimate.netInterestKrw)}</td>
-                    <td className="px-4 py-4 text-right font-black text-emerald-600 tabular-nums text-lg tracking-tight">{formatKrw("ko-KR", row.estimate.maturityAmountKrw)}</td>
+                    <td className="px-4 py-4 text-right font-black text-navy tabular-nums">{formatPct("ko-KR", row.baseRatePct)}</td>
+                    <td className="px-4 py-4 text-right font-black text-primary tabular-nums">{typeof row.bonusRatePct === "number" ? formatPct("ko-KR", row.bonusRatePct) : "-"}</td>
+                    <td className="px-4 py-4 text-right font-black text-navy tabular-nums">{formatKrw("ko-KR", row.estimate.netInterestKrw)}</td>
+                    <td className="px-4 py-4 text-right font-black text-primary tabular-nums text-lg tracking-tight">{formatKrw("ko-KR", row.estimate.maturityAmountKrw)}</td>
                     <td className="px-4 py-4">
                       <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{formatCandidateSourceLabel(row.source)}</span>
                     </td>
@@ -442,9 +442,9 @@ export default function CandidateComparisonSection({
 
           <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-8" data-testid="candidate-comparison-pagination">
             <p className="text-xs font-bold text-slate-400">
-              전체 <span className="text-slate-900 font-black">{comparedRows.length}</span>개 중 <span className="text-slate-900 font-black">{pageStart}-{pageEnd}</span>번째 후보 표시
+              전체 <span className="text-navy font-black">{comparedRows.length}</span>개 중 <span className="text-navy font-black">{pageStart}-{pageEnd}</span>번째 후보 표시
               {" · "}
-              페이지 <span className="text-slate-900 font-black">{currentPage}</span> / {totalPages}
+              페이지 <span className="text-navy font-black">{currentPage}</span> / {totalPages}
             </p>
             <div className="flex items-center gap-3">
               <Button
@@ -468,16 +468,16 @@ export default function CandidateComparisonSection({
             </div>
           </div>
 
-          <div className="rounded-[1.5rem] bg-emerald-50/30 p-6 border border-emerald-100/50" data-testid="candidate-comparison-assumptions">
+          <div className="rounded-[1.5rem] bg-primary/30 p-6 border border-primary/10" data-testid="candidate-comparison-assumptions">
             <div className="flex items-center gap-2 mb-3">
-              <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">계산 가정</p>
+              <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-navy">계산 가정</p>
             </div>
-            <p className="text-xs font-bold text-emerald-900/70 leading-relaxed">모든 금액은 추정치입니다. 단리 계산(기간/12)과 입력 세율을 적용해 세후 이자 및 만기 수령액을 산출합니다.</p>
-            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] font-black uppercase tracking-widest text-emerald-600">
-              <p>기준 금액: <span className="text-slate-900 ml-1">{formatKrw("ko-KR", Math.max(100_000, asFiniteNumber(amountKrw, effectivePayload.defaults.amountKrw)))}</span></p>
-              <p>세율: <span className="text-slate-900 ml-1">{formatPct("ko-KR", Math.max(0, Math.min(100, asFiniteNumber(taxRatePct, effectivePayload.defaults.taxRatePct))))}</span></p>
-              <p>기간: <span className="text-slate-900 ml-1">{formatMonths("ko-KR", effectivePayload.defaults.termMonths)}</span></p>
+            <p className="text-xs font-bold text-navy/70 leading-relaxed">모든 금액은 추정치입니다. 단리 계산(기간/12)과 입력 세율을 적용해 세후 이자 및 만기 수령액을 산출합니다.</p>
+            <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-[11px] font-black uppercase tracking-widest text-primary">
+              <p>기준 금액: <span className="text-navy ml-1">{formatKrw("ko-KR", Math.max(100_000, asFiniteNumber(amountKrw, effectivePayload.defaults.amountKrw)))}</span></p>
+              <p>세율: <span className="text-navy ml-1">{formatPct("ko-KR", Math.max(0, Math.min(100, asFiniteNumber(taxRatePct, effectivePayload.defaults.taxRatePct))))}</span></p>
+              <p>기간: <span className="text-navy ml-1">{formatMonths("ko-KR", effectivePayload.defaults.termMonths)}</span></p>
             </div>
           </div>
         </div>

@@ -672,7 +672,7 @@ export function ImportCsvClient() {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 CSV Import</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 CSV Import</h1>
           <p className="text-sm text-slate-600">CSV 헤더 추천 매핑 + 파싱 미리보기 진단으로 안전하게 초안을 생성합니다.</p>
 
           <BodyInset className="space-y-2">
@@ -977,7 +977,7 @@ export function ImportCsvClient() {
               {saveBatchLoading ? "배치 저장 중..." : "저장(배치 생성)"}
             </Button>
             {savedBatch ? (
-              <p className="text-xs font-semibold text-emerald-700">
+              <p className="text-xs font-semibold text-navy">
                 batch: {savedBatch.id} / total {savedBatch.total} / ok {savedBatch.ok} / failed {savedBatch.failed}
               </p>
             ) : null}
@@ -1015,7 +1015,7 @@ export function ImportCsvClient() {
 
           <BodyTableFrame>
             <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-csv-preview-table">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+              <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="px-3 py-2 text-left">line</th>
                   <th className="px-3 py-2 text-left">date</th>
@@ -1101,7 +1101,7 @@ export function ImportCsvClient() {
               {result.cashflow.length > 0 ? (
                 <BodyTableFrame>
                   <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                    <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                       <tr>
                         <th className="px-3 py-2 text-left">YYYY-MM</th>
                         <th className="px-3 py-2 text-right">income</th>
@@ -1113,10 +1113,10 @@ export function ImportCsvClient() {
                     <tbody className="divide-y divide-slate-100">
                       {result.cashflow.map((row) => (
                         <tr key={row.ym}>
-                          <td className="px-3 py-2 font-semibold text-slate-900">{row.ym}</td>
+                          <td className="px-3 py-2 font-semibold text-navy">{row.ym}</td>
                           <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.incomeKrw)}</td>
                           <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.expenseKrw)}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(row.netKrw)}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-navy">{formatKrw(row.netKrw)}</td>
                           <td className="px-3 py-2 text-right text-slate-700">{row.txCount.toLocaleString("ko-KR")}</td>
                         </tr>
                       ))}

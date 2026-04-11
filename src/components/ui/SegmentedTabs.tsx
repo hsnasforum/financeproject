@@ -23,7 +23,7 @@ export function SegmentedTabs({ options, activeTab, onChange, className, layoutI
     <div
       className={cn(
         "flex w-full items-center gap-1 overflow-x-auto rounded-full p-1 md:w-auto md:overflow-visible",
-        dark ? "bg-white/10 backdrop-blur" : "bg-slate-100",
+        dark ? "bg-white/10 backdrop-blur" : "bg-surface-muted",
         className
       )}
     >
@@ -37,7 +37,7 @@ export function SegmentedTabs({ options, activeTab, onChange, className, layoutI
               "relative min-w-[88px] flex-none rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-200 md:min-w-0",
               dark
                 ? (isActive ? "text-white" : "text-white/65 hover:text-white")
-                : (isActive ? "text-slate-900" : "text-slate-500 hover:text-slate-700")
+                : (isActive ? "text-navy" : "text-slate-500 hover:text-slate-700")
             )}
           >
             {isActive && (

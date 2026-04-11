@@ -14,8 +14,8 @@ function progressPct(value: number, target: number): number {
 }
 
 function deltaBadge(improved: boolean, changed: boolean): { label: string; className: string } {
-  if (!changed) return { label: "변화 없음", className: "bg-slate-100 text-slate-600" };
-  if (improved) return { label: "개선", className: "bg-emerald-100 text-emerald-700" };
+  if (!changed) return { label: "변화 없음", className: "bg-surface-muted text-slate-600" };
+  if (improved) return { label: "개선", className: "bg-primary/10 text-navy" };
   return { label: "악화", className: "bg-rose-100 text-rose-700" };
 }
 
@@ -127,7 +127,7 @@ export function SnapshotDeltaCards({ prev, next }: { prev: PlannerSnapshot | nul
         <div className="rounded border bg-white p-3">
           <p className="text-sm font-medium">비상금 목표 달성률</p>
           <div className="mt-2 h-2 w-full rounded bg-slate-200">
-            <div className="h-2 rounded bg-emerald-500" style={{ width: `${Math.min(100, emergencyProgress)}%` }} />
+            <div className="h-2 rounded bg-primary" style={{ width: `${Math.min(100, emergencyProgress)}%` }} />
           </div>
           <p className="mt-1 text-xs text-slate-600">{emergencyProgress.toFixed(1)}% (현금성자산/비상금 목표)</p>
         </div>

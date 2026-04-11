@@ -399,7 +399,7 @@ export function BackupClient() {
       <div className="grid gap-8 lg:grid-cols-2">
         <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100">
           <SubSectionHeader title="데이터 내보내기 (Export)" description="서버 화이트리스트 파일과 클라이언트 저장소 키를 백업합니다." />
-          <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 p-3 rounded-xl leading-relaxed">
+          <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-slate-400 bg-surface-muted p-3 rounded-xl leading-relaxed">
             대상 키 예시: {whitelistPreview}
           </p>
           <div className="mt-8 flex items-center gap-4">
@@ -413,7 +413,7 @@ export function BackupClient() {
           <SubSectionHeader title="데이터 가져오기 (Import)" description="백업 파일을 업로드하여 상태를 복원합니다." />
           <div className="mt-6 flex flex-col gap-4">
             <div className="flex items-center gap-3">
-              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-95">
+              <label className="inline-flex h-12 cursor-pointer items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-surface-muted active:scale-95">
                 {importing ? "복원 처리 중..." : "백업 파일 선택"}
                 <input
                   type="file"
@@ -428,7 +428,7 @@ export function BackupClient() {
                   }}
                 />
               </label>
-              <div className="flex-1 rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-2">
+              <div className="flex-1 rounded-2xl border border-slate-100 bg-surface-muted/50 px-4 py-2">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
                 <p className="text-xs font-bold text-slate-600 tabular-nums">
                   {restorePointInfo.exists ? `생성됨 (${new Date(restorePointInfo.createdAt!).toLocaleString("ko-KR", { hour12: false })})` : "생성된 시점 없음"}
@@ -452,28 +452,28 @@ export function BackupClient() {
       {(notice || error) && (
         <div className={cn(
           "mt-8 rounded-[1.5rem] p-5 text-sm font-black animate-in fade-in slide-in-from-bottom-2",
-          error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+          error ? "bg-rose-50 text-rose-700" : "bg-primary/5 text-navy"
         )}>
           {error || notice}
         </div>
       )}
 
       {pendingBundle ? (
-        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border-emerald-100">
+        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border-primary/10">
           <SubSectionHeader title="복원 미리보기 및 설정" description={`파일명: ${pendingFilename ?? "-"}`} />
           
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Same</p>
-              <p className="text-lg font-black text-slate-900 tabular-nums">{serverDiff?.same.length ?? 0}</p>
+              <p className="text-lg font-black text-navy tabular-nums">{serverDiff?.same.length ?? 0}</p>
             </div>
             <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Changed</p>
               <p className="text-lg font-black text-amber-700 tabular-nums">{serverDiff?.changed.length ?? 0}</p>
             </div>
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Added</p>
-              <p className="text-lg font-black text-emerald-700 tabular-nums">{serverDiff?.added.length ?? 0}</p>
+            <div className="rounded-2xl border border-primary/10 bg-primary/10 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary">Added</p>
+              <p className="text-lg font-black text-navy tabular-nums">{serverDiff?.added.length ?? 0}</p>
             </div>
             <div className="rounded-2xl border border-rose-100 bg-rose-50 p-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Missing</p>
@@ -485,10 +485,10 @@ export function BackupClient() {
             <div className="space-y-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">복원 옵션 선택</p>
               <div className="space-y-2">
-                <label className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4 cursor-pointer transition-all hover:bg-white">
+                <label className="flex items-center gap-3 rounded-xl border border-slate-100 bg-surface-muted/50 p-4 cursor-pointer transition-all hover:bg-white">
                   <input
                     type="checkbox"
-                    className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary"
                     checked={applyServerFiles}
                     onChange={(event) => setApplyServerFiles(event.target.checked)}
                   />
@@ -497,10 +497,10 @@ export function BackupClient() {
                     <p className="text-[11px] font-bold text-slate-400 mt-0.5">화이트리스트에 포함된 설정 및 데이터 파일을 덮어씁니다.</p>
                   </div>
                 </label>
-                <label className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-4 cursor-pointer transition-all hover:bg-white">
+                <label className="flex items-center gap-3 rounded-xl border border-slate-100 bg-surface-muted/50 p-4 cursor-pointer transition-all hover:bg-white">
                   <input
                     type="checkbox"
-                    className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary"
                     checked={applyClientStorage}
                     onChange={(event) => setApplyClientStorage(event.target.checked)}
                   />
@@ -528,11 +528,11 @@ export function BackupClient() {
                 </div>
                 <div className="max-h-60 overflow-y-auto rounded-2xl border border-slate-100 bg-white p-2 scrollbar-thin scrollbar-thumb-slate-200">
                   {selectablePaths.map((pathValue) => (
-                    <label key={pathValue} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer group">
+                    <label key={pathValue} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 hover:bg-surface-muted transition-colors cursor-pointer group">
                       <span className="inline-flex items-center gap-2 min-w-0">
                         <input
                           type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                           checked={selectedServerPaths.includes(pathValue)}
                           onChange={() => togglePath(pathValue)}
                         />
@@ -542,7 +542,7 @@ export function BackupClient() {
                         "shrink-0 text-[9px] font-black uppercase px-1.5 py-0.5 rounded",
                         diffStatusByPath.get(pathValue) === "same" ? "text-slate-300" :
                         diffStatusByPath.get(pathValue) === "changed" ? "bg-amber-100 text-amber-700" :
-                        diffStatusByPath.get(pathValue) === "added" ? "bg-emerald-100 text-emerald-700" :
+                        diffStatusByPath.get(pathValue) === "added" ? "bg-primary/10 text-navy" :
                         "bg-rose-100 text-rose-700"
                       )}>
                         {diffStatusByPath.get(pathValue) ?? "-"}
@@ -558,7 +558,7 @@ export function BackupClient() {
             <Button
               type="button"
               variant="primary"
-              className="h-14 px-12 rounded-2xl font-black shadow-xl shadow-emerald-100 transition-all hover:-translate-y-0.5 active:scale-95"
+              className="h-14 px-12 rounded-2xl font-black shadow-xl shadow-primary/10 transition-all hover:-translate-y-0.5 active:scale-95"
               disabled={importing || rollingBack}
               onClick={() => void handleImportApply()}
             >
@@ -569,7 +569,7 @@ export function BackupClient() {
       ) : null}
 
       {importSummary ? (
-        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-slate-50">
+        <Card className="mt-8 rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-surface-muted">
           <SubSectionHeader 
             title="복원 결과 요약" 
             className="mb-6"
@@ -579,19 +579,19 @@ export function BackupClient() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
             <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">localStorage</p>
-              <p className="text-base font-black tabular-nums mt-1 text-slate-900">+{importSummary.localApplied.length} / -{importSummary.localRemoved.length}</p>
+              <p className="text-base font-black tabular-nums mt-1 text-navy">+{importSummary.localApplied.length} / -{importSummary.localRemoved.length}</p>
             </div>
             <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Server Files</p>
-              <p className="text-base font-black tabular-nums mt-1 text-slate-900">Written {importSummary.serverWritten.length}</p>
+              <p className="text-base font-black tabular-nums mt-1 text-navy">Written {importSummary.serverWritten.length}</p>
             </div>
             <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Restore Point</p>
-              <p className="text-base font-black mt-1 text-slate-900">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
+              <p className="text-base font-black mt-1 text-navy">{importSummary.restorePointCreated ? "Created" : "N/A"}</p>
             </div>
             <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rollback Status</p>
-              <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-emerald-600")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
+              <p className={cn("text-base font-black mt-1", importSummary.rolledBack ? "text-amber-600" : "text-primary")}>{importSummary.rolledBack ? "ROLLED BACK" : "CLEAN"}</p>
             </div>
           </div>
 

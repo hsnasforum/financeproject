@@ -115,8 +115,8 @@ function matchesPolicyDiffFilter(row: OpsAuditEvent, filter: PolicyDiffFilter): 
 
 function schedulerDeltaBadgeClass(delta: number): string {
   if (delta > 0) return "border-rose-200 bg-rose-50 text-rose-700";
-  if (delta < 0) return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  return "border-slate-200 bg-slate-100 text-slate-600";
+  if (delta < 0) return "border-primary/20 bg-primary/5 text-navy";
+  return "border-slate-200 bg-surface-muted text-slate-600";
 }
 
 function formatDelta(delta: number): string {
@@ -261,7 +261,7 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
       ) : null}
 
       <Card className="mb-4 p-4">
-        <h2 className="text-base font-black text-slate-900">필터</h2>
+        <h2 className="text-base font-black text-navy">필터</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="block text-xs text-slate-600">
             Event Type
@@ -391,7 +391,7 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
       {rows.length > 0 ? (
         <Card className="overflow-x-auto p-0">
           <table className="min-w-full border-collapse text-left text-xs">
-            <thead className="bg-slate-100 text-slate-600">
+            <thead className="bg-surface-muted text-slate-600">
               <tr>
                 <th className="px-3 py-2 font-semibold">시각</th>
                 <th className="px-3 py-2 font-semibold">이벤트</th>
@@ -404,7 +404,7 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
               {rows.map((row, index) => (
                 <tr key={`${row.at}-${row.eventType}-${index}`} className="border-t border-slate-200 align-top">
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatDateTime(row.at)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-900">{row.eventType}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-navy">{row.eventType}</td>
                   <td className="px-3 py-2 text-slate-700">
                     {(() => {
                       const diff = toSchedulerPolicyDiff(row.eventType, row.meta);

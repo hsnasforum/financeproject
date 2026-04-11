@@ -95,7 +95,7 @@ export function VaultLockScreenClient({ scope }: VaultLockScreenClientProps) {
   return (
     <div className="mx-auto max-w-xl px-4 py-10">
       <Card>
-        <h1 className="text-lg font-black text-slate-900">Vault 잠금 상태</h1>
+        <h1 className="text-lg font-black text-navy">Vault 잠금 상태</h1>
         <p className="mt-2 text-sm text-slate-600">
           {scope === "planning" ? "플래닝 데이터를 열기 전에 vault 잠금 해제가 필요합니다." : "OPS 화면 접근 전에 vault 잠금 해제가 필요합니다."}
         </p>

@@ -182,7 +182,7 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
         </p>
       </Card>
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-navy">
           {notice}
         </Card>
       ) : null}
@@ -203,12 +203,12 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
       ) : null}
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">캐시 요약</h2>
+        <h2 className="text-base font-black text-navy">캐시 요약</h2>
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 엔트리: <span className="font-semibold">{toNum(stats?.entries?.total)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히트 수: <span className="font-semibold">{toNum(stats?.usage?.totals?.hits)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">미스 수: <span className="font-semibold">{toNum(stats?.usage?.totals?.misses)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히트율: <span className="font-semibold">{toPercent(stats?.usage?.hitRate)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">총 엔트리: <span className="font-semibold">{toNum(stats?.entries?.total)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">히트 수: <span className="font-semibold">{toNum(stats?.usage?.totals?.hits)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">미스 수: <span className="font-semibold">{toNum(stats?.usage?.totals?.misses)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">히트율: <span className="font-semibold">{toPercent(stats?.usage?.hitRate)}</span></div>
         </div>
         <p className="mt-3 text-xs text-slate-500">갱신 시각: {formatDateTime(stats?.usage?.updatedAt)}</p>
 
@@ -226,7 +226,7 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
             <tbody>
               {kindRows.map((row) => (
                 <tr key={row.kind} className="border-b border-slate-100">
-                  <td className="px-2 py-2 font-semibold text-slate-900">{row.kind}</td>
+                  <td className="px-2 py-2 font-semibold text-navy">{row.kind}</td>
                   <td className="px-2 py-2">{row.entries}</td>
                   <td className="px-2 py-2">{row.hits}</td>
                   <td className="px-2 py-2">{row.misses}</td>

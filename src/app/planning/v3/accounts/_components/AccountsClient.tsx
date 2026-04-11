@@ -313,7 +313,7 @@ export function AccountsClient() {
         </ReportHeroCard>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">계좌 추가</h2>
+          <h2 className="text-sm font-bold text-navy">계좌 추가</h2>
           <div className="grid gap-2 sm:grid-cols-4">
             <input
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -363,7 +363,7 @@ export function AccountsClient() {
         </Card>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">계좌 목록</h2>
+          <h2 className="text-sm font-bold text-navy">계좌 목록</h2>
           {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : null}
           {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">등록된 계좌가 없습니다.</p> : null}
 
@@ -371,7 +371,7 @@ export function AccountsClient() {
             <div className="space-y-2">
               {rows.map((row) => (
                 <div
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                  className="rounded-2xl border border-slate-200 bg-surface-muted p-4"
                   data-testid={`v3-account-row-${row.id}`}
                   key={row.id}
                 >
@@ -433,11 +433,11 @@ export function AccountsClient() {
                   ) : (
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{row.name}</p>
+                        <p className="text-sm font-semibold text-navy">{row.name}</p>
                         <p className="text-xs text-slate-600">{row.kind} / {row.currency}</p>
                         {row.note ? <p className="text-xs text-slate-500">{row.note}</p> : null}
                         {openingByAccount[row.id] ? (
-                          <p className="text-xs font-semibold text-emerald-700">
+                          <p className="text-xs font-semibold text-navy">
                             opening: {openingByAccount[row.id].asOfDate} / {openingByAccount[row.id].amountKrw.toLocaleString("ko-KR")}원
                           </p>
                         ) : (

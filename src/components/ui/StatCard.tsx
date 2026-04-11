@@ -22,12 +22,12 @@ export function StatCard({ label, value, description, icon, trend, className }: 
         {icon && <div className="text-slate-400">{icon}</div>}
       </div>
       <div className="flex items-baseline gap-3">
-        <p className="text-2xl font-black tabular-nums tracking-tight text-slate-900">{value}</p>
+        <p className="text-2xl font-black tabular-nums tracking-tight text-navy">{value}</p>
         {trend && (
           <span
             className={cn(
               "text-xs font-bold",
-              trend.isPositive ? "text-emerald-600" : "text-amber-600"
+              trend.isPositive ? "text-primary" : "text-amber-600"
             )}
           >
             {trend.value}

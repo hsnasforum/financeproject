@@ -77,13 +77,13 @@ export function RecommendClient() {
               <div className={cn(
                 "h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold transition-colors",
                 step === s ? "bg-primary text-white ring-4 ring-primary/20" : 
-                step > s ? "bg-emerald-100 text-emerald-700" : "bg-surface border border-border text-slate-400"
+                step > s ? "bg-primary/10 text-navy" : "bg-surface border border-border text-slate-400"
               )}>
                 {step > s ? "✓" : s}
               </div>
               <span className={cn(
                 "text-[10px] font-bold uppercase tracking-widest",
-                step === s ? "text-primary" : step > s ? "text-emerald-700" : "text-slate-400"
+                step === s ? "text-primary" : step > s ? "text-navy" : "text-slate-400"
               )}>
                 {s === 1 ? "목적 설정" : s === 2 ? "상세 조건" : "추천 결과"}
               </span>
@@ -94,10 +94,10 @@ export function RecommendClient() {
         {/* Step 1: Purpose */}
         {step === 1 && (
           <Card className="p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <h2 className="text-xl font-bold text-slate-900 mb-6 text-center">어떤 목적으로 저축하시나요?</h2>
+            <h2 className="text-xl font-bold text-navy mb-6 text-center">어떤 목적으로 저축하시나요?</h2>
             <div className="max-w-md mx-auto space-y-6">
               <input 
-                className="w-full h-14 rounded-2xl border border-border bg-surface px-6 text-center text-lg font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm" 
+                className="w-full h-14 rounded-2xl border border-border bg-surface px-6 text-center text-lg font-bold text-navy focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm" 
                 value={purpose} 
                 onChange={(e) => setPurpose(e.target.value)} 
                 placeholder="예: 내 집 마련, 결혼 자금, 비상금" 
@@ -107,7 +107,7 @@ export function RecommendClient() {
                   <button
                     key={preset}
                     onClick={() => setPurpose(preset)}
-                    className="px-4 py-2 rounded-full border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                    className="px-4 py-2 rounded-full border border-border text-sm font-medium text-slate-600 hover:bg-surface-muted transition-colors"
                   >
                     {preset}
                   </button>
@@ -130,7 +130,7 @@ export function RecommendClient() {
         {step === 2 && (
           <Card className="p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="flex items-center justify-between mb-8 pb-4 border-b border-border/50">
-              <h2 className="text-xl font-bold text-slate-900">상세 선호 조건</h2>
+              <h2 className="text-xl font-bold text-navy">상세 선호 조건</h2>
               <button onClick={() => setStep(1)} className="text-sm font-bold text-slate-400 hover:text-primary transition-colors">← 이전으로</button>
             </div>
             
@@ -202,7 +202,7 @@ export function RecommendClient() {
         {step === 3 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-black text-slate-900 tracking-tight">AI 추천 결과</h2>
+              <h2 className="text-2xl font-black text-navy tracking-tight">AI 추천 결과</h2>
               <button onClick={() => setStep(2)} className="text-sm font-bold text-slate-400 hover:text-primary transition-colors">조건 재설정</button>
             </div>
 
@@ -232,21 +232,21 @@ export function RecommendClient() {
                        <div className="flex items-center gap-3 mb-4">
                          <div className={cn(
                            "flex h-8 w-8 items-center justify-center rounded-full text-xs font-black",
-                           idx === 0 ? "bg-primary text-white" : "bg-slate-100 text-slate-500"
+                           idx === 0 ? "bg-primary text-white" : "bg-surface-muted text-slate-500"
                          )}>
                            {idx + 1}
                          </div>
                          <p className="text-xs font-bold text-slate-500">{row.product.kor_co_nm}</p>
                        </div>
                        
-                       <h3 className="text-lg font-black text-slate-900 leading-tight mb-6 line-clamp-2 h-11">
+                       <h3 className="text-lg font-black text-navy leading-tight mb-6 line-clamp-2 h-11">
                          {row.product.fin_prdt_nm}
                        </h3>
                        
                        <div className="flex items-end justify-between border-t border-border/50 pt-4">
                          <div>
                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">최적 금리</p>
-                           <p className="text-2xl font-black text-emerald-600 tabular-nums">{row.explain.pickedOption.intr_rate2}%</p>
+                           <p className="text-2xl font-black text-primary tabular-nums">{row.explain.pickedOption.intr_rate2}%</p>
                          </div>
                          <div className="text-right">
                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">적합도</p>
@@ -265,17 +265,17 @@ export function RecommendClient() {
                      </div>
                      <div className="divide-y divide-border/50">
                        {results.slice(3).map((row, idx) => (
-                         <div key={row.product.fin_prdt_cd} className="flex items-center gap-4 p-4 px-6 hover:bg-slate-50 transition-colors">
+                         <div key={row.product.fin_prdt_cd} className="flex items-center gap-4 p-4 px-6 hover:bg-surface-muted transition-colors">
                            <span className="w-6 text-center text-sm font-bold text-slate-400">{idx + 4}</span>
                            <div className="flex-1 min-w-0">
                              <div className="flex items-center gap-2">
                                <span className="text-[10px] font-bold text-slate-500">{row.product.kor_co_nm}</span>
                              </div>
-                             <p className="font-bold text-slate-900 truncate">{row.product.fin_prdt_nm}</p>
+                             <p className="font-bold text-navy truncate">{row.product.fin_prdt_nm}</p>
                            </div>
                            <div className="text-right whitespace-nowrap">
                              <p className="text-[10px] text-slate-400 font-bold mb-0.5">{row.explain.pickedOption.save_trm}개월 최고</p>
-                             <p className="font-black text-emerald-600 tabular-nums">{row.explain.pickedOption.intr_rate2}%</p>
+                             <p className="font-black text-primary tabular-nums">{row.explain.pickedOption.intr_rate2}%</p>
                            </div>
                            <div className="w-16 text-right hidden sm:block">
                               <Badge variant="outline" className="text-[10px] font-bold">{row.explain.finalPoints.toFixed(1)}점</Badge>

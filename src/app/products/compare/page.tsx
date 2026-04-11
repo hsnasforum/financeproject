@@ -148,7 +148,7 @@ export default function ProductsComparePage() {
   const hasEnoughItems = ids.length >= 2;
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
+    <main className="min-h-screen bg-surface-muted py-8 md:py-12">
       <Container>
         <PageHeader
           title="상품 비교"
@@ -164,12 +164,12 @@ export default function ProductsComparePage() {
             <div className="flex items-center gap-6">
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">비교 중인 후보</span>
-                <span className="text-xl font-black text-emerald-600">{ids.length} / {compareStoreConfig.max}</span>
+                <span className="text-xl font-black text-primary">{ids.length} / {compareStoreConfig.max}</span>
               </div>
-              <div className="h-8 w-px bg-slate-100" />
+              <div className="h-8 w-px bg-surface-muted" />
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">읽을 수 있는 후보</span>
-                <span className="text-xl font-black text-slate-900">{validCount}</span>
+                <span className="text-xl font-black text-navy">{validCount}</span>
               </div>
             </div>
 
@@ -189,7 +189,7 @@ export default function ProductsComparePage() {
               >
                 비교함 비우기
               </Button>
-              <BodyActionLink href="/products/catalog" className="inline-flex h-9 items-center justify-center rounded-full bg-emerald-600 px-6 text-[11px] font-bold text-white no-underline shadow-md shadow-emerald-600/20 transition-all hover:bg-emerald-700 hover:scale-[1.02]">
+              <BodyActionLink href="/products/catalog" className="inline-flex h-9 items-center justify-center rounded-full bg-primary px-6 text-[11px] font-bold text-white no-underline shadow-md shadow-primary/20 transition-all hover:bg-navy hover:scale-[1.02]">
                 비교 후보 더 담기
               </BodyActionLink>
             </div>
@@ -227,8 +227,8 @@ export default function ProductsComparePage() {
               <div className="overflow-x-auto scrollbar-hide">
                 <table className="w-full min-w-[800px] border-collapse text-sm">
                   <thead>
-                    <tr className="bg-slate-50/50">
-                      <th className="sticky left-0 z-20 w-40 bg-slate-50/50 p-6 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 border-r border-slate-100">
+                    <tr className="bg-surface-muted/50">
+                      <th className="sticky left-0 z-20 w-40 bg-surface-muted/50 p-6 text-left text-[10px] font-bold uppercase tracking-widest text-slate-400 border-r border-slate-100">
                         {readThroughCopy.comparisonAxisLabel}
                       </th>
                       {cells.map((cell) => (
@@ -239,7 +239,7 @@ export default function ProductsComparePage() {
                               removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
                               void refresh();
                             }}
-                            className="absolute top-4 right-4 h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"
+                            className="absolute top-4 right-4 h-6 w-6 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 hover:bg-rose-100 hover:text-rose-600 transition-all opacity-0 group-hover:opacity-100"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                           </button>
@@ -247,12 +247,12 @@ export default function ProductsComparePage() {
                           <div className="flex flex-col gap-3">
                             <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-10 w-10" />
                             <div>
-                              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
-                              <h3 className="mt-1 font-black text-slate-900 leading-snug line-clamp-2">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
+                              <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
+                              <h3 className="mt-1 font-black text-navy leading-snug line-clamp-2">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
                             </div>
                             <Link
                               href={`/products/catalog/${encodeURIComponent(cell.id)}`}
-                              className="inline-flex w-fit rounded-full bg-slate-100 px-4 py-1.5 text-[10px] font-bold text-slate-600 transition hover:bg-slate-200"
+                              className="inline-flex w-fit rounded-full bg-surface-muted px-4 py-1.5 text-[10px] font-bold text-slate-600 transition hover:bg-slate-200"
                             >
                               {readThroughCopy.detailCtaLabel}
                             </Link>
@@ -262,19 +262,19 @@ export default function ProductsComparePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    <tr className="hover:bg-slate-50/30 transition-colors">
+                    <tr className="hover:bg-surface-muted/30 transition-colors">
                       <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
                         상품 유형
                       </td>
                       {cells.map((cell) => (
                         <td key={`kind-${cell.id}`} className="p-5 px-6 border-r border-slate-100 last:border-0">
-                          <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">
+                          <span className="rounded-lg bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-600">
                             {formatKindLabel(cell.item?.kind)}
                           </span>
                         </td>
                       ))}
                     </tr>
-                    <tr className="hover:bg-slate-50/30 transition-colors">
+                    <tr className="hover:bg-surface-muted/30 transition-colors">
                       <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
                         대표 금리
                       </td>
@@ -283,31 +283,31 @@ export default function ProductsComparePage() {
                         const applied = option ? (option.intrRate2 ?? option.intrRate ?? null) : null;
                         return (
                           <td key={`rate-${cell.id}`} className="p-5 px-6 border-r border-slate-100 last:border-0">
-                            <span className="text-2xl font-black text-emerald-600 tabular-nums">
+                            <span className="text-2xl font-black text-primary tabular-nums">
                               {formatRate(applied)}
                             </span>
                           </td>
                         );
                       })}
                     </tr>
-                    <tr className="hover:bg-slate-50/30 transition-colors">
+                    <tr className="hover:bg-surface-muted/30 transition-colors">
                       <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
                         가입 기간
                       </td>
                       {cells.map((cell) => (
-                        <td key={`term-${cell.id}`} className="p-5 px-6 font-bold text-slate-900 border-r border-slate-100 last:border-0">
+                        <td key={`term-${cell.id}`} className="p-5 px-6 font-bold text-navy border-r border-slate-100 last:border-0">
                           {termLabel(representativeOption(cell.item))}
                         </td>
                       ))}
                     </tr>
-                    <tr className="hover:bg-slate-50/30 transition-colors">
+                    <tr className="hover:bg-surface-muted/30 transition-colors">
                       <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
                         예금자 보호
                       </td>
                       {cells.map((cell) => (
                         <td key={`protection-${cell.id}`} className="p-5 px-6 border-r border-slate-100 last:border-0">
                           {cell.item?.signals?.depositProtection === "matched" ? (
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-navy">
                               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
                               보호 대상
                             </div>
@@ -317,7 +317,7 @@ export default function ProductsComparePage() {
                         </td>
                       ))}
                     </tr>
-                    <tr className="hover:bg-slate-50/30 transition-colors">
+                    <tr className="hover:bg-surface-muted/30 transition-colors">
                       <td className="sticky left-0 z-10 bg-white p-5 px-6 font-bold text-[11px] text-slate-500 border-r border-slate-100">
                         {readThroughCopy.summaryLabel}
                       </td>
@@ -349,7 +349,7 @@ export default function ProductsComparePage() {
                         removeCompareIdFromStorage(cell.id, compareStoreConfig.max);
                         void refresh();
                       }}
-                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 active:bg-rose-100 active:text-rose-600 transition-all"
+                      className="absolute top-4 right-4 h-8 w-8 rounded-full bg-surface-muted flex items-center justify-center text-slate-400 active:bg-rose-100 active:text-rose-600 transition-all"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                     </button>
@@ -357,33 +357,33 @@ export default function ProductsComparePage() {
                     <div className="mb-6 flex items-center gap-4">
                       <ProviderLogo providerName={cell.item?.providerName ?? "-"} className="h-12 w-12" />
                       <div>
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
-                        <h3 className="mt-1 font-black text-slate-900 leading-tight">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
+                        <p className="text-[10px] font-bold text-primary uppercase tracking-widest">{cell.item?.providerName ?? "-"}</p>
+                        <h3 className="mt-1 font-black text-navy leading-tight">{cell.item?.productName ?? "불러오지 못한 상품"}</h3>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 mb-6">
-                      <div className="rounded-2xl bg-slate-50 p-4">
+                      <div className="rounded-2xl bg-surface-muted p-4">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">대표 금리</p>
-                        <p className="text-xl font-black text-emerald-600 tabular-nums">{formatRate(applied)}</p>
+                        <p className="text-xl font-black text-primary tabular-nums">{formatRate(applied)}</p>
                       </div>
-                      <div className="rounded-2xl bg-slate-50 p-4">
+                      <div className="rounded-2xl bg-surface-muted p-4">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">가입 기간</p>
-                        <p className="text-sm font-black text-slate-900">{termLabel(option)}</p>
+                        <p className="text-sm font-black text-navy">{termLabel(option)}</p>
                       </div>
                     </div>
 
                     <div className="space-y-4">
                       <div className="flex items-center justify-between px-2">
                         <span className="text-[11px] font-bold text-slate-400">상품 유형</span>
-                        <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-slate-600">
+                        <span className="rounded-lg bg-surface-muted px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-slate-600">
                           {formatKindLabel(cell.item?.kind)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between px-2">
                         <span className="text-[11px] font-bold text-slate-400">예금자 보호</span>
                         {cell.item?.signals?.depositProtection === "matched" ? (
-                          <span className="text-[10px] font-bold text-emerald-700">보호 대상</span>
+                          <span className="text-[10px] font-bold text-navy">보호 대상</span>
                         ) : (
                           <span className="text-[10px] font-bold text-slate-300">확인 안 됨</span>
                         )}
@@ -402,7 +402,7 @@ export default function ProductsComparePage() {
 
                     <Link
                       href={`/products/catalog/${encodeURIComponent(cell.id)}`}
-                      className="mt-8 flex h-12 w-full items-center justify-center rounded-2xl bg-slate-100 text-sm font-bold text-slate-700 transition active:bg-slate-200"
+                      className="mt-8 flex h-12 w-full items-center justify-center rounded-2xl bg-surface-muted text-sm font-bold text-slate-700 transition active:bg-slate-200"
                     >
                       {readThroughCopy.detailCtaLabel}
                     </Link>

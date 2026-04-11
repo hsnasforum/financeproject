@@ -232,7 +232,7 @@ function normalizeWatchStatus(value: unknown): "ok" | "unknown" {
 function gradeToneClass(value: "상" | "중" | "하" | "unknown"): string {
   if (value === "상") return "text-rose-700";
   if (value === "중") return "text-amber-700";
-  if (value === "하") return "text-emerald-700";
+  if (value === "하") return "text-navy";
   return "text-slate-500";
 }
 
@@ -257,7 +257,7 @@ function formatLastValue(value: number | null): string {
 
 function Sparkline({ points }: { points: number[] }) {
   if (points.length < 2) {
-    return <div className="h-8 rounded bg-slate-100" aria-hidden="true" />;
+    return <div className="h-8 rounded bg-surface-muted" aria-hidden="true" />;
   }
 
   const width = 96;
@@ -492,7 +492,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                 disabled={refreshing}
                 className={cn(
                   reportHeroPrimaryActionClassName,
-                  "disabled:opacity-60 transition-colors bg-emerald-600 hover:bg-emerald-500 border-emerald-500/50"
+                  "disabled:opacity-60 transition-colors bg-primary hover:bg-primary border-primary/10"
                 )}
               >
                 {refreshing ? "갱신 중..." : "지금 갱신"}
@@ -502,10 +502,10 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
         >
           <NewsNavigation />
 
-          <div className="mb-8 rounded-3xl bg-emerald-500/10 p-5 border border-emerald-500/20 backdrop-blur-sm">
+          <div className="mb-8 rounded-3xl bg-primary/10 p-5 border border-primary/20 backdrop-blur-sm">
             <div className="flex items-start gap-3">
-              <div className="mt-1 h-2 w-2 flex-none animate-pulse rounded-full bg-emerald-400" />
-	              <p className="text-sm font-bold text-emerald-950 leading-relaxed tracking-tight">
+              <div className="mt-1 h-2 w-2 flex-none animate-pulse rounded-full bg-primary" />
+	              <p className="text-sm font-bold text-navy leading-relaxed tracking-tight">
 	                {priorityMessage}
 	              </p>
             </div>
@@ -544,7 +544,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
 
           {notice || errorMessage ? (
             <div className="mt-6 rounded-2xl bg-black/20 p-4 border border-white/5">
-              {notice ? <p className="text-xs font-bold text-emerald-400 flex items-center gap-2"><span>✅</span> {notice}</p> : null}
+              {notice ? <p className="text-xs font-bold text-primary flex items-center gap-2"><span>✅</span> {notice}</p> : null}
               {errorMessage ? <p className="text-xs font-bold text-rose-400 flex items-center gap-2"><span>❌</span> {errorMessage}</p> : null}
             </div>
           ) : null}
@@ -561,12 +561,12 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
             {loading ? (
               <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
             ) : (
-              <p className="rounded-2xl bg-emerald-50/50 border border-emerald-100/50 p-5 text-sm font-bold text-emerald-900 leading-relaxed">
+              <p className="rounded-2xl bg-primary/10 border border-primary/10 p-5 text-sm font-bold text-navy leading-relaxed">
                 {asString(data?.digest?.observation) || "데이터 없음"}
               </p>
             )}
 
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-surface-muted p-5">
               <div className="flex items-center justify-between gap-2 mb-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">반대 시그널</p>
                 <span className="text-[10px] font-black text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full tabular-nums">{counterSignalCount}건</span>
@@ -587,7 +587,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
             <SubSectionHeader
               title="근거 링크"
               description="오늘 관찰의 근거가 된 뉴스 기사들입니다."
-              action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">{evidenceCount}건</span>}
+              action={<span className="text-[10px] font-black text-slate-400 bg-surface-muted px-2 py-0.5 rounded-full tabular-nums">{evidenceCount}건</span>}
             />
             {!data?.digest?.evidence?.length ? (
               <p className="text-sm text-slate-500 italic">근거 링크 없음</p>
@@ -595,7 +595,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
               <ul className="space-y-3">
                 {data.digest.evidence.slice(0, 5).map((row, index) => (
                   <li key={`${asString(row.url)}-${index}`} className="group rounded-2xl border border-slate-200/60 bg-white p-4 shadow-sm hover:shadow-md transition-all">
-                    <a href={asString(row.url)} target="_blank" rel="noopener noreferrer" className="block text-sm font-black text-slate-900 leading-snug hover:text-emerald-700 transition-colors">
+                    <a href={asString(row.url)} target="_blank" rel="noopener noreferrer" className="block text-sm font-black text-navy leading-snug hover:text-navy transition-colors">
                       {asString(row.title) || asString(row.url) || "링크"}
                     </a>
                     <div className="mt-2 flex items-center gap-2">
@@ -618,7 +618,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
               <button
                 type="button"
                 onClick={() => setWatchAdvanced((prev) => !prev)}
-                className="text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
+                className="text-[10px] font-black uppercase tracking-widest text-primary hover:underline"
               >
                 {watchAdvanced ? "간략히 보기" : "상세 분석 모드"}
               </button>
@@ -639,7 +639,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                           <span className="h-1 w-1 shrink-0 rounded-full bg-amber-400" />
                           <span>{row.label}: {row.unknownReasonLabel || "원인을 확인하지 못했습니다."}</span>
                           {row.resolveHref ? (
-                            <Link href={row.resolveHref} className="text-emerald-700 underline underline-offset-4 font-black">
+                            <Link href={row.resolveHref} className="text-navy underline underline-offset-4 font-black">
                               빠른 해결
                             </Link>
                           ) : null}
@@ -653,11 +653,11 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                 {watchlistRows.map((row) => (
                 <li key={`${row.seriesId}-${row.label}`} className="rounded-2xl border border-slate-200/60 bg-white p-5 shadow-sm hover:shadow-md transition-all">
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <p className="text-sm font-black text-slate-900 tracking-tight">{row.label}</p>
+                    <p className="text-sm font-black text-navy tracking-tight">{row.label}</p>
                     <p className={cn("text-[10px] font-black px-2 py-0.5 rounded-full tabular-nums",
                       row.grade === "상" ? "bg-rose-50 text-rose-700" :
                       row.grade === "중" ? "bg-amber-50 text-amber-700" :
-                      row.grade === "하" ? "bg-emerald-50 text-emerald-700" : "bg-slate-50 text-slate-500")}>
+                      row.grade === "하" ? "bg-primary/5 text-navy" : "bg-surface-muted text-slate-500")}>
                       {row.grade} {trendArrow(row.sparklineTrend)}
                     </p>
                   </div>
@@ -674,7 +674,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                     <div className="mt-3 flex items-center justify-between gap-2 bg-amber-50 px-3 py-1.5 rounded-xl border border-amber-100">
                       <p className="text-[10px] font-black text-amber-700">{row.unknownReasonLabel || "데이터 부족"}</p>
                       {row.resolveHref && (
-                        <Link href={row.resolveHref} className="text-[10px] font-black text-emerald-700 hover:underline">해결 ▶</Link>
+                        <Link href={row.resolveHref} className="text-[10px] font-black text-navy hover:underline">해결 ▶</Link>
                       )}
                     </div>
                   ) : null}
@@ -683,7 +683,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
               </ul>
             </div>
           ) : (
-            <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+            <div className="rounded-[2rem] bg-surface-muted px-6 py-12 text-center border border-dashed border-slate-200">
               <p className="text-sm font-medium text-slate-500">체크된 변수가 없습니다.</p>
             </div>
           )}
@@ -693,11 +693,11 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
           <SubSectionHeader
             title="시나리오 비교"
             description="현재 관찰 결과에 따른 주요 시나리오와 개인화된 영향 요약입니다."
-            action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">{scenarioCount}개</span>}
+            action={<span className="text-[10px] font-black text-slate-400 bg-surface-muted px-2 py-0.5 rounded-full tabular-nums">{scenarioCount}개</span>}
           />
 
           {!data?.scenarios?.cards?.length ? (
-            <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+            <div className="rounded-[2rem] bg-surface-muted px-6 py-12 text-center border border-dashed border-slate-200">
               <p className="text-sm font-medium text-slate-500">시나리오 데이터가 없습니다.</p>
             </div>
           ) : (
@@ -729,8 +729,8 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                 return (
                   <div key={key} className="group rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm hover:shadow-md transition-all flex flex-col">
                     <div className="flex items-center justify-between gap-3 mb-4">
-                      <p className="text-lg font-black text-slate-900 tracking-tight">{asString(card.name) || "Scenario"}</p>
-                      <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">INDEX {index + 1}</span>
+                      <p className="text-lg font-black text-navy tracking-tight">{asString(card.name) || "Scenario"}</p>
+                      <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-black text-slate-500 uppercase tracking-wider">INDEX {index + 1}</span>
                     </div>
 
                     <div className="space-y-4 flex-1">
@@ -758,7 +758,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">내 상황 영향 요약</p>
                           <button
                             type="button"
-                            className="text-[10px] font-black text-emerald-600 hover:underline"
+                            className="text-[10px] font-black text-primary hover:underline"
                             onClick={() => setAdvancedImpact((prev) => ({ ...prev, [key]: !showAdvanced }))}
                           >
                             {showAdvanced ? "간략히" : "분석 근거 ▶"}
@@ -766,17 +766,17 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                         </div>
 
                         {isProfileMissing ? (
-                          <div className="rounded-xl bg-slate-50 p-3 text-center border border-dashed border-slate-200">
+                          <div className="rounded-xl bg-surface-muted p-3 text-center border border-dashed border-slate-200">
                             <p className="text-[11px] font-bold text-slate-500">프로필 설정이 필요합니다.</p>
-                            <Link href="/planning/v3/exposure" className="text-[11px] font-black text-emerald-700 underline underline-offset-4 mt-1 block">지금 설정하기</Link>
+                            <Link href="/planning/v3/exposure" className="text-[11px] font-black text-navy underline underline-offset-4 mt-1 block">지금 설정하기</Link>
                           </div>
                         ) : (
                           <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-2 text-[11px] font-black tabular-nums">
-                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">부채 <span className="text-emerald-600">{gradeLabel(impact.debtServiceRisk)}</span></p>
-                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">물가 <span className="text-emerald-600">{gradeLabel(impact.inflationPressureRisk)}</span></p>
-                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">환율 <span className="text-emerald-600">{gradeLabel(impact.fxPressureRisk)}</span></p>
-                              <p className="flex justify-between bg-slate-50 px-2.5 py-1 rounded-lg">완충 <span className="text-emerald-600">{gradeLabel(impact.bufferAdequacy)}</span></p>
+                              <p className="flex justify-between bg-surface-muted px-2.5 py-1 rounded-lg">부채 <span className="text-primary">{gradeLabel(impact.debtServiceRisk)}</span></p>
+                              <p className="flex justify-between bg-surface-muted px-2.5 py-1 rounded-lg">물가 <span className="text-primary">{gradeLabel(impact.inflationPressureRisk)}</span></p>
+                              <p className="flex justify-between bg-surface-muted px-2.5 py-1 rounded-lg">환율 <span className="text-primary">{gradeLabel(impact.fxPressureRisk)}</span></p>
+                              <p className="flex justify-between bg-surface-muted px-2.5 py-1 rounded-lg">완충 <span className="text-primary">{gradeLabel(impact.bufferAdequacy)}</span></p>
                             </div>
                             {showAdvanced && (
                               <ul className="list-disc space-y-1.5 pl-4 text-[11px] font-bold text-slate-600 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -855,7 +855,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
                   type="button"
                   disabled={recovering}
                   onClick={() => setRecoveryPreview(null)}
-                  className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                  className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-surface-muted transition-colors"
                 >
                   취소
                 </button>

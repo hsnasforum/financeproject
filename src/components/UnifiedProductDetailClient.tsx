@@ -93,7 +93,7 @@ function ProductIdentifierDisclosure({
   checkedAt: string;
 }) {
   return (
-    <details className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
+    <details className="rounded-2xl border border-slate-200 bg-surface-muted/70 px-4 py-3">
       <summary className="cursor-pointer list-none text-[11px] font-semibold text-slate-500 marker:hidden">
         공유·복구용 보조 정보
       </summary>
@@ -211,10 +211,10 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
           <>
             <Card className="rounded-[2.5rem] p-8 shadow-sm">
               <div className="flex flex-wrap items-center gap-2 mb-6">
-                <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{formatKindLabel(item.kind)}</span>
-                <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">기준 확인 {formatDateTime(generatedAt || item.updatedAt)}</span>
+                <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-600">{formatKindLabel(item.kind)}</span>
+                <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-slate-500">기준 확인 {formatDateTime(generatedAt || item.updatedAt)}</span>
                 {(item.badges ?? []).map((badge) => (
-                  <span key={`${item.stableId}-${badge}`} className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">{badge}</span>
+                  <span key={`${item.stableId}-${badge}`} className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-navy">{badge}</span>
                 ))}
               </div>
 
@@ -227,7 +227,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                         <div className="space-y-2">
                           <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">기간 선택</label>
                           <select
-                            className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all"
+                            className="h-12 w-full rounded-2xl border border-slate-200 bg-surface-muted/50 px-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-primary transition-all"
                             value={selectedOptionValue}
                             onChange={(event) => setSelectedOptionKey(event.target.value)}
                           >
@@ -242,18 +242,18 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                           </select>
                         </div>
                         <div className="flex gap-4">
-                          <div className="flex-1 rounded-2xl bg-emerald-50 p-4 border border-emerald-100">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">적용 금리</p>
-                            <p className="mt-2 text-2xl font-black text-emerald-700 tabular-nums">{formatRate(appliedRate)}</p>
+                          <div className="flex-1 rounded-2xl bg-primary/5 p-4 border border-primary/10">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-primary">적용 금리</p>
+                            <p className="mt-2 text-2xl font-black text-navy tabular-nums">{formatRate(appliedRate)}</p>
                           </div>
-                          <div className="flex-1 rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                          <div className="flex-1 rounded-2xl bg-surface-muted p-4 border border-slate-100">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">기본 / 최고</p>
                             <p className="mt-2 text-base font-black text-slate-700 tabular-nums">{formatRate(baseRate)} / {formatRate(maxRate)}</p>
                           </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center bg-slate-50/50">
+                      <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center bg-surface-muted/50">
                         <p className="text-sm font-bold text-slate-400">제공된 기간 옵션 정보가 없습니다.</p>
                       </div>
                     )}
@@ -261,12 +261,12 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
 
                   <div className="space-y-4">
                     <SubSectionHeader title="다음 확인 포인트" description="가입 전에 다시 볼 항목만 먼저 정리했습니다." />
-                    <div className="rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 lg:p-8">
+                    <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/30 p-6 lg:p-8">
                       {conditions.length > 0 ? (
                         <ul className="space-y-4">
                           {conditions.map((row, index) => (
                             <li key={`${item.stableId}-condition-${index}`} className="flex items-start gap-3">
-                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                               <p className="text-sm font-medium leading-relaxed text-slate-700">{row}</p>
                             </li>
                           ))}
@@ -279,7 +279,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                 </div>
 
                 <div className="space-y-6">
-                  <Card className="rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-slate-50/50">
+                  <Card className="rounded-[2rem] p-8 shadow-sm border border-slate-100 bg-surface-muted/50">
                     <SubSectionHeader
                       title="다음에 할 일"
                       description="비교함에 담거나 비교 화면에서 다른 후보와 나란히 다시 확인하세요."
@@ -287,7 +287,7 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                     <div className="mt-8 space-y-4">
                       <Button
                         variant="primary"
-                        className="w-full h-14 rounded-2xl font-black shadow-lg shadow-emerald-900/20"
+                        className="w-full h-14 rounded-2xl font-black shadow-lg shadow-navy/20"
                         onClick={() => {
                           const next = addCompareIdToStorage(item.stableId || id, compareStoreConfig.max);
                           setCompareMessage(`비교함에 담았습니다. 비교 화면에서 다른 후보와 나란히 다시 확인할 수 있습니다. (${next.length}/${compareStoreConfig.max})`);
@@ -296,12 +296,12 @@ export function UnifiedProductDetailClient({ id }: { id: string }) {
                         비교 후보 담기
                       </Button>
                       <Link href="/products/compare" className="block">
-                        <Button variant="outline" className="w-full h-12 rounded-2xl border-slate-200 bg-white font-black text-slate-700 hover:bg-slate-100">
+                        <Button variant="outline" className="w-full h-12 rounded-2xl border-slate-200 bg-white font-black text-slate-700 hover:bg-surface-muted">
                           비교함에서 나란히 보기
                         </Button>
                       </Link>
                       {compareMessage && (
-                        <p className="text-center text-xs font-black text-emerald-600 animate-in fade-in slide-in-from-top-1">{compareMessage}</p>
+                        <p className="text-center text-xs font-black text-primary animate-in fade-in slide-in-from-top-1">{compareMessage}</p>
                       )}
                     </div>
                   </Card>

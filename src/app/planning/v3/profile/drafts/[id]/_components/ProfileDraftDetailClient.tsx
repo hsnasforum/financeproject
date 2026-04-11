@@ -399,7 +399,7 @@ export function ProfileDraftDetailClient({
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Draft Detail</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Profile Draft Detail</h1>
           <p className="text-sm text-slate-700">
             이 화면은 stable planning handoff 직전의 개별 초안 검토 surface입니다. 다음 단계는 draft 검토 후
             preflight에서 영향 범위를 확인하고, apply 뒤 planning에서 실행을 저장한 다음 stable report를 확인하는
@@ -548,7 +548,7 @@ export function ProfileDraftDetailClient({
               </p>
               {applyResult ? (
                 <p
-                  className={`text-sm font-semibold ${applyResult.includes("실패") ? "text-rose-700" : "text-emerald-700"}`}
+                  className={`text-sm font-semibold ${applyResult.includes("실패") ? "text-rose-700" : "text-navy"}`}
                   data-testid="v3-draft-apply-result"
                 >
                   {applyResult}
@@ -655,7 +655,7 @@ export function ProfileDraftDetailClient({
                   preflight.changes.length > 0 ? (
                     <BodyTableFrame>
                       <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
-                        <thead className="bg-slate-50">
+                        <thead className="bg-surface-muted">
                           <tr>
                             <th className="px-2 py-1 text-left">path</th>
                             <th className="px-2 py-1 text-left">kind</th>

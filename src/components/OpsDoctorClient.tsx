@@ -97,7 +97,7 @@ function formatDateTime(value: string): string {
 }
 
 function statusTone(status: DoctorCheck["status"]): string {
-  if (status === "PASS") return "border-emerald-200 bg-emerald-50 text-emerald-900";
+  if (status === "PASS") return "border-primary/20 bg-primary/5 text-navy";
   if (status === "WARN") return "border-amber-200 bg-amber-50 text-amber-900";
   return "border-rose-200 bg-rose-50 text-rose-900";
 }
@@ -325,7 +325,7 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
         </Card>
       ) : null}
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-4 text-sm text-navy">
           {notice}
         </Card>
       ) : null}
@@ -347,7 +347,7 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
 
       {report ? (
         <Card className="mb-4 p-4">
-          <h2 className="text-base font-black text-slate-900">요약</h2>
+          <h2 className="text-base font-black text-navy">요약</h2>
           <p className="mt-2 text-sm text-slate-700">
             generatedAt: <span className="font-semibold">{formatDateTime(report.generatedAt)}</span>
           </p>
@@ -357,10 +357,10 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
             </p>
           ) : null}
           <div className="mt-3 grid gap-2 md:grid-cols-4 text-sm">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">전체 판정: <span className="font-semibold">{report.ok ? "PASS" : "FAIL"}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">PASS: <span className="font-semibold">{report.summary.pass}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">WARN: <span className="font-semibold">{report.summary.warn}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">FAIL: <span className="font-semibold">{report.summary.fail}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">전체 판정: <span className="font-semibold">{report.ok ? "PASS" : "FAIL"}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">PASS: <span className="font-semibold">{report.summary.pass}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">WARN: <span className="font-semibold">{report.summary.warn}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">FAIL: <span className="font-semibold">{report.summary.fail}</span></div>
           </div>
         </Card>
       ) : null}

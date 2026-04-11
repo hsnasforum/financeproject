@@ -78,7 +78,7 @@ export function DataSourcePingButton({ source, onResult, showInlineState = true 
         {loading ? "테스트 중..." : "연결 테스트"}
       </Button>
       {showInlineState && state ? (
-        <p className={`mt-2 text-xs ${state.tone === "ok" ? "text-emerald-700" : "text-red-700"}`}>{state.text}</p>
+        <p className={`mt-2 text-xs ${state.tone === "ok" ? "text-navy" : "text-red-700"}`}>{state.text}</p>
       ) : null}
     </div>
   );

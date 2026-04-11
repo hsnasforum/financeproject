@@ -249,7 +249,7 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
         )}
       />
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-navy">
           {notice}
         </Card>
       ) : null}
@@ -262,7 +262,7 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
       ) : null}
 
       <Card className="mb-4 p-4">
-        <h2 className="text-base font-black text-slate-900">필터</h2>
+        <h2 className="text-base font-black text-navy">필터</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <label className="text-xs text-slate-600">
             Status
@@ -330,7 +330,7 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
       </Card>
 
       <Card className="mb-4 p-4">
-        <h2 className="text-base font-black text-slate-900">보존 정리</h2>
+        <h2 className="text-base font-black text-navy">보존 정리</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <label className="text-xs text-slate-600">
             keepDays
@@ -360,7 +360,7 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
       </Card>
 
       <Card className="p-4">
-        <h2 className="text-base font-black text-slate-900">Runs</h2>
+        <h2 className="text-base font-black text-navy">Runs</h2>
         {loading && rows.length < 1 ? (
           <LoadingState className="mt-3" title="실행 기록을 불러오는 중입니다" />
         ) : null}
@@ -410,7 +410,7 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
                     <td className="px-2 py-2">
                       <a
                         aria-label={`run ${row.id} 리포트 열기`}
-                        className="font-semibold text-emerald-700"
+                        className="font-semibold text-navy"
                         href={`/planning/reports/${encodeURIComponent(row.id)}`}
                       >
                         리포트
@@ -447,11 +447,11 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
           aria-labelledby="ops-runs-delete-title"
         >
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-runs-delete-title" className="text-base font-black text-slate-900">실행 기록 삭제 확인</h3>
+            <h3 id="ops-runs-delete-title" className="text-base font-black text-navy">실행 기록 삭제 확인</h3>
             <p className="mt-2 text-sm text-slate-700">
               실행 기록을 휴지통으로 이동합니다. 계속 진행할까요?
             </p>
-            <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
+            <p className="mt-2 rounded-md border border-slate-200 bg-surface-muted px-2 py-1 text-xs text-slate-700">
               runId: <span className="font-semibold">{confirmDeleteRunId}</span>
             </p>
             <div className="mt-4 flex justify-end gap-2">

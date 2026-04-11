@@ -504,7 +504,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                 type="button"
                 disabled={refreshing}
                 onClick={() => { void handleRefresh(); }}
-                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
               >
                 {refreshing ? "갱신 중..." : "수동 갱신"}
               </button>
@@ -515,7 +515,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
         <div className="space-y-6">
           {notice || errorMessage ? (
             <div className="px-2">
-              {notice ? <p className="text-xs font-bold text-emerald-600">✅ {notice}</p> : null}
+              {notice ? <p className="text-xs font-bold text-primary">✅ {notice}</p> : null}
               {errorMessage ? <p className="text-xs font-bold text-rose-600">❌ {errorMessage}</p> : null}
               <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">마지막 생성: {formatDateTime(digest?.generatedAt)}</p>
             </div>
@@ -524,26 +524,26 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
           <Card className="rounded-[2.5rem] p-8 shadow-sm">
             <SubSectionHeader title="내 판단 메모" description="기사/토픽/시나리오 카드에서 '메모'를 눌러 대상을 선택해 주세요." />
             {!activeTarget ? (
-              <div className="rounded-2xl bg-slate-50 px-6 py-8 text-center border border-dashed border-slate-200">
+              <div className="rounded-2xl bg-surface-muted px-6 py-8 text-center border border-dashed border-slate-200">
                 <p className="text-sm font-medium text-slate-500">선택된 메모 대상이 없습니다.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">대상</span>
-                  <span className="text-sm font-bold text-slate-900">{activeTarget.label}</span>
+                  <span className="text-sm font-bold text-navy">{activeTarget.label}</span>
                 </div>
                 <textarea
                   value={noteText}
                   onChange={(event) => setNoteText(event.target.value)}
                   placeholder="판단 근거/가정/리스크 메모"
-                  className="h-32 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
+                  className="h-32 w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 py-3 text-sm text-slate-800 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                 />
                 <input
                   value={tagsText}
                   onChange={(event) => setTagsText(event.target.value)}
                   placeholder="태그(쉼표 또는 줄바꿈)"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
+                  className="w-full rounded-xl border border-slate-200 bg-surface-muted px-4 py-2 text-sm text-slate-800 focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                 />
                 <div className="flex items-center gap-3 pt-2">
                   <button
@@ -562,7 +562,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                       setNoteText("");
                       setTagsText("");
                     }}
-                    className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                    className="rounded-xl border border-slate-200 px-5 py-2.5 text-xs font-black text-slate-600 hover:bg-surface-muted transition-colors"
                   >
                     대상 해제
                   </button>
@@ -576,7 +576,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
             {loading ? (
               <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
             ) : (
-              <p className="rounded-[2rem] bg-emerald-50/50 border border-emerald-100/50 p-6 text-sm font-bold text-emerald-900 leading-relaxed tabular-nums">{summaryLine}</p>
+              <p className="rounded-[2rem] bg-primary/10 border border-primary/10 p-6 text-sm font-bold text-navy leading-relaxed tabular-nums">{summaryLine}</p>
             )}
             <div className="mt-8 grid gap-8 md:grid-cols-2">
               <div className="min-w-0">
@@ -586,7 +586,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                     {digest.summary.evidenceLinks.slice(0, 5).map((url) => (
                       <li key={url} className="min-w-0">
                         <a
-                          className="block max-w-full truncate text-emerald-700 font-bold underline decoration-emerald-200 underline-offset-4 hover:decoration-emerald-500 transition-all"
+                          className="block max-w-full truncate text-navy font-bold underline decoration-primary/20 underline-offset-4 hover:decoration-primary transition-all"
                           href={url}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -626,7 +626,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
               <SubSectionHeader title="Top Links" description="중요도 점수가 높은 핵심 기사들입니다." />
             </div>
             {!digest?.topItems?.length ? (
-              <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+              <div className="rounded-[2rem] bg-surface-muted px-6 py-12 text-center border border-dashed border-slate-200">
                 <p className="text-sm font-medium text-slate-500">표시할 기사가 없습니다.</p>
               </div>
             ) : (
@@ -637,13 +637,13 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                   <li key={`${item.url}-${item.publishedAt}`} className="group rounded-[2rem] border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-all">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600 uppercase tracking-wider">{item.topicLabel}</span>
+                        <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[10px] font-black text-slate-600 uppercase tracking-wider">{item.topicLabel}</span>
                         <span className="text-[10px] font-bold text-slate-400">{item.sourceName}</span>
                       </div>
-                      <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full tabular-nums">SCORE {item.score.toFixed(2)}</span>
+                      <span className="text-[10px] font-black text-primary bg-primary/5 px-2 py-0.5 rounded-full tabular-nums">SCORE {item.score.toFixed(2)}</span>
                     </div>
 
-                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="block text-base font-black text-slate-900 leading-snug tracking-tight hover:text-emerald-700 transition-colors">
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="block text-base font-black text-navy leading-snug tracking-tight hover:text-navy transition-colors">
                       {item.title}
                     </a>
 
@@ -653,7 +653,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                       <button
                         type="button"
                         onClick={() => setAdvancedTopItem((prev) => ({ ...prev, [item.url]: !prev[item.url] }))}
-                        className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                        className="rounded-lg border border-slate-200 bg-surface-muted px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-surface-muted hover:text-slate-700 transition-colors"
                       >
                         {advancedTopItem[item.url] ? "상세 분석 닫기" : "상세 분석"}
                       </button>
@@ -667,7 +667,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                     </div>
 
                     {advancedTopItem[item.url] ? (
-                      <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3 text-[10px] font-bold text-slate-500 tabular-nums">
+                      <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-surface-muted p-3 text-[10px] font-bold text-slate-500 tabular-nums">
                         <p>소스: {Number(item.scoreParts?.source ?? 0).toFixed(2)}</p>
                         <p>최근성: {Number(item.scoreParts?.recency ?? 0).toFixed(2)}</p>
                         <p>키워드: {Number(item.scoreParts?.keyword ?? 0).toFixed(2)}</p>
@@ -681,11 +681,11 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                       <div className="mt-4 space-y-2 border-t border-slate-50 pt-4">
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">연결된 메모 ({related.length})</p>
                         {related.slice(0, 2).map((row) => (
-                          <div key={row.id} className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                          <div key={row.id} className="rounded-2xl bg-surface-muted p-4 border border-slate-100">
                             <p className="text-sm font-medium text-slate-700 leading-relaxed">{row.note}</p>
                             <div className="mt-3 flex flex-wrap items-center gap-2">
                               {row.tags.map((tag) => (
-                                <span key={`${row.id}-${tag}`} className="rounded-lg bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">#{tag}</span>
+                                <span key={`${row.id}-${tag}`} className="rounded-lg bg-primary/5 px-2 py-0.5 text-[10px] font-black text-navy">#{tag}</span>
                               ))}
                               <span className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(row.createdAt)}</span>
                               <button
@@ -713,7 +713,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
               <SubSectionHeader title="Top Topics" description="최근 기사가 급증한 주요 키워드 그룹입니다." />
             </div>
             {!digest?.topTopics?.length ? (
-              <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+              <div className="rounded-[2rem] bg-surface-muted px-6 py-12 text-center border border-dashed border-slate-200">
                 <p className="text-sm font-medium text-slate-500">표시할 토픽이 없습니다.</p>
               </div>
             ) : (
@@ -724,7 +724,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                   return (
                     <div key={topic.topicId} className="group rounded-[2rem] border border-slate-200/60 bg-white p-6 shadow-sm hover:shadow-md transition-all">
                       <div className="flex items-center justify-between gap-3 mb-3">
-                        <p className="text-base font-black text-slate-900 tracking-tight">{topic.topicLabel}</p>
+                        <p className="text-base font-black text-navy tracking-tight">{topic.topicLabel}</p>
                         <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-black text-amber-700 uppercase tracking-wider">{topic.burstLevel}</span>
                       </div>
                       <p className="text-xs font-bold text-slate-500 tabular-nums">
@@ -744,7 +744,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                         <button
                           type="button"
                           onClick={() => focusNoteTarget({ targetType: "topic", targetId: topic.topicId, label: topic.topicLabel })}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-surface-muted transition-colors"
                         >
                           메모 작성
                         </button>
@@ -753,7 +753,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                       {related.length > 0 && (
                         <div className="mt-3 space-y-2">
                           {related.slice(0, 1).map((row) => (
-                            <div key={row.id} className="rounded-xl bg-slate-50 p-3 border border-slate-100">
+                            <div key={row.id} className="rounded-xl bg-surface-muted p-3 border border-slate-100">
                               <p className="text-xs font-medium text-slate-700 leading-relaxed line-clamp-2">{row.note}</p>
                             </div>
                           ))}
@@ -771,7 +771,7 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
               <SubSectionHeader title="시나리오 카드" description="현재 관찰 결과에 따른 미래 재무 시나리오 요약입니다." />
             </div>
             {!scenarios?.scenarios?.length ? (
-              <div className="rounded-[2rem] bg-slate-50 px-6 py-12 text-center border border-dashed border-slate-200">
+              <div className="rounded-[2rem] bg-surface-muted px-6 py-12 text-center border border-dashed border-slate-200">
                 <p className="text-sm font-medium text-slate-500">분석된 시나리오가 없습니다.</p>
               </div>
             ) : (
@@ -781,12 +781,12 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                   return (
                     <div key={row.name} id={`scenario-${row.name}`} className="group rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm hover:shadow-md transition-all flex flex-col">
                       <div className="flex items-center justify-between gap-3 mb-4">
-                        <p className="text-lg font-black text-slate-900 tracking-tight">{row.name}</p>
+                        <p className="text-lg font-black text-navy tracking-tight">{row.name}</p>
                         <span className="rounded-full bg-sky-50 px-3 py-1 text-[10px] font-black text-sky-700 uppercase tracking-wider">신뢰도 {confidenceLabel(row.confidence)}</span>
                       </div>
 
                       <div className="space-y-4 flex-1">
-                        <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                        <div className="rounded-2xl bg-surface-muted p-4 border border-slate-100">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">트리거 상태: {triggerStatusLabel(row.triggerStatus)}</p>
                           <p className="text-xs font-bold text-slate-700 leading-relaxed">{formatLegacyTriggerText(row.triggerSummary)}</p>
                         </div>
@@ -807,8 +807,8 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">내 영향 점검</p>
                             {row.personalImpact && !isProfileMissingImpact(row.personalImpact) ? (
                               <div className="space-y-1 text-[11px] font-bold text-slate-700">
-                                <p className="flex justify-between">현금흐름 <span className="text-emerald-600">{impactGradeLabel(row.personalImpact.cashflowRisk)}</span></p>
-                                <p className="flex justify-between">부채상환 <span className="text-emerald-600">{impactGradeLabel(row.personalImpact.debtServiceRisk)}</span></p>
+                                <p className="flex justify-between">현금흐름 <span className="text-primary">{impactGradeLabel(row.personalImpact.cashflowRisk)}</span></p>
+                                <p className="flex justify-between">부채상환 <span className="text-primary">{impactGradeLabel(row.personalImpact.debtServiceRisk)}</span></p>
                               </div>
                             ) : (
                               <p className="text-[11px] text-slate-400 italic">프로필 설정 필요</p>
@@ -821,11 +821,11 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
                         <button
                           type="button"
                           onClick={() => focusNoteTarget({ targetType: "scenario", targetId: row.name, label: `${row.name} 시나리오` })}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-surface-muted transition-colors"
                         >
                           메모 추가
                         </button>
-                        <Link href="#news-digest-scenarios-all" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest">상세 분석 ▶</Link>
+                        <Link href="#news-digest-scenarios-all" className="text-[10px] font-black text-primary hover:underline uppercase tracking-widest">상세 분석 ▶</Link>
                       </div>
                     </div>
                   );

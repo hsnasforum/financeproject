@@ -1021,8 +1021,8 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
       <div className="space-y-5" data-testid="v3-batch-detail">
         <Card className="space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Import-to-Planning Beta</p>
-            <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Detail</h1>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Import-to-Planning Beta</p>
+            <h1 className="text-xl font-black text-navy">Planning v3 Batch Detail</h1>
             <p className="text-sm text-slate-600">
               id: <span className="font-mono">{id}</span>
             </p>
@@ -1045,7 +1045,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
             </BodyActionLink>
           </div>
 
-          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-surface-muted px-4 py-3">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Support / Internal</p>
             <div className={bodyActionLinkGroupClassName}>
               <BodyActionLink className="text-xs text-slate-600" href="/planning/v3/accounts">
@@ -1083,7 +1083,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
         {detail ? (
           <>
             <Card className="space-y-2" data-testid="v3-batch-meta">
-              <h2 className="text-sm font-bold text-slate-900">업로드/집계 상태</h2>
+              <h2 className="text-sm font-bold text-navy">업로드/집계 상태</h2>
               <p className="text-sm text-slate-700">
                 총 거래 {asNumber(detail.stats.total).toLocaleString("ko-KR")}건 / 파싱 성공 {asNumber(detail.stats.ok).toLocaleString("ko-KR")}건 / 파싱 실패 {asNumber(detail.stats.failed).toLocaleString("ko-KR")}건
               </p>
@@ -1095,7 +1095,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                   일부 행은 형식 불일치로 제외되었습니다. 컬럼 매핑/금액 형식을 확인해 주세요.
                 </p>
               ) : (
-                <p className="text-xs font-semibold text-emerald-700">
+                <p className="text-xs font-semibold text-navy">
                   파싱 실패 없이 집계되었습니다.
                 </p>
               )}
@@ -1165,7 +1165,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
               <BodySectionHeading title="Sample (Redacted)" />
               <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                  <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left">line</th>
                       <th className="px-3 py-2 text-left">date</th>
@@ -1215,7 +1215,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
               {txnOverrideMessage ? <p className="text-sm font-semibold text-slate-700">{txnOverrideMessage}</p> : null}
               <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                  <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left">date</th>
                       <th className="px-3 py-2 text-right">amount</th>
@@ -1344,7 +1344,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
               {categorizedMessage ? <p className="text-sm font-semibold text-rose-700">{categorizedMessage}</p> : null}
               <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-breakdown-table">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                  <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left">ym</th>
                       <th className="px-3 py-2 text-right">income</th>
@@ -1359,7 +1359,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                   <tbody className="divide-y divide-slate-100">
                     {breakdownRows.length > 0 ? breakdownRows.map((row) => (
                       <tr key={`breakdown-${row.ym}`}>
-                        <td className="px-3 py-2 font-semibold text-slate-900">{row.ym}</td>
+                        <td className="px-3 py-2 font-semibold text-navy">{row.ym}</td>
                         <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.incomeKrw)}</td>
                         <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.expenseKrw)}</td>
                         <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.transferKrw)}</td>
@@ -1382,7 +1382,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
               <BodySectionHeading title="월별 요약" />
               <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                  <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left">YYYY-MM</th>
                       <th className="px-3 py-2 text-right">income</th>
@@ -1394,10 +1394,10 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                   <tbody className="divide-y divide-slate-100">
                     {detail.monthsSummary.length > 0 ? detail.monthsSummary.map((row) => (
                       <tr key={row.ym}>
-                        <td className="px-3 py-2 font-semibold text-slate-900">{row.ym}</td>
+                        <td className="px-3 py-2 font-semibold text-navy">{row.ym}</td>
                         <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.incomeKrw))}</td>
                         <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.expenseKrw))}</td>
-                        <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(asNumber(row.netKrw))}</td>
+                        <td className="px-3 py-2 text-right font-semibold text-navy">{formatKrw(asNumber(row.netKrw))}</td>
                         <td className="px-3 py-2 text-right text-slate-700">{asNumber(row.txCount).toLocaleString("ko-KR")}</td>
                       </tr>
                     )) : (
@@ -1417,7 +1417,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
               />
               <BodyTableFrame>
                 <table className="min-w-full divide-y divide-slate-200 text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                  <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                     <tr>
                       <th className="px-3 py-2 text-left">account</th>
                       <th className="px-3 py-2 text-left">YYYY-MM</th>
@@ -1590,7 +1590,7 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                   <BodySectionHeading title="월별 캐시플로우 v2" />
                   <BodyTableFrame>
                     <table className="min-w-full divide-y divide-slate-200 text-sm">
-                      <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                      <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                         <tr>
                           <th className="px-3 py-2 text-left">YYYY-MM</th>
                           <th className="px-3 py-2 text-right">inflow</th>
@@ -1605,10 +1605,10 @@ export function TransactionBatchDetailClient({ id }: { id: string }) {
                       <tbody className="divide-y divide-slate-100">
                         {cashflow.monthly.length > 0 ? cashflow.monthly.map((row, index) => (
                           <tr key={`${pickMonth(row) || "month"}-${index}`}>
-                            <td className="px-3 py-2 font-semibold text-slate-900">{pickMonth(row) || "-"}</td>
+                            <td className="px-3 py-2 font-semibold text-navy">{pickMonth(row) || "-"}</td>
                             <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.inflowKrw ?? row.incomeKrw))}</td>
                             <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.outflowKrw ?? Math.abs(asNumber(row.expenseKrw))))}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(asNumber(row.netKrw))}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-navy">{formatKrw(asNumber(row.netKrw))}</td>
                             <td className="px-3 py-2 text-right text-slate-700">{formatKrw(asNumber(row.fixedOutflowKrw))}</td>
                             <td className="px-3 py-2 text-right text-slate-700">{formatKrw(asNumber(row.variableOutflowKrw))}</td>
                             <td className="px-3 py-2 text-right text-slate-700">{formatKrw(asNumber(row.transferNetKrw))}</td>

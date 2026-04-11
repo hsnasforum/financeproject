@@ -168,12 +168,12 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
     <Card className="space-y-3" data-testid="planning-candidates" id="candidates">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-base font-bold text-slate-900">실시간 상품 탐색 (예금/적금)</h2>
+          <h2 className="text-base font-bold text-navy">실시간 상품 탐색 (예금/적금)</h2>
           <p className="mt-1 text-xs text-slate-600">많은 후보를 한 번에 보여주지 않도록 5개씩 나눠서 표시합니다.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${tab === "deposit" ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-300 text-slate-700"}`}
+            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${tab === "deposit" ? "border-primary bg-primary/5 text-navy" : "border-slate-300 text-slate-700"}`}
             data-testid="candidates-tab-deposit"
             type="button"
             onClick={() => setTab("deposit")}
@@ -181,7 +181,7 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
             예금
           </button>
           <button
-            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${tab === "saving" ? "border-emerald-400 bg-emerald-50 text-emerald-700" : "border-slate-300 text-slate-700"}`}
+            className={`rounded-lg border px-3 py-1 text-xs font-semibold ${tab === "saving" ? "border-primary bg-primary/5 text-navy" : "border-slate-300 text-slate-700"}`}
             data-testid="candidates-tab-saving"
             type="button"
             onClick={() => setTab("saving")}
@@ -266,7 +266,7 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
         <div className="space-y-3">
           <BodyTableFrame>
             <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="candidates-table">
-              <thead className="bg-slate-50">
+              <thead className="bg-surface-muted">
                 <tr>
                   <th className="px-3 py-2 text-left">금융사</th>
                   <th className="px-3 py-2 text-left">상품명</th>
@@ -287,14 +287,14 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
                 ) : pageRows.map((row) => (
                   <tr key={`${tab}:${row.product.fin_prdt_cd}`}>
                     <td className="px-3 py-2 text-slate-800">{row.providerName}</td>
-                    <td className="px-3 py-2 font-semibold text-slate-900">{row.productName}</td>
+                    <td className="px-3 py-2 font-semibold text-navy">{row.productName}</td>
                     <td className="px-3 py-2 text-right">{row.termMonths.toLocaleString("ko-KR")}개월</td>
                     <td className="px-3 py-2 text-right">{formatPct("ko-KR", row.annualRatePct)}</td>
                     <td className="px-3 py-2 text-right">{formatKrw("ko-KR", row.netInterestWon)}</td>
                     <td className="px-3 py-2 text-right">{formatKrw("ko-KR", row.maturityWon)}</td>
                     <td className="px-3 py-2 text-center">
                       <button
-                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-surface-muted"
                         type="button"
                         onClick={() => setDrawerProduct(row.product)}
                       >
@@ -340,12 +340,12 @@ export default function ProductCandidatesPanel(props: ProductCandidatesPanelProp
         세후 이자/만기금액은 단순 추정치(세율/금리/복리 여부는 설정값). 실제 조건은 상품 약관/우대조건에 따라 달라집니다.
       </p>
 
-      <details className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-        <summary className="cursor-pointer font-semibold text-slate-900" data-testid="candidates-evidence-toggle">
+      <details className="rounded-xl border border-slate-200 bg-surface-muted px-3 py-2 text-xs text-slate-700">
+        <summary className="cursor-pointer font-semibold text-navy" data-testid="candidates-evidence-toggle">
           계산 근거 보기
         </summary>
         <div className="mt-2 space-y-2" data-testid="candidates-evidence-panel">
-          <p className="font-semibold text-slate-900">{candidatesEvidence.title}</p>
+          <p className="font-semibold text-navy">{candidatesEvidence.title}</p>
           <p className="text-[11px] text-slate-600">공식: {candidatesEvidence.formula}</p>
           <div>
             <p className="text-[11px] text-slate-600">입력:</p>

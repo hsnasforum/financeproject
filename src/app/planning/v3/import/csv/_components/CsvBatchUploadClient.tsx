@@ -85,7 +85,7 @@ export function CsvBatchUploadClient() {
     <PageShell>
       <div className="space-y-5" data-testid="v3-csv-upload-page">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 CSV Upload</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 CSV Upload</h1>
           <p className="text-sm text-slate-600">CSV 파일을 배치로 저장한 뒤 요약 페이지로 이동합니다.</p>
           <div className={bodyActionLinkGroupClassName}>
             <BodyActionLink href="/planning/v3/batches">

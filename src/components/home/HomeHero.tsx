@@ -50,23 +50,26 @@ const DEFAULT_SLIDES: HomeHeroSlide[] = [
 ];
 
 const THEME_MAP: Record<HomeHeroSlide["theme"], { front: string; orb: string; backA: string; backB: string }> = {
+  // Stability — Deep Navy → Trust Blue
   sky: {
-    front: "bg-[linear-gradient(145deg,#8fd0ff_0%,#66afff_45%,#4e82ff_100%)] text-white shadow-[0_28px_48px_rgba(77,129,255,0.30)]",
-    orb: "bg-[radial-gradient(circle_at_35%_30%,#6df4d5_0%,#58c9ff_45%,#3764ff_100%)]",
-    backA: "bg-[#77bbff]/55",
-    backB: "bg-[#7ac8ff]/70",
+    front: "bg-[linear-gradient(145deg,#1e3a8a_0%,#1e3a8a_40%,#0a1f44_100%)] text-white shadow-[0_28px_48px_rgba(10,31,68,0.38)]",
+    orb: "bg-[radial-gradient(circle_at_35%_30%,#00d9a3_0%,#3b82f6_45%,#1e3a8a_100%)]",
+    backA: "bg-[#3b82f6]/40",
+    backB: "bg-[#1e3a8a]/55",
   },
+  // Innovation — Navy → Violet
   emerald: {
-    front: "bg-[linear-gradient(145deg,#7be7d0_0%,#2bc2a3_46%,#0e8f7a_100%)] text-white shadow-[0_28px_48px_rgba(16,185,129,0.26)]",
-    orb: "bg-[radial-gradient(circle_at_35%_30%,#d9fff5_0%,#8bf3d9_45%,#1ea88d_100%)]",
-    backA: "bg-[#88ecd7]/50",
-    backB: "bg-[#71e1c8]/70",
+    front: "bg-[linear-gradient(145deg,#1e3a8a_0%,#4338ca_45%,#7c3aed_100%)] text-white shadow-[0_28px_48px_rgba(124,58,237,0.32)]",
+    orb: "bg-[radial-gradient(circle_at_35%_30%,#c4b5fd_0%,#7c3aed_45%,#4c1d95_100%)]",
+    backA: "bg-[#7c3aed]/35",
+    backB: "bg-[#4338ca]/50",
   },
+  // Growth — Navy → Electric Mint
   amber: {
-    front: "bg-[linear-gradient(145deg,#ffe29a_0%,#ffc85c_44%,#ff9b54_100%)] text-slate-950 shadow-[0_28px_48px_rgba(251,146,60,0.24)]",
-    orb: "bg-[radial-gradient(circle_at_35%_30%,#fff7d6_0%,#ffd46f_45%,#ff9952_100%)]",
-    backA: "bg-[#ffd994]/50",
-    backB: "bg-[#ffc86b]/68",
+    front: "bg-[linear-gradient(145deg,#0a1f44_0%,#0f766e_50%,#00d9a3_100%)] text-white shadow-[0_28px_48px_rgba(0,217,163,0.26)]",
+    orb: "bg-[radial-gradient(circle_at_35%_30%,#d1fae5_0%,#00d9a3_45%,#0f766e_100%)]",
+    backA: "bg-[#00d9a3]/35",
+    backB: "bg-[#0f766e]/55",
   },
 };
 
@@ -87,46 +90,51 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
   const theme = THEME_MAP[activeSlide.theme];
 
   return (
-    <section className="border-b border-slate-100 bg-slate-50/50">
-      <Container className="px-4 py-14 sm:px-6 md:py-20 lg:px-8">
+    <section className="relative overflow-hidden border-b border-slate-200/60 bg-gradient-to-b from-[#f5f7fa] via-white to-white">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-[0.06]"
+        style={{ background: "var(--hero-gradient)" }}
+      />
+      <Container className="relative px-4 py-14 sm:px-6 md:py-20 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="max-w-2xl">
-            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">시작 가이드</p>
-            <h1 className="mt-5 text-[2.75rem] font-black leading-[1.12] tracking-[-0.04em] text-slate-950 md:text-[4.4rem]">
+            <p className="text-sm font-bold text-primary uppercase tracking-widest">시작 가이드</p>
+            <h1 className="mt-5 text-[2.75rem] font-black leading-[1.12] tracking-[-0.04em] text-navy md:text-[4.4rem]">
               재무 상태를 먼저 보고
               <br />
               조건에 맞는 상품을
               <br />
-              바로 비교하는 MMD
+              바로 비교하는 <span className="bg-[linear-gradient(135deg,#1e3a8a_0%,#7c3aed_100%)] bg-clip-text text-transparent">MMD</span>
             </h1>
-            <p className="mt-5 max-w-lg text-lg font-medium leading-relaxed text-slate-500">
+            <p className="mt-5 max-w-lg text-lg font-medium leading-relaxed text-muted">
               먼저 플래닝으로 현재 흐름을 진단하고, 바로 비교가 필요하면 추천 허브에서 지금 조건에 맞는 후보를 살펴보세요.
             </p>
 
             <div className="mt-10 flex flex-wrap gap-3">
               <Link
-                className="inline-flex h-14 items-center rounded-2xl bg-emerald-600 px-10 text-base font-black text-white shadow-xl shadow-emerald-100 transition-all hover:bg-emerald-700 hover:-translate-y-0.5 active:scale-95"
+                className="inline-flex h-14 items-center rounded-2xl bg-primary px-10 text-base font-black text-white shadow-[0_18px_36px_-12px_rgba(30,58,138,0.55)] transition-all hover:bg-primary-hover hover:-translate-y-0.5 active:scale-95"
                 href="/planning"
                 prefetch={devPlanningPrefetch("/planning")}
               >
                 재무 상태 진단 시작
               </Link>
               <Link
-                className="inline-flex h-14 items-center rounded-2xl bg-white border border-slate-200 px-10 text-base font-black text-slate-600 shadow-sm transition-all hover:bg-slate-50 hover:-translate-y-0.5 active:scale-95"
+                className="inline-flex h-14 items-center rounded-2xl bg-white border border-slate-200 px-10 text-base font-black text-navy shadow-sm transition-all hover:border-primary/30 hover:bg-[#f5f7fa] hover:-translate-y-0.5 active:scale-95"
                 href="/recommend"
                 prefetch={devPlanningPrefetch("/recommend")}
               >
                 조건에 맞는 상품 비교
               </Link>
             </div>
-            <p className="mt-4 max-w-lg text-sm font-medium leading-relaxed text-slate-500">
+            <p className="mt-4 max-w-lg text-sm font-medium leading-relaxed text-muted">
               진단이 먼저면 플래닝에서 시작하고, 비교가 먼저면 추천 허브에서 바로 이어서 볼 수 있습니다.
             </p>
           </div>
 
           <div className="relative flex min-h-[320px] items-center justify-center lg:min-h-[420px]">
-            <div className="absolute h-72 w-72 rounded-full bg-white/30 blur-3xl" />
-            <div className="absolute -right-2 top-6 h-32 w-32 rounded-full bg-[#6dd3ff]/20 blur-3xl" />
+            <div className="absolute h-72 w-72 rounded-full bg-[#7c3aed]/10 blur-3xl" />
+            <div className="absolute -right-2 top-6 h-32 w-32 rounded-full bg-[#00d9a3]/20 blur-3xl" />
             <div className="hero-card-stage relative h-[264px] w-[388px] md:h-[312px] md:w-[492px]">
               <HeroCard className={cn("hero-card hero-card-back left-8 top-12 rotate-[-10deg]", theme.backA)} />
               <HeroCard className={cn("hero-card hero-card-mid left-14 top-7 rotate-[-4deg]", theme.backB)} />
@@ -148,8 +156,8 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
               <button
                 aria-label={`${index + 1}번 슬라이드 보기`}
                 className={cn(
-                  "h-2.5 rounded-full bg-white/70 transition-all duration-300",
-                  isActive ? "w-8 bg-white" : "w-2.5 hover:bg-white/90",
+                  "h-2.5 rounded-full transition-all duration-300",
+                  isActive ? "w-8 bg-primary" : "w-2.5 bg-slate-300 hover:bg-slate-400",
                 )}
                 key={slide.id}
                 onClick={() => setActiveIndex(index)}
@@ -161,7 +169,7 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
         {activeSlide.href ? (
           <div className="mt-5 flex justify-center">
             <Link
-              className="inline-flex h-11 items-center rounded-full bg-white/80 px-5 text-sm font-extrabold text-slate-900 shadow-[0_12px_24px_rgba(15,23,42,0.08)] transition-transform hover:-translate-y-0.5"
+              className="inline-flex h-11 items-center rounded-full bg-white px-5 text-sm font-extrabold text-navy ring-1 ring-slate-200 shadow-[0_12px_24px_-8px_rgba(10,31,68,0.12)] transition-all hover:-translate-y-0.5 hover:ring-primary/30"
               href={activeSlide.href}
               prefetch={devPlanningPrefetch(activeSlide.href)}
             >

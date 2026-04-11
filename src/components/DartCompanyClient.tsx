@@ -331,7 +331,7 @@ export function DartCompanyClient() {
 
             {!loadingCompany && !companyError && company ? (
               <dl className="mt-3 grid grid-cols-1 gap-2 text-sm">
-                <div><dt className="text-slate-500">회사명</dt><dd className="font-medium text-slate-900">{company.corp_name ?? "-"}</dd></div>
+                <div><dt className="text-slate-500">회사명</dt><dd className="font-medium text-navy">{company.corp_name ?? "-"}</dd></div>
                 <div><dt className="text-slate-500">영문명</dt><dd>{company.corp_name_eng ?? "-"}</dd></div>
                 <div><dt className="text-slate-500">종목코드</dt><dd>{company.stock_code ?? "-"}</dd></div>
                 <div><dt className="text-slate-500">대표자</dt><dd>{company.ceo_nm ?? "-"}</dd></div>

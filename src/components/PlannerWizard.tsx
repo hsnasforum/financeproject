@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
 const STEPS = [
   { label: uiTextKo.planner.stepGoal, icon: "🎯", color: "text-rose-500", bg: "bg-rose-50" },
   { label: uiTextKo.planner.stepAnalysis, icon: "📊", color: "text-blue-500", bg: "bg-blue-50" },
-  { label: uiTextKo.planner.stepAlternatives, icon: "✨", color: "text-emerald-500", bg: "bg-emerald-50" },
+  { label: uiTextKo.planner.stepAlternatives, icon: "✨", color: "text-primary", bg: "bg-primary/5" },
   { label: uiTextKo.planner.stepExecution, icon: "⚡", color: "text-amber-500", bg: "bg-amber-50" },
   { label: uiTextKo.planner.stepMonitoring, icon: "📅", color: "text-indigo-500", bg: "bg-indigo-50" },
 ] as const;
@@ -99,9 +99,9 @@ function InputHint({ value, unit }: { value: number, unit: PlannerInput["unit"] 
   if (!value) return null;
   const inManwon = unit === "MANWON" ? value : value / 10000;
   if (inManwon >= 10000) {
-    return <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{(inManwon / 10000).toFixed(1)}억원</span>;
+    return <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-primary bg-primary/5 px-1.5 py-0.5 rounded">{(inManwon / 10000).toFixed(1)}억원</span>;
   }
-  return <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">{inManwon.toLocaleString()}만원</span>;
+  return <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] font-bold text-primary bg-primary/5 px-1.5 py-0.5 rounded">{inManwon.toLocaleString()}만원</span>;
 }
 
 function FinancialHealthGauge({ score }: { score: number }) {
@@ -120,7 +120,7 @@ function FinancialHealthGauge({ score }: { score: number }) {
             transition={{ duration: 1.5, ease: "easeOut", delay: 0.5 }}
             strokeLinecap="round"
             className={cn(
-              score > 70 ? "text-emerald-500" : score > 40 ? "text-amber-500" : "text-rose-500"
+              score > 70 ? "text-primary" : score > 40 ? "text-amber-500" : "text-rose-500"
             )}
           />
         </svg>
@@ -129,7 +129,7 @@ function FinancialHealthGauge({ score }: { score: number }) {
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 1 }}
-            className="text-xl font-black text-slate-900 tabular-nums"
+            className="text-xl font-black text-navy tabular-nums"
           >
             {score}
           </motion.span>
@@ -154,19 +154,19 @@ function MascotGuide({ step }: { step: number }) {
       key={step}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative mb-8 flex items-center gap-6 p-6 bg-white rounded-3xl shadow-card border border-emerald-100 overflow-hidden group"
+      className="relative mb-8 flex items-center gap-6 p-6 bg-white rounded-3xl shadow-card border border-primary/10 overflow-hidden group"
     >
       <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:scale-110 transition-transform duration-700">
         <Image src="/nb/mascot.png" alt="" width={160} height={160} />
       </div>
       <motion.div 
         whileHover={{ scale: 1.05, rotate: 5 }}
-        className="relative shrink-0 h-16 w-16 rounded-2xl bg-emerald-50 flex items-center justify-center overflow-hidden ring-4 ring-emerald-50/50"
+        className="relative shrink-0 h-16 w-16 rounded-2xl bg-primary/5 flex items-center justify-center overflow-hidden ring-4 ring-primary/10"
       >
         <Image src="/nb/mascot.png" alt="Mascot" width={64} height={64} className="object-cover" />
       </motion.div>
       <div className="relative">
-        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">Financial Assistant</p>
+        <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-1">Financial Assistant</p>
         <p className="text-sm font-bold text-slate-700 leading-relaxed">{messages[step]}</p>
       </div>
     </motion.div>
@@ -205,7 +205,7 @@ function TrendRow({ label, values, color, formatValue }: { label: string; values
     >
       <div>
         <p className="text-[11px] font-black text-slate-400 uppercase mb-1 tracking-tight">{label}</p>
-        <p className={cn("text-xs font-bold tabular-nums", diff >= 0 ? "text-emerald-600" : "text-red-600")}>
+        <p className={cn("text-xs font-bold tabular-nums", diff >= 0 ? "text-primary" : "text-red-600")}>
           {sign}{diff.toFixed(1)}%
         </p>
       </div>
@@ -368,7 +368,7 @@ export function PlannerWizard() {
                       "w-full group flex items-center gap-4 px-5 py-4 rounded-[1.5rem] text-sm font-bold transition-all duration-300",
                       isActive 
                         ? "bg-primary text-white shadow-xl shadow-primary/20 scale-[1.03]" 
-                        : "bg-surface text-slate-500 hover:bg-slate-50 hover:text-slate-900 shadow-sm border border-border/50"
+                        : "bg-surface text-slate-500 hover:bg-surface-muted hover:text-navy shadow-sm border border-border/50"
                     )}
                     onClick={() => setStep(idx)}
                   >
@@ -384,8 +384,8 @@ export function PlannerWizard() {
                 );
               })}
 
-              <Card className="mt-8 p-6 bg-slate-50 border border-slate-100 shadow-inner relative overflow-hidden">
-                <div className="absolute -right-4 -bottom-4 h-24 w-24 bg-emerald-500/5 rounded-full blur-2xl" />
+              <Card className="mt-8 p-6 bg-surface-muted border border-slate-100 shadow-inner relative overflow-hidden">
+                <div className="absolute -right-4 -bottom-4 h-24 w-24 bg-primary/5 rounded-full blur-2xl" />
                 <p className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">UI Prefs</p>
                 <div className="space-y-4">
                   <div>
@@ -393,13 +393,13 @@ export function PlannerWizard() {
                     <div className="grid grid-cols-2 gap-2 bg-slate-200/50 p-1 rounded-xl">
                       <button 
                         onClick={() => { setLinkOpenModeState("quickview"); setLinkOpenMode("quickview"); }}
-                        className={cn("py-1.5 rounded-lg text-[10px] font-black transition-all", linkOpenMode === "quickview" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                        className={cn("py-1.5 rounded-lg text-[10px] font-black transition-all", linkOpenMode === "quickview" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700")}
                       >
                         빠른 보기
                       </button>
                       <button 
                         onClick={() => { setLinkOpenModeState("newtab"); setLinkOpenMode("newtab"); }}
-                        className={cn("py-1.5 rounded-lg text-[10px] font-black transition-all", linkOpenMode === "newtab" ? "bg-white text-emerald-600 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                        className={cn("py-1.5 rounded-lg text-[10px] font-black transition-all", linkOpenMode === "newtab" ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700")}
                       >
                         새 탭
                       </button>
@@ -426,20 +426,20 @@ export function PlannerWizard() {
                 <Card className="p-10 space-y-10">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Step 1. 목표 설정</h2>
+                      <h2 className="text-2xl font-black text-navy tracking-tight">Step 1. 목표 설정</h2>
                       <p className="text-sm font-medium text-slate-500 mt-1">당신의 꿈을 현실로 바꾸기 위한 첫 걸음입니다.</p>
                     </div>
                     <div className="h-12 w-12 rounded-2xl bg-rose-50 flex items-center justify-center text-2xl shadow-sm ring-1 ring-rose-100">🎯</div>
                   </div>
                   
-                  <div className="grid gap-8 sm:grid-cols-2 bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100 shadow-inner">
+                  <div className="grid gap-8 sm:grid-cols-2 bg-surface-muted/50 p-8 rounded-[2rem] border border-slate-100 shadow-inner">
                     <div className="space-y-2">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">목표 명칭</label>
-                      <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none" value={input.goalName} onChange={(e) => setText("goalName", e.target.value)} placeholder="예: 결혼 자금, 내 집 마련" />
+                      <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-navy shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none" value={input.goalName} onChange={(e) => setText("goalName", e.target.value)} placeholder="예: 결혼 자금, 내 집 마련" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">금액 단위</label>
-                      <select className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none appearance-none cursor-pointer" value={input.unit} onChange={(e) => setText("unit", e.target.value as PlannerInput["unit"])}>
+                      <select className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-navy shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none appearance-none cursor-pointer" value={input.unit} onChange={(e) => setText("unit", e.target.value as PlannerInput["unit"])}>
                         <option value="MANWON">만원 (Default)</option>
                         <option value="KRW">원 (Won)</option>
                       </select>
@@ -447,13 +447,13 @@ export function PlannerWizard() {
                     <div className="space-y-2">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">목표 금액</label>
                       <div className="relative">
-                        <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 pr-24 text-base font-black text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none tabular-nums" value={input.goalAmount} onChange={(e) => setNumber("goalAmount", e.target.value)} />
+                        <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 pr-24 text-base font-black text-navy shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none tabular-nums" value={input.goalAmount} onChange={(e) => setNumber("goalAmount", e.target.value)} />
                         <InputHint value={input.goalAmount} unit={input.unit} />
                       </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">목표 기한 (개월)</label>
-                      <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-black text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none tabular-nums" value={input.goalDeadlineMonths} onChange={(e) => setNumber("goalDeadlineMonths", e.target.value)} />
+                      <input className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-black text-navy shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none tabular-nums" value={input.goalDeadlineMonths} onChange={(e) => setNumber("goalDeadlineMonths", e.target.value)} />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">우선 순위</label>
@@ -464,7 +464,7 @@ export function PlannerWizard() {
                             onClick={() => setText("goalPriority", p)}
                             className={cn(
                               "py-2 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all",
-                              input.goalPriority === p ? "bg-primary text-white shadow-md" : "text-slate-400 hover:bg-slate-50"
+                              input.goalPriority === p ? "bg-primary text-white shadow-md" : "text-slate-400 hover:bg-surface-muted"
                             )}
                           >
                             {p === "high" ? "필수" : p === "medium" ? "보통" : "여유"}
@@ -474,7 +474,7 @@ export function PlannerWizard() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">위험 성향</label>
-                      <select className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-slate-900 shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none appearance-none cursor-pointer" value={input.riskProfile} onChange={(e) => setText("riskProfile", e.target.value as PlannerInput["riskProfile"])}>
+                      <select className="w-full h-14 rounded-2xl border border-border bg-white px-5 text-base font-bold text-navy shadow-sm focus:ring-4 focus:ring-primary/10 transition-all outline-none appearance-none cursor-pointer" value={input.riskProfile} onChange={(e) => setText("riskProfile", e.target.value as PlannerInput["riskProfile"])}>
                         <option value="conservative">안정형 (원금 보전)</option>
                         <option value="balanced">중립형 (적정 수익)</option>
                         <option value="aggressive">공격형 (높은 수익)</option>
@@ -488,7 +488,7 @@ export function PlannerWizard() {
                 <Card className="p-10 space-y-10">
                   <div className="flex items-start justify-between">
                     <div>
-                      <h2 className="text-2xl font-black text-slate-900 tracking-tight">Step 2. 자산 현황 분석</h2>
+                      <h2 className="text-2xl font-black text-navy tracking-tight">Step 2. 자산 현황 분석</h2>
                       <p className="text-sm font-medium text-slate-500 mt-1">정확한 진단을 위해 수입과 지출 정보를 입력해주세요.</p>
                     </div>
                     <div className="h-12 w-12 rounded-2xl bg-blue-50 flex items-center justify-center text-2xl shadow-sm ring-1 ring-blue-100">📊</div>
@@ -510,9 +510,9 @@ export function PlannerWizard() {
                             <input 
                               className={cn(
                                 "w-full h-12 rounded-2xl border border-border bg-white px-4 pr-24 text-sm font-black transition-all outline-none focus:ring-4 shadow-sm",
-                                field.color === "emerald" ? "text-emerald-600 focus:ring-emerald-500/10" :
+                                field.color === "emerald" ? "text-primary focus:ring-primary/10" :
                                 field.color === "rose" ? "text-rose-600 focus:ring-rose-500/10" :
-                                "text-slate-900 focus:ring-primary/10"
+                                "text-navy focus:ring-primary/10"
                               )}
                               value={input[field.key as keyof PlannerInput] as string} 
                               onChange={(e) => setNumber(field.key as keyof PlannerInput, e.target.value)} 
@@ -524,10 +524,10 @@ export function PlannerWizard() {
                     </div>
 
                     {/* Quick Calculator View */}
-                    <div className="p-6 rounded-[2.5rem] bg-emerald-900 text-white shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
-                       <div className="absolute inset-0 bg-gradient-to-r from-emerald-800 to-transparent pointer-events-none" />
+                    <div className="p-6 rounded-[2.5rem] bg-navy text-white shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+                       <div className="absolute inset-0 bg-gradient-to-r from-navy to-transparent pointer-events-none" />
                        <div className="relative z-10">
-                          <p className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-2">Estimated Monthly Saving</p>
+                          <p className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2">Estimated Monthly Saving</p>
                           <p className="text-3xl font-black tabular-nums tracking-tight">
                             {formatMoney(plan.metrics.monthlySaving, input.unit)}
                           </p>
@@ -535,7 +535,7 @@ export function PlannerWizard() {
                        <div className="relative z-10 text-right">
                           <div className={cn(
                             "inline-flex items-center gap-2 px-4 py-2 rounded-full font-black text-xs",
-                            plan.metrics.goalFeasible ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                            plan.metrics.goalFeasible ? "bg-primary/20 text-primary" : "bg-rose-500/20 text-rose-400"
                           )}>
                             {plan.metrics.goalFeasible ? "✓ 목표 달성 가능" : "⚠ 재원 부족 예상"}
                           </div>
@@ -543,9 +543,9 @@ export function PlannerWizard() {
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-2 border-t border-slate-100 pt-10">
-                      <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 shadow-sm space-y-6">
-                        <p className="text-sm font-black text-slate-900 flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full bg-emerald-500" /> 보험 점검
+                      <div className="p-6 rounded-[2rem] bg-surface-muted border border-slate-100 shadow-sm space-y-6">
+                        <p className="text-sm font-black text-navy flex items-center gap-2">
+                          <span className="h-2 w-2 rounded-full bg-primary" /> 보험 점검
                         </p>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-1.5">
@@ -573,7 +573,7 @@ export function PlannerWizard() {
                               whileTap={{ scale: 0.95 }}
                               className={cn(
                                 "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer",
-                                input[item.key as keyof PlannerInput] ? "bg-primary text-white border-primary shadow-sm" : "bg-white text-slate-500 border-border hover:bg-slate-100"
+                                input[item.key as keyof PlannerInput] ? "bg-primary text-white border-primary shadow-sm" : "bg-white text-slate-500 border-border hover:bg-surface-muted"
                               )}
                             >
                               <input type="checkbox" checked={input[item.key as keyof PlannerInput] as boolean} onChange={(e) => setBoolean(item.key as keyof PlannerInput, e.target.checked)} className="hidden" />
@@ -581,16 +581,16 @@ export function PlannerWizard() {
                             </motion.label>
                           ))}
                         </div>
-                        <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 shadow-inner">
+                        <div className="p-4 bg-primary/10 rounded-2xl border border-primary/10 shadow-inner">
                           <p className="text-xs text-slate-700 leading-relaxed">
-                            보험료 부담률: <span className="font-black text-emerald-600">{insuranceMetrics.premiumRatioPct.toFixed(1)}%</span> (권장 10% 내외)
+                            보험료 부담률: <span className="font-black text-primary">{insuranceMetrics.premiumRatioPct.toFixed(1)}%</span> (권장 10% 내외)
                           </p>
                           <p className="mt-1 text-[11px] text-slate-500 font-medium">{insuranceMetrics.explain}</p>
                         </div>
                       </div>
 
-                      <div className="p-6 rounded-[2rem] bg-slate-50 border border-slate-100 shadow-sm space-y-6">
-                        <p className="text-sm font-black text-slate-900 flex items-center gap-2">
+                      <div className="p-6 rounded-[2rem] bg-surface-muted border border-slate-100 shadow-sm space-y-6">
+                        <p className="text-sm font-black text-navy flex items-center gap-2">
                           <span className="h-2 w-2 rounded-full bg-amber-500" /> 노후 준비
                         </p>
                         <div className="grid gap-4 sm:grid-cols-2">
@@ -627,14 +627,14 @@ export function PlannerWizard() {
                            <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v20"/><path d="m17 5-5-3-5 3"/><path d="m17 19-5 3-5-3"/><path d="M2 12h20"/><path d="m5 7 3 5-3 5"/><path d="m19 7-3 5 3 5"/></svg>
                         </div>
                         <div className="relative z-10">
-                          <Badge variant="success" className="mb-4 bg-emerald-500 text-white border-none px-4 py-1.5 text-xs font-black shadow-lg shadow-emerald-900/40">진단 레포트 완료</Badge>
+                          <Badge variant="success" className="mb-4 bg-primary text-white border-none px-4 py-1.5 text-xs font-black shadow-lg shadow-navy/40">진단 레포트 완료</Badge>
                           <h3 className="text-2xl md:text-4xl font-black tracking-tight leading-[1.1]">{plan.summaryLine}</h3>
                         </div>
                         <div className="relative z-10 shrink-0 bg-white/10 p-6 rounded-[2.5rem] backdrop-blur-xl border border-white/10 flex items-center gap-6 shadow-2xl">
                            <FinancialHealthGauge score={healthScore} />
                            <div className="text-left">
                               <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-1">월 가용 자금</p>
-                              <p className="text-3xl font-black text-emerald-400 tabular-nums tracking-tighter">{formatMoney(plan.metrics.freeCashflow, input.unit)}</p>
+                              <p className="text-3xl font-black text-primary tabular-nums tracking-tighter">{formatMoney(plan.metrics.freeCashflow, input.unit)}</p>
                            </div>
                         </div>
                      </div>
@@ -645,9 +645,9 @@ export function PlannerWizard() {
                           { label: "부채 상환 비중", value: `${(plan.metrics.debtPaymentRatio * 100).toFixed(1)}%`, trend: (plan.metrics.debtPaymentRatio * 100) > 30 ? "주의" : "양호" },
                           { label: "목표 달성", value: plan.metrics.goalFeasible ? "가능성 높음" : "추가 재원 필요", trend: "예측 결과" },
                         ].map((m) => (
-                          <div key={m.label} className="p-6 transition-colors hover:bg-slate-50">
+                          <div key={m.label} className="p-6 transition-colors hover:bg-surface-muted">
                             <p className="text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">{m.label}</p>
-                            <p className={cn("text-xl font-black tracking-tight text-slate-900 tabular-nums", m.trend === "주의" || m.trend === "부족" ? "text-rose-600" : "")}>{m.value}</p>
+                            <p className={cn("text-xl font-black tracking-tight text-navy tabular-nums", m.trend === "주의" || m.trend === "부족" ? "text-rose-600" : "")}>{m.value}</p>
                             <p className="text-[10px] font-bold text-slate-400 mt-1">{m.trend}</p>
                           </div>
                         ))}
@@ -656,10 +656,10 @@ export function PlannerWizard() {
 
                   <div className="space-y-6">
                      <div className="flex items-center justify-between px-2 mt-10">
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                        <h3 className="text-xl font-black text-navy tracking-tight flex items-center gap-2">
                           <span className="h-2 w-2 rounded-full bg-primary" /> 단계별 맞춤 제언
                         </h3>
-                        <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none font-bold text-[10px]">총 {plan.recommendations.length}개의 분석 항목</Badge>
+                        <Badge variant="secondary" className="bg-surface-muted text-slate-500 border-none font-bold text-[10px]">총 {plan.recommendations.length}개의 분석 항목</Badge>
                      </div>
                      
                      {plan.recommendations.map((rec) => (
@@ -667,7 +667,7 @@ export function PlannerWizard() {
                         <div className="flex flex-col md:flex-row min-h-[240px]">
                           <div className={cn(
                             "w-full md:w-3 shrink-0",
-                            rec.priority === "P0" ? "bg-rose-500" : rec.priority === "P1" ? "bg-amber-500" : "bg-emerald-500"
+                            rec.priority === "P0" ? "bg-rose-500" : rec.priority === "P1" ? "bg-amber-500" : "bg-primary"
                           )} />
                           <div className="flex-1 p-8 lg:p-10">
                             <div className="flex items-center gap-2 mb-6">
@@ -677,7 +677,7 @@ export function PlannerWizard() {
                               {SHOW_RULE_DEBUG && <span className="font-mono text-[9px] text-slate-300">ID: {rec.id}</span>}
                             </div>
                             
-                            <h4 className="text-2xl md:text-3xl font-black text-slate-900 mb-8 tracking-tight">{rec.title}</h4>
+                            <h4 className="text-2xl md:text-3xl font-black text-navy mb-8 tracking-tight">{rec.title}</h4>
 
                             <div className="grid lg:grid-cols-[1.2fr_1fr] gap-12">
                               <div className="space-y-4">
@@ -699,7 +699,7 @@ export function PlannerWizard() {
                                  </p>
                                  <div className="space-y-3">
                                   {rec.actions.map((action, i) => (
-                                    <div key={i} className="group/action flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100 transition-all hover:bg-white hover:shadow-md hover:border-primary/20">
+                                    <div key={i} className="group/action flex items-center justify-between p-4 rounded-2xl bg-surface-muted border border-slate-100 transition-all hover:bg-white hover:shadow-md hover:border-primary/20">
                                       <span className="text-sm font-bold text-slate-800">{action.label}</span>
                                       {action.href && (
                                         <Button variant="outline" size="sm" className="h-8 px-4 text-[10px] font-black bg-white shadow-sm border-slate-200 group-hover/action:bg-primary group-hover/action:text-white group-hover/action:border-primary transition-all rounded-full" onClick={() => openAction(action)}>
@@ -729,7 +729,7 @@ export function PlannerWizard() {
                      ))}
                   </div>
 
-                  <AssumptionsCallout className="mt-12 bg-white border-emerald-100 shadow-sm">
+                  <AssumptionsCallout className="mt-12 bg-white border-primary/10 shadow-sm">
                     본 재무설계 결과는 사용자가 입력한 데이터와 가정(물가상승률 {input.assumedInflationRate}%, 기대수익률 {input.assumedAnnualReturn}%)을 바탕으로 산출된 참고용 자료이며, 실제 금융 서비스 이용 시 해당 기관의 약관을 반드시 확인하시기 바랍니다.
                   </AssumptionsCallout>
                 </div>
@@ -740,12 +740,12 @@ export function PlannerWizard() {
                   <Card className="p-10 space-y-10">
                     <div className="flex items-center justify-between border-b border-border/50 pb-8">
                       <div>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">{uiTextKo.planner.sectionExecution}</h2>
+                        <h2 className="text-2xl font-black text-navy tracking-tight">{uiTextKo.planner.sectionExecution}</h2>
                         <p className="text-sm font-medium text-slate-500 mt-1">오늘 바로 시작할 수 있는 작은 실천들이 큰 미래를 만듭니다.</p>
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Progress</p>
-                        <Badge variant="secondary" className="px-4 py-1.5 text-xs font-black bg-emerald-50 text-emerald-700 border-none shadow-sm">
+                        <Badge variant="secondary" className="px-4 py-1.5 text-xs font-black bg-primary/5 text-navy border-none shadow-sm">
                           완료 {Object.values(checkedMap).filter(Boolean).length} / {plan.checklist.length}
                         </Badge>
                       </div>
@@ -756,7 +756,7 @@ export function PlannerWizard() {
                         <div key={bucket} className="space-y-6">
                           <div className="flex items-center gap-3">
                             <span className={cn("h-6 w-1 rounded-full", bucket === "이번 주" ? "bg-rose-500" : "bg-primary")} />
-                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">{bucket}</h3>
+                            <h3 className="text-sm font-black text-navy uppercase tracking-widest">{bucket}</h3>
                           </div>
                           <div className="space-y-4">
                             {plan.checklist.filter(it => it.bucket === bucket).map(item => {
@@ -768,7 +768,7 @@ export function PlannerWizard() {
                                   className={cn(
                                     "flex items-start gap-5 p-5 rounded-3xl border transition-all duration-300",
                                     isChecked 
-                                      ? "bg-slate-50 border-border/50 opacity-60 scale-[0.98]" 
+                                      ? "bg-surface-muted border-border/50 opacity-60 scale-[0.98]" 
                                       : "bg-white border-border shadow-sm hover:shadow-md hover:border-primary/30"
                                   )}
                                 >
@@ -782,7 +782,7 @@ export function PlannerWizard() {
                                     {isChecked && <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>}
                                   </button>
                                   <div className="flex-1 min-w-0">
-                                    <p className={cn("text-base font-black tracking-tight", isChecked ? "text-slate-400 line-through font-bold" : "text-slate-900")}>{item.label}</p>
+                                    <p className={cn("text-base font-black tracking-tight", isChecked ? "text-slate-400 line-through font-bold" : "text-navy")}>{item.label}</p>
                                     <p className="text-xs font-medium text-slate-500 mt-2 leading-relaxed">{item.reason}</p>
                                     {!isChecked && (
                                       <div className="mt-4 flex flex-wrap gap-2">
@@ -863,7 +863,7 @@ export function PlannerWizard() {
                     <Card className="lg:col-span-2 p-10 space-y-10">
                        <div className="flex items-start justify-between border-b border-border/50 pb-8">
                           <div>
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tight">{uiTextKo.planner.sectionMonitoring}</h2>
+                            <h2 className="text-2xl font-black text-navy tracking-tight">{uiTextKo.planner.sectionMonitoring}</h2>
                             <p className="text-sm font-medium text-slate-500 mt-1">지속적인 모니터링은 성공적인 재무 관리의 핵심입니다.</p>
                           </div>
                           <Button variant="primary" size="lg" onClick={saveCurrentSnapshot} className="font-black shadow-xl shadow-primary/20 rounded-full px-8 h-12 text-sm uppercase tracking-widest transition-all hover:scale-105 active:scale-95">
@@ -871,10 +871,10 @@ export function PlannerWizard() {
                           </Button>
                        </div>
                        
-                       <div className="bg-emerald-600 text-white rounded-[2.5rem] p-8 flex items-center justify-between shadow-xl shadow-emerald-900/20 relative overflow-hidden group">
+                       <div className="bg-primary text-white rounded-[2.5rem] p-8 flex items-center justify-between shadow-xl shadow-navy/20 relative overflow-hidden group">
                           <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
                           <div className="relative z-10">
-                             <p className="text-[10px] font-black text-emerald-100 uppercase tracking-[0.2em] mb-3">Next Review Recommended</p>
+                             <p className="text-[10px] font-black text-primary/80 uppercase tracking-[0.2em] mb-3">Next Review Recommended</p>
                              <p className="text-3xl font-black tabular-nums tracking-tight">{plan.monitoring.nextReviewDate}</p>
                           </div>
                           <div className="relative z-10 h-16 w-16 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white group-hover:scale-110 transition-transform duration-500 shadow-2xl">
@@ -900,11 +900,11 @@ export function PlannerWizard() {
                     </Card>
 
                     <Card className="p-8 bg-surface border-border/50">
-                      <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8 border-b border-border/50 pb-4">Recent History</h3>
+                      <h3 className="text-xs font-black text-navy uppercase tracking-widest mb-8 border-b border-border/50 pb-4">Recent History</h3>
                       <div className="space-y-4">
                         {snapshots.length === 0 ? (
                           <div className="py-20 text-center space-y-4">
-                            <div className="h-12 w-12 mx-auto bg-slate-50 rounded-full flex items-center justify-center text-slate-200">∅</div>
+                            <div className="h-12 w-12 mx-auto bg-surface-muted rounded-full flex items-center justify-center text-slate-200">∅</div>
                             <p className="text-[11px] font-bold text-slate-400">저장된 기록이 없습니다.</p>
                           </div>
                         ) : (
@@ -917,7 +917,7 @@ export function PlannerWizard() {
                               <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">{snap.createdAt.slice(0, 10)}</p>
                               <p className="text-sm font-black text-slate-800 line-clamp-1 mb-4">{snap.input.goalName}</p>
                               <div className="flex gap-2">
-                                 <Button variant="outline" size="sm" className="h-8 flex-1 text-[10px] font-black bg-slate-50 border-none rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm" onClick={() => applySnapshot(snap.id)}>LOAD</Button>
+                                 <Button variant="outline" size="sm" className="h-8 flex-1 text-[10px] font-black bg-surface-muted border-none rounded-xl hover:bg-primary hover:text-white transition-all shadow-sm" onClick={() => applySnapshot(snap.id)}>LOAD</Button>
                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl" onClick={() => { deleteSnapshot(snap.id); setSnapshots(listSnapshots()); }}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                                  </Button>
@@ -935,7 +935,7 @@ export function PlannerWizard() {
                           <div className="h-10 w-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm ring-1 ring-indigo-100">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
                           </div>
-                          <h3 className="text-xl font-black text-slate-900 tracking-tight">트렌드 분석 및 성과 비교</h3>
+                          <h3 className="text-xl font-black text-navy tracking-tight">트렌드 분석 및 성과 비교</h3>
                         </div>
                         <Badge variant="outline" className="px-3 py-1 font-black text-[10px] border-slate-200 text-slate-400">LAST 10 SNAPSHOTS</Badge>
                      </div>
@@ -943,14 +943,14 @@ export function PlannerWizard() {
                      <div className="grid md:grid-cols-2 gap-8 mb-12">
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">기준 스냅샷 (A)</label>
-                          <select className="w-full h-12 rounded-2xl border border-border bg-slate-50 px-5 text-sm font-bold outline-none cursor-pointer hover:bg-white transition-all shadow-inner" value={compareA} onChange={(e) => setCompareA(e.target.value)}>
+                          <select className="w-full h-12 rounded-2xl border border-border bg-surface-muted px-5 text-sm font-bold outline-none cursor-pointer hover:bg-white transition-all shadow-inner" value={compareA} onChange={(e) => setCompareA(e.target.value)}>
                             <option value="">비교 대상을 선택하세요</option>
                             {snapshots.map((snap) => <option key={snap.id} value={snap.id}>{snap.createdAt.slice(0, 16)} - {snap.input.goalName}</option>)}
                           </select>
                         </div>
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">대조 스냅샷 (B)</label>
-                          <select className="w-full h-12 rounded-2xl border border-border bg-slate-50 px-5 text-sm font-bold outline-none cursor-pointer hover:bg-white transition-all shadow-inner" value={compareB} onChange={(e) => setCompareB(e.target.value)}>
+                          <select className="w-full h-12 rounded-2xl border border-border bg-surface-muted px-5 text-sm font-bold outline-none cursor-pointer hover:bg-white transition-all shadow-inner" value={compareB} onChange={(e) => setCompareB(e.target.value)}>
                             <option value="">비교 대상을 선택하세요</option>
                             {snapshots.map((snap) => <option key={snap.id} value={snap.id}>{snap.createdAt.slice(0, 16)} - {snap.input.goalName}</option>)}
                           </select>
@@ -974,9 +974,9 @@ export function PlannerWizard() {
                            <span className="h-px bg-slate-200 flex-1" />
                         </p>
                         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                          <TrendRow label="월 저축액" values={monthlySavingTrend} color="#059669" formatValue={(v) => formatMoney(v, input.unit)} />
-                          <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#dc2626" formatValue={(v) => formatMoney(v, input.unit)} />
-                          <TrendRow label="필요 적립액" values={goalRequiredTrend} color="#059669" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="월 저축액" values={monthlySavingTrend} color="#10b981" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="비상금 부족" values={emergencyGapTrend} color="#ef4444" formatValue={(v) => formatMoney(v, input.unit)} />
+                          <TrendRow label="필요 적립액" values={goalRequiredTrend} color="#10b981" formatValue={(v) => formatMoney(v, input.unit)} />
                           <TrendRow label="부채 상환율" values={debtRatioTrend} color="#6366f1" formatValue={(v) => `${v.toFixed(1)}%`} />
                         </div>
                      </div>
@@ -990,7 +990,7 @@ export function PlannerWizard() {
             <Button 
               variant="outline" 
               size="lg"
-              className="w-44 h-14 rounded-full font-black text-xs uppercase tracking-widest bg-white shadow-md border-slate-200 hover:bg-slate-50 transition-all active:scale-95"
+              className="w-44 h-14 rounded-full font-black text-xs uppercase tracking-widest bg-white shadow-md border-slate-200 hover:bg-surface-muted transition-all active:scale-95"
               disabled={step === 0} 
               onClick={() => {
                 setStep((s) => Math.max(0, s - 1));

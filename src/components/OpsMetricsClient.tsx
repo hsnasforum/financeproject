@@ -547,7 +547,7 @@ export function OpsMetricsClient() {
         {summaryCards.map((card) => (
           <Card className="p-4" key={card.title}>
             <p className="text-xs font-semibold text-slate-500">{card.title}</p>
-            <p className="mt-1 text-lg font-black text-slate-900">{card.value}</p>
+            <p className="mt-1 text-lg font-black text-navy">{card.value}</p>
             <p className="mt-1 text-[11px] text-slate-600">{card.hint}</p>
           </Card>
         ))}
@@ -555,7 +555,7 @@ export function OpsMetricsClient() {
 
       <Card className="mb-4 p-4" data-testid="planning-fallback-summary">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-black text-slate-900">Planning fallback usage</h2>
+          <h2 className="text-base font-black text-navy">Planning fallback usage</h2>
           <p className="text-xs text-slate-500">
             마지막 발생: {planningFallbacks.lastEventAt ? formatDateTime(planningFallbacks.lastEventAt) : "-"}
           </p>
@@ -564,10 +564,10 @@ export function OpsMetricsClient() {
           {planningFallbackCards.map((card) => (
             <div key={card.title} className="rounded-lg border border-slate-200 bg-white p-3">
               <p className="text-[11px] font-semibold text-slate-500">{card.title}</p>
-              <p className="mt-1 text-lg font-black text-slate-900">{card.value.toLocaleString()}</p>
+              <p className="mt-1 text-lg font-black text-navy">{card.value.toLocaleString()}</p>
               <p className="mt-1 text-[11px] text-slate-600">최근 증가량 +{card.delta.toLocaleString()}</p>
               <p className={`mt-1 text-[11px] font-semibold ${
-                card.level === "ok" ? "text-emerald-600" : card.level === "warn" ? "text-amber-600" : "text-rose-600"
+                card.level === "ok" ? "text-primary" : card.level === "warn" ? "text-amber-600" : "text-rose-600"
               }`}
               >
                 {card.levelLabel}
@@ -583,9 +583,9 @@ export function OpsMetricsClient() {
           {planningFallbackSourceRows.length > 0 ? (
             <div className="mt-2 grid gap-2 md:grid-cols-3">
               {planningFallbackSourceRows.map((row) => (
-                <div key={`${row.counterKey}-${row.sourceKey}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <div key={`${row.counterKey}-${row.sourceKey}`} className="rounded-lg border border-slate-200 bg-surface-muted p-2">
                   <p className="text-[11px] font-semibold text-slate-500">{row.label}</p>
-                  <p className="mt-1 text-sm font-black text-slate-900">{fallbackSourceKeyLabel(row.sourceKey as PlanningFallbackSourceKey)}</p>
+                  <p className="mt-1 text-sm font-black text-navy">{fallbackSourceKeyLabel(row.sourceKey as PlanningFallbackSourceKey)}</p>
                   <p className="text-[11px] text-slate-500">{row.sourceKey}</p>
                   <p className="text-[11px] text-slate-600">count {row.count.toLocaleString()}</p>
                 </div>
@@ -601,7 +601,7 @@ export function OpsMetricsClient() {
             <div className="mt-2 space-y-2">
               {planningFallbacks.recentEvents.slice(0, 8).map((event, index) => (
                 <div key={`${event.at}-${event.key}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2">
-                  <p className="text-[11px] font-semibold text-slate-900">
+                  <p className="text-[11px] font-semibold text-navy">
                     {event.sourceKey ? fallbackSourceKeyLabel(event.sourceKey) : "unknown"} · {event.key}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-600">
@@ -619,34 +619,34 @@ export function OpsMetricsClient() {
         <div className="mt-4 border-t border-slate-200 pt-3">
           <p className="text-xs font-semibold text-slate-600">Legacy run backlog</p>
           <div className="mt-2 grid gap-2 md:grid-cols-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="rounded-lg border border-slate-200 bg-surface-muted p-2">
               <p className="text-[11px] font-semibold text-slate-500">Legacy candidates</p>
-              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.legacyCandidates.toLocaleString()}</p>
+              <p className="mt-1 text-sm font-black text-navy">{legacyRunBackfill.legacyCandidates.toLocaleString()}</p>
               <p className="text-[11px] text-slate-600">user {legacyRunBackfill.userLegacyCandidates.toLocaleString()} / ops-doctor {legacyRunBackfill.opsDoctorLegacyCandidates.toLocaleString()}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="rounded-lg border border-slate-200 bg-surface-muted p-2">
               <p className="text-[11px] font-semibold text-slate-500">Canonical DTO gap</p>
-              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.resultDtoOnlyCandidates.toLocaleString()}</p>
+              <p className="mt-1 text-sm font-black text-navy">{legacyRunBackfill.resultDtoOnlyCandidates.toLocaleString()}</p>
               <p className="text-[11px] text-slate-600">engine schema missing {legacyRunBackfill.missingEngineSchemaCandidates.toLocaleString()}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="rounded-lg border border-slate-200 bg-surface-muted p-2">
               <p className="text-[11px] font-semibold text-slate-500">Backlog status</p>
-              <p className="mt-1 text-sm font-black text-slate-900">{fallbackLevelLabel(legacyBacklogStatus)}</p>
+              <p className="mt-1 text-sm font-black text-navy">{fallbackLevelLabel(legacyBacklogStatus)}</p>
               <p className="text-[11px] text-slate-600">backfillable {legacyRunBackfill.missingResultDtoCandidates.toLocaleString()} / unreadable {legacyRunBackfill.unreadableCandidates.toLocaleString()}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="rounded-lg border border-slate-200 bg-surface-muted p-2">
               <p className="text-[11px] font-semibold text-slate-500">Run split</p>
-              <p className="mt-1 text-sm font-black text-slate-900">user {legacyRunBackfill.userRuns.toLocaleString()}</p>
+              <p className="mt-1 text-sm font-black text-navy">user {legacyRunBackfill.userRuns.toLocaleString()}</p>
               <p className="text-[11px] text-slate-600">ops-doctor {legacyRunBackfill.opsDoctorRuns.toLocaleString()}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="rounded-lg border border-slate-200 bg-surface-muted p-2">
               <p className="text-[11px] font-semibold text-slate-500">Backfillable missing resultDto</p>
-              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.missingResultDtoCandidates.toLocaleString()}</p>
+              <p className="mt-1 text-sm font-black text-navy">{legacyRunBackfill.missingResultDtoCandidates.toLocaleString()}</p>
               <p className="text-[11px] text-slate-600">total runs {legacyRunBackfill.totalRuns.toLocaleString()}</p>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+            <div className="rounded-lg border border-slate-200 bg-surface-muted p-2">
               <p className="text-[11px] font-semibold text-slate-500">Unreadable meta</p>
-              <p className="mt-1 text-sm font-black text-slate-900">{legacyRunBackfill.unreadableCandidates.toLocaleString()}</p>
+              <p className="mt-1 text-sm font-black text-navy">{legacyRunBackfill.unreadableCandidates.toLocaleString()}</p>
               <p className="text-[11px] text-slate-600">separate investigation needed</p>
             </div>
           </div>
@@ -654,7 +654,7 @@ export function OpsMetricsClient() {
       </Card>
 
       <Card className="mb-4 p-4">
-        <h2 className="text-base font-black text-slate-900">필터</h2>
+        <h2 className="text-base font-black text-navy">필터</h2>
         <label className="mt-3 block text-xs text-slate-600">
           Event Type
           <select
@@ -686,7 +686,7 @@ export function OpsMetricsClient() {
       {rows.length > 0 ? (
         <Card className="overflow-x-auto p-0" data-testid="metrics-events">
           <table className="min-w-full border-collapse text-left text-xs">
-            <thead className="bg-slate-100 text-slate-600">
+            <thead className="bg-surface-muted text-slate-600">
               <tr>
                 <th className="px-3 py-2 font-semibold">시각</th>
                 <th className="px-3 py-2 font-semibold">유형</th>
@@ -699,7 +699,7 @@ export function OpsMetricsClient() {
               {rows.map((row, index) => (
                 <tr key={`${row.at}-${row.type}-${index}`} className="border-t border-slate-200 align-top">
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatDateTime(row.at)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-900">{row.type}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-navy">{row.type}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.status ?? "-"}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatMs(row.durationMs)}</td>
                   <td className="max-w-[520px] px-3 py-2 text-slate-700">{shortMeta(row)}</td>

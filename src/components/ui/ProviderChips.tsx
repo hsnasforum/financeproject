@@ -29,14 +29,14 @@ export function ProviderChips({ providers, selectedId, onSelect, className }: Pr
               className={cn(
                 "flex min-w-[80px] snap-start flex-col items-center gap-2 rounded-2xl border p-3 transition-all duration-300 active:scale-95",
                 isSelected
-                  ? "border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500"
-                  : "border-slate-100 bg-white hover:border-emerald-200 hover:bg-slate-50"
+                  ? "border-primary bg-primary/10 ring-1 ring-primary"
+                  : "border-slate-100 bg-white hover:border-primary/20 hover:bg-surface-muted"
               )}
             >
               <div
                 className={cn(
-                  "flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 ring-1 ring-slate-100 transition-colors",
-                  isSelected && "bg-white ring-emerald-200"
+                  "flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted ring-1 ring-slate-100 transition-colors",
+                  isSelected && "bg-white ring-primary/20"
                 )}
               >
                 <ProviderLogo
@@ -48,7 +48,7 @@ export function ProviderChips({ providers, selectedId, onSelect, className }: Pr
               <span
                 className={cn(
                   "text-[11px] font-bold tracking-tight text-slate-500 transition-colors",
-                  isSelected && "text-emerald-700"
+                  isSelected && "text-navy"
                 )}
               >
                 {provider.name}

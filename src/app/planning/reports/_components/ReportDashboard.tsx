@@ -71,8 +71,8 @@ function renderEvidenceValue(value: unknown): string {
 function guideToneClass(tone: "slate" | "amber" | "rose" | "emerald"): string {
   if (tone === "rose") return "border-rose-100 bg-rose-50/50 text-rose-900 shadow-sm";
   if (tone === "amber") return "border-amber-100 bg-amber-50/50 text-amber-900 shadow-sm";
-  if (tone === "emerald") return "border-emerald-100 bg-emerald-50/50 text-emerald-900 shadow-sm";
-  return "border-slate-100 bg-slate-50/50 text-slate-900 shadow-sm";
+  if (tone === "emerald") return "border-primary/10 bg-primary/10 text-navy shadow-sm";
+  return "border-slate-100 bg-surface-muted/50 text-navy shadow-sm";
 }
 
 function formatEvidenceInput(value: string | number): string {
@@ -252,7 +252,7 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
         onClick={() => setOpen((prev) => !prev)}
         ref={triggerRef}
         type="button"
-        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-emerald-200 hover:text-emerald-600 shadow-sm"
+        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:border-primary/20 hover:text-primary shadow-sm"
       >
         <span>근거 {open ? "닫기" : "보기"}</span>
       </button>
@@ -271,8 +271,8 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
               className="pointer-events-auto absolute rounded-[2rem] border border-slate-200 bg-white/95 p-6 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95 duration-200"
             >
               <div className="space-y-4">
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 px-4 py-3">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">계산 공식</p>
+                <div className="rounded-2xl border border-primary/10 bg-primary/30 px-4 py-3">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary">계산 공식</p>
                   <p className="mt-1 text-xs font-bold leading-relaxed text-slate-700">{evidenceItem.formula}</p>
                 </div>
 
@@ -280,16 +280,16 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">입력값</p>
                   <ul className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {evidenceItem.inputs.map((input, index) => (
-                      <li className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2" key={`${itemId}:input:${index}`}>
+                      <li className="rounded-xl border border-slate-100 bg-surface-muted px-3 py-2" key={`${itemId}:input:${index}`}>
                         <p className="text-[10px] font-bold text-slate-400">{input.label}</p>
-                        <p className="mt-0.5 text-xs font-black text-slate-900 tabular-nums">{formatEvidenceInput(input.value)}</p>
+                        <p className="mt-0.5 text-xs font-black text-navy tabular-nums">{formatEvidenceInput(input.value)}</p>
                       </li>
                     ))}
                   </ul>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="rounded-2xl border border-slate-100 bg-surface-muted px-4 py-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">가정</p>
                     {evidenceItem.assumptions.length > 0 ? (
                       <ul className="list-disc space-y-1 pl-4 text-xs font-bold text-slate-600">
@@ -301,7 +301,7 @@ function CoreMetricEvidenceDock({ item }: { item?: EvidenceItem }) {
                       <p className="text-xs font-bold text-slate-300 italic">가정 정보 없음</p>
                     )}
                   </div>
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <div className="rounded-2xl border border-slate-100 bg-surface-muted px-4 py-3">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">참고 메모</p>
                     {evidenceItem.notes && evidenceItem.notes.length > 0 ? (
                       <ul className="list-disc space-y-1 pl-4 text-xs font-bold text-slate-600">
@@ -383,8 +383,8 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-summary-cards">
           <div className="flex flex-wrap items-start justify-between gap-6 mb-8">
             <div className="max-w-3xl">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">우선 액션</p>
-              <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900 leading-tight">
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary">우선 액션</p>
+              <h2 className="mt-3 text-2xl font-black tracking-tight text-navy leading-tight">
                 {leadAction ? leadAction.title : "이번 달 먼저 볼 액션부터 정리했습니다."}
               </h2>
               <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">
@@ -431,7 +431,7 @@ export default function ReportDashboard({ vm }: Props) {
           </ReportHeroStatGrid>
 
           <div className="mt-10 grid gap-6 lg:grid-cols-2">
-            <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6 shadow-inner">
+            <div className="rounded-[2rem] border border-slate-100 bg-surface-muted p-6 shadow-inner">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">왜 이 액션을 먼저 보나요</p>
               <p className="mt-3 text-sm font-bold leading-relaxed text-slate-700">
                 {leadAction
@@ -445,7 +445,7 @@ export default function ReportDashboard({ vm }: Props) {
                 </div>
               ) : null}
             </div>
-            <div className="rounded-[2rem] border border-slate-100 bg-slate-50 p-6 shadow-inner">
+            <div className="rounded-[2rem] border border-slate-100 bg-surface-muted p-6 shadow-inner">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">계산 기준</p>
               <p className="mt-3 text-sm font-bold leading-relaxed text-slate-700">{basisPreview}</p>
               {assumptionPreview ? (
@@ -463,8 +463,8 @@ export default function ReportDashboard({ vm }: Props) {
       {simulateReady && monthlyOperatingGuide ? (
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-monthly-operating-guide">
           <div className="mb-8">
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">월급 운영 요약</p>
-            <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-900">월급 운영 가이드</h2>
+            <p className="text-[10px] font-black uppercase tracking-widest text-primary">월급 운영 요약</p>
+            <h2 className="mt-3 text-2xl font-black tracking-tight text-navy">월급 운영 가이드</h2>
             <p className="mt-3 text-base font-black leading-snug text-slate-700">{monthlyOperatingGuide.headline}</p>
             <p className="mt-2 text-xs font-bold text-slate-400 italic">※ {monthlyOperatingGuide.basisLabel}</p>
           </div>
@@ -485,7 +485,7 @@ export default function ReportDashboard({ vm }: Props) {
             </div>
 
             <div className="space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 ml-1">{monthlyOperatingGuide.nextPlanTitle}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary ml-1">{monthlyOperatingGuide.nextPlanTitle}</p>
               <div className="grid gap-4 md:grid-cols-3">
                 {monthlyOperatingGuide.nextPlan.map((item) => (
                   <article className={cn("rounded-[1.5rem] border p-5", guideToneClass(item.tone))} key={`plan-${item.title}`}>
@@ -518,11 +518,11 @@ export default function ReportDashboard({ vm }: Props) {
               <ul className="mt-4 space-y-2 border-t border-slate-50 pt-4">
                 {appliedOverrides.map((override) => (
                   <li className="text-[11px] font-bold text-slate-600 flex flex-wrap gap-2" key={`${override.key}:${override.updatedAt}`}>
-                    <span className="text-emerald-600 font-black">조정 항목</span>
+                    <span className="text-primary font-black">조정 항목</span>
                     <span className="text-slate-300">·</span>
-                    <span className="text-slate-900">{renderOverrideReason(override.reason)}</span>
+                    <span className="text-navy">{renderOverrideReason(override.reason)}</span>
                     <span className="text-slate-300">/</span>
-                    <span className="text-slate-900">{override.value}</span>
+                    <span className="text-navy">{override.value}</span>
                     <span className="ml-auto text-[10px] text-slate-300 tabular-nums">{override.updatedAt}</span>
                   </li>
                 ))}
@@ -557,7 +557,7 @@ export default function ReportDashboard({ vm }: Props) {
                     <ul className="list-disc space-y-1 pl-4 text-[11px] font-bold text-slate-600">
                       {normalization.fixesApplied.map((fix, index) => (
                         <li key={`${fix.path}-${index}`}>
-                          <span className="text-emerald-600">{fix.path}</span>: {fix.message}
+                          <span className="text-primary">{fix.path}</span>: {fix.message}
                           {fix.from !== undefined || fix.to !== undefined
                             ? <span className="ml-1 text-slate-400">({renderEvidenceValue(fix.from)} → {renderEvidenceValue(fix.to)})</span>
                             : ""}
@@ -577,7 +577,7 @@ export default function ReportDashboard({ vm }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">주의 목록</p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">주의가 필요한 부분</h2>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-navy">주의가 필요한 부분</h2>
             </div>
             <Badge variant="destructive" className="rounded-full px-4 py-1 font-black">
               {topWarnings.length}개 우선 확인
@@ -586,7 +586,7 @@ export default function ReportDashboard({ vm }: Props) {
           
           <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
             <table className="min-w-full divide-y divide-slate-100 text-sm" data-testid="report-warnings-table">
-              <thead className="bg-slate-50 text-slate-400">
+              <thead className="bg-surface-muted text-slate-400">
                 <tr>
                   <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">경고 항목</th>
                   <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">심각도</th>
@@ -601,9 +601,9 @@ export default function ReportDashboard({ vm }: Props) {
                     <td className="px-4 py-8 text-slate-400 text-center font-bold" colSpan={5}>검출된 경고가 없습니다.</td>
                   </tr>
                 ) : topWarnings.map((warning) => (
-                  <tr className="group transition-colors hover:bg-slate-50/50" key={`${warning.code}:${warning.subjectKey ?? "-"}`}>
+                  <tr className="group transition-colors hover:bg-surface-muted/50" key={`${warning.code}:${warning.subjectKey ?? "-"}`}>
                     <td className="px-4 py-4">
-                      <p className="font-black text-slate-900">{warning.title}</p>
+                      <p className="font-black text-navy">{warning.title}</p>
                       <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{warning.code}{warning.subjectLabel ? ` · ${warning.subjectLabel}` : ""}</p>
                     </td>
                     <td className="px-4 py-4">
@@ -615,7 +615,7 @@ export default function ReportDashboard({ vm }: Props) {
                     <td className="px-4 py-4 text-xs font-medium text-slate-600 leading-relaxed">{warning.plainDescription}</td>
                     <td className="px-4 py-4">
                       {warning.suggestedActionId ? (
-                        <span className="text-[11px] font-black text-emerald-600 uppercase tracking-widest underline underline-offset-4 decoration-emerald-200">{warning.suggestedActionId}</span>
+                        <span className="text-[11px] font-black text-primary uppercase tracking-widest underline underline-offset-4 decoration-primary/20">{warning.suggestedActionId}</span>
                       ) : <span className="text-slate-300">-</span>}
                     </td>
                   </tr>
@@ -625,7 +625,7 @@ export default function ReportDashboard({ vm }: Props) {
           </div>
 
           {extraWarnings.length > 0 ? (
-            <details className="group/extra mt-4 rounded-[1.5rem] border border-slate-100 bg-slate-50/50 px-5 py-4 transition-all">
+            <details className="group/extra mt-4 rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 px-5 py-4 transition-all">
               <summary className="cursor-pointer text-xs font-black text-slate-400 group-open/extra:text-slate-600 list-none flex items-center gap-2">
                 <span className="transition-transform group-open/extra:rotate-90">▶</span>
                 추가 {extraWarnings.length}개 경고 더 보기
@@ -636,7 +636,7 @@ export default function ReportDashboard({ vm }: Props) {
                     <Badge variant={warning.severityMax === "critical" ? "destructive" : "warning"} className="h-4 px-1 text-[8px] font-black border-none shrink-0">
                       {severityText(warning.severityMax)}
                     </Badge>
-                    <span className="font-black text-slate-900">{warning.title}</span>
+                    <span className="font-black text-navy">{warning.title}</span>
                     <span className="text-slate-300 tabular-nums">({warning.count}회)</span>
                   </li>
                 ))}
@@ -650,10 +650,10 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-goals-table">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">목표</p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">목표 진행 현황</h2>
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary">목표</p>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-navy">목표 진행 현황</h2>
             </div>
-            <Badge variant="secondary" className="rounded-full px-4 py-1 font-black bg-emerald-50 text-emerald-700 border-none">
+            <Badge variant="secondary" className="rounded-full px-4 py-1 font-black bg-primary/5 text-navy border-none">
               총 {vm.goalsTable.length}개 목표
             </Badge>
           </div>
@@ -665,7 +665,7 @@ export default function ReportDashboard({ vm }: Props) {
           ) : (
             <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
               <table className="min-w-full divide-y divide-slate-100 text-sm">
-                <thead className="bg-slate-50 text-slate-400">
+                <thead className="bg-surface-muted text-slate-400">
                   <tr>
                     <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">목표명</th>
                     <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">목표액</th>
@@ -677,11 +677,11 @@ export default function ReportDashboard({ vm }: Props) {
                 </thead>
                 <tbody className="divide-y divide-slate-50 bg-white">
                   {vm.goalsTable.map((goal, index) => (
-                    <tr className="group transition-colors hover:bg-slate-50/50" key={`${goal.name}-${index}`}>
-                      <td className="px-4 py-4 font-black text-slate-900">{goal.name}</td>
+                    <tr className="group transition-colors hover:bg-surface-muted/50" key={`${goal.name}-${index}`}>
+                      <td className="px-4 py-4 font-black text-navy">{goal.name}</td>
                       <td className="px-4 py-4 text-right font-bold tabular-nums text-slate-700">{formatMoney(goal.targetAmount)}</td>
                       <td className="px-4 py-4 text-right font-bold tabular-nums text-slate-700">{formatMoney(goal.currentAmount)}</td>
-                      <td className={cn("px-4 py-4 text-right font-black tabular-nums", goal.shortfall > 0 ? "text-rose-600" : "text-emerald-600")}>
+                      <td className={cn("px-4 py-4 text-right font-black tabular-nums", goal.shortfall > 0 ? "text-rose-600" : "text-primary")}>
                         {goal.shortfall > 0 ? formatMoney(goal.shortfall) : "충족"}
                       </td>
                       <td className="px-4 py-4 text-right font-black tabular-nums text-slate-400">{goal.targetMonth > 0 ? `M${goal.targetMonth}` : "-"}</td>
@@ -704,7 +704,7 @@ export default function ReportDashboard({ vm }: Props) {
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">실행 순서</p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">추천 실행 순서</h2>
+              <h2 className="mt-2 text-2xl font-black tracking-tight text-navy">추천 실행 순서</h2>
             </div>
             <Badge variant="warning" className="rounded-full px-4 py-1 font-black shadow-sm">
               우선순위 {vm.topActions.length}개
@@ -716,7 +716,7 @@ export default function ReportDashboard({ vm }: Props) {
               <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">주거 판단 보조</p>
               <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
                 <div className="max-w-2xl">
-                  <p className="text-sm font-black leading-relaxed text-slate-900">{housingSupportTitle}</p>
+                  <p className="text-sm font-black leading-relaxed text-navy">{housingSupportTitle}</p>
                   <p className="mt-2 text-xs font-bold leading-relaxed text-slate-600">{housingSupportSummary}</p>
                 </div>
                 <Link
@@ -745,18 +745,18 @@ export default function ReportDashboard({ vm }: Props) {
                     : null;
 
                 return (
-                  <article className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 shadow-inner transition-all hover:bg-white hover:shadow-md" key={action.code}>
+                  <article className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 shadow-inner transition-all hover:bg-white hover:shadow-md" key={action.code}>
                     <Badge variant={action.severity === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black border-none mb-3">
                       {severityText(action.severity)}
                     </Badge>
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
+                    <h3 className="text-lg font-black text-navy tracking-tight leading-snug">{action.title}</h3>
                     <p className="mt-3 text-xs font-bold leading-relaxed text-slate-500">{action.summary}</p>
                     <div className="mt-6 space-y-2">
                       <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">핵심 단계</p>
                       <ul className="space-y-1.5">
                         {action.steps.slice(0, 3).map((step, index) => (
                           <li className="flex gap-2 text-[11px] font-bold text-slate-700" key={`${action.code}-step-${index}`}>
-                            <span className="text-emerald-500 shrink-0">•</span>
+                            <span className="text-primary shrink-0">•</span>
                             <span className="leading-tight">{step}</span>
                           </li>
                         ))}
@@ -765,7 +765,7 @@ export default function ReportDashboard({ vm }: Props) {
                     {actionCtaLink ? (
                       <div className="mt-6 border-t border-slate-100 pt-4">
                         <Link
-                          className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-emerald-900/10 transition hover:bg-emerald-700 active:scale-95"
+                          className="inline-flex items-center rounded-xl bg-primary px-4 py-2 text-[11px] font-black text-white shadow-lg shadow-navy/10 transition hover:bg-navy active:scale-95"
                           href={actionCtaLink.href}
                         >
                           {actionCtaLink.label}
@@ -788,13 +788,13 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
           <div className="mb-8">
             <p className="text-[10px] font-black uppercase tracking-widest text-sky-600">확률 시뮬레이션</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">변동성 시뮬레이션</h2>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-navy">변동성 시뮬레이션</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             {vm.monteCarloSummary.keyProbs.map((item) => (
-              <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5" key={item.key}>
+              <div className="rounded-2xl border border-slate-100 bg-surface-muted p-5" key={item.key}>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">{item.label}</p>
-                <p className="text-xl font-black text-slate-900 tabular-nums">{formatPct("ko-KR", item.probability * 100)}</p>
+                <p className="text-xl font-black text-navy tabular-nums">{formatPct("ko-KR", item.probability * 100)}</p>
               </div>
             ))}
           </div>
@@ -805,20 +805,20 @@ export default function ReportDashboard({ vm }: Props) {
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
           <div className="mb-8">
             <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">대출 요약</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-900">대출 부담 요약</h2>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-navy">대출 부담 요약</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted p-5">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">월 상환액</p>
-              <p className="text-xl font-black text-slate-900 tabular-nums">{formatMoney(vm.debtSummary.meta.totalMonthlyPaymentKrw)}</p>
+              <p className="text-xl font-black text-navy tabular-nums">{formatMoney(vm.debtSummary.meta.totalMonthlyPaymentKrw)}</p>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted p-5">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">현재 DSR</p>
-              <p className="text-xl font-black text-emerald-600 tabular-nums">{formatPct("ko-KR", vm.debtSummary.meta.debtServiceRatio * 100)}</p>
+              <p className="text-xl font-black text-primary tabular-nums">{formatPct("ko-KR", vm.debtSummary.meta.debtServiceRatio * 100)}</p>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted p-5">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">대환 비교</p>
-              <p className="text-xl font-black text-slate-900 tabular-nums">{vm.debtSummary.refinance?.length ?? 0}건 가능</p>
+              <p className="text-xl font-black text-navy tabular-nums">{vm.debtSummary.refinance?.length ?? 0}건 가능</p>
             </div>
           </div>
         </Card>

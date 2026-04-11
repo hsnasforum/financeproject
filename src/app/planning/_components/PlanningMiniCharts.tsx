@@ -59,7 +59,7 @@ function RangeVisualization({ min, max, current, color }: { min: number; max: nu
 
   return (
     <div className="group/range relative mt-2">
-      <div className="h-1.5 w-full rounded-full bg-slate-100" />
+      <div className="h-1.5 w-full rounded-full bg-surface-muted" />
       <div
         className="absolute inset-y-0 left-0 h-1.5 rounded-full transition-all duration-500 ease-out"
         style={{ width: `${progress}%`, backgroundColor: color, opacity: 0.3 }}
@@ -75,7 +75,7 @@ function RangeVisualization({ min, max, current, color }: { min: number; max: nu
 export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsProps) {
   const tablePoints = pickTablePoints(points);
   const metrics: Array<{ key: MetricKey; title: string; color: string; tone: string }> = [
-    { key: "netWorthKrw", title: t(locale, "CHART_LABEL_NET_WORTH"), color: "#10b981", tone: "emerald" }, // emerald-500
+    { key: "netWorthKrw", title: t(locale, "CHART_LABEL_NET_WORTH"), color: "#10b981", tone: "emerald" }, // success — 순자산 증가는 초록 관습 유지
     { key: "cashKrw", title: t(locale, "CHART_LABEL_CASH"), color: "#0ea5e9", tone: "sky" }, // sky-500
     { key: "totalDebtKrw", title: t(locale, "CHART_LABEL_TOTAL_DEBT"), color: "#f59e0b", tone: "amber" }, // amber-500
   ];
@@ -83,7 +83,7 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
   return (
     <div className="space-y-8">
       {mode === "key" ? (
-        <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600 leading-relaxed italic">
+        <p className="rounded-2xl border border-slate-200 bg-surface-muted px-4 py-3 text-xs font-medium text-slate-600 leading-relaxed italic">
           💡 {t(locale, "CHART_KEY_MODE_NOTICE")}
         </p>
       ) : null}
@@ -94,8 +94,8 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
           const values = points.map((item) => item[metric.key]);
           const isPositive = summary.deltaPct >= 0;
           const deltaColor = metric.tone === "amber"
-            ? (isPositive ? "text-rose-600 bg-rose-50" : "text-emerald-600 bg-emerald-50")
-            : (isPositive ? "text-emerald-600 bg-emerald-50" : "text-rose-600 bg-rose-50");
+            ? (isPositive ? "text-rose-600 bg-rose-50" : "text-primary bg-primary/5")
+            : (isPositive ? "text-primary bg-primary/5" : "text-rose-600 bg-rose-50");
 
           return (
             <div className="group flex flex-col rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm transition-all hover:shadow-md" key={metric.key}>
@@ -107,7 +107,7 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
               </div>
 
               <div className="mt-4 flex items-baseline gap-2">
-                <p className="text-2xl font-black text-slate-900 tracking-tight tabular-nums">{formatKrw(locale, summary.end)}</p>
+                <p className="text-2xl font-black text-navy tracking-tight tabular-nums">{formatKrw(locale, summary.end)}</p>
                 <p className="text-[11px] font-bold text-slate-400">말기</p>
               </div>
 
@@ -162,7 +162,7 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
         <div className="hidden md:block">
           <BodyTableFrame>
             <table className="min-w-full divide-y divide-slate-100">
-              <thead className="bg-slate-50">
+              <thead className="bg-surface-muted">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <th className="px-6 py-4 text-left">월 (Index)</th>
                   <th className="px-6 py-4 text-right">순자산</th>
@@ -172,9 +172,9 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
               </thead>
               <tbody className="divide-y divide-slate-50 bg-white">
                 {tablePoints.map((point) => (
-                  <tr className="group/row hover:bg-slate-50/50 transition-colors" key={point.monthIndex}>
+                  <tr className="group/row hover:bg-surface-muted/50 transition-colors" key={point.monthIndex}>
                     <td className="px-6 py-4 text-xs font-black text-slate-400 tabular-nums">M{point.monthIndex + 1}</td>
-                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-emerald-600 transition-colors">{formatKrw(locale, point.netWorthKrw)}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-primary transition-colors">{formatKrw(locale, point.netWorthKrw)}</td>
                     <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-sky-600 transition-colors">{formatKrw(locale, point.cashKrw)}</td>
                     <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-amber-600 transition-colors">{formatKrw(locale, point.totalDebtKrw)}</td>
                   </tr>
@@ -187,15 +187,15 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
         {/* Mobile View: Card List */}
         <div className="grid gap-3 md:hidden">
           {tablePoints.map((point) => (
-            <div className="rounded-3xl border border-slate-200/60 bg-white p-5 shadow-sm active:bg-slate-50 transition-colors" key={point.monthIndex}>
+            <div className="rounded-3xl border border-slate-200/60 bg-white p-5 shadow-sm active:bg-surface-muted transition-colors" key={point.monthIndex}>
               <div className="mb-4 flex items-center justify-between border-b border-slate-50 pb-3">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">시점</p>
-                <p className="text-sm font-black text-slate-900 tabular-nums">M{point.monthIndex + 1}</p>
+                <p className="text-sm font-black text-navy tabular-nums">M{point.monthIndex + 1}</p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">순자산</p>
-                  <p className="text-[11px] font-bold text-emerald-600 tabular-nums">{formatKrw(locale, point.netWorthKrw)}</p>
+                  <p className="text-[11px] font-bold text-primary tabular-nums">{formatKrw(locale, point.netWorthKrw)}</p>
                 </div>
                 <div className="border-x border-slate-100 px-1">
                   <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">현금</p>

@@ -74,7 +74,7 @@ function readDevCsrf(): string | null {
 function riskBadgeClass(risk: "LOW" | "MEDIUM" | "HIGH"): string {
   if (risk === "HIGH") return "border-rose-200 bg-rose-50 text-rose-700";
   if (risk === "MEDIUM") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgendaBarProps) {
@@ -325,7 +325,7 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
                         </button>
                         <button
                           type="button"
-                          className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="rounded-lg border border-primary/30 bg-primary/5 px-2 py-1 text-[11px] font-bold text-navy hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => onMarkDone(item.id)}
                           disabled={item.status === "DONE"}
                         >
@@ -335,7 +335,7 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
                           <>
                             <button
                               type="button"
-                              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
                               onClick={() => void runOpsPlan(item)}
                               disabled={state?.loadingPlan || state?.running}
                             >
@@ -357,7 +357,7 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
                       <p className="mt-1 text-[11px] text-slate-500">복구 버튼은 dev 환경에서만 표시됩니다.</p>
                     ) : null}
                     {state?.plan ? (
-                      <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                      <div className="mt-2 rounded-md border border-slate-200 bg-surface-muted p-2">
                         <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${riskBadgeClass(state.plan.risk)}`}>
                           {state.plan.risk}
                         </span>
@@ -395,9 +395,9 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
         {urgentItems.length > 0 ? (
           <ul className="mt-3 space-y-2">
             {urgentItems.map((item) => (
-              <li key={item.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5 md:flex-row md:items-center md:justify-between">
+              <li key={item.id} className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-surface-muted p-2.5 md:flex-row md:items-center md:justify-between">
                 <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-bold text-slate-800 hover:text-emerald-700">
+                  <p className="truncate text-xs font-bold text-slate-800 hover:text-navy">
                     {summarizeMessage(item.message)}
                   </p>
                   <p className="mt-1 text-[11px] text-slate-500">
@@ -415,7 +415,7 @@ export function StickyAgendaBar({ agenda, onMarkDoing, onMarkDone }: StickyAgend
                   </button>
                   <button
                     type="button"
-                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded-lg border border-primary/30 bg-primary/5 px-2 py-1 text-[11px] font-bold text-navy hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => onMarkDone(item.id)}
                     disabled={item.status === "DONE"}
                   >

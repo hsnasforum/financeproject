@@ -133,13 +133,13 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
     <Card className="mb-6 space-y-4" data-testid="planning-onboarding-wizard">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-slate-900">온보딩 위저드</h2>
+          <h2 className="text-base font-bold text-navy">온보딩 위저드</h2>
           <p className="text-xs text-slate-600">초기 프로필을 4단계로 빠르게 만듭니다. 기본값 적용 내역을 함께 저장합니다.</p>
         </div>
         <div className="flex flex-wrap gap-1 text-[11px] text-slate-600">
           {(Object.keys(STEP_LABELS) as unknown as WizardStep[]).map((id) => (
             <span
-              className={`rounded-full border px-2 py-0.5 ${id === step ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50"}`}
+              className={`rounded-full border px-2 py-0.5 ${id === step ? "border-primary/30 bg-primary/5 text-navy" : "border-slate-200 bg-surface-muted"}`}
               key={id}
             >
               {STEP_LABELS[id]}
@@ -311,15 +311,15 @@ export default function PlanningOnboardingWizard({ disabled = false, onApply }: 
       ) : null}
 
       {step === 4 ? (
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-          <p className="font-semibold text-slate-900">검토</p>
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs text-slate-700">
+          <p className="font-semibold text-navy">검토</p>
           <p>월 잉여금: {formatNumber(previewSummary.monthlySurplusKrw)}원</p>
           <p>DSR: {previewSummary.dsrPct.toFixed(1)}%</p>
           <p>비상금 목표: {formatNumber(previewSummary.emergencyTargetKrw)}원 ({previewSummary.emergencyMonths}개월)</p>
           <p>총 부채 월상환: {formatNumber(previewSummary.totalDebtPayment)}원</p>
           <p>적용 기본 정책: emergencyMonths={PLANNING_DEFAULTS.emergencyMonths}, goalPriority={PLANNING_DEFAULTS.goalPriority}</p>
           <div>
-            <p className="font-semibold text-slate-900">defaultsApplied</p>
+            <p className="font-semibold text-navy">defaultsApplied</p>
             {preview.defaultsApplied.items.length < 1 ? (
               <p>-</p>
             ) : (

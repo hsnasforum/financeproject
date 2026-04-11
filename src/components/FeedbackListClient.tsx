@@ -83,7 +83,7 @@ function parsePriorityParam(value: string | null): PriorityFilter {
 }
 
 function statusClassName(status: FeedbackStatus): string {
-  if (status === "DONE") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "DONE") return "bg-primary/5 text-navy border-primary/20";
   if (status === "DOING") return "bg-amber-50 text-amber-700 border-amber-200";
   return "bg-sky-50 text-sky-700 border-sky-200";
 }
@@ -92,7 +92,7 @@ function priorityClassName(priority: FeedbackPriority): string {
   if (priority === "P0") return "bg-rose-50 text-rose-700 border-rose-200";
   if (priority === "P1") return "bg-amber-50 text-amber-700 border-amber-200";
   if (priority === "P2") return "bg-sky-50 text-sky-700 border-sky-200";
-  return "bg-slate-100 text-slate-700 border-slate-300";
+  return "bg-surface-muted text-slate-700 border-slate-300";
 }
 
 function dueLabel(value: string | null): string {
@@ -234,7 +234,7 @@ export function FeedbackListClient() {
                     value={q}
                     onChange={(event) => setQ(event.target.value)}
                     placeholder="메시지, 접속 화면, 추적 ID"
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                   />
                 </div>
                 
@@ -249,8 +249,8 @@ export function FeedbackListClient() {
                         className={cn(
                           "rounded-full px-3 py-1.5 text-xs font-black transition-all shadow-sm",
                           status === entry
-                            ? "bg-emerald-600 text-white shadow-emerald-900/10"
-                            : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                            ? "bg-primary text-white shadow-navy/10"
+                            : "bg-white border border-slate-200 text-slate-500 hover:bg-surface-muted"
                         )}
                       >
                         {statusLabel(entry)}
@@ -264,7 +264,7 @@ export function FeedbackListClient() {
                   <select
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as PriorityFilter)}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                   >
                     {PRIORITY_FILTERS.map((entry) => (
                       <option key={entry} value={entry}>{entry}</option>
@@ -277,7 +277,7 @@ export function FeedbackListClient() {
                   <select
                     value={dueFilter}
                     onChange={(event) => setDueFilter(event.target.value as DueFilter)}
-                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
                   >
                     {DUE_FILTERS.map((entry) => (
                       <option key={entry} value={entry}>{entry === "ALL" ? "전체 기간" : entry === "HAS_DUE" ? "마감일 있음" : entry === "NO_DUE" ? "마감일 없음" : "마감 지남"}</option>
@@ -293,7 +293,7 @@ export function FeedbackListClient() {
                     <button
                       type="button"
                       onClick={() => setTag("")}
-                      className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest"
+                      className="text-[10px] font-black text-primary hover:underline uppercase tracking-widest"
                     >
                       태그 초기화
                     </button>
@@ -313,8 +313,8 @@ export function FeedbackListClient() {
                           className={cn(
                             "rounded-full px-3 py-1.5 text-xs font-black transition-all shadow-sm",
                             active
-                              ? "bg-emerald-500 text-white border-transparent"
-                              : "bg-white border border-slate-200 text-slate-500 hover:bg-slate-50"
+                              ? "bg-primary text-white border-transparent"
+                              : "bg-white border border-slate-200 text-slate-500 hover:bg-surface-muted"
                           )}
                         >
                           #{entry.label} <span className={cn("ml-1 tabular-nums opacity-60", active ? "text-white" : "text-slate-400")}>{entry.count}</span>
@@ -331,10 +331,10 @@ export function FeedbackListClient() {
           <div className="grid gap-4 lg:hidden">
             {filteredRows.map((item) => (
               <Link key={`mobile-${item.id}`} href={`/feedback/${encodeURIComponent(item.id)}`} className="block group">
-                <Card className="rounded-[2rem] p-6 shadow-sm group-hover:border-emerald-200 transition-all active:scale-[0.98]">
+                <Card className="rounded-[2rem] p-6 shadow-sm group-hover:border-primary/20 transition-all active:scale-[0.98]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-wrap gap-2">
-                      <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
+                      <span className="rounded-lg bg-surface-muted px-2 py-0.5 text-[10px] font-black text-slate-600 uppercase tracking-wider">{categoryLabel(item.category)}</span>
                       <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", statusClassName(item.status))}>{statusDisplayLabel(item.status)}</span>
                       <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider", priorityClassName(item.priority))}>{item.priority}</span>
                     </div>
@@ -347,7 +347,7 @@ export function FeedbackListClient() {
                   
                   <div className="mt-6 flex items-center justify-between border-t border-slate-50 pt-4">
                     <span className="text-[10px] font-bold text-slate-400">{statusDisplayLabel(item.status)} 상태와 확인 메모 이어보기</span>
-                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">상세 기록 보기 →</span>
+                    <span className="text-[10px] font-black text-primary uppercase tracking-widest">상세 기록 보기 →</span>
                   </div>
                 </Card>
               </Link>
@@ -371,23 +371,23 @@ export function FeedbackListClient() {
                 </thead>
                 <tbody className="divide-y divide-transparent">
                   {filteredRows.map((item) => (
-                    <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-black text-slate-900">{categoryLabel(item.category)}</td>
-                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors">
+                    <tr key={item.id} className="group hover:bg-surface-muted/50 transition-colors">
+                      <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-50 bg-white group-hover:bg-surface-muted/50 transition-colors font-black text-navy">{categoryLabel(item.category)}</td>
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-surface-muted/50 transition-colors">
                         <span className={cn("inline-flex rounded-lg border px-2 py-0.5 text-[10px] font-black tracking-wider", statusClassName(item.status))}>
                           {statusDisplayLabel(item.status)}
                         </span>
                       </td>
-                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-surface-muted/50 transition-colors">
                         <span className={cn("inline-flex rounded-lg border px-2 py-0.5 text-[10px] font-black tracking-wider", priorityClassName(item.priority))}>
                           {item.priority}
                         </span>
                       </td>
-                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-bold text-slate-500 tabular-nums text-xs">{dueLabel(item.dueDate)}</td>
-                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-bold text-slate-400 tabular-nums text-xs whitespace-nowrap">{formatDateTime(item.createdAt)}</td>
-                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors font-bold text-slate-700 leading-snug">{summarizeMessage(item.message)}</td>
-                      <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-50 bg-white group-hover:bg-slate-50/50 transition-colors text-right">
-                        <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="text-[11px] font-black text-emerald-600 uppercase tracking-widest hover:underline whitespace-nowrap">
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-surface-muted/50 transition-colors font-bold text-slate-500 tabular-nums text-xs">{dueLabel(item.dueDate)}</td>
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-surface-muted/50 transition-colors font-bold text-slate-400 tabular-nums text-xs whitespace-nowrap">{formatDateTime(item.createdAt)}</td>
+                      <td className="px-4 py-4 border-y border-slate-50 bg-white group-hover:bg-surface-muted/50 transition-colors font-bold text-slate-700 leading-snug">{summarizeMessage(item.message)}</td>
+                      <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-50 bg-white group-hover:bg-surface-muted/50 transition-colors text-right">
+                        <Link href={`/feedback/${encodeURIComponent(item.id)}`} className="text-[11px] font-black text-primary uppercase tracking-widest hover:underline whitespace-nowrap">
                           상세 기록 보기 →
                         </Link>
                       </td>

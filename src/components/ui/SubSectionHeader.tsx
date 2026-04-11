@@ -28,7 +28,7 @@ export function SubSectionHeader({
   return (
     <div className={cn("flex flex-wrap items-center justify-between gap-3 mb-4", className)}>
       <div>
-        <h3 className={cn("text-lg font-black text-slate-900 tracking-tight", titleClassName)}>
+        <h3 className={cn("text-lg font-black text-navy tracking-tight", titleClassName)}>
           {title}
         </h3>
         {description && (

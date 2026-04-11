@@ -36,7 +36,7 @@ function levelStyle(level: FreshnessSummary["level"]): string {
   if (level === "error") return "border-rose-300 bg-rose-50 text-rose-800";
   if (level === "info") return "border-sky-300 bg-sky-50 text-sky-800";
   if (level === "warn") return "border-amber-300 bg-amber-50 text-amber-900";
-  return "border-emerald-300 bg-emerald-50 text-emerald-900";
+  return "border-primary/30 bg-primary/5 text-navy";
 }
 
 function statusLabel(status: FreshnessItemStatus): string {
@@ -385,9 +385,9 @@ export function DataFreshnessBanner({
               자동 스모크 업데이트(세션당 1회)
             </label>
           </div>
-          {syncMessage ? <p className="mt-2 text-emerald-700">{syncMessage}</p> : null}
+          {syncMessage ? <p className="mt-2 text-navy">{syncMessage}</p> : null}
           {syncError ? <p className="mt-2 text-rose-700">{syncError}</p> : null}
-          <pre className="mt-2 overflow-x-auto rounded-xl bg-slate-100 border border-slate-200 p-4 text-[11px] font-bold leading-5 text-slate-600 shadow-inner">
+          <pre className="mt-2 overflow-x-auto rounded-xl bg-surface-muted border border-slate-200 p-4 text-[11px] font-bold leading-5 text-slate-600 shadow-inner">
 {`pnpm live:smoke
 pnpm live:sync
 pnpm seed:debug`}

@@ -69,18 +69,18 @@ export function ProductResultsHeader({
           <Badge variant={getModeVariant(mode)} className="px-3 py-1 text-[10px] font-black uppercase tracking-widest border-none">
             {modeLabel}
           </Badge>
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">{viewLabel}</span>
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-surface-muted px-2 py-1 rounded-lg border border-slate-100">{viewLabel}</span>
         </div>
         
         <div className="flex flex-wrap items-baseline gap-2">
-          <h2 className="text-lg font-black text-slate-900 tracking-tight">검색 결과</h2>
-          <span className="text-4xl font-black tabular-nums text-emerald-600 tracking-tight">{shownCount.toLocaleString()}</span>
+          <h2 className="text-lg font-black text-navy tracking-tight">검색 결과</h2>
+          <span className="text-4xl font-black tabular-nums text-primary tracking-tight">{shownCount.toLocaleString()}</span>
           <span className="text-sm font-black text-slate-400 uppercase tracking-widest">items</span>
           <span className="ml-2 text-xs font-bold text-slate-400">/ Total {totalCount.toLocaleString()} candidates</span>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-widest shadow-sm">{scanLabel}</span>
+          <span className="rounded-full bg-surface-muted px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-widest shadow-sm">{scanLabel}</span>
           {truncatedByMaxPages ? (
             <span className="rounded-full bg-rose-50 border border-rose-100 px-3 py-1 text-[10px] font-black text-rose-600 uppercase tracking-widest">Scope Truncated</span>
           ) : null}
@@ -93,7 +93,7 @@ export function ProductResultsHeader({
           <select
             value={sortKey}
             onChange={(event) => onSortChange(event.target.value as SortKey)}
-            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100 shadow-sm cursor-pointer"
+            className="h-11 w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10 shadow-sm cursor-pointer"
           >
             <option value={ratePreference === "higher" ? "rateDesc" : "rateAsc"}>
               {ratePreference === "higher" ? "최고 금리순" : "최저 금리순"}

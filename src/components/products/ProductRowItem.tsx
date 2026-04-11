@@ -79,7 +79,7 @@ export function ProductRowItem({
   return (
     <>
       <div
-        className="group relative flex flex-col md:flex-row md:items-center gap-6 py-6 px-6 transition-all duration-300 hover:bg-slate-50 rounded-[2rem] cursor-pointer"
+        className="group relative flex flex-col md:flex-row md:items-center gap-6 py-6 px-6 transition-all duration-300 hover:bg-surface-muted rounded-[2rem] cursor-pointer"
         onClick={() => {
           onViewed?.();
           setOpen(true);
@@ -96,18 +96,18 @@ export function ProductRowItem({
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{product.kor_co_nm ?? "-"}</span>
               {badges.map((badge) => (
-                <Badge key={`${product.fin_prdt_cd}-${badge}`} variant="secondary" className="h-4 px-1.5 text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border-none">
+                <Badge key={`${product.fin_prdt_cd}-${badge}`} variant="secondary" className="h-4 px-1.5 text-[9px] font-black uppercase tracking-wider bg-primary/5 text-navy border-none">
                   {badge}
                 </Badge>
               ))}
             </div>
-            <h3 className="truncate text-lg font-black text-slate-900 tracking-tight group-hover:text-emerald-600 transition-colors">
+            <h3 className="truncate text-lg font-black text-navy tracking-tight group-hover:text-primary transition-colors">
               {product.fin_prdt_nm ?? "-"}
             </h3>
             {freshnessMeta ? (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black">
                 {freshnessMeta.lastSyncedAt ? (
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-slate-500">
+                  <span className="rounded-full border border-slate-200 bg-surface-muted px-2.5 py-1 text-slate-500">
                     기준 확인 {formatKoreanDateTime(freshnessMeta.lastSyncedAt)}
                   </span>
                 ) : null}
@@ -116,7 +116,7 @@ export function ProductRowItem({
                     className={cn(
                       "rounded-full border px-2.5 py-1",
                       freshnessMeta.freshnessStatus === "ok"
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        ? "border-primary/20 bg-primary/5 text-navy"
                         : freshnessMeta.freshnessStatus === "stale"
                           ? "border-amber-200 bg-amber-50 text-amber-800"
                           : freshnessMeta.freshnessStatus === "error"
@@ -146,7 +146,7 @@ export function ProductRowItem({
               {reasonLines.length > 0 && (
                 <>
                   <span className="h-1 w-1 rounded-full bg-slate-200" />
-                  <span className="truncate text-emerald-600 uppercase tracking-widest font-black text-[10px]">{reasonLines[0]}</span>
+                  <span className="truncate text-primary uppercase tracking-widest font-black text-[10px]">{reasonLines[0]}</span>
                 </>
               )}
             </div>
@@ -156,7 +156,7 @@ export function ProductRowItem({
         <div className="flex items-center justify-between md:justify-end gap-8 shrink-0 mt-2 md:mt-0">
           <div className="flex flex-col items-end">
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">최고 금리</span>
-            <span className="text-3xl font-black text-emerald-600 tabular-nums tracking-tight">
+            <span className="text-3xl font-black text-primary tabular-nums tracking-tight">
               {formatRate(bestRate ?? basicRate)}
             </span>
           </div>
@@ -165,7 +165,7 @@ export function ProductRowItem({
             <Button
               size="sm"
               variant="ghost"
-              className={cn("h-10 w-10 p-0 rounded-xl transition-all", isFavorite ? "text-emerald-600 bg-emerald-50" : "text-slate-300 hover:text-rose-500 hover:bg-rose-50")}
+              className={cn("h-10 w-10 p-0 rounded-xl transition-all", isFavorite ? "text-primary bg-primary/5" : "text-slate-300 hover:text-rose-500 hover:bg-rose-50")}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -179,7 +179,7 @@ export function ProductRowItem({
             <Button
               size="sm"
               variant="ghost"
-              className={cn("h-10 w-10 p-0 rounded-xl transition-all", isCompared ? "text-emerald-600 bg-emerald-50" : "text-slate-300 hover:text-emerald-600 hover:bg-emerald-50")}
+              className={cn("h-10 w-10 p-0 rounded-xl transition-all", isCompared ? "text-primary bg-primary/5" : "text-slate-300 hover:text-primary hover:bg-primary/5")}
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();

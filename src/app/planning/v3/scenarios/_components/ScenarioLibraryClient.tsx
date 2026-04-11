@@ -246,13 +246,13 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
             <ReportHeroStatCard label="저장 상태" value={saveStatusValue} description={saveStatusDescription} />
             <ReportHeroStatCard label="현재 상태" value={currentStatusValue} description={currentStatusDescription} />
           </ReportHeroStatGrid>
-          {notice ? <p className="text-xs font-semibold text-emerald-300">{notice}</p> : null}
+          {notice ? <p className="text-xs font-semibold text-primary/30">{notice}</p> : null}
           {loadError ? <p className="text-xs font-semibold text-rose-300">{loadError}</p> : null}
           {error ? <p className="text-xs font-semibold text-rose-300">{error}</p> : null}
         </ReportHeroCard>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">템플릿 목록</h2>
+          <h2 className="text-sm font-bold text-navy">템플릿 목록</h2>
           {loading ? (
             <p className="text-sm text-slate-600">불러오는 중...</p>
           ) : loadError ? (
@@ -262,7 +262,7 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
           ) : (
             <div className="max-h-[28rem] overflow-auto rounded border border-slate-200">
               <table className="min-w-full text-left text-sm">
-                <thead className="sticky top-0 bg-slate-100 text-slate-700">
+                <thead className="sticky top-0 bg-surface-muted text-slate-700">
                   <tr>
                     <th className="px-2 py-2">순서</th>
                     <th className="px-2 py-2">토픽</th>

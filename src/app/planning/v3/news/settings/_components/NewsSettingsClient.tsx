@@ -233,7 +233,7 @@ type AlertRuleTargetCandidate = {
   detail?: string;
 };
 
-const ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME = "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-slate-50 transition-all uppercase tracking-widest";
+const ALERT_RULES_FOLLOW_THROUGH_LINK_CLASSNAME = "rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-600 hover:bg-surface-muted transition-all uppercase tracking-widest";
 const SETTINGS_SECTION_REVEAL = {
   hidden: { opacity: 0, y: 18 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.34 } },
@@ -245,8 +245,8 @@ const SETTINGS_STAGGER_REVEAL = {
 };
 
 const SETTINGS_PANEL_CLASSNAME = "rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 transition-colors duration-200 hover:border-slate-300";
-const SETTINGS_PANEL_SUBTLE_CLASSNAME = "rounded-[2rem] border border-slate-200/90 bg-slate-50/85 px-5 py-5 shadow-sm shadow-slate-200/30 transition-colors duration-200 hover:border-slate-300";
-const SETTINGS_ROW_PANEL_CLASSNAME = "rounded-[1.5rem] border border-slate-200/80 bg-white px-4 py-4 transition-colors duration-200 hover:border-emerald-200/80 hover:bg-emerald-50/30";
+const SETTINGS_PANEL_SUBTLE_CLASSNAME = "rounded-[2rem] border border-slate-200/90 bg-surface-muted/85 px-5 py-5 shadow-sm shadow-slate-200/30 transition-colors duration-200 hover:border-slate-300";
+const SETTINGS_ROW_PANEL_CLASSNAME = "rounded-[1.5rem] border border-slate-200/80 bg-white px-4 py-4 transition-colors duration-200 hover:border-primary/10 hover:bg-primary/30";
 
 type ExposureProfile = {
   savedAt?: string;
@@ -932,7 +932,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   onClick={() => { void handleSave(); }}
                   className={cn(
                     reportHeroPrimaryActionClassName,
-                    "disabled:opacity-60 disabled:hover:bg-emerald-600 bg-emerald-600 hover:bg-emerald-500 border-emerald-500/50 shadow-sm shadow-emerald-200/50"
+                    "disabled:opacity-60 disabled:hover:bg-primary bg-primary hover:bg-primary border-primary/10 shadow-sm shadow-primary/10"
                   )}
                 >
                   {saving ? "저장 중..." : "뉴스 기준/내 상황 저장"}
@@ -940,17 +940,17 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
               </div>
             )}
           >
-            <div className="rounded-[1.75rem] border border-slate-200/90 bg-slate-100/80 px-3 py-3 md:px-4">
+            <div className="rounded-[1.75rem] border border-slate-200/90 bg-surface-muted/80 px-3 py-3 md:px-4">
               <NewsNavigation />
             </div>
 
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.9fr)]">
               <div className="space-y-4">
-                <div className="rounded-[1.75rem] border border-emerald-200/90 bg-emerald-50/90 px-5 py-4">
+                <div className="rounded-[1.75rem] border border-primary/10 bg-primary/10 px-5 py-4">
                   <div className="flex items-start gap-3">
-                    <div className="mt-1 h-2.5 w-2.5 flex-none animate-pulse rounded-full bg-emerald-500" />
+                    <div className="mt-1 h-2.5 w-2.5 flex-none animate-pulse rounded-full bg-primary" />
                     <div className="space-y-2">
-                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-700">현재 저장 상태</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.22em] text-navy">현재 저장 상태</p>
                       <p className="text-sm font-bold leading-relaxed tracking-tight text-slate-800">
                         {newsSettingsStatusText}
                       </p>
@@ -958,14 +958,14 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   </div>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-slate-200/90 bg-slate-50/80 px-5 py-4">
+                <div className="rounded-[1.75rem] border border-slate-200/90 bg-surface-muted/80 px-5 py-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">빠른 이동</p>
                   <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-[0.18em]">
-                    <a href="#news-settings-exposure" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50">상황 프로필</a>
-                    <a href="#news-settings-sources" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50">뉴스 소스</a>
-                    <a href="#news-settings-topics" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50">관심 토픽</a>
-                    <a href="#news-settings-alert-rules" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50">알림 규칙</a>
-                    <a href="#news-settings-advanced" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50">고급 설정</a>
+                    <a href="#news-settings-exposure" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-surface-muted">상황 프로필</a>
+                    <a href="#news-settings-sources" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-surface-muted">뉴스 소스</a>
+                    <a href="#news-settings-topics" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-surface-muted">관심 토픽</a>
+                    <a href="#news-settings-alert-rules" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-surface-muted">알림 규칙</a>
+                    <a href="#news-settings-advanced" className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:border-slate-300 hover:bg-surface-muted">고급 설정</a>
                   </div>
                 </div>
               </div>
@@ -974,7 +974,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">작업 순서</p>
-                    <p className="mt-2 text-lg font-black tracking-tight text-slate-900">주요 입력은 왼쪽, 상태와 고급 관리는 오른쪽에 모았습니다.</p>
+                    <p className="mt-2 text-lg font-black tracking-tight text-navy">주요 입력은 왼쪽, 상태와 고급 관리는 오른쪽에 모았습니다.</p>
                   </div>
                   <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-slate-500">
                     Updated {formatDateTime(updatedAt)}
@@ -1006,31 +1006,31 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                 label="활성 소스"
                 value={`${activeSourceCount}/${sources.length}`}
                 description="반영 중인 뉴스 미디어 수"
-                className="border-slate-200/80 bg-slate-50/80 px-4 py-4 hover:bg-white"
+                className="border-slate-200/80 bg-surface-muted/80 px-4 py-4 hover:bg-white"
               />
               <ReportHeroStatCard
                 label="토픽 최적화"
                 value={`${overriddenTopicCount}개`}
                 description="커스텀 키워드 적용 중"
-                className="border-slate-200/80 bg-slate-50/80 px-4 py-4 hover:bg-white"
+                className="border-slate-200/80 bg-surface-muted/80 px-4 py-4 hover:bg-white"
               />
               <ReportHeroStatCard
                 label="프로필 완성도"
                 value={`${exposureCompletionCount}/10`}
                 description="개인화 영향 분석 지표"
-                className="border-slate-200/80 bg-slate-50/80 px-4 py-4 hover:bg-white"
+                className="border-slate-200/80 bg-surface-muted/80 px-4 py-4 hover:bg-white"
               />
               <ReportHeroStatCard
                 label="지표 카탈로그"
                 value={`${enabledIndicatorCount}개`}
                 description="추적 중인 활성 지표 수"
-                className="border-slate-200/80 bg-slate-50/80 px-4 py-4 hover:bg-white"
+                className="border-slate-200/80 bg-surface-muted/80 px-4 py-4 hover:bg-white"
               />
             </ReportHeroStatGrid>
 
             {notice || errorMessage ? (
-              <div className="rounded-[1.5rem] border border-slate-200/90 bg-slate-50/90 px-5 py-4">
-                {notice ? <p className="flex items-center gap-2 text-xs font-bold text-emerald-700"><span>✅</span> {notice}</p> : null}
+              <div className="rounded-[1.5rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-4">
+                {notice ? <p className="flex items-center gap-2 text-xs font-bold text-navy"><span>✅</span> {notice}</p> : null}
                 {errorMessage ? <p className="flex items-center gap-2 text-xs font-bold text-rose-600"><span>❌</span> {errorMessage}</p> : null}
               </div>
             ) : null}
@@ -1041,7 +1041,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
           <motion.div className="space-y-6" variants={SETTINGS_STAGGER_REVEAL}>
             <motion.section variants={SETTINGS_SECTION_REVEAL}>
               <Card id="news-settings-exposure" className="rounded-[2.5rem] border border-slate-200/90 bg-white p-6 shadow-sm shadow-slate-200/40 md:p-8">
-                <div className="rounded-[1.75rem] border border-slate-200/90 bg-slate-50/75 p-5 md:p-6">
+                <div className="rounded-[1.75rem] border border-slate-200/90 bg-surface-muted/75 p-5 md:p-6">
                   <SubSectionHeader
                     title="내 상황 프로필"
                     description="먼저 내 상황을 맞춰 두면, 이후 뉴스 해석과 시나리오 영향 분석이 같은 기준에서 움직입니다."
@@ -1061,7 +1061,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                       <label key={field.key} className={SETTINGS_ROW_PANEL_CLASSNAME}>
                         <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">{field.label}</span>
                         <select
-                          className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-emerald-500"
+                          className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-primary"
                           value={exposureDraft[field.key as keyof ExposureDraft]}
                           onChange={(e) => updateExposure(field.key as keyof ExposureDraft, e.target.value as ExposureDraft[keyof ExposureDraft])}
                         >
@@ -1084,7 +1084,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   descriptionClassName="max-w-2xl text-sm"
                 />
                 {loading ? <p className="animate-pulse text-sm text-slate-500">불러오는 중...</p> : (
-                  <div className="overflow-hidden rounded-[1.75rem] border border-slate-200/90 bg-slate-50/80">
+                  <div className="overflow-hidden rounded-[1.75rem] border border-slate-200/90 bg-surface-muted/80">
                     <div className="hidden grid-cols-[minmax(0,1.3fr)_auto_auto] gap-4 border-b border-slate-200/80 px-5 py-3 text-[10px] font-black uppercase tracking-[0.22em] text-slate-400 md:grid">
                       <span>뉴스 소스</span>
                       <span className="text-center">가중치</span>
@@ -1094,18 +1094,18 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                       {sources.map((row) => (
                         <div key={row.id} className="grid gap-4 px-4 py-4 transition-colors hover:bg-white/80 md:grid-cols-[minmax(0,1.3fr)_auto_auto] md:items-center md:px-5">
                           <div className="min-w-0">
-                            <p className="text-sm font-black tracking-tight text-slate-900">{row.name}</p>
+                            <p className="text-sm font-black tracking-tight text-navy">{row.name}</p>
                             <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
                               {row.country} · {row.language} · Default {row.defaultWeight}
                             </p>
                           </div>
                           <label className="flex items-center justify-between gap-3 md:justify-self-end">
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 md:hidden">가중치</span>
-                            <input type="number" step="0.1" min="0" max="3" value={sourceDrafts[row.id]?.weight ?? String(row.defaultWeight)} onChange={(e) => updateSourceWeight(row.id, e.target.value)} className="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-emerald-500" />
+                            <input type="number" step="0.1" min="0" max="3" value={sourceDrafts[row.id]?.weight ?? String(row.defaultWeight)} onChange={(e) => updateSourceWeight(row.id, e.target.value)} className="w-20 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 outline-none transition-colors focus:border-primary" />
                           </label>
                           <label className="flex items-center justify-between gap-3 md:justify-self-end">
                             <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 md:hidden">사용</span>
-                            <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" checked={sourceDrafts[row.id]?.enabled ?? row.defaultEnabled} onChange={(e) => updateSourceEnabled(row.id, e.target.checked)} />
+                            <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary" checked={sourceDrafts[row.id]?.enabled ?? row.defaultEnabled} onChange={(e) => updateSourceEnabled(row.id, e.target.checked)} />
                           </label>
                         </div>
                       ))}
@@ -1129,12 +1129,12 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                     <div key={row.id} className={SETTINGS_PANEL_SUBTLE_CLASSNAME}>
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
                         <div className="min-w-0">
-                          <p className="text-base font-black tracking-tight text-slate-900">{row.label}</p>
+                          <p className="text-base font-black tracking-tight text-navy">{row.label}</p>
                           <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
                             기본: {row.defaultKeywords.join(", ")}
                           </p>
                         </div>
-                        <textarea value={topicDrafts[row.id]?.keywordsText ?? ""} onChange={(e) => updateTopicKeywords(row.id, e.target.value)} placeholder="기본 키워드 대신 사용할 단어들..." rows={3} className="w-full rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-emerald-500" />
+                        <textarea value={topicDrafts[row.id]?.keywordsText ?? ""} onChange={(e) => updateTopicKeywords(row.id, e.target.value)} placeholder="기본 키워드 대신 사용할 단어들..." rows={3} className="w-full rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition-colors focus:border-primary" />
                       </div>
                     </div>
                   ))}
@@ -1145,7 +1145,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
 
           <motion.aside className="space-y-6 xl:sticky xl:top-24 xl:self-start" variants={SETTINGS_STAGGER_REVEAL}>
             <motion.section variants={SETTINGS_SECTION_REVEAL}>
-              <Card className="rounded-[2.25rem] border border-slate-200/90 bg-slate-50/90 p-6 shadow-sm shadow-slate-200/40">
+              <Card className="rounded-[2.25rem] border border-slate-200/90 bg-surface-muted/90 p-6 shadow-sm shadow-slate-200/40">
                 <SubSectionHeader
                   title="보조 컨텍스트"
                   description="왼쪽 작업면을 조정할 때 바로 참고할 저장 기준과 알림 상태를 한곳에 모았습니다."
@@ -1183,12 +1183,12 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   descriptionClassName="text-sm"
                 />
 
-                <details id="news-settings-alert-rules" className="group rounded-[1.9rem] border border-slate-200/90 bg-slate-50/75 p-5" open={shouldOpenAlertRulesPanel(alertRuleDraftEffective.length, "")}>
+                <details id="news-settings-alert-rules" className="group rounded-[1.9rem] border border-slate-200/90 bg-surface-muted/75 p-5" open={shouldOpenAlertRulesPanel(alertRuleDraftEffective.length, "")}>
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-slate-400 transition-transform group-open:rotate-90">▶</span>
                       <div>
-                        <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-900">알림 규칙 오버라이드 (JSON)</p>
+                        <p className="text-sm font-black uppercase tracking-[0.18em] text-navy">알림 규칙 오버라이드 (JSON)</p>
                         <p className="mt-1 text-xs text-slate-500">적용은 메인 저장과 별도이며, 이 섹션 안에서만 처리됩니다.</p>
                       </div>
                     </div>
@@ -1197,7 +1197,7 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   <div className="mt-5 space-y-5">
                     <div className={SETTINGS_PANEL_CLASSNAME}>
                       <div className="mb-4 flex flex-wrap items-center gap-3">
-                        <button type="button" onClick={() => void handleAlertRulesAction("reload")} disabled={alertRulesPhase !== "idle" || alertRulesDirty} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60"> {alertRulesPhase === "reloading" ? "로딩 중..." : "현재 적용값 불러오기"} </button>
+                        <button type="button" onClick={() => void handleAlertRulesAction("reload")} disabled={alertRulesPhase !== "idle" || alertRulesDirty} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-surface-muted disabled:opacity-60"> {alertRulesPhase === "reloading" ? "로딩 중..." : "현재 적용값 불러오기"} </button>
                         <button type="button" onClick={() => void handleAlertRulesAction("apply")} disabled={alertRulesPhase !== "idle" || !alertRulesDirty} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white transition-colors hover:bg-slate-800 disabled:opacity-60"> {alertRulesPhase === "applying" ? "적용 중..." : "알림 규칙 적용"} </button>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
@@ -1207,13 +1207,13 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                       </div>
                       <p className="mt-4 text-xs font-bold leading-relaxed text-slate-600">{alertRulesSectionStatusText}</p>
                     </div>
-                    <textarea value={alertRulesJson} onChange={(e) => setAlertRulesJson(e.target.value)} rows={6} className="w-full rounded-[1.6rem] border border-slate-200 bg-slate-950 p-5 font-mono text-[11px] text-emerald-400 outline-none shadow-inner focus:ring-1 focus:ring-emerald-500" placeholder="JSON 오버라이드 입력..." />
-                    {alertRulesIoSummary ? <p className="text-xs font-bold text-emerald-600">✅ {alertRulesIoSummary}</p> : null}
+                    <textarea value={alertRulesJson} onChange={(e) => setAlertRulesJson(e.target.value)} rows={6} className="w-full rounded-[1.6rem] border border-slate-200 bg-slate-950 p-5 font-mono text-[11px] text-primary outline-none shadow-inner focus:ring-1 focus:ring-primary" placeholder="JSON 오버라이드 입력..." />
+                    {alertRulesIoSummary ? <p className="text-xs font-bold text-primary">✅ {alertRulesIoSummary}</p> : null}
                     <div className="space-y-3">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">활성 규칙 리스트 ({alertRuleDraftEffective.length})</p>
                       <div className="max-h-64 overflow-auto rounded-[1.6rem] border border-slate-200 bg-white">
                         <table className="min-w-full text-left">
-                          <thead className="sticky top-0 border-b border-slate-200 bg-slate-50">
+                          <thead className="sticky top-0 border-b border-slate-200 bg-surface-muted">
                             <tr className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
                               <th className="px-4 py-3">유형</th>
                               <th className="px-4 py-3">조건</th>
@@ -1222,14 +1222,14 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {alertRuleDraftEffective.map((row) => (
-                              <tr key={row.id} className="transition-colors hover:bg-slate-50/80">
+                              <tr key={row.id} className="transition-colors hover:bg-surface-muted/80">
                                 <td className="px-4 py-4">
-                                  <p className="text-xs font-black text-slate-900">{asString(row.name) || row.id}</p>
+                                  <p className="text-xs font-black text-navy">{asString(row.name) || row.id}</p>
                                   <p className="text-[10px] font-bold uppercase text-slate-400">{formatAlertRuleKind(row.kind)}</p>
                                 </td>
                                 <td className="px-4 py-4 text-xs font-medium leading-relaxed text-slate-600">{formatAlertRuleSummary(row)}</td>
                                 <td className="px-4 py-4 text-center">
-                                  <span className={cn("inline-block rounded-lg px-2 py-0.5 text-[10px] font-black tabular-nums", row.enabled !== false ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400")}>{row.enabled !== false ? "ACTIVE" : "DISABLED"}</span>
+                                  <span className={cn("inline-block rounded-lg px-2 py-0.5 text-[10px] font-black tabular-nums", row.enabled !== false ? "bg-primary/5 text-navy" : "bg-surface-muted text-slate-400")}>{row.enabled !== false ? "ACTIVE" : "DISABLED"}</span>
                                 </td>
                               </tr>
                             ))}
@@ -1240,12 +1240,12 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   </div>
                 </details>
 
-                <details className="group mt-5 rounded-[1.9rem] border border-slate-200/90 bg-slate-50/75 p-5">
+                <details className="group mt-5 rounded-[1.9rem] border border-slate-200/90 bg-surface-muted/75 p-5">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <span className="text-xs text-slate-400 transition-transform group-open:rotate-90">▶</span>
                       <div>
-                        <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-900">소스 및 지표 벌크 IO (고급)</p>
+                        <p className="text-sm font-black uppercase tracking-[0.18em] text-navy">소스 및 지표 벌크 IO (고급)</p>
                         <p className="mt-1 text-xs text-slate-500">수동 편집보다 대량 동기화가 필요한 경우에만 여는 보조 작업면입니다.</p>
                       </div>
                     </div>
@@ -1253,27 +1253,27 @@ export function NewsSettingsClient({ csrf }: NewsSettingsClientProps) {
                   <div className="mt-5 space-y-6">
                     <div className={SETTINGS_PANEL_CLASSNAME}>
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-900">뉴스 소스 데이터 (JSON)</p>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-navy">뉴스 소스 데이터 (JSON)</p>
                       </div>
                       <textarea value={sourcesJson} onChange={(e) => setSourcesJson(e.target.value)} rows={4} className="mt-4 w-full rounded-[1.35rem] border border-slate-200 bg-slate-950 p-4 font-mono text-[10px] text-sky-400 outline-none shadow-inner" />
                       <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "export")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50 shadow-sm">내보내기</button>
-                        <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "import", "dry_run")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50 shadow-sm">가져오기 (Dry-run)</button>
+                        <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "export")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-surface-muted shadow-sm">내보내기</button>
+                        <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "import", "dry_run")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-surface-muted shadow-sm">가져오기 (Dry-run)</button>
                         <button type="button" disabled={sourcesIoLoading} onClick={() => void handleIo("sources", "import", "apply")} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white transition-colors hover:bg-slate-800 shadow-sm">가져오기 (적용)</button>
                       </div>
-                      {sourcesIoSummary ? <p className="mt-3 text-[11px] font-bold text-emerald-600">✅ {sourcesIoSummary}</p> : null}
+                      {sourcesIoSummary ? <p className="mt-3 text-[11px] font-bold text-primary">✅ {sourcesIoSummary}</p> : null}
                     </div>
                     <div className={SETTINGS_PANEL_CLASSNAME}>
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-900">지표 Series Specs (JSON)</p>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-navy">지표 Series Specs (JSON)</p>
                       </div>
                       <textarea value={specsJson} onChange={(e) => setSpecsJson(e.target.value)} rows={4} className="mt-4 w-full rounded-[1.35rem] border border-slate-200 bg-slate-950 p-4 font-mono text-[10px] text-sky-400 outline-none shadow-inner" />
                       <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "export")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50 shadow-sm">내보내기</button>
-                        <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "import", "dry_run")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-slate-50 shadow-sm">가져오기 (Dry-run)</button>
+                        <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "export")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-surface-muted shadow-sm">내보내기</button>
+                        <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "import", "dry_run")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 transition-colors hover:bg-surface-muted shadow-sm">가져오기 (Dry-run)</button>
                         <button type="button" disabled={specsIoLoading} onClick={() => void handleIo("specs", "import", "apply")} className="rounded-xl bg-slate-900 px-5 py-2 text-xs font-black text-white transition-colors hover:bg-slate-800 shadow-sm">가져오기 (적용)</button>
                       </div>
-                      {specsIoSummary ? <p className="mt-3 text-[11px] font-bold text-emerald-600">✅ {specsIoSummary}</p> : null}
+                      {specsIoSummary ? <p className="mt-3 text-[11px] font-bold text-primary">✅ {specsIoSummary}</p> : null}
                     </div>
                   </div>
                 </details>

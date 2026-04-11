@@ -32,7 +32,7 @@ export function ProviderLogo({
       <div
         key={key || "fallback"}
         style={{ width: size, height: size }}
-        className={`flex shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 font-bold border border-slate-200/70 shadow-sm ${className}`}
+        className={`flex shrink-0 items-center justify-center rounded-full bg-surface-muted text-slate-400 font-bold border border-slate-200/70 shadow-sm ${className}`}
       >
         {initial}
       </div>

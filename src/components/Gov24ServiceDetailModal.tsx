@@ -74,14 +74,14 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
       <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] bg-white p-8 lg:p-10 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-6">
           <div className="space-y-1">
-            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">맞춤 혜택 상세 정보</span>
-            <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">{data.title}</h3>
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest">맞춤 혜택 상세 정보</span>
+            <h3 className="text-2xl font-black text-navy tracking-tight leading-tight">{data.title}</h3>
             <div className="flex items-center gap-3 pt-1">
-              <span className="inline-flex rounded-lg bg-slate-100 px-2 py-0.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">Source: {SOURCE_LABEL[data.source]}</span>
+              <span className="inline-flex rounded-lg bg-surface-muted px-2 py-0.5 text-[10px] font-black text-slate-500 uppercase tracking-wider">Source: {SOURCE_LABEL[data.source]}</span>
               {data.org && <span className="text-[11px] font-bold text-slate-400">기관: {data.org}</span>}
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-2xl bg-slate-100 p-2 text-slate-400 hover:bg-slate-200 transition-colors">
+          <button type="button" onClick={onClose} className="rounded-2xl bg-surface-muted p-2 text-slate-400 hover:bg-slate-200 transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
           </button>
         </div>
@@ -95,8 +95,8 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
               className={cn(
                 "rounded-full px-4 py-2 text-xs font-black transition-all",
                 tab === key
-                  ? "bg-emerald-500 text-white shadow-md shadow-emerald-200"
-                  : "bg-white text-slate-500 hover:bg-slate-50"
+                  ? "bg-primary text-white shadow-md shadow-primary/20"
+                  : "bg-white text-slate-500 hover:bg-surface-muted"
               )}
             >
               {TAB_LABELS[key]}
@@ -110,7 +110,7 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
               <div className="space-y-6">
                 <ul className="grid gap-3">
                   {targetItems.map((entry, idx) => (
-                    <li key={`${idx}:${entry.key}`} className="rounded-2xl bg-slate-50 p-4 border border-slate-100/50">
+                    <li key={`${idx}:${entry.key}`} className="rounded-2xl bg-surface-muted p-4 border border-slate-100/50">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{entry.key}</p>
                       <p className="text-sm font-bold text-slate-700 leading-relaxed">{entry.value}</p>
                     </li>
@@ -160,7 +160,7 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
                     {applyLinks.map((entry, idx) => (
                       <a
                         key={`${idx}:${entry.url}`}
-                        className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-[0.98]"
+                        className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-surface-muted active:scale-[0.98]"
                         href={entry.url}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -174,7 +174,7 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
             </div>
           ) : tab === "apply" && applyLinks.length > 0 ? (
             <div className="space-y-6">
-              <div className="py-8 text-center rounded-3xl bg-slate-50">
+              <div className="py-8 text-center rounded-3xl bg-surface-muted">
                 <p className="text-sm font-black text-slate-400">신청방법 원문이 없습니다.</p>
               </div>
               <div>
@@ -183,7 +183,7 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
                   {applyLinks.map((entry, idx) => (
                     <a
                       key={`${idx}:${entry.url}`}
-                      className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-[0.98]"
+                      className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-surface-muted active:scale-[0.98]"
                       href={entry.url}
                       target="_blank"
                       rel="noopener noreferrer"
@@ -217,7 +217,7 @@ export function Gov24ServiceDetailModal({ data, onClose }: { data: Gov24ServiceD
           {safeApplyUrl && (
             <div className="space-y-1">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">관련 사이트</p>
-              <a className="text-sm font-black text-emerald-600 underline underline-offset-4 decoration-emerald-200 hover:text-emerald-700 transition-colors" href={safeApplyUrl} target="_blank" rel="noopener noreferrer">
+              <a className="text-sm font-black text-primary underline underline-offset-4 decoration-primary/20 hover:text-navy transition-colors" href={safeApplyUrl} target="_blank" rel="noopener noreferrer">
                 정부24에서 확인하기
               </a>
             </div>

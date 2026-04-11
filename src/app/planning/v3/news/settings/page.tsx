@@ -5,7 +5,7 @@ export default async function PlanningV3NewsSettingsPage() {
   const cookieStore = await cookies();
   const csrf = cookieStore.get("dev_csrf")?.value ?? "";
   return (
-    <div className="bg-slate-100/80">
+    <div className="bg-surface-muted/80">
       <NewsSettingsClient csrf={csrf} />
     </div>
   );

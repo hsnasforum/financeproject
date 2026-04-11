@@ -55,7 +55,7 @@ export function HelpDialog() {
                 </h2>
                 <button
                   type="button"
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+                  className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-surface-muted"
                   onClick={() => setOpen(false)}
                 >
                   {uiTextKo.help.close}
@@ -87,7 +87,7 @@ export function HelpDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+        className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-surface-muted"
       >
         {uiTextKo.help.open}
       </button>

@@ -65,7 +65,7 @@ export function FxToolClient() {
                 외화 항목 (콤마 구분)
               </label>
               <input
-                className="block w-full h-12 rounded-2xl border border-slate-200 bg-slate-50/50 px-5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white transition-all shadow-inner placeholder:text-slate-300"
+                className="block w-full h-12 rounded-2xl border border-slate-200 bg-surface-muted/50 px-5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white transition-all shadow-inner placeholder:text-slate-300"
                 value={pairs}
                 onChange={(e) => setPairs(e.target.value)}
                 placeholder="예: USD:1000, JPY:50000"
@@ -95,7 +95,7 @@ export function FxToolClient() {
         </Card>
 
         <div className="lg:col-span-2 space-y-6">
-          <Card className={cn("rounded-[2rem] p-8 shadow-sm transition-all border-2", rows.length > 0 ? "border-emerald-100 bg-white" : "border-dashed border-slate-100 bg-slate-50/30")}>
+          <Card className={cn("rounded-[2rem] p-8 shadow-sm transition-all border-2", rows.length > 0 ? "border-primary/10 bg-white" : "border-dashed border-slate-100 bg-surface-muted/30")}>
             <SubSectionHeader title="현재 기준 환산 결과" description={rows.length > 0 ? "현재 조회 기준 환율로 계산한 비교 결과입니다." : "환산 버튼을 누르면 여기에 비교 결과가 표시됩니다."} />
             
             {rows.length === 0 ? (
@@ -106,14 +106,14 @@ export function FxToolClient() {
               <div className="mt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="grid gap-4 sm:grid-cols-2">
                   {rows.map((row) => (
-                    <div key={`${row.currency}-${row.amount}`} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 group hover:border-emerald-200 transition-all">
+                    <div key={`${row.currency}-${row.amount}`} className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5 group hover:border-primary/20 transition-all">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{row.currency} 항목</span>
                         <span className="text-[10px] font-bold text-slate-400 tabular-nums">기준 환율 {row.rate ?? "-"}</span>
                       </div>
                       <div className="flex items-end justify-between gap-2">
                         <p className="text-sm font-bold text-slate-500 tracking-tight">{row.amount.toLocaleString()} {row.currency}</p>
-                        <p className="text-lg font-black text-slate-900 tabular-nums">
+                        <p className="text-lg font-black text-navy tabular-nums">
                           {typeof row.krw === "number" ? formatKrwWithEok(row.krw) : "-"}
                         </p>
                       </div>
@@ -122,10 +122,10 @@ export function FxToolClient() {
                   ))}
                 </div>
 
-                <div className="rounded-3xl bg-emerald-600 p-8 shadow-xl shadow-emerald-900/20 text-white">
+                <div className="rounded-3xl bg-primary p-8 shadow-xl shadow-navy/20 text-white">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">현재 기준 합계</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">현재 기준 합계</p>
                       <p className="text-sm font-black text-white">원화 환산 합계</p>
                     </div>
                     <p className="text-3xl font-black tabular-nums tracking-tight">

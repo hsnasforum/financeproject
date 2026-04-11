@@ -146,7 +146,7 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Summary</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Batch Summary</h1>
           <div className={bodyActionLinkGroupClassName}>
             <BodyActionLink href="/planning/v3/batches">
               배치 목록
@@ -221,7 +221,7 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
             <BodySectionHeading title="월별 요약" />
             <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
-                <thead className="bg-slate-50">
+                <thead className="bg-surface-muted">
                   <tr>
                     <th className="px-2 py-1 text-left">ym</th>
                     <th className="px-2 py-1 text-right">income</th>

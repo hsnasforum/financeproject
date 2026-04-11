@@ -12,7 +12,7 @@ export default function DartPublicPage() {
             title="DART 공시 분석"
             description="화면을 준비하는 중입니다..."
           />
-          <div className="h-64 animate-pulse rounded-[2rem] bg-slate-100" />
+          <div className="h-64 animate-pulse rounded-[2rem] bg-surface-muted" />
         </PageShell>
       }
     >

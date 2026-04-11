@@ -300,7 +300,7 @@ export function OpsPlanningFeedbackClient() {
         </Card>
       ) : null}
 
-      {notice ? <p className="mb-3 text-sm font-semibold text-emerald-700">{notice}</p> : null}
+      {notice ? <p className="mb-3 text-sm font-semibold text-navy">{notice}</p> : null}
       {error ? (
         <DevUnlockShortcutMessage
           className="mb-3 text-sm font-semibold text-rose-700"
@@ -347,7 +347,7 @@ export function OpsPlanningFeedbackClient() {
 
           <div className="mt-3 max-h-[560px] overflow-auto rounded-lg border border-slate-200">
             <table className="min-w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600">
+              <thead className="bg-surface-muted text-slate-600">
                 <tr>
                   <th className="px-3 py-2">시간</th>
                   <th className="px-3 py-2">분류</th>
@@ -364,7 +364,7 @@ export function OpsPlanningFeedbackClient() {
                 ) : filteredRows.map((row) => (
                   <tr
                     key={row.id}
-                    className={`cursor-pointer border-t border-slate-200 ${selected?.id === row.id ? "bg-emerald-50" : "bg-white hover:bg-slate-50"}`}
+                    className={`cursor-pointer border-t border-slate-200 ${selected?.id === row.id ? "bg-primary/5" : "bg-white hover:bg-surface-muted"}`}
                     onClick={() => setSelectedId(row.id)}
                   >
                     <td className="px-3 py-2">{formatDateTime(row.createdAt)}</td>
@@ -387,8 +387,8 @@ export function OpsPlanningFeedbackClient() {
             <p className="text-sm text-slate-500">선택된 피드백이 없습니다.</p>
           ) : (
             <div className="space-y-3 text-sm">
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="font-semibold text-slate-900">{selected.content.title}</p>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
+                <p className="font-semibold text-navy">{selected.content.title}</p>
                 <p className="mt-1 text-slate-700">{selected.content.message}</p>
               </div>
 
@@ -431,20 +431,20 @@ export function OpsPlanningFeedbackClient() {
                 </label>
               </div>
 
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2 text-xs text-slate-700">
                 <p>snapshotRef: id={asString(selected.context.snapshot?.id) || "-"}, asOf={asString(selected.context.snapshot?.asOf) || "-"}, fetchedAt={asString(selected.context.snapshot?.fetchedAt) || "-"}, missing={String(selected.context.snapshot?.missing === true)}</p>
                 <p>runId: {asString(selected.context.runId) || "-"}</p>
                 <p>reportId: {asString(selected.context.reportId) || "-"}</p>
                 <p>health: critical={typeof selected.context.health?.criticalCount === "number" ? selected.context.health.criticalCount : "-"}, warnings={selected.context.health?.warningsCodes?.join(", ") || "-"}</p>
                 <p>linked issue: {selected.link?.githubIssue?.url ? (
-                  <a className="font-semibold text-emerald-700 underline" href={selected.link.githubIssue.url} rel="noopener noreferrer" target="_blank">
+                  <a className="font-semibold text-navy underline" href={selected.link.githubIssue.url} rel="noopener noreferrer" target="_blank">
                     #{selected.link.githubIssue.number}
                   </a>
                 ) : "-"}</p>
               </div>
 
               <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
-                <p className="font-semibold text-slate-900">Create GitHub Issue</p>
+                <p className="font-semibold text-navy">Create GitHub Issue</p>
                 <p className="mt-1">confirm: <span className="font-mono">{expectedConfirm(selected.id)}</span></p>
                 {selected.triage.status === "new" ? (
                   <p className="mt-1 text-amber-700">status가 new이면 생성할 수 없습니다. 먼저 triage를 저장하세요.</p>
@@ -485,11 +485,11 @@ export function OpsPlanningFeedbackClient() {
           aria-labelledby="ops-feedback-delete-title"
         >
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-feedback-delete-title" className="text-base font-black text-slate-900">피드백 삭제 확인</h3>
+            <h3 id="ops-feedback-delete-title" className="text-base font-black text-navy">피드백 삭제 확인</h3>
             <p className="mt-2 text-sm text-slate-700">
               피드백 항목을 삭제합니다. 계속 진행할까요?
             </p>
-            <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
+            <div className="mt-2 rounded-md border border-slate-200 bg-surface-muted px-2 py-1 text-xs text-slate-700">
               id: <span className="font-semibold">{confirmDeleteTarget.id}</span>
               <br />
               title: <span className="font-semibold">{confirmDeleteTarget.content.title}</span>

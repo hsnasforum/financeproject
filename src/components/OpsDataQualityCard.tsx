@@ -65,7 +65,7 @@ function formatDateTime(value: string): string {
 function statusTone(status: DataQualityStatus): string {
   if (status === "FAIL") return "border-rose-200 bg-rose-50 text-rose-700";
   if (status === "WARN") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 export function OpsDataQualityCard({ csrf }: OpsDataQualityCardProps) {
@@ -110,7 +110,7 @@ export function OpsDataQualityCard({ csrf }: OpsDataQualityCardProps) {
     <Card className="mt-6 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-base font-black text-slate-900">External Data Quality</h2>
+          <h2 className="text-base font-black text-navy">External Data Quality</h2>
           <p className="text-xs text-slate-600">Finlife/DART 외부 데이터 스키마·중복·이상치·신선도 점검</p>
         </div>
         <div className="flex items-center gap-2">
@@ -155,9 +155,9 @@ export function OpsDataQualityCard({ csrf }: OpsDataQualityCardProps) {
           </div>
 
           {report.datasets.map((dataset) => (
-            <div key={dataset.datasetId} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <div key={dataset.datasetId} className="rounded-md border border-slate-200 bg-surface-muted p-3">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="font-semibold text-slate-900">{dataset.label} ({dataset.datasetId})</div>
+                <div className="font-semibold text-navy">{dataset.label} ({dataset.datasetId})</div>
                 <div className={`rounded-full border px-2 py-0.5 text-[11px] ${statusTone(dataset.status)}`}>{dataset.status}</div>
               </div>
               <p className="mt-1 text-[11px] text-slate-600">
@@ -175,7 +175,7 @@ export function OpsDataQualityCard({ csrf }: OpsDataQualityCardProps) {
                       </summary>
                       <p className="mt-1 text-slate-600">{issue.message}</p>
                       {issue.samples.length > 0 ? (
-                        <pre className="mt-1 overflow-auto rounded border border-slate-200 bg-slate-50 p-2 text-[10px] text-slate-700">
+                        <pre className="mt-1 overflow-auto rounded border border-slate-200 bg-surface-muted p-2 text-[10px] text-slate-700">
                           {JSON.stringify(issue.samples, null, 2)}
                         </pre>
                       ) : null}

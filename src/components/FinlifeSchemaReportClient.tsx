@@ -106,10 +106,10 @@ export function FinlifeSchemaReportClient() {
   }, [payload, kind]);
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-6 md:px-8 md:py-10">
+    <main className="min-h-screen bg-surface-muted px-4 py-6 md:px-8 md:py-10">
       <div className="mx-auto max-w-6xl space-y-4">
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h1 className="text-lg font-semibold text-slate-900">FINLIFE Fixture Schema Report</h1>
+          <h1 className="text-lg font-semibold text-navy">FINLIFE Fixture Schema Report</h1>
           <p className="mt-1 text-sm text-slate-500">FINLIFE_MODE=fixture와 --record로 만든 fixture의 key 빈도를 확인합니다.</p>
           <div className="mt-3 grid gap-2 md:grid-cols-3">
             <label className="text-xs text-slate-600">

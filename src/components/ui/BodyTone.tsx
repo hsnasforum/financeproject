@@ -39,17 +39,17 @@ type BodyDialogSurfaceProps = {
 } & HTMLAttributes<HTMLDivElement>;
 
 export const bodyFieldClassName =
-  "mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
+  "mt-1 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-navy shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10";
 
 export const bodyCompactFieldClassName =
-  "rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
+  "rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-navy shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10";
 
 export const bodyTextAreaClassName =
-  "mt-1 min-h-48 w-full rounded-2xl border border-slate-200 bg-white p-3 font-mono text-xs text-slate-900 shadow-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100";
+  "mt-1 min-h-48 w-full rounded-2xl border border-slate-200 bg-white p-3 font-mono text-xs text-navy shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10";
 
 export const bodyLabelClassName = "text-sm font-semibold text-slate-700";
 
-export const bodySectionTitleClassName = "text-sm font-bold text-slate-900";
+export const bodySectionTitleClassName = "text-sm font-bold text-navy";
 
 export const bodySectionDescriptionClassName = "text-xs text-slate-600";
 
@@ -65,10 +65,10 @@ export const bodyMetaChipClassName =
   "rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 shadow-sm";
 
 export const bodyInlineActionLinkClassName =
-  "inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline shadow-sm transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700";
+  "inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 no-underline shadow-sm transition hover:border-primary/30 hover:bg-primary/5 hover:text-navy";
 
 export const bodyActionLinkClassName =
-  "inline-flex items-center text-sm font-semibold text-emerald-700 underline underline-offset-2";
+  "inline-flex items-center text-sm font-semibold text-navy underline underline-offset-2";
 
 export function BodyActionLink({ className, ...props }: BodyActionLinkProps) {
   return (
@@ -81,7 +81,7 @@ export function BodyActionLink({ className, ...props }: BodyActionLinkProps) {
 
 export function BodyInset({ children, className, ...rest }: BodyInsetProps) {
   return (
-    <div className={cn("rounded-xl border border-slate-200 bg-slate-50 p-3", className)} {...rest}>
+    <div className={cn("rounded-xl border border-slate-200 bg-surface-muted p-3", className)} {...rest}>
       {children}
     </div>
   );
@@ -89,8 +89,8 @@ export function BodyInset({ children, className, ...rest }: BodyInsetProps) {
 
 export function BodyStatusInset({ tone = "default", children, className, ...rest }: BodyStatusInsetProps) {
   const toneClassName = {
-    default: "border-slate-200 bg-slate-50 text-slate-700",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    default: "border-slate-200 bg-surface-muted text-slate-700",
+    success: "border-primary/20 bg-primary/5 text-navy",
     warning: "border-amber-200 bg-amber-50 text-amber-700",
     danger: "border-rose-200 bg-rose-50 text-rose-700",
   }[tone];
@@ -135,8 +135,8 @@ export function BodySectionHeading({ title, description, action, className }: Bo
 
 export function BodyEmptyState({ title, description, className }: BodyEmptyStateProps) {
   return (
-    <div className={cn("rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center", className)}>
-      <p className="text-sm font-semibold text-slate-900">{title}</p>
+    <div className={cn("rounded-2xl border border-dashed border-slate-200 bg-surface-muted px-4 py-6 text-center", className)}>
+      <p className="text-sm font-semibold text-navy">{title}</p>
       {description ? <p className="mt-1 text-sm text-slate-600">{description}</p> : null}
     </div>
   );
