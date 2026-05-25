@@ -1,6 +1,7 @@
 # 2026-05-26 의존성 보안 패치
 
 ## 변경 파일
+- `.github/workflows/ci.yml`
 - `package.json`
 - `pnpm-lock.yaml`
 - `docs/dart-rules-quality-report.md`
@@ -21,6 +22,7 @@
 - `next`와 `eslint-config-next`를 `16.2.3`에서 `16.2.6`으로 올렸습니다.
 - `pnpm.overrides`에 `fast-uri@3.1.2`, `hono@4.12.18`, `postcss@8.5.10`을 추가해 전이 취약점을 제거했습니다.
 - `eslint-config-next` 16.2.6이 끌어오는 `eslint-plugin-react-hooks` 7.1.1의 신규 React Compiler lint 확장을 피하기 위해 기존 통과 기준인 `7.0.1`로 고정했습니다.
+- CI의 install 직후 단계에 `pnpm audit`를 추가해 같은 종류의 의존성 취약점이 PR 게이트를 통과하지 않도록 했습니다.
 - `corepack pnpm verify` 실행으로 DART/schema/freshness 리포트 기준 시각이 갱신됐습니다.
 
 ## 검증
@@ -36,10 +38,12 @@
 - `corepack pnpm e2e:rc` PASS: 24 passed, 1 skipped
 - `corepack pnpm release:verify` 1차 FAIL: 최신 `/work` note의 `## 다음 라운드` 섹션 누락을 `multi-agent:guard`가 지적했습니다. 본 문서 보완 후 재실행 예정입니다.
 - `corepack pnpm release:verify` PASS: `planning:v2:complete`, `multi-agent:guard`, `planning:v2:compat`, `planning:v2:regress`, `test`, advisory `planning:ssot:check` 통과
+- `corepack pnpm multi-agent:guard` PASS: CI workflow 변경과 본 `/work` 기록 보정 후 확인
 
 ## 남은 리스크
 - `eslint-plugin-react-hooks` 7.0.1 override는 lint 기준 유지를 위한 보수적 고정입니다. React Compiler 신규 규칙을 도입하려면 별도 리팩터링 배치가 필요합니다.
 - `postcss`, `hono`, `fast-uri`는 전이 의존성 override이므로 다음 대규모 의존성 업데이트 때 제거 가능 여부를 다시 확인해야 합니다.
+- CI의 `pnpm audit`는 npm advisory DB와 네트워크에 의존하므로, 외부 레지스트리 장애 시 일시 실패 가능성이 있습니다.
 - 새 커밋을 push하면 PR #24 head SHA가 바뀌므로 GitHub Actions `CI`, `E2E Smoke`를 새 SHA 기준으로 다시 확인해야 합니다.
 - PR #24 병합은 원격 `main` 변경이므로 명시 승인 전에는 진행하지 않습니다.
 
