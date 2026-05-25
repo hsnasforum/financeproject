@@ -26,13 +26,16 @@
 - `corepack pnpm lint` PASS
 - `git diff --check` PASS
 - `corepack pnpm e2e:rc` PASS: 24 passed, 1 skipped
+- GitHub Actions on `77fe13c7d05f51446512ac228ec365221c8fe84f`: `CI` success, `E2E Smoke` success
+- PR #24 상태 확인: open, ready, mergeable, review/comment/thread 없음
+- `git fetch origin main && git merge-base --is-ancestor origin/main HEAD` PASS: `origin/main`은 현재 HEAD의 조상
 
 ## 남은 리스크
-- 원격 Actions 재실행 결과는 아직 확인 전입니다. 커밋과 push 이후 PR #24의 새 head SHA 기준 CI/E2E 결과를 다시 확인해야 합니다.
 - 이 변경은 Playwright 실행 설정에 한정되며 앱 런타임 로직은 바꾸지 않았습니다.
 - 문서나 사용자 경로는 바뀌지 않았으므로 `docs/current-screens.md` 갱신은 필요하지 않은 것으로 판단했습니다.
+- PR #24 병합은 원격 main을 바꾸는 비가역성 있는 작업이라 별도 승인 후 진행하는 것이 안전합니다.
 
 ## 다음 라운드 우선순위
-- 현재 변경을 커밋하고 `pr37-planning-v3-txn-overrides` 원격 브랜치에 push합니다.
-- PR #24의 새 head SHA 기준 GitHub Actions CI와 E2E Smoke를 확인합니다.
-- 원격 CI가 다시 실패하면 새 로그에서 앱 assertion 실패와 환경 설정 실패를 분리해 후속 수정합니다.
+- PR #24 병합 승인 여부를 확정합니다.
+- 병합 후 `main` 기준 fetch/pull과 기본 smoke 또는 release gate를 다시 확인합니다.
+- 병합 이후 남는 제품 완성도 리스크를 main 기준으로 재감사합니다.
