@@ -21,8 +21,7 @@ export async function copyToClipboard(text: string): Promise<{ ok: boolean; mess
     const textarea = document.createElement("textarea");
     textarea.value = value;
     textarea.setAttribute("readonly", "");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
+    textarea.className = "app-clipboard-buffer";
     document.body.appendChild(textarea);
     textarea.focus();
     textarea.select();

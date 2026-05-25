@@ -9,6 +9,17 @@ const test = base.extend({
   page: async ({ page }, runPage) => {
     if (shouldDisableDevHmr) {
       await page.addInitScript(() => {
+        const pathname = window.location.pathname;
+        if (
+          pathname === "/planning"
+          || pathname === "/planning/runs"
+          || pathname === "/planning/reports"
+          || pathname.startsWith("/planning/reports/")
+          || pathname.startsWith("/public/dart")
+          || pathname === "/settings/data-sources"
+        ) {
+          return;
+        }
         const windowWithGuard = window as typeof window & {
           __E2E_DEV_HMR_GUARD__?: boolean;
           WebSocket: typeof WebSocket;

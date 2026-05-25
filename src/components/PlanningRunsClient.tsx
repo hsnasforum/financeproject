@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Badge } from "@/components/ui/Badge";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { buildConfirmString } from "@/lib/ops/confirm";
 import {
@@ -905,7 +906,7 @@ export function PlanningRunsClient({
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs font-bold text-slate-600">완료율 {actionProgressSummaryByRun[selectedRun.id]?.completionPct ?? 0}%</p>
                   <div className="flex-1 h-1.5 rounded-full bg-surface-muted overflow-hidden">
-                    <div className="h-full bg-primary transition-all duration-500" style={{ width: `${actionProgressSummaryByRun[selectedRun.id]?.completionPct ?? 0}%` }} />
+                    <CspSafeProgressBar value={actionProgressSummaryByRun[selectedRun.id]?.completionPct ?? 0} />
                   </div>
                 </div>
 

@@ -48,7 +48,22 @@ describe("security middleware", () => {
         host: "localhost:3000",
       },
     }));
+    const csp = response.headers.get("content-security-policy") ?? "";
+    const scriptSrcDirective = csp.split(";").find((directive) => directive.trim().startsWith("script-src")) ?? "";
+    const styleSrcDirective = csp.split(";").find((directive) => directive.trim().startsWith("style-src ")) ?? "";
+    const styleSrcElemDirective = csp.split(";").find((directive) => directive.trim().startsWith("style-src-elem")) ?? "";
+    const styleSrcAttrDirective = csp.split(";").find((directive) => directive.trim().startsWith("style-src-attr")) ?? "";
     expect(response.headers.get("content-security-policy")).not.toContain("'unsafe-eval'");
+    expect(csp).not.toContain("'unsafe-inline'");
+    expect(scriptSrcDirective).not.toContain("'unsafe-inline'");
+    expect(scriptSrcDirective).toContain("'nonce-");
+    expect(styleSrcDirective.trim()).toBe("style-src 'self'");
+    expect(styleSrcElemDirective.trim()).toBe("style-src-elem 'self'");
+    expect(styleSrcAttrDirective.trim()).toBe("style-src-attr 'none'");
+    expect(csp).toContain("connect-src 'self' https: wss:");
+    expect(csp).toContain("upgrade-insecure-requests");
+    expect(csp).not.toContain("connect-src 'self' ws:");
+    expect(csp).not.toContain(" http:");
   });
 
   it("blocks remote access to /ops", async () => {
@@ -70,6 +85,35 @@ describe("security middleware", () => {
     expect(response.status).toBe(403);
   });
 
+  it("blocks remote access to /api/dev in development", () => {
+    const response = middleware(makeRequest("https://example.com/api/dev/errors/recent", {
+      headers: {
+        host: "example.com",
+      },
+    }));
+    expect(response.status).toBe(403);
+  });
+
+  it("blocks remote access to dev pages in development", () => {
+    const response = middleware(makeRequest("https://example.com/dev/data", {
+      headers: {
+        host: "example.com",
+      },
+    }));
+    expect(response.status).toBe(403);
+  });
+
+  it("lets dev-only routes fall through in production so route handlers can return 404", () => {
+    mutableEnv.NODE_ENV = "production";
+    const response = middleware(makeRequest("https://example.com/api/dev/errors/recent", {
+      headers: {
+        host: "example.com",
+      },
+    }));
+    expect(response.status).not.toBe(403);
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
   it("lets legacy /planner routes fall through to app redirect pages", () => {
     const response = middleware(makeRequest("http://localhost:3000/planner/legacy"));
     expect(response.status).toBe(200);
@@ -77,7 +121,7 @@ describe("security middleware", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
 
-  it("allows remote when ALLOW_REMOTE=true", () => {
+  it("allows remote when ALLOW_REMOTE=true outside production", () => {
     mutableEnv.ALLOW_REMOTE = "true";
     const response = middleware(makeRequest("https://example.com/ops", {
       headers: {
@@ -85,5 +129,16 @@ describe("security middleware", () => {
       },
     }));
     expect(response.status).not.toBe(403);
+  });
+
+  it("ignores ALLOW_REMOTE=true in production", () => {
+    mutableEnv.NODE_ENV = "production";
+    mutableEnv.ALLOW_REMOTE = "true";
+    const response = middleware(makeRequest("https://example.com/ops", {
+      headers: {
+        host: "example.com",
+      },
+    }));
+    expect(response.status).toBe(403);
   });
 });

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SourceBadge } from "@/components/debug/SourceBadge";
 import { RowFlags } from "@/components/debug/RowFlags";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 
 type StatusRow = {
   sourceId: string;
@@ -482,7 +483,7 @@ export default function DebugUnifiedPage() {
               {totalCount && progressPct !== null ? (
                 <div className="mb-2">
                   <div className="mb-1 h-2 w-full rounded bg-slate-200">
-                    <div className="h-2 rounded bg-slate-600" style={{ width: `${progressPct}%` }} />
+                    <CspSafeProgressBar fillClassName="text-slate-600" value={progressPct} />
                   </div>
                   <div className="text-xs text-slate-700">
                     Synced: {row.counts} / {totalCount} ({progressPct.toFixed(2)}%)

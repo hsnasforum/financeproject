@@ -7,7 +7,7 @@ export function downloadText(filename: string, content: string, mimeType = "text
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = filename;
-  anchor.style.display = "none";
+  anchor.hidden = true;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

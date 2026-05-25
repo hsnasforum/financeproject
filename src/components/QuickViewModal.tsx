@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
+import { lockDocumentScroll } from "@/lib/browser/scrollLock";
 import { cn } from "@/lib/utils";
 
 export type QuickViewKind = "deposit" | "saving" | "recommend" | "products" | "fxtool" | "benefits" | "subscription";
@@ -90,8 +91,7 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockDocumentScroll();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -99,7 +99,7 @@ export function QuickViewModal({ open, onClose, kind, title, hrefForNewTab }: Qu
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = prev;
+      releaseScrollLock();
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose]);

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BodyEmptyState, BodyTableFrame } from "@/components/ui/BodyTone";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { formatKrw } from "@/lib/planning/i18n/format";
 import { type Locale } from "@/lib/planning/i18n";
 import { LIMITS } from "@/lib/planning/v2/limits";
@@ -223,9 +224,9 @@ export function GoalsTable(props: GoalsTableProps) {
                     <div className="flex flex-col items-end gap-1.5">
                       <span className="text-xs font-black text-navy tabular-nums">{goal.progressPct.toFixed(1)}%</span>
                       <div className="h-1 w-20 overflow-hidden rounded-full bg-surface-muted">
-                        <div
-                          className={cn("h-full transition-all duration-500", goal.achieved ? "bg-primary" : "bg-sky-400")}
-                          style={{ width: `${Math.min(100, goal.progressPct)}%` }}
+                        <CspSafeProgressBar
+                          fillClassName={goal.achieved ? "text-primary" : "text-sky-400"}
+                          value={goal.progressPct}
                         />
                       </div>
                     </div>

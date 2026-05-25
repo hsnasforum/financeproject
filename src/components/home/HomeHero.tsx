@@ -93,8 +93,7 @@ export function HomeHero({ slides = DEFAULT_SLIDES }: { slides?: HomeHeroSlide[]
     <section className="relative overflow-hidden border-b border-slate-200/60 bg-gradient-to-b from-[#f5f7fa] via-white to-white">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-[0.06]"
-        style={{ background: "var(--hero-gradient)" }}
+        className="bg-hero-gradient-surface pointer-events-none absolute inset-x-0 top-0 h-[520px] opacity-[0.06]"
       />
       <Container className="relative px-4 py-14 sm:px-6 md:py-20 lg:px-8">
         <div className="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">

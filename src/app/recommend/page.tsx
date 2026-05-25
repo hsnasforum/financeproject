@@ -11,6 +11,7 @@ import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
@@ -1315,10 +1316,7 @@ function RecommendPageInner() {
                       <span className="text-[10px] font-black text-primary tabular-nums">{Math.round(scorePct)}%</span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-surface-muted overflow-hidden">
-                      <div 
-                        className="h-full bg-primary transition-all duration-1000 ease-out shadow-sm shadow-primary/20" 
-                        style={{ width: `${scorePct}%` }}
-                      />
+                      <CspSafeProgressBar fillClassName="text-primary" value={scorePct} />
                     </div>
                   </div>
 

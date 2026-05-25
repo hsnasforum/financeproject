@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { lockDocumentScroll } from "@/lib/browser/scrollLock";
 import { playbooks } from "@/lib/planner/playbook.ko";
 
 type PlaybookModalProps = {
@@ -15,8 +16,7 @@ export function PlaybookModal({ open, onClose, playbookId }: PlaybookModalProps)
 
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockDocumentScroll();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -24,7 +24,7 @@ export function PlaybookModal({ open, onClose, playbookId }: PlaybookModalProps)
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = prev;
+      releaseScrollLock();
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose]);

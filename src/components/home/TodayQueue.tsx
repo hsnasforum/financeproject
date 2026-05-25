@@ -100,8 +100,7 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
           ) : (
             <>
               <div
-                className="relative overflow-hidden rounded-[2rem] p-10 text-white"
-                style={{ background: "var(--hero-gradient)" }}
+                className="bg-hero-gradient-surface relative overflow-hidden rounded-[2rem] p-10 text-white"
               >
                 <div aria-hidden className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-[#00d9a3]/20 blur-3xl" />
                 <p className="relative text-sm font-black uppercase tracking-widest text-[#00d9a3]">Daily Action</p>

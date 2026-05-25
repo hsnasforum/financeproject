@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { lockDocumentScroll } from "@/lib/browser/scrollLock";
 import {
   computeCandidateComparison,
   type CandidateComparisonRow,
@@ -262,8 +263,7 @@ export default function CandidateComparisonSection({
 
   useEffect(() => {
     if (!activeEvidenceRow || typeof window === "undefined") return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockDocumentScroll();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") setActiveEvidenceRow(null);
@@ -271,7 +271,7 @@ export default function CandidateComparisonSection({
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [activeEvidenceRow]);

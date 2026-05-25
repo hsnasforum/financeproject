@@ -70,4 +70,9 @@ describe("isLocalRequest", () => {
     const request = makeRequestLike("https://example.com/ops", { host: "example.com" });
     expect(isLocalRequest(request, { ...process.env, ALLOW_REMOTE: "true" })).toBe(true);
   });
+
+  it("ignores ALLOW_REMOTE=true in production", () => {
+    const request = makeRequestLike("https://example.com/ops", { host: "example.com" });
+    expect(isLocalRequest(request, { ...process.env, NODE_ENV: "production", ALLOW_REMOTE: "true" })).toBe(false);
+  });
 });

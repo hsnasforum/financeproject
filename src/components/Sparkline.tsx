@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 type SparklineProps = {
@@ -50,7 +49,17 @@ export function Sparkline({
   }, [values, width, height]);
 
   if (!values.length) {
-    return <div className={cn("rounded bg-surface-muted", className)} style={{ width, height }} />;
+    return (
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        aria-hidden="true"
+        className={cn("inline-block rounded bg-surface-muted align-top", className)}
+      >
+        <rect x="0" y="0" width={width} height={height} rx="6" fill="currentColor" className="text-surface-muted" />
+      </svg>
+    );
   }
 
   const handleMouseMove = (e: React.MouseEvent | React.FocusEvent) => {
@@ -63,12 +72,25 @@ export function Sparkline({
   };
 
   const hoveredPoint = hoveredIndex !== null ? points[hoveredIndex] : null;
+  const tooltipValue = hoveredPoint && formatValue ? formatValue(hoveredPoint.value, hoveredPoint.index) : null;
+  const tooltipLabel = hoveredPoint ? `Point ${hoveredPoint.index + 1}` : null;
+  const tooltipWidth = Math.max(
+    64,
+    Math.max(tooltipLabel?.length ?? 0, tooltipValue?.length ?? 0) * 6.5 + 18,
+  );
+  const tooltipHeight = 32;
+  const tooltipX = hoveredPoint
+    ? Math.max(4, Math.min(width - tooltipWidth - 4, hoveredPoint.x - tooltipWidth / 2))
+    : 0;
+  const tooltipArrowX = hoveredPoint
+    ? Math.max(tooltipX + 8, Math.min(tooltipX + tooltipWidth - 8, hoveredPoint.x))
+    : 0;
+  const tooltipY = -40;
 
   return (
     <div
       ref={containerRef}
-      className={cn("relative group/sparkline cursor-crosshair touch-none", className)}
-      style={{ width, height }}
+      className={cn("group/sparkline relative inline-block cursor-crosshair touch-none align-top outline-none", className)}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setHoveredIndex(null)}
       onFocus={handleMouseMove}
@@ -102,14 +124,8 @@ export function Sparkline({
           className="transition-all duration-300"
         />
 
-        <AnimatePresence>
-          {hoveredPoint && (
-            <motion.g
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.1 }}
-            >
+        {hoveredPoint ? (
+          <g>
               {/* Vertical Guide Line */}
               <line
                 x1={hoveredPoint.x}
@@ -131,36 +147,47 @@ export function Sparkline({
                 strokeWidth="1.5"
                 className="shadow-sm"
               />
-            </motion.g>
-          )}
-        </AnimatePresence>
+          </g>
+        ) : null}
+        {hoveredPoint && tooltipValue && tooltipLabel ? (
+          <g pointerEvents="none">
+              <rect
+                x={tooltipX}
+                y={tooltipY}
+                width={tooltipWidth}
+                height={tooltipHeight}
+                rx="8"
+                fill="white"
+                stroke="currentColor"
+                className="text-slate-200"
+              />
+              <polygon
+                points={`${tooltipArrowX - 4},${tooltipY + tooltipHeight} ${tooltipArrowX + 4},${tooltipY + tooltipHeight} ${tooltipArrowX},${tooltipY + tooltipHeight + 6}`}
+                fill="white"
+                stroke="currentColor"
+                className="text-slate-200"
+              />
+              <text
+                x={tooltipX + tooltipWidth / 2}
+                y={tooltipY + 12}
+                textAnchor="middle"
+                fill="currentColor"
+                className="fill-current text-[9px] font-black uppercase tracking-tight text-slate-400"
+              >
+                {tooltipLabel}
+              </text>
+              <text
+                x={tooltipX + tooltipWidth / 2}
+                y={tooltipY + 24}
+                textAnchor="middle"
+                fill="currentColor"
+                className="fill-current text-[10px] font-black tabular-nums text-slate-700"
+              >
+                {tooltipValue}
+              </text>
+          </g>
+        ) : null}
       </svg>
-
-      {/* Tooltip Overlay */}
-      <AnimatePresence>
-        {hoveredPoint && formatValue && (
-          <motion.div
-            initial={{ opacity: 0, y: 4, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.95 }}
-            transition={{ duration: 0.1 }}
-            className="absolute z-50 pointer-events-none"
-            style={{
-              left: hoveredPoint.x,
-              bottom: height + 8,
-              transform: "translateX(-50%)"
-            }}
-          >
-            <div className="relative bg-white border border-slate-200 text-navy text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow-xl whitespace-nowrap flex flex-col items-center gap-0.5">
-              <span className="text-slate-400 uppercase tracking-tighter text-[9px]">Point {hoveredPoint.index + 1}</span>
-              <span className="tabular-nums text-slate-700">{formatValue(hoveredPoint.value, hoveredPoint.index)}</span>
-              {/* Arrow with border effect */}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-200" />
-              <div className="absolute top-[calc(100%-1px)] left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white" />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

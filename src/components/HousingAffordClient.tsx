@@ -7,6 +7,7 @@ import { NumberField } from "@/components/forms/NumberField";
 import { ErrorSummary } from "@/components/forms/ErrorSummary";
 import { FieldError } from "@/components/forms/FieldError";
 import { Card } from "@/components/ui/Card";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
@@ -47,6 +48,44 @@ function toNumberOrNull(text: string): number | null {
   const parsed = Number(cleaned);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
+}
+
+function clampPct(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function CashflowCompositionBar({
+  otherOutflowPct,
+  housingCostPct,
+}: {
+  otherOutflowPct: number;
+  housingCostPct: number;
+}) {
+  const otherWidth = clampPct(otherOutflowPct);
+  const housingWidth = clampPct(housingCostPct);
+  const housingStart = Math.min(100, otherWidth);
+  const visibleHousingWidth = Math.max(0, Math.min(100 - housingStart, housingWidth));
+
+  return (
+    <svg
+      className="block h-full w-full"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-label="월 현금흐름 구성"
+      role="img"
+    >
+      <rect x="0" y="0" width="100" height="100" rx="50" fill="currentColor" className="text-slate-200" />
+      <g>
+        <title>기타 지출</title>
+        <rect x="0" y="0" width={otherWidth} height="100" rx="50" fill="currentColor" className="text-slate-400" />
+      </g>
+      <g>
+        <title>주거비</title>
+        <rect x={housingStart} y="0" width={visibleHousingWidth} height="100" rx="50" fill="currentColor" className="text-primary" />
+      </g>
+    </svg>
+  );
 }
 
 export function HousingAffordClient({
@@ -420,13 +459,15 @@ export function HousingAffordClient({
                   {/* Housing Ratio Bar */}
                   <div className="space-y-1.5 pt-1">
                     <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={cn(
-                          "h-full transition-all duration-500",
-                          (result.housingRatioPct ?? 0) <= 25 ? "bg-primary" :
-                          (result.housingRatioPct ?? 0) <= 35 ? "bg-amber-500" : "bg-rose-500"
-                        )}
-                        style={{ width: `${Math.min(100, result.housingRatioPct ?? 0)}%` }}
+                      <CspSafeProgressBar
+                        fillClassName={
+                          (result.housingRatioPct ?? 0) <= 25
+                            ? "text-primary"
+                            : (result.housingRatioPct ?? 0) <= 35
+                              ? "text-amber-500"
+                              : "text-rose-500"
+                        }
+                        value={result.housingRatioPct ?? 0}
                       />
                     </div>
                     <div className="flex justify-between text-[9px] font-bold text-slate-400 uppercase tracking-widest">
@@ -447,15 +488,9 @@ export function HousingAffordClient({
               </div>
 
               <div className="h-4 w-full flex overflow-hidden rounded-full bg-slate-200 mt-4">
-                <div
-                  className="h-full bg-slate-400 border-r border-white/20"
-                  style={{ width: `${Math.min(100, (otherOutflowVal / incomeVal) * 100)}%` }}
-                  title="기타 지출"
-                />
-                <div
-                  className="h-full bg-primary"
-                  style={{ width: `${Math.min(100, (housingCostVal / incomeVal) * 100)}%` }}
-                  title="주거비"
+                <CashflowCompositionBar
+                  housingCostPct={(housingCostVal / incomeVal) * 100}
+                  otherOutflowPct={(otherOutflowVal / incomeVal) * 100}
                 />
               </div>
 
