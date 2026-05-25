@@ -1,6 +1,6 @@
 # DART Rules Quality Gate Report
 
-- generatedAt: 2026-05-25T15:51:30.006Z
+- generatedAt: 2026-05-25T18:53:01.832Z
 - status: PASS
 - evalPath: tmp/dart/rules_eval.json
 - baselinePath: docs/dart-rules-quality-baseline.json
