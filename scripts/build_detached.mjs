@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { isCommandNotFound, pnpmCommandCandidates } from "./pnpm_runner.mjs";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const cwd = process.cwd();
@@ -35,49 +36,65 @@ async function runWorker(args) {
   const startedAt = new Date().toISOString();
   fs.writeSync(logFd, `[build:detached] worker start ${startedAt} cwd=${cwd}\n`);
 
-  const child = spawn("pnpm", ["build"], {
-    cwd,
-    env: process.env,
-    shell: process.platform === "win32",
-    stdio: ["ignore", logFd, logFd],
-  });
+  const candidates = pnpmCommandCandidates();
 
-  child.on("error", (error) => {
-    const finishedAt = new Date().toISOString();
-    fs.writeSync(logFd, `[build:detached] worker error ${finishedAt} ${error.message}\n`);
-    writeExitFile(exitFile, {
-      ok: false,
-      code: 1,
-      signal: null,
-      pid: child.pid ?? null,
-      startedAt,
-      finishedAt,
-      logFile,
-      error: error.message,
+  const runBuild = (candidateIndex = 0) => {
+    const candidate = candidates[candidateIndex];
+    let fallbackStarted = false;
+    const child = spawn(candidate.command, [...candidate.args, "build"], {
+      cwd,
+      env: process.env,
+      shell: process.platform === "win32",
+      stdio: ["ignore", logFd, logFd],
     });
-    fs.closeSync(logFd);
-    process.exit(1);
-  });
 
-  child.on("exit", (code, signal) => {
-    const finishedAt = new Date().toISOString();
-    const normalizedCode = typeof code === "number" ? code : 1;
-    fs.writeSync(
-      logFd,
-      `[build:detached] worker exit ${finishedAt} code=${normalizedCode} signal=${signal ?? "null"}\n`,
-    );
-    writeExitFile(exitFile, {
-      ok: normalizedCode === 0,
-      code: normalizedCode,
-      signal: signal ?? null,
-      pid: child.pid ?? null,
-      startedAt,
-      finishedAt,
-      logFile,
+    child.on("error", (error) => {
+      if (isCommandNotFound(error) && candidateIndex + 1 < candidates.length) {
+        fallbackStarted = true;
+        fs.writeSync(logFd, `[build:detached] worker fallback from ${candidate.command} to ${candidates[candidateIndex + 1].command}\n`);
+        runBuild(candidateIndex + 1);
+        return;
+      }
+
+      const finishedAt = new Date().toISOString();
+      fs.writeSync(logFd, `[build:detached] worker error ${finishedAt} ${error.message}\n`);
+      writeExitFile(exitFile, {
+        ok: false,
+        code: 1,
+        signal: null,
+        pid: child.pid ?? null,
+        startedAt,
+        finishedAt,
+        logFile,
+        error: error.message,
+      });
+      fs.closeSync(logFd);
+      process.exit(1);
     });
-    fs.closeSync(logFd);
-    process.exit(0);
-  });
+
+    child.on("exit", (code, signal) => {
+      if (fallbackStarted) return;
+      const finishedAt = new Date().toISOString();
+      const normalizedCode = typeof code === "number" ? code : 1;
+      fs.writeSync(
+        logFd,
+        `[build:detached] worker exit ${finishedAt} code=${normalizedCode} signal=${signal ?? "null"}\n`,
+      );
+      writeExitFile(exitFile, {
+        ok: normalizedCode === 0,
+        code: normalizedCode,
+        signal: signal ?? null,
+        pid: child.pid ?? null,
+        startedAt,
+        finishedAt,
+        logFile,
+      });
+      fs.closeSync(logFd);
+      process.exit(0);
+    });
+  };
+
+  runBuild();
 }
 
 function startDetachedBuild(args) {

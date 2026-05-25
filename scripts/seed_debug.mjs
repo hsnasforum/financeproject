@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import dotenv from "dotenv";
+import { runPnpmSync } from "./pnpm_runner.mjs";
 
 function loadEnvFiles() {
   for (const name of [".env.local", "env.local", ".env"]) {
@@ -13,8 +13,7 @@ function loadEnvFiles() {
 
 function runStep(label, args) {
   console.log(`[seed:debug] ${label}`);
-  const bin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const result = spawnSync(bin, args, {
+  const result = runPnpmSync(args, {
     stdio: "inherit",
     env: process.env,
   });

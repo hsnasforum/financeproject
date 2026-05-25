@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
+import { runPnpm as runPnpmCommand } from "./pnpm_runner.mjs";
 
 const cwd = process.cwd();
 const packageJsonPath = path.join(cwd, "package.json");
@@ -20,14 +20,11 @@ function parseArgs(argv) {
 }
 
 function runPnpm(args) {
-  return new Promise((resolve) => {
-    const child = spawn("pnpm", args, {
+  return runPnpmCommand(args, {
       stdio: "inherit",
       shell: process.platform === "win32",
       env: process.env,
-    });
-    child.on("exit", (code) => resolve(typeof code === "number" ? code : 1));
-  });
+    }).then((result) => result.code);
 }
 
 async function readPackageJson() {

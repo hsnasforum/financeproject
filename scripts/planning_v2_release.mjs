@@ -1,6 +1,7 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { tsImport } from "tsx/esm/api";
+import { runPnpmBuffered } from "./pnpm_runner.mjs";
 
 const SELF_TEST_DOC_PATH = "docs/planning-v2-5min-selftest.md";
 let redactTextImpl = fallbackRedactText;
@@ -51,10 +52,29 @@ function printStep(status, id, note = "") {
 
 function runCommand(step, cwd) {
   return new Promise((resolve, reject) => {
-    const command = process.platform === "win32" && step.command === "pnpm" ? "pnpm.cmd" : step.command;
     const startedAtMs = Date.now();
     const out = [];
     const err = [];
+    if (step.command === "pnpm") {
+      runPnpmBuffered(step.args, {
+        cwd,
+        env: {
+          ...process.env,
+          ...(step.env ?? {}),
+        },
+        onStdout: (chunk) => out.push(String(chunk)),
+        onStderr: (chunk) => err.push(String(chunk)),
+      }).then((result) => {
+        resolve({
+          exitCode: result.code,
+          durationMs: Date.now() - startedAtMs,
+          stdout: out.join(""),
+          stderr: result.error ? `${err.join("")}${String(result.error)}` : err.join(""),
+        });
+      }, reject);
+      return;
+    }
+    const command = step.command;
     const child = spawn(command, step.args, {
       cwd,
       env: {

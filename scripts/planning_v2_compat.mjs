@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
-import { spawn } from "node:child_process";
 import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
+import { runPnpm as runPnpmCommand } from "./pnpm_runner.mjs";
 
 const FIXTURE_ROOT = path.resolve(process.cwd(), "tests/fixtures/compat");
 const PLAIN_STORAGE_FIXTURE = "v1_plain_storage";
@@ -24,31 +24,17 @@ function unwrapModule(modRaw) {
   return modRaw;
 }
 
-async function runCommand(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd ?? process.cwd(),
-      env: options.env ?? process.env,
-      stdio: "inherit",
-    });
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-}
-
 async function runPnpm(script, options = {}) {
-  const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const code = await runCommand(command, [script], options);
-  if (code !== 0) {
-    throw new Error(`${script} failed with code ${code}`);
+  const result = await runPnpmCommand([script], options);
+  if (result.code !== 0) {
+    throw new Error(`${script} failed with code ${result.code}`);
   }
 }
 
 async function runPnpmArgs(args, options = {}) {
-  const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const code = await runCommand(command, args, options);
-  if (code !== 0) {
-    throw new Error(`pnpm ${args.join(" ")} failed with code ${code}`);
+  const result = await runPnpmCommand(args, options);
+  if (result.code !== 0) {
+    throw new Error(`pnpm ${args.join(" ")} failed with code ${result.code}`);
   }
 }
 

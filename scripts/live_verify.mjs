@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
-import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { runPnpmSync } from "./pnpm_runner.mjs";
 
 for (const name of [".env.local", "env.local", ".env"]) {
   const filePath = path.join(process.cwd(), name);
@@ -40,8 +40,7 @@ function runStep(step) {
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
   console.log(`[live:verify] ${step.name} ...`);
-  const bin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const res = spawnSync(bin, step.args, {
+  const res = runPnpmSync(step.args, {
     stdio: "inherit",
     env: process.env,
   });

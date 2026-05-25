@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
+import { runPnpm } from "./pnpm_runner.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -93,8 +94,14 @@ async function main() {
   }
 
   if (!args.skipInstall) {
-    const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-    await runCommand(pnpmCmd, ["install", "--frozen-lockfile"], toDir);
+    const result = await runPnpm(["install", "--frozen-lockfile"], {
+      cwd: toDir,
+      env: process.env,
+      stdio: "inherit",
+    });
+    if (result.code !== 0) {
+      throw new Error(`pnpm install --frozen-lockfile failed with code ${result.code}`);
+    }
   }
 
   if (process.platform === "win32") {

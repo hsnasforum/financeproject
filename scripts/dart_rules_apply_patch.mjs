@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { runPnpmSync } from "./pnpm_runner.mjs";
 import { fileURLToPath } from "node:url";
 
 const RULES_RELATIVE_PATH = path.join("config", "dart-disclosure-rules.json");
@@ -201,7 +201,7 @@ function runGate(cwd) {
     ["dart:rules:gate"],
   ];
   for (const args of commands) {
-    const result = spawnSync("pnpm", args, {
+    const result = runPnpmSync(args, {
       cwd,
       stdio: "inherit",
       shell: process.platform === "win32",
