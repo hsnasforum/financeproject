@@ -211,6 +211,68 @@ test("planning runs selected and compare states show distinct report follow-thro
   }
 });
 
+test("planning reports preserve compare and recommendation deep links", async ({ page, request }) => {
+  const profileId = await createSeedProfile(request);
+  try {
+    const baselineRunTitle = `딥링크 기준 실행 ${Date.now()}`;
+    const selectedRunTitle = `딥링크 선택 실행 ${Date.now()}`;
+    const baselineRunId = await createSeedRun(request, profileId, baselineRunTitle);
+    const selectedRunId = await createSeedRun(request, profileId, selectedRunTitle);
+
+    await gotoWithAbortRetry(
+      page,
+      `/planning/reports?runId=${encodeURIComponent(selectedRunId)}&profileId=${encodeURIComponent(profileId)}&baseRunId=${encodeURIComponent(baselineRunId)}`,
+    );
+    await expect(page.getByRole("heading", { name: "플래닝 리포트", exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator("#report-run-selector")).toHaveValue(selectedRunId, { timeout: 30_000 });
+    await expect(page.getByTestId("compare-toggle")).toHaveText("비교 닫기", { timeout: 30_000 });
+    await expect(page.getByTestId("baseline-selector")).toHaveValue(baselineRunId, { timeout: 30_000 });
+
+    const recommendRunId = `recommend-deeplink-${Date.now()}`;
+    const recommendHistoryHref = `/recommend/history?open=${encodeURIComponent(recommendRunId)}`;
+    await gotoWithAbortRetry(
+      page,
+      `/planning/reports?runId=${encodeURIComponent(selectedRunId)}&profileId=${encodeURIComponent(profileId)}&recommendRunId=${encodeURIComponent(recommendRunId)}`,
+    );
+    await expect(page.getByRole("heading", { name: "플래닝 리포트", exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("link", { name: "추천 비교 기록 보기" })).toHaveAttribute("href", recommendHistoryHref);
+    await expect(page.getByText(/추천 비교 기록과 함께 열렸습니다/)).toBeVisible({ timeout: 30_000 });
+
+    const restoreSummary = page.getByText("공유·복구용 보조 정보");
+    await restoreSummary.click();
+    await expect(page.getByText(recommendRunId)).toBeVisible({ timeout: 30_000 });
+
+    const saveButton = page.getByTestId("report-save-button");
+    await expect(saveButton).toBeEnabled({ timeout: 30_000 });
+    await saveButton.click();
+    await expect(page.getByText(/연결된 추천 실행 참조도 함께 보관했습니다/)).toBeVisible({ timeout: 30_000 });
+    await page.waitForURL((url) => (
+      url.pathname === "/planning/reports"
+      && url.searchParams.get("runId") === selectedRunId
+      && url.searchParams.get("profileId") === profileId
+      && url.searchParams.get("recommendRunId") === recommendRunId
+      && Boolean(url.searchParams.get("selected"))
+    ));
+    const savedReportId = new URL(page.url()).searchParams.get("selected");
+    if (!savedReportId) {
+      throw new Error("saved report id was not written to the reports dashboard query");
+    }
+
+    await page.getByRole("link", { name: "저장된 상세 리포트 열기", exact: true }).click();
+    await page.waitForURL((url) => url.pathname === `/planning/reports/${savedReportId}`);
+    await expect(page.getByRole("heading", { name: "플래닝 리포트 상세", exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByRole("link", { name: "추천 비교 기록으로 돌아가기" })).toHaveAttribute("href", recommendHistoryHref);
+    await expect(page.getByText("추천 실행 ID")).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(recommendRunId)).toBeVisible({ timeout: 30_000 });
+  } finally {
+    await deleteSeedProfile(request, profileId);
+  }
+});
+
 test("planning reports dashboard save handoff exposes a saved detail destination", async ({ page, request }) => {
   const profileId = await createSeedProfile(request);
   try {

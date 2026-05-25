@@ -84,8 +84,11 @@ type ChromiumLauncher = {
 };
 
 async function importPlaywrightRuntime(): Promise<{ chromium?: ChromiumLauncher }> {
-  const dynamicImport = new Function("specifier", "return import(specifier);") as (specifier: string) => Promise<unknown>;
-  return dynamicImport("playwright") as Promise<{ chromium?: ChromiumLauncher }>;
+  const specifier = "playwright";
+  return import(
+    /* webpackIgnore: true */
+    specifier
+  ) as Promise<{ chromium?: ChromiumLauncher }>;
 }
 
 async function renderPdfFromHtml(html: string): Promise<Buffer> {

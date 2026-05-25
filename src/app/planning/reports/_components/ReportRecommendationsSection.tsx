@@ -6,11 +6,6 @@ import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingState } from "@/components/ui/LoadingState";
-import {
-  reportHeroActionLinkClassName,
-  reportHeroMetaChipClassName,
-  reportHeroPrimaryActionClassName,
-} from "@/components/ui/ReportTone";
 import { formatKrw, formatMonths, formatPct } from "@/lib/planning/i18n/format";
 import { type Stage } from "@/lib/planning/engine";
 import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";

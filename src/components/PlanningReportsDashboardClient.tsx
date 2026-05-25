@@ -12,6 +12,10 @@ import {
 import InterpretabilityGuideCard from "@/components/planning/InterpretabilityGuideCard";
 import DisclosuresPanel from "@/components/planning/DisclosuresPanel";
 import {
+  REPORT_ADVANCED_RAW_DEFAULT_OPEN,
+  resolveReportAdvancedToggleReady,
+} from "@/components/planning/reportDashboardReadiness";
+import {
   bodyCompactFieldClassName,
 } from "@/components/ui/BodyTone";
 import { Button } from "@/components/ui/Button";
@@ -78,6 +82,8 @@ type ActionRow = {
   steps: string[];
   severity: "critical" | "warn" | "info";
 };
+
+let reportDashboardClientReadyCache = false;
 
 function DeferredReportSectionPlaceholder({
   title,
@@ -240,8 +246,8 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const [showCandidateInsights, setShowCandidateInsights] = useState(false);
   const [showBenefitInsights, setShowBenefitInsights] = useState(false);
   const [showRealtimeProductExplorer, setShowRealtimeProductExplorer] = useState(false);
-  const [showAdvancedRaw, setShowAdvancedRaw] = useState(false);
-  const [interactiveReady, setInteractiveReady] = useState(false);
+  const [showAdvancedRaw, setShowAdvancedRaw] = useState(REPORT_ADVANCED_RAW_DEFAULT_OPEN);
+  const [clientReady, setClientReady] = useState(reportDashboardClientReadyCache);
   const [saveReportWorking, setSaveReportWorking] = useState(false);
   const [saveReportNotice, setSaveReportNotice] = useState("");
   const [saveReportError, setSaveReportError] = useState("");
@@ -253,6 +259,16 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunId) ?? null,
     [runs, selectedRunId],
+  );
+  const advancedToggleReady = useMemo(
+    () => resolveReportAdvancedToggleReady({
+      clientReady,
+      loading,
+      runsCount: runs.length,
+      selectedRunId,
+      hasSelectedRun: Boolean(selectedRun?.id),
+    }),
+    [clientReady, loading, runs.length, selectedRun?.id, selectedRunId],
   );
   const resolvedProfileId = useMemo(
     () => selectedRun?.profileId || runs[0]?.profileId || initialScope.effectiveProfileId || props.initialProfileId || "",
@@ -405,6 +421,10 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     if (typeof window === "undefined") return;
     window.print();
   };
+  const handleExportHtml = (): void => {
+    if (typeof window === "undefined" || !selectedRun?.id) return;
+    window.location.assign(`/api/planning/reports/${encodeURIComponent(selectedRun.id)}/export.html`);
+  };
   const handleSavedReportManualRecheck = (): void => {
     const normalizedSavedReportId = savedReportId.trim();
     if (!normalizedSavedReportId) return;
@@ -462,12 +482,13 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   };
 
   useEffect(() => {
-    setInteractiveReady(true);
-  }, []);
-
-  useEffect(() => {
     setSavedReportId(querySelectedReportId);
   }, [querySelectedReportId]);
+
+  useEffect(() => {
+    reportDashboardClientReadyCache = true;
+    setClientReady(true);
+  }, []);
 
   useEffect(() => {
     if (!savedReportId || !hasValidSavedReportDetail) return;
@@ -734,6 +755,16 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             >
               PDF 인쇄
             </Button>
+            <Button
+              data-testid="report-export-html-button"
+              disabled={!selectedRun?.id}
+              onClick={handleExportHtml}
+              size="sm"
+              variant="outline"
+              className="rounded-full font-bold h-9"
+            >
+              HTML 저장
+            </Button>
             <Link href={planningHref}>
               <Button variant="primary" className="rounded-full font-bold h-9">플래닝으로 돌아가기</Button>
             </Link>
@@ -811,7 +842,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                   </Button>
                   <Button
                     data-testid="report-save-button"
-                    disabled={!selectedRun?.id || saveReportWorking}
+                    disabled={!clientReady || !selectedRun?.id || saveReportWorking}
                     onClick={() => void handleSaveReport()}
                     size="sm"
                     variant="outline"
@@ -1175,9 +1206,9 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
           <div className="no-print p-4 rounded-2xl border border-slate-200 bg-surface-muted/50">
             <Button
               aria-expanded={showAdvancedRaw}
-              data-ready={interactiveReady ? "true" : "false"}
+              data-ready={advancedToggleReady ? "true" : "false"}
               data-testid="report-advanced-toggle"
-              disabled={!interactiveReady}
+              disabled={!advancedToggleReady}
               onClick={() => setShowAdvancedRaw((prev) => !prev)}
               size="sm"
               variant="ghost"
