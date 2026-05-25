@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/Button";
 import {
   createDataSourcePingSnapshot,
@@ -20,6 +20,11 @@ type PingState = { tone: "ok" | "error"; text: string } | null;
 export function DataSourcePingButton({ source, onResult, showInlineState = true }: Props) {
   const [loading, setLoading] = useState(false);
   const [state, setState] = useState<PingState>(null);
+  const hydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   const onTest = async () => {
     setLoading(true);
@@ -74,7 +79,7 @@ export function DataSourcePingButton({ source, onResult, showInlineState = true 
 
   return (
     <div className="mt-2">
-      <Button size="sm" variant="outline" onClick={onTest} disabled={loading}>
+      <Button size="sm" variant="outline" onClick={onTest} disabled={loading || !hydrated}>
         {loading ? "테스트 중..." : "연결 테스트"}
       </Button>
       {showInlineState && state ? (

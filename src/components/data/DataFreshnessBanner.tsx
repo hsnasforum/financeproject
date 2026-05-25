@@ -276,7 +276,7 @@ export function DataFreshnessBanner({
             {error ? "상태 조회 실패" : summary.message}
           </p>
           <p className="mt-1 text-xs opacity-80">
-            자동 동기화는 수행하지 않으며, stale 감지만 제공합니다.
+            자동 스모크 업데이트는 토글이 켜진 경우 세션당 1회만 시도합니다.
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] opacity-85">
             <span>Required 이슈 {summary.requiredIssuesCount}건</span>

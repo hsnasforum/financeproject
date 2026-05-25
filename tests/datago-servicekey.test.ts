@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildDatagoUrl, getServiceKeyForSource } from "../src/lib/sources/datago/client";
+import { KDB_ENDPOINT } from "../src/lib/sources/datago/kdb";
 
 describe("datago service key resolution", () => {
   it("uses source-specific key first and fallback second", () => {
@@ -34,5 +35,10 @@ describe("datago service key resolution", () => {
     else delete process.env.KDB_DATAGO_SERVICE_KEY;
     if (typeof prevCommon === "string") process.env.DATAGO_SERVICE_KEY = prevCommon;
     else delete process.env.DATAGO_SERVICE_KEY;
+  });
+
+  it("uses https for the KDB upstream endpoint", () => {
+    expect(KDB_ENDPOINT.startsWith("https://")).toBe(true);
+    expect(KDB_ENDPOINT).not.toContain("http://apis.data.go.kr");
   });
 });

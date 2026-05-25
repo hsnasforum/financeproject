@@ -71,6 +71,7 @@ export function DataSourceImpactCardsClient({ cards, readOnlyHealthByCardId, sou
       if (!event.key || !event.key.startsWith("data-source-ping:v1:")) return;
       refresh();
     };
+    refresh();
     window.addEventListener(DATA_SOURCE_PING_UPDATED_EVENT, handleCustomUpdate);
     window.addEventListener("storage", handleStorage);
     return () => {

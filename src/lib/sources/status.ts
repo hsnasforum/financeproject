@@ -45,8 +45,50 @@ function normalizeLastRun(meta: Record<string, unknown> | null): LastRunMeta | u
   };
 }
 
+function resolveDataSourceStatusErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? "");
+  if (/does not exist|Cannot open database|SQLITE|database|not initialized|schema/i.test(raw)) {
+    return "공공데이터 저장소가 아직 준비되지 않았습니다. 데이터 소스 설정에서 동기화를 다시 실행해주세요.";
+  }
+  return "공공데이터 상태를 확인하지 못했습니다. 잠시 후 다시 시도해주세요.";
+}
+
+function buildUnavailableSourceStatus(input: {
+  sourceId: "datago_kdb";
+  kind: "deposit";
+  ttlMs: number;
+  error: unknown;
+  checkedAt: string;
+}): SourceStatusRow {
+  return {
+    sourceId: input.sourceId,
+    kind: input.kind,
+    lastSyncedAt: null,
+    lastAttemptAt: input.checkedAt,
+    ttlMs: input.ttlMs,
+    ageMs: null,
+    isFresh: false,
+    counts: 0,
+    lastError: {
+      at: input.checkedAt,
+      message: resolveDataSourceStatusErrorMessage(input.error),
+    },
+  };
+}
+
+async function hasDatagoStatusTables(): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ name: string }>>`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table'
+      AND name IN ('ExternalSourceSnapshot', 'ExternalProduct')
+  `;
+  const names = new Set(rows.map((row) => row.name));
+  return names.has("ExternalSourceSnapshot") && names.has("ExternalProduct");
+}
+
 export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
   const nowMs = Date.now();
+  const checkedAt = new Date(nowMs).toISOString();
   const statuses: SourceStatusRow[] = [];
 
   for (const kind of ["deposit", "saving"] as const) {
@@ -66,51 +108,72 @@ export async function getUnifiedSourceStatuses(): Promise<SourceStatusRow[]> {
 
   for (const sourceId of ["datago_kdb"] as const) {
     const kind = "deposit" as const;
-    const snapshot = await prisma.externalSourceSnapshot.findUnique({
-      where: {
-        sourceId_kind: {
+    try {
+      if (!await hasDatagoStatusTables()) {
+        statuses.push(buildUnavailableSourceStatus({
           sourceId,
           kind,
+          ttlMs: DATAGO_DEFAULT_TTL_MS,
+          error: new Error("DATAGO storage schema is not initialized."),
+          checkedAt,
+        }));
+        continue;
+      }
+
+      const snapshot = await prisma.externalSourceSnapshot.findUnique({
+        where: {
+          sourceId_kind: {
+            sourceId,
+            kind,
+          },
         },
-      },
-    });
-    const ttlMs = snapshot?.ttlMs ?? DATAGO_DEFAULT_TTL_MS;
-    const fresh = evaluateFreshness(snapshot?.lastSyncedAt ?? null, ttlMs, nowMs);
-    const count = await prisma.externalProduct.count({ where: { sourceId, kind } });
-    const meta = (snapshot?.metaJson as Record<string, unknown> | null) ?? null;
-    const lastAttemptAt = typeof meta?.lastAttemptAt === "string" ? meta.lastAttemptAt : null;
-    const lastRun = normalizeLastRun(meta);
-    const lastError = (meta?.lastError as Record<string, unknown> | undefined) ?? undefined;
-    statuses.push({
-      sourceId,
-      kind,
-      lastSyncedAt: fresh.lastSyncedAt,
-      lastAttemptAt,
-      ttlMs,
-      ageMs: fresh.ageMs,
-      isFresh: fresh.isFresh,
-      counts: count,
-      lastRun: lastRun
-        ? {
-            startedAt: lastRun.startedAt,
-            finishedAt: lastRun.finishedAt,
-            fetchedItems: lastRun.fetchedItems,
-            upsertedItems: lastRun.upsertedItems,
-            touchedItems: lastRun.touchedItems,
-            createdItems: lastRun.createdItems,
-            updatedItems: lastRun.updatedItems,
-            totalCount: lastRun.totalCount,
-            resultCode: lastRun.resultCode,
-            resultMsg: lastRun.resultMsg,
-          }
-        : undefined,
-      lastError: lastError
-        ? {
-            at: typeof lastError.at === "string" ? lastError.at : undefined,
-            message: typeof lastError.message === "string" ? lastError.message : undefined,
-          }
-        : undefined,
-    });
+      });
+      const ttlMs = snapshot?.ttlMs ?? DATAGO_DEFAULT_TTL_MS;
+      const fresh = evaluateFreshness(snapshot?.lastSyncedAt ?? null, ttlMs, nowMs);
+      const count = await prisma.externalProduct.count({ where: { sourceId, kind } });
+      const meta = (snapshot?.metaJson as Record<string, unknown> | null) ?? null;
+      const lastAttemptAt = typeof meta?.lastAttemptAt === "string" ? meta.lastAttemptAt : null;
+      const lastRun = normalizeLastRun(meta);
+      const lastError = (meta?.lastError as Record<string, unknown> | undefined) ?? undefined;
+      statuses.push({
+        sourceId,
+        kind,
+        lastSyncedAt: fresh.lastSyncedAt,
+        lastAttemptAt,
+        ttlMs,
+        ageMs: fresh.ageMs,
+        isFresh: fresh.isFresh,
+        counts: count,
+        lastRun: lastRun
+          ? {
+              startedAt: lastRun.startedAt,
+              finishedAt: lastRun.finishedAt,
+              fetchedItems: lastRun.fetchedItems,
+              upsertedItems: lastRun.upsertedItems,
+              touchedItems: lastRun.touchedItems,
+              createdItems: lastRun.createdItems,
+              updatedItems: lastRun.updatedItems,
+              totalCount: lastRun.totalCount,
+              resultCode: lastRun.resultCode,
+              resultMsg: lastRun.resultMsg,
+            }
+          : undefined,
+        lastError: lastError
+          ? {
+              at: typeof lastError.at === "string" ? lastError.at : undefined,
+              message: typeof lastError.message === "string" ? lastError.message : undefined,
+            }
+          : undefined,
+      });
+    } catch (error) {
+      statuses.push(buildUnavailableSourceStatus({
+        sourceId,
+        kind,
+        ttlMs: DATAGO_DEFAULT_TTL_MS,
+        error,
+        checkedAt,
+      }));
+    }
   }
 
   return statuses;
