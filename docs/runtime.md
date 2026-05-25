@@ -29,6 +29,14 @@ ALREADY_RUNNING http://127.0.0.1:<port>
 
 and exits with code `0`.
 
+When the standalone build is used, the launcher links required runtime assets beside the standalone server before starting:
+
+- `.next/static`
+- `public`
+- `prisma`
+
+It also restores traced package links needed by Prisma's SQLite adapter and `better-sqlite3` native binding when they are present in the standalone output.
+
 ## Data Directory
 
 Planning storage root is resolved by this precedence:

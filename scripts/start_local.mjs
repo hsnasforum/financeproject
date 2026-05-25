@@ -11,6 +11,7 @@ import {
   resolveRuntimeLockPath,
   writeLockFile,
 } from "./start_local_lock.mjs";
+import { ensureStandaloneRuntimeAssets } from "./standalone_runtime_assets.mjs";
 
 const FORCED_HOST = "127.0.0.1";
 
@@ -235,6 +236,15 @@ async function main() {
       url,
     });
     process.stdout.write(`LISTENING ${url}\n`);
+
+    if (standaloneServer) {
+      ensureStandaloneRuntimeAssets({
+        standaloneServer,
+        distDir: ".next",
+        cwd: process.cwd(),
+        log: (message) => console.log(message.replace("[standalone_runtime_assets]", "[start:local]")),
+      });
+    }
 
     child = standaloneServer
       ? spawn(process.execPath, [standaloneServer, ...passthroughArgs], { stdio: "inherit", env })
