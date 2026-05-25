@@ -229,25 +229,11 @@ function normalizeWatchStatus(value: unknown): "ok" | "unknown" {
   return asString(value) === "ok" ? "ok" : "unknown";
 }
 
-function gradeToneClass(value: "상" | "중" | "하" | "unknown"): string {
-  if (value === "상") return "text-rose-700";
-  if (value === "중") return "text-amber-700";
-  if (value === "하") return "text-navy";
-  return "text-slate-500";
-}
-
 function trendArrow(value: "up" | "down" | "flat" | "unknown"): string {
   if (value === "up") return "▲";
   if (value === "down") return "▼";
   if (value === "flat") return "■";
   return "·";
-}
-
-function qualityLevelLabel(value: "high" | "med" | "low" | undefined): string {
-  if (value === "high") return "높음";
-  if (value === "med") return "중간";
-  if (value === "low") return "낮음";
-  return "-";
 }
 
 function formatLastValue(value: number | null): string {

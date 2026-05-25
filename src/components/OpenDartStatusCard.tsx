@@ -155,7 +155,7 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
               <dl className="grid gap-y-3 text-xs">
                 <div className="flex justify-between border-b border-slate-100 pb-2">
                   <dt className="font-bold text-slate-500">1. 인덱스 준비 상태</dt>
-                  <dd className={cn("font-black", exists ? "text-primary" : "text-rose-600")}>{exists ? "준비됨" : "확인 필요"}</dd>
+                  <dd className={cn("font-black", exists ? "text-success" : "text-danger")}>{exists ? "준비됨" : "확인 필요"}</dd>
                 </div>
                 <div className="border-b border-slate-100 pb-2">
                   <div className="flex justify-between gap-3">

@@ -225,7 +225,6 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [groups, setGroups] = useState<AlertGroup[]>([]);
-  const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<AlertSummary>(() => emptySummary());
   const [levelFilter, setLevelFilter] = useState<AlertLevelFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<AlertSourceFilter>("all");
@@ -245,7 +244,6 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
       }
       setGroups(payload.data.groups ?? []);
-      setTotal(Math.max(0, Number(payload.data.total ?? 0)));
       setSummary({
         highTotal: Math.max(0, Number(payload.data.summary?.highTotal ?? 0)),
         visibleTotal: Math.max(0, Number(payload.data.summary?.visibleTotal ?? 0)),
@@ -257,7 +255,6 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
       });
     } catch (error) {
       setGroups([]);
-      setTotal(0);
       setSummary(emptySummary());
       setErrorMessage(error instanceof Error ? error.message : "알림함 데이터를 불러오지 못했습니다.");
     } finally {
@@ -269,7 +266,6 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
     void load(days);
   }, [days, load]);
 
-  const dayCount = useMemo(() => groups.length, [groups]);
   const filteredGroups = useMemo(() => {
     return groups
       .map((group) => ({
@@ -306,7 +302,6 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
       }
       setGroups(payload.data.groups ?? []);
-      setTotal(Math.max(0, Number(payload.data.total ?? 0)));
       setSummary({
         highTotal: Math.max(0, Number(payload.data.summary?.highTotal ?? 0)),
         visibleTotal: Math.max(0, Number(payload.data.summary?.visibleTotal ?? 0)),

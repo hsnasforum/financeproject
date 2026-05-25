@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
-import { cn } from "@/lib/utils";
 
 type WeeklyPlanPanelProps = {
   csrf?: string;

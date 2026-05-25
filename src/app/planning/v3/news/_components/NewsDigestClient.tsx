@@ -10,7 +10,6 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { type DigestDay } from "@/lib/planning/v3/news/digest";
 import { type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
-import { cn } from "@/lib/utils";
 
 type NewsDigestClientProps = {
   csrf?: string;
@@ -166,13 +165,6 @@ function impactGradeLabel(value: string | null | undefined): string {
   return "unknown";
 }
 
-function consensusLabel(value: string | null | undefined): string {
-  const normalized = asString(value).toLowerCase();
-  if (normalized === "high") return "높음";
-  if (normalized === "med" || normalized === "medium") return "중간";
-  return "낮음";
-}
-
 function contradictionGradeLabel(value: string | null | undefined): string {
   const normalized = asString(value).toLowerCase();
   if (normalized === "high") return "높음";
@@ -234,7 +226,6 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
   const [activeTarget, setActiveTarget] = useState<NoteTargetDraft | null>(null);
   const [noteText, setNoteText] = useState("");
   const [tagsText, setTagsText] = useState("");
-  const [advancedScenario, setAdvancedScenario] = useState<Record<string, boolean>>({});
   const [advancedTopItem, setAdvancedTopItem] = useState<Record<string, boolean>>({});
 
   const fetchNotes = useCallback(async () => {
@@ -334,20 +325,6 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
       out.set(key, row);
     }
     return out;
-  }, [topicContradictions]);
-
-  const strongestContradiction = useMemo(() => {
-    const weight = (grade: TopicContradictionGrade): number => {
-      if (grade === "high") return 3;
-      if (grade === "med") return 2;
-      return 1;
-    };
-    return [...topicContradictions].sort((a, b) => {
-      const diff = weight(b.contradictionGrade) - weight(a.contradictionGrade);
-      if (diff !== 0) return diff;
-      if (a.signalBalance !== b.signalBalance) return b.signalBalance - a.signalBalance;
-      return a.topicId.localeCompare(b.topicId);
-    })[0] ?? null;
   }, [topicContradictions]);
 
   function focusNoteTarget(target: NoteTargetDraft) {
@@ -777,7 +754,6 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {scenarios.scenarios.map((row) => {
-                  const related = notesForTarget("scenario", row.name);
                   return (
                     <div key={row.name} id={`scenario-${row.name}`} className="group rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm hover:shadow-md transition-all flex flex-col">
                       <div className="flex items-center justify-between gap-3 mb-4">

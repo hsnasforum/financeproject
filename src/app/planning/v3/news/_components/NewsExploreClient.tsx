@@ -232,9 +232,6 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
     if (asString(applied.minScore)) count += 1;
     return count;
   }, [applied]);
-  const topTopic = topics[0];
-  const topSource = sources[0];
-
   function submitFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setApplied({ ...draft });
