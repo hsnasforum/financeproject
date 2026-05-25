@@ -1,6 +1,6 @@
 # Schema Drift Report
 
-- Generated at: 2026-05-25T20:18:17.166Z
+- Generated at: 2026-05-25T20:59:49.855Z
 - Mode: check
 - Snapshot dir: `.data`
 - Fingerprint options: maxDepth=8, arraySampleSize=3
