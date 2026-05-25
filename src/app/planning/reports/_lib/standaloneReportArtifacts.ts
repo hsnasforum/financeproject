@@ -14,6 +14,7 @@ import {
 type StandaloneReportBuildOptions = {
   contractOptions?: BuildReportInputContractOptions;
   printView?: boolean;
+  styleNonce?: string;
   report?: {
     id?: string;
     createdAt?: string;
@@ -117,6 +118,7 @@ export function buildStandaloneReportArtifactsFromRun(
       ...(diag.evidenceDetail ? { evidenceDetail: diag.evidenceDetail } : {}),
     })),
     ...(options.printView ? { printView: true } : {}),
+    ...(options.styleNonce ? { styleNonce: options.styleNonce } : {}),
     ...(vm.reproducibility
       ? {
         reproducibility: vm.reproducibility,
