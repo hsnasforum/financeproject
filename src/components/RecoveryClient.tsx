@@ -414,7 +414,7 @@ export function RecoveryClient() {
               </Button>
               {offlineRepairResult ? (
                 <div className="mt-3 text-[10px] font-bold text-center">
-                  <span className={offlineRepairResult.ok ? "text-primary" : "text-rose-600"}>
+                  <span className={offlineRepairResult.ok ? "text-success" : "text-danger"}>
                     {offlineRepairResult.ok ? "복구 완료" : "일부 실패"}
                   </span>
                 </div>

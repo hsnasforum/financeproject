@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import {
@@ -82,12 +82,19 @@ export default function PlanningQuickStartGate({
   const [appliedPreview, setAppliedPreview] = useState<PlanningQuickStartPreview | null>(null);
   const [profileSaveRequiredAfterApply, setProfileSaveRequiredAfterApply] = useState(false);
   const [profileUnsavedStateSeenAfterApply, setProfileUnsavedStateSeenAfterApply] = useState(false);
+  const hydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   const ready = useMemo(() => isPlanningQuickStartReady(draft), [draft]);
   const preview = useMemo(
     () => (ready ? buildPlanningQuickStartPreview(draft) : null),
     [draft, ready],
   );
+  const interactionDisabled = disabled || !hydrated;
+
   useEffect(() => {
     if (!profileSaveRequiredAfterApply || profileSyncState === "saved" || profileUnsavedStateSeenAfterApply) return;
     const timeoutId = window.setTimeout(() => {
@@ -120,7 +127,7 @@ export default function PlanningQuickStartGate({
   }
 
   function applyQuickStart(): void {
-    if (!ready || disabled || !previewOpen || !preview) return;
+    if (!ready || interactionDisabled || !previewOpen || !preview) return;
     setProfileSaveRequiredAfterApply(true);
     setProfileUnsavedStateSeenAfterApply(false);
     setAppliedPreview(preview);
@@ -129,7 +136,7 @@ export default function PlanningQuickStartGate({
   }
 
   function openPreview(): void {
-    if (!ready || disabled) return;
+    if (!ready || interactionDisabled) return;
     setPreviewOpen(true);
   }
 
@@ -253,11 +260,11 @@ export default function PlanningQuickStartGate({
             </p>
           </div>
           {previewOpen ? (
-            <Button disabled={disabled} onClick={() => setPreviewOpen(false)} variant="outline">
+            <Button disabled={interactionDisabled} onClick={() => setPreviewOpen(false)} variant="outline">
               다시 입력
             </Button>
           ) : (
-            <Button data-testid="planning-quickstart-open-preview" disabled={disabled || !ready} onClick={openPreview} variant="primary">
+            <Button data-testid="planning-quickstart-open-preview" disabled={interactionDisabled || !ready} onClick={openPreview} variant="primary">
               초안 미리보기
             </Button>
           )}
@@ -270,6 +277,7 @@ export default function PlanningQuickStartGate({
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
+              disabled={interactionDisabled}
               value={formatGroupedIntegerInput(draft.monthlyIncomeNet)}
               onChange={(event) => updateField("monthlyIncomeNet", toNumber(event.target.value))}
             />
@@ -280,6 +288,7 @@ export default function PlanningQuickStartGate({
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
+              disabled={interactionDisabled}
               value={formatGroupedIntegerInput(draft.fixedExpense)}
               onChange={(event) => updateField("fixedExpense", toNumber(event.target.value))}
             />
@@ -289,6 +298,7 @@ export default function PlanningQuickStartGate({
             <input
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               placeholder="예: 비상금 1,000만 원"
+              disabled={interactionDisabled}
               value={draft.goalName ?? ""}
               onChange={(event) => updateField("goalName", event.target.value)}
             />
@@ -299,6 +309,7 @@ export default function PlanningQuickStartGate({
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
+              disabled={interactionDisabled}
               value={formatGroupedIntegerInput(draft.goalTargetAmount)}
               onChange={(event) => updateField("goalTargetAmount", toNumber(event.target.value))}
             />
@@ -310,6 +321,7 @@ export default function PlanningQuickStartGate({
               inputMode="numeric"
               type="number"
               min={1}
+              disabled={interactionDisabled}
               value={draft.goalTargetMonth ?? ""}
               onChange={(event) => updateField("goalTargetMonth", toNumber(event.target.value))}
             />
@@ -354,7 +366,7 @@ export default function PlanningQuickStartGate({
                 <p className="text-sm leading-6 text-slate-700">{appliedDescription}</p>
               </div>
               {nextStepLabel && nextStepTargetId ? (
-                <Button data-testid="planning-quickstart-next-step" disabled={disabled} onClick={focusNextStep} variant="primary">
+                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
                   {nextStepLabel}
                 </Button>
               ) : null}
@@ -384,7 +396,7 @@ export default function PlanningQuickStartGate({
                 <p className="text-sm leading-6 text-slate-700">{restoredDescription}</p>
               </div>
               {nextStepLabel && nextStepTargetId ? (
-                <Button data-testid="planning-quickstart-next-step" disabled={disabled} onClick={focusNextStep} variant="primary">
+                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
                   {nextStepLabel}
                 </Button>
               ) : null}
@@ -402,7 +414,7 @@ export default function PlanningQuickStartGate({
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">적용 전 미리보기</p>
                 <h3 className="mt-2 text-base font-black text-navy">이 초안으로 시작하면 아래 값이 먼저 채워집니다.</h3>
               </div>
-              <Button data-testid="planning-quickstart-apply" disabled={disabled} onClick={applyQuickStart} variant="primary">
+              <Button data-testid="planning-quickstart-apply" disabled={interactionDisabled} onClick={applyQuickStart} variant="primary">
                 이 초안으로 시작
               </Button>
             </div>

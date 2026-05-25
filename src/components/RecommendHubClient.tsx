@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
 import { scoreProducts, type RecommendProfile } from "@/lib/recommend/score";
@@ -228,7 +227,15 @@ export function RecommendHubClient() {
                 <Card key={res.product.fin_prdt_cd + res.product.kor_co_nm} className="group flex flex-col rounded-[2.5rem] border-slate-200/60 bg-white p-6 shadow-sm transition-all hover:shadow-md">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="relative h-8 w-8 overflow-hidden rounded-full border border-slate-100 bg-surface-muted">
-                      <Image src={`/logos/${res.product.kor_co_nm}.png`} alt="" fill className="object-contain p-1" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/logos/${res.product.kor_co_nm}.png`}
+                        alt=""
+                        className="h-full w-full object-contain p-1"
+                        onError={(event) => {
+                          event.currentTarget.hidden = true;
+                        }}
+                      />
                     </div>
                     <span className="text-[10px] font-bold text-slate-400">{res.product.kor_co_nm}</span>
                     <Badge variant="secondary" className="ml-auto text-[9px] font-bold px-2 py-0 border-none bg-surface-muted text-slate-500 uppercase">

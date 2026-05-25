@@ -28,6 +28,9 @@ function quickStartProgressToneClassName(state: WorkspaceQuickStartProgressState
   return "border-slate-200 bg-white text-slate-600";
 }
 
+const topSurfaceLinkButtonClassName = "inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-5 text-sm font-bold transition-all duration-300 hover:scale-[1.02] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/10 focus-visible:ring-offset-2";
+const topSurfaceOutlineLinkClassName = "border-slate-200 bg-white text-slate-700 shadow-sm hover:border-primary/10 hover:bg-primary/5 hover:text-primary";
+
 export function PlanningWorkspaceTopSurfacePanel({
   quickStart,
   actions,
@@ -147,24 +150,28 @@ export function PlanningWorkspaceTopSurfacePanel({
                   {savingRun ? "저장 중..." : "결과 저장"}
                 </Button>
               ) : null}
-              <Link href={runsPageHref} data-ready="true" data-testid="planning-runs-link" className="inline-flex">
-                <Button
-                  data-testid="planning-quickstart-runs-link"
-                  id="planning-quickstart-runs-link"
-                  variant={quickStartVm.runStatusReviewRequired ? "primary" : "outline"}
-                  className={cn(
-                    "rounded-xl font-bold",
-                    quickStartVm.runStatusReviewRequired ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 hover:text-white" : "",
-                  )}
-                >
-                  실행 내역
-                </Button>
+              <Link
+                href={runsPageHref}
+                data-ready="true"
+                data-testid="planning-runs-link"
+                id="planning-quickstart-runs-link"
+                className={cn(
+                  topSurfaceLinkButtonClassName,
+                  quickStartVm.runStatusReviewRequired
+                    ? "border-emerald-600 bg-emerald-600 text-white shadow-md shadow-emerald-600/20 hover:bg-emerald-700 hover:text-white"
+                    : topSurfaceOutlineLinkClassName,
+                )}
+              >
+                실행 내역
               </Link>
               {quickStartVm.beginnerStepSaveDone ? (
-                <Link href={quickStartVm.selectedRunReportHref}>
-                  <Button data-testid="planning-quickstart-report-button" id="planning-quickstart-report-button" variant="outline" className="rounded-xl bg-white font-bold">
-                    리포트
-                  </Button>
+                <Link
+                  href={quickStartVm.selectedRunReportHref}
+                  data-testid="planning-quickstart-report-button"
+                  id="planning-quickstart-report-button"
+                  className={cn(topSurfaceLinkButtonClassName, topSurfaceOutlineLinkClassName)}
+                >
+                  리포트
                 </Link>
               ) : (
                 <Button disabled title="실행 결과를 저장하면 리포트를 열 수 있습니다." variant="outline" className="rounded-xl font-bold opacity-50">
