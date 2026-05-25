@@ -84,16 +84,17 @@ describe("POST /api/planning/v3/drafts/[id]/create-profile", () => {
     });
 
     const draft = await createDraft({
-      source: { kind: "csv", rows: 2, months: 1 },
-      cashflow: [
-        { ym: "2026-03", incomeKrw: 3_300_000, expenseKrw: -2_000_000, netKrw: 1_300_000, txCount: 2 },
-      ],
-      draftPatch: {
-        monthlyIncomeNet: 3_300_000,
-        monthlyEssentialExpenses: 1_400_000,
-        monthlyDiscretionaryExpenses: 600_000,
-        assumptions: ["assumption"],
-        monthsConsidered: 1,
+      source: { kind: "csv" },
+      meta: { rows: 2 },
+      payload: {
+        cashflow: [
+          { ym: "2026-03", incomeKrw: 3_300_000, expenseKrw: -2_000_000, netKrw: 1_300_000, txCount: 2 },
+        ],
+        draftPatch: {
+          monthlyIncomeNet: 3_300_000,
+          monthlyEssentialExpenses: 1_400_000,
+          monthlyDiscretionaryExpenses: 600_000,
+        },
       },
     });
 

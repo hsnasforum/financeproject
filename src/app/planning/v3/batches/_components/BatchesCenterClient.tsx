@@ -1,6 +1,5 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { BodyActionLink, BodySectionHeading, BodyTableFrame, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
@@ -72,32 +71,6 @@ function buildCsrfQuery(): string {
   if (!csrf) return "";
   return `?csrf=${encodeURIComponent(csrf)}`;
 }
-
-const BATCHES_STAGGER_REVEAL: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.04,
-      duration: 0.32,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  },
-};
-
-const BATCHES_SECTION_REVEAL: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.28,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  },
-};
 
 const batchesTopLinkClassName =
   "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:bg-surface-muted hover:text-navy";
@@ -191,16 +164,8 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
 
   return (
     <PageShell className="bg-surface-muted/80">
-      <motion.div
-        className="space-y-6 md:space-y-8"
-        initial="hidden"
-        animate="visible"
-        variants={BATCHES_STAGGER_REVEAL}
-      >
-        <motion.section
-          variants={BATCHES_SECTION_REVEAL}
-          className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 md:px-6 md:py-6"
-        >
+      <div className="space-y-6 md:space-y-8">
+        <section className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 md:px-6 md:py-6">
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] xl:items-start">
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.22em] text-primary">Batch Workspace</p>
@@ -235,19 +200,11 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
               </div>
             </div>
           </div>
-        </motion.section>
+        </section>
 
-        <motion.section
-          variants={BATCHES_SECTION_REVEAL}
-          className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.85fr)]"
-        >
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.85fr)]">
           <div className="space-y-4">
-            <motion.div
-              variants={BATCHES_SECTION_REVEAL}
-              className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 md:px-6"
-              whileHover={{ y: -2 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <div className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 transition-transform duration-200 hover:-translate-y-0.5 md:px-6">
               <BodySectionHeading
                 title="배치 목록 workspace"
                 description="목록 자체를 primary workspace로 두고, 우측에는 현재 목록을 읽는 데 필요한 요약과 보조 정보를 따로 분리했습니다."
@@ -339,15 +296,11 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
                   </BodyTableFrame>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
 
-          <motion.aside variants={BATCHES_SECTION_REVEAL} className="space-y-4">
-            <motion.div
-              className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30"
-              whileHover={{ y: -2 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+          <aside className="space-y-4">
+            <div className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30 transition-transform duration-200 hover:-translate-y-0.5">
               <BodySectionHeading
                 title="현재 목록 요약"
                 description="목록 우측에는 가장 먼저 확인할 통계와 다음 작업 방향만 남겼습니다."
@@ -375,14 +328,9 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
                   </p>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              variants={BATCHES_SECTION_REVEAL}
-              className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30"
-              whileHover={{ y: -2 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <div className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30 transition-transform duration-200 hover:-translate-y-0.5">
               <BodySectionHeading
                 title="지원 메모"
                 description="list pane 바깥에서만 필요한 보조 설명입니다."
@@ -398,10 +346,10 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.aside>
-        </motion.section>
-      </motion.div>
+            </div>
+          </aside>
+        </section>
+      </div>
     </PageShell>
   );
 }

@@ -67,13 +67,16 @@ describe("planning v3 drafts remote host contract", () => {
 
     const created = await createDraft({
       source: { kind: "csv", filename: "remote-host.csv" },
-      cashflow: [
-        { ym: "2026-03", incomeKrw: 2_400_000, expenseKrw: -1_100_000, netKrw: 1_300_000, txCount: 2 },
-      ],
-      draftPatch: {
-        monthlyIncomeNet: 2_400_000,
-        monthlyEssentialExpenses: 900_000,
-        monthlyDiscretionaryExpenses: 200_000,
+      meta: { rows: 2 },
+      payload: {
+        cashflow: [
+          { ym: "2026-03", incomeKrw: 2_400_000, expenseKrw: -1_100_000, netKrw: 1_300_000, txCount: 2 },
+        ],
+        draftPatch: {
+          monthlyIncomeNet: 2_400_000,
+          monthlyEssentialExpenses: 900_000,
+          monthlyDiscretionaryExpenses: 200_000,
+        },
       },
     });
     existingDraftId = created.id;

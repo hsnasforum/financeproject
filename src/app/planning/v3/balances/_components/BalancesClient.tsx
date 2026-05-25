@@ -1,6 +1,5 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageShell } from "@/components/ui/PageShell";
@@ -54,32 +53,6 @@ function buildCsrfQuery(): string {
   if (!csrf) return "";
   return `&csrf=${encodeURIComponent(csrf)}`;
 }
-
-const BALANCES_STAGGER_REVEAL: Variants = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      staggerChildren: 0.08,
-      delayChildren: 0.04,
-      duration: 0.32,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  },
-};
-
-const BALANCES_SECTION_REVEAL: Variants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.28,
-      ease: [0.22, 1, 0.36, 1],
-    },
-  },
-};
 
 const balancesActionLinkClassName =
   "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:bg-surface-muted hover:text-navy";
@@ -220,12 +193,7 @@ export function BalancesClient() {
 
   return (
     <PageShell className="relative">
-      <motion.div
-        className="space-y-6 md:space-y-8"
-        initial="hidden"
-        animate="visible"
-        variants={BALANCES_STAGGER_REVEAL}
-      >
+      <div className="space-y-6 md:space-y-8">
         <ReportHeroCard
           kicker="Balance Timeline"
           title="월별 잔액 흐름을 같은 기준으로 확인합니다"
@@ -285,17 +253,9 @@ export function BalancesClient() {
           {message ? <p className="text-xs font-semibold text-rose-500">{message}</p> : null}
         </ReportHeroCard>
 
-        <motion.section
-          variants={BALANCES_SECTION_REVEAL}
-          className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]"
-        >
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.85fr)]">
           <div className="space-y-4">
-            <motion.div
-              variants={BALANCES_SECTION_REVEAL}
-              className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 md:px-6"
-              whileHover={{ y: -2 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <div className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 transition-transform duration-200 hover:-translate-y-0.5 md:px-6">
               <SubSectionHeader
                 title="조회 기준"
                 description="먼저 계산할 배치를 고르고, transfer 포함 여부를 정하면 아래 표가 같은 기준으로 다시 계산됩니다."
@@ -352,14 +312,9 @@ export function BalancesClient() {
                   </Link>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div
-              variants={BALANCES_SECTION_REVEAL}
-              className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 md:px-6"
-              whileHover={{ y: -2 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+            <div className="rounded-[2rem] border border-slate-200/90 bg-white px-5 py-5 shadow-sm shadow-slate-200/40 transition-transform duration-200 hover:-translate-y-0.5 md:px-6">
               <SubSectionHeader
                 title="월별 잔액 표"
                 description="opening, net, closing 흐름을 한 표에서 비교합니다. selector와 data-testid 계약은 유지됩니다."
@@ -408,18 +363,11 @@ export function BalancesClient() {
                   </div>
                 ) : null}
               </div>
-            </motion.div>
+            </div>
           </div>
 
-          <motion.aside
-            variants={BALANCES_SECTION_REVEAL}
-            className="space-y-4"
-          >
-            <motion.div
-              className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30"
-              whileHover={{ y: -2 }}
-              transition={{ duration: 0.2, ease: "easeOut" }}
-            >
+          <aside className="space-y-4">
+            <div className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30 transition-transform duration-200 hover:-translate-y-0.5">
               <SubSectionHeader
                 title="선택 배치 메모"
                 description="현재 계산에 바로 영향을 주는 기준만 오른쪽 보조 패널에 모았습니다."
@@ -443,15 +391,10 @@ export function BalancesClient() {
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
 
             {warnings.length > 0 ? (
-              <motion.div
-                variants={BALANCES_SECTION_REVEAL}
-                className="rounded-[2rem] border border-amber-200/90 bg-amber-50/90 px-5 py-5 shadow-sm shadow-amber-100/70"
-                whileHover={{ y: -2 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
+              <div className="rounded-[2rem] border border-amber-200/90 bg-amber-50/90 px-5 py-5 shadow-sm shadow-amber-100/70 transition-transform duration-200 hover:-translate-y-0.5">
                 <SubSectionHeader
                   title="주의"
                   description="계산 결과를 읽기 전에 확인할 항목입니다."
@@ -462,14 +405,9 @@ export function BalancesClient() {
                 <ul className="mt-4 list-disc space-y-2 pl-5 text-sm font-medium text-amber-900/90">
                   {warnings.map((warning) => <li key={warning}>{warning}</li>)}
                 </ul>
-              </motion.div>
+              </div>
             ) : (
-              <motion.div
-                variants={BALANCES_SECTION_REVEAL}
-                className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30"
-                whileHover={{ y: -2 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
+              <div className="rounded-[2rem] border border-slate-200/90 bg-surface-muted/90 px-5 py-5 shadow-sm shadow-slate-200/30 transition-transform duration-200 hover:-translate-y-0.5">
                 <SubSectionHeader
                   title="체크 포인트"
                   description="현재 화면을 읽을 때 같이 보면 좋은 보조 설명입니다."
@@ -486,12 +424,12 @@ export function BalancesClient() {
                     </div>
                   ))}
                 </div>
-              </motion.div>
+              </div>
             )}
-          </motion.aside>
-        </motion.section>
+          </aside>
+        </section>
 
-      </motion.div>
+      </div>
     </PageShell>
   );
 }
