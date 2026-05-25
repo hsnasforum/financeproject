@@ -7,6 +7,7 @@ import { runPnpm } from "./pnpm_runner.mjs";
 
 const PREFLIGHT_REQUIRED_GATES = [
   "cleanup:next-artifacts",
+  "deps:audit",
 ];
 const EARLY_REQUIRED_GATES = [
   "planning:v2:complete",

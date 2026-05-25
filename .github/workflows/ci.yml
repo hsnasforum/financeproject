@@ -42,7 +42,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Dependency audit
-        run: pnpm audit
+        run: pnpm deps:audit
 
       - name: Prisma generate
         run: pnpm prisma:generate

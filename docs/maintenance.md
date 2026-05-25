@@ -29,7 +29,7 @@
 - `cleanup:next-artifacts -- --build-preflight`는 위 정리에 더해 tracked isolated build 내부 `standalone/.data` shadow까지 지운다.
 - dev 서버가 살아 있어도 오래된 `.next-build*` 정리는 계속 수행하지만, 공유 runtime 산출물(`.next-host*`, `.next-e2e*`) 정리는 active runtime이 비면 다시 실행하는 편이 안전하다.
 - build/release preflight용 `standalone/.data` 정리는 active build/prod/playwright runtime이 없을 때만 수행한다.
-- `release:verify`는 먼저 `pnpm cleanup:next-artifacts -- --build-preflight`를 실행한 뒤 `pnpm test`, `pnpm planning:v2:complete`, `pnpm multi-agent:guard`를 필수로 실행하고, 추가 게이트가 있으면 이어서 확인한다.
+- `release:verify`는 먼저 `pnpm cleanup:next-artifacts -- --build-preflight`와 `pnpm deps:audit`를 실행한 뒤 `pnpm test`, `pnpm planning:v2:complete`, `pnpm multi-agent:guard`를 필수로 실행하고, 추가 게이트가 있으면 이어서 확인한다.
 - `release:verify`의 planning e2e 하위 게이트는 전용 포트·고유 dist dir를 사용하고, `planning:v2:regress`는 임시 planning e2e data dir까지 분리해 shared runtime/data false negative를 줄인다.
 - 사용자 경로/셀렉터 영향이 있으면 `pnpm e2e:rc`를 추가하고, 범위가 넓으면 `pnpm e2e`까지 넓힌다.
 - `pnpm planning:v2:guard`, `pnpm planning:v2:engine:guard`는 planning v2 architecture/security/engine contract를 직접 건드린 release에서만 conditional gate로 붙이고, 결과는 release closeout 또는 change batch `/work`에 남긴다.
