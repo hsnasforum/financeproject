@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/Button";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { t } from "@/lib/planning/i18n";
-import { buildPlanningWorkspaceGroups } from "@/components/planning/workspace/groups";
 import {
   PlanningWorkspaceExecutionPanel,
   PlanningWorkspaceModalPanel,
@@ -27,6 +26,7 @@ export function PlanningWorkspaceClient({
   featureFlags,
   locale,
   initialSelectedProfileId = "",
+  initialSelectedProfile = null,
   snapshotItems,
   csrf = "",
 }: PlanningWorkspaceClientProps) {
@@ -34,10 +34,15 @@ export function PlanningWorkspaceClient({
     featureFlags,
     locale,
     initialSelectedProfileId,
+    initialSelectedProfile,
     snapshotItems,
     csrf,
   });
-  const { quickStart, profile, execution, results, dialogs, actions } = buildPlanningWorkspaceGroups(controller);
+  const { quickStart, profile, execution, results, dialogs, actions } = controller;
+  const headerSelectNeedsPendingOption = Boolean(
+    quickStart.selectedProfileId
+    && !quickStart.profiles.some((profileOption) => profileOption.id === quickStart.selectedProfileId),
+  );
 
   return (
     <PageShell>
@@ -53,6 +58,7 @@ export function PlanningWorkspaceClient({
                 value={quickStart.selectedProfileId}
                 onChange={(event) => actions.setSelectedProfileId(event.target.value)}
               >
+                {headerSelectNeedsPendingOption ? <option hidden value={quickStart.selectedProfileId} /> : null}
                 {quickStart.profiles.length === 0 ? <option value="">없음</option> : null}
                 {quickStart.profiles.map((profileOption) => (
                   <option key={profileOption.id} value={profileOption.id}>{profileOption.name}</option>

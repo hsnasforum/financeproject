@@ -282,7 +282,7 @@ export function buildWorkspaceQuickStartVm(input: {
         ? "border-amber-200 bg-amber-50"
         : !beginnerStepSaveDone
           ? "border-primary/20 bg-primary/5"
-          : "border-slate-200 bg-surface-muted";
+          : "border-slate-200 bg-slate-50";
 
   return {
     beginnerStepProfileDone,

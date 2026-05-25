@@ -4,6 +4,7 @@ import { loadSnapshotListForPlanning } from "@/app/planning/_lib/snapshotList";
 import { getPlanningFeatureFlags } from "@/lib/planning/config";
 import { resolvePlanningLocale } from "@/lib/planning/i18n";
 import { normalizeProfileId } from "@/lib/planning/profileScope";
+import { getDefaultProfileId, getProfile } from "@/lib/planning/server/store/profileStore";
 
 type PlanningPageProps = {
   searchParams?: Promise<{
@@ -30,12 +31,22 @@ export default async function PlanningPage({ searchParams }: PlanningPageProps) 
   const locale = resolvePlanningLocale(pickLang(resolvedSearchParams?.lang), process.env.PLANNING_LOCALE);
   const snapshotItems = await loadSnapshotListForPlanning(20).catch(() => ({ history: [] }));
   const initialSelectedProfileId = pickProfileId(resolvedSearchParams?.profileId);
+  let initialSelectedProfile = initialSelectedProfileId
+    ? await getProfile(initialSelectedProfileId).catch(() => null)
+    : null;
+  if (!initialSelectedProfile) {
+    const defaultProfileId = await getDefaultProfileId().catch(() => "");
+    if (defaultProfileId) {
+      initialSelectedProfile = await getProfile(defaultProfileId).catch(() => null);
+    }
+  }
   return (
     <PlanningWorkspaceClient
       featureFlags={featureFlags}
       locale={locale}
       snapshotItems={snapshotItems}
       initialSelectedProfileId={initialSelectedProfileId}
+      initialSelectedProfile={initialSelectedProfile}
       csrf={csrf}
     />
   );

@@ -56,19 +56,14 @@ function summarizeMetric(points: PlanningChartPoint[], key: MetricKey): {
 function RangeVisualization({ min, max, current, color }: { min: number; max: number; current: number; color: string }) {
   const range = max - min || 1;
   const progress = Math.min(100, Math.max(0, ((current - min) / range) * 100));
+  const markerX = Math.min(98.5, Math.max(0, progress - 0.75));
 
   return (
-    <div className="group/range relative mt-2">
-      <div className="h-1.5 w-full rounded-full bg-surface-muted" />
-      <div
-        className="absolute inset-y-0 left-0 h-1.5 rounded-full transition-all duration-500 ease-out"
-        style={{ width: `${progress}%`, backgroundColor: color, opacity: 0.3 }}
-      />
-      <div
-        className="absolute top-1/2 -translate-y-1/2 h-3 w-1 rounded-full shadow-sm transition-all duration-500 ease-out"
-        style={{ left: `${progress}%`, backgroundColor: color }}
-      />
-    </div>
+    <svg className="group/range mt-2 block h-3 w-full" viewBox="0 0 100 12" preserveAspectRatio="none" aria-hidden="true">
+      <rect x="0" y="3" width="100" height="6" rx="3" fill="currentColor" className="text-surface-muted" />
+      <rect x="0" y="3" width={progress} height="6" rx="3" fill={color} opacity="0.3" />
+      <rect x={markerX} y="0" width="1.5" height="12" rx="0.75" fill={color} />
+    </svg>
   );
 }
 
@@ -93,9 +88,10 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
           const summary = summarizeMetric(points, metric.key);
           const values = points.map((item) => item[metric.key]);
           const isPositive = summary.deltaPct >= 0;
+          // amber(부채): 증가가 나쁨 → positive delta = danger. 그 외(순자산/현금): 증가가 좋음 → success.
           const deltaColor = metric.tone === "amber"
-            ? (isPositive ? "text-rose-600 bg-rose-50" : "text-primary bg-primary/5")
-            : (isPositive ? "text-primary bg-primary/5" : "text-rose-600 bg-rose-50");
+            ? (isPositive ? "text-danger bg-danger/10" : "text-success bg-success/10")
+            : (isPositive ? "text-success bg-success/10" : "text-danger bg-danger/10");
 
           return (
             <div className="group flex flex-col rounded-[2.5rem] border border-slate-200/60 bg-white p-7 shadow-sm transition-all hover:shadow-md" key={metric.key}>
@@ -174,7 +170,7 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
                 {tablePoints.map((point) => (
                   <tr className="group/row hover:bg-surface-muted/50 transition-colors" key={point.monthIndex}>
                     <td className="px-6 py-4 text-xs font-black text-slate-400 tabular-nums">M{point.monthIndex + 1}</td>
-                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-primary transition-colors">{formatKrw(locale, point.netWorthKrw)}</td>
+                    <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-success transition-colors">{formatKrw(locale, point.netWorthKrw)}</td>
                     <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-sky-600 transition-colors">{formatKrw(locale, point.cashKrw)}</td>
                     <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-amber-600 transition-colors">{formatKrw(locale, point.totalDebtKrw)}</td>
                   </tr>
@@ -195,7 +191,7 @@ export function PlanningMiniCharts({ points, mode, locale }: PlanningMiniChartsP
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">순자산</p>
-                  <p className="text-[11px] font-bold text-primary tabular-nums">{formatKrw(locale, point.netWorthKrw)}</p>
+                  <p className="text-[11px] font-bold text-success tabular-nums">{formatKrw(locale, point.netWorthKrw)}</p>
                 </div>
                 <div className="border-x border-slate-100 px-1">
                   <p className="text-[9px] font-black uppercase tracking-tight text-slate-400 mb-1">현금</p>
