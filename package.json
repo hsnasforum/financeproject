@@ -39,6 +39,7 @@
     "dart:rules:baseline:update": "node scripts/dart_rules_quality_gate.mjs --update-baseline",
     "providers:logos:import": "node scripts/providers-logos-import.mjs",
     "providers:manifest": "node scripts/providers-manifest.mjs",
+    "e2e:install:chromium": "node scripts/playwright_install_chromium.mjs",
     "e2e": "node scripts/playwright_with_webserver_debug.mjs test",
     "e2e:rc": "node scripts/playwright_with_webserver_debug.mjs test tests/e2e/smoke.spec.ts tests/e2e/flow-planner-to-history.spec.ts tests/e2e/planning-quickstart-preview.spec.ts tests/e2e/flow-history-to-report.spec.ts tests/e2e/news-settings-alert-rules.spec.ts tests/e2e/dart-flow.spec.ts tests/e2e/data-sources-settings.spec.ts --workers=1",
     "e2e:rc:dart": "node scripts/playwright_with_webserver_debug.mjs test tests/e2e/dart-flow.spec.ts --workers=1",

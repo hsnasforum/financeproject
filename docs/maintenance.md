@@ -35,6 +35,7 @@
 - `pnpm planning:v2:guard`, `pnpm planning:v2:engine:guard`는 planning v2 architecture/security/engine contract를 직접 건드린 release에서만 conditional gate로 붙이고, 결과는 release closeout 또는 change batch `/work`에 남긴다.
 - `pnpm planning:v2:freeze:guard`는 v2 core 변경 visibility용 informational evidence이며 advisory 기록으로만 남긴다.
 - `pnpm e2e:rc:dart`, `pnpm e2e:rc:data-sources`는 stable helper 범위를 좁혀 보는 subset gate이며, full stable RC closeout의 `pnpm e2e:rc`를 대체하지 않는다.
+- GitHub Actions의 Playwright Chromium 설치는 `pnpm e2e:install:chromium` wrapper를 사용해 per-attempt timeout과 재시도로 runner/apt transient를 흡수한다.
 - shared `.next` 또는 dev server를 쓰는 최종 게이트(`pnpm build`, `pnpm e2e:rc`, `pnpm release:verify`)는 단일 소유로 순차 실행한다. concurrent repo build가 감지되면 `next_build_safe`는 `.next-build-<pid>` 같은 고유 dist dir로 우회한다.
 - beta targeted Playwright와 `pnpm v3:doctor`/`pnpm v3:support-bundle`/`pnpm v3:restore`/`pnpm v3:migrate` 같은 ops/dev 명령은 stable release final gate에 자동 포함하지 않는다.
 - `pnpm planning:v2:ops:run*`, `pnpm planning:v2:ops:safety*`, `pnpm planning:v2:ops:scheduler:health`, `pnpm planning:v2:ops:prune`는 release blocker가 아니라 ops cadence 또는 evidence 명령이다.
