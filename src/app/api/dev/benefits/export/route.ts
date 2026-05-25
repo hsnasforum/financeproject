@@ -1,8 +1,8 @@
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 import { searchBenefits } from "../../../../../lib/publicApis/providers/benefits";
 import { getBenefitQualityBucket } from "../../../../../lib/publicApis/benefitsQuality";
 import { csvEscape } from "../../../../../lib/publicApis/benefitsCsv";
 import { type BenefitCandidate } from "../../../../../lib/publicApis/contracts/types";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
 
 function parsePositiveInt(value: string | null, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
@@ -34,9 +34,14 @@ function toExportRows(items: BenefitCandidate[]) {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevReadRequest(request, {
+    onBlocked: () => new Response(
+      JSON.stringify({ ok: false, error: "NOT_FOUND" }),
+      { status: 404, headers: { "content-type": "application/json" } },
+    ),
+  });
   if (blocked) {
-    return new Response(JSON.stringify({ ok: false, error: "NOT_FOUND" }), { status: 404, headers: { "content-type": "application/json" } });
+    return blocked;
   }
 
   const { searchParams } = new URL(request.url);

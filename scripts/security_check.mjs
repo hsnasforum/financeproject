@@ -25,6 +25,123 @@ const checks = [
     ],
     allowNoMatch: true,
   },
+  {
+    name: "report-export-no-inline-print-script",
+    cmd: "rg",
+    args: [
+      "-n",
+      "(<script>.*window\\.print\\(|window\\.addEventListener\\(['\\\"]load['\\\"].*window\\.print\\()",
+      "src/lib/planning/reports/standaloneHtmlReport.ts",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "pdf-report-no-new-function-loader",
+    cmd: "rg",
+    args: [
+      "-n",
+      "new Function\\(",
+      "src/lib/planning/v2/report/pdfReport.ts",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "root-layout-no-external-font-stylesheet",
+    cmd: "rg",
+    args: [
+      "-n",
+      "cdn\\.jsdelivr\\.net|pretendardvariable-dynamic-subset\\.min\\.css",
+      "src/app/layout.tsx",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "kdb-endpoint-no-insecure-http",
+    cmd: "rg",
+    args: [
+      "-n",
+      "http://apis\\.data\\.go\\.kr",
+      "src/lib/sources/datago/kdb.ts",
+      "scripts/datago_sync.mjs",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "app-runtime-no-inline-style-tag",
+    cmd: "rg",
+    args: [
+      "-n",
+      "<style>|styled-jsx|jsx global",
+      "src/app",
+      "src/components",
+      "--glob",
+      "!**/*.test.*",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "app-runtime-no-inline-style-attr",
+    cmd: "rg",
+    args: [
+      "-n",
+      "style\\s*=\\s*\\{\\{",
+      "src/app",
+      "src/components",
+      "--glob",
+      "!**/*.test.*",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "app-runtime-no-style-mutation",
+    cmd: "rg",
+    args: [
+      "-n",
+      "(\\.style\\.[A-Za-z_$][A-Za-z0-9_$]*\\s*=|setAttribute\\(\\s*['\\\"]style['\\\"]|style\\.setProperty\\()",
+      "src/app",
+      "src/components",
+      "src/lib/browser",
+      "--glob",
+      "!**/*.test.*",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "app-runtime-no-framer-motion",
+    cmd: "rg",
+    args: [
+      "-n",
+      "from ['\\\"]framer-motion['\\\"]",
+      "src/app",
+      "src/components",
+      "--glob",
+      "!**/*.test.*",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "app-runtime-no-next-image",
+    cmd: "rg",
+    args: [
+      "-n",
+      "from ['\\\"]next/image['\\\"]",
+      "src/app",
+      "src/components",
+      "--glob",
+      "!**/*.test.*",
+    ],
+    allowNoMatch: true,
+  },
+  {
+    name: "standalone-report-no-inline-style-attr",
+    cmd: "rg",
+    args: [
+      "-n",
+      "style=",
+      "src/lib/planning/reports/standaloneHtmlReport.ts",
+    ],
+    allowNoMatch: true,
+  },
 ];
 
 const REPO_ROOT = process.cwd();

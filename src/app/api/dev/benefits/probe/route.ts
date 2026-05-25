@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 import { odcloudFetchWithAuth, resolveOdcloudEndpoint, setSearchParams } from "@/lib/publicApis/odcloud";
 import { extractOdcloudRows } from "@/lib/publicApis/odcloudScan";
 
@@ -46,8 +46,8 @@ async function fetchPage(params: { endpoint: URL; apiKey: string; pageNo: number
   };
 }
 
-export async function GET() {
-  const blocked = onlyDev();
+export async function GET(request: Request) {
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   const apiKey = (process.env.MOIS_BENEFITS_API_KEY ?? "").trim();

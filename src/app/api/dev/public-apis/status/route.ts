@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getApiCacheDiagnostics } from "@/lib/cache/apiCache";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 import { computeMissingKeys, computeNotLoadedYet, parseEnvKeys, parseEnvTemplate, validateApiUrls } from "@/lib/dev/envDoctor";
 
 export const runtime = "nodejs";
@@ -29,8 +29,8 @@ const APIS = [
   { apiName: "opendart-company", label: "OpenDART 기업개황", required: ["OPENDART_API_KEY"] },
 ] as const;
 
-export async function GET() {
-  const blocked = onlyDev();
+export async function GET(request: Request) {
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   const root = process.cwd();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildSnapshot } from "@/lib/publicApis/benefitsSnapshot";
+import { guardDevMutationRequest } from "@/lib/dev/devGuards";
 import { searchBenefits } from "@/lib/publicApis/providers/benefits";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 
 function parsePositiveInt(value: string | null, fallback: number, min: number, max: number): number {
   const parsed = Number(value);
@@ -17,7 +17,7 @@ function parseMaxPages(value: string | null, fallback: number | "auto"): number 
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevMutationRequest(request);
   if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);

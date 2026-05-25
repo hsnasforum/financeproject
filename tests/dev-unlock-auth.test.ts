@@ -106,4 +106,22 @@ describe("dev unlock + dart watch auth", () => {
     expect(watchResponse.status).toBe(404);
     expect(runScriptMock).not.toHaveBeenCalled();
   });
+
+  it("keeps unlock route local-only even before token checks", async () => {
+    const response = await unlockPOST(new Request("http://evil.com/api/dev/unlock", {
+      method: "POST",
+      headers: {
+        host: "evil.com",
+        origin: "http://evil.com",
+        referer: "http://evil.com/dashboard",
+        "x-dev-token": "unit-test-token",
+      },
+    }));
+    const json = (await response.json()) as { ok?: boolean; error?: { code?: string } };
+
+    expect(response.status).toBe(403);
+    expect(json.ok).toBe(false);
+    expect(json.error?.code).toBe("LOCAL_ONLY");
+    expect(runScriptMock).not.toHaveBeenCalled();
+  });
 });

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { append as appendAuditLog } from "@/lib/audit/auditLogStore";
 import { buildBundle, isServerPathWhitelisted, type BackupBundle, validateBundle } from "@/lib/backup/backupBundle";
 import { validateRuntime } from "@/lib/backup/backupValidateRuntime";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevMutationRequest } from "@/lib/dev/devGuards";
 import { checkPlanningIntegrity, type PlanningIntegrityReport } from "@/lib/ops/planningDoctor";
 
 const RESTORE_POINT_PATH = path.join(process.cwd(), "tmp", "backup_restore_point.json");
@@ -220,7 +220,7 @@ function rollbackFromRestorePoint(cwd: string): { ok: boolean; written: string[]
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevMutationRequest(request);
   if (blocked) return blocked;
 
   let body: unknown;

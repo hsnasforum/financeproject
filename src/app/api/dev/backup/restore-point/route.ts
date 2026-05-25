@@ -1,12 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 
 const RESTORE_POINT_PATH = path.join(process.cwd(), "tmp", "backup_restore_point.json");
 
-export async function GET() {
-  const blocked = onlyDev();
+export async function GET(request: Request) {
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   try {

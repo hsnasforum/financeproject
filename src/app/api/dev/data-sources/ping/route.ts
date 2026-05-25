@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 import { getKstTodayYYYYMMDD, fetchEximExchange } from "@/lib/publicApis/providers/exchange";
 import { searchBenefits } from "@/lib/publicApis/providers/benefits";
 import { listSubscriptionNotices } from "@/lib/publicApis/providers/subscription";
@@ -31,7 +31,7 @@ function statusFromCode(code?: string): number {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);

@@ -5,6 +5,12 @@ import { GET } from "../src/app/api/dev/dart/brief/route";
 
 const BRIEF_PATH = path.join(process.cwd(), "tmp", "dart", "daily_brief.json");
 
+function localRequest(): Request {
+  return new Request("http://localhost:3000/api/dev/dart/brief", {
+    headers: { host: "localhost:3000" },
+  });
+}
+
 describe("dart brief route", () => {
   it("returns {ok:true,data:null} when brief file is missing", async () => {
     const backup = fs.existsSync(BRIEF_PATH) ? fs.readFileSync(BRIEF_PATH, "utf-8") : null;
@@ -12,7 +18,7 @@ describe("dart brief route", () => {
     if (backup !== null) fs.unlinkSync(BRIEF_PATH);
 
     try {
-      const response = await GET();
+      const response = await GET(localRequest());
       const json = (await response.json()) as { ok?: boolean; data?: unknown };
       expect(response.status).toBe(200);
       expect(json.ok).toBe(true);

@@ -6,6 +6,12 @@ import { resolveNewsBriefJsonPath } from "../src/lib/news/storageSqlite";
 
 const BRIEF_PATH = resolveNewsBriefJsonPath();
 
+function localRequest(): Request {
+  return new Request("http://localhost:3000/api/dev/news/brief", {
+    headers: { host: "localhost:3000" },
+  });
+}
+
 function withBriefFile(content: string | null, run: () => Promise<void>) {
   const backup = fs.existsSync(BRIEF_PATH) ? fs.readFileSync(BRIEF_PATH, "utf-8") : null;
   if (content === null) {
@@ -28,7 +34,7 @@ function withBriefFile(content: string | null, run: () => Promise<void>) {
 describe("news brief route", () => {
   it("returns {ok:true,data:null} when brief file is missing", async () => {
     await withBriefFile(null, async () => {
-      const response = await GET();
+      const response = await GET(localRequest());
       const json = (await response.json()) as { ok?: boolean; data?: unknown };
       expect(response.status).toBe(200);
       expect(json.ok).toBe(true);
@@ -38,7 +44,7 @@ describe("news brief route", () => {
 
   it("returns null when brief file is invalid json", async () => {
     await withBriefFile("{invalid", async () => {
-      const response = await GET();
+      const response = await GET(localRequest());
       const json = (await response.json()) as { ok?: boolean; data?: unknown };
       expect(response.status).toBe(200);
       expect(json.ok).toBe(true);
@@ -62,7 +68,7 @@ describe("news brief route", () => {
     };
 
     await withBriefFile(`${JSON.stringify(briefPayload)}\n`, async () => {
-      const response = await GET();
+      const response = await GET(localRequest());
       const json = (await response.json()) as { ok?: boolean; data?: { generatedAt?: string } | null };
       expect(response.status).toBe(200);
       expect(json.ok).toBe(true);

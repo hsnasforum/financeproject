@@ -6,6 +6,8 @@ import {
   assertLocalHost,
   assertNotProduction,
   assertSameOrigin,
+  guardDevMutationRequest,
+  guardDevReadRequest,
 } from "../src/lib/dev/devGuards";
 
 function buildRequest(input?: {
@@ -95,5 +97,54 @@ describe("dev guards", () => {
       fetchSite: "same-origin",
     });
     assertSameOrigin(request);
+  });
+
+  it("guardDevReadRequest returns 404 response in production", async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const originalNodeEnv = env.NODE_ENV;
+    env.NODE_ENV = "production";
+    try {
+      const response = guardDevReadRequest(
+        buildRequest({ host: "localhost:3000" }),
+        {
+          onBlocked: () => new Response(JSON.stringify({ ok: false, error: "NOT_FOUND" }), { status: 404 }),
+        },
+      );
+      expect(response?.status).toBe(404);
+      const json = response ? await response.json() as { ok?: boolean; error?: string } : null;
+      expect(json?.ok).toBe(false);
+      expect(json?.error).toBe("NOT_FOUND");
+    } finally {
+      if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
+      else delete env.NODE_ENV;
+    }
+  });
+
+  it("guardDevReadRequest blocks remote host with LOCAL_ONLY", async () => {
+    const response = guardDevReadRequest(buildRequest({ host: "evil.com" }));
+    expect(response?.status).toBe(403);
+    const json = response ? await response.json() as { ok?: boolean; error?: { code?: string } } : null;
+    expect(json?.ok).toBe(false);
+    expect(json?.error?.code).toBe("LOCAL_ONLY");
+  });
+
+  it("guardDevMutationRequest enforces same-origin and optional csrf", async () => {
+    const remote = guardDevMutationRequest(buildRequest({ host: "localhost:3000", origin: "http://evil.com" }));
+    expect(remote?.status).toBe(403);
+    const remoteJson = remote ? await remote.json() as { error?: { code?: string } } : null;
+    expect(remoteJson?.error?.code).toBe("ORIGIN_MISMATCH");
+
+    const csrfRequest = buildRequest({
+      host: "localhost:3000",
+      origin: "http://localhost:3000",
+      cookie: "dev_csrf=token-ok",
+    });
+    const csrfFail = guardDevMutationRequest(csrfRequest, {
+      body: { csrf: "mismatch" },
+      requireCsrf: true,
+    });
+    expect(csrfFail?.status).toBe(403);
+    const csrfJson = csrfFail ? await csrfFail.json() as { error?: { code?: string } } : null;
+    expect(csrfJson?.error?.code).toBe("CSRF_MISMATCH");
   });
 });

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { onlyDev } from "../../../../../lib/dev/onlyDev";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 import { list } from "../../../../../lib/audit/auditLogStore";
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   try {

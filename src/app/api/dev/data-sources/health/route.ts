@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadDataSourceImpactSnapshot } from "@/lib/dataSources/impactSnapshot";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 import { shouldCooldown } from "@/lib/http/rateLimitCooldown";
 import { listProviders } from "@/lib/providers/registry";
 
@@ -12,8 +12,8 @@ type SourceHealthRow = {
   lastSnapshotGeneratedAt: string | null;
 };
 
-export async function GET() {
-  const blocked = onlyDev();
+export async function GET(request: Request) {
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   const impactSnapshot = await loadDataSourceImpactSnapshot();

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 
 export const runtime = "nodejs";
 
@@ -40,19 +41,6 @@ type FixtureEnvelope = {
 };
 
 const DEFAULT_FIXTURE_DIR = "tmp/finlife-fixtures";
-
-function onlyDev() {
-  if ((process.env.NODE_ENV ?? "").trim() === "production") {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "NOT_FOUND", message: "Not found" },
-      },
-      { status: 404 },
-    );
-  }
-  return null;
-}
 
 function resolveFixtureDir(dir?: string): string {
   const raw = typeof dir === "string" && dir.trim() ? dir.trim() : (process.env.FINLIFE_FIXTURE_DIR ?? "").trim();
@@ -162,7 +150,7 @@ function buildFinlifeSchemaReport(opts?: { dir?: string; topN?: number }): Schem
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   const { searchParams } = new URL(request.url);
