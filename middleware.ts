@@ -89,7 +89,13 @@ function shouldAttachNonce(request: NextRequest): boolean {
 }
 
 function createNonce(): string {
-  return Buffer.from(crypto.randomUUID()).toString("base64");
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
 }
 
 function blockResponse(request: NextRequest, contentSecurityPolicy: string): NextResponse {
