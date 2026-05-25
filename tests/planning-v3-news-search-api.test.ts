@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { upsertItems, writeState } from "../planning/v3/news/store";
 import { GET } from "../src/app/api/planning/v3/news/search/route";
 import { closeNewsDatabase, openNewsDatabase, resolveNewsDbPath } from "../src/lib/news/storageSqlite";
@@ -74,6 +74,8 @@ function seedSearchIndex() {
 
 describe("planning v3 news search api", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-05T00:00:00.000Z"));
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-v3-news-search-api-"));
     env.PLANNING_DATA_DIR = path.join(root, "planning");
     env.NODE_ENV = "test";
@@ -81,6 +83,7 @@ describe("planning v3 news search api", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
 
