@@ -135,6 +135,7 @@ export function usePlanningWorkspaceController({
     initialSelectedProfileId,
     initialSelectedProfile,
     beginnerMode: execution.beginnerMode,
+    beginnerModeLoaded: execution.beginnerModeLoaded,
     isMountedRef,
     profileDeleteDialog: feedback.profileDeleteDialog,
     setProfileDeleteDialog: feedback.setProfileDeleteDialog,

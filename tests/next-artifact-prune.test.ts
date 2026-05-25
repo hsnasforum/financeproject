@@ -96,7 +96,7 @@ describe("next_artifact_prune", () => {
     const result = pruneRootIsolatedBuildArtifacts({ cwd: root });
 
     expect(result.skippedDueToActiveRuntime).toBe(true);
-    expect(result.activeRuntimeProcesses.map((entry) => entry.kind)).toContain("build");
+    expect(result.activeRuntimeProcesses.map((entry: { kind: string }) => entry.kind)).toContain("build");
     expect(result.removed).toEqual([]);
     expect(fs.existsSync(path.join(root, ".next-build-old"))).toBe(true);
     expect(fs.existsSync(path.join(root, ".next-build-old-tsconfig.json"))).toBe(true);
@@ -123,7 +123,7 @@ describe("next_artifact_prune", () => {
     const result = pruneStandaloneDataArtifactsForBuildPreflight({ cwd: root });
 
     expect(result.skippedDueToActiveRuntime).toBe(true);
-    expect(result.activeRuntimeProcesses.map((entry) => entry.kind)).toContain("prod");
+    expect(result.activeRuntimeProcesses.map((entry: { kind: string }) => entry.kind)).toContain("prod");
     expect(fs.existsSync(path.join(root, ".next-build-live", "standalone", ".data", "news", "items"))).toBe(true);
   });
 });

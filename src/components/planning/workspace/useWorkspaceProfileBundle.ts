@@ -102,6 +102,7 @@ type WorkspaceProfileBundleInput = {
   initialSelectedProfileId: string;
   initialSelectedProfile?: PlanningProfileRecord | null;
   beginnerMode: boolean;
+  beginnerModeLoaded: boolean;
   isMountedRef: MountedRef;
   profileDeleteDialog: WorkspaceProfileDeleteDialogState;
   setProfileDeleteDialog: Dispatch<SetStateAction<WorkspaceProfileDeleteDialogState>>;
@@ -391,6 +392,7 @@ export function useWorkspaceProfileBundle({
   initialSelectedProfileId,
   initialSelectedProfile = null,
   beginnerMode,
+  beginnerModeLoaded,
   isMountedRef,
   profileDeleteDialog,
   setProfileDeleteDialog,
@@ -636,7 +638,7 @@ export function useWorkspaceProfileBundle({
   }, [loadSelectedProfileRecord, selectedProfile, selectedProfileId]);
 
   useEffect(() => {
-    if (!beginnerMode) return;
+    if (!beginnerModeLoaded || !beginnerMode) return;
     const context = beginnerGoalContext(profileForm);
     const nextGoals = ensureBeginnerGoals(profileForm.goals, context);
     if (nextGoals.length === profileForm.goals.length) return;
@@ -647,7 +649,7 @@ export function useWorkspaceProfileBundle({
     };
     applyLocalProfileEditorState(buildProfileJsonEditorState(nextForm, profileName));
     clearPendingSuggestions();
-  }, [applyLocalProfileEditorState, beginnerMode, clearPendingSuggestions, profileForm, profileName]);
+  }, [applyLocalProfileEditorState, beginnerMode, beginnerModeLoaded, clearPendingSuggestions, profileForm, profileName]);
 
   function toggleSuggestionCode(code: string, checked: boolean): void {
     setAcceptedSuggestionCodes((prev) => {

@@ -108,6 +108,8 @@ describe("toInterpretationInputFromReportVM", () => {
     expect(input.aggregatedWarnings[0]?.code).toBe("NO_SUCH_WARNING");
     expect(input.goals).toHaveLength(1);
     expect(input.outcomes?.snapshotMeta?.staleDays).toBe(80);
-    expect(input.summaryEvidence?.monthlySurplusKrw?.inputs.monthlyIncomeKrw).toBe(5_000_000);
+    const summaryEvidence = input.summaryEvidence;
+    expect(Array.isArray(summaryEvidence) ? undefined : summaryEvidence?.monthlySurplusKrw?.inputs.monthlyIncomeKrw)
+      .toBe(5_000_000);
   });
 });

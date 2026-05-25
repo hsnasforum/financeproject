@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 
 let prisma = null;
 
-const KDB_ENDPOINT = "http://apis.data.go.kr/B190030/GetDepositProductInfoService/getDepositProductList";
+const KDB_ENDPOINT = "https://apis.data.go.kr/B190030/GetDepositProductInfoService/getDepositProductList";
 
 for (const name of [".env.local", "env.local", ".env"]) {
   const filePath = path.join(process.cwd(), name);

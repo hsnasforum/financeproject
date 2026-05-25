@@ -402,6 +402,7 @@ export function useWorkspaceExecutionOptionsBundle({
 
   return {
     beginnerMode,
+    beginnerModeLoaded,
     setBeginnerMode,
     policyId,
     setPolicyId,
