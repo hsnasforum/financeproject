@@ -9,6 +9,7 @@ const SOURCE_RULES = [
   { source: "finlife", pattern: /^finlife_.*_snapshot\.json$/i, maxAgeDays: 3 },
   { source: "benefits", pattern: /^benefits_.*\.json$/i, maxAgeDays: 7 },
   { source: "gov24", pattern: /^gov24_.*\.json$/i, maxAgeDays: 7 },
+  { source: "exchange", pattern: /^exchange_snapshot\.json$/i, maxAgeDays: 1 },
 ];
 const AUXILIARY_FILE_PATTERNS = [
   /_partial\.json$/i,

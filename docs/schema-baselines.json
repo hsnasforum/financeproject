@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-26T13:35:10.106Z",
+  "generatedAt": "2026-05-25T10:44:42.026Z",
   "fingerprint": {
     "maxDepth": 8,
     "arraySampleSize": 3,
@@ -482,6 +482,36 @@
         }
       ]
     },
+    "exchange_snapshot.json": {
+      "maxDepth": 8,
+      "arraySampleSize": 3,
+      "entries": [
+        {
+          "path": "$",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.asOf",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.generatedAt",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.rowCount",
+          "types": [
+            "number"
+          ]
+        }
+      ]
+    },
     "finlife_credit-loan_snapshot.json": {
       "maxDepth": 8,
       "arraySampleSize": 3,
@@ -949,6 +979,48 @@
           ]
         },
         {
+          "path": "$.items[].options[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.intr_rate2",
+          "types": [
+            "number"
+          ]
+        },
+        {
           "path": "$.items[].options[].raw.save_trm",
           "types": [
             "string"
@@ -964,6 +1036,98 @@
           "path": "$.items[].raw",
           "types": [
             "object"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_end_day",
+          "types": [
+            "null",
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.etc_note",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_subm_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_deny",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_member",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_way",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.max_limit",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.mtrt_int",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.spcl_cnd",
+          "types": [
+            "string"
           ]
         },
         {
@@ -991,6 +1155,12 @@
           ]
         },
         {
+          "path": "$.meta.configuredGroups[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
           "path": "$.meta.duplicateAcrossGroupsCount",
           "types": [
             "number"
@@ -1015,6 +1185,12 @@
           ]
         },
         {
+          "path": "$.meta.groupsScanned[]",
+          "types": [
+            "string"
+          ]
+        },
+        {
           "path": "$.meta.lastUpstreamStatus",
           "types": [
             "null"
@@ -1030,6 +1206,12 @@
           "path": "$.meta.pagesFetchedByGroup",
           "types": [
             "object"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.020000",
+          "types": [
+            "number"
           ]
         },
         {
@@ -1431,6 +1613,302 @@
           ]
         },
         {
+          "path": "$.items[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options",
+          "types": [
+            "array"
+          ]
+        },
+        {
+          "path": "$.items[].options[]",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].intr_rate2",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.mon_paym_atm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.mon_paym_atm_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.paym_prd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.paym_prd_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.pnsn_entr_age",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.pnsn_entr_age_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.pnsn_recp_amt",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.pnsn_recp_trm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.pnsn_recp_trm_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.pnsn_strt_age",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].options[].raw.pnsn_strt_age_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw",
+          "types": [
+            "object"
+          ]
+        },
+        {
+          "path": "$.items[].raw.avg_prft_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.btrm_prft_rate_1",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.btrm_prft_rate_2",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.btrm_prft_rate_3",
+          "types": [
+            "null",
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_end_day",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_month",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_rate",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.dcls_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.etc",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_co_subm_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_cd",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.fin_prdt_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.guar_rate",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.join_way",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.kor_co_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.mntn_cnt",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.items[].raw.pnsn_kind",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.pnsn_kind_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.prdt_type",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.prdt_type_nm",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.sale_co",
+          "types": [
+            "null"
+          ]
+        },
+        {
+          "path": "$.items[].raw.sale_strt_day",
+          "types": [
+            "string"
+          ]
+        },
+        {
+          "path": "$.items[].raw.top_fin_grp_no",
+          "types": [
+            "string"
+          ]
+        },
+        {
           "path": "$.meta",
           "types": [
             "object"
@@ -1491,19 +1969,19 @@
           ]
         },
         {
-          "path": "$.meta.note",
-          "types": [
-            "string"
-          ]
-        },
-        {
           "path": "$.meta.pagesFetchedByGroup",
           "types": [
             "object"
           ]
         },
         {
-          "path": "$.meta.pagesFetchedByGroup.020000",
+          "path": "$.meta.pagesFetchedByGroup.050000",
+          "types": [
+            "number"
+          ]
+        },
+        {
+          "path": "$.meta.pagesFetchedByGroup.060000",
           "types": [
             "number"
           ]

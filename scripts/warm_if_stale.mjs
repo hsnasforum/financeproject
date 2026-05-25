@@ -2,10 +2,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import dotenv from "dotenv";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, ".data");
+
+for (const name of [".env.local", "env.local", ".env"]) {
+  const filePath = path.join(ROOT, name);
+  if (!fs.existsSync(filePath)) continue;
+  dotenv.config({ path: filePath, override: false, quiet: true });
+}
 
 const POLICY = {
   finlife: { maxAgeDays: 1 },

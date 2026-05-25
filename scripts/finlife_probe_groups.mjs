@@ -6,13 +6,22 @@ import {
   fetchJsonWithDiag,
   extractFinlifeCounts,
   isFinlifeSuccess,
+  parsePositiveInt,
 } from "./finlife_cli_common.mjs";
+import { finlifeGroupEnvKey } from "./finlife_sync.mjs";
 
 ensureFetchAvailable();
 const { baseUrl, apiKey } = getFinlifeConfig();
+const PROBE_KIND_ENDPOINTS = {
+  deposit: "depositProductsSearch.json",
+  saving: "savingProductsSearch.json",
+  pension: "annuitySavingProductsSearch.json",
+};
 
 function endpointFor(kind) {
-  return kind === "deposit" ? "depositProductsSearch.json" : "savingProductsSearch.json";
+  const endpoint = PROBE_KIND_ENDPOINTS[kind];
+  if (!endpoint) throw new Error(`Unsupported FINLIFE probe kind: ${kind}`);
+  return endpoint;
 }
 
 function buildProbeUrl(kind, grp) {
@@ -51,11 +60,10 @@ function inferLikelyCause({ statusBuckets, errCdBuckets, htmlLikeCount }) {
 
 async function main() {
   const candidates = parseProbeCandidates(process.env.FINLIFE_PROBE_GROUP_CANDIDATES);
+  const timeoutMs = parsePositiveInt(process.env.FINLIFE_PROBE_TIMEOUT_MS, 20_000, 500, 120_000);
+  const retries = parsePositiveInt(process.env.FINLIFE_PROBE_RETRIES, 1, 0, 5);
   const debugMode = process.env.FINLIFE_PROBE_DEBUG === "1";
-  const result = {
-    deposit: { valid: [], counts: {} },
-    saving: { valid: [], counts: {} },
-  };
+  const result = Object.fromEntries(Object.keys(PROBE_KIND_ENDPOINTS).map((kind) => [kind, { valid: [], counts: {} }]));
   const statusBuckets = {};
   const errCdBuckets = {};
   let nonJsonCount = 0;
@@ -63,10 +71,10 @@ async function main() {
   let sampleDiag = null;
   const debugLines = [];
 
-  for (const kind of ["deposit", "saving"]) {
+  for (const kind of Object.keys(PROBE_KIND_ENDPOINTS)) {
     for (const grp of candidates) {
       const maskedUrl = maskUrl(buildProbeUrl(kind, grp));
-      const diag = await fetchJsonWithDiag(buildProbeUrl(kind, grp), { timeoutMs: 10_000 });
+      const diag = await fetchJsonWithDiag(buildProbeUrl(kind, grp), { timeoutMs, retries });
       const statusKey = typeof diag.status === "number" ? String(diag.status) : "ERR";
       statusBuckets[statusKey] = (statusBuckets[statusKey] ?? 0) + 1;
       if (diag.errCd) errCdBuckets[diag.errCd] = (errCdBuckets[diag.errCd] ?? 0) + 1;
@@ -90,7 +98,7 @@ async function main() {
 
       if (debugMode && debugLines.length < 5) {
         debugLines.push(
-          `[debug] ${kind}:${grp} status=${diag.status ?? "ERR"} err_cd=${diag.errCd ?? "-"} total=${counts.totalCount ?? "-"} baseListLen=${counts.baseListLen} url=${maskedUrl}`,
+          `[debug] ${kind}:${grp} status=${diag.status ?? "ERR"} err_cd=${diag.errCd ?? "-"} attempts=${diag.attempts ?? 1} total=${counts.totalCount ?? "-"} baseListLen=${counts.baseListLen} url=${maskedUrl}`,
         );
       }
     }
@@ -100,14 +108,20 @@ async function main() {
   const recommended = [...new Set([...result.deposit.valid, ...result.saving.valid])].sort();
 
   console.log(`[finlife:probe] baseUrl=${baseUrl}`);
-  console.log("[finlife:probe] endpoints=depositProductsSearch.json,savingProductsSearch.json");
+  console.log(`[finlife:probe] endpoints=${Object.values(PROBE_KIND_ENDPOINTS).join(",")}`);
   console.log(`[finlife:probe] candidates=${candidates.length}`);
-  console.log(`[finlife:probe] deposit validGroups=${result.deposit.valid.join(",") || "(none)"}`);
-  console.log(`[finlife:probe] saving validGroups=${result.saving.valid.join(",") || "(none)"}`);
-  console.log(`[finlife:probe] deposit counts=${JSON.stringify(result.deposit.counts)}`);
-  console.log(`[finlife:probe] saving counts=${JSON.stringify(result.saving.counts)}`);
+  console.log(`[finlife:probe] timeoutMs=${timeoutMs} retries=${retries}`);
+  for (const kind of Object.keys(PROBE_KIND_ENDPOINTS)) {
+    console.log(`[finlife:probe] ${kind} validGroups=${result[kind].valid.join(",") || "(none)"}`);
+  }
+  for (const kind of Object.keys(PROBE_KIND_ENDPOINTS)) {
+    console.log(`[finlife:probe] ${kind} counts=${JSON.stringify(result[kind].counts)}`);
+  }
   if (debugLines.length > 0) debugLines.forEach((line) => console.log(line));
   console.log(`Recommended FINLIFE_TOPFIN_GRP_LIST=${recommended.join(",")}`);
+  for (const kind of Object.keys(PROBE_KIND_ENDPOINTS).filter((value) => value !== "deposit" && value !== "saving")) {
+    console.log(`Recommended ${finlifeGroupEnvKey(kind)}=${result[kind].valid.join(",")}`);
+  }
 
   if (recommended.length === 0) {
     console.log(`[finlife:probe] Summary: ${summarizeBuckets(statusBuckets, "status") || "status:(none)"}`);
