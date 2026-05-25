@@ -63,6 +63,7 @@ pnpm dev
 - 터미널에 출력된 `Open (same env)` 또는 `Open (LAN)` URL을 그대로 사용
 - 기본 예: `http://localhost:3100`
 - WSL에서는 `pnpm dev`가 `0.0.0.0` + Windows `127.0.0.1` localhost bridge 조합을 기본으로 쓰므로 `http://localhost:3100`를 우선 사용
+- WSL에서 `powershell.exe`가 PATH에 없다는 bridge skip 메시지가 나오면 앱은 계속 실행 중이므로 `Open (LAN)` URL을 사용
 - Windows 브라우저에서 localhost forwarding이 안 되면 같은 출력의 `Open (LAN)` URL로 접속
 
 ## E) 동기화 (선택)

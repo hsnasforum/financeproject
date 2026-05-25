@@ -142,6 +142,15 @@ function resolveWindowsPath(posixPath) {
   return value || null;
 }
 
+export function isWindowsPowerShellAvailable(runner = spawnSync) {
+  const checked = runner("powershell.exe", ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 2000,
+  });
+  return !checked.error && checked.status === 0;
+}
+
 export function parseBridgeAddressList(value) {
   if (!value || value === "-") return [];
   return value.split(",").map((entry) => entry.trim()).filter(Boolean);
@@ -171,6 +180,16 @@ function launchWindowsLocalhostBridge({ port, targetHost, targetPort }) {
   const windowsScriptPath = resolveWindowsPath(scriptPath);
   if (!windowsScriptPath) {
     return { child: null, ready: Promise.resolve({ ok: false, reason: "wslpath failed" }) };
+  }
+  if (!isWindowsPowerShellAvailable()) {
+    return {
+      child: null,
+      ready: Promise.resolve({
+        ok: false,
+        skipped: true,
+        reason: "powershell.exe not found; use Open (LAN) URL or restore Windows interop PATH",
+      }),
+    };
   }
 
   const child = spawn("powershell.exe", [
@@ -377,7 +396,9 @@ async function main() {
           console.warn(`[next_dev_safe] Windows localhost bridge 일부 listen 주소는 건너뛰었습니다: ${ready.warnings.join(", ")}`);
         }
       } else {
-        console.warn(`[next_dev_safe] Windows localhost bridge disabled: ${ready.reason}`);
+        const message = `[next_dev_safe] Windows localhost bridge ${ready.skipped ? "skipped" : "disabled"}: ${ready.reason}`;
+        if (ready.skipped) console.log(message);
+        else console.warn(message);
       }
     } else {
       console.warn("[next_dev_safe] Windows localhost bridge disabled: WSL IPv4 주소를 찾지 못했습니다.");
