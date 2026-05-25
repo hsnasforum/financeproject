@@ -96,11 +96,11 @@ export function RecommendClient() {
           <Card className="p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <h2 className="text-xl font-bold text-navy mb-6 text-center">어떤 목적으로 저축하시나요?</h2>
             <div className="max-w-md mx-auto space-y-6">
-              <input 
-                className="w-full h-14 rounded-2xl border border-border bg-surface px-6 text-center text-lg font-bold text-navy focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm" 
-                value={purpose} 
-                onChange={(e) => setPurpose(e.target.value)} 
-                placeholder="예: 내 집 마련, 결혼 자금, 비상금" 
+              <input
+                className="w-full h-14 rounded-2xl border border-border bg-surface px-6 text-center text-lg font-bold text-navy focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all shadow-sm"
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value)}
+                placeholder="예: 내 집 마련, 결혼 자금, 비상금"
               />
               <div className="flex flex-wrap justify-center gap-2">
                 {["목돈 마련", "비상금", "결혼 자금", "여행 자금"].map((preset) => (

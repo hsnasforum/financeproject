@@ -576,9 +576,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                 </div>
                 <div className="flex flex-col gap-2 min-w-[180px]">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">기관별 필터</p>
-                  <select 
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none shadow-sm focus:ring-1 focus:ring-primary" 
-                    value={orgTypeFilter} 
+                  <select
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none shadow-sm focus:ring-1 focus:ring-primary"
+                    value={orgTypeFilter}
                     onChange={(e) => setOrgTypeFilter(e.target.value as Gov24OrgType)}
                   >
                     {ORG_FILTER_OPTIONS.map((entry) => (
@@ -620,7 +620,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                         </div>
                         <h3 className="text-xl font-black text-navy tracking-tight group-hover:text-primary transition-colors">{item.card?.title ?? item.title}</h3>
                         <p className="mt-3 line-clamp-2 text-sm font-medium leading-relaxed text-slate-600">{item.card?.summary ?? item.summary}</p>
-                        
+
                         <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           {(item.card?.lines ?? []).map((line) => (
                             <div key={`${item.id}-${line.label}`} className="rounded-xl bg-surface-muted p-3">
@@ -635,10 +635,10 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                             상세에서 다시 확인
                           </Button>
                           {quickUrl ? (
-                            <a 
-                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-surface-muted active:scale-[0.98]" 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
+                            <a
+                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-surface-muted active:scale-[0.98]"
+                              target="_blank"
+                              rel="noopener noreferrer"
                               href={quickUrl}
                             >
                               정부24 신청하기
