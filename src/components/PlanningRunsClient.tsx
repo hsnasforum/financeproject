@@ -215,6 +215,33 @@ export function PlanningRunsClient({
     }
   }
 
+  async function loadActionProgressSummaryForRuns(runRows: PlanningRunRecord[], requestId: number): Promise<void> {
+    if (runRows.length < 1) {
+      if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
+      setActionProgressSummaryByRun({});
+      return;
+    }
+    const next: Record<string, ActionProgressSummary> = {};
+    await Promise.all(runRows.map(async (run) => {
+      try {
+        const response = await fetch(`/api/planning/runs/${encodeURIComponent(run.id)}/action-progress`, { cache: "no-store" });
+        const rawPayload = await response.json().catch(() => null);
+        const payload = parsePlanningV2Response<PlanningRunActionProgress>(rawPayload);
+        const payloadMeta = payload.ok
+          ? ((payload.meta ?? {}) as { summary?: ActionProgressSummary })
+          : {};
+        if (!response.ok || !payload.ok) return;
+        const summary = payloadMeta.summary;
+        if (!summary) return;
+        next[run.id] = summary;
+      } catch {
+        // ignore per-run action summary failures
+      }
+    }));
+    if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
+    setActionProgressSummaryByRun(next);
+  }
+
   async function loadRuns(profileId = filterProfileId): Promise<void> {
     const requestId = runsRequestIdRef.current + 1;
     runsRequestIdRef.current = requestId;
@@ -300,38 +327,9 @@ export function PlanningRunsClient({
       setLoading(false);
     }
   }
-  const loadRunsRef = useRef(loadRuns);
-  loadRunsRef.current = loadRuns;
-  const scheduleLoadSelectedActionCenter = useEffectEvent((runId: string, requestId: number) => {
-    void loadSelectedActionCenter(runId, requestId);
+  const loadRunsEvent = useEffectEvent((nextProfileId: string) => {
+    void loadRuns(nextProfileId);
   });
-
-  async function loadActionProgressSummaryForRuns(runRows: PlanningRunRecord[], requestId: number): Promise<void> {
-    if (runRows.length < 1) {
-      if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
-      setActionProgressSummaryByRun({});
-      return;
-    }
-    const next: Record<string, ActionProgressSummary> = {};
-    await Promise.all(runRows.map(async (run) => {
-      try {
-      const response = await fetch(`/api/planning/runs/${encodeURIComponent(run.id)}/action-progress`, { cache: "no-store" });
-        const rawPayload = await response.json().catch(() => null);
-        const payload = parsePlanningV2Response<PlanningRunActionProgress>(rawPayload);
-        const payloadMeta = payload.ok
-          ? ((payload.meta ?? {}) as { summary?: ActionProgressSummary })
-          : {};
-        if (!response.ok || !payload.ok) return;
-        const summary = payloadMeta.summary;
-        if (!summary) return;
-        next[run.id] = summary;
-      } catch {
-        // ignore per-run action summary failures
-      }
-    }));
-    if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
-    setActionProgressSummaryByRun(next);
-  }
 
   async function loadSelectedActionCenter(runId: string, requestId = actionCenterRequestIdRef.current + 1): Promise<void> {
     actionCenterRequestIdRef.current = requestId;
@@ -421,6 +419,10 @@ export function PlanningRunsClient({
     }
   }
 
+  const scheduleLoadSelectedActionCenter = useEffectEvent((runId: string, requestId: number) => {
+    void loadSelectedActionCenter(runId, requestId);
+  });
+
   async function patchActionProgress(
     runId: string,
     actionKey: string,
@@ -500,7 +502,7 @@ export function PlanningRunsClient({
   }, []);
 
   useEffect(() => {
-    void loadRunsRef.current(filterProfileId);
+    loadRunsEvent(filterProfileId);
   }, [filterProfileId]);
 
   useEffect(() => {

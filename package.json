@@ -195,7 +195,6 @@
   "pnpm": {
     "overrides": {
       "@hono/node-server": "1.19.13",
-      "eslint-plugin-react-hooks": "7.0.1",
       "fast-uri": "3.1.2",
       "hono": "4.12.18",
       "postcss": "8.5.10"

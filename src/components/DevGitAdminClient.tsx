@@ -62,7 +62,7 @@ export function DevGitAdminClient() {
   const ranAtLabel = useMemo(() => {
     if (!result?.ranAt) return "-";
     return new Date(result.ranAt).toLocaleString("ko-KR");
-  }, [result?.ranAt]);
+  }, [result]);
 
   return (
     <main className="py-8">
@@ -111,4 +111,3 @@ export function DevGitAdminClient() {
     </main>
   );
 }
-

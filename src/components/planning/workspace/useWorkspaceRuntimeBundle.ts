@@ -1258,7 +1258,7 @@ export function useWorkspaceRuntimeActionsBundle({
     setFeedbackSubmitting,
     setFeedbackTitle,
     setFeedbackToast,
-    state.savedRun?.id,
+    state.savedRun,
     workspaceSnapshotState.feedbackContext,
   ]);
 

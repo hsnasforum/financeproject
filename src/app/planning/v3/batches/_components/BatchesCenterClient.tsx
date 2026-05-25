@@ -154,7 +154,7 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
         setMessage("초안 생성에 실패했습니다.");
         return;
       }
-      window.location.href = `/planning/v3/profile/drafts/${encodeURIComponent(json.data.id)}`;
+      window.location.assign(`/planning/v3/profile/drafts/${encodeURIComponent(json.data.id)}`);
     } catch {
       setMessage("초안 생성에 실패했습니다.");
     } finally {

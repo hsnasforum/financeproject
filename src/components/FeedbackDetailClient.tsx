@@ -239,7 +239,7 @@ export function FeedbackDetailClient({ id }: Props) {
   const serialized = useMemo(() => (item ? JSON.stringify(item, null, 2) : ""), [item]);
   const snapshotPretty = useMemo(
     () => (item?.snapshot ? JSON.stringify(item.snapshot, null, 2) : ""),
-    [item?.snapshot],
+    [item],
   );
   const opsAction = useMemo(() => {
     if (!item || !isOpsTicket(item)) return null;

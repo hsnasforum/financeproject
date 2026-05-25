@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -123,8 +123,9 @@ export function PlanningTrashClient() {
       setLoading(false);
     }
   }
-  const loadTrashRef = useRef(loadTrash);
-  loadTrashRef.current = loadTrash;
+  const loadTrashEvent = useEffectEvent((nextKind: TrashKindOrAll) => {
+    void loadTrash(nextKind);
+  });
 
   function openRestoreDialog(kind: TrashKind, id: string): void {
     const expectedConfirm = buildConfirmString(`RESTORE ${kind}`, id);
@@ -252,7 +253,7 @@ export function PlanningTrashClient() {
   }
 
   useEffect(() => {
-    void loadTrashRef.current("all");
+    loadTrashEvent("all");
   }, []);
 
   return (
