@@ -19,7 +19,7 @@
 - GitHub PR #24 메타를 재확인해 현재 상태가 `open`, `mergeable`, `draft 아님`임을 확인했습니다.
 - PR #24의 review, review thread, comment가 비어 있음을 확인했습니다.
 - `origin/main`이 현재 HEAD의 조상이라 최신 main 대비 rebase/merge-base 문제는 없는 것으로 확인했습니다.
-- `/work` 기록 커밋 후 새 head SHA `64f023b3271c21d570a1f6d10eb13cb24d085256` 기준 GitHub Actions `CI`, `E2E Smoke`가 success임을 재확인했습니다.
+- `/work` 기록 커밋 후 조회 시점 head SHA 기준 GitHub Actions `CI`, `E2E Smoke`가 success임을 재확인했습니다.
 - 이번 라운드 산출물은 구현 지시 전용 3~5단계 계획, 원격 CI 후속 기록, 승인 경계 정리로 제한했습니다.
 
 ## 검증
@@ -40,7 +40,7 @@
 
 ## 남은 리스크
 - 이번 라운드에서 코드 변경은 없고 `/work` 기록만 정리했습니다.
-- 현재 PR #24 head SHA 기준 원격 CI/E2E는 success입니다.
+- 이 문서의 원격 CI/E2E 확인은 조회 시점 head SHA 기준입니다. 후속 push가 있으면 PR 본문과 GitHub Actions에서 최신 head 기준 결과를 다시 확인해야 합니다.
 - PR #24는 mergeable이지만, 실제 merge 같은 비가역 작업은 이번 라운드 범위 밖이며 별도 승인 없이는 진행하면 안 됩니다.
 
 ## 다음 라운드 우선순위
