@@ -86,7 +86,10 @@ export function OpsPlanningFeedbackClient() {
   const [issueConfirmText, setIssueConfirmText] = useState("");
 
   useEffect(() => {
-    setCsrf(readDevCsrfToken());
+    const timeoutId = window.setTimeout(() => {
+      setCsrf(readDevCsrfToken());
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const loadList = useCallback(async (currentCsrf: string): Promise<void> => {
@@ -113,7 +116,10 @@ export function OpsPlanningFeedbackClient() {
 
   useEffect(() => {
     if (!csrf) return;
-    void loadList(csrf);
+    const timeoutId = window.setTimeout(() => {
+      void loadList(csrf);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [csrf, loadList]);
 
   const filteredRows = useMemo(() => rows.filter((row) => {
@@ -139,12 +145,15 @@ export function OpsPlanningFeedbackClient() {
 
   useEffect(() => {
     if (!selected) return;
-    setSelectedId(selected.id);
-    setTriageStatus(selected.triage.status);
-    setTriagePriority(selected.triage.priority);
-    setTriageTags((selected.triage.tags ?? []).join(", "));
-    setTriageDue(selected.triage.due ?? "");
-    setIssueConfirmText("");
+    const timeoutId = window.setTimeout(() => {
+      setSelectedId(selected.id);
+      setTriageStatus(selected.triage.status);
+      setTriagePriority(selected.triage.priority);
+      setTriageTags((selected.triage.tags ?? []).join(", "));
+      setTriageDue(selected.triage.due ?? "");
+      setIssueConfirmText("");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selected]);
 
   async function refreshAndSelect(id?: string): Promise<void> {
