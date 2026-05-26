@@ -308,44 +308,56 @@ export function ImportCsvClient() {
   const [directImportStatus, setDirectImportStatus] = useState("");
 
   useEffect(() => {
-    const parsed = parseCsvText(csvText, { hasHeader: true });
-    const nextHeaders = parsed.header ?? [];
-    setHeaders(nextHeaders);
+    const timeoutId = window.setTimeout(() => {
+      const parsed = parseCsvText(csvText, { hasHeader: true });
+      const nextHeaders = parsed.header ?? [];
+      setHeaders(nextHeaders);
 
-    if (nextHeaders.length < 1) {
-      setInferred(null);
-      setMapping(INITIAL_MAPPING);
-      setPreviewRows([]);
-      setPreviewStats(null);
-      setPreviewWarnings([]);
-      setPreviewValidationErrors([]);
-      return;
-    }
+      if (nextHeaders.length < 1) {
+        setInferred(null);
+        setMapping(INITIAL_MAPPING);
+        setPreviewRows([]);
+        setPreviewStats(null);
+        setPreviewWarnings([]);
+        setPreviewValidationErrors([]);
+        return;
+      }
 
-    const suggested = inferCsvMapping(nextHeaders);
-    setInferred(suggested);
-    setMapping(applyInferredMapping(suggested));
+      const suggested = inferCsvMapping(nextHeaders);
+      setInferred(suggested);
+      setMapping(applyInferredMapping(suggested));
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [csvText]);
 
   useEffect(() => {
-    let disposed = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      void loadAccounts(controller.signal);
+    }, 0);
 
-    async function loadAccounts() {
+    async function loadAccounts(signal: AbortSignal) {
+      if (signal.aborted) return;
       setAccountLoading(true);
       try {
         const response = await fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
           cache: "no-store",
           credentials: "same-origin",
+          signal,
         });
         const payload = await response.json().catch(() => null);
+        if (signal.aborted) return;
         if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
-          if (!disposed) {
+          if (!signal.aborted) {
             setAccounts([]);
           }
           return;
         }
 
-        if (!disposed) {
+        if (!signal.aborted) {
           const items = payload.items.filter(isAccount);
           setAccounts(items);
           if (items.length > 0) {
@@ -353,20 +365,19 @@ export function ImportCsvClient() {
           }
         }
       } catch {
-        if (!disposed) {
+        if (!signal.aborted) {
           setAccounts([]);
         }
       } finally {
-        if (!disposed) {
+        if (!signal.aborted) {
           setAccountLoading(false);
         }
       }
     }
 
-    void loadAccounts();
-
     return () => {
-      disposed = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, []);
 
@@ -381,11 +392,15 @@ export function ImportCsvClient() {
 
   useEffect(() => {
     if (!csvText.trim() || headers.length < 1) {
-      setPreviewRows([]);
-      setPreviewStats(null);
-      setPreviewWarnings([]);
-      setPreviewValidationErrors([]);
-      return;
+      const resetTimer = window.setTimeout(() => {
+        setPreviewRows([]);
+        setPreviewStats(null);
+        setPreviewWarnings([]);
+        setPreviewValidationErrors([]);
+      }, 0);
+      return () => {
+        window.clearTimeout(resetTimer);
+      };
     }
 
     const controller = new AbortController();
