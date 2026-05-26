@@ -2,7 +2,6 @@ import {
   assertLocalHost,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
-import { onlyDev } from "../../../../../../lib/dev/onlyDev";
 import { getRun } from "../../../../../../lib/planning/server/store/runStore";
 import { buildStandaloneReportArtifactsFromRun } from "../../../../../planning/reports/_lib/standaloneReportArtifacts";
 
@@ -44,9 +43,6 @@ function withLocalReadGuard(request: Request): Response | null {
 }
 
 export async function GET(request: Request, context: RouteContext) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
   const guardFailure = withLocalReadGuard(request);
   if (guardFailure) return guardFailure;
 

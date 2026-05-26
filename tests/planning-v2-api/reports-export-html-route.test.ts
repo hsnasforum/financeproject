@@ -160,6 +160,21 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     expect(html).not.toContain("Bearer ");
   });
 
+  it("keeps local html download available in production builds", async () => {
+    const runId = await createRunForExport();
+    env.NODE_ENV = "production";
+
+    const response = await exportHtmlGET(
+      buildGetRequest(`/api/planning/reports/${runId}/export.html`),
+      { params: Promise.resolve({ runId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain(
+      `attachment; filename=\"planning-run-${runId}-report.html\"`,
+    );
+  });
+
   it("supports print view mode with inline disposition and external print script", async () => {
     const runId = await createRunForExport();
     const response = await exportHtmlGET(

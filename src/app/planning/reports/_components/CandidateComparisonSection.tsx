@@ -185,7 +185,6 @@ export default function CandidateComparisonSection({
   const [minRatePct, setMinRatePct] = useState("0");
   const [amountKrw, setAmountKrw] = useState("10000000");
   const [taxRatePct, setTaxRatePct] = useState("15.4");
-  const [page, setPage] = useState(1);
   const [activeEvidenceRow, setActiveEvidenceRow] = useState<CandidateComparisonRow | null>(null);
   const usesSharedPayload = payloadLoading !== undefined || payloadError !== undefined || sharedPayload !== undefined;
   const effectiveLoading = usesSharedPayload ? Boolean(payloadLoading) : loading;
@@ -251,18 +250,18 @@ export default function CandidateComparisonSection({
     return sortRows(compared, sortBy);
   }, [amountKrw, effectivePayload, kindFilter, minRatePct, selectedGoal, sortBy, taxRatePct]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [amountKrw, goalId, kindFilter, minRatePct, sortBy, taxRatePct, runId]);
+  const pageResetKey = useMemo(
+    () => [amountKrw, goalId, kindFilter, minRatePct, sortBy, taxRatePct, runId].join("\u001f"),
+    [amountKrw, goalId, kindFilter, minRatePct, sortBy, taxRatePct, runId],
+  );
+  const [pageState, setPageState] = useState({ key: pageResetKey, page: 1 });
+  const page = pageState.key === pageResetKey ? pageState.page : 1;
+  const visibleActiveEvidenceRow = activeEvidenceRow
+    ? comparedRows.find((row) => row.id === activeEvidenceRow.id) ?? null
+    : null;
 
   useEffect(() => {
-    if (!activeEvidenceRow) return;
-    const exists = comparedRows.some((row) => row.id === activeEvidenceRow.id);
-    if (!exists) setActiveEvidenceRow(null);
-  }, [activeEvidenceRow, comparedRows]);
-
-  useEffect(() => {
-    if (!activeEvidenceRow || typeof window === "undefined") return;
+    if (!visibleActiveEvidenceRow || typeof window === "undefined") return;
     const releaseScrollLock = lockDocumentScroll();
 
     function onKeyDown(event: KeyboardEvent) {
@@ -274,7 +273,7 @@ export default function CandidateComparisonSection({
       releaseScrollLock();
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [activeEvidenceRow]);
+  }, [visibleActiveEvidenceRow]);
 
   const totalPages = Math.max(1, Math.ceil(comparedRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -287,8 +286,13 @@ export default function CandidateComparisonSection({
 
   useEffect(() => {
     if (!effectivePayload) return;
-    setAmountKrw(formatGroupedIntegerInput(effectivePayload.defaults.amountKrw));
-    setTaxRatePct(String(effectivePayload.defaults.taxRatePct));
+    const timeoutId = window.setTimeout(() => {
+      setAmountKrw(formatGroupedIntegerInput(effectivePayload.defaults.amountKrw));
+      setTaxRatePct(String(effectivePayload.defaults.taxRatePct));
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [effectivePayload]);
 
   return (
@@ -451,7 +455,10 @@ export default function CandidateComparisonSection({
                 variant="outline"
                 size="sm"
                 disabled={currentPage <= 1}
-                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                onClick={() => setPageState((prev) => ({
+                  key: pageResetKey,
+                  page: Math.max(1, prev.key === pageResetKey ? prev.page - 1 : 1),
+                }))}
                 className="rounded-full px-6 font-black h-9"
               >
                 이전 5개
@@ -460,7 +467,10 @@ export default function CandidateComparisonSection({
                 variant="outline"
                 size="sm"
                 disabled={currentPage >= totalPages}
-                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                onClick={() => setPageState((prev) => ({
+                  key: pageResetKey,
+                  page: Math.min(totalPages, (prev.key === pageResetKey ? prev.page : 1) + 1),
+                }))}
                 className="rounded-full px-6 font-black h-9"
               >
                 다음 5개
@@ -483,8 +493,8 @@ export default function CandidateComparisonSection({
         </div>
       ) : null}
 
-      {activeEvidenceRow ? (
-        <CandidateEvidencePanel row={activeEvidenceRow} onClose={() => setActiveEvidenceRow(null)} />
+      {visibleActiveEvidenceRow ? (
+        <CandidateEvidencePanel row={visibleActiveEvidenceRow} onClose={() => setActiveEvidenceRow(null)} />
       ) : null}
     </Card>
   );
