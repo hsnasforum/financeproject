@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { CLIENT_STORAGE_WHITELIST } from "@/lib/backup/backupBundle";
 import { DoctorSummaryCard } from "@/components/DoctorSummaryCard";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,21 @@ import { cn } from "@/lib/utils";
 
 const DEV_UNLOCKED_SESSION_KEY = "dev_action_unlocked_v1";
 const DEV_CSRF_SESSION_KEY = "dev_action_csrf_v1";
+
+function subscribeDevUnlockSession(onStoreChange: () => void): () => void {
+  window.addEventListener("storage", onStoreChange);
+  return () => window.removeEventListener("storage", onStoreChange);
+}
+
+function readDevUnlockSessionCsrf(): string | null {
+  const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
+  const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
+  return unlocked && csrf ? csrf : null;
+}
+
+function readDevUnlockServerSnapshot(): string | null {
+  return null;
+}
 
 type UnlockState = {
   loading: boolean;
@@ -83,21 +98,25 @@ export function RecoveryClient() {
         .filter((key) => serverTargets[key]),
     [serverTargets],
   );
+  const sessionCsrf = useSyncExternalStore(
+    subscribeDevUnlockSession,
+    readDevUnlockSessionCsrf,
+    readDevUnlockServerSnapshot,
+  );
+  const effectiveUnlock = useMemo<UnlockState>(() => ({
+    ...unlock,
+    unlocked: unlock.unlocked || sessionCsrf !== null,
+    csrf: unlock.csrf ?? sessionCsrf,
+  }), [sessionCsrf, unlock]);
 
-  useEffect(() => {
-    const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
-    const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
-    if (unlocked && csrf) {
-      setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
+  function handleConfirmTextChange(next: string) {
+    setConfirmText(next);
+    if (next !== "RESET") {
+      setArmLocalReset(false);
+      setArmServerReset(false);
+      setArmOfflineRepair(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (confirmText === "RESET") return;
-    setArmLocalReset(false);
-    setArmServerReset(false);
-    setArmOfflineRepair(false);
-  }, [confirmText]);
+  }
 
   async function handleUnlock() {
     const token = unlockToken.trim();
@@ -141,7 +160,7 @@ export function RecoveryClient() {
   }
 
   function ensureDevReady(): boolean {
-    if (!unlock.unlocked || !unlock.csrf) {
+    if (!effectiveUnlock.unlocked || !effectiveUnlock.csrf) {
       setError("먼저 Dev 잠금 해제를 완료해 주세요.");
       setNotice("");
       return false;
@@ -206,7 +225,7 @@ export function RecoveryClient() {
         body: JSON.stringify({
           targets: selectedServerTargets,
           confirm: "RESET",
-          csrf: unlock.csrf,
+          csrf: effectiveUnlock.csrf,
         }),
       });
       const payload = (await response.json().catch(() => null)) as ResetApiPayload | null;
@@ -245,7 +264,7 @@ export function RecoveryClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           confirm: "RESET",
-          csrf: unlock.csrf,
+          csrf: effectiveUnlock.csrf,
         }),
       });
       const payload = (await response.json().catch(() => null)) as OfflineRepairPayload | null;
@@ -298,18 +317,18 @@ export function RecoveryClient() {
                   type="button" 
                   className="h-11 px-8 rounded-2xl font-black shadow-md" 
                   onClick={() => void handleUnlock()} 
-                  disabled={unlock.loading}
+                  disabled={effectiveUnlock.loading}
                 >
-                  {unlock.loading ? "인증 중..." : "잠금 해제"}
+                  {effectiveUnlock.loading ? "인증 중..." : "잠금 해제"}
                 </Button>
               </div>
               <div className="flex items-center gap-2 px-1">
-                <span className={cn("w-2 h-2 rounded-full", unlock.unlocked ? "bg-primary" : "bg-slate-300")} />
+                <span className={cn("w-2 h-2 rounded-full", effectiveUnlock.unlocked ? "bg-primary" : "bg-slate-300")} />
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  인증 상태: {unlock.unlocked ? "UNLOCKED" : "LOCKED"}
+                  인증 상태: {effectiveUnlock.unlocked ? "UNLOCKED" : "LOCKED"}
                 </span>
               </div>
-              {unlock.error ? <p className="text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{unlock.error}</p> : null}
+              {effectiveUnlock.error ? <p className="text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{effectiveUnlock.error}</p> : null}
             </div>
           </Card>
 
@@ -319,7 +338,7 @@ export function RecoveryClient() {
               <input
                 type="text"
                 value={confirmText}
-                onChange={(event) => setConfirmText(event.target.value)}
+                onChange={(event) => handleConfirmTextChange(event.target.value)}
                 placeholder="RESET"
                 className="h-12 w-full rounded-2xl border border-rose-200 bg-white px-6 text-xl font-black text-rose-700 tracking-[0.2em] shadow-sm focus:ring-1 focus:ring-rose-500 transition-all outline-none placeholder:text-rose-100 placeholder:tracking-normal"
               />
