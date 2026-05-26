@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
 import { applyFilters, collectFilterOptions } from "@/lib/finlife/filters";
@@ -38,7 +38,8 @@ import {
 } from "@/lib/products/listUtils";
 import {
   addRecent,
-  loadShelfFromStorage,
+  loadShelfFromSnapshot,
+  PRODUCT_SHELF_UPDATED_EVENT,
   productShelfConfig,
   toggleCompare,
   toggleFavorite,
@@ -54,6 +55,7 @@ type Props = {
   ratePreference: RatePreference;
   initialTopFinGrpNo: string;
   initialPageNo?: number;
+  scriptNonce?: string;
 };
 
 type SortKey = ProductListSortKey;
@@ -73,6 +75,7 @@ type StatusApiResponse = {
 };
 
 const FINLIFE_PAGE_SIZE = 50;
+const OPTION_SORT_KEYS: OptionSortKey[] = ["best_desc", "base_desc", "bonus_desc", "term_asc", "term_desc", "provider_asc", "product_asc"];
 
 function parseAmountInput(value: string): number {
   const parsed = Number(value.replace(/[^0-9]/g, ""));
@@ -127,6 +130,53 @@ function isValidSortKey(value: string | null): value is SortKey {
   return value === "rateDesc" || value === "rateAsc" || value === "nameAsc" || value === "termAsc";
 }
 
+function isValidOptionSortKey(value: string | null): value is OptionSortKey {
+  return OPTION_SORT_KEYS.includes(value as OptionSortKey);
+}
+
+function parseMaxPagesParam(value: string | null): number | "auto" {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "auto" || !normalized) return "auto";
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(80, Math.trunc(parsed)) : "auto";
+}
+
+function subscribeProductShelf(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  const handleStoreChange = () => onStoreChange();
+  const hydrationTimer = window.setTimeout(handleStoreChange, 0);
+  window.addEventListener("storage", handleStoreChange);
+  window.addEventListener(PRODUCT_SHELF_UPDATED_EVENT, handleStoreChange);
+  return () => {
+    window.clearTimeout(hydrationTimer);
+    window.removeEventListener("storage", handleStoreChange);
+    window.removeEventListener(PRODUCT_SHELF_UPDATED_EVENT, handleStoreChange);
+  };
+}
+
+function getProductShelfStorageSnapshot(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return [
+      window.localStorage.getItem(productShelfConfig.storageKey) ?? "",
+      window.localStorage.getItem(productShelfConfig.legacyCompareStorageKey) ?? "",
+    ].join("\n---product-shelf---\n");
+  } catch {
+    return "";
+  }
+}
+
+function getServerProductShelfStorageSnapshot(): string {
+  return "";
+}
+
+function readProductShelfFromSnapshot(snapshot: string): ProductShelfState {
+  const [currentRaw = "", legacyCompareRaw = ""] = snapshot.split("\n---product-shelf---\n");
+  return loadShelfFromSnapshot(currentRaw || null, legacyCompareRaw || null);
+}
+
+const COMPARE_COUNT_BOOTSTRAP_SCRIPT = `(function(){try{var raw=window.localStorage.getItem(${JSON.stringify(productShelfConfig.storageKey)});var ids=[];if(raw){var parsed=JSON.parse(raw);if(parsed&&Array.isArray(parsed.compareBasket))ids=parsed.compareBasket;}if(!ids.length){var legacy=window.localStorage.getItem(${JSON.stringify(productShelfConfig.legacyCompareStorageKey)});if(legacy){var legacyParsed=JSON.parse(legacy);if(Array.isArray(legacyParsed))ids=legacyParsed;}}var seen=Object.create(null);var count=0;ids.forEach(function(entry){if(typeof entry!=="string")return;var id=entry.trim();if(!id||seen[id])return;seen[id]=true;count+=1;});count=Math.min(count,${productShelfConfig.maxCompareBasket});document.querySelectorAll("[data-product-compare-count]").forEach(function(node){node.textContent="비교함 "+count;});}catch(error){}})();`;
+
 function buildUnifiedDetailId(product: NormalizedProduct): string | null {
   const raw = (product.raw as Record<string, unknown> | null) ?? null;
   const stableId = typeof raw?.stableId === "string" ? raw.stableId.trim() : "";
@@ -169,28 +219,43 @@ function GroupedOptionMobileItem({ row }: { row: OptionRow }) {
   );
 }
 
-export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1 }: Props) {
+export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1, scriptNonce }: Props) {
   const router = useRouter();
-  const [topFinGrpNo, setTopFinGrpNo] = useState(initialTopFinGrpNo);
-  const [selectedFinCoNo, setSelectedFinCoNo] = useState<string | null>(null);
-  const [pageNo, setPageNo] = useState(initialPageNo);
-  const [scanMode, setScanMode] = useState<"page" | "all">("page");
-  const [maxPages, setMaxPages] = useState<number | "auto">("auto");
-  const [viewMode, setViewMode] = useState<"product" | "option">("product");
+  const searchParams = useSearchParams();
+  const productShelfStorageSnapshot = useSyncExternalStore(
+    subscribeProductShelf,
+    getProductShelfStorageSnapshot,
+    getServerProductShelfStorageSnapshot,
+  );
+  const shelf = readProductShelfFromSnapshot(productShelfStorageSnapshot);
   const defaultSortKey: SortKey = ratePreference === "higher" ? "rateDesc" : "rateAsc";
-  const [sortKey, setSortKey] = useState<SortKey>(defaultSortKey);
-  const [optionSortKey, setOptionSortKey] = useState<OptionSortKey>("best_desc");
-  const [optionGroup, setOptionGroup] = useState(false);
+  const [topFinGrpNo, setTopFinGrpNo] = useState(initialTopFinGrpNo);
+  const [selectedFinCoNo, setSelectedFinCoNo] = useState<string | null>(() => {
+    const parsed = (searchParams?.get("finCoNo") ?? "").trim();
+    return parsed || null;
+  });
+  const [pageNo, setPageNo] = useState(initialPageNo);
+  const [scanMode, setScanMode] = useState<"page" | "all">(() => (searchParams?.get("scan") === "all" ? "all" : "page"));
+  const [maxPages, setMaxPages] = useState<number | "auto">(() => parseMaxPagesParam(searchParams?.get("maxPages") ?? null));
+  const [viewMode, setViewMode] = useState<"product" | "option">(() => (searchParams?.get("view") === "option" ? "option" : "product"));
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const parsedSort = searchParams?.get("sort") ?? null;
+    return isValidSortKey(parsedSort) ? parsedSort : defaultSortKey;
+  });
+  const [optionSortKey, setOptionSortKey] = useState<OptionSortKey>(() => {
+    const parsedOptSort = searchParams?.get("optSort") ?? null;
+    return isValidOptionSortKey(parsedOptSort) ? parsedOptSort : "best_desc";
+  });
+  const [optionGroup, setOptionGroup] = useState(() => searchParams?.get("optGroup") === "1");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [showAllProviders, setShowAllProviders] = useState(false);
 
-  const [selectedTerms, setSelectedTerms] = useState<string[]>([]);
-  const [amountInput, setAmountInput] = useState("10000000");
-  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([]);
-  const [selectedBenefits, setSelectedBenefits] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [shelf, setShelf] = useState<ProductShelfState | null>(null);
+  const [selectedTerms, setSelectedTerms] = useState<string[]>(() => parseCsvParam(searchParams?.get("terms") ?? null));
+  const [amountInput, setAmountInput] = useState(() => (searchParams?.get("amount") ?? "").trim() || "10000000");
+  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>(() => parseCsvParam(searchParams?.get("types") ?? null));
+  const [selectedBenefits, setSelectedBenefits] = useState<string[]>(() => parseCsvParam(searchParams?.get("benefits") ?? null));
+  const [searchQuery, setSearchQuery] = useState(() => (searchParams?.get("q") ?? "").trim());
+  const [onlyFavorites, setOnlyFavorites] = useState(() => searchParams?.get("fav") === "1");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -202,59 +267,20 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   const sourceStatusAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    setShelf(loadShelfFromStorage());
-  }, []);
-
-  useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get("scan") === "all") {
-      setScanMode("all");
-      const mp = (sp.get("maxPages") ?? "").trim().toLowerCase();
-      if (mp === "auto") setMaxPages("auto");
-      else if (mp) {
-        const parsed = Number(mp);
-        if (Number.isFinite(parsed) && parsed > 0) setMaxPages(Math.min(80, Math.trunc(parsed)));
-      }
-    }
-    const parsedSort = sp.get("sort");
-    if (isValidSortKey(parsedSort)) setSortKey(parsedSort);
-    const parsedQuery = (sp.get("q") ?? "").trim();
-    if (parsedQuery) setSearchQuery(parsedQuery);
-    if (sp.get("fav") === "1") setOnlyFavorites(true);
-    const parsedTerms = parseCsvParam(sp.get("terms"));
-    if (parsedTerms.length > 0) setSelectedTerms(parsedTerms);
-    const parsedTypes = parseCsvParam(sp.get("types"));
-    if (parsedTypes.length > 0) setSelectedProductTypes(parsedTypes);
-    const parsedBenefits = parseCsvParam(sp.get("benefits"));
-    if (parsedBenefits.length > 0) setSelectedBenefits(parsedBenefits);
-    const parsedAmount = (sp.get("amount") ?? "").trim();
-    if (parsedAmount) setAmountInput(parsedAmount);
-    const parsedFinCoNo = (sp.get("finCoNo") ?? "").trim();
-    if (parsedFinCoNo) setSelectedFinCoNo(parsedFinCoNo);
-    if (sp.get("view") === "option") setViewMode("option");
-    const parsedOptSort = sp.get("optSort");
-    if (parsedOptSort && ["best_desc", "base_desc", "bonus_desc", "term_asc", "term_desc", "provider_asc", "product_asc"].includes(parsedOptSort)) {
-      setOptionSortKey(parsedOptSort as OptionSortKey);
-    }
-    if (sp.get("optGroup") === "1") setOptionGroup(true);
-  }, [kind]);
-
-  useEffect(() => {
-    const onStorage = () => setShelf(loadShelfFromStorage());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
-    setAvailability([]);
-    setAvailabilityNotice("");
+    const availabilityTimer = window.setTimeout(() => {
+      setAvailability([]);
+      setAvailabilityNotice("");
+    }, 0);
+    return () => window.clearTimeout(availabilityTimer);
   }, [kind]);
 
   useEffect(() => {
     if (kind !== "deposit" && kind !== "saving") {
       sourceStatusAbortRef.current?.abort();
-      setSourceStatusRows([]);
-      return;
+      const sourceStatusTimer = window.setTimeout(() => {
+        setSourceStatusRows([]);
+      }, 0);
+      return () => window.clearTimeout(sourceStatusTimer);
     }
 
     sourceStatusAbortRef.current?.abort();
@@ -322,9 +348,12 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     if (providerOptions.length === 0) return;
     if (providerOptions.some((entry) => entry.id === topFinGrpNo)) return;
 
-    setTopFinGrpNo(providerOptions[0].id);
-    setPageNo(1);
-    setSelectionNotice("선택한 권역에 공시 상품이 없어 가능한 권역으로 자동 변경했습니다.");
+    const providerFallbackTimer = window.setTimeout(() => {
+      setTopFinGrpNo(providerOptions[0].id);
+      setPageNo(1);
+      setSelectionNotice("선택한 권역에 공시 상품이 없어 가능한 권역으로 자동 변경했습니다.");
+    }, 0);
+    return () => window.clearTimeout(providerFallbackTimer);
   }, [providerOptions, topFinGrpNo]);
 
   useEffect(() => {
@@ -473,7 +502,10 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
 
   useEffect(() => {
     if (!optionGroup) return;
-    setOpenGroups((prev) => pruneOpen(prev, validOptionGroupKeys));
+    const openGroupsTimer = window.setTimeout(() => {
+      setOpenGroups((prev) => pruneOpen(prev, validOptionGroupKeys));
+    }, 0);
+    return () => window.clearTimeout(openGroupsTimer);
   }, [optionGroup, validOptionGroupKeys]);
 
   const totals = useMemo(() => {
@@ -510,18 +542,15 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   const compareCount = shelf?.compareBasket.length ?? 0;
 
   const handleToggleFavorite = (id: string) => {
-    const next = toggleFavorite(id);
-    setShelf(next);
+    toggleFavorite(id);
   };
 
   const handleToggleCompare = (id: string) => {
-    const next = toggleCompare(id);
-    setShelf(next);
+    toggleCompare(id);
   };
 
   const handleViewed = (id: string) => {
-    const next = addRecent(id);
-    setShelf(next);
+    addRecent(id);
   };
 
   const snapshotStatus = useMemo(() => {
@@ -697,8 +726,11 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                 href="/products/compare"
                 className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-navy/10 transition-all hover:bg-navy active:scale-95 px-4"
               >
-                <span className="text-xs font-black">비교함 {compareCount}</span>
+                <span data-product-compare-count className="text-xs font-black" suppressHydrationWarning>
+                  비교함 {compareCount}
+                </span>
               </Link>
+              <script nonce={scriptNonce} dangerouslySetInnerHTML={{ __html: COMPARE_COUNT_BOOTSTRAP_SCRIPT }} />
             </div>
           </div>
 

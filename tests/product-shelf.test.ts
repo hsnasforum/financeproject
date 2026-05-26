@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   loadShelf,
+  loadShelfFromSnapshot,
   migrateProductShelf,
   productShelfConfig,
   saveShelf,
@@ -42,6 +43,11 @@ describe("productShelf load/save/migrate", () => {
     expect(loaded.recentViewed).toHaveLength(productShelfConfig.maxRecentViewed);
     expect(loaded.recentViewed[0]).toBe("r6");
     expect(loaded.compareBasket).toEqual(["c2", "c3", "c4", "c5"]);
+  });
+
+  it("loads legacy compare ids from a storage snapshot without browser side effects", () => {
+    const loaded = loadShelfFromSnapshot(null, JSON.stringify(["legacy-a", "legacy-b", "legacy-b"]));
+    expect(loaded.compareBasket).toEqual(["legacy-a", "legacy-b"]);
   });
 });
 
