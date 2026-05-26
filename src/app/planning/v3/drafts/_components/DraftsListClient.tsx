@@ -72,12 +72,19 @@ export function DraftsListClient({
 
   const csrfToken = useMemo(() => readDevCsrfToken(), []);
 
+  const fetchDrafts = useCallback((signal?: AbortSignal) => fetchDraftList((input, init) => (
+    fetch(input, {
+      ...init,
+      signal,
+    })
+  ), csrfToken), [csrfToken]);
+
   const loadDrafts = useCallback(async () => {
     setLoading(true);
     setMessage("");
 
     try {
-      const list = await fetchDraftList(fetch, csrfToken);
+      const list = await fetchDrafts();
       setRows(list);
     } catch (error) {
       setRows([]);
@@ -85,12 +92,34 @@ export function DraftsListClient({
     } finally {
       setLoading(false);
     }
-  }, [csrfToken]);
+  }, [fetchDrafts]);
 
   useEffect(() => {
     if (disableAutoLoad) return;
-    void loadDrafts();
-  }, [disableAutoLoad, loadDrafts]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialDrafts() {
+      try {
+        const list = await fetchDrafts(controller.signal);
+        if (!active) return;
+        setRows(list);
+        setMessage("");
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        setRows([]);
+        setMessage(error instanceof Error ? error.message : "초안 목록을 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialDrafts();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [disableAutoLoad, fetchDrafts]);
 
   async function handleImportPreview() {
     if (!file || importing) return;
