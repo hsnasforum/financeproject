@@ -223,38 +223,51 @@ export function ExposureProfileClient({ csrf }: ExposureProfileClientProps) {
     { label: "환율/완충", value: `${summarizeFxIncome(draft)} · ${summarizeLiquidity(draft)}`, hint: "해외 지출·외화 소득·현금 버팀력 기준" },
   ]), [completedFields, draft]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/planning/v3/exposure/profile", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as ExposureResponse | null;
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
-
-      const next = profileToDraft(payload.profile ?? null);
-      setDraft(next);
-      setInitialDraft(next);
-      setSavedAt(payload.profile?.savedAt ?? null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "노출 프로필을 불러오지 못했습니다.");
-      const reset = defaultDraft();
-      setDraft(reset);
-      setInitialDraft(reset);
-      setSavedAt(null);
-    } finally {
-      setLoading(false);
+  const fetchProfile = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch("/api/planning/v3/exposure/profile", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as ExposureResponse | null;
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
+    return payload.profile ?? null;
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialProfile() {
+      try {
+        const profile = await fetchProfile(controller.signal);
+        if (!active) return;
+        const next = profileToDraft(profile);
+        setDraft(next);
+        setInitialDraft(next);
+        setSavedAt(profile?.savedAt ?? null);
+        setError("");
+      } catch (loadError) {
+        if (!active || controller.signal.aborted) return;
+        setError(loadError instanceof Error ? loadError.message : "노출 프로필을 불러오지 못했습니다.");
+        const reset = defaultDraft();
+        setDraft(reset);
+        setInitialDraft(reset);
+        setSavedAt(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialProfile();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [fetchProfile]);
 
   function setField<K extends keyof ExposureDraft>(key: K, value: ExposureDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
