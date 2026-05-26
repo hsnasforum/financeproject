@@ -205,12 +205,19 @@ export function AlertRulesClient() {
   const preferences = activePreset.preferences;
 
   useEffect(() => {
-    setIncludeCategoriesText(toCsv(preferences.includeCategories));
-    setExcludeFlagsText(toCsv(preferences.excludeFlags));
+    const timeoutId = window.setTimeout(() => {
+      setIncludeCategoriesText(toCsv(preferences.includeCategories));
+      setExcludeFlagsText(toCsv(preferences.excludeFlags));
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [preferences.excludeFlags, preferences.includeCategories, profile.activePresetId]);
 
   useEffect(() => {
-    setProfile(loadProfileFromStorage());
+    const timeoutId = window.setTimeout(() => {
+      setProfile(loadProfileFromStorage());
+    }, 0);
     const onProfileChanged = () => setProfile(loadProfileFromStorage());
     const onRulesChanged = () => setProfile(loadProfileFromStorage());
     const onStorage = (event: StorageEvent) => {
@@ -226,6 +233,7 @@ export function AlertRulesClient() {
     window.addEventListener(ALERT_RULES_CHANGED_EVENT, onRulesChanged);
     window.addEventListener("storage", onStorage);
     return () => {
+      window.clearTimeout(timeoutId);
       window.removeEventListener(ALERT_PROFILE_CHANGED_EVENT, onProfileChanged);
       window.removeEventListener(ALERT_RULES_CHANGED_EVENT, onRulesChanged);
       window.removeEventListener("storage", onStorage);
