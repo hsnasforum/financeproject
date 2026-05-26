@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -15,14 +15,12 @@ import {
   clearRecentSearches,
   DART_FAVORITES_UPDATED_EVENT,
   isFavorite,
+  dartStoreConfig,
   listFavorites,
   listRecent,
   listRecentSearches,
   pushRecentSearch,
   removeFavorite,
-  type DartFavorite,
-  type DartRecent,
-  type DartRecentSearch,
 } from "@/lib/dart/dartStore";
 import {
   buildDartCompanyHref,
@@ -177,17 +175,84 @@ function readFreshStoredSearchSnapshot(
   }
 }
 
+function subscribeDartLocalLists(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  const handleStoreChange = () => onStoreChange();
+  window.addEventListener("storage", handleStoreChange);
+  window.addEventListener(DART_FAVORITES_UPDATED_EVENT, handleStoreChange);
+  return () => {
+    window.removeEventListener("storage", handleStoreChange);
+    window.removeEventListener(DART_FAVORITES_UPDATED_EVENT, handleStoreChange);
+  };
+}
+
+function getDartLocalListsStorageSnapshot(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return [
+      window.localStorage.getItem(dartStoreConfig.favoritesKey) ?? "",
+      window.localStorage.getItem(dartStoreConfig.recentKey) ?? "",
+      window.localStorage.getItem(dartStoreConfig.recentSearchesKey) ?? "",
+    ].join("\n---dart-store---\n");
+  } catch {
+    return "";
+  }
+}
+
+function getServerDartLocalListsStorageSnapshot(): string {
+  return "";
+}
+
+type DartLocalLists = {
+  favorites: ReturnType<typeof listFavorites>;
+  recent: ReturnType<typeof listRecent>;
+  recentSearches: ReturnType<typeof listRecentSearches>;
+};
+
+const EMPTY_DART_LOCAL_LISTS: DartLocalLists = {
+  favorites: [],
+  recent: [],
+  recentSearches: [],
+};
+
+function readDartLocalLists(): DartLocalLists {
+  if (typeof window === "undefined") return EMPTY_DART_LOCAL_LISTS;
+  try {
+    return {
+      favorites: listFavorites(),
+      recent: listRecent(),
+      recentSearches: listRecentSearches(),
+    };
+  } catch {
+    return EMPTY_DART_LOCAL_LISTS;
+  }
+}
+
 export function DartSearchClient() {
   const searchParams = useSearchParams();
   const isDev = process.env.NODE_ENV !== "production";
   const isMountedRef = useRef(true);
   const didRestoreSearchRef = useRef(false);
+  const scheduledSearchRestoreRef = useRef(false);
   const didApplyMonitorContextRef = useRef(false);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [tab, setTab] = useState<"search" | "monitor">(
-    () => (searchParams?.get("tab") === "monitor" ? "monitor" : "search"),
+  const urlQuery = normalizeDartSearchQuery(searchParams?.get("q"));
+  const urlTab = searchParams?.get("tab") === "monitor" ? "monitor" : "search";
+  const urlMonitorCorpCode = normalizeCorpCode(searchParams?.get("corpCode"));
+  const urlMonitorCorpName = normalizeDartSearchQuery(searchParams?.get("corpName"), 120);
+  const isHydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
   );
-  const [q, setQ] = useState("");
+  useSyncExternalStore(
+    subscribeDartLocalLists,
+    getDartLocalListsStorageSnapshot,
+    getServerDartLocalListsStorageSnapshot,
+  );
+  const [, setLocalListsRevision] = useState(0);
+  const [tabOverride, setTabOverride] = useState<"search" | "monitor" | null>(null);
+  const tab = tabOverride ?? urlTab;
+  const [q, setQ] = useState(() => urlQuery);
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -198,24 +263,18 @@ export function DartSearchClient() {
   const [buildLoading, setBuildLoading] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
-  const [favorites, setFavorites] = useState<DartFavorite[]>([]);
-  const [recent, setRecent] = useState<DartRecent[]>([]);
-  const [recentSearches, setRecentSearches] = useState<DartRecentSearch[]>([]);
-  const urlQuery = normalizeDartSearchQuery(searchParams?.get("q"));
-  const urlTab = searchParams?.get("tab") === "monitor" ? "monitor" : "search";
-  const urlMonitorCorpCode = normalizeCorpCode(searchParams?.get("corpCode"));
-  const urlMonitorCorpName = normalizeDartSearchQuery(searchParams?.get("corpName"), 120);
 
   const refreshLocalLists = useCallback(() => {
-    setFavorites(listFavorites());
-    setRecent(listRecent());
-    setRecentSearches(listRecentSearches());
+    setLocalListsRevision((value) => value + 1);
   }, []);
 
-  const favoriteCorpCodes = useMemo(
-    () => new Set(favorites.map((item) => item.corpCode)),
-    [favorites],
-  );
+  const {
+    favorites,
+    recent,
+    recentSearches,
+  } = isHydrated ? readDartLocalLists() : EMPTY_DART_LOCAL_LISTS;
+
+  const favoriteCorpCodes = new Set(favorites.map((item) => item.corpCode));
 
   const buildCompanyHref = useCallback(
     (corpCode: string, fromQuery?: string, corpName?: string) => buildDartCompanyHref(corpCode, fromQuery, corpName),
@@ -309,25 +368,19 @@ export function DartSearchClient() {
     };
   }, []);
 
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    setTab(urlTab);
-  }, [urlTab]);
-
-  useEffect(() => {
-    refreshLocalLists();
-    const onStorage = () => refreshLocalLists();
-    const onFavoritesUpdated = () => refreshLocalLists();
-    window.addEventListener("storage", onStorage);
-    window.addEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
+  const scheduleSearchRestore = useCallback((restore: () => void): (() => void) => {
+    if (scheduledSearchRestoreRef.current || didRestoreSearchRef.current) return () => undefined;
+    scheduledSearchRestoreRef.current = true;
+    const restoreTimer = window.setTimeout(() => {
+      scheduledSearchRestoreRef.current = false;
+      didRestoreSearchRef.current = true;
+      restore();
+    }, 0);
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
+      window.clearTimeout(restoreTimer);
+      scheduledSearchRestoreRef.current = false;
     };
-  }, [refreshLocalLists]);
+  }, []);
 
   useEffect(() => {
     if (!isHydrated || urlTab !== "monitor" || !urlMonitorCorpCode) return;
@@ -517,7 +570,10 @@ export function DartSearchClient() {
       DART_SEARCH_DRAFT_QUERY_MAX_AGE_MS,
     );
     if (!draftQuery) return;
-    setQ((current) => (current === draftQuery ? current : draftQuery));
+    const restoreTimer = window.setTimeout(() => {
+      setQ((current) => (current === draftQuery ? current : draftQuery));
+    }, 0);
+    return () => window.clearTimeout(restoreTimer);
   }, [isDev, isHydrated, q]);
 
   useLayoutEffect(() => {
@@ -525,26 +581,27 @@ export function DartSearchClient() {
     if (typeof window === "undefined" || window.location.pathname !== "/public/dart") return;
     if (!urlQuery) return;
 
-    didRestoreSearchRef.current = true;
-    setQ((current) => (current === urlQuery ? current : urlQuery));
-
     const lastSuccessfulSnapshot = readFreshStoredSearchSnapshot(
       DART_LAST_SUCCESSFUL_SEARCH_SNAPSHOT_STORAGE_KEY,
       DART_LAST_SUCCESSFUL_SEARCH_SNAPSHOT_MAX_AGE_MS,
     );
     if (lastSuccessfulSnapshot && lastSuccessfulSnapshot.query === urlQuery) {
-      setActiveSearchQuery(urlQuery);
-      setHasSearched(true);
-      setLoading(false);
-      setError("");
-      setNotice("");
-      setMissing(null);
-      setItems(lastSuccessfulSnapshot.items);
-      return;
+      return scheduleSearchRestore(() => {
+        setQ((current) => (current === urlQuery ? current : urlQuery));
+        setActiveSearchQuery(urlQuery);
+        setHasSearched(true);
+        setLoading(false);
+        setError("");
+        setNotice("");
+        setMissing(null);
+        setItems(lastSuccessfulSnapshot.items);
+      });
     }
 
-    void search(urlQuery);
-  }, [isHydrated, search, urlQuery]);
+    return scheduleSearchRestore(() => {
+      void search(urlQuery);
+    });
+  }, [isHydrated, scheduleSearchRestore, search, urlQuery]);
 
   useLayoutEffect(() => {
     if (!isDev || !isHydrated || didRestoreSearchRef.current) return;
@@ -557,10 +614,10 @@ export function DartSearchClient() {
     clearPendingSearchQuery();
     if (!pendingQuery) return;
 
-    didRestoreSearchRef.current = true;
-    setQ((current) => (current === pendingQuery ? current : pendingQuery));
-    void search(pendingQuery);
-  }, [clearPendingSearchQuery, isDev, isHydrated, search]);
+    return scheduleSearchRestore(() => {
+      void search(pendingQuery);
+    });
+  }, [clearPendingSearchQuery, isDev, isHydrated, scheduleSearchRestore, search]);
 
   useLayoutEffect(() => {
     if (!isDev || !isHydrated || didRestoreSearchRef.current) return;
@@ -572,16 +629,16 @@ export function DartSearchClient() {
       DART_LAST_SUCCESSFUL_SEARCH_SNAPSHOT_MAX_AGE_MS,
     );
     if (lastSuccessfulSnapshot) {
-      didRestoreSearchRef.current = true;
-      setQ((current) => (current === lastSuccessfulSnapshot.query ? current : lastSuccessfulSnapshot.query));
-      setActiveSearchQuery(lastSuccessfulSnapshot.query);
-      setHasSearched(true);
-      setLoading(false);
-      setError("");
-      setNotice("");
-      setMissing(null);
-      setItems(lastSuccessfulSnapshot.items);
-      return;
+      return scheduleSearchRestore(() => {
+        setQ((current) => (current === lastSuccessfulSnapshot.query ? current : lastSuccessfulSnapshot.query));
+        setActiveSearchQuery(lastSuccessfulSnapshot.query);
+        setHasSearched(true);
+        setLoading(false);
+        setError("");
+        setNotice("");
+        setMissing(null);
+        setItems(lastSuccessfulSnapshot.items);
+      });
     }
 
     const lastSuccessfulQuery = readFreshStoredSearchQuery(
@@ -590,40 +647,26 @@ export function DartSearchClient() {
     );
     if (!lastSuccessfulQuery) return;
 
-    didRestoreSearchRef.current = true;
-    setQ((current) => (current === lastSuccessfulQuery ? current : lastSuccessfulQuery));
-    void search(lastSuccessfulQuery);
-  }, [isDev, isHydrated, search]);
+    return scheduleSearchRestore(() => {
+      void search(lastSuccessfulQuery);
+    });
+  }, [isDev, isHydrated, scheduleSearchRestore, search]);
 
   function toggleFavorite(item: SearchItem) {
-    setFavorites((current) => {
-      const exists = current.some((favorite) => favorite.corpCode === item.corpCode);
-      const nextFavorites = exists
-        ? current.filter((favorite) => favorite.corpCode !== item.corpCode)
-        : [
-            {
-              corpCode: item.corpCode,
-              corpName: item.corpName,
-              savedAt: new Date().toISOString(),
-            },
-            ...current.filter((favorite) => favorite.corpCode !== item.corpCode),
-          ];
-
-      try {
-        if (exists) {
-          removeFavorite(item.corpCode);
-        } else {
-          addFavorite({
-            corpCode: item.corpCode,
-            corpName: item.corpName,
-          });
-        }
-      } catch {
-        // Keep the optimistic UI state even if persistence fails.
+    const exists = favoriteCorpCodes.has(item.corpCode);
+    try {
+      if (exists) {
+        removeFavorite(item.corpCode);
+      } else {
+        addFavorite({
+          corpCode: item.corpCode,
+          corpName: item.corpName,
+        });
       }
-
-      return nextFavorites;
-    });
+    } catch {
+      // Keep the current UI if persistence fails.
+    }
+    refreshLocalLists();
   }
 
 
@@ -671,7 +714,7 @@ export function DartSearchClient() {
       <div className="flex items-center gap-2 mb-8">
         <button
           type="button"
-          onClick={() => setTab("search")}
+          onClick={() => setTabOverride("search")}
           disabled={!isHydrated}
           className={cn(
             "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
@@ -683,7 +726,7 @@ export function DartSearchClient() {
         </button>
         <button
           type="button"
-          onClick={() => setTab("monitor")}
+          onClick={() => setTabOverride("monitor")}
           disabled={!isHydrated}
           className={cn(
             "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
