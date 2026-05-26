@@ -106,15 +106,18 @@ export function LabelingClient() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
   useEffect(() => {
-    const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
-    const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
-    if (unlocked && csrf) {
-      setUnlock((prev) => ({
-        ...prev,
-        unlocked: true,
-        csrf,
-      }));
-    }
+    const timeoutId = window.setTimeout(() => {
+      const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
+      const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
+      if (unlocked && csrf) {
+        setUnlock((prev) => ({
+          ...prev,
+          unlocked: true,
+          csrf,
+        }));
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const filteredItems = useMemo(() => {
@@ -133,18 +136,6 @@ export function LabelingClient() {
     const found = filteredItems.find((item) => item.key === activeKey);
     return found ?? filteredItems[0];
   }, [activeKey, filteredItems]);
-
-  useEffect(() => {
-    if (filteredItems.length < 1) {
-      setActiveKey(null);
-      return;
-    }
-    if (!currentItem) {
-      setActiveKey(filteredItems[0].key);
-      return;
-    }
-    setActiveKey(currentItem.key);
-  }, [filteredItems, currentItem]);
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -178,7 +169,10 @@ export function LabelingClient() {
   }, []);
 
   useEffect(() => {
-    void loadQueue();
+    const timeoutId = window.setTimeout(() => {
+      void loadQueue();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadQueue]);
 
   async function handleUnlock() {
@@ -373,13 +367,19 @@ export function LabelingClient() {
             className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-navy outline-none ring-primary/20 transition focus:border-primary focus:ring"
             placeholder="회사/종목코드/제목 검색"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveKey(null);
+            }}
           />
           <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={uncertainOnly}
-              onChange={(event) => setUncertainOnly(event.target.checked)}
+              onChange={(event) => {
+                setUncertainOnly(event.target.checked);
+                setActiveKey(null);
+              }}
             />
             불확실만
           </label>
