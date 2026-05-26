@@ -327,6 +327,9 @@ export function PlanningRunsClient({
       setLoading(false);
     }
   }
+  const loadProfilesEvent = useEffectEvent(() => {
+    void loadProfiles();
+  });
   const loadRunsEvent = useEffectEvent((nextProfileId: string) => {
     void loadRuns(nextProfileId);
   });
@@ -477,14 +480,19 @@ export function PlanningRunsClient({
 
   useEffect(() => {
     if (filterProfileId) return;
-    try {
-      const stored = normalizeProfileId(window.localStorage.getItem(PLANNING_SELECTED_PROFILE_STORAGE_KEY));
-      if (stored) {
-        setFilterProfileId(stored);
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const stored = normalizeProfileId(window.localStorage.getItem(PLANNING_SELECTED_PROFILE_STORAGE_KEY));
+        if (stored) {
+          setFilterProfileId(stored);
+        }
+      } catch {
+        // ignore storage failures
       }
-    } catch {
-      // ignore storage failures
-    }
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [filterProfileId]);
 
   useEffect(() => {
@@ -498,34 +506,53 @@ export function PlanningRunsClient({
   }, [filterProfileId]);
 
   useEffect(() => {
-    void loadProfiles();
+    const timeoutId = window.setTimeout(() => {
+      loadProfilesEvent();
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, []);
 
   useEffect(() => {
-    loadRunsEvent(filterProfileId);
+    const timeoutId = window.setTimeout(() => {
+      loadRunsEvent(filterProfileId);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [filterProfileId]);
 
   useEffect(() => {
     if (!selectedRun) {
       actionCenterRequestIdRef.current += 1;
+      const timeoutId = window.setTimeout(() => {
+        if (!isMountedRef.current) return;
+        setSelectedActionPlan(null);
+        setSelectedActionProgress(null);
+        setActionNoteDrafts({});
+        setActionCenterError("");
+        setActionCenterLoading(false);
+      }, 0);
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
+    }
+    const requestId = actionCenterRequestIdRef.current + 1;
+    actionCenterRequestIdRef.current = requestId;
+    const resetTimeoutId = window.setTimeout(() => {
+      if (!isMountedRef.current || actionCenterRequestIdRef.current !== requestId) return;
+      setActionCenterLoading(true);
       setSelectedActionPlan(null);
       setSelectedActionProgress(null);
       setActionNoteDrafts({});
       setActionCenterError("");
-      setActionCenterLoading(false);
-      return;
-    }
-    const requestId = actionCenterRequestIdRef.current + 1;
-    actionCenterRequestIdRef.current = requestId;
-    setActionCenterLoading(true);
-    setSelectedActionPlan(null);
-    setSelectedActionProgress(null);
-    setActionNoteDrafts({});
-    setActionCenterError("");
+    }, 0);
     const timeoutId = window.setTimeout(() => {
       scheduleLoadSelectedActionCenter(selectedRun.id, requestId);
     }, 250);
     return () => {
+      window.clearTimeout(resetTimeoutId);
       window.clearTimeout(timeoutId);
     };
   }, [selectedRun]);
