@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 type PlanningReportsPageProps = {
   searchParams?: Promise<{
+    baseRunId?: string | string[];
     runId?: string | string[];
     profileId?: string | string[];
   }>;
@@ -31,6 +32,7 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
   const searchParams = await props.searchParams;
   const requestedProfileId = normalizeProfileId(searchParams?.profileId);
   const requestedRunId = asString(searchParams?.runId);
+  const requestedBaseRunId = asString(searchParams?.baseRunId);
 
   let effectiveProfileId = requestedProfileId;
   let runs: Awaited<ReturnType<typeof listRuns>> = [];
@@ -120,6 +122,7 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
 
   return (
     <PlanningReportsDashboardBoundary
+      initialBaseRunId={requestedBaseRunId}
       initialRuns={initialScopeReady ? runs : undefined}
       initialProfileId={effectiveProfileId}
       initialRunId={initialRunId}

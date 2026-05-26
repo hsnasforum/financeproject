@@ -3,7 +3,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState, useSyncExternalStore } from "react";
 import { toInterpretationInputFromReportVM } from "@/app/planning/reports/_lib/reportInterpretationAdapter";
 import { type CandidateRecommendationsPayload } from "@/app/planning/reports/_lib/recommendationSignals";
 import {
@@ -82,8 +82,6 @@ type ActionRow = {
   steps: string[];
   severity: "critical" | "warn" | "info";
 };
-
-let reportDashboardClientReadyCache = false;
 
 function DeferredReportSectionPlaceholder({
   title,
@@ -210,6 +208,21 @@ function formatMetricDelta(unitKind: ReportDeltaItem["unitKind"], delta: number)
   return `${sign}${Math.round(absolute).toLocaleString("ko-KR")}`;
 }
 
+function resolveRequestedBaselineRunId(
+  runs: PlanningRunRecord[],
+  selectedRunId: string,
+  requestedBaselineRunId: string,
+): string {
+  if (!requestedBaselineRunId) return "";
+  return runs.some((run) => (
+    run.id === requestedBaselineRunId
+    && run.id !== selectedRunId
+    && (run.overallStatus === "SUCCESS" || run.overallStatus === "PARTIAL_SUCCESS")
+  ))
+    ? requestedBaselineRunId
+    : "";
+}
+
 
 export default function PlanningReportsDashboardClient(props: PlanningReportsDashboardClientProps) {
   const router = useRouter();
@@ -234,10 +247,14 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
     }),
     [initialPreferredRun, preferredRunId, props.initialProfileId, props.initialRuns],
   );
+  const initialBaselineRunId = useMemo(
+    () => resolveRequestedBaselineRunId(initialScope.runs, initialScope.initialRunId, queryBaseRunId),
+    [initialScope.initialRunId, initialScope.runs, queryBaseRunId],
+  );
   const [runs, setRuns] = useState<PlanningRunRecord[]>(initialScope.runs);
   const [selectedRunId, setSelectedRunId] = useState(initialScope.initialRunId);
-  const [compareMode, setCompareMode] = useState(false);
-  const [baselineRunId, setBaselineRunId] = useState("");
+  const [compareMode, setCompareMode] = useState(Boolean(initialBaselineRunId));
+  const [baselineRunId, setBaselineRunId] = useState(initialBaselineRunId);
   const [loading, setLoading] = useState((props.initialRuns?.length ?? 0) < 1);
   const [error, setError] = useState("");
   const [candidatePayload, setCandidatePayload] = useState<CandidateRecommendationsPayload | null>(null);
@@ -247,28 +264,36 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const [showBenefitInsights, setShowBenefitInsights] = useState(false);
   const [showRealtimeProductExplorer, setShowRealtimeProductExplorer] = useState(false);
   const [showAdvancedRaw, setShowAdvancedRaw] = useState(REPORT_ADVANCED_RAW_DEFAULT_OPEN);
-  const [clientReady, setClientReady] = useState(reportDashboardClientReadyCache);
   const [saveReportWorking, setSaveReportWorking] = useState(false);
   const [saveReportNotice, setSaveReportNotice] = useState("");
   const [saveReportError, setSaveReportError] = useState("");
-  const [savedReportId, setSavedReportId] = useState(querySelectedReportId);
+  const savedReportId = querySelectedReportId;
   const [validatedSavedReportId, setValidatedSavedReportId] = useState("");
   const [invalidSavedReportId, setInvalidSavedReportId] = useState("");
   const showInitialLoadNotice = Boolean(props.initialLoadNotice) && (loading || (!error && runs.length < 1));
+  const clientReady = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
+  const resolvedSelectedRunId = useMemo(() => {
+    if (selectedRunId && runs.some((run) => run.id === selectedRunId)) return selectedRunId;
+    return runs[0]?.id ?? "";
+  }, [runs, selectedRunId]);
   const selectedRun = useMemo(
-    () => runs.find((run) => run.id === selectedRunId) ?? null,
-    [runs, selectedRunId],
+    () => runs.find((run) => run.id === resolvedSelectedRunId) ?? null,
+    [resolvedSelectedRunId, runs],
   );
   const advancedToggleReady = useMemo(
     () => resolveReportAdvancedToggleReady({
       clientReady,
       loading,
       runsCount: runs.length,
-      selectedRunId,
+      selectedRunId: resolvedSelectedRunId,
       hasSelectedRun: Boolean(selectedRun?.id),
     }),
-    [clientReady, loading, runs.length, selectedRun?.id, selectedRunId],
+    [clientReady, loading, resolvedSelectedRunId, runs.length, selectedRun?.id],
   );
   const resolvedProfileId = useMemo(
     () => selectedRun?.profileId || runs[0]?.profileId || initialScope.effectiveProfileId || props.initialProfileId || "",
@@ -289,21 +314,21 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const selectedRunVmData = selectedRunVm.vm;
   const baselineOptions = useMemo(() => {
     return runs
-      .filter((run) => run.id !== selectedRunId)
+      .filter((run) => run.id !== resolvedSelectedRunId)
       .filter((run) => run.overallStatus === "SUCCESS" || run.overallStatus === "PARTIAL_SUCCESS")
       .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
-  }, [runs, selectedRunId]);
+  }, [resolvedSelectedRunId, runs]);
+  const resolvedBaselineRunId = useMemo(() => {
+    if (!compareMode) return "";
+    if (baselineRunId && baselineOptions.some((run) => run.id === baselineRunId)) {
+      return baselineRunId;
+    }
+    return baselineOptions[0]?.id ?? "";
+  }, [baselineOptions, baselineRunId, compareMode]);
   const baselineRun = useMemo(
-    () => runs.find((run) => run.id === baselineRunId) ?? null,
-    [baselineRunId, runs],
+    () => runs.find((run) => run.id === resolvedBaselineRunId) ?? null,
+    [resolvedBaselineRunId, runs],
   );
-
-  useEffect(() => {
-    if (runs.length < 1 || selectedRun) return;
-    const fallbackRunId = runs[0]?.id ?? "";
-    if (!fallbackRunId) return;
-    setSelectedRunId(fallbackRunId);
-  }, [runs, selectedRun]);
   const baselineRunVm = useMemo(
     () => (
       baselineRun
@@ -463,7 +488,6 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       const nextParams = new URLSearchParams(searchParams.toString());
       nextParams.set("selected", createdReportId);
       const nextHref = nextParams.size > 0 ? `${pathname}?${nextParams.toString()}` : pathname;
-      setSavedReportId(createdReportId);
       setValidatedSavedReportId(createdReportId);
       setInvalidSavedReportId("");
       router.replace(nextHref, { scroll: false });
@@ -480,15 +504,6 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       setSaveReportWorking(false);
     }
   };
-
-  useEffect(() => {
-    setSavedReportId(querySelectedReportId);
-  }, [querySelectedReportId]);
-
-  useEffect(() => {
-    reportDashboardClientReadyCache = true;
-    setClientReady(true);
-  }, []);
 
   useEffect(() => {
     if (!savedReportId || !hasValidSavedReportDetail) return;
@@ -512,8 +527,6 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   useEffect(() => {
     const normalizedSavedReportId = savedReportId.trim();
     if (!normalizedSavedReportId) {
-      setValidatedSavedReportId("");
-      setInvalidSavedReportId("");
       return;
     }
     if (
@@ -558,40 +571,17 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   }, [invalidSavedReportId, savedReportId, validatedSavedReportId]);
 
   useEffect(() => {
-    if (!queryBaseRunId) return;
-    if (!baselineOptions.some((run) => run.id === queryBaseRunId)) return;
-    setCompareMode(true);
-    setBaselineRunId(queryBaseRunId);
-  }, [baselineOptions, queryBaseRunId]);
-
-  useEffect(() => {
-    if (!compareMode) return;
-    setBaselineRunId((previous) => {
-      if (previous && baselineOptions.some((run) => run.id === previous)) {
-        return previous;
-      }
-      return baselineOptions[0]?.id ?? "";
-    });
-  }, [baselineOptions, compareMode]);
-
-  useEffect(() => {
-    if (loading || runs.length < 1 || selectedRun) return;
-    const fallbackRunId = runs[0]?.id ?? "";
-    if (!fallbackRunId || fallbackRunId === selectedRunId) return;
-    setSelectedRunId(fallbackRunId);
-  }, [loading, runs, selectedRun, selectedRunId]);
-
-  useEffect(() => {
-    if (hasInitialRuns) {
-      setRuns(initialScope.runs);
-      setSelectedRunId(initialScope.initialRunId);
-      setLoading(false);
-      setError("");
-      return;
-    }
+    if (hasInitialRuns) return;
 
     let active = true;
     const controller = new AbortController();
+
+    function applyRequestedBaselineRun(nextRuns: PlanningRunRecord[], nextSelectedRunId: string): void {
+      const nextBaselineRunId = resolveRequestedBaselineRunId(nextRuns, nextSelectedRunId, queryBaseRunId);
+      if (!nextBaselineRunId) return;
+      setCompareMode(true);
+      setBaselineRunId(nextBaselineRunId);
+    }
 
     async function loadRequestedRunFallback(runId: string): Promise<PlanningRunRecord | null> {
       const normalizedRunId = runId.trim();
@@ -655,6 +645,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
         });
         setRuns(nextScope.runs);
         setSelectedRunId(nextScope.initialRunId);
+        applyRequestedBaselineRun(nextScope.runs, nextScope.initialRunId);
       } catch (loadError) {
         if (controller.signal.aborted || !active) return;
         const requestedRun = initialPreferredRun ?? await loadRequestedRunFallback(preferredRunId);
@@ -688,7 +679,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       active = false;
       controller.abort();
     };
-  }, [hasInitialRuns, initialPreferredRun, initialScope.initialRunId, initialScope.runs, preferredRunId, resolvedProfileId]);
+  }, [hasInitialRuns, initialPreferredRun, preferredRunId, queryBaseRunId, resolvedProfileId]);
 
   useEffect(() => {
     let active = true;
@@ -822,7 +813,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                   <select
                     className={cn(bodyCompactFieldClassName, "min-w-[240px] h-9 text-xs font-bold rounded-lg")}
                     id="report-run-selector"
-                    value={selectedRunId}
+                    value={resolvedSelectedRunId}
                     onChange={(event) => setSelectedRunId(event.target.value)}
                   >
                     {runs.map((run) => (
@@ -947,7 +938,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
                     className={cn(bodyCompactFieldClassName, "min-w-[240px] h-8 text-[11px] font-bold rounded-lg bg-white")}
                     data-testid="baseline-selector"
                     id="report-baseline-selector"
-                    value={baselineRunId}
+                    value={resolvedBaselineRunId}
                     onChange={(event) => setBaselineRunId(event.target.value)}
                   >
                     <option value="">기준 실행 선택</option>
