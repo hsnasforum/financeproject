@@ -182,7 +182,8 @@ export function JournalClient({ csrf }: JournalClientProps) {
   const [routine, setRoutine] = useState<DailyRoutineChecklist | null>(null);
   const [draft, setDraft] = useState<DraftState>(emptyDraft());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
+    if (signal?.aborted) return;
     setLoading(true);
     setEntriesLoadError("");
     setScenarioLoadError("");
@@ -192,6 +193,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
+          signal,
           headers: {
             "x-requested-with": "XMLHttpRequest",
           },
@@ -200,6 +202,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
           method: "GET",
           cache: "no-store",
           credentials: "same-origin",
+          signal,
           headers: {
             "x-requested-with": "XMLHttpRequest",
           },
@@ -208,6 +211,7 @@ export function JournalClient({ csrf }: JournalClientProps) {
 
       const entriesPayload = (await entriesRes.json().catch(() => null)) as JournalListResponse | null;
       const scenariosPayload = (await scenariosRes.json().catch(() => null)) as ScenarioResponse | null;
+      if (signal?.aborted) return;
 
       if (!entriesRes.ok || entriesPayload?.ok !== true) {
         throw new Error(entriesPayload?.error?.message ?? `HTTP ${entriesRes.status}`);
@@ -222,17 +226,21 @@ export function JournalClient({ csrf }: JournalClientProps) {
         setScenarioLoadError("연결 시나리오를 불러오지 못했습니다. 저장된 저널은 계속 확인할 수 있습니다.");
       }
     } catch (error) {
+      if (signal?.aborted) return;
       setEntriesLoadError(error instanceof Error ? error.message : "저널을 불러오지 못했습니다.");
       setEntries([]);
       setScenarios(null);
       setScenarioLoadError("");
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
-  const loadRoutine = useCallback(async (date: string) => {
+  const loadRoutine = useCallback(async (date: string, signal?: AbortSignal) => {
     const safeDate = asString(date);
+    if (signal?.aborted) return;
     if (!safeDate) {
       setRoutine(null);
       return;
@@ -244,11 +252,13 @@ export function JournalClient({ csrf }: JournalClientProps) {
         method: "GET",
         cache: "no-store",
         credentials: "same-origin",
+        signal,
         headers: {
           "x-requested-with": "XMLHttpRequest",
         },
       });
       const payload = (await response.json().catch(() => null)) as RoutineResponse | null;
+      if (signal?.aborted) return;
       if (!response.ok || payload?.ok !== true || !payload.checklist) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
       }
@@ -264,19 +274,36 @@ export function JournalClient({ csrf }: JournalClientProps) {
           .filter((row) => row.id.length > 0 && row.label.length > 0),
       });
     } catch (error) {
+      if (signal?.aborted) return;
       setRoutine(null);
       setRoutineErrorMessage(error instanceof Error ? error.message : "체크리스트를 불러오지 못했습니다.");
     } finally {
-      setRoutineLoading(false);
+      if (!signal?.aborted) {
+        setRoutineLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      void load(controller.signal);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [load]);
 
   useEffect(() => {
-    void loadRoutine(draft.date);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      void loadRoutine(draft.date, controller.signal);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [draft.date, loadRoutine]);
 
   const availableScenarioIds = useMemo(() => {
