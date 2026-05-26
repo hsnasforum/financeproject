@@ -265,23 +265,32 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
   }
 
   useEffect(() => {
-    void loadReports();
+    const timeoutId = window.setTimeout(() => {
+      void loadReports();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadReports]);
 
   useEffect(() => {
     if (!selectedId) return;
-    void loadReportDetail(selectedId);
+    const timeoutId = window.setTimeout(() => {
+      void loadReportDetail(selectedId);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selectedId]);
 
   useEffect(() => {
     const runId = selected?.runId ?? "";
-    if (!runId) {
-      setSelectedRun(null);
+    const timeoutId = window.setTimeout(() => {
+      if (!runId) {
+        setSelectedRun(null);
+        setShowAllActions(false);
+        return;
+      }
       setShowAllActions(false);
-      return;
-    }
-    setShowAllActions(false);
-    void loadRunDetail(runId);
+      void loadRunDetail(runId);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selected?.runId]);
 
   const selectedVm = useMemo(

@@ -272,6 +272,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
   const [showBenefitInsights, setShowBenefitInsights] = useState(false);
   const [showRealtimeProductExplorer, setShowRealtimeProductExplorer] = useState(false);
   const [showAdvancedRaw, setShowAdvancedRaw] = useState(REPORT_ADVANCED_RAW_DEFAULT_OPEN);
+  const [recommendRestoreInfoOpen, setRecommendRestoreInfoOpen] = useState(false);
   const [saveReportWorking, setSaveReportWorking] = useState(false);
   const [saveReportNotice, setSaveReportNotice] = useState("");
   const [saveReportError, setSaveReportError] = useState("");
@@ -928,7 +929,11 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             {selectedRunHasExplicitRecommendRef ? (
               <div className="mt-4 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-xs font-bold text-navy">
                 <p>이 리포트는 추천 비교 기록과 함께 열렸습니다. 필요하면 위 버튼으로 돌아가 저장 당시 비교 후보를 다시 확인해 보세요.</p>
-                <details className="mt-3 rounded-xl border border-primary/10 bg-white/70 px-3 py-2">
+                <details
+                  className="mt-3 rounded-xl border border-primary/10 bg-white/70 px-3 py-2"
+                  onToggle={(event) => setRecommendRestoreInfoOpen(event.currentTarget.open)}
+                  open={recommendRestoreInfoOpen}
+                >
                   <summary className="cursor-pointer list-none text-[11px] font-semibold text-navy marker:hidden">
                     공유·복구용 보조 정보
                   </summary>
