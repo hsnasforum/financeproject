@@ -175,7 +175,15 @@ function toRunLoadErrorMessage(message?: string): string {
 function formatDateTime(value: string): string {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return value;
-  return new Date(timestamp).toLocaleString("ko-KR", { hour12: false });
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hourCycle: "h23",
+  }).format(new Date(timestamp));
 }
 
 
@@ -563,9 +571,12 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
       setInvalidSavedReportId(normalizedSavedReportId);
     }
 
-    void validateSavedReport();
+    const validationTimer = window.setTimeout(() => {
+      void validateSavedReport();
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(validationTimer);
       controller.abort();
     };
   }, [invalidSavedReportId, savedReportId, validatedSavedReportId]);

@@ -25,3 +25,7 @@
 - `seed:kdb`, `products:sync`는 외부 데이터/스냅샷 갱신 성격이 있어 이번 라운드에서 실행하지 않았습니다.
 - 이번 `/work` 기록을 push하면 PR #24 head SHA가 다시 바뀌므로 GitHub Actions `CI`, `E2E Smoke`를 새 SHA 기준으로 다시 확인해야 합니다.
 - PR #24 병합은 원격 `main` 변경이므로 명시 승인 전에는 진행하지 않습니다.
+
+## 다음 라운드
+- 남은 외부 데이터 성격 검증(`seed:kdb`, `products:sync`)은 필요한 env와 fixture 조건을 확인한 뒤 별도 라운드에서 실행합니다.
+- 새 커밋이 추가되면 PR #24 head SHA 기준 GitHub Actions `CI`, `E2E Smoke`를 다시 확인합니다.
