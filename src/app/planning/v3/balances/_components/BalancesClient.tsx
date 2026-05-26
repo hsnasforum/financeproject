@@ -184,11 +184,17 @@ export function BalancesClient() {
   }, [includeTransfers, selectedBatchId]);
 
   useEffect(() => {
-    void loadBatchesAndAccounts();
+    const timeoutId = window.setTimeout(() => {
+      void loadBatchesAndAccounts();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadBatchesAndAccounts]);
 
   useEffect(() => {
-    void loadBalances();
+    const timeoutId = window.setTimeout(() => {
+      void loadBalances();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadBalances]);
 
   return (
