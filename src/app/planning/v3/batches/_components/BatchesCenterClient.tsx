@@ -72,6 +72,33 @@ function buildCsrfQuery(): string {
   return `?csrf=${encodeURIComponent(csrf)}`;
 }
 
+function normalizeBatchRows(rows: BatchListRow[]): BatchListRow[] {
+  return rows
+    .map((row) => ({
+      batchId: asString(row.batchId),
+      ...(asString(row.createdAt) ? { createdAt: asString(row.createdAt) } : {}),
+      ...(isRecord(row.stats)
+        ? {
+            stats: {
+              ...(Number.isFinite(Number(row.stats.months)) ? { months: asNumber(row.stats.months) } : {}),
+              ...(Number.isFinite(Number(row.stats.txns)) ? { txns: asNumber(row.stats.txns) } : {}),
+              ...(Number.isFinite(Number(row.stats.unassignedCategory)) ? { unassignedCategory: asNumber(row.stats.unassignedCategory) } : {}),
+              ...(Number.isFinite(Number(row.stats.transfers)) ? { transfers: asNumber(row.stats.transfers) } : {}),
+            },
+          }
+        : {}),
+    }))
+    .filter((row) => row.batchId.length > 0)
+    .sort((left, right) => {
+      const leftTs = Date.parse(left.createdAt ?? "");
+      const rightTs = Date.parse(right.createdAt ?? "");
+      if (Number.isFinite(leftTs) && Number.isFinite(rightTs) && leftTs !== rightTs) {
+        return rightTs - leftTs;
+      }
+      return left.batchId.localeCompare(right.batchId);
+    });
+}
+
 const batchesTopLinkClassName =
   "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:bg-surface-muted hover:text-navy";
 
@@ -86,56 +113,57 @@ export function BatchesCenterClient({ initialRows = [] }: Props) {
   const [createLoadingBatchId, setCreateLoadingBatchId] = useState("");
   const featuredRow = rows[0] ?? null;
 
+  const fetchRows = useCallback(async (signal?: AbortSignal): Promise<BatchListRow[]> => {
+    const response = await fetch(`/api/planning/v3/batches${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !isListResponse(json)) {
+      throw new Error("배치 목록을 불러오지 못했습니다.");
+    }
+    return normalizeBatchRows(json.data);
+  }, []);
+
   const loadRows = useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/planning/v3/batches${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !isListResponse(json)) {
-        setRows([]);
-        setMessage("배치 목록을 불러오지 못했습니다.");
-        return;
-      }
-      const normalized = json.data
-        .map((row) => ({
-          batchId: asString(row.batchId),
-          ...(asString(row.createdAt) ? { createdAt: asString(row.createdAt) } : {}),
-          ...(isRecord(row.stats)
-            ? {
-                stats: {
-                  ...(Number.isFinite(Number(row.stats.months)) ? { months: asNumber(row.stats.months) } : {}),
-                  ...(Number.isFinite(Number(row.stats.txns)) ? { txns: asNumber(row.stats.txns) } : {}),
-                  ...(Number.isFinite(Number(row.stats.unassignedCategory)) ? { unassignedCategory: asNumber(row.stats.unassignedCategory) } : {}),
-                  ...(Number.isFinite(Number(row.stats.transfers)) ? { transfers: asNumber(row.stats.transfers) } : {}),
-                },
-              }
-            : {}),
-        }))
-        .filter((row) => row.batchId.length > 0)
-        .sort((left, right) => {
-          const leftTs = Date.parse(left.createdAt ?? "");
-          const rightTs = Date.parse(right.createdAt ?? "");
-          if (Number.isFinite(leftTs) && Number.isFinite(rightTs) && leftTs !== rightTs) {
-            return rightTs - leftTs;
-          }
-          return left.batchId.localeCompare(right.batchId);
-        });
-      setRows(normalized);
+      setRows(await fetchRows());
     } catch {
       setRows([]);
       setMessage("배치 목록을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchRows]);
 
   useEffect(() => {
-    void loadRows();
-  }, [loadRows]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialRows() {
+      try {
+        const nextRows = await fetchRows(controller.signal);
+        if (!active) return;
+        setRows(nextRows);
+        setMessage("");
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setRows([]);
+        setMessage("배치 목록을 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialRows();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [fetchRows]);
 
   async function handleCreateDraft(batchId: string): Promise<void> {
     setCreateLoadingBatchId(batchId);
