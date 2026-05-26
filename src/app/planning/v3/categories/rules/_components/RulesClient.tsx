@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { BodyActionLink, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
@@ -78,6 +78,19 @@ function buildCsrfQuery(): string {
   return `?csrf=${encodeURIComponent(csrf)}`;
 }
 
+const LOAD_RULES_ERROR_MESSAGE = "룰 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+
+function normalizeRuleRows(items: unknown[]): RuleRow[] {
+  return items.filter(isRuleRow).map((row) => ({
+    id: row.id,
+    categoryId: row.categoryId,
+    match: { type: "contains", value: asString(row.match.value) },
+    priority: asNumber(row.priority),
+    enabled: row.enabled !== false,
+    ...(asString(row.note) ? { note: asString(row.note) } : {}),
+  }));
+}
+
 export function RulesClient() {
   const [rows, setRows] = useState<RuleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,39 +106,57 @@ export function RulesClient() {
   const [enabled, setEnabled] = useState(true);
   const [note, setNote] = useState("");
 
-  async function loadRules() {
+  const fetchRules = useCallback(async (signal?: AbortSignal): Promise<RuleRow[]> => {
+    const response = await fetch(`/api/planning/v3/categories/rules${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
+      throw new Error(LOAD_RULES_ERROR_MESSAGE);
+    }
+    return normalizeRuleRows(payload.items);
+  }, []);
+
+  const loadRules = useCallback(async () => {
     setLoading(true);
     setLoadError("");
     try {
-      const response = await fetch(`/api/planning/v3/categories/rules${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
-        setRows([]);
-        setLoadError("룰 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-      setRows(payload.items.filter(isRuleRow).map((row) => ({
-        id: row.id,
-        categoryId: row.categoryId,
-        match: { type: "contains", value: asString(row.match.value) },
-        priority: asNumber(row.priority),
-        enabled: row.enabled !== false,
-        ...(asString(row.note) ? { note: asString(row.note) } : {}),
-      })));
+      setRows(await fetchRules());
     } catch {
       setRows([]);
-      setLoadError("룰 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      setLoadError(LOAD_RULES_ERROR_MESSAGE);
     } finally {
       setLoading(false);
     }
-  }
+  }, [fetchRules]);
 
   useEffect(() => {
-    void loadRules();
-  }, []);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialRules() {
+      try {
+        const nextRows = await fetchRules(controller.signal);
+        if (!active) return;
+        setRows(nextRows);
+        setLoadError("");
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setRows([]);
+        setLoadError(LOAD_RULES_ERROR_MESSAGE);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialRules();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [fetchRules]);
 
   async function saveRule() {
     if (saving) return;
