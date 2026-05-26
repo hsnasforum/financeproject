@@ -89,32 +89,57 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
   const [summary, setSummary] = useState<BatchSummary | null>(initialSummary);
   const [createLoading, setCreateLoading] = useState(false);
 
+  const fetchSummary = useCallback(async (signal?: AbortSignal): Promise<BatchSummary> => {
+    const response = await fetch(`/api/planning/v3/batches/${encodeURIComponent(id)}/summary${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !isSummaryResponse(json)) {
+      throw new Error("배치 요약을 불러오지 못했습니다.");
+    }
+    return json.data;
+  }, [id]);
+
   const loadSummary = useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/planning/v3/batches/${encodeURIComponent(id)}/summary${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !isSummaryResponse(json)) {
-        setSummary(null);
-        setMessage("배치 요약을 불러오지 못했습니다.");
-        return;
-      }
-      setSummary(json.data);
+      setSummary(await fetchSummary());
     } catch {
       setSummary(null);
       setMessage("배치 요약을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [fetchSummary]);
 
   useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialSummary() {
+      try {
+        const nextSummary = await fetchSummary(controller.signal);
+        if (!active) return;
+        setSummary(nextSummary);
+        setMessage("");
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setSummary(null);
+        setMessage("배치 요약을 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialSummary();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [fetchSummary]);
 
   async function handleCreateDraft(): Promise<void> {
     if (!summary || createLoading) return;
