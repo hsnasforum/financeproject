@@ -67,18 +67,22 @@ export function DataFreshnessBanner({
   const autoSmokeSessionKeyRef = useRef<string>("");
 
   useEffect(() => {
-    const path = typeof window !== "undefined" ? window.location.pathname : "global";
-    autoSmokeSessionKeyRef.current = `freshness:autoSmoke:run:${path}`;
-    try {
-      const stored = localStorage.getItem("freshness:autoSmoke");
-      if (stored === "1") setAutoSmoke(true);
-      else if (stored === "0") setAutoSmoke(false);
-      else setAutoSmoke(autoSmokeDefault);
-    } catch {
-      setAutoSmoke(autoSmokeDefault);
-    } finally {
-      setAutoSmokeReady(true);
-    }
+    const timer = window.setTimeout(() => {
+      const path = typeof window !== "undefined" ? window.location.pathname : "global";
+      autoSmokeSessionKeyRef.current = `freshness:autoSmoke:run:${path}`;
+      try {
+        const stored = localStorage.getItem("freshness:autoSmoke");
+        if (stored === "1") setAutoSmoke(true);
+        else if (stored === "0") setAutoSmoke(false);
+        else setAutoSmoke(autoSmokeDefault);
+      } catch {
+        setAutoSmoke(autoSmokeDefault);
+      } finally {
+        setAutoSmokeReady(true);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [autoSmokeDefault]);
 
   useEffect(() => {
@@ -149,8 +153,14 @@ export function DataFreshnessBanner({
   }, [refresh]);
 
   useEffect(() => {
-    void refresh();
-    return () => abortRef.current?.abort();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      abortRef.current?.abort();
+    };
   }, [refresh]);
 
   const summary = useMemo(
