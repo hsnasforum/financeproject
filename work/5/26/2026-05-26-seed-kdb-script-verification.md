@@ -25,3 +25,8 @@
 - `products:sync`는 외부 데이터 동기화 성격이 강해 이번 라운드에서 실행하지 않았습니다.
 - 이번 `/work` 기록을 push하면 PR #24 head SHA가 다시 바뀌므로 GitHub Actions `CI`, `E2E Smoke`를 새 SHA 기준으로 다시 확인해야 합니다.
 - PR #24 병합은 원격 `main` 변경이므로 명시 승인 전에는 진행하지 않습니다.
+
+## 다음 라운드
+- 외부 데이터 동기화가 필요한 경우 `products:sync`의 실행 범위와 네트워크 의존성을 먼저 분리합니다.
+- PR #24 head가 바뀌면 GitHub Actions `CI`, `E2E Smoke`를 다시 확인합니다.
+- 검증 전용 `/work` 기록만 바뀐 경우에도 `multi-agent:guard`로 최신 기록 형식을 다시 확인합니다.

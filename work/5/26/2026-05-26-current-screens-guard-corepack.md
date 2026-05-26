@@ -35,3 +35,8 @@
 - 이번 수정은 current-screens/SSOT guard의 실행성만 보강했으며, `package.json` 안의 다른 nested `pnpm ...` 스크립트 전체를 일괄 변경하지 않았습니다.
 - PR #24 head가 이 커밋으로 바뀌면 GitHub Actions `CI`, `E2E Smoke`를 새 SHA 기준으로 다시 확인해야 합니다.
 - PR #24 병합은 원격 `main` 변경이므로 명시 승인 전에는 진행하지 않습니다.
+
+## 다음 라운드
+- 다른 verification script에 bare `pnpm` 재호출이 남아 있는지 추가로 확인합니다.
+- 새 SHA가 생기면 PR #24의 GitHub Actions `CI`, `E2E Smoke`를 다시 확인합니다.
+- route SSOT 문서나 guard script가 추가로 바뀌면 `planning:current-screens:guard`와 `planning:ssot:check`를 함께 실행합니다.

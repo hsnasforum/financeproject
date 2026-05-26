@@ -47,3 +47,8 @@
 - `seed:kdb`, `products:sync`, `e2e:parallel:report-flake:prod`는 이번 라운드에서 직접 실행하지 않았습니다. 다만 남은 bare `pnpm` 호출은 없고, 같은 wrapper fallback은 `e2e:parallel:flake:prod`로 검증했습니다.
 - 이번 커밋을 push하면 PR #24 head SHA가 다시 바뀌므로 GitHub Actions `CI`, `E2E Smoke`를 새 SHA 기준으로 다시 확인해야 합니다.
 - PR #24 병합은 원격 `main` 변경이므로 명시 승인 전에는 진행하지 않습니다.
+
+## 다음 라운드
+- 미실행 항목 중 fixture 기반인 `seed:kdb`를 먼저 확인하고, 외부 동기화 성격의 `products:sync`는 별도 승인 또는 안전한 fixture 경로가 있을 때 실행합니다.
+- PR #24 head가 바뀌면 GitHub Actions `CI`, `E2E Smoke`를 다시 확인합니다.
+- wrapper fallback을 쓰는 다른 e2e 스크립트는 실패 재현이 있을 때 같은 방식으로 좁게 보강합니다.
