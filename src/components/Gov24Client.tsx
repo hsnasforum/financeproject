@@ -171,7 +171,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   }, [refreshSnapshotStatus]);
 
   useEffect(() => {
-    void checkSnapshotStatus();
+    const timer = window.setTimeout(() => {
+      void checkSnapshotStatus();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [checkSnapshotStatus]);
 
   const runManualSync = useCallback(async () => {
@@ -271,7 +275,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
 
   useEffect(() => {
     if (step !== 7) return;
-    void searchSimpleFind({ cursor: 0, append: false });
+    const timer = window.setTimeout(() => {
+      void searchSimpleFind({ cursor: 0, append: false });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [orgTypeFilter, searchSimpleFind, step]);
 
   return (
