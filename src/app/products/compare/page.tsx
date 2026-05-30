@@ -140,7 +140,20 @@ export default function ProductsComparePage() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    let active = true;
+
+    async function refreshCompareItems() {
+      await Promise.resolve();
+      if (active) {
+        void refresh();
+      }
+    }
+
+    void refreshCompareItems();
+
+    return () => {
+      active = false;
+    };
   }, [refresh]);
 
   const hasRows = cells.length > 0;
