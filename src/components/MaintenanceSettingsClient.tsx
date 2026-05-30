@@ -133,11 +133,14 @@ export function MaintenanceSettingsClient() {
   ]);
 
   useEffect(() => {
-    const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
-    const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
-    if (unlocked && csrf) {
-      setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
-    }
+    const timeoutId = window.setTimeout(() => {
+      const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
+      const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
+      if (unlocked && csrf) {
+        setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
