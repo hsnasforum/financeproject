@@ -103,7 +103,10 @@ export function OpsDataQualityCard({ csrf }: OpsDataQualityCardProps) {
   }, [csrf, hasCsrf]);
 
   useEffect(() => {
-    void load(false);
+    const timeoutId = window.setTimeout(() => {
+      void load(false);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [load]);
 
   return (
