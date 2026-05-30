@@ -238,12 +238,18 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
   }, [historyById, selectedForDiffA, selectedForDiffB]);
 
   useEffect(() => {
-    void loadHistory();
-    void loadLatestRef();
+    const timeoutId = window.setTimeout(() => {
+      void loadHistory();
+      void loadLatestRef();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadHistory, loadLatestRef]);
 
   useEffect(() => {
-    void loadDetail(selectedId);
+    const timeoutId = window.setTimeout(() => {
+      void loadDetail(selectedId);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadDetail, selectedId]);
 
   return (
