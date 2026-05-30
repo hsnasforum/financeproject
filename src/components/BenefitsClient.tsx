@@ -299,13 +299,12 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   useEffect(() => {
     if (initializedFromQueryRef.current) return;
     initializedFromQueryRef.current = true;
+    let active = true;
 
     const queryPreset = parseBenefitsQueryPreset(searchParams, initialQuery);
     const topicsFromUrl = parseTopicKeys((searchParams.get("topics") ?? "").split(",").map((entry) => entry.trim()).filter(Boolean));
     const parsedSido = queryPreset.sido || normalizeSido(searchParams.get("sido") ?? "") || "";
     const parsedSigungu = queryPreset.sigungu || (searchParams.get("sigungu") ?? "").trim();
-    const hasIncludeNationwideParam = searchParams.has("includeNationwide");
-    const hasIncludeUnknownParam = searchParams.has("includeUnknown");
     const parsedIncludeNationwide = parseFlag(searchParams.get("includeNationwide"), parsedSido ? false : true);
     const parsedIncludeUnknown = parseFlag(searchParams.get("includeUnknown"), parsedSido ? false : true);
     const parsedScan = (searchParams.get("scan") ?? "").trim().toLowerCase();
@@ -327,26 +326,31 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       maxPages: parsedMaxPages,
     };
 
-    setPlannerContext({
-      category: queryPreset.category,
-      region: queryPreset.region,
-      ageBand: queryPreset.ageBand,
-      incomeBand: queryPreset.incomeBand,
-    });
-    setQuery(initialState.query);
-    setSelectedTopics(initialState.topics);
-    setSido(initialState.sido);
-    setSigungu(initialState.sigungu);
-    setIncludeNationwide(initialState.includeNationwide);
-    setIncludeUnknown(initialState.includeUnknown);
-    if (!hasIncludeNationwideParam && parsedSido) setIncludeNationwide(false);
-    if (!hasIncludeUnknownParam && parsedSido) setIncludeUnknown(false);
-    setScanAll(initialState.scanAll);
-    setPageSize(initialState.pageSize);
-    setMaxPages(initialState.maxPages);
-    void run(initialState, { cursor: 0, includeFacets: true });
+    async function applyInitialState() {
+      await Promise.resolve();
+      if (!active) return;
+      setPlannerContext({
+        category: queryPreset.category,
+        region: queryPreset.region,
+        ageBand: queryPreset.ageBand,
+        incomeBand: queryPreset.incomeBand,
+      });
+      setQuery(initialState.query);
+      setSelectedTopics(initialState.topics);
+      setSido(initialState.sido);
+      setSigungu(initialState.sigungu);
+      setIncludeNationwide(initialState.includeNationwide);
+      setIncludeUnknown(initialState.includeUnknown);
+      setScanAll(initialState.scanAll);
+      setPageSize(initialState.pageSize);
+      setMaxPages(initialState.maxPages);
+      void run(initialState, { cursor: 0, includeFacets: true });
+    }
+
+    void applyInitialState();
 
     return () => {
+      active = false;
       requestControllerRef.current?.abort();
     };
   }, [initialQuery, run, searchParams]);
