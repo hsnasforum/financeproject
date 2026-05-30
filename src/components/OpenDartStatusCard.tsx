@@ -104,7 +104,10 @@ export function OpenDartStatusCard({ configured }: { configured: boolean }) {
   }
 
   useEffect(() => {
-    void fetchStatus();
+    const timeoutId = window.setTimeout(() => {
+      void fetchStatus();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const exists = status?.exists === true;
