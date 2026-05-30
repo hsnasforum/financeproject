@@ -91,32 +91,58 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const [data, setData] = useState<TrendsResponse["data"]>(null);
 
-  const load = useCallback(async (windowArg: 7 | 30) => {
-    setLoading(true);
-    setErrorMessage("");
-    try {
-      const response = await fetch(`/api/planning/v3/news/trends?window=${windowArg}`, {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as TrendsResponse | null;
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
-      setData(payload.data ?? null);
-      setWindowDays(payload?.windowDays === 30 ? 30 : 7);
-    } catch (error) {
-      setData(null);
-      setErrorMessage(error instanceof Error ? error.message : "트렌드를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
+  const load = useCallback(async (windowArg: 7 | 30, signal?: AbortSignal) => {
+    const response = await fetch(`/api/planning/v3/news/trends?window=${windowArg}`, {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as TrendsResponse | null;
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
+    const responseWindowDays: 7 | 30 = payload?.windowDays === 30 ? 30 : 7;
+    return {
+      data: payload.data ?? null,
+      windowDays: responseWindowDays,
+    };
   }, []);
 
   useEffect(() => {
-    void load(windowDays);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadTrends() {
+      try {
+        const next = await load(windowDays, controller.signal);
+        if (!active) return;
+        setData(next.data);
+        setWindowDays(next.windowDays);
+        setErrorMessage("");
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        setData(null);
+        setErrorMessage(error instanceof Error ? error.message : "트렌드를 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadTrends();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [load, windowDays]);
+
+  const selectWindowDays = useCallback((nextWindowDays: 7 | 30) => {
+    if (windowDays === nextWindowDays) return;
+    setWindowDays(nextWindowDays);
+    setLoading(true);
+    setErrorMessage("");
+  }, [windowDays]);
 
   const topicRows = data?.topics ?? [];
   const burstCount = topicRows.filter((row) => {
@@ -136,14 +162,14 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
             <div className="flex items-center bg-white/10 rounded-lg p-1">
               <button
                 type="button"
-                onClick={() => setWindowDays(7)}
+                onClick={() => selectWindowDays(7)}
                 className={reportHeroToggleButtonClassName(windowDays === 7)}
               >
                 7일
               </button>
               <button
                 type="button"
-                onClick={() => setWindowDays(30)}
+                onClick={() => selectWindowDays(30)}
                 className={reportHeroToggleButtonClassName(windowDays === 30)}
               >
                 30일
@@ -189,7 +215,7 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
               <div className="mt-6 flex justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setWindowDays(windowDays === 7 ? 30 : 7)}
+                  onClick={() => selectWindowDays(windowDays === 7 ? 30 : 7)}
                   className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all"
                 >
                   {windowDays === 7 ? "30일 구간으로 변경" : "7일 구간으로 변경"}
