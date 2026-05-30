@@ -60,6 +60,13 @@ type ScenarioDraftRow = {
   enabled: boolean;
 };
 
+type ScenarioLibraryLoadResult = {
+  updatedAt: string | null;
+  rows: ScenarioDraftRow[];
+};
+
+const SCENARIO_LIBRARY_LOAD_FAILED_MESSAGE = "시나리오 라이브러리를 불러오지 못했습니다.";
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -101,41 +108,66 @@ export function ScenarioLibraryClient({ csrf }: ScenarioLibraryClientProps) {
   const dirty = useMemo(() => JSON.stringify(draftRows) !== initialRowsJson, [draftRows, initialRowsJson]);
   const enabledCount = useMemo(() => draftRows.filter((row) => row.enabled).length, [draftRows]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadLibraryData = useCallback(async (signal?: AbortSignal): Promise<ScenarioLibraryLoadResult> => {
+    const response = await fetch("/api/planning/v3/scenarios/library", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        "x-requested-with": "XMLHttpRequest",
+      },
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as ScenarioGetResponse | null;
+    if (!response.ok || payload?.ok !== true || !payload.data) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
+    }
+
+    return {
+      updatedAt: payload.data.updatedAt ?? null,
+      rows: rowsToDraft(payload.data.rows ?? []),
+    };
+  }, []);
+
+  const applyLibraryLoadResult = useCallback((result: ScenarioLibraryLoadResult) => {
+    setUpdatedAt(result.updatedAt);
+    setDraftRows(result.rows);
+    setInitialRowsJson(JSON.stringify(result.rows));
     setLoadError("");
     setError("");
-    try {
-      const response = await fetch("/api/planning/v3/scenarios/library", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: {
-          "x-requested-with": "XMLHttpRequest",
-        },
-      });
-      const payload = (await response.json().catch(() => null)) as ScenarioGetResponse | null;
-      if (!response.ok || payload?.ok !== true || !payload.data) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
+  }, []);
 
-      const nextRows = rowsToDraft(payload.data.rows ?? []);
-      setUpdatedAt(payload.data.updatedAt ?? null);
-      setDraftRows(nextRows);
-      setInitialRowsJson(JSON.stringify(nextRows));
-    } catch (loadError) {
-      setLoadError(loadError instanceof Error ? loadError.message : "시나리오 라이브러리를 불러오지 못했습니다.");
-      setUpdatedAt(null);
-      setDraftRows([]);
-      setInitialRowsJson("[]");
-    } finally {
-      setLoading(false);
-    }
+  const applyLibraryLoadFailure = useCallback((message: string) => {
+    setLoadError(message);
+    setUpdatedAt(null);
+    setDraftRows([]);
+    setInitialRowsJson("[]");
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialLibrary() {
+      try {
+        const result = await loadLibraryData(controller.signal);
+        if (!active) return;
+        applyLibraryLoadResult(result);
+      } catch (loadError) {
+        if (!active || controller.signal.aborted) return;
+        applyLibraryLoadFailure(loadError instanceof Error ? loadError.message : SCENARIO_LIBRARY_LOAD_FAILED_MESSAGE);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialLibrary();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [applyLibraryLoadFailure, applyLibraryLoadResult, loadLibraryData]);
 
   function moveRow(index: number, direction: -1 | 1) {
     setDraftRows((prev) => {
