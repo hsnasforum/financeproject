@@ -91,7 +91,12 @@ export function DartCompanyPageClient() {
   }, []);
 
   useEffect(() => {
-    refreshLists();
+    const timeoutId = window.setTimeout(() => {
+      refreshLists();
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [refreshLists]);
 
   useEffect(() => {
