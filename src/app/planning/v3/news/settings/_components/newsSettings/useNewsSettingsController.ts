@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import {
   type AlertRulesGetResponse,
@@ -35,7 +35,50 @@ import {
   sortAlertRules,
 } from "./shared";
 
+type IndicatorSpecsState = {
+  specsJson: string;
+  indicatorCatalog: IndicatorCatalogRow[];
+};
+
+type AlertRulesState = {
+  alertRulesUpdatedAt: string | null;
+  alertRuleDefaults: AlertRuleRow[] | null;
+  alertRulesJson: string;
+};
+
+type NewsSettingsLoadResult = {
+  updatedAt: string | null;
+  exposureUpdatedAt: string | null;
+  sources: SourceRow[];
+  topics: TopicRow[];
+  sourceDrafts: Record<string, SourceDraft>;
+  topicDrafts: Record<string, TopicDraft>;
+  exposureDraft: ExposureDraft;
+  indicatorSpecs: IndicatorSpecsState | null;
+  alertRules: AlertRulesState | null;
+};
+
+function toIndicatorSpecsState(payload: IndicatorSpecsGetResponse | null | undefined): IndicatorSpecsState {
+  const specs = payload?.data?.specs ?? [];
+  const catalog = payload?.data?.catalog ?? [];
+  return {
+    specsJson: `${JSON.stringify(specs, null, 2)}\n`,
+    indicatorCatalog: [...catalog].sort((a, b) => asString(a.id).localeCompare(asString(b.id))),
+  };
+}
+
+function toAlertRulesState(payload: AlertRulesGetResponse | AlertRulesPostResponse | null | undefined): AlertRulesState {
+  const defaults = payload?.data?.defaults?.rules ?? null;
+  const overrides = payload?.data?.overrides?.rules ?? [];
+  return {
+    alertRulesUpdatedAt: payload?.data?.updatedAt ?? payload?.data?.overrides?.updatedAt ?? null,
+    alertRuleDefaults: Array.isArray(defaults) ? sortAlertRules(defaults) : null,
+    alertRulesJson: `${JSON.stringify(overrides, null, 2)}\n`,
+  };
+}
+
 export function useNewsSettingsController({ csrf }: NewsSettingsClientProps): NewsSettingsController {
+  const requestSeqRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -66,100 +109,151 @@ export function useNewsSettingsController({ csrf }: NewsSettingsClientProps): Ne
   const [alertRulesIoSummary, setAlertRulesIoSummary] = useState("");
   const [alertRulesLoadError, setAlertRulesLoadError] = useState("");
 
-  const applyIndicatorSpecsResponse = useCallback((payload: IndicatorSpecsGetResponse | null | undefined) => {
-    const specs = payload?.data?.specs ?? [];
-    const catalog = payload?.data?.catalog ?? [];
-    setSpecsJson(`${JSON.stringify(specs, null, 2)}\n`);
-    setIndicatorCatalog([...catalog].sort((a, b) => asString(a.id).localeCompare(asString(b.id))));
-  }, []);
-
   const applyAlertRulesResponse = useCallback((payload: AlertRulesGetResponse | AlertRulesPostResponse | null | undefined) => {
-    const defaults = payload?.data?.defaults?.rules ?? null;
-    const overrides = payload?.data?.overrides?.rules ?? [];
-    setAlertRulesUpdatedAt(payload?.data?.updatedAt ?? payload?.data?.overrides?.updatedAt ?? null);
-    if (Array.isArray(defaults)) {
-      setAlertRuleDefaults(sortAlertRules(defaults));
-    }
-    const nextJson = `${JSON.stringify(overrides, null, 2)}\n`;
-    setAlertRulesJson(nextJson);
-    setInitialAlertRulesJson(nextJson);
+    const next = toAlertRulesState(payload);
+    setAlertRulesUpdatedAt(next.alertRulesUpdatedAt);
+    if (next.alertRuleDefaults) setAlertRuleDefaults(next.alertRuleDefaults);
+    setAlertRulesJson(next.alertRulesJson);
+    setInitialAlertRulesJson(next.alertRulesJson);
     setAlertRulesLoadError("");
   }, []);
 
-  const load = useCallback(async () => {
+  const applyLoadResult = useCallback((next: NewsSettingsLoadResult) => {
+    setUpdatedAt(next.updatedAt);
+    setSources(next.sources);
+    setTopics(next.topics);
+    setExposureUpdatedAt(next.exposureUpdatedAt);
+    setExposureDraft(next.exposureDraft);
+    setInitialExposureDraft(next.exposureDraft);
+    setSourceDrafts(next.sourceDrafts);
+    setInitialSourceDrafts(next.sourceDrafts);
+    setTopicDrafts(next.topicDrafts);
+    setInitialTopicDrafts(next.topicDrafts);
+    if (next.indicatorSpecs) {
+      setSpecsJson(next.indicatorSpecs.specsJson);
+      setIndicatorCatalog(next.indicatorSpecs.indicatorCatalog);
+    }
+    if (next.alertRules) {
+      setAlertRulesUpdatedAt(next.alertRules.alertRulesUpdatedAt);
+      if (next.alertRules.alertRuleDefaults) setAlertRuleDefaults(next.alertRules.alertRuleDefaults);
+      setAlertRulesJson(next.alertRules.alertRulesJson);
+      setInitialAlertRulesJson(next.alertRules.alertRulesJson);
+    }
+    setInitialLoadFailed(false);
+    setErrorMessage("");
+    setAlertRulesLoadError("");
+  }, []);
+
+  const load = useCallback(async (signal?: AbortSignal): Promise<NewsSettingsLoadResult> => {
+    const [settingsResponse, exposureResponse] = await Promise.all([
+      fetch("/api/planning/v3/news/settings", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        signal,
+      }),
+      fetch("/api/planning/v3/exposure/profile", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        signal,
+      }),
+    ]);
+    const [specsResponse, alertRulesResponse] = await Promise.all([
+      fetch("/api/planning/v3/indicators/specs", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        signal,
+      }).catch(() => null),
+      fetch("/api/planning/v3/news/alerts/rules", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "x-requested-with": "XMLHttpRequest" },
+        signal,
+      }).catch(() => null),
+    ]);
+    const settingsPayload = (await settingsResponse.json().catch(() => null)) as GetSettingsResponse | null;
+    const exposurePayload = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
+    const specsPayload = specsResponse ? (await specsResponse.json().catch(() => null)) as IndicatorSpecsGetResponse | null : null;
+    const alertRulesPayload = alertRulesResponse ? (await alertRulesResponse.json().catch(() => null)) as AlertRulesGetResponse | null : null;
+
+    if (!settingsResponse.ok || settingsPayload?.ok !== true || !settingsPayload.data) {
+      throw new Error(settingsPayload?.error?.message ?? `HTTP ${settingsResponse.status}`);
+    }
+    if (!exposureResponse.ok || exposurePayload?.ok !== true) {
+      throw new Error(exposurePayload?.error?.message ?? `HTTP ${exposureResponse.status}`);
+    }
+
+    const loadedSources = settingsPayload.data.sources ?? [];
+    const loadedTopics = settingsPayload.data.topics ?? [];
+    const nextExposureDraft = profileToDraft(exposurePayload.profile ?? null);
+    return {
+      updatedAt: settingsPayload.data.updatedAt ?? null,
+      sources: loadedSources,
+      topics: loadedTopics,
+      exposureUpdatedAt: exposurePayload.profile?.savedAt ?? null,
+      exposureDraft: nextExposureDraft,
+      sourceDrafts: buildSourceDrafts(loadedSources),
+      topicDrafts: buildTopicDrafts(loadedTopics),
+      indicatorSpecs: specsResponse?.ok && specsPayload?.ok === true ? toIndicatorSpecsState(specsPayload) : null,
+      alertRules: alertRulesResponse?.ok && alertRulesPayload?.ok === true ? toAlertRulesState(alertRulesPayload) : null,
+    };
+  }, []);
+
+  useEffect(() => {
+    const requestId = ++requestSeqRef.current;
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadNewsSettings() {
+      try {
+        const next = await load(controller.signal);
+        if (!active || requestId !== requestSeqRef.current) return;
+        applyLoadResult(next);
+      } catch (error) {
+        if (!active || requestId !== requestSeqRef.current || controller.signal.aborted) return;
+        setInitialLoadFailed(true);
+        setErrorMessage(error instanceof Error ? error.message : "설정을 불러오지 못했습니다.");
+      } finally {
+        if (active && requestId === requestSeqRef.current) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadNewsSettings();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [applyLoadResult, load]);
+
+  const reloadFromServer = useCallback(async () => {
+    const requestId = ++requestSeqRef.current;
     setLoading(true);
     setInitialLoadFailed(false);
     setErrorMessage("");
     setAlertRulesLoadError("");
     try {
-      const [settingsResponse, exposureResponse] = await Promise.all([
-        fetch("/api/planning/v3/news/settings", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: { "x-requested-with": "XMLHttpRequest" },
-        }),
-        fetch("/api/planning/v3/exposure/profile", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: { "x-requested-with": "XMLHttpRequest" },
-        }),
-      ]);
-      const [specsResponse, alertRulesResponse] = await Promise.all([
-        fetch("/api/planning/v3/indicators/specs", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: { "x-requested-with": "XMLHttpRequest" },
-        }).catch(() => null),
-        fetch("/api/planning/v3/news/alerts/rules", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: { "x-requested-with": "XMLHttpRequest" },
-        }).catch(() => null),
-      ]);
-      const settingsPayload = (await settingsResponse.json().catch(() => null)) as GetSettingsResponse | null;
-      const exposurePayload = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
-      const specsPayload = specsResponse ? (await specsResponse.json().catch(() => null)) as IndicatorSpecsGetResponse | null : null;
-      const alertRulesPayload = alertRulesResponse ? (await alertRulesResponse.json().catch(() => null)) as AlertRulesGetResponse | null : null;
-
-      if (!settingsResponse.ok || settingsPayload?.ok !== true || !settingsPayload.data) {
-        throw new Error(settingsPayload?.error?.message ?? `HTTP ${settingsResponse.status}`);
-      }
-      if (!exposureResponse.ok || exposurePayload?.ok !== true) {
-        throw new Error(exposurePayload?.error?.message ?? `HTTP ${exposureResponse.status}`);
-      }
-      if (specsResponse?.ok && specsPayload?.ok === true) applyIndicatorSpecsResponse(specsPayload);
-      if (alertRulesResponse?.ok && alertRulesPayload?.ok === true) applyAlertRulesResponse(alertRulesPayload);
-
-      const loadedSources = settingsPayload.data.sources ?? [];
-      const loadedTopics = settingsPayload.data.topics ?? [];
-      const nextSourceDrafts = buildSourceDrafts(loadedSources);
-      const nextTopicDrafts = buildTopicDrafts(loadedTopics);
-      const nextExposureDraft = profileToDraft(exposurePayload.profile ?? null);
-      setUpdatedAt(settingsPayload.data.updatedAt ?? null);
-      setSources(loadedSources);
-      setTopics(loadedTopics);
-      setExposureUpdatedAt(exposurePayload.profile?.savedAt ?? null);
-      setExposureDraft(nextExposureDraft);
-      setInitialExposureDraft(nextExposureDraft);
-      setSourceDrafts(nextSourceDrafts);
-      setInitialSourceDrafts(nextSourceDrafts);
-      setTopicDrafts(nextTopicDrafts);
-      setInitialTopicDrafts(nextTopicDrafts);
+      const next = await load();
+      if (requestId !== requestSeqRef.current) return;
+      applyLoadResult(next);
     } catch (error) {
+      if (requestId !== requestSeqRef.current) return;
       setInitialLoadFailed(true);
       setErrorMessage(error instanceof Error ? error.message : "설정을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (requestId === requestSeqRef.current) {
+        setLoading(false);
+      }
     }
-  }, [applyAlertRulesResponse, applyIndicatorSpecsResponse]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  }, [applyLoadResult, load]);
 
   const parsedAlertRulesDraft = useMemo(() => parseAlertRuleOverridesJson(alertRulesJson), [alertRulesJson]);
   const alertRuleOverridesCount = parsedAlertRulesDraft.rules.length;
@@ -259,13 +353,13 @@ export function useNewsSettingsController({ csrf }: NewsSettingsClientProps): Ne
       if (!expRes.ok) throw new Error("프로필 저장 실패");
 
       setNotice("저장되었습니다.");
-      await load();
+      await reloadFromServer();
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "저장 중 오류");
     } finally {
       setSaving(false);
     }
-  }, [canSaveSettings, csrf, exposureDraft, load, sourceDrafts, sources, topicDrafts, topics]);
+  }, [canSaveSettings, csrf, exposureDraft, reloadFromServer, sourceDrafts, sources, topicDrafts, topics]);
 
   const handleIo = useCallback(async (target: "sources" | "specs", action: "export" | "import", mode?: "dry_run" | "apply") => {
     const isLoading = target === "sources" ? setSourcesIoLoading : setSpecsIoLoading;
@@ -301,14 +395,14 @@ export function useNewsSettingsController({ csrf }: NewsSettingsClientProps): Ne
         const result = await res.json();
         if (!res.ok || !result.ok) throw new Error("가져오기 실패");
         setSummary(`${mode === "apply" ? "적용" : "분석"} 완료`);
-        if (mode === "apply") await load();
+        if (mode === "apply") await reloadFromServer();
       }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "IO 작업 중 오류");
     } finally {
       isLoading(false);
     }
-  }, [csrf, load, sourcesJson, specsJson]);
+  }, [csrf, reloadFromServer, sourcesJson, specsJson]);
 
   const handleAlertRulesAction = useCallback(async (action: "reload" | "apply") => {
     setAlertRulesPhase(action === "reload" ? "reloading" : "applying");
