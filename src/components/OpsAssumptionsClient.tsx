@@ -355,12 +355,18 @@ export function OpsAssumptionsClient(props: OpsAssumptionsClientProps) {
   }, []);
 
   useEffect(() => {
-    void loadProfileOptions();
+    const timeoutId = window.setTimeout(() => {
+      void loadProfileOptions();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadProfileOptions]);
 
   useEffect(() => {
-    void loadLatest();
-    void loadOverrides();
+    const timeoutId = window.setTimeout(() => {
+      void loadLatest();
+      void loadOverrides();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadLatest, loadOverrides]);
 
   return (
