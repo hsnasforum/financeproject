@@ -134,17 +134,20 @@ export function DartDisclosureMonitorClient() {
   }, []);
 
   useEffect(() => {
-    const nextSettings = getDisclosureSettings();
-    const nextView = getDisclosureMonitorView();
-    setSettings(nextSettings);
-    setFocusMode(nextView.focusMode);
-    setFromInput(nextSettings.from ?? "");
-    setToInput(nextSettings.to ?? "");
-    refreshWatchlist();
+    const timeoutId = window.setTimeout(() => {
+      const nextSettings = getDisclosureSettings();
+      const nextView = getDisclosureMonitorView();
+      setSettings(nextSettings);
+      setFocusMode(nextView.focusMode);
+      setFromInput(nextSettings.from ?? "");
+      setToInput(nextSettings.to ?? "");
+      refreshWatchlist();
+    }, 0);
     const onFavoritesUpdated = () => refreshWatchlist();
     window.addEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
     window.addEventListener("storage", onFavoritesUpdated);
     return () => {
+      window.clearTimeout(timeoutId);
       window.removeEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
       window.removeEventListener("storage", onFavoritesUpdated);
     };
