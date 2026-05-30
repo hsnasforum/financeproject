@@ -306,6 +306,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     if (restoredRef.current) return;
     restoredRef.current = true;
     if (typeof window === "undefined") return;
+    let active = true;
 
     const parsed = parseArmPersistPayload(window.sessionStorage.getItem(AUTO_MERGE_ARM_SESSION_KEY));
     const pruned = pruneArmedState(
@@ -314,51 +315,62 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     );
     const restoredArmed = toNumericArmedMap(pruned.armed);
 
-    if (Object.keys(restoredArmed).length > 0) {
-      armByPrRef.current = restoredArmed;
-      setArmByPr(restoredArmed);
-      setConfirmByPr((prev) => {
-        const next = { ...prev };
-        for (const [rawPr, entry] of Object.entries(restoredArmed)) {
-          const prNumber = normalizePrNumber(rawPr);
-          if (!prNumber) continue;
-          next[prNumber] = entry.confirmText;
-        }
-        return next;
-      });
-      setArmStatusByPr((prev) => {
-        const next = { ...prev };
-        for (const [rawPr, entry] of Object.entries(restoredArmed)) {
-          const prNumber = normalizePrNumber(rawPr);
-          if (!prNumber) continue;
-          next[prNumber] = {
-            polling: false,
-            lastCheckedAt: entry.lastCheckAt ? formatTime(new Date(entry.lastCheckAt)) : "",
-            reasonCode: entry.lastReasonCode || "UNKNOWN",
-            reasonMessage: entry.lastReasonCode ? `복원됨 (${entry.lastReasonCode})` : "복원됨",
-            eligible: false,
-            currentIntervalMs: baseIntervalMs,
-          };
-          pollMetaRef.current[prNumber] = {
-            nextPollAt: 0,
-            backoffMs: 0,
-          };
-        }
-        return next;
-      });
+    async function restoreArmedState() {
+      await Promise.resolve();
+      if (!active) return;
+
+      if (Object.keys(restoredArmed).length > 0) {
+        armByPrRef.current = restoredArmed;
+        setArmByPr(restoredArmed);
+        setConfirmByPr((prev) => {
+          const next = { ...prev };
+          for (const [rawPr, entry] of Object.entries(restoredArmed)) {
+            const prNumber = normalizePrNumber(rawPr);
+            if (!prNumber) continue;
+            next[prNumber] = entry.confirmText;
+          }
+          return next;
+        });
+        setArmStatusByPr((prev) => {
+          const next = { ...prev };
+          for (const [rawPr, entry] of Object.entries(restoredArmed)) {
+            const prNumber = normalizePrNumber(rawPr);
+            if (!prNumber) continue;
+            next[prNumber] = {
+              polling: false,
+              lastCheckedAt: entry.lastCheckAt ? formatTime(new Date(entry.lastCheckAt)) : "",
+              reasonCode: entry.lastReasonCode || "UNKNOWN",
+              reasonMessage: entry.lastReasonCode ? `복원됨 (${entry.lastReasonCode})` : "복원됨",
+              eligible: false,
+              currentIntervalMs: baseIntervalMs,
+            };
+            pollMetaRef.current[prNumber] = {
+              nextPollAt: 0,
+              backoffMs: 0,
+            };
+          }
+          return next;
+        });
+      }
+
+      window.sessionStorage.setItem(
+        AUTO_MERGE_ARM_SESSION_KEY,
+        JSON.stringify({
+          version: AUTO_MERGE_ARM_SESSION_VERSION,
+          armed: pruned.armed,
+        }),
+      );
+
+      if (pruned.removedShaMismatch.length > 0) {
+        pushNotice(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
+      }
     }
 
-    window.sessionStorage.setItem(
-      AUTO_MERGE_ARM_SESSION_KEY,
-      JSON.stringify({
-        version: AUTO_MERGE_ARM_SESSION_VERSION,
-        armed: pruned.armed,
-      }),
-    );
+    void restoreArmedState();
 
-    if (pruned.removedShaMismatch.length > 0) {
-      pushNotice(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
-    }
+    return () => {
+      active = false;
+    };
   }, [baseIntervalMs, props.candidates, pushNotice]);
 
   useEffect(() => {
