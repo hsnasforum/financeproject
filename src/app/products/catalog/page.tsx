@@ -57,6 +57,13 @@ type UnifiedResponse = {
   };
 };
 
+type CatalogState = {
+  queryKey: string;
+  rows: UnifiedItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 function formatRate(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "-";
   return `${value.toFixed(2)}%`;
@@ -69,12 +76,28 @@ export default function ProductsCatalogPage() {
   const [q, setQ] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<string>("all");
   const [includeSamplebank, setIncludeSamplebank] = useState(false);
-  const [rows, setRows] = useState<UnifiedItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [catalogState, setCatalogState] = useState<CatalogState>({
+    queryKey: "",
+    rows: [],
+    nextCursor: null,
+    hasMore: false,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [compareNotice, setCompareNotice] = useState("");
+  const catalogQueryKey = useMemo(() => {
+    const sourcesKey = includeSamplebank ? "finlife,datago_kdb,samplebank" : "finlife,datago_kdb";
+    return [kind, sourcesKey, q.trim()].join("\u0000");
+  }, [includeSamplebank, kind, q]);
+  const currentCatalog = useMemo(() => {
+    const isCurrent = catalogState.queryKey === catalogQueryKey;
+    return {
+      rows: isCurrent ? catalogState.rows : [],
+      nextCursor: isCurrent ? catalogState.nextCursor : null,
+      hasMore: isCurrent && catalogState.hasMore,
+    };
+  }, [catalogQueryKey, catalogState.hasMore, catalogState.nextCursor, catalogState.queryKey, catalogState.rows]);
+  const { rows, nextCursor, hasMore } = currentCatalog;
 
   const providers = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
@@ -116,23 +139,38 @@ export default function ProductsCatalogPage() {
       const pageItems = Array.isArray(json.data?.items)
         ? json.data?.items
         : (Array.isArray(json.data?.merged) ? json.data.merged : []);
-      setRows((prev) => (append ? [...prev, ...pageItems] : pageItems));
-      setHasMore(Boolean(json.data?.pageInfo?.hasMore));
-      setNextCursor(typeof json.data?.pageInfo?.nextCursor === "string" ? json.data.pageInfo.nextCursor : null);
+      const responseHasMore = Boolean(json.data?.pageInfo?.hasMore);
+      const responseNextCursor = typeof json.data?.pageInfo?.nextCursor === "string" ? json.data.pageInfo.nextCursor : null;
+      setCatalogState((prev) => ({
+        queryKey: catalogQueryKey,
+        rows: append && prev.queryKey === catalogQueryKey ? [...prev.rows, ...pageItems] : pageItems,
+        hasMore: responseHasMore,
+        nextCursor: responseNextCursor,
+      }));
       setCompareNotice("");
     } catch {
       setError("UPSTREAM: 통합 카탈로그 조회 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [includeSamplebank, kind, q]);
+  }, [catalogQueryKey, includeSamplebank, kind, q]);
 
   useEffect(() => {
-    setRows([]);
-    setNextCursor(null);
-    setHasMore(false);
-    void run({ append: false });
-  }, [kind, q, run]);
+    let active = true;
+
+    async function refreshCatalog() {
+      await Promise.resolve();
+      if (active) {
+        void run({ append: false });
+      }
+    }
+
+    void refreshCatalog();
+
+    return () => {
+      active = false;
+    };
+  }, [run]);
 
   const filteredRows = useMemo(() => {
     const termFilter = Number(termMonths);
