@@ -254,7 +254,10 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
   }, [csrf, hasCsrf]);
 
   useEffect(() => {
-    void loadDoctor();
+    const timeoutId = window.setTimeout(() => {
+      void loadDoctor();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadDoctor]);
 
   return (
