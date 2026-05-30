@@ -175,48 +175,69 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
   const [freshness, setFreshness] = useState<ExploreFreshness | null>(null);
   const [advanced, setAdvanced] = useState<Record<string, boolean>>({});
 
-  const load = useCallback(async (filters: ExploreFilterState) => {
-    const requestId = ++requestSeqRef.current;
-    setLoading(true);
-    setErrorMessage("");
-
-    try {
-      const query = buildQuery(filters);
-      const response = await fetch(`/api/planning/v3/news/search?${query}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as ExploreResponse | null;
-      if (!response.ok || payload?.ok !== true || !payload.data) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
-
-      if (requestId !== requestSeqRef.current) return;
-
-      setItems(payload.data.items ?? []);
-      setTopics(payload.data.topics ?? []);
-      setSources(payload.data.sources ?? []);
-      setTotal(Math.max(0, Number(payload.data.total ?? 0)));
-      setFreshness(payload.data.freshness ?? null);
-    } catch (error) {
-      if (requestId !== requestSeqRef.current) return;
-
-      setItems([]);
-      setTopics([]);
-      setSources([]);
-      setTotal(0);
-      setFreshness(null);
-      setErrorMessage(error instanceof Error ? error.message : "뉴스 탐색 데이터를 불러오지 못했습니다.");
-    } finally {
-      if (requestId === requestSeqRef.current) {
-        setLoading(false);
-      }
+  const load = useCallback(async (filters: ExploreFilterState, signal?: AbortSignal) => {
+    const query = buildQuery(filters);
+    const response = await fetch(`/api/planning/v3/news/search?${query}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as ExploreResponse | null;
+    if (!response.ok || payload?.ok !== true || !payload.data) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
+    return {
+      items: payload.data.items ?? [],
+      topics: payload.data.topics ?? [],
+      sources: payload.data.sources ?? [],
+      total: Math.max(0, Number(payload.data.total ?? 0)),
+      freshness: payload.data.freshness ?? null,
+    };
   }, []);
 
   useEffect(() => {
-    void load(applied);
+    const requestId = ++requestSeqRef.current;
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadExplore() {
+      try {
+        const next = await load(applied, controller.signal);
+        if (!active || requestId !== requestSeqRef.current) return;
+        setItems(next.items);
+        setTopics(next.topics);
+        setSources(next.sources);
+        setTotal(next.total);
+        setFreshness(next.freshness);
+        setErrorMessage("");
+      } catch (error) {
+        if (!active || requestId !== requestSeqRef.current || controller.signal.aborted) return;
+        setItems([]);
+        setTopics([]);
+        setSources([]);
+        setTotal(0);
+        setFreshness(null);
+        setErrorMessage(error instanceof Error ? error.message : "뉴스 탐색 데이터를 불러오지 못했습니다.");
+      } finally {
+        if (active && requestId === requestSeqRef.current) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadExplore();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [applied, load]);
+
+  const applyFilters = useCallback((filters: ExploreFilterState) => {
+    setApplied({ ...filters });
+    setLoading(true);
+    setErrorMessage("");
+  }, []);
 
   const resultLabel = useMemo(() => {
     if (loading) return "불러오는 중...";
@@ -234,7 +255,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
   }, [applied]);
   function submitFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setApplied({ ...draft });
+    applyFilters(draft);
   }
 
   return (
@@ -250,7 +271,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                 type="button"
                 onClick={() => {
                   setDraft(DEFAULT_FILTERS);
-                  setApplied(DEFAULT_FILTERS);
+                  applyFilters(DEFAULT_FILTERS);
                 }}
                 className={reportHeroActionLinkClassName}
               >
@@ -379,7 +400,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                   type="button"
                   onClick={() => {
                     setDraft(DEFAULT_FILTERS);
-                    setApplied(DEFAULT_FILTERS);
+                    applyFilters(DEFAULT_FILTERS);
                   }}
                   className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-surface-muted transition-colors"
                 >
@@ -437,7 +458,7 @@ export function NewsExploreClient({ csrf }: NewsExploreClientProps) {
                   type="button"
                   onClick={() => {
                     setDraft(DEFAULT_FILTERS);
-                    setApplied(DEFAULT_FILTERS);
+                    applyFilters(DEFAULT_FILTERS);
                   }}
                   className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all"
                 >
