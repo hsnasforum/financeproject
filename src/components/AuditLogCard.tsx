@@ -66,7 +66,19 @@ export function AuditLogCard({ limit = 50 }: AuditLogCardProps) {
   }, [limit]);
 
   useEffect(() => {
-    void loadAudit();
+    let active = true;
+
+    async function loadInitialAudit() {
+      await Promise.resolve();
+      if (!active) return;
+      void loadAudit();
+    }
+
+    void loadInitialAudit();
+
+    return () => {
+      active = false;
+    };
   }, [loadAudit]);
 
   return (
