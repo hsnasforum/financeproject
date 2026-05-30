@@ -263,10 +263,13 @@ export default function DebugUnifiedPage() {
   }, [reload]);
 
   useEffect(() => {
-    nextCursorRef.current = null;
-    setNextCursor(null);
-    setHasMore(false);
-    void reload(false);
+    const timeoutId = window.setTimeout(() => {
+      nextCursorRef.current = null;
+      setNextCursor(null);
+      setHasMore(false);
+      void reload(false);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [reload]);
 
   useEffect(() => {
