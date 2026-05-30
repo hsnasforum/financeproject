@@ -56,7 +56,10 @@ export function DevGitAdminClient() {
   }, []);
 
   useEffect(() => {
-    void execute("status");
+    const timeoutId = window.setTimeout(() => {
+      void execute("status");
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [execute]);
 
   const ranAtLabel = useMemo(() => {
