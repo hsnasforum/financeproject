@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BodyActionLink, bodyDenseActionRowClassName } from "@/components/ui/BodyTone";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -82,6 +82,13 @@ type TopicContradictionRow = {
   downSignals: number;
   signalBalance: number;
   summary: string;
+};
+
+type DigestLoadResult = {
+  digest: DigestDay | null;
+  scenarios: NewsScenarioPack | null;
+  topicContradictions: TopicContradictionRow[];
+  notes: NewsNoteRecord[];
 };
 
 function asString(value: unknown): string {
@@ -227,11 +234,13 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
   const [noteText, setNoteText] = useState("");
   const [tagsText, setTagsText] = useState("");
   const [advancedTopItem, setAdvancedTopItem] = useState<Record<string, boolean>>({});
+  const requestSeqRef = useRef(0);
 
-  const fetchNotes = useCallback(async () => {
+  const fetchNotes = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/planning/v3/news/notes", {
       cache: "no-store",
       credentials: "same-origin",
+      signal,
       headers: {
         "x-requested-with": "XMLHttpRequest",
       },
@@ -243,50 +252,75 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
     return payload.data?.notes ?? [];
   }, []);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage("");
+  const load = useCallback(async (signal?: AbortSignal): Promise<DigestLoadResult> => {
+    const [digestRes, scenarioRes] = await Promise.all([
+      fetch("/api/planning/v3/news/digest", {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+      fetch("/api/planning/v3/news/scenarios", {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+    ]);
+    const digestPayload = (await digestRes.json().catch(() => null)) as DigestResponse | null;
+    const scenarioPayload = (await scenarioRes.json().catch(() => null)) as ScenarioResponse | null;
 
-    try {
-      const [digestRes, scenarioRes] = await Promise.all([
-        fetch("/api/planning/v3/news/digest", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/planning/v3/news/scenarios", {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ]);
-      const digestPayload = (await digestRes.json().catch(() => null)) as DigestResponse | null;
-      const scenarioPayload = (await scenarioRes.json().catch(() => null)) as ScenarioResponse | null;
-
-      if (!digestRes.ok || digestPayload?.ok !== true) {
-        throw new Error(digestPayload?.error?.message ?? `HTTP ${digestRes.status}`);
-      }
-      setDigest(digestPayload?.data ?? null);
-      setTopicContradictions(digestPayload?.topicContradictions ?? []);
-      setScenarios((scenarioRes.ok && scenarioPayload?.ok === true) ? (scenarioPayload.data ?? null) : null);
-
-      try {
-        const loadedNotes = await fetchNotes();
-        setNotes(loadedNotes);
-      } catch {
-        setNotes([]);
-      }
-    } catch (error) {
-      setDigest(null);
-      setTopicContradictions([]);
-      setScenarios(null);
-      setNotes([]);
-      setErrorMessage(error instanceof Error ? error.message : "뉴스 데이터를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
+    if (!digestRes.ok || digestPayload?.ok !== true) {
+      throw new Error(digestPayload?.error?.message ?? `HTTP ${digestRes.status}`);
     }
+
+    let loadedNotes: NewsNoteRecord[] = [];
+    try {
+      loadedNotes = await fetchNotes(signal);
+    } catch {
+      loadedNotes = [];
+    }
+
+    return {
+      digest: digestPayload?.data ?? null,
+      topicContradictions: digestPayload?.topicContradictions ?? [],
+      scenarios: (scenarioRes.ok && scenarioPayload?.ok === true) ? (scenarioPayload.data ?? null) : null,
+      notes: loadedNotes,
+    };
   }, [fetchNotes]);
 
   useEffect(() => {
-    void load();
+    const requestId = ++requestSeqRef.current;
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadDigest() {
+      try {
+        const next = await load(controller.signal);
+        if (!active || requestId !== requestSeqRef.current) return;
+        setDigest(next.digest);
+        setTopicContradictions(next.topicContradictions);
+        setScenarios(next.scenarios);
+        setNotes(next.notes);
+        setErrorMessage("");
+      } catch (error) {
+        if (!active || requestId !== requestSeqRef.current || controller.signal.aborted) return;
+        setDigest(null);
+        setTopicContradictions([]);
+        setScenarios(null);
+        setNotes([]);
+        setErrorMessage(error instanceof Error ? error.message : "뉴스 데이터를 불러오지 못했습니다.");
+      } finally {
+        if (active && requestId === requestSeqRef.current) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadDigest();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [load]);
 
   const summaryLine = useMemo(() => {
@@ -446,10 +480,29 @@ export function NewsDigestClient({ csrf }: NewsDigestClientProps) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
       }
       setNotice(`뉴스 갱신 완료 (${Math.round(Number(payload?.tookMs ?? 0))}ms)`);
-      await load();
+      setLoading(true);
+      const requestId = ++requestSeqRef.current;
+      try {
+        const next = await load();
+        if (requestId === requestSeqRef.current) {
+          setDigest(next.digest);
+          setTopicContradictions(next.topicContradictions);
+          setScenarios(next.scenarios);
+          setNotes(next.notes);
+        }
+      } catch (loadError) {
+        if (requestId === requestSeqRef.current) {
+          setDigest(null);
+          setTopicContradictions([]);
+          setScenarios(null);
+          setNotes([]);
+        }
+        throw loadError;
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "뉴스 갱신에 실패했습니다.");
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   }
