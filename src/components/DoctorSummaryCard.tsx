@@ -290,7 +290,10 @@ export function DoctorSummaryCard() {
   }, []);
 
   useEffect(() => {
-    void loadSummary();
+    const timeoutId = window.setTimeout(() => {
+      void loadSummary();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadSummary]);
 
   const loadHistory = useCallback(async () => {
@@ -314,7 +317,10 @@ export function DoctorSummaryCard() {
   }, []);
 
   useEffect(() => {
-    void loadHistory();
+    const timeoutId = window.setTimeout(() => {
+      void loadHistory();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadHistory]);
 
   const topActions = useMemo(() => {
