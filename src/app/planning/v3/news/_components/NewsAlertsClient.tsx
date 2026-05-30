@@ -95,6 +95,18 @@ function emptySummary(): AlertSummary {
   };
 }
 
+function toAlertSummary(summary: NonNullable<AlertsResponse["data"]>["summary"]): AlertSummary {
+  return {
+    highTotal: Math.max(0, Number(summary?.highTotal ?? 0)),
+    visibleTotal: Math.max(0, Number(summary?.visibleTotal ?? 0)),
+    pendingTotal: Math.max(0, Number(summary?.pendingTotal ?? 0)),
+    acknowledgedTotal: Math.max(0, Number(summary?.acknowledgedTotal ?? 0)),
+    hiddenTotal: Math.max(0, Number(summary?.hiddenTotal ?? 0)),
+    latestVisibleTitle: asString(summary?.latestVisibleTitle) || null,
+    latestVisibleCreatedAt: asString(summary?.latestVisibleCreatedAt) || null,
+  };
+}
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -231,40 +243,57 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
   const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>("visible");
   const [savingEventId, setSavingEventId] = useState("");
 
-  const load = useCallback(async (windowDays: 7 | 30) => {
-    setLoading(true);
-    setErrorMessage("");
-    try {
-      const response = await fetch(`/api/planning/v3/news/alerts?days=${windowDays}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as AlertsResponse | null;
-      if (!response.ok || payload?.ok !== true || !payload.data) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
-      setGroups(payload.data.groups ?? []);
-      setSummary({
-        highTotal: Math.max(0, Number(payload.data.summary?.highTotal ?? 0)),
-        visibleTotal: Math.max(0, Number(payload.data.summary?.visibleTotal ?? 0)),
-        pendingTotal: Math.max(0, Number(payload.data.summary?.pendingTotal ?? 0)),
-        acknowledgedTotal: Math.max(0, Number(payload.data.summary?.acknowledgedTotal ?? 0)),
-        hiddenTotal: Math.max(0, Number(payload.data.summary?.hiddenTotal ?? 0)),
-        latestVisibleTitle: asString(payload.data.summary?.latestVisibleTitle) || null,
-        latestVisibleCreatedAt: asString(payload.data.summary?.latestVisibleCreatedAt) || null,
-      });
-    } catch (error) {
-      setGroups([]);
-      setSummary(emptySummary());
-      setErrorMessage(error instanceof Error ? error.message : "알림함 데이터를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
+  const load = useCallback(async (windowDays: 7 | 30, signal?: AbortSignal) => {
+    const response = await fetch(`/api/planning/v3/news/alerts?days=${windowDays}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as AlertsResponse | null;
+    if (!response.ok || payload?.ok !== true || !payload.data) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
+    return {
+      groups: payload.data.groups ?? [],
+      summary: toAlertSummary(payload.data.summary),
+    };
   }, []);
 
   useEffect(() => {
-    void load(days);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadAlerts() {
+      try {
+        const next = await load(days, controller.signal);
+        if (!active) return;
+        setGroups(next.groups);
+        setSummary(next.summary);
+        setErrorMessage("");
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        setGroups([]);
+        setSummary(emptySummary());
+        setErrorMessage(error instanceof Error ? error.message : "알림함 데이터를 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadAlerts();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [days, load]);
+
+  const selectDays = useCallback((nextDays: 7 | 30) => {
+    if (days === nextDays) return;
+    setDays(nextDays);
+    setLoading(true);
+    setErrorMessage("");
+  }, [days]);
 
   const filteredGroups = useMemo(() => {
     return groups
@@ -302,15 +331,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
       }
       setGroups(payload.data.groups ?? []);
-      setSummary({
-        highTotal: Math.max(0, Number(payload.data.summary?.highTotal ?? 0)),
-        visibleTotal: Math.max(0, Number(payload.data.summary?.visibleTotal ?? 0)),
-        pendingTotal: Math.max(0, Number(payload.data.summary?.pendingTotal ?? 0)),
-        acknowledgedTotal: Math.max(0, Number(payload.data.summary?.acknowledgedTotal ?? 0)),
-        hiddenTotal: Math.max(0, Number(payload.data.summary?.hiddenTotal ?? 0)),
-        latestVisibleTitle: asString(payload.data.summary?.latestVisibleTitle) || null,
-        latestVisibleCreatedAt: asString(payload.data.summary?.latestVisibleCreatedAt) || null,
-      });
+      setSummary(toAlertSummary(payload.data.summary));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "알림 상태를 저장하지 못했습니다.");
     } finally {
@@ -333,14 +354,14 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
               <div className="ml-2 flex items-center rounded-lg border border-slate-200 bg-surface-muted p-1">
                 <button
                   type="button"
-                  onClick={() => setDays(7)}
+                  onClick={() => selectDays(7)}
                   className={alertsHeaderToggleClassName(days === 7)}
                 >
                   7일
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDays(30)}
+                  onClick={() => selectDays(30)}
                   className={alertsHeaderToggleClassName(days === 30)}
                 >
                   30일
