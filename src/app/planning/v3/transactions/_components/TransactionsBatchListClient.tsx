@@ -61,6 +61,9 @@ type Props = {
   initialLoadFailed?: boolean;
 };
 
+type BatchRowsLoadResult = BatchRow[];
+type AccountsLoadResult = Account[];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -186,62 +189,72 @@ export function TransactionsBatchListClient({
   const [uploadError, setUploadError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
 
+  const loadRowsData = useCallback(async (signal?: AbortSignal): Promise<BatchRowsLoadResult> => {
+    const response = await fetch(`/api/planning/v3/transactions/batches?limit=50${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !isListResponse(json)) {
+      throw new Error("배치 목록을 불러오지 못했습니다.");
+    }
+
+    return json.items.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt,
+      kind: "csv",
+      ...(asString(item.fileName) ? { fileName: asString(item.fileName) } : {}),
+      total: asNumber(item.total),
+      ok: asNumber(item.ok),
+      failed: asNumber(item.failed),
+    }));
+  }, []);
+
+  const applyRowsResult = useCallback((nextRows: BatchRowsLoadResult) => {
+    setLoadFailed(false);
+    setRows(nextRows);
+    setMessage("");
+  }, []);
+
+  const applyRowsFailure = useCallback(() => {
+    setRows([]);
+    setLoadFailed(true);
+    setMessage("");
+  }, []);
+
   const loadRows = useCallback(async () => {
     setLoading(true);
     setLoadFailed(false);
     setMessage("");
 
     try {
-      const response = await fetch(`/api/planning/v3/transactions/batches?limit=50${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !isListResponse(json)) {
-        setRows([]);
-        setLoadFailed(true);
-        return;
-      }
-
-      setLoadFailed(false);
-      setRows(json.items.map((item) => ({
-        id: item.id,
-        createdAt: item.createdAt,
-        kind: "csv",
-        ...(asString(item.fileName) ? { fileName: asString(item.fileName) } : {}),
-        total: asNumber(item.total),
-        ok: asNumber(item.ok),
-        failed: asNumber(item.failed),
-      })));
+      const nextRows = await loadRowsData();
+      applyRowsResult(nextRows);
     } catch {
-      setRows([]);
-      setLoadFailed(true);
+      applyRowsFailure();
     } finally {
       setLoading(false);
     }
+  }, [applyRowsFailure, applyRowsResult, loadRowsData]);
+
+  const loadAccountsData = useCallback(async (signal?: AbortSignal): Promise<AccountsLoadResult> => {
+    const response = await fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
+      return [];
+    }
+    return payload.items.filter(isAccount);
   }, []);
 
-  const loadAccounts = useCallback(async () => {
-    setAccountLoading(true);
-    try {
-      const response = await fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
-        setAccounts([]);
-        return;
-      }
-      const items = payload.items.filter(isAccount);
-      setAccounts(items);
-      if (items.length > 0) {
-        setSelectedAccountId((prev) => prev || items[0].id);
-      }
-    } catch {
-      setAccounts([]);
-    } finally {
-      setAccountLoading(false);
+  const applyAccountsResult = useCallback((items: AccountsLoadResult) => {
+    setAccounts(items);
+    if (items.length > 0) {
+      setSelectedAccountId((prev) => prev || items[0].id);
     }
   }, []);
 
@@ -302,9 +315,44 @@ export function TransactionsBatchListClient({
 
   useEffect(() => {
     if (disableAutoLoad) return;
-    void loadRows();
-    void loadAccounts();
-  }, [disableAutoLoad, loadRows, loadAccounts]);
+
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialRows() {
+      try {
+        const nextRows = await loadRowsData(controller.signal);
+        if (!active) return;
+        applyRowsResult(nextRows);
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        applyRowsFailure();
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    async function loadInitialAccounts() {
+      try {
+        const items = await loadAccountsData(controller.signal);
+        if (!active) return;
+        applyAccountsResult(items);
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setAccounts([]);
+      } finally {
+        if (active) setAccountLoading(false);
+      }
+    }
+
+    void loadInitialRows();
+    void loadInitialAccounts();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [applyAccountsResult, applyRowsFailure, applyRowsResult, disableAutoLoad, loadAccountsData, loadRowsData]);
 
   return (
     <PageShell>
