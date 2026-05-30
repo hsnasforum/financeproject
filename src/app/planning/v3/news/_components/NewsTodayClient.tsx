@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -123,6 +123,12 @@ type WatchlistRow = {
   unknownReasonCode?: "missing" | "disabled" | "no_data" | "insufficient_data" | "invalid_series_id" | "unknown";
   unknownReasonLabel?: string;
   resolveHref?: string | null;
+};
+
+type NewsTodayLoadResult = {
+  data: TodayResponse["data"];
+  profile: ExposureProfile | null;
+  watchlistRows: WatchlistRow[];
 };
 
 type RecoveryAction = "rebuild_caches" | "recompute_trends";
@@ -269,6 +275,7 @@ function Sparkline({ points }: { points: number[] }) {
 }
 
 export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
+  const requestSeqRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -292,86 +299,105 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
         ? "상태가 unknown인 watch 항목부터 정리하는 편이 좋습니다."
         : "오늘 핵심 시나리오를 확인한 뒤 저널에 대응 계획을 남기세요.";
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setErrorMessage("");
-    try {
-      const [todayResponse, exposureResponse, digestResponse] = await Promise.all([
-        fetch("/api/planning/v3/news/today", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/planning/v3/exposure/profile", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch("/api/planning/v3/news/digest", {
-          method: "GET",
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ]);
+  const load = useCallback(async (signal?: AbortSignal): Promise<NewsTodayLoadResult> => {
+    const [todayResponse, exposureResponse, digestResponse] = await Promise.all([
+      fetch("/api/planning/v3/news/today", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+      fetch("/api/planning/v3/exposure/profile", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+      fetch("/api/planning/v3/news/digest", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+    ]);
 
-      const todayPayload = (await todayResponse.json().catch(() => null)) as TodayResponse | null;
-      if (!todayResponse.ok || todayPayload?.ok !== true) {
-        throw new Error(todayPayload?.error?.message ?? `HTTP ${todayResponse.status}`);
-      }
-      setData(todayPayload.data ?? null);
-
-      const exposurePayload = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
-      if (exposureResponse.ok && exposurePayload?.ok === true) {
-        setProfile(exposurePayload.profile ?? null);
-      } else {
-        setProfile(null);
-      }
-
-      const digestPayload = (await digestResponse.json().catch(() => null)) as DigestResponse | null;
-      if (digestResponse.ok && digestPayload?.ok === true) {
-        const rows: WatchlistRow[] = (digestPayload.data?.watchlist ?? [])
-          .map((row) => {
-            const label = asString(row.label);
-            if (!label) return null;
-            const points = Array.isArray(row.sparkline?.points)
-              ? row.sparkline.points.filter((point) => Number.isFinite(point)).map((point) => Math.max(0, Math.min(100, Math.round(point))))
-              : [];
-            return {
-              label,
-              seriesId: asString(row.seriesId),
-              view: normalizeWatchView(row.view),
-              window: Math.max(1, Math.round(Number(row.window) || 1)),
-              status: normalizeWatchStatus(row.status),
-              grade: normalizeWatchGrade(row.grade),
-              asOf: asString(row.asOf) || null,
-              sparklinePoints: points,
-              sparklineTrend: normalizeWatchTrend(row.sparkline?.trend),
-              sparklineLastValue: Number.isFinite(row.sparkline?.lastValue ?? NaN) ? Number(row.sparkline?.lastValue) : null,
-              unknownReasonCode: row.unknownReasonCode,
-              unknownReasonLabel: asString(row.unknownReasonLabel) || undefined,
-              resolveHref: asString(row.resolveHref) || null,
-            };
-          })
-          .filter((row): row is NonNullable<typeof row> => Boolean(row));
-        setWatchlistRows(rows);
-      } else {
-        setWatchlistRows([]);
-      }
-    } catch (error) {
-      setData(null);
-      setProfile(null);
-      setWatchlistRows([]);
-      setErrorMessage(error instanceof Error ? error.message : "오늘 뉴스 요약을 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
+    const todayPayload = (await todayResponse.json().catch(() => null)) as TodayResponse | null;
+    if (!todayResponse.ok || todayPayload?.ok !== true) {
+      throw new Error(todayPayload?.error?.message ?? `HTTP ${todayResponse.status}`);
     }
+
+    const exposurePayload = (await exposureResponse.json().catch(() => null)) as ExposureResponse | null;
+    const digestPayload = (await digestResponse.json().catch(() => null)) as DigestResponse | null;
+    const rows: WatchlistRow[] = digestResponse.ok && digestPayload?.ok === true
+      ? (digestPayload.data?.watchlist ?? [])
+        .map((row) => {
+          const label = asString(row.label);
+          if (!label) return null;
+          const points = Array.isArray(row.sparkline?.points)
+            ? row.sparkline.points.filter((point) => Number.isFinite(point)).map((point) => Math.max(0, Math.min(100, Math.round(point))))
+            : [];
+          return {
+            label,
+            seriesId: asString(row.seriesId),
+            view: normalizeWatchView(row.view),
+            window: Math.max(1, Math.round(Number(row.window) || 1)),
+            status: normalizeWatchStatus(row.status),
+            grade: normalizeWatchGrade(row.grade),
+            asOf: asString(row.asOf) || null,
+            sparklinePoints: points,
+            sparklineTrend: normalizeWatchTrend(row.sparkline?.trend),
+            sparklineLastValue: Number.isFinite(row.sparkline?.lastValue ?? NaN) ? Number(row.sparkline?.lastValue) : null,
+            unknownReasonCode: row.unknownReasonCode,
+            unknownReasonLabel: asString(row.unknownReasonLabel) || undefined,
+            resolveHref: asString(row.resolveHref) || null,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+      : [];
+
+    return {
+      data: todayPayload.data ?? null,
+      profile: exposureResponse.ok && exposurePayload?.ok === true ? (exposurePayload.profile ?? null) : null,
+      watchlistRows: rows,
+    };
   }, []);
 
   useEffect(() => {
-    void load();
+    const requestId = ++requestSeqRef.current;
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadToday() {
+      try {
+        const next = await load(controller.signal);
+        if (!active || requestId !== requestSeqRef.current) return;
+        setData(next.data);
+        setProfile(next.profile);
+        setWatchlistRows(next.watchlistRows);
+        setErrorMessage("");
+      } catch (error) {
+        if (!active || requestId !== requestSeqRef.current || controller.signal.aborted) return;
+        setData(null);
+        setProfile(null);
+        setWatchlistRows([]);
+        setErrorMessage(error instanceof Error ? error.message : "오늘 뉴스 요약을 불러오지 못했습니다.");
+      } finally {
+        if (active && requestId === requestSeqRef.current) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadToday();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [load]);
 
   const handleRefresh = useCallback(async () => {
+    let loadRequestId: number | null = null;
     setRefreshing(true);
     setNotice("");
     setErrorMessage("");
@@ -391,10 +417,28 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
       }
       setRecoveryPreview(null);
       setNotice(`수동 갱신 완료: 신규 ${payload.data?.itemsNew ?? 0}건, 중복 ${payload.data?.itemsDeduped ?? 0}건`);
-      await load();
+      setLoading(true);
+      loadRequestId = ++requestSeqRef.current;
+      try {
+        const next = await load();
+        if (loadRequestId !== requestSeqRef.current) return;
+        setData(next.data);
+        setProfile(next.profile);
+        setWatchlistRows(next.watchlistRows);
+        setErrorMessage("");
+      } catch (loadError) {
+        if (loadRequestId !== requestSeqRef.current) return;
+        setData(null);
+        setProfile(null);
+        setWatchlistRows([]);
+        throw loadError;
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "갱신 중 오류가 발생했습니다.");
     } finally {
+      if (loadRequestId !== null && loadRequestId === requestSeqRef.current) {
+        setLoading(false);
+      }
       setRefreshing(false);
     }
   }, [csrf, load]);
@@ -431,6 +475,7 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
     const action = recoveryPreview?.action;
     if (action !== "rebuild_caches" && action !== "recompute_trends") return;
 
+    let loadRequestId: number | null = null;
     setRecovering(true);
     setNotice("");
     setErrorMessage("");
@@ -452,10 +497,28 @@ export function NewsTodayClient({ csrf }: NewsTodayClientProps) {
       setNotice(
         `복구 완료: ${asString(payload.data.summary?.title) || "작업"} · 대상 ${payload.data.execution.dailyDays ?? 0}일 · 파일 ${payload.data.execution.wroteCount ?? 0}개`,
       );
-      await load();
+      setLoading(true);
+      loadRequestId = ++requestSeqRef.current;
+      try {
+        const next = await load();
+        if (loadRequestId !== requestSeqRef.current) return;
+        setData(next.data);
+        setProfile(next.profile);
+        setWatchlistRows(next.watchlistRows);
+        setErrorMessage("");
+      } catch (loadError) {
+        if (loadRequestId !== requestSeqRef.current) return;
+        setData(null);
+        setProfile(null);
+        setWatchlistRows([]);
+        throw loadError;
+      }
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "복구 실행 중 오류가 발생했습니다.");
     } finally {
+      if (loadRequestId !== null && loadRequestId === requestSeqRef.current) {
+        setLoading(false);
+      }
       setRecovering(false);
     }
   }, [csrf, load, recoveryPreview?.action]);
