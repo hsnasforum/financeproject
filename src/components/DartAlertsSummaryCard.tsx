@@ -158,9 +158,12 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
 
   useEffect(() => {
     let active = true;
-    setAlertState(loadAlertState());
-    setAlertRules(loadRules());
-    setLocalPrefs(mergePrefs(defaultAlertPrefs(), loadUserPrefs(ALERT_PREFS_STORAGE_KEY)));
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return;
+      setAlertState(loadAlertState());
+      setAlertRules(loadRules());
+      setLocalPrefs(mergePrefs(defaultAlertPrefs(), loadUserPrefs(ALERT_PREFS_STORAGE_KEY)));
+    }, 0);
 
     const onRulesChanged = () => setAlertRules(loadRules());
     const onPrefsChanged = () => {
@@ -196,6 +199,7 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
     void load();
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
       window.removeEventListener(ALERT_RULES_CHANGED_EVENT, onRulesChanged);
       window.removeEventListener(ALERT_PREFS_CHANGED_EVENT, onPrefsChanged);
       window.removeEventListener("storage", onStorage);
