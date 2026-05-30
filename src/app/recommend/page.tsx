@@ -848,6 +848,7 @@ function RecommendPageInner() {
   }, [router, showValidationIssues]);
 
   useEffect(() => {
+    let active = true;
     let nextProfile: StoredProfile = recommendProfileDefaults();
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -864,28 +865,39 @@ function RecommendPageInner() {
     }
 
     const queryOverrides = parseQueryOverrides(searchParams);
-    if (queryOverrides.issues.length > 0) {
-      showValidationIssues(queryOverrides.issues);
-    } else {
-      setFormIssues([]);
-    }
     if (queryOverrides.hasQuery) {
       nextProfile = parseRecommendProfile({ ...nextProfile, ...queryOverrides.profilePatch }).value;
     }
     const stored = parseStoredResult(localStorage.getItem(RESULT_STORAGE_KEY));
-    setLastStored(stored);
-    lastStoredRef.current = stored;
-    setProfile(nextProfile);
-    setReadyToPersist(true);
 
-    if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
-      autoRunTriggeredRef.current = true;
-      void submitWithProfile(nextProfile, {
-        autoSave: queryOverrides.autoSave,
-        goHistory: queryOverrides.goHistory,
-        autorunSig: buildAutorunSignature(nextProfile),
-      });
+    async function applyInitialState() {
+      await Promise.resolve();
+      if (!active) return;
+      if (queryOverrides.issues.length > 0) {
+        showValidationIssues(queryOverrides.issues);
+      } else {
+        setFormIssues([]);
+      }
+      setLastStored(stored);
+      lastStoredRef.current = stored;
+      setProfile(nextProfile);
+      setReadyToPersist(true);
+
+      if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
+        autoRunTriggeredRef.current = true;
+        void submitWithProfile(nextProfile, {
+          autoSave: queryOverrides.autoSave,
+          goHistory: queryOverrides.goHistory,
+          autorunSig: buildAutorunSignature(nextProfile),
+        });
+      }
     }
+
+    void applyInitialState();
+
+    return () => {
+      active = false;
+    };
   }, [searchParams, showValidationIssues, submitWithProfile]);
 
   useEffect(() => {
@@ -895,18 +907,32 @@ function RecommendPageInner() {
 
   useEffect(() => {
     if (!result?.items?.length) {
+      let active = true;
       sourceStatusAbortRef.current?.abort();
-      setSourceStatusRows([]);
-      setSourceStatusReady(false);
-      return;
+
+      async function clearSourceStatus() {
+        await Promise.resolve();
+        if (!active) return;
+        setSourceStatusRows([]);
+        setSourceStatusReady(false);
+      }
+
+      void clearSourceStatus();
+
+      return () => {
+        active = false;
+      };
     }
 
     sourceStatusAbortRef.current?.abort();
     const controller = new AbortController();
     sourceStatusAbortRef.current = controller;
-    setSourceStatusReady(false);
+    let active = true;
 
     void (async () => {
+      await Promise.resolve();
+      if (!active || controller.signal.aborted) return;
+      setSourceStatusReady(false);
       try {
         const response = await fetch("/api/sources/status", {
           method: "GET",
@@ -915,26 +941,29 @@ function RecommendPageInner() {
         });
         const json = (await response.json()) as StatusApiResponse;
         if (!response.ok || !json.ok || !Array.isArray(json.data)) {
-          if (!controller.signal.aborted) {
+          if (active && !controller.signal.aborted) {
             setSourceStatusRows([]);
             setSourceStatusReady(false);
           }
           return;
         }
-        if (!controller.signal.aborted) {
+        if (active && !controller.signal.aborted) {
           setSourceStatusRows(json.data);
           setSourceStatusReady(true);
         }
       } catch (fetchError) {
         if (fetchError instanceof Error && fetchError.name === "AbortError") return;
-        if (!controller.signal.aborted) {
+        if (active && !controller.signal.aborted) {
           setSourceStatusRows([]);
           setSourceStatusReady(false);
         }
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [result]);
 
   const purposeLabel = useMemo(() => {
