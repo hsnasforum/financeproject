@@ -245,18 +245,27 @@ export function useWorkspaceExecutionOptionsBundle({
       optimizerServerDisabled,
     });
 
-    if (nextState.runMonteCarloEnabled !== runMonteCarloEnabled) {
-      setRunMonteCarloEnabled(nextState.runMonteCarloEnabled);
-    }
-    if (nextState.runActionsEnabled !== runActionsEnabled) {
-      setRunActionsEnabled(nextState.runActionsEnabled);
-    }
-    if (nextState.runOptimizeEnabled !== runOptimizeEnabled) {
-      setRunOptimizeEnabled(nextState.runOptimizeEnabled);
-    }
-    if (nextState.includeProducts !== includeProducts) {
-      setIncludeProducts(nextState.includeProducts);
-    }
+    const hasDisableStateChange = nextState.runMonteCarloEnabled !== runMonteCarloEnabled
+      || nextState.runActionsEnabled !== runActionsEnabled
+      || nextState.runOptimizeEnabled !== runOptimizeEnabled
+      || nextState.includeProducts !== includeProducts;
+    if (!hasDisableStateChange) return;
+
+    const timeoutId = window.setTimeout(() => {
+      if (nextState.runMonteCarloEnabled !== runMonteCarloEnabled) {
+        setRunMonteCarloEnabled(nextState.runMonteCarloEnabled);
+      }
+      if (nextState.runActionsEnabled !== runActionsEnabled) {
+        setRunActionsEnabled(nextState.runActionsEnabled);
+      }
+      if (nextState.runOptimizeEnabled !== runOptimizeEnabled) {
+        setRunOptimizeEnabled(nextState.runOptimizeEnabled);
+      }
+      if (nextState.includeProducts !== includeProducts) {
+        setIncludeProducts(nextState.includeProducts);
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [
     includeProducts,
     includeProductsServerDisabled,
@@ -271,13 +280,16 @@ export function useWorkspaceExecutionOptionsBundle({
   ]);
 
   useEffect(() => {
-    try {
-      setBeginnerMode(loadWorkspaceBeginnerMode(window.localStorage));
-    } catch {
-      // ignore storage failures
-    } finally {
-      setBeginnerModeLoaded(true);
-    }
+    const timeoutId = window.setTimeout(() => {
+      try {
+        setBeginnerMode(loadWorkspaceBeginnerMode(window.localStorage));
+      } catch {
+        // ignore storage failures
+      } finally {
+        setBeginnerModeLoaded(true);
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
