@@ -131,7 +131,10 @@ export function useOpsMetricsController(): OpsMetricsController {
   }, [eventType]);
 
   useEffect(() => {
-    void loadMetrics();
+    const timeoutId = window.setTimeout(() => {
+      void loadMetrics();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadMetrics]);
 
   const summaryCards = useMemo(() => buildMetricsSummaryCards(summary24h, summary7d), [summary24h, summary7d]);
