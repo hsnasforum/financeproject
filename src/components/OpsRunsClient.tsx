@@ -151,7 +151,11 @@ export function OpsRunsClient({ csrf }: OpsRunsClientProps) {
   }, [csrf, dateFrom, dateTo, hasCsrf, limit, offset, profileId, query, status]);
 
   useEffect(() => {
-    void loadRuns();
+    const timeoutId = window.setTimeout(() => {
+      void loadRuns();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadRuns]);
 
   function requestDeleteRunAction(runId: string): void {
