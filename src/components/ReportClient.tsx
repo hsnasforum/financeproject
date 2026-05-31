@@ -30,6 +30,11 @@ import { cn } from "@/lib/utils";
 
 const PLANNER_LAST_SNAPSHOT_KEY = "planner_last_snapshot_v1";
 
+type RecommendationPageState = {
+  runId: string;
+  page: number;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -175,7 +180,10 @@ export function ReportClient({
 }) {
   const [includeDisclosuresFromDigest, setIncludeDisclosuresFromDigest] = useState(false);
   const [includeDailyBrief, setIncludeDailyBrief] = useState(false);
-  const [recommendationPage, setRecommendationPage] = useState(1);
+  const [recommendationPageState, setRecommendationPageState] = useState<RecommendationPageState>({
+    runId: "",
+    page: 1,
+  });
   const [benefitsLoading, setBenefitsLoading] = useState(false);
   const [benefitsError, setBenefitsError] = useState("");
   const [benefitItems, setBenefitItems] = useState<BenefitCandidate[]>([]);
@@ -260,10 +268,6 @@ export function ReportClient({
   }), [plannerSnapshot, savedRun, includeDisclosuresFromDigest, disclosureDigest, digestError]);
 
   useEffect(() => {
-    setRecommendationPage(1);
-  }, [savedRun?.runId]);
-
-  useEffect(() => {
     let active = true;
 
     async function loadBenefits(): Promise<void> {
@@ -311,6 +315,10 @@ export function ReportClient({
 
   const recommendationPageSize = 5;
   const recommendationItems = reportModel.recommendation.run?.items ?? [];
+  const recommendationRunId = savedRun?.runId ?? "";
+  const recommendationPage = recommendationPageState.runId === recommendationRunId
+    ? recommendationPageState.page
+    : 1;
   const recommendationTotalPages = Math.max(1, Math.ceil(recommendationItems.length / recommendationPageSize));
   const recommendationCurrentPage = Math.min(recommendationPage, recommendationTotalPages);
   const recommendationPageItems = recommendationItems.slice(
@@ -575,7 +583,10 @@ export function ReportClient({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setRecommendationPage((prev) => Math.max(1, prev - 1))}
+                    onClick={() => setRecommendationPageState({
+                      runId: recommendationRunId,
+                      page: Math.max(1, recommendationCurrentPage - 1),
+                    })}
                     disabled={recommendationCurrentPage <= 1}
                     className="rounded-full px-4 h-8 font-black"
                   >
@@ -584,7 +595,10 @@ export function ReportClient({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setRecommendationPage((prev) => Math.min(recommendationTotalPages, prev + 1))}
+                    onClick={() => setRecommendationPageState({
+                      runId: recommendationRunId,
+                      page: Math.min(recommendationTotalPages, recommendationCurrentPage + 1),
+                    })}
                     disabled={recommendationCurrentPage >= recommendationTotalPages}
                     className="rounded-full px-4 h-8 font-black"
                   >
