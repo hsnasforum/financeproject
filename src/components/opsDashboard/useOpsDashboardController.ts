@@ -331,42 +331,48 @@ export function useOpsDashboardController({
   }, [csrf, hasCsrf, loadDashboard]);
 
   useEffect(() => {
-    void loadDashboard();
+    const timeoutId = window.setTimeout(() => {
+      void loadDashboard();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadDashboard]);
 
   useEffect(() => {
-    try {
-      if (typeof window !== "undefined" && "Notification" in window) {
-        setNotificationPermission(window.Notification.permission);
-      }
-      const raw = window.localStorage.getItem(AUTO_RUN_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as AutoRunSummary;
-        if (
-          parsed
-          && typeof parsed === "object"
-          && typeof parsed.ranAt === "string"
-          && typeof parsed.total === "number"
-          && Array.isArray(parsed.completed)
-        ) {
-          setAutoRunSummary(parsed);
+    const timeoutId = window.setTimeout(() => {
+      try {
+        if (typeof window !== "undefined" && "Notification" in window) {
+          setNotificationPermission(window.Notification.permission);
         }
-      }
+        const raw = window.localStorage.getItem(AUTO_RUN_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as AutoRunSummary;
+          if (
+            parsed
+            && typeof parsed === "object"
+            && typeof parsed.ranAt === "string"
+            && typeof parsed.total === "number"
+            && Array.isArray(parsed.completed)
+          ) {
+            setAutoRunSummary(parsed);
+          }
+        }
 
-      const savedSelection = window.localStorage.getItem(AUTO_RUN_SELECTION_STORAGE_KEY);
-      if (savedSelection) {
-        const parsedSelection = JSON.parse(savedSelection) as unknown;
-        setAutoRunSelection((previous) => normalizeAutoRunSelection(parsedSelection, previous));
-      }
+        const savedSelection = window.localStorage.getItem(AUTO_RUN_SELECTION_STORAGE_KEY);
+        if (savedSelection) {
+          const parsedSelection = JSON.parse(savedSelection) as unknown;
+          setAutoRunSelection((previous) => normalizeAutoRunSelection(parsedSelection, previous));
+        }
 
-      const savedPolicy = window.localStorage.getItem(AUTO_RUN_POLICY_STORAGE_KEY);
-      if (savedPolicy) {
-        const parsedPolicy = JSON.parse(savedPolicy) as unknown;
-        setAutoRunPolicy((previous) => normalizeAutoRunPolicy(parsedPolicy, previous));
+        const savedPolicy = window.localStorage.getItem(AUTO_RUN_POLICY_STORAGE_KEY);
+        if (savedPolicy) {
+          const parsedPolicy = JSON.parse(savedPolicy) as unknown;
+          setAutoRunPolicy((previous) => normalizeAutoRunPolicy(parsedPolicy, previous));
+        }
+      } catch {
+        // localStorage 파싱 오류는 화면 동작에 영향 주지 않음
       }
-    } catch {
-      // localStorage 파싱 오류는 화면 동작에 영향 주지 않음
-    }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
