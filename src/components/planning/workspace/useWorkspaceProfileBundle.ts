@@ -596,21 +596,24 @@ export function useWorkspaceProfileBundle({
 
   useEffect(() => {
     initialProfileLoadSettledRef.current = false;
-    let preferredProfileId = resolveInitialProfileRequestId(initialSelectedProfileId);
-    if (!preferredProfileId) {
-      try {
-        preferredProfileId = resolveInitialProfileRequestId("", window.localStorage.getItem(PLANNING_SELECTED_PROFILE_STORAGE_KEY));
-      } catch {
-        preferredProfileId = "";
+    const timeoutId = window.setTimeout(() => {
+      let preferredProfileId = resolveInitialProfileRequestId(initialSelectedProfileId);
+      if (!preferredProfileId) {
+        try {
+          preferredProfileId = resolveInitialProfileRequestId("", window.localStorage.getItem(PLANNING_SELECTED_PROFILE_STORAGE_KEY));
+        } catch {
+          preferredProfileId = "";
+        }
       }
-    }
-    if (preferredProfileId) {
-      setSelectedProfileId(preferredProfileId);
-      void loadSelectedProfileRecord(preferredProfileId);
-    }
-    void loadProfiles(preferredProfileId || undefined).finally(() => {
-      initialProfileLoadSettledRef.current = true;
-    });
+      if (preferredProfileId) {
+        setSelectedProfileId(preferredProfileId);
+        void loadSelectedProfileRecord(preferredProfileId);
+      }
+      void loadProfiles(preferredProfileId || undefined).finally(() => {
+        initialProfileLoadSettledRef.current = true;
+      });
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [initialSelectedProfileId, loadProfiles, loadSelectedProfileRecord]);
 
   useEffect(() => {
@@ -647,8 +650,13 @@ export function useWorkspaceProfileBundle({
       ...profileForm,
       goals: nextGoals,
     };
-    applyLocalProfileEditorState(buildProfileJsonEditorState(nextForm, profileName));
-    clearPendingSuggestions();
+    const localEditVersion = profileEditorLocalEditVersionRef.current;
+    const timeoutId = window.setTimeout(() => {
+      if (profileEditorLocalEditVersionRef.current !== localEditVersion) return;
+      applyLocalProfileEditorState(buildProfileJsonEditorState(nextForm, profileName));
+      clearPendingSuggestions();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [applyLocalProfileEditorState, beginnerMode, beginnerModeLoaded, clearPendingSuggestions, profileForm, profileName]);
 
   function toggleSuggestionCode(code: string, checked: boolean): void {
