@@ -155,9 +155,13 @@ export function OpsHubClient({ csrf }: OpsHubClientProps) {
   }, []);
 
   useEffect(() => {
-    void loadRestorePoint();
-    void loadPolicy();
-    void loadRecentErrors();
+    const timeoutId = window.setTimeout(() => {
+      void loadRestorePoint();
+      void loadPolicy();
+      void loadRecentErrors();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadRestorePoint, loadPolicy, loadRecentErrors]);
 
   return (
