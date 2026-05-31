@@ -84,7 +84,11 @@ export function OpsSecurityClient() {
   }, []);
 
   useEffect(() => {
-    void loadStatus();
+    const timeoutId = window.setTimeout(() => {
+      void loadStatus();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadStatus]);
 
   async function runAction(path: string, body: Record<string, unknown>): Promise<void> {
