@@ -253,7 +253,11 @@ export function PlanningTrashClient() {
   }
 
   useEffect(() => {
-    loadTrashEvent("all");
+    const timeoutId = window.setTimeout(() => {
+      loadTrashEvent("all");
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   return (

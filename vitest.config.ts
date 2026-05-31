@@ -12,7 +12,7 @@ export default defineConfig({
       ...configDefaults.exclude,
       "tests/e2e/**",
       ".next/**",
-      ".next-build/**",
+      ".next-build*/**",
       "tmp/**",
     ],
   },
