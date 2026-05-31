@@ -134,7 +134,11 @@ export function OpsPlanningCacheClient(props: OpsPlanningCacheClientProps) {
   }, [hasCsrf, loadStats, props.csrf]);
 
   useEffect(() => {
-    void loadStats();
+    const timeoutId = window.setTimeout(() => {
+      void loadStats();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadStats]);
 
   const kindRows = useMemo(() => {
