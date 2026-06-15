@@ -11,6 +11,7 @@ import { ProductDetailDrawer } from "@/components/products/ProductDetailDrawer";
 import { LoadingState } from "@/components/ui/LoadingState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
@@ -847,6 +848,7 @@ function RecommendPageInner() {
   }, [router, showValidationIssues]);
 
   useEffect(() => {
+    let active = true;
     let nextProfile: StoredProfile = recommendProfileDefaults();
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -863,28 +865,39 @@ function RecommendPageInner() {
     }
 
     const queryOverrides = parseQueryOverrides(searchParams);
-    if (queryOverrides.issues.length > 0) {
-      showValidationIssues(queryOverrides.issues);
-    } else {
-      setFormIssues([]);
-    }
     if (queryOverrides.hasQuery) {
       nextProfile = parseRecommendProfile({ ...nextProfile, ...queryOverrides.profilePatch }).value;
     }
     const stored = parseStoredResult(localStorage.getItem(RESULT_STORAGE_KEY));
-    setLastStored(stored);
-    lastStoredRef.current = stored;
-    setProfile(nextProfile);
-    setReadyToPersist(true);
 
-    if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
-      autoRunTriggeredRef.current = true;
-      void submitWithProfile(nextProfile, {
-        autoSave: queryOverrides.autoSave,
-        goHistory: queryOverrides.goHistory,
-        autorunSig: buildAutorunSignature(nextProfile),
-      });
+    async function applyInitialState() {
+      await Promise.resolve();
+      if (!active) return;
+      if (queryOverrides.issues.length > 0) {
+        showValidationIssues(queryOverrides.issues);
+      } else {
+        setFormIssues([]);
+      }
+      setLastStored(stored);
+      lastStoredRef.current = stored;
+      setProfile(nextProfile);
+      setReadyToPersist(true);
+
+      if (queryOverrides.autoRun && !autoRunTriggeredRef.current) {
+        autoRunTriggeredRef.current = true;
+        void submitWithProfile(nextProfile, {
+          autoSave: queryOverrides.autoSave,
+          goHistory: queryOverrides.goHistory,
+          autorunSig: buildAutorunSignature(nextProfile),
+        });
+      }
     }
+
+    void applyInitialState();
+
+    return () => {
+      active = false;
+    };
   }, [searchParams, showValidationIssues, submitWithProfile]);
 
   useEffect(() => {
@@ -894,18 +907,32 @@ function RecommendPageInner() {
 
   useEffect(() => {
     if (!result?.items?.length) {
+      let active = true;
       sourceStatusAbortRef.current?.abort();
-      setSourceStatusRows([]);
-      setSourceStatusReady(false);
-      return;
+
+      async function clearSourceStatus() {
+        await Promise.resolve();
+        if (!active) return;
+        setSourceStatusRows([]);
+        setSourceStatusReady(false);
+      }
+
+      void clearSourceStatus();
+
+      return () => {
+        active = false;
+      };
     }
 
     sourceStatusAbortRef.current?.abort();
     const controller = new AbortController();
     sourceStatusAbortRef.current = controller;
-    setSourceStatusReady(false);
+    let active = true;
 
     void (async () => {
+      await Promise.resolve();
+      if (!active || controller.signal.aborted) return;
+      setSourceStatusReady(false);
       try {
         const response = await fetch("/api/sources/status", {
           method: "GET",
@@ -914,26 +941,29 @@ function RecommendPageInner() {
         });
         const json = (await response.json()) as StatusApiResponse;
         if (!response.ok || !json.ok || !Array.isArray(json.data)) {
-          if (!controller.signal.aborted) {
+          if (active && !controller.signal.aborted) {
             setSourceStatusRows([]);
             setSourceStatusReady(false);
           }
           return;
         }
-        if (!controller.signal.aborted) {
+        if (active && !controller.signal.aborted) {
           setSourceStatusRows(json.data);
           setSourceStatusReady(true);
         }
       } catch (fetchError) {
         if (fetchError instanceof Error && fetchError.name === "AbortError") return;
-        if (!controller.signal.aborted) {
+        if (active && !controller.signal.aborted) {
           setSourceStatusRows([]);
           setSourceStatusReady(false);
         }
       }
     })();
 
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [result]);
 
   const purposeLabel = useMemo(() => {
@@ -1006,7 +1036,7 @@ function RecommendPageInner() {
         먼저 비교 후보 보기로 현재 조건의 후보를 확인하고, 결과 순서가 아쉬울 때만 가중치 설정으로 점수 기준을 조정해 보세요.{" "}
         이 화면은 확정 답안을 고르는 곳이 아니라, 현재 조건 기준으로 비교할 후보와 다음 확인 포인트를 정리하는 단계입니다.{" "}
         데이터 신뢰 및 연동 상태는{" "}
-        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+        <Link href="/settings/data-sources" className="font-black text-primary hover:text-navy">
           내 설정 &gt; 데이터 신뢰 및 연동 상태
         </Link>
         에서 확인할 수 있습니다.
@@ -1083,20 +1113,20 @@ function RecommendPageInner() {
               </div>
             </div>
 
-            <div className="flex flex-col justify-between rounded-[2rem] bg-slate-50 p-6 border border-slate-100 shadow-inner">
+            <div className="flex flex-col justify-between rounded-[2rem] bg-surface-muted p-6 border border-slate-100 shadow-inner">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">비교 시작 요약</p>
                 </div>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-500">대상</span>
-                    <span className="text-xs font-black text-slate-900">{purposeLabel}</span>
+                    <span className="text-xs font-black text-navy">{purposeLabel}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-500">결과</span>
-                    <span className="text-xs font-black text-slate-900">Top {profile.topN}</span>
+                    <span className="text-xs font-black text-navy">Top {profile.topN}</span>
                   </div>
                 </div>
                 <p className="text-[11px] font-bold leading-relaxed text-slate-500">
@@ -1108,14 +1138,14 @@ function RecommendPageInner() {
                 <Button
                   variant="primary"
                   data-testid="recommend-submit"
-                  className="w-full rounded-2xl h-14 text-sm font-black shadow-lg shadow-emerald-900/20"
+                  className="w-full rounded-2xl h-14 text-sm font-black shadow-lg shadow-navy/20"
                   onClick={() => void submit()}
                   disabled={loading}
                 >
                   {loading ? "후보 정리 중" : "비교 후보 보기"}
                 </Button>
                 <button
-                  className="w-full text-[10px] font-bold text-slate-400 hover:text-emerald-600 transition-colors uppercase tracking-widest"
+                  className="w-full text-[10px] font-bold text-slate-400 hover:text-primary transition-colors uppercase tracking-widest"
                   onClick={() => setAdvancedOpen(!advancedOpen)}
                 >
                   {advancedOpen ? "설정 닫기" : "가중치 설정"}
@@ -1136,7 +1166,7 @@ function RecommendPageInner() {
                 <label className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-xs font-bold text-slate-500">금리 가중치</span>
-                    <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.rate * 100)}%</span>
+                    <span className="text-xs font-black text-primary">{Math.round(profile.weights.rate * 100)}%</span>
                   </div>
                   <input
                     type="range"
@@ -1145,13 +1175,13 @@ function RecommendPageInner() {
                     step={0.01}
                     value={profile.weights.rate}
                     onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, rate: Number(e.target.value) } }))}
-                    className="w-full accent-emerald-600"
+                    className="w-full accent-primary"
                   />
                 </label>
                 <label className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-xs font-bold text-slate-500">기간 가중치</span>
-                    <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.term * 100)}%</span>
+                    <span className="text-xs font-black text-primary">{Math.round(profile.weights.term * 100)}%</span>
                   </div>
                   <input
                     type="range"
@@ -1160,13 +1190,13 @@ function RecommendPageInner() {
                     step={0.01}
                     value={profile.weights.term}
                     onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, term: Number(e.target.value) } }))}
-                    className="w-full accent-emerald-600"
+                    className="w-full accent-primary"
                   />
                 </label>
                 <label className="space-y-3">
                   <div className="flex justify-between">
                     <span className="text-xs font-bold text-slate-500">유동성 가중치</span>
-                    <span className="text-xs font-black text-emerald-600">{Math.round(profile.weights.liquidity * 100)}%</span>
+                    <span className="text-xs font-black text-primary">{Math.round(profile.weights.liquidity * 100)}%</span>
                   </div>
                   <input
                     type="range"
@@ -1175,7 +1205,7 @@ function RecommendPageInner() {
                     step={0.01}
                     value={profile.weights.liquidity}
                     onChange={(e) => setProfile((prev) => ({ ...prev, weights: { ...prev.weights, liquidity: Number(e.target.value) } }))}
-                    className="w-full accent-emerald-600"
+                    className="w-full accent-primary"
                   />
                 </label>
               </div>
@@ -1192,14 +1222,14 @@ function RecommendPageInner() {
         <div className="space-y-8">
           <div className="flex flex-wrap items-center justify-between gap-4 px-2">
             <div>
-              <h2 className="text-xl font-black text-slate-900">추천 결과 <span className="ml-1 text-emerald-600">{result.items?.length}</span></h2>
+              <h2 className="text-xl font-black text-navy">추천 결과 <span className="ml-1 text-primary">{result.items?.length}</span></h2>
               <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
                 점수는 현재 선택한 조건과 가중치 기준 비교값입니다. 우열 확정이 아니라 비교 참고용으로 읽고, 가입 전 실제 금리와 조건은 다시 확인해 주세요.
               </p>
             </div>
             <div className="flex items-start gap-3">
               {feedback && (
-                <span className="text-xs font-bold text-emerald-600 animate-in fade-in duration-300">{feedback}</span>
+                <span className="text-xs font-bold text-primary animate-in fade-in duration-300">{feedback}</span>
               )}
               <div className="space-y-2">
                 <div className="flex gap-2">
@@ -1215,11 +1245,11 @@ function RecommendPageInner() {
           </div>
 
           {planningContextStrip && (
-            <Card className="rounded-[2.5rem] border border-emerald-100 bg-emerald-50/40 p-6 shadow-sm">
+            <Card className="rounded-[2.5rem] border border-primary/10 bg-primary/10 p-6 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">플래닝 연동</p>
-                  <h3 className="text-lg font-black tracking-tight text-slate-900">{planningContextStrip.title}</h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">플래닝 연동</p>
+                  <h3 className="text-lg font-black tracking-tight text-navy">{planningContextStrip.title}</h3>
                   <p className="text-sm font-medium leading-relaxed text-slate-600">{planningContextStrip.description}</p>
                   {(planningContextStrip.sourceLabel || planningContextStrip.overallStatusLabel || planningContextStrip.runId) && (
                     <p className="text-xs font-medium leading-relaxed text-slate-500">
@@ -1229,12 +1259,12 @@ function RecommendPageInner() {
                 </div>
                 <div className="flex flex-wrap gap-2 text-[11px] font-black">
                   {planningContextStrip.actionLabel ? (
-                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
+                    <span className="rounded-full border border-primary/20 bg-white px-3 py-1 text-navy shadow-sm">
                       연결된 액션: {planningContextStrip.actionLabel}
                     </span>
                   ) : null}
                   {planningContextStrip.stageLabel ? (
-                    <span className="rounded-full border border-emerald-200 bg-white px-3 py-1 text-emerald-700 shadow-sm">
+                    <span className="rounded-full border border-primary/20 bg-white px-3 py-1 text-navy shadow-sm">
                       현재 단계: {planningContextStrip.stageLabel}
                     </span>
                   ) : null}
@@ -1274,12 +1304,12 @@ function RecommendPageInner() {
                 depositProtectionPolicy: result.meta?.assumptions.depositProtectionPolicy,
               });
               return (
-                <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100">
+                <Card key={itemKey} className="group relative overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-primary/10">
                   <div className="mb-6 flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <span className={cn(
                         "flex h-8 w-8 items-center justify-center rounded-full text-xs font-black shadow-sm",
-                        index === 0 ? "bg-emerald-500 text-white shadow-emerald-900/10" : "bg-slate-100 text-slate-600 border border-slate-200"
+                        index === 0 ? "bg-primary text-white shadow-navy/10" : "bg-surface-muted text-slate-600 border border-slate-200"
                       )}>
                         {index + 1}
                       </span>
@@ -1287,44 +1317,41 @@ function RecommendPageInner() {
                     </div>
                     <div className="flex flex-col items-end">
                       <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">매칭 점수</span>
-                      <span className="text-lg font-black text-emerald-600 tabular-nums">{item.finalScore.toFixed(2)}</span>
+                      <span className="text-lg font-black text-primary tabular-nums">{item.finalScore.toFixed(2)}</span>
                     </div>
                   </div>
 
                   <div className="mb-8">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{item.providerName}</p>
-                    <h3 className="mt-1 text-xl font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tight">
+                    <h3 className="mt-1 text-xl font-black leading-snug text-navy group-hover:text-primary transition-colors tracking-tight">
                       {item.productName}
                     </h3>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 mb-8">
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 text-center">
+                    <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-4 text-center">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">선택 기간</p>
                       <p className="mt-1 font-black text-slate-700 tabular-nums">{item.selectedOption.saveTrm || item.selectedOption.termMonths || "-"}개월</p>
                     </div>
-                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4 text-center">
-                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">적용 금리</p>
-                      <p className="mt-1 font-black text-emerald-700 tabular-nums">{item.selectedOption.appliedRate.toFixed(2)}%</p>
+                    <div className="rounded-2xl border border-primary/10 bg-primary/30 p-4 text-center">
+                      <p className="text-[10px] font-black text-primary uppercase tracking-widest">적용 금리</p>
+                      <p className="mt-1 font-black text-navy tabular-nums">{item.selectedOption.appliedRate.toFixed(2)}%</p>
                     </div>
                   </div>
 
                   <div className="mb-8 space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">점수 세부 분석</p>
-                      <span className="text-[10px] font-black text-emerald-600 tabular-nums">{Math.round(scorePct)}%</span>
+                      <span className="text-[10px] font-black text-primary tabular-nums">{Math.round(scorePct)}%</span>
                     </div>
-                    <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-500 transition-all duration-1000 ease-out shadow-sm shadow-emerald-200" 
-                        style={{ width: `${scorePct}%` }}
-                      />
+                    <div className="h-1.5 w-full rounded-full bg-surface-muted overflow-hidden">
+                      <CspSafeProgressBar fillClassName="text-primary" value={scorePct} />
                     </div>
                   </div>
 
                   <div className="mb-8 space-y-3">
                     {freshnessMeta ? (
-                      <div className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4">
+                      <div className="space-y-3 rounded-2xl border border-slate-100 bg-surface-muted/70 px-4 py-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">결과 기준</p>
                           <div className="flex flex-wrap gap-2">
@@ -1333,7 +1360,7 @@ function RecommendPageInner() {
                                 className={cn(
                                   "rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm",
                                   freshnessMeta.freshnessStatus === "ok"
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    ? "border-primary/20 bg-primary/5 text-navy"
                                     : freshnessMeta.freshnessStatus === "stale"
                                       ? "border-amber-200 bg-amber-50 text-amber-800"
                                       : freshnessMeta.freshnessStatus === "error"
@@ -1386,10 +1413,10 @@ function RecommendPageInner() {
                           className={cn(
                             "rounded-2xl border px-4 py-3 text-[11px] font-bold leading-relaxed shadow-sm",
                             cue.tone === "emerald"
-                              ? "border-emerald-100 bg-emerald-50/40 text-emerald-800"
+                              ? "border-primary/10 bg-primary/10 text-navy"
                               : cue.tone === "amber"
                                 ? "border-amber-100 bg-amber-50/50 text-amber-900"
-                                : "border-slate-100 bg-slate-50/70 text-slate-600",
+                                : "border-slate-100 bg-surface-muted/70 text-slate-600",
                           )}
                         >
                           <p className="text-[10px] font-black uppercase tracking-widest">{cue.label}</p>
@@ -1406,13 +1433,13 @@ function RecommendPageInner() {
                           {actionReasonContext?.sectionLabel ?? "비교 근거"}
                         </p>
                         {actionReasonContext ? (
-                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-primary">
                             상단 플래닝 연동 기준
                           </span>
                         ) : null}
                       </div>
                       {actionReasonContext ? (
-                        <p className="rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600">
+                        <p className="rounded-2xl border border-primary/10 bg-primary/10 px-4 py-3 text-[11px] font-bold leading-relaxed text-slate-600">
                           {actionReasonContext.helper}
                         </p>
                       ) : null}
@@ -1420,7 +1447,7 @@ function RecommendPageInner() {
                     <ul className="space-y-3">
                       {item.reasons.slice(0, 3).map((reason, i) => (
                         <li key={i} className="flex gap-3 text-sm font-medium text-slate-600">
-                          <span className="text-emerald-500 font-black mt-0.5">•</span>
+                          <span className="text-primary font-black mt-0.5">•</span>
                           <span className="line-clamp-2 leading-relaxed">{reason}</span>
                         </li>
                       ))}
@@ -1492,7 +1519,7 @@ function RecommendPageInner() {
 
 export default function RecommendPage() {
   return (
-    <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-slate-50"><LoadingState /></main>}>
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-surface-muted"><LoadingState /></main>}>
       <RecommendPageInner />
     </Suspense>
   );

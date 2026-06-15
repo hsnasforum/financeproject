@@ -21,8 +21,8 @@ function formatValue(value: unknown): string {
 
 export default function DisclosuresPanel({ report, title = "자동 교정/기본값 적용 내역" }: DisclosuresPanelProps) {
   return (
-    <details className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700" data-testid="disclosures-panel">
-      <summary className="cursor-pointer font-semibold text-slate-900">{title}</summary>
+    <details className="rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs text-slate-700" data-testid="disclosures-panel">
+      <summary className="cursor-pointer font-semibold text-navy">{title}</summary>
       <div className="mt-2 space-y-3">
         <section>
           <p className="font-semibold text-slate-800">자동 교정</p>

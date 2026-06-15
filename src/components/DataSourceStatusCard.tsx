@@ -26,7 +26,7 @@ type SourceCardProps = {
 };
 
 function badgeClass(state: "configured" | "missing" | "error") {
-  if (state === "configured") return "bg-emerald-50 text-emerald-700 border-emerald-100 shadow-sm";
+  if (state === "configured") return "bg-primary/5 text-navy border-primary/10 shadow-sm";
   if (state === "missing") return "bg-amber-50 text-amber-700 border-amber-100 font-black";
   return "bg-rose-50 text-rose-700 border-rose-100 font-black";
 }
@@ -88,11 +88,11 @@ export function DataSourceStatusCard({ source, pingSource, autoEndpointHint, can
   }
 
   return (
-    <Card className="p-0 overflow-hidden flex flex-col justify-between group rounded-[2rem] shadow-sm border-slate-100 hover:border-emerald-100 transition-all" data-testid={`data-source-card-${source.id}`}>
+    <Card className="p-0 overflow-hidden flex flex-col justify-between group rounded-[2rem] shadow-sm border-slate-100 hover:border-primary/10 transition-all" data-testid={`data-source-card-${source.id}`}>
       <div className="p-6 flex-1">
         <div className="flex items-start justify-between gap-2 mb-6">
           <div>
-            <p className="text-lg font-black text-slate-900 tracking-tight leading-tight">{source.label}</p>
+            <p className="text-lg font-black text-navy tracking-tight leading-tight">{source.label}</p>
             <p className="mt-2 text-xs font-bold leading-relaxed text-slate-500">
               사용자 영향, 현재 읽는 기준, 최근 연결 확인까지 먼저 보고, 개발용 연결 조건과 점검 액션은 맨 아래에서만 확인합니다.
             </p>
@@ -117,7 +117,7 @@ export function DataSourceStatusCard({ source, pingSource, autoEndpointHint, can
             <div
               className={cn(
                 "rounded-2xl border p-4 shadow-sm",
-                snapshot.tone === "ok" ? "border-emerald-100 bg-emerald-50/30 text-emerald-900" : "border-rose-100 bg-rose-50/30 text-rose-900",
+                snapshot.tone === "ok" ? "border-primary/10 bg-primary/30 text-navy" : "border-rose-100 bg-rose-50/30 text-rose-900",
               )}
             >
               <div className="flex items-center justify-between gap-2 mb-2">
@@ -147,7 +147,7 @@ export function DataSourceStatusCard({ source, pingSource, autoEndpointHint, can
           ) : null}
 
           {canPing ? (
-            <details className="rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+            <details className="rounded-2xl border border-slate-100 bg-surface-muted/60 p-4">
               <summary className="cursor-pointer text-[10px] font-black uppercase tracking-widest text-slate-400">
                 개발용 연결 조건과 내부 메모만 보기
               </summary>
@@ -185,7 +185,7 @@ export function DataSourceStatusCard({ source, pingSource, autoEndpointHint, can
       </div>
 
       {canPing && pingSource ? (
-        <div className="bg-slate-50 border-t border-slate-100 p-4">
+        <div className="bg-surface-muted border-t border-slate-100 p-4">
           <p className="mb-2 text-[10px] font-bold leading-relaxed text-slate-400">
             위 카드는 최근 점검 결과이고, 새 점검은 아래 개발 환경 버튼에서만 실행합니다.
           </p>

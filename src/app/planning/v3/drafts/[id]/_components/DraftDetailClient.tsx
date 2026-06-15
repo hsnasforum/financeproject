@@ -353,7 +353,7 @@ export function DraftDetailClient({
     <PageShell>
       <div className="space-y-5" data-testid="v3-draft-review-root">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Draft Review</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Draft Review</h1>
           <div className="text-sm text-slate-600">id: <span className="font-mono">{id}</span></div>
           <BodyActionLink href="/planning/v3/drafts">
             목록으로 돌아가기
@@ -439,7 +439,7 @@ export function DraftDetailClient({
                 {diffSummary ? (
                   <div className="space-y-3 text-sm text-slate-700">
                     <div>
-                      <p className="font-semibold text-slate-900">변경 요약</p>
+                      <p className="font-semibold text-navy">변경 요약</p>
                       {diffSummary.changedKeys.length > 0 ? (
                         <ul className="mt-1 list-disc space-y-1 pl-5">
                           {diffSummary.changedKeys.map((key) => (
@@ -451,7 +451,7 @@ export function DraftDetailClient({
                       )}
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-900">노트</p>
+                      <p className="font-semibold text-navy">노트</p>
                       {diffSummary.notes.length > 0 ? (
                         <ul className="mt-1 list-disc space-y-1 pl-5">
                           {diffSummary.notes.map((note) => (

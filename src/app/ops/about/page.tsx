@@ -55,7 +55,7 @@ export default async function OpsAboutPage() {
       ) : null}
 
       <Card className="p-4">
-        <h2 className="text-base font-black text-slate-900">Runtime Info</h2>
+        <h2 className="text-base font-black text-navy">Runtime Info</h2>
         <div className="mt-3 grid gap-2 text-sm">
           <p>appVersion: <span className="font-semibold">{appInfo.appVersion}</span></p>
           <p>engineVersion: <span className="font-semibold">{appInfo.engineVersion}</span></p>

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { getApiCacheRecord, makeApiCacheKey, setApiCache } from "@/lib/cache/apiCache";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevMutationRequest } from "@/lib/dev/devGuards";
 import { getDartCompany } from "@/lib/publicApis/dart/company";
 import { getExchangeQuotes } from "@/lib/publicApis/providers/fx";
 import { getHousingRentBenchmark, getHousingSalesBenchmark } from "@/lib/publicApis/providers/housing";
@@ -43,7 +43,7 @@ const REQUIRED_ENV: Record<ApiName, string[]> = {
 };
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevMutationRequest(request);
   if (blocked) return blocked;
 
   let body: SampleBody;

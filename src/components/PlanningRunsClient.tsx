@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { Badge } from "@/components/ui/Badge";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
 import { buildConfirmString } from "@/lib/ops/confirm";
 import {
@@ -214,6 +215,33 @@ export function PlanningRunsClient({
     }
   }
 
+  async function loadActionProgressSummaryForRuns(runRows: PlanningRunRecord[], requestId: number): Promise<void> {
+    if (runRows.length < 1) {
+      if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
+      setActionProgressSummaryByRun({});
+      return;
+    }
+    const next: Record<string, ActionProgressSummary> = {};
+    await Promise.all(runRows.map(async (run) => {
+      try {
+        const response = await fetch(`/api/planning/runs/${encodeURIComponent(run.id)}/action-progress`, { cache: "no-store" });
+        const rawPayload = await response.json().catch(() => null);
+        const payload = parsePlanningV2Response<PlanningRunActionProgress>(rawPayload);
+        const payloadMeta = payload.ok
+          ? ((payload.meta ?? {}) as { summary?: ActionProgressSummary })
+          : {};
+        if (!response.ok || !payload.ok) return;
+        const summary = payloadMeta.summary;
+        if (!summary) return;
+        next[run.id] = summary;
+      } catch {
+        // ignore per-run action summary failures
+      }
+    }));
+    if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
+    setActionProgressSummaryByRun(next);
+  }
+
   async function loadRuns(profileId = filterProfileId): Promise<void> {
     const requestId = runsRequestIdRef.current + 1;
     runsRequestIdRef.current = requestId;
@@ -299,38 +327,12 @@ export function PlanningRunsClient({
       setLoading(false);
     }
   }
-  const loadRunsRef = useRef(loadRuns);
-  loadRunsRef.current = loadRuns;
-  const scheduleLoadSelectedActionCenter = useEffectEvent((runId: string, requestId: number) => {
-    void loadSelectedActionCenter(runId, requestId);
+  const loadProfilesEvent = useEffectEvent(() => {
+    void loadProfiles();
   });
-
-  async function loadActionProgressSummaryForRuns(runRows: PlanningRunRecord[], requestId: number): Promise<void> {
-    if (runRows.length < 1) {
-      if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
-      setActionProgressSummaryByRun({});
-      return;
-    }
-    const next: Record<string, ActionProgressSummary> = {};
-    await Promise.all(runRows.map(async (run) => {
-      try {
-      const response = await fetch(`/api/planning/runs/${encodeURIComponent(run.id)}/action-progress`, { cache: "no-store" });
-        const rawPayload = await response.json().catch(() => null);
-        const payload = parsePlanningV2Response<PlanningRunActionProgress>(rawPayload);
-        const payloadMeta = payload.ok
-          ? ((payload.meta ?? {}) as { summary?: ActionProgressSummary })
-          : {};
-        if (!response.ok || !payload.ok) return;
-        const summary = payloadMeta.summary;
-        if (!summary) return;
-        next[run.id] = summary;
-      } catch {
-        // ignore per-run action summary failures
-      }
-    }));
-    if (!isMountedRef.current || runsRequestIdRef.current !== requestId) return;
-    setActionProgressSummaryByRun(next);
-  }
+  const loadRunsEvent = useEffectEvent((nextProfileId: string) => {
+    void loadRuns(nextProfileId);
+  });
 
   async function loadSelectedActionCenter(runId: string, requestId = actionCenterRequestIdRef.current + 1): Promise<void> {
     actionCenterRequestIdRef.current = requestId;
@@ -420,6 +422,10 @@ export function PlanningRunsClient({
     }
   }
 
+  const scheduleLoadSelectedActionCenter = useEffectEvent((runId: string, requestId: number) => {
+    void loadSelectedActionCenter(runId, requestId);
+  });
+
   async function patchActionProgress(
     runId: string,
     actionKey: string,
@@ -474,14 +480,19 @@ export function PlanningRunsClient({
 
   useEffect(() => {
     if (filterProfileId) return;
-    try {
-      const stored = normalizeProfileId(window.localStorage.getItem(PLANNING_SELECTED_PROFILE_STORAGE_KEY));
-      if (stored) {
-        setFilterProfileId(stored);
+    const timeoutId = window.setTimeout(() => {
+      try {
+        const stored = normalizeProfileId(window.localStorage.getItem(PLANNING_SELECTED_PROFILE_STORAGE_KEY));
+        if (stored) {
+          setFilterProfileId(stored);
+        }
+      } catch {
+        // ignore storage failures
       }
-    } catch {
-      // ignore storage failures
-    }
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [filterProfileId]);
 
   useEffect(() => {
@@ -495,34 +506,53 @@ export function PlanningRunsClient({
   }, [filterProfileId]);
 
   useEffect(() => {
-    void loadProfiles();
+    const timeoutId = window.setTimeout(() => {
+      loadProfilesEvent();
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, []);
 
   useEffect(() => {
-    void loadRunsRef.current(filterProfileId);
+    const timeoutId = window.setTimeout(() => {
+      loadRunsEvent(filterProfileId);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [filterProfileId]);
 
   useEffect(() => {
     if (!selectedRun) {
       actionCenterRequestIdRef.current += 1;
+      const timeoutId = window.setTimeout(() => {
+        if (!isMountedRef.current) return;
+        setSelectedActionPlan(null);
+        setSelectedActionProgress(null);
+        setActionNoteDrafts({});
+        setActionCenterError("");
+        setActionCenterLoading(false);
+      }, 0);
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
+    }
+    const requestId = actionCenterRequestIdRef.current + 1;
+    actionCenterRequestIdRef.current = requestId;
+    const resetTimeoutId = window.setTimeout(() => {
+      if (!isMountedRef.current || actionCenterRequestIdRef.current !== requestId) return;
+      setActionCenterLoading(true);
       setSelectedActionPlan(null);
       setSelectedActionProgress(null);
       setActionNoteDrafts({});
       setActionCenterError("");
-      setActionCenterLoading(false);
-      return;
-    }
-    const requestId = actionCenterRequestIdRef.current + 1;
-    actionCenterRequestIdRef.current = requestId;
-    setActionCenterLoading(true);
-    setSelectedActionPlan(null);
-    setSelectedActionProgress(null);
-    setActionNoteDrafts({});
-    setActionCenterError("");
+    }, 0);
     const timeoutId = window.setTimeout(() => {
       scheduleLoadSelectedActionCenter(selectedRun.id, requestId);
     }, 250);
     return () => {
+      window.clearTimeout(resetTimeoutId);
       window.clearTimeout(timeoutId);
     };
   }, [selectedRun]);
@@ -663,7 +693,7 @@ export function PlanningRunsClient({
   };
 
   return (
-    <PageShell className="bg-slate-50">
+    <PageShell className="bg-surface-muted">
       <PageHeader
         title="실행 기록"
         description="플래닝에서 저장한 실행을 다시 읽고 서로 비교한 뒤, 필요한 실행만 상세 리포트로 이어 보는 기록/비교 화면입니다."
@@ -704,8 +734,8 @@ export function PlanningRunsClient({
         </Card>
       )}
       {notice && (
-        <Card className="mb-4 border-emerald-100 bg-emerald-50/50 p-4 rounded-2xl">
-          <p className="text-sm font-bold text-emerald-700">{notice}</p>
+        <Card className="mb-4 border-primary/10 bg-primary/10 p-4 rounded-2xl">
+          <p className="text-sm font-bold text-navy">{notice}</p>
         </Card>
       )}
 
@@ -748,7 +778,7 @@ export function PlanningRunsClient({
 
           <div className="mt-6 overflow-hidden rounded-2xl border border-slate-100">
             <table className="min-w-full text-left text-[11px] text-slate-700" data-testid="planning-runs-table">
-              <thead className="bg-slate-50 border-b border-slate-100">
+              <thead className="bg-surface-muted border-b border-slate-100">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <th className="no-print px-4 py-3">비교</th>
                   <th className="px-4 py-3">실행 기록</th>
@@ -774,18 +804,18 @@ export function PlanningRunsClient({
                   const snapshotLabel = run.meta.snapshot?.id || run.meta.snapshot?.asOf || "latest/missing";
                   const completion = actionProgressSummaryByRun[run.id];
                   return (
-                    <tr className={cn("hover:bg-slate-50/50 transition-colors", selectedRunId === run.id && "bg-emerald-50")} key={run.id}>
+                    <tr className={cn("hover:bg-surface-muted/50 transition-colors", selectedRunId === run.id && "bg-primary/5")} key={run.id}>
                       <td className="no-print px-4 py-3">
                         <input
                           checked={checked}
                           onChange={() => toggleCompare(run.id)}
                           type="checkbox"
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                         />
                       </td>
                       <td className="px-4 py-3">
                         <button
-                          className="font-bold text-slate-900 hover:text-emerald-600 hover:underline text-left"
+                          className="font-bold text-navy hover:text-primary hover:underline text-left"
                           onClick={() => setSelectedRunId(run.id)}
                           type="button"
                         >
@@ -807,7 +837,7 @@ export function PlanningRunsClient({
                       <td className="px-4 py-3 font-bold text-slate-400">{flags.hasMonteCarlo ? "M" : "-"}/{flags.hasActions ? "A" : "-"}/{flags.hasDebt ? "D" : "-"}</td>
                       <td className="px-4 py-3 text-right space-x-2">
                         <Link
-                          className="text-emerald-600 font-bold hover:underline"
+                          className="text-primary font-bold hover:underline"
                           href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(run.id)}`, run.profileId)}
                         >
                           리포트 보기
@@ -835,24 +865,24 @@ export function PlanningRunsClient({
               description="선택한 실행의 저장 결과를 다시 읽고, 필요하면 바로 리포트 화면으로 이어 갑니다."
             />
             {!selectedRun ? (
-              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-surface-muted/50 rounded-2xl border border-dashed border-slate-200">
                 실행이 준비되면 목록에서 하나를 선택해 저장 결과를 다시 읽고, 필요하면 바로 리포트 화면으로 이어가세요.
               </p>
             ) : (
               <div className="space-y-6">
-                <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100 mb-4">선택한 실행</p>
+                <div className="rounded-2xl bg-primary p-6 text-white shadow-xl shadow-navy/20">
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80 mb-4">선택한 실행</p>
                   <h3 className="text-xl font-black tracking-tight">{selectedRun.title || selectedRun.id.slice(0, 8)}</h3>
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-emerald-50/90">
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-primary/80">
                     선택한 실행의 저장 결과를 다시 읽고, 필요하면 바로 리포트 화면에서 자세한 근거와 후속 행동을 이어 확인할 수 있습니다.
                   </p>
                   <div className="mt-4 grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-[10px] font-bold text-emerald-100/70 uppercase">생성 시각</p>
+                      <p className="text-[10px] font-bold text-primary/80 uppercase">생성 시각</p>
                       <p className="text-sm font-bold">{formatDateTime(selectedRun.createdAt)}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-emerald-100/70 uppercase">종료 순자산</p>
+                      <p className="text-[10px] font-bold text-primary/80 uppercase">종료 순자산</p>
                       <p className="text-sm font-bold text-white">{formatNumber(selectedSummary.endNetWorthKrw)}원</p>
                     </div>
                   </div>
@@ -860,25 +890,25 @@ export function PlanningRunsClient({
                   <div className="mt-8 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" className="h-8 text-[10px] font-black rounded-lg border-white/20 bg-white/5 hover:bg-white/10" onClick={() => void copyRunJsonAction(selectedRun)}>JSON 복사</Button>
                     <Link
-                      className="inline-flex items-center h-8 rounded-lg bg-white px-3 text-[10px] font-black text-emerald-600 hover:bg-emerald-50 transition-colors shadow-sm"
+                      className="inline-flex items-center h-8 rounded-lg bg-white px-3 text-[10px] font-black text-primary hover:bg-primary/5 transition-colors shadow-sm"
                       href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(selectedRun.id)}`, selectedRun.profileId)}
                     >
                       리포트 화면 보기 →
                     </Link>
                   </div>
-                  <p className="mt-3 text-[11px] font-medium leading-relaxed text-emerald-100/80">
+                  <p className="mt-3 text-[11px] font-medium leading-relaxed text-primary/80">
                     리포트 화면은 이 실행 하나의 저장 결과를 다시 읽는 기본 도착점입니다. 저장된 상세 리포트는 그 화면에서 따로 보관해 열 수 있고, 다른 실행 비교는 이 화면에서 이어서 고릅니다.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="p-4 rounded-2xl bg-surface-muted border border-slate-100">
                     <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">최저 현금</p>
-                    <p className="text-sm font-black text-slate-900">{formatNumber(selectedSummary.worstCashKrw)}원</p>
+                    <p className="text-sm font-black text-navy">{formatNumber(selectedSummary.worstCashKrw)}원</p>
                   </div>
-                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                  <div className="p-4 rounded-2xl bg-surface-muted border border-slate-100">
                     <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">목표 달성</p>
-                    <p className="text-sm font-black text-slate-900">{selectedDto?.summary.goalsAchieved ? `${selectedDto.summary.goalsAchieved.achieved}/${selectedDto.summary.goalsAchieved.total}` : "-"}</p>
+                    <p className="text-sm font-black text-navy">{selectedDto?.summary.goalsAchieved ? `${selectedDto.summary.goalsAchieved.achieved}/${selectedDto.summary.goalsAchieved.total}` : "-"}</p>
                   </div>
                 </div>
               </div>
@@ -891,7 +921,7 @@ export function PlanningRunsClient({
               description="저장된 액션 체크리스트의 진행 상태와 메모를 정리하는 영역입니다."
             />
             {!selectedRun ? (
-              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-surface-muted/50 rounded-2xl border border-dashed border-slate-200">
                 실행을 선택하면 저장 당시 후속 행동과 메모를 여기서 이어 정리할 수 있습니다.
               </p>
             ) : actionCenterLoading ? (
@@ -904,8 +934,8 @@ export function PlanningRunsClient({
               <div className="space-y-4">
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs font-bold text-slate-600">완료율 {actionProgressSummaryByRun[selectedRun.id]?.completionPct ?? 0}%</p>
-                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${actionProgressSummaryByRun[selectedRun.id]?.completionPct ?? 0}%` }} />
+                  <div className="flex-1 h-1.5 rounded-full bg-surface-muted overflow-hidden">
+                    <CspSafeProgressBar value={actionProgressSummaryByRun[selectedRun.id]?.completionPct ?? 0} />
                   </div>
                 </div>
 
@@ -915,14 +945,14 @@ export function PlanningRunsClient({
                     const status = progress?.status ?? "todo";
                     const noteValue = actionNoteDrafts[item.actionKey] ?? "";
                     return (
-                      <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100" key={item.actionKey}>
+                      <div className="p-4 rounded-2xl bg-surface-muted border border-slate-100" key={item.actionKey}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-black text-slate-900">{item.title}</p>
+                            <p className="text-sm font-black text-navy">{item.title}</p>
                             <p className="mt-1 text-xs font-medium text-slate-500 leading-relaxed">{item.description}</p>
                           </div>
                           <Badge variant="secondary" className={cn("text-[9px] uppercase font-black",
-                            status === 'done' ? "bg-emerald-100 text-emerald-700" :
+                            status === 'done' ? "bg-primary/10 text-navy" :
                             status === 'doing' ? "bg-sky-100 text-sky-700" : "bg-slate-200 text-slate-600"
                           )}>
                             {status}
@@ -965,27 +995,27 @@ export function PlanningRunsClient({
               description="선택한 두 실행의 차이를 먼저 읽고, 필요하면 상세 비교 리포트로 이어 갑니다."
             />
             {!compareResult ? (
-              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+              <p className="py-12 text-center text-sm font-bold text-slate-400 bg-surface-muted/50 rounded-2xl border border-dashed border-slate-200">
                 목록에서 실행 두 개를 선택하면 두 실행의 차이를 여기서 먼저 읽고, 필요하면 상세 비교 리포트로 이어갈 수 있습니다.
               </p>
             ) : (
               <div className="space-y-4">
                 {compareWhyChanged && (
-                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                    <p className="text-xs font-black text-emerald-800 uppercase tracking-widest mb-2">Insight</p>
-                    <p className="text-sm font-bold text-slate-900 leading-snug">{compareWhyChanged.headline}</p>
+                  <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10">
+                    <p className="text-xs font-black text-navy uppercase tracking-widest mb-2">Insight</p>
+                    <p className="text-sm font-bold text-navy leading-snug">{compareWhyChanged.headline}</p>
                   </div>
                 )}
                 <div className="space-y-2 text-xs font-bold text-slate-600">
-                  <div className="flex justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="flex justify-between p-3 rounded-xl bg-surface-muted border border-slate-100">
                     <span>말기 순자산 변화</span>
-                    <span className={cn(compareResult.diff.keyMetrics.endNetWorthDeltaKrw >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                    <span className={cn(compareResult.diff.keyMetrics.endNetWorthDeltaKrw >= 0 ? "text-success" : "text-danger")}>
                       {formatNumber(compareResult.diff.keyMetrics.endNetWorthDeltaKrw)}원
                     </span>
                   </div>
-                  <div className="flex justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <div className="flex justify-between p-3 rounded-xl bg-surface-muted border border-slate-100">
                     <span>최저 현금 변화</span>
-                    <span className={cn(compareResult.diff.keyMetrics.worstCashDeltaKrw >= 0 ? "text-emerald-600" : "text-rose-600")}>
+                    <span className={cn(compareResult.diff.keyMetrics.worstCashDeltaKrw >= 0 ? "text-success" : "text-danger")}>
                       {formatNumber(compareResult.diff.keyMetrics.worstCashDeltaKrw)}원
                     </span>
                   </div>
@@ -994,7 +1024,7 @@ export function PlanningRunsClient({
                   두 실행의 차이를 여기서 먼저 읽고, 필요하면 상세 비교 리포트에서 변화 근거와 비교 자료를 더 확인합니다.
                 </p>
                 <a
-                  className="block w-full text-center py-3 rounded-xl bg-emerald-600 text-white text-xs font-black hover:bg-emerald-700 shadow-lg shadow-emerald-900/10 transition-all active:scale-[0.98]"
+                  className="block w-full text-center py-3 rounded-xl bg-primary text-white text-xs font-black hover:bg-navy shadow-lg shadow-navy/10 transition-all active:scale-[0.98]"
                   href={`/api/planning/v2/runs/${encodeURIComponent(compareResult.other.id)}/report?compareTo=${encodeURIComponent(compareResult.base.id)}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1014,7 +1044,7 @@ export function PlanningRunsClient({
           role="dialog"
         >
           <div className="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10">
-            <h3 className="text-base font-black text-slate-900" id="planning-runs-delete-title">실행 기록 삭제 확인</h3>
+            <h3 className="text-base font-black text-navy" id="planning-runs-delete-title">실행 기록 삭제 확인</h3>
             <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
               삭제해도 바로 영구 삭제되지 않고 휴지통으로 이동합니다. 필요하면 바로 복구할 수 있습니다.
             </p>
@@ -1057,11 +1087,11 @@ export function PlanningRunsClient({
           role="dialog"
         >
           <div className="w-full max-w-md rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-900/10">
-            <h3 className="text-base font-black text-slate-900" id="planning-runs-restore-title">실행 기록 복구 확인</h3>
+            <h3 className="text-base font-black text-navy" id="planning-runs-restore-title">실행 기록 복구 확인</h3>
             <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">
               방금 휴지통으로 옮긴 실행을 다시 목록으로 돌립니다. 확인 문구를 입력하면 바로 복구됩니다.
             </p>
-            <div className="mt-4 px-3 py-2 font-mono text-[10px] text-emerald-600 bg-emerald-50 rounded-lg border border-emerald-100">{restoreExpectedConfirm}</div>
+            <div className="mt-4 px-3 py-2 font-mono text-[10px] text-primary bg-primary/5 rounded-lg border border-primary/10">{restoreExpectedConfirm}</div>
             <input
               className={cn(bodyFieldClassName, "mt-4 h-11 text-center font-bold")}
               value={restoreConfirmText}

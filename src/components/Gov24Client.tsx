@@ -171,7 +171,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
   }, [refreshSnapshotStatus]);
 
   useEffect(() => {
-    void checkSnapshotStatus();
+    const timer = window.setTimeout(() => {
+      void checkSnapshotStatus();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [checkSnapshotStatus]);
 
   const runManualSync = useCallback(async () => {
@@ -271,7 +275,11 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
 
   useEffect(() => {
     if (step !== 7) return;
-    void searchSimpleFind({ cursor: 0, append: false });
+    const timer = window.setTimeout(() => {
+      void searchSimpleFind({ cursor: 0, append: false });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [orgTypeFilter, searchSimpleFind, step]);
 
   return (
@@ -281,7 +289,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
         description="입력한 조건을 기준으로 정부 혜택 후보를 다시 찾고, 신청 전에 무엇을 확인할지 정리하는 화면입니다."
         action={
           <div className="flex items-center gap-2">
-            <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border transition-all", syncing ? "bg-emerald-50 text-emerald-600 border-emerald-200 animate-pulse" : "bg-slate-100 text-slate-400 border-slate-200")}>
+            <span className={cn("rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest border transition-all", syncing ? "bg-primary/5 text-primary border-primary/20 animate-pulse" : "bg-surface-muted text-slate-400 border-slate-200")}>
               {syncing || syncState === "syncing" ? "기준 데이터 갱신 중" : "기준 데이터 확인됨"}
             </span>
             {process.env.NODE_ENV !== "production" && (
@@ -299,15 +307,15 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
 
       <div className="space-y-6">
         {/* Status Strip */}
-        <Card className="rounded-3xl p-4 lg:p-5 shadow-sm bg-slate-50/50 border-slate-100">
+        <Card className="rounded-3xl p-4 lg:p-5 shadow-sm bg-surface-muted/50 border-slate-100">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[11px] font-bold text-slate-500">
             <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              현재 참고 중인 혜택 <span className="text-slate-900 font-black ml-0.5">{snapshotTotal?.toLocaleString() ?? "?"}건</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+              현재 참고 중인 혜택 <span className="text-navy font-black ml-0.5">{snapshotTotal?.toLocaleString() ?? "?"}건</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-              반영 범위 <span className="text-slate-900 font-black ml-0.5">{completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
+              반영 범위 <span className="text-navy font-black ml-0.5">{completionRate !== null ? `${Math.round(completionRate * 1000) / 10}%` : "?"}</span>
             </div>
             {syncUniqueCount !== null && (
               <div className="flex items-center gap-2 text-slate-400">
@@ -332,7 +340,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
           <Card className="rounded-[2rem] p-8 shadow-sm">
             <div className="mb-8 flex items-center justify-between">
               <div className="space-y-1">
-                <span className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">Step 0{step} / 06</span>
+                <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em]">Step 0{step} / 06</span>
                 <SubSectionHeader
                   title={step === 1 ? "혜택 대상을 선택해 주세요" :
                          step === 2 ? "거주하시는 지역을 선택해 주세요" :
@@ -345,7 +353,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
               </div>
               <div className="flex gap-1">
                 {[1, 2, 3, 4, 5, 6].map((s) => (
-                  <div key={s} className={cn("h-1 rounded-full transition-all", s === step ? "w-6 bg-emerald-500" : s < step ? "w-2 bg-emerald-200" : "w-2 bg-slate-100")} />
+                  <div key={s} className={cn("h-1 rounded-full transition-all", s === step ? "w-6 bg-primary" : s < step ? "w-2 bg-primary/20" : "w-2 bg-surface-muted")} />
                 ))}
               </div>
             </div>
@@ -358,7 +366,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                     onClick={() => setTargetType("individual")}
                     className={cn(
                       "flex flex-col items-center justify-center gap-4 rounded-3xl border-2 p-8 transition-all active:scale-[0.98]",
-                      targetType === "individual" ? "border-emerald-500 bg-emerald-50/30 text-emerald-700" : "border-slate-100 hover:border-slate-200 text-slate-500"
+                      targetType === "individual" ? "border-primary bg-primary/30 text-navy" : "border-slate-100 hover:border-slate-200 text-slate-500"
                     )}
                   >
                     <span className="text-3xl">👤</span>
@@ -385,7 +393,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                           key={sido.code}
                           type="button"
                           onClick={() => { setSelectedSidoCode(sido.code); setSelectedSigunguCode(""); }}
-                          className={cn("h-10 rounded-xl text-xs font-bold transition-all border shadow-sm", selectedSidoCode === sido.code ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                          className={cn("h-10 rounded-xl text-xs font-bold transition-all border shadow-sm", selectedSidoCode === sido.code ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-100 hover:bg-surface-muted")}
                         >
                           {sido.name}
                         </button>
@@ -401,14 +409,14 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                             key={sigungu.code}
                             type="button"
                             onClick={() => setSelectedSigunguCode(sigungu.code)}
-                            className={cn("h-10 rounded-xl text-xs font-bold transition-all border shadow-sm", selectedSigunguCode === sigungu.code ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                            className={cn("h-10 rounded-xl text-xs font-bold transition-all border shadow-sm", selectedSigunguCode === sigungu.code ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-100 hover:bg-surface-muted")}
                           >
                             {sigungu.name}
                           </button>
                         ))}
                       </div>
                     ) : (
-                      <div className="h-[280px] flex items-center justify-center rounded-2xl border border-dashed border-slate-100 bg-slate-50/30">
+                      <div className="h-[280px] flex items-center justify-center rounded-2xl border border-dashed border-slate-100 bg-surface-muted/30">
                         <p className="text-xs font-bold text-slate-400">먼저 시/도를 선택해 주세요.</p>
                       </div>
                     )}
@@ -421,7 +429,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                   <div className="space-y-3">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">생년월일 (8자리)</p>
                     <input
-                      className="h-14 w-full sm:w-[320px] rounded-2xl border border-slate-200 px-6 text-xl font-black text-slate-900 tracking-[0.2em] shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none placeholder:text-slate-200 placeholder:tracking-normal"
+                      className="h-14 w-full sm:w-[320px] rounded-2xl border border-slate-200 px-6 text-xl font-black text-navy tracking-[0.2em] shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none placeholder:text-slate-200 placeholder:tracking-normal"
                       placeholder="19900101"
                       value={birthYmd}
                       onChange={(e) => setBirthYmd(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
@@ -433,14 +441,14 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                       <button
                         type="button"
                         onClick={() => setGender("F")}
-                        className={cn("h-12 px-8 rounded-2xl text-sm font-black transition-all border shadow-sm", gender === "F" ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                        className={cn("h-12 px-8 rounded-2xl text-sm font-black transition-all border shadow-sm", gender === "F" ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-100 hover:bg-surface-muted")}
                       >
                         여성
                       </button>
                       <button
                         type="button"
                         onClick={() => setGender("M")}
-                        className={cn("h-12 px-8 rounded-2xl text-sm font-black transition-all border shadow-sm", gender === "M" ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                        className={cn("h-12 px-8 rounded-2xl text-sm font-black transition-all border shadow-sm", gender === "M" ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-100 hover:bg-surface-muted")}
                       >
                         남성
                       </button>
@@ -459,14 +467,14 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                           key={entry.value}
                           type="button"
                           onClick={() => setIncomeBracket(entry.value)}
-                          className={cn("h-12 px-4 rounded-2xl text-xs font-black transition-all border shadow-sm text-left", incomeBracket === entry.value ? "bg-emerald-500 text-white border-emerald-500" : "bg-white text-slate-600 border-slate-100 hover:bg-slate-50")}
+                          className={cn("h-12 px-4 rounded-2xl text-xs font-black transition-all border shadow-sm text-left", incomeBracket === entry.value ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-100 hover:bg-surface-muted")}
                         >
                           {entry.label}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <div className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 overflow-x-auto">
+                  <div className="rounded-3xl border border-slate-100 bg-surface-muted/50 p-6 overflow-x-auto">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">2025년 기준 중위소득 참고 (단위: 원)</p>
                     <table className="min-w-full text-[11px]">
                       <thead>
@@ -501,7 +509,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                         key={trait}
                         type="button"
                         onClick={() => toggleTrait(personalTraits, trait, setPersonalTraits)}
-                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", personalTraits.includes(trait) ? "bg-emerald-600 text-white border-emerald-600 shadow-emerald-900/10" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
+                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", personalTraits.includes(trait) ? "bg-primary text-white border-primary shadow-navy/10" : "bg-white text-slate-500 border-slate-100 hover:bg-surface-muted")}
                       >
                         {trait}
                       </button>
@@ -519,7 +527,7 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                         key={trait}
                         type="button"
                         onClick={() => toggleTrait(householdTraits, trait, setHouseholdTraits)}
-                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", householdTraits.includes(trait) ? "bg-emerald-600 text-white border-emerald-600 shadow-emerald-900/10" : "bg-white text-slate-500 border-slate-100 hover:bg-slate-50")}
+                        className={cn("h-10 px-4 rounded-full text-xs font-black transition-all border shadow-sm", householdTraits.includes(trait) ? "bg-primary text-white border-primary shadow-navy/10" : "bg-white text-slate-500 border-slate-100 hover:bg-surface-muted")}
                       >
                         {trait}
                       </button>
@@ -557,14 +565,14 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
             <Card className="rounded-[2rem] p-8 shadow-sm">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                 <div className="space-y-2">
-                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">검색 조건 요약</p>
+                  <p className="text-[10px] font-black text-primary uppercase tracking-widest">검색 조건 요약</p>
                   <SubSectionHeader title={summaryLine} className="mb-0" />
                   <p className="text-xs font-medium leading-relaxed text-slate-500">
                     조건을 바꾸면 결과도 함께 달라집니다. 상세에서 신청 방법과 제한 조건을 다시 확인하세요.
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <input
-                      className="h-11 min-w-[280px] rounded-2xl border border-slate-200 bg-slate-50/50 px-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all"
+                      className="h-11 min-w-[280px] rounded-2xl border border-slate-200 bg-surface-muted/50 px-4 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-primary transition-all"
                       placeholder="결과 내 재검색 (예: 장학금, 의료비)"
                       value={resultQuery}
                       onChange={(e) => setResultQuery(e.target.value)}
@@ -576,9 +584,9 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                 </div>
                 <div className="flex flex-col gap-2 min-w-[180px]">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">기관별 필터</p>
-                  <select 
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none shadow-sm focus:ring-1 focus:ring-emerald-500" 
-                    value={orgTypeFilter} 
+                  <select
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 outline-none shadow-sm focus:ring-1 focus:ring-primary"
+                    value={orgTypeFilter}
                     onChange={(e) => setOrgTypeFilter(e.target.value as Gov24OrgType)}
                   >
                     {ORG_FILTER_OPTIONS.map((entry) => (
@@ -595,35 +603,35 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
             {loading && items.length === 0 ? (
               <LoadingState title="현재 조건에 맞는 혜택 후보를 찾고 있습니다" description="오픈 API에서 최신 데이터를 가져오는 중입니다." />
             ) : items.length === 0 ? (
-              <Card className="rounded-[2rem] p-20 text-center border-dashed border-slate-200 bg-slate-50/30">
-                <p className="text-lg font-black text-slate-900">검색된 혜택이 없습니다</p>
+              <Card className="rounded-[2rem] p-20 text-center border-dashed border-slate-200 bg-surface-muted/30">
+                <p className="text-lg font-black text-navy">검색된 혜택이 없습니다</p>
                 <p className="mt-2 text-sm font-medium text-slate-500">조건이나 키워드를 조금 바꿔서 혜택 후보를 다시 찾아보세요.</p>
                 <Button variant="outline" className="mt-8 rounded-2xl font-black" onClick={() => { setStep(1); setItems([]); }}>다시 찾기</Button>
               </Card>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between px-2">
-                  <p className="text-sm font-bold text-slate-500">현재 조건 기준 <span className="text-slate-900 font-black">{totalMatched.toLocaleString()}건</span>의 혜택 후보를 읽는 중입니다.</p>
+                  <p className="text-sm font-bold text-slate-500">현재 조건 기준 <span className="text-navy font-black">{totalMatched.toLocaleString()}건</span>의 혜택 후보를 읽는 중입니다.</p>
                 </div>
                 <div className="grid gap-4">
                   {items.map((item) => {
                     const quickUrl = item.primaryApplyUrl;
                     return (
-                      <Card key={item.id} className="rounded-[2rem] p-6 lg:p-8 shadow-sm hover:border-emerald-200 transition-all group">
+                      <Card key={item.id} className="rounded-[2rem] p-6 lg:p-8 shadow-sm hover:border-primary/20 transition-all group">
                         <div className="flex flex-wrap items-center gap-3 mb-3">
                           {item.card?.badge && (
-                            <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-600 uppercase tracking-wider">{item.card.badge}</span>
+                            <span className="rounded-lg border border-slate-200 bg-surface-muted px-2.5 py-1 text-[10px] font-black text-slate-600 uppercase tracking-wider">{item.card.badge}</span>
                           )}
                           {item.card?.department && (
                             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">관할: {item.card.department}</span>
                           )}
                         </div>
-                        <h3 className="text-xl font-black text-slate-900 tracking-tight group-hover:text-emerald-600 transition-colors">{item.card?.title ?? item.title}</h3>
+                        <h3 className="text-xl font-black text-navy tracking-tight group-hover:text-primary transition-colors">{item.card?.title ?? item.title}</h3>
                         <p className="mt-3 line-clamp-2 text-sm font-medium leading-relaxed text-slate-600">{item.card?.summary ?? item.summary}</p>
-                        
+
                         <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                           {(item.card?.lines ?? []).map((line) => (
-                            <div key={`${item.id}-${line.label}`} className="rounded-xl bg-slate-50 p-3">
+                            <div key={`${item.id}-${line.label}`} className="rounded-xl bg-surface-muted p-3">
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{line.label}</p>
                               <p className="mt-1 text-xs font-bold text-slate-700">{line.value}</p>
                             </div>
@@ -635,10 +643,10 @@ export function Gov24Client({ initialQuery = "" }: { initialQuery?: string }) {
                             상세에서 다시 확인
                           </Button>
                           {quickUrl ? (
-                            <a 
-                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-slate-50 active:scale-[0.98]" 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
+                            <a
+                              className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-black text-slate-700 shadow-sm transition-all hover:bg-surface-muted active:scale-[0.98]"
+                              target="_blank"
+                              rel="noopener noreferrer"
                               href={quickUrl}
                             >
                               정부24 신청하기

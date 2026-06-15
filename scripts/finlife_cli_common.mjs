@@ -96,8 +96,18 @@ function parseJsonText(text) {
   }
 }
 
-export async function fetchJsonWithDiag(url, opts = {}) {
-  const timeoutMs = parsePositiveInt(opts.timeoutMs, 10_000, 500, 120_000);
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldRetryDiag(diag) {
+  const errCd = diag?.errCd == null ? "" : String(diag.errCd);
+  if (errCd === "TIMEOUT" || errCd === "FETCH_ERROR") return true;
+  const status = Number(diag?.status);
+  return status === 429 || (status >= 500 && status <= 599);
+}
+
+async function fetchJsonWithDiagOnce(url, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error(`timeout(${timeoutMs}ms)`)), timeoutMs);
 
@@ -138,6 +148,25 @@ export async function fetchJsonWithDiag(url, opts = {}) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function fetchJsonWithDiag(url, opts = {}) {
+  const timeoutMs = parsePositiveInt(opts.timeoutMs, 10_000, 500, 120_000);
+  const retries = parsePositiveInt(opts.retries, 0, 0, 5);
+  const retryDelayMs = parsePositiveInt(opts.retryDelayMs, 250, 0, 30_000);
+  let lastDiag = null;
+
+  for (let attempt = 1; attempt <= retries + 1; attempt += 1) {
+    const diag = await fetchJsonWithDiagOnce(url, timeoutMs);
+    lastDiag = { ...diag, attempts: attempt };
+    if (attempt <= retries && shouldRetryDiag(diag)) {
+      if (retryDelayMs > 0) await sleep(retryDelayMs * attempt);
+      continue;
+    }
+    return lastDiag;
+  }
+
+  return lastDiag;
 }
 
 function pickTotalCount(json) {

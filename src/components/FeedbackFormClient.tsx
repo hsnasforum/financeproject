@@ -206,7 +206,7 @@ export function FeedbackFormClient() {
 
       <Card className="rounded-[2rem] p-8 shadow-sm">
         <form onSubmit={onSubmit} className="space-y-6">
-          <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/70 p-5">
+          <div className="rounded-[1.5rem] border border-slate-100 bg-surface-muted/70 p-5">
             <p className="text-sm font-black text-slate-800">무엇을 남기나요?</p>
             <p className="mt-2 text-sm font-medium leading-relaxed text-slate-600">
               이 화면은 즉시 답변을 받는 곳이 아니라, 문제 상황과 개선 아이디어를 기록으로 남겨 두는 support entry 화면입니다.
@@ -221,7 +221,7 @@ export function FeedbackFormClient() {
             <select
               value={category}
               onChange={(event) => setCategory(event.target.value as FeedbackCategory)}
-              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
               disabled={submitting}
             >
               {CATEGORY_OPTIONS.map((option) => (
@@ -238,7 +238,7 @@ export function FeedbackFormClient() {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               rows={8}
-              className="w-full rounded-[2rem] border border-slate-200 bg-white p-5 text-sm font-medium leading-relaxed text-slate-700 shadow-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all outline-none"
+              className="w-full rounded-[2rem] border border-slate-200 bg-white p-5 text-sm font-medium leading-relaxed text-slate-700 shadow-sm focus:border-primary focus:ring-1 focus:ring-primary transition-all outline-none"
               placeholder="문제 상황 또는 개선 아이디어를 구체적으로 적어 주세요."
               disabled={submitting}
             />
@@ -249,7 +249,7 @@ export function FeedbackFormClient() {
             </div>
           </label>
 
-          {notice ? <p className="text-sm font-black text-emerald-600 bg-emerald-50 p-4 rounded-2xl">{notice}</p> : null}
+          {notice ? <p className="text-sm font-black text-primary bg-primary/5 p-4 rounded-2xl">{notice}</p> : null}
           {error ? <p className="text-sm font-black text-rose-600 bg-rose-50 p-4 rounded-2xl">{error}</p> : null}
 
           <div className="flex flex-wrap items-center gap-3 pt-2">

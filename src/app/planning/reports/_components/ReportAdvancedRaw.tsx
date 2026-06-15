@@ -57,7 +57,7 @@ function SafeTextViewer(props: {
   const hasMore = rendered.length < safeText.length;
   
   return (
-    <details className="group rounded-[1.5rem] border border-slate-200 bg-slate-50/50 p-4 transition-all">
+    <details className="group rounded-[1.5rem] border border-slate-200 bg-surface-muted/50 p-4 transition-all">
       <summary className="cursor-pointer text-sm font-black text-slate-400 group-open:text-slate-600 list-none flex items-center gap-2">
         <span className="transition-transform group-open:rotate-90">▶</span>
         {title}
@@ -97,17 +97,17 @@ export default function ReportAdvancedRaw({ reproducibility, raw, onLoadMoreRunJ
       <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Advanced Metadata</p>
-          <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">시스템 원문 데이터</h2>
+          <h2 className="mt-1 text-2xl font-black tracking-tight text-navy">시스템 원문 데이터</h2>
           <p className="mt-2 text-sm font-bold text-slate-500 leading-relaxed">재현성과 디버깅을 위한 원문 확인용 영역입니다.</p>
         </div>
-        <Badge variant="secondary" className="rounded-lg bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm">
+        <Badge variant="secondary" className="rounded-lg bg-surface-muted text-slate-600 border border-slate-200 px-3 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm">
           Raw Access
         </Badge>
       </div>
 
       <div className="space-y-6">
         {reproducibility && (
-          <details className="group rounded-[2rem] border border-slate-200 bg-slate-50/50 p-6 transition-all">
+          <details className="group rounded-[2rem] border border-slate-200 bg-surface-muted/50 p-6 transition-all">
             <summary className="cursor-pointer text-sm font-black text-slate-400 group-open:text-slate-600 list-none flex items-center gap-2">
               <span className="transition-transform group-open:rotate-90">▶</span>
               Reproducibility (실행 환경 정보)
@@ -136,9 +136,9 @@ export default function ReportAdvancedRaw({ reproducibility, raw, onLoadMoreRunJ
                     <ul className="space-y-2">
                       {reproducibility.appliedOverrides.map((override) => (
                         <li key={`${override.key}:${override.updatedAt}`} className="text-[11px] font-bold text-slate-600 flex flex-wrap gap-2">
-                          <span className="text-emerald-600 font-black">{override.key}</span>
+                          <span className="text-primary font-black">{override.key}</span>
                           <span className="text-slate-300">=</span>
-                          <span className="text-slate-900">{override.value}</span>
+                          <span className="text-navy">{override.value}</span>
                           {override.reason && <span className="text-slate-400">({override.reason})</span>}
                         </li>
                       ))}
@@ -168,7 +168,7 @@ export default function ReportAdvancedRaw({ reproducibility, raw, onLoadMoreRunJ
         )}
 
         {runJsonPreview ? (
-          <details className="group rounded-[1.5rem] border border-slate-200 bg-slate-50/50 p-4 transition-all">
+          <details className="group rounded-[1.5rem] border border-slate-200 bg-surface-muted/50 p-4 transition-all">
             <summary className="cursor-pointer text-sm font-black text-slate-400 group-open:text-slate-600 list-none flex items-center gap-2">
               <span className="transition-transform group-open:rotate-90">▶</span>
               Run JSON (실행 결과 데이터)
@@ -185,7 +185,7 @@ export default function ReportAdvancedRaw({ reproducibility, raw, onLoadMoreRunJ
                   <Button
                     variant="primary"
                     size="sm"
-                    className="h-8 rounded-lg px-4 text-[10px] font-black shadow-lg shadow-emerald-900/10"
+                    className="h-8 rounded-lg px-4 text-[10px] font-black shadow-lg shadow-navy/10"
                     disabled={runJsonPreview.loading}
                     onClick={onLoadMoreRunJson}
                   >

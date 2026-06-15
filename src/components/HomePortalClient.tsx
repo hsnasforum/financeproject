@@ -73,66 +73,66 @@ export function HomePortalClient({
           >
             {latestRun && featuredAction ? (
               <Link
-                className="block rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:bg-white hover:shadow-md hover:border-emerald-100 group"
+                className="block rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:bg-white hover:shadow-md hover:border-primary/10 group"
                 href={featuredAction.href}
               >
                 <div className="flex flex-wrap items-center gap-3">
                   <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">추천 액션</p>
-                  <span className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-sm shadow-emerald-100">
+                  <span className="rounded-lg bg-primary px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-sm shadow-primary/10">
                     {featuredAction.badge}
                   </span>
                   {featuredAction.quickRuleLabel ? (
-                    <span className="rounded-lg border border-emerald-100 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600">
+                    <span className="rounded-lg border border-primary/10 bg-white px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
                       빠른 점검 · {featuredAction.quickRuleLabel}
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-4 text-xl font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">{featuredAction.title}</p>
+                <p className="mt-4 text-xl font-black tracking-tight text-navy group-hover:text-primary transition-colors">{featuredAction.title}</p>
                 <p className="mt-2 text-sm leading-relaxed text-slate-500">{featuredAction.summary}</p>
                 <div className="mt-4 flex flex-wrap gap-4 text-xs font-bold">
                   {featuredAction.basis ? (
                     <p className="text-slate-400">기준: {featuredAction.basis}</p>
                   ) : null}
                   {featuredAction.quickRuleDetail ? (
-                    <p className="text-emerald-600/70 italic">상태 읽기: {featuredAction.quickRuleDetail}</p>
+                    <p className="text-primary/80 italic">상태 읽기: {featuredAction.quickRuleDetail}</p>
                   ) : null}
                 </div>
-                <p className="mt-6 text-sm font-black text-emerald-600">액션 리포트 보기 →</p>
+                <p className="mt-6 text-sm font-black text-primary">액션 리포트 보기 →</p>
               </Link>
             ) : null}
             <div className="grid gap-4 lg:grid-cols-3">
               {latestRun ? (
                 <>
                 <Link
-                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
+                  className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-primary/10 group"
                   href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(latestRun.id)}`, latestRun.profileId)}
                   prefetch={devPlanningPrefetch("/planning/reports")}
                 >
                   <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">다음 1</p>
-                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">최신 리포트 다시 보기</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-navy group-hover:text-primary transition-colors">최신 리포트 다시 보기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     {latestRun.title} · {formatDateLabel(latestRun.createdAt)}
                   </p>
-                  <p className="mt-6 text-sm font-black text-emerald-600">리포트 열기 →</p>
+                  <p className="mt-6 text-sm font-black text-primary">리포트 열기 →</p>
                 </Link>
                 <Link
-                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
+                  className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-primary/10 group"
                   href={appendProfileIdQuery("/planning", latestRun.profileId)}
                   prefetch={devPlanningPrefetch("/planning")}
                 >
                   <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">다음 2</p>
-                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">같은 프로필로 다시 계산</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-navy group-hover:text-primary transition-colors">같은 프로필로 다시 계산</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     저장된 조건을 이어 받아 수정 후 다시 실행합니다.
                   </p>
-                  <p className="mt-6 text-sm font-black text-emerald-600">플래닝 이어가기 →</p>
+                  <p className="mt-6 text-sm font-black text-primary">플래닝 이어가기 →</p>
                 </Link>
                 <Link
-                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
+                  className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-primary/10 group"
                   href="/benefits"
                 >
                   <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">다음 3</p>
-                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">혜택 후보까지 이어보기</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-navy group-hover:text-amber-600 transition-colors">혜택 후보까지 이어보기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     플랜을 본 뒤 바로 생활 혜택과 지원 후보를 비교합니다.
                   </p>
@@ -142,34 +142,34 @@ export function HomePortalClient({
               ) : (
                 <>
                 <Link
-                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
+                  className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-primary/10 group"
                   href="/planning"
                   prefetch={devPlanningPrefetch("/planning")}
                 >
                   <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">시작 1</p>
-                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">첫 플랜 만들기</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-navy group-hover:text-primary transition-colors">첫 플랜 만들기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     월수입, 지출, 자산만 입력해도 첫 결과를 볼 수 있습니다.
                   </p>
-                  <p className="mt-6 text-sm font-black text-emerald-600">플래닝 시작 →</p>
+                  <p className="mt-6 text-sm font-black text-primary">플래닝 시작 →</p>
                 </Link>
                 <Link
-                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
+                  className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-primary/10 group"
                   href="/products/catalog"
                 >
                   <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">시작 2</p>
-                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">상품 흐름 먼저 익히기</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-navy group-hover:text-primary transition-colors">상품 흐름 먼저 익히기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     예적금, 대출, 연금 카테고리를 먼저 훑고 비교 기준을 잡습니다.
                   </p>
-                  <p className="mt-6 text-sm font-black text-emerald-600">카탈로그 보기 →</p>
+                  <p className="mt-6 text-sm font-black text-primary">카탈로그 보기 →</p>
                 </Link>
                 <Link
-                  className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-emerald-100 group"
+                  className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:bg-white hover:shadow-md hover:border-primary/10 group"
                   href="/benefits"
                 >
                   <p className="text-[10px] font-black tracking-[0.16em] text-slate-400">시작 3</p>
-                  <p className="mt-4 text-lg font-black tracking-tight text-slate-900 group-hover:text-amber-600 transition-colors">혜택 후보 먼저 보기</p>
+                  <p className="mt-4 text-lg font-black tracking-tight text-navy group-hover:text-amber-600 transition-colors">혜택 후보 먼저 보기</p>
                   <p className="mt-2 text-sm leading-relaxed text-slate-500">
                     플랜 전에도 주거, 청년, 생활안정 관련 혜택을 바로 탐색할 수 있습니다.
                   </p>
@@ -184,7 +184,7 @@ export function HomePortalClient({
             <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-slate-400">최근 저장한 실행 기록</p>
-              <h2 className="mt-3 text-[2rem] font-black tracking-[-0.04em] text-slate-950">최근 플래닝 실행</h2>
+              <h2 className="mt-3 text-[2rem] font-black tracking-[-0.04em] text-navy">최근 플래닝 실행</h2>
               {latestRun ? (
                 <p className="mt-2 text-sm text-slate-500">
                   가장 최근 저장: {latestRun.title} · {formatDateLabel(latestRun.createdAt)} · {statusLabel(latestRun.overallStatus)}
@@ -192,7 +192,7 @@ export function HomePortalClient({
               ) : null}
             </div>
             <Link
-              className="text-sm font-black text-emerald-600 hover:underline"
+              className="text-sm font-black text-primary hover:underline"
               href="/planning"
               prefetch={devPlanningPrefetch("/planning")}
             >
@@ -201,11 +201,11 @@ export function HomePortalClient({
             </div>
 
             {recent.length === 0 ? (
-              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-slate-50/50 px-6 py-16 text-center">
-              <p className="text-lg font-black text-slate-900">아직 저장된 실행 기록이 없습니다.</p>
+              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-surface-muted/50 px-6 py-16 text-center">
+              <p className="text-lg font-black text-navy">아직 저장된 실행 기록이 없습니다.</p>
               <p className="mt-2 text-sm font-medium text-slate-500 leading-relaxed">첫 플래닝 실행을 저장하면 이 영역에서 바로 리포트를 이어서 볼 수 있습니다.</p>
               <Link
-                className="mt-10 inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-10 text-sm font-black text-white shadow-xl shadow-emerald-900/20 transition-all hover:bg-emerald-700 active:scale-95"
+                className="mt-10 inline-flex h-12 items-center rounded-2xl bg-primary px-10 text-sm font-black text-white shadow-xl shadow-navy/20 transition-all hover:bg-navy active:scale-95"
                 href="/planning"
                 prefetch={devPlanningPrefetch("/planning")}
               >
@@ -215,22 +215,22 @@ export function HomePortalClient({
             ) : (
               <div className="grid gap-6 lg:grid-cols-3">
               {recent.map((run) => (
-                <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8 transition-all hover:border-emerald-100 hover:bg-white" key={run.id}>
+                <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-8 transition-all hover:border-primary/10 hover:bg-white" key={run.id}>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{run.createdAt.slice(0, 10)}</p>
-                  <p className="mt-5 text-xl font-black tracking-tight text-slate-900">{run.title}</p>
+                  <p className="mt-5 text-xl font-black tracking-tight text-navy">{run.title}</p>
                   <p className="mt-2 text-xs font-bold text-slate-500">
                     {statusLabel(run.overallStatus)} · {run.horizonMonths}개월 · {formatPolicyLabel(run.policyId)}
                   </p>
                   <div className="mt-10 flex flex-wrap items-center gap-6">
                     <Link
-                      className="inline-flex text-sm font-black text-emerald-600 hover:underline"
+                      className="inline-flex text-sm font-black text-primary hover:underline"
                       href={appendProfileIdQuery(`/planning/reports?runId=${encodeURIComponent(run.id)}`, run.profileId)}
                       prefetch={devPlanningPrefetch("/planning/reports")}
                     >
                       리포트 보기
                     </Link>
                     <Link
-                      className="inline-flex text-sm font-black text-slate-400 hover:text-slate-900"
+                      className="inline-flex text-sm font-black text-slate-400 hover:text-navy"
                       href={appendProfileIdQuery("/planning", run.profileId)}
                       prefetch={devPlanningPrefetch("/planning")}
                     >

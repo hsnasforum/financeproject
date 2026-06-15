@@ -672,7 +672,7 @@ export default function DebugPlanningV2Client() {
           </p>
         ) : null}
         {notice ? (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+          <p className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm font-semibold text-navy">
             {notice}
           </p>
         ) : null}
@@ -804,42 +804,42 @@ export default function DebugPlanningV2Client() {
       </Card>
 
       <Card className="mt-5 space-y-5">
-        <h2 className="text-base font-black text-slate-900">Single Result</h2>
+        <h2 className="text-base font-black text-navy">Single Result</h2>
 
         <div className="grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             generatedAt: <span className="font-semibold">{formatDateTime(response?.meta?.generatedAt)}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             snapshot missing: <span className="font-semibold">{response?.meta?.snapshot?.missing ? "true" : "false"}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             snapshot asOf: <span className="font-semibold">{response?.meta?.snapshot?.asOf ?? "-"}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             snapshot fetchedAt: <span className="font-semibold">{formatDateTime(response?.meta?.snapshot?.fetchedAt)}</span>
           </div>
         </div>
 
         <div className="grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             warningsCount: <span className="font-semibold">{response?.meta?.snapshot?.warningsCount ?? 0}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             sourcesCount: <span className="font-semibold">{response?.meta?.snapshot?.sourcesCount ?? 0}</span>
           </div>
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Summary</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Summary</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText(summary ?? {})}
           </pre>
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Warnings</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Warnings</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText((response?.data?.warnings ?? []).map((warning) => ({
               reasonCode: warning.reasonCode,
               month: warning.month ?? null,
@@ -849,35 +849,35 @@ export default function DebugPlanningV2Client() {
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Goals</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Goals</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText(response?.data?.goalStatus ?? [])}
           </pre>
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Timeline Sample (0 / 12 / 24 / last)</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Timeline Sample (0 / 12 / 24 / last)</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText(timelineSample)}
           </pre>
         </div>
       </Card>
 
       <Card className="mt-5 space-y-5">
-        <h2 className="text-base font-black text-slate-900">Scenario Comparison</h2>
+        <h2 className="text-base font-black text-navy">Scenario Comparison</h2>
 
         <div className="grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             generatedAt: <span className="font-semibold">{formatDateTime(scenariosResponse?.meta?.generatedAt)}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             snapshot asOf: <span className="font-semibold">{scenariosResponse?.meta?.snapshot?.asOf ?? "-"}</span>
           </div>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-xs">
-            <thead className="bg-slate-50">
+            <thead className="bg-surface-muted">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold">Scenario</th>
                 <th className="px-3 py-2 text-left font-semibold">End NetWorth</th>
@@ -907,8 +907,8 @@ export default function DebugPlanningV2Client() {
 
         <div className="space-y-4">
           {(scenariosResponse?.data?.scenarios ?? []).map((row) => (
-            <div key={row.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <h3 className="text-sm font-black text-slate-900">{row.title} why diff</h3>
+            <div key={row.id} className="rounded-xl border border-slate-200 bg-surface-muted p-3">
+              <h3 className="text-sm font-black text-navy">{row.title} why diff</h3>
               <ul className="mt-2 space-y-1 text-xs text-slate-700">
                 {(row.diffVsBase?.shortWhy ?? []).map((line, index) => (
                   <li key={`${row.id}-why-${index}`}>- {line}</li>
@@ -927,35 +927,35 @@ export default function DebugPlanningV2Client() {
       </Card>
 
       <Card className="mt-5 space-y-5">
-        <h2 className="text-base font-black text-slate-900">Monte Carlo</h2>
+        <h2 className="text-base font-black text-navy">Monte Carlo</h2>
 
         <div className="grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             generatedAt: <span className="font-semibold">{formatDateTime(monteCarloResponse?.meta?.generatedAt)}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             snapshot asOf: <span className="font-semibold">{monteCarloResponse?.meta?.snapshot?.asOf ?? "-"}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             paths: <span className="font-semibold">{monteCarloResponse?.data?.monteCarlo?.meta?.paths ?? "-"}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             seed: <span className="font-semibold">{monteCarloResponse?.data?.monteCarlo?.meta?.seed ?? "-"}</span>
           </div>
         </div>
 
         <div className="grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             retirementDepletionBeforeEnd: <span className="font-semibold">{monteCarloResponse?.data?.monteCarlo?.probabilities?.retirementDepletionBeforeEnd ?? "-"}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             retirementAchievedAtRetireAge: <span className="font-semibold">{monteCarloResponse?.data?.monteCarlo?.probabilities?.retirementAchievedAtRetireAge ?? "-"}</span>
           </div>
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Goal Probabilities</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Goal Probabilities</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText({
               emergencyAchievedByMonth: monteCarloResponse?.data?.monteCarlo?.probabilities?.emergencyAchievedByMonth ?? null,
               lumpSumGoalAchieved: monteCarloResponse?.data?.monteCarlo?.probabilities?.lumpSumGoalAchieved ?? {},
@@ -964,8 +964,8 @@ export default function DebugPlanningV2Client() {
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Percentiles</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Percentiles</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText({
               endNetWorthKrw: monteCarloResponse?.data?.monteCarlo?.percentiles?.endNetWorthKrw ?? {},
               worstCashKrw: monteCarloResponse?.data?.monteCarlo?.percentiles?.worstCashKrw ?? {},
@@ -974,7 +974,7 @@ export default function DebugPlanningV2Client() {
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Notes</h3>
+          <h3 className="text-sm font-black text-navy">Notes</h3>
           <ul className="mt-2 space-y-1 text-xs text-slate-700">
             {(monteCarloResponse?.data?.monteCarlo?.notes ?? []).map((line, index) => (
               <li key={`mc-note-${index}`}>- {line}</li>
@@ -984,31 +984,31 @@ export default function DebugPlanningV2Client() {
       </Card>
 
       <Card className="mt-5 space-y-5">
-        <h2 className="text-base font-black text-slate-900">Action Plan</h2>
+        <h2 className="text-base font-black text-navy">Action Plan</h2>
 
         <div className="grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             generatedAt: <span className="font-semibold">{formatDateTime(actionsResponse?.meta?.generatedAt)}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             snapshot asOf: <span className="font-semibold">{actionsResponse?.meta?.snapshot?.asOf ?? "-"}</span>
           </div>
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Plan Summary</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Plan Summary</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText(actionsResponse?.data?.planSummary ?? {})}
           </pre>
         </div>
 
         <div className="space-y-4">
           {(actionsResponse?.data?.actions ?? []).map((action, index) => (
-            <div key={`${action.code}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div key={`${action.code}-${index}`} className="rounded-xl border border-slate-200 bg-surface-muted p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase text-white">{action.severity}</span>
                 <span className="rounded bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700">{action.code}</span>
-                <h3 className="text-sm font-black text-slate-900">{action.title}</h3>
+                <h3 className="text-sm font-black text-navy">{action.title}</h3>
               </div>
               <p className="mt-2 text-xs text-slate-700">{action.summary}</p>
 
@@ -1048,7 +1048,7 @@ export default function DebugPlanningV2Client() {
               {Array.isArray(action.candidates) && action.candidates.length > 0 ? (
                 <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
                   <table className="min-w-full divide-y divide-slate-200 text-xs">
-                    <thead className="bg-slate-50">
+                    <thead className="bg-surface-muted">
                       <tr>
                         <th className="px-2 py-1 text-left font-semibold">Kind</th>
                         <th className="px-2 py-1 text-left font-semibold">Company</th>
@@ -1082,23 +1082,23 @@ export default function DebugPlanningV2Client() {
       </Card>
 
       <Card className="mt-5 space-y-5">
-        <h2 className="text-base font-black text-slate-900">Debt Strategy</h2>
+        <h2 className="text-base font-black text-navy">Debt Strategy</h2>
 
         <div className="grid gap-2 text-sm md:grid-cols-3">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             generatedAt: <span className="font-semibold">{formatDateTime(debtResponse?.meta?.generatedAt)}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             debtServiceRatio: <span className="font-semibold">{debtResponse?.data?.meta?.debtServiceRatio ?? "-"}</span>
           </div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
             totalMonthlyPayment: <span className="font-semibold">{formatMoney(debtResponse?.data?.meta?.totalMonthlyPaymentKrw)}</span>
           </div>
         </div>
 
         <div className="overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full divide-y divide-slate-200 text-xs">
-            <thead className="bg-slate-50">
+            <thead className="bg-surface-muted">
               <tr>
                 <th className="px-2 py-1 text-left font-semibold">Debt</th>
                 <th className="px-2 py-1 text-left font-semibold">Type</th>
@@ -1131,22 +1131,22 @@ export default function DebugPlanningV2Client() {
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Refinance</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Refinance</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText(debtResponse?.data?.refinance ?? [])}
           </pre>
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">What-if</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">What-if</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText(debtResponse?.data?.whatIf ?? {})}
           </pre>
         </div>
 
         <div>
-          <h3 className="text-sm font-black text-slate-900">Warnings</h3>
-          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <h3 className="text-sm font-black text-navy">Warnings</h3>
+          <pre className="mt-2 overflow-auto rounded-xl border border-slate-200 bg-surface-muted p-3 text-xs">
             {toJsonText(debtResponse?.data?.warnings ?? [])}
           </pre>
         </div>

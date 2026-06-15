@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SourceBadge } from "@/components/debug/SourceBadge";
 import { RowFlags } from "@/components/debug/RowFlags";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 
 type StatusRow = {
   sourceId: string;
@@ -262,10 +263,13 @@ export default function DebugUnifiedPage() {
   }, [reload]);
 
   useEffect(() => {
-    nextCursorRef.current = null;
-    setNextCursor(null);
-    setHasMore(false);
-    void reload(false);
+    const timeoutId = window.setTimeout(() => {
+      nextCursorRef.current = null;
+      setNextCursor(null);
+      setHasMore(false);
+      void reload(false);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [reload]);
 
   useEffect(() => {
@@ -423,7 +427,7 @@ export default function DebugUnifiedPage() {
             type="button"
             onClick={() => void runSmokeSync()}
             disabled={syncing || loading}
-            className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md border border-primary/30 bg-primary/5 px-3 py-1.5 text-sm font-medium text-navy disabled:cursor-not-allowed disabled:opacity-50"
           >
             {syncing ? "스모크 업데이트 중..." : "스모크 업데이트"}
           </button>
@@ -431,7 +435,7 @@ export default function DebugUnifiedPage() {
             type="button"
             disabled={mode !== "merged" || !singleSourceId || !hasMore || autoRefresh || loading}
             onClick={() => void reload(true)}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-navy disabled:cursor-not-allowed disabled:opacity-50"
           >
             Load more
           </button>
@@ -465,7 +469,7 @@ export default function DebugUnifiedPage() {
           {singleSourceId && autoRefresh ? (
             <span className="text-slate-500">Auto refresh ON: 매 주기 첫 페이지로 재로딩됩니다.</span>
           ) : null}
-          {syncMessage ? <span className="text-emerald-700">{syncMessage}</span> : null}
+          {syncMessage ? <span className="text-navy">{syncMessage}</span> : null}
           {syncError ? <span className="text-rose-700">{syncError}</span> : null}
           <span className="text-slate-500">rows: {filtered.length}</span>
           {singleSourceId ? <span className="text-slate-500">nextCursor: {nextCursor ? "yes" : "none"}</span> : null}
@@ -477,12 +481,12 @@ export default function DebugUnifiedPage() {
             <article key={`${row.sourceId}:${row.kind}`} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
               <div className="mb-2 flex items-center justify-between">
                 <SourceBadge sourceId={row.sourceId} />
-                <span className={row.isFresh ? "text-emerald-700" : "text-amber-700"}>{row.isFresh ? "fresh" : "stale"}</span>
+                <span className={row.isFresh ? "text-navy" : "text-amber-700"}>{row.isFresh ? "fresh" : "stale"}</span>
               </div>
               {totalCount && progressPct !== null ? (
                 <div className="mb-2">
                   <div className="mb-1 h-2 w-full rounded bg-slate-200">
-                    <div className="h-2 rounded bg-slate-600" style={{ width: `${progressPct}%` }} />
+                    <CspSafeProgressBar fillClassName="text-slate-600" value={progressPct} />
                   </div>
                   <div className="text-xs text-slate-700">
                     Synced: {row.counts} / {totalCount} ({progressPct.toFixed(2)}%)
@@ -549,7 +553,7 @@ export default function DebugUnifiedPage() {
           <p className="mt-1 text-xs text-slate-500">finlife canonical에 매칭되지 않은 KDB 상품입니다.</p>
           <div className="mt-3 grid gap-2">
             {kdbOnlyRows.map((row) => (
-              <article key={`kdb-only-${row.externalKey}`} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+              <article key={`kdb-only-${row.externalKey}`} className="rounded-lg border border-slate-200 bg-surface-muted p-3 text-sm">
                 <p className="font-semibold">{row.providerName || "-"} · {row.productName || "-"}</p>
                 <p className="mt-1 text-xs text-slate-600">{row.summary || "-"}</p>
               </article>
@@ -560,7 +564,7 @@ export default function DebugUnifiedPage() {
 
       <section className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="min-w-full text-sm">
-          <thead className="bg-slate-50 text-left text-slate-600">
+          <thead className="bg-surface-muted text-left text-slate-600">
             <tr>
               <th className="px-3 py-2">Source</th>
               <th className="px-3 py-2">Provider</th>
@@ -574,7 +578,7 @@ export default function DebugUnifiedPage() {
           <tbody>
             {filtered.map((row) => {
               const rowClass = row.isNew
-                ? "border-l-4 border-emerald-500 bg-emerald-50"
+                ? "border-l-4 border-primary bg-primary/5"
                 : row.isUpdated
                   ? "border-l-4 border-amber-500 bg-amber-50"
                   : "";
@@ -587,7 +591,7 @@ export default function DebugUnifiedPage() {
                     {Array.isArray(row.badges) && row.badges.length > 0 ? (
                       <div className="mt-1 flex flex-wrap gap-1">
                         {row.badges.map((badge) => (
-                          <span key={`${row.externalKey}-${badge}`} className="rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-[10px]">
+                          <span key={`${row.externalKey}-${badge}`} className="rounded-full border border-slate-300 bg-surface-muted px-2 py-0.5 text-[10px]">
                             {badge}
                           </span>
                         ))}

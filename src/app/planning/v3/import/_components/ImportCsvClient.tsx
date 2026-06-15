@@ -308,44 +308,56 @@ export function ImportCsvClient() {
   const [directImportStatus, setDirectImportStatus] = useState("");
 
   useEffect(() => {
-    const parsed = parseCsvText(csvText, { hasHeader: true });
-    const nextHeaders = parsed.header ?? [];
-    setHeaders(nextHeaders);
+    const timeoutId = window.setTimeout(() => {
+      const parsed = parseCsvText(csvText, { hasHeader: true });
+      const nextHeaders = parsed.header ?? [];
+      setHeaders(nextHeaders);
 
-    if (nextHeaders.length < 1) {
-      setInferred(null);
-      setMapping(INITIAL_MAPPING);
-      setPreviewRows([]);
-      setPreviewStats(null);
-      setPreviewWarnings([]);
-      setPreviewValidationErrors([]);
-      return;
-    }
+      if (nextHeaders.length < 1) {
+        setInferred(null);
+        setMapping(INITIAL_MAPPING);
+        setPreviewRows([]);
+        setPreviewStats(null);
+        setPreviewWarnings([]);
+        setPreviewValidationErrors([]);
+        return;
+      }
 
-    const suggested = inferCsvMapping(nextHeaders);
-    setInferred(suggested);
-    setMapping(applyInferredMapping(suggested));
+      const suggested = inferCsvMapping(nextHeaders);
+      setInferred(suggested);
+      setMapping(applyInferredMapping(suggested));
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [csvText]);
 
   useEffect(() => {
-    let disposed = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      void loadAccounts(controller.signal);
+    }, 0);
 
-    async function loadAccounts() {
+    async function loadAccounts(signal: AbortSignal) {
+      if (signal.aborted) return;
       setAccountLoading(true);
       try {
         const response = await fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
           cache: "no-store",
           credentials: "same-origin",
+          signal,
         });
         const payload = await response.json().catch(() => null);
+        if (signal.aborted) return;
         if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
-          if (!disposed) {
+          if (!signal.aborted) {
             setAccounts([]);
           }
           return;
         }
 
-        if (!disposed) {
+        if (!signal.aborted) {
           const items = payload.items.filter(isAccount);
           setAccounts(items);
           if (items.length > 0) {
@@ -353,20 +365,19 @@ export function ImportCsvClient() {
           }
         }
       } catch {
-        if (!disposed) {
+        if (!signal.aborted) {
           setAccounts([]);
         }
       } finally {
-        if (!disposed) {
+        if (!signal.aborted) {
           setAccountLoading(false);
         }
       }
     }
 
-    void loadAccounts();
-
     return () => {
-      disposed = true;
+      window.clearTimeout(timeoutId);
+      controller.abort();
     };
   }, []);
 
@@ -381,11 +392,15 @@ export function ImportCsvClient() {
 
   useEffect(() => {
     if (!csvText.trim() || headers.length < 1) {
-      setPreviewRows([]);
-      setPreviewStats(null);
-      setPreviewWarnings([]);
-      setPreviewValidationErrors([]);
-      return;
+      const resetTimer = window.setTimeout(() => {
+        setPreviewRows([]);
+        setPreviewStats(null);
+        setPreviewWarnings([]);
+        setPreviewValidationErrors([]);
+      }, 0);
+      return () => {
+        window.clearTimeout(resetTimer);
+      };
     }
 
     const controller = new AbortController();
@@ -672,7 +687,7 @@ export function ImportCsvClient() {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 CSV Import</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 CSV Import</h1>
           <p className="text-sm text-slate-600">CSV 헤더 추천 매핑 + 파싱 미리보기 진단으로 안전하게 초안을 생성합니다.</p>
 
           <BodyInset className="space-y-2">
@@ -977,7 +992,7 @@ export function ImportCsvClient() {
               {saveBatchLoading ? "배치 저장 중..." : "저장(배치 생성)"}
             </Button>
             {savedBatch ? (
-              <p className="text-xs font-semibold text-emerald-700">
+              <p className="text-xs font-semibold text-navy">
                 batch: {savedBatch.id} / total {savedBatch.total} / ok {savedBatch.ok} / failed {savedBatch.failed}
               </p>
             ) : null}
@@ -1015,7 +1030,7 @@ export function ImportCsvClient() {
 
           <BodyTableFrame>
             <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-csv-preview-table">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+              <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                 <tr>
                   <th className="px-3 py-2 text-left">line</th>
                   <th className="px-3 py-2 text-left">date</th>
@@ -1101,7 +1116,7 @@ export function ImportCsvClient() {
               {result.cashflow.length > 0 ? (
                 <BodyTableFrame>
                   <table className="min-w-full divide-y divide-slate-200 text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                    <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                       <tr>
                         <th className="px-3 py-2 text-left">YYYY-MM</th>
                         <th className="px-3 py-2 text-right">income</th>
@@ -1113,10 +1128,10 @@ export function ImportCsvClient() {
                     <tbody className="divide-y divide-slate-100">
                       {result.cashflow.map((row) => (
                         <tr key={row.ym}>
-                          <td className="px-3 py-2 font-semibold text-slate-900">{row.ym}</td>
+                          <td className="px-3 py-2 font-semibold text-navy">{row.ym}</td>
                           <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.incomeKrw)}</td>
                           <td className="px-3 py-2 text-right text-slate-800">{formatKrw(row.expenseKrw)}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(row.netKrw)}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-navy">{formatKrw(row.netKrw)}</td>
                           <td className="px-3 py-2 text-right text-slate-700">{row.txCount.toLocaleString("ko-KR")}</td>
                         </tr>
                       ))}

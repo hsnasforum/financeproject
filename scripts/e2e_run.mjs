@@ -1,22 +1,19 @@
 #!/usr/bin/env node
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import net from "node:net";
 import process from "node:process";
 import { setTimeout as delay } from "node:timers/promises";
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
+import { runPnpmBuffered, runPnpmSync, startPnpm } from "./pnpm_runner.mjs";
 
 const HOST = "127.0.0.1";
 const START_PORT = 3100;
 const MAX_SCAN = 50;
 const READY_TIMEOUT_MS = 60_000;
 const READY_INTERVAL_MS = 500;
-
-function commandFor(bin) {
-  return process.platform === "win32" ? `${bin}.cmd` : bin;
-}
 
 function loadLocalEnv() {
   const root = process.cwd();
@@ -51,7 +48,7 @@ async function findFreePort(host, startPort, maxScan) {
 }
 
 function resolveNextDevFlags() {
-  const help = spawnSync(commandFor("pnpm"), ["exec", "next", "dev", "--help"], {
+  const help = runPnpmSync(["exec", "next", "dev", "--help"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -95,30 +92,20 @@ function killProcessTree(child) {
 }
 
 function runPlaywright(env) {
-  return new Promise((resolve) => {
-    let combinedOutput = "";
-    const child = spawn(commandFor("pnpm"), ["exec", "playwright", "test"], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env,
-    });
-    child.stdout.on("data", (chunk) => {
+  let combinedOutput = "";
+  return runPnpmBuffered(["exec", "playwright", "test"], {
+    env,
+    onStdout: (chunk) => {
       const text = String(chunk);
       combinedOutput += text;
       process.stdout.write(text);
-    });
-    child.stderr.on("data", (chunk) => {
+    },
+    onStderr: (chunk) => {
       const text = String(chunk);
       combinedOutput += text;
       process.stderr.write(text);
-    });
-    child.on("close", (code, signal) => {
-      if (signal) {
-        resolve({ code: 1, output: combinedOutput });
-        return;
-      }
-      resolve({ code: code ?? 1, output: combinedOutput });
-    });
-  });
+    },
+  }).then((result) => ({ code: result.signal ? 1 : result.code, output: combinedOutput }));
 }
 
 function hasMissingBrowserDeps(output) {
@@ -141,15 +128,11 @@ async function main() {
 
   console.log(`[e2e] baseURL=${baseUrl}`);
 
-  const devServer = spawn(
-    commandFor("pnpm"),
-    ["exec", "next", "dev", hostFlag, HOST, portFlag, String(port)],
-    {
-      stdio: "inherit",
-      env: { ...process.env },
-      detached: process.platform !== "win32",
-    },
-  );
+  const devServer = await startPnpm(["exec", "next", "dev", hostFlag, HOST, portFlag, String(port)], {
+    stdio: "inherit",
+    env: { ...process.env },
+    detached: process.platform !== "win32",
+  });
 
   const cleanup = () => killProcessTree(devServer);
   process.on("SIGINT", () => {

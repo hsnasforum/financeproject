@@ -93,6 +93,10 @@ function buildEndpoint(base, pathSuffix) {
   return `${base}/${trimmed}`;
 }
 
+function resolveMolitSalesEndpointName(base) {
+  return /RTMSDataSvcAptTradeDev/i.test(base) ? "getRTMSDataSvcAptTradeDev" : "getRTMSDataSvcAptTrade";
+}
+
 function encodeServiceKey(key) {
   return /%[0-9a-fA-F]{2}/.test(key) ? key : encodeURIComponent(key);
 }
@@ -118,7 +122,7 @@ async function run() {
 
   if (requireEnv("MOLIT_SALES_API_KEY")) {
     const base = normalizeBaseUrl(process.env.MOLIT_SALES_API_URL || "", defaultMolitSalesBase);
-    const endpoint = buildEndpoint(base, "getRTMSDataSvcAptTrade");
+    const endpoint = buildEndpoint(base, resolveMolitSalesEndpointName(base));
     const url = buildApiUrl(endpoint, process.env.MOLIT_SALES_API_KEY, {
       LAWD_CD: "11680",
       DEAL_YMD: dealYmd,

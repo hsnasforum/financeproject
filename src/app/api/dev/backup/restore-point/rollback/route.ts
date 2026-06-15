@@ -3,7 +3,7 @@ import path from "node:path";
 import { NextResponse } from "next/server";
 import { append as appendAuditLog } from "@/lib/audit/auditLogStore";
 import { isServerPathWhitelisted, type BackupBundle, validateBundle } from "@/lib/backup/backupBundle";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevMutationRequest } from "@/lib/dev/devGuards";
 import { checkPlanningIntegrity } from "@/lib/ops/planningDoctor";
 
 const RESTORE_POINT_PATH = path.join(process.cwd(), "tmp", "backup_restore_point.json");
@@ -44,8 +44,8 @@ function appendRestoreApplyAudit(summary: string, details: Record<string, unknow
   }
 }
 
-export async function POST() {
-  const blocked = onlyDev();
+export async function POST(request: Request) {
+  const blocked = guardDevMutationRequest(request);
   if (blocked) return blocked;
 
   if (!fs.existsSync(RESTORE_POINT_PATH)) {

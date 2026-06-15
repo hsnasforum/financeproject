@@ -36,7 +36,7 @@ function levelStyle(level: FreshnessSummary["level"]): string {
   if (level === "error") return "border-rose-300 bg-rose-50 text-rose-800";
   if (level === "info") return "border-sky-300 bg-sky-50 text-sky-800";
   if (level === "warn") return "border-amber-300 bg-amber-50 text-amber-900";
-  return "border-emerald-300 bg-emerald-50 text-emerald-900";
+  return "border-primary/30 bg-primary/5 text-navy";
 }
 
 function statusLabel(status: FreshnessItemStatus): string {
@@ -67,18 +67,22 @@ export function DataFreshnessBanner({
   const autoSmokeSessionKeyRef = useRef<string>("");
 
   useEffect(() => {
-    const path = typeof window !== "undefined" ? window.location.pathname : "global";
-    autoSmokeSessionKeyRef.current = `freshness:autoSmoke:run:${path}`;
-    try {
-      const stored = localStorage.getItem("freshness:autoSmoke");
-      if (stored === "1") setAutoSmoke(true);
-      else if (stored === "0") setAutoSmoke(false);
-      else setAutoSmoke(autoSmokeDefault);
-    } catch {
-      setAutoSmoke(autoSmokeDefault);
-    } finally {
-      setAutoSmokeReady(true);
-    }
+    const timer = window.setTimeout(() => {
+      const path = typeof window !== "undefined" ? window.location.pathname : "global";
+      autoSmokeSessionKeyRef.current = `freshness:autoSmoke:run:${path}`;
+      try {
+        const stored = localStorage.getItem("freshness:autoSmoke");
+        if (stored === "1") setAutoSmoke(true);
+        else if (stored === "0") setAutoSmoke(false);
+        else setAutoSmoke(autoSmokeDefault);
+      } catch {
+        setAutoSmoke(autoSmokeDefault);
+      } finally {
+        setAutoSmokeReady(true);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [autoSmokeDefault]);
 
   useEffect(() => {
@@ -149,8 +153,14 @@ export function DataFreshnessBanner({
   }, [refresh]);
 
   useEffect(() => {
-    void refresh();
-    return () => abortRef.current?.abort();
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+      abortRef.current?.abort();
+    };
   }, [refresh]);
 
   const summary = useMemo(
@@ -276,7 +286,7 @@ export function DataFreshnessBanner({
             {error ? "상태 조회 실패" : summary.message}
           </p>
           <p className="mt-1 text-xs opacity-80">
-            자동 동기화는 수행하지 않으며, stale 감지만 제공합니다.
+            자동 스모크 업데이트는 토글이 켜진 경우 세션당 1회만 시도합니다.
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] opacity-85">
             <span>Required 이슈 {summary.requiredIssuesCount}건</span>
@@ -385,9 +395,9 @@ export function DataFreshnessBanner({
               자동 스모크 업데이트(세션당 1회)
             </label>
           </div>
-          {syncMessage ? <p className="mt-2 text-emerald-700">{syncMessage}</p> : null}
+          {syncMessage ? <p className="mt-2 text-navy">{syncMessage}</p> : null}
           {syncError ? <p className="mt-2 text-rose-700">{syncError}</p> : null}
-          <pre className="mt-2 overflow-x-auto rounded-xl bg-slate-100 border border-slate-200 p-4 text-[11px] font-bold leading-5 text-slate-600 shadow-inner">
+          <pre className="mt-2 overflow-x-auto rounded-xl bg-surface-muted border border-slate-200 p-4 text-[11px] font-bold leading-5 text-slate-600 shadow-inner">
 {`pnpm live:smoke
 pnpm live:sync
 pnpm seed:debug`}

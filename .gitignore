@@ -26,6 +26,7 @@
 # misc
 .DS_Store
 *.pem
+CLAUDE.md
 
 # debug
 npm-debug.log*
@@ -73,6 +74,8 @@ public/providers/*
 !public/providers/README.md
 /.pnpm-store/
 /artifacts/
+/.pipeline/
+/verify/
 
 # runtime data artifacts (keep local only)
 .data/ops/

@@ -155,19 +155,19 @@ export function DataSourceHealthTable() {
               ) : (
                 rows.map((row) => (
                   <tr key={row.sourceKey} className="group transition-colors">
-                    <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-100 bg-slate-50/50 font-black text-slate-900">{row.sourceKey}</td>
-                    <td className="px-4 py-4 border-y border-slate-100 bg-slate-50/50">
-                      <span className={cn("inline-flex rounded-lg px-2 py-0.5 text-[10px] font-black", row.configured ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700")}>
+                    <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-100 bg-surface-muted/50 font-black text-navy">{row.sourceKey}</td>
+                    <td className="px-4 py-4 border-y border-slate-100 bg-surface-muted/50">
+                      <span className={cn("inline-flex rounded-lg px-2 py-0.5 text-[10px] font-black", row.configured ? "bg-primary/5 text-navy" : "bg-rose-50 text-rose-700")}>
                         {row.configured ? "YES" : "NO"}
                       </span>
                     </td>
-                    <td className="px-4 py-4 border-y border-slate-100 bg-slate-50/50">
-                      <span className={cn("inline-flex rounded-lg px-2 py-0.5 text-[10px] font-black", row.replayEnabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-400")}>
+                    <td className="px-4 py-4 border-y border-slate-100 bg-surface-muted/50">
+                      <span className={cn("inline-flex rounded-lg px-2 py-0.5 text-[10px] font-black", row.replayEnabled ? "bg-primary/5 text-navy" : "bg-surface-muted text-slate-400")}>
                         {row.replayEnabled ? "YES" : "NO"}
                       </span>
                     </td>
-                    <td className="px-4 py-4 border-y border-slate-100 bg-slate-50/50 tabular-nums text-xs font-bold text-slate-500">{formatDateTime(row.cooldownNextRetryAt)}</td>
-                    <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-100 bg-slate-50/50 tabular-nums text-xs font-bold text-slate-500">{formatDateTime(row.lastSnapshotGeneratedAt)}</td>
+                    <td className="px-4 py-4 border-y border-slate-100 bg-surface-muted/50 tabular-nums text-xs font-bold text-slate-500">{formatDateTime(row.cooldownNextRetryAt)}</td>
+                    <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-100 bg-surface-muted/50 tabular-nums text-xs font-bold text-slate-500">{formatDateTime(row.lastSnapshotGeneratedAt)}</td>
                   </tr>
                 ))
               )}
@@ -188,11 +188,11 @@ export function DataSourceHealthTable() {
             {impactCards.map((card: DataSourceImpactOperatorCardSummary) => {
               const { cardId, healthSummary, label, readOnly } = card;
               return (
-                <div key={cardId} className="rounded-3xl border border-slate-100 bg-slate-50/50 p-6 flex flex-col" data-testid={`data-source-impact-meta-${cardId}`}>
+                <div key={cardId} className="rounded-3xl border border-slate-100 bg-surface-muted/50 p-6 flex flex-col" data-testid={`data-source-impact-meta-${cardId}`}>
                   <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                    <p className="text-sm font-black text-slate-900 tracking-tight">{label}</p>
+                    <p className="text-sm font-black text-navy tracking-tight">{label}</p>
                     {readOnly && (
-                      <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider", readOnly.tone === "warning" ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700 border border-emerald-100")}>
+                      <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider", readOnly.tone === "warning" ? "bg-amber-100 text-amber-700" : "bg-primary/5 text-navy border border-primary/10")}>
                         {readOnly.statusLabel}
                       </span>
                     )}
@@ -211,12 +211,12 @@ export function DataSourceHealthTable() {
                   {healthSummary && (
                     <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-4 shadow-inner">
                       <div className="flex items-center justify-between mb-3">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">health API 집계</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-primary">health API 집계</p>
                         <p className="text-[10px] font-bold text-slate-400 tabular-nums">{formatDateTime(healthSummary.latestCheckedAt)}</p>
                       </div>
                       <div className="space-y-3">
                         {healthSummary.items.map((item) => (
-                          <div key={`${cardId}-${item.label}`} className="rounded-xl bg-slate-50 p-3">
+                          <div key={`${cardId}-${item.label}`} className="rounded-xl bg-surface-muted p-3">
                             <div className="flex items-center justify-between gap-2 mb-1">
                               <p className="text-[11px] font-black text-slate-700">{item.label}</p>
                               <span className={cn("text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest", item.statusLabel === "주의" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-500")}>
@@ -265,19 +265,19 @@ export function DataSourceHealthTable() {
                     <td className="px-3 py-3 border-y border-l border-slate-100 bg-white tabular-nums text-slate-500 whitespace-nowrap">{formatDateTime(row.time)}</td>
                     <td className="px-3 py-3 border-y border-slate-100 bg-white font-black text-slate-700">{row.source || "-"}</td>
                     <td className="px-3 py-3 border-y border-slate-100 bg-white font-bold text-slate-500 whitespace-nowrap">{row.route || "-"}</td>
-                    <td className="px-3 py-3 border-y border-slate-100 bg-white"><span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono">{row.code}</span></td>
+                    <td className="px-3 py-3 border-y border-slate-100 bg-white"><span className="rounded bg-surface-muted px-1.5 py-0.5 font-mono">{row.code}</span></td>
                     <td className="px-3 py-3 border-y border-slate-100 bg-white font-black text-rose-600">{row.status}</td>
                     <td className="px-3 py-3 border-y border-slate-100 bg-white max-w-[20rem] font-medium text-slate-600 whitespace-normal break-words leading-relaxed">{row.message || "-"}</td>
                     <td className="px-3 py-3 rounded-r-2xl border-y border-r border-slate-100 bg-white">
                       <div className="flex items-center gap-2">
-                        <code className="max-w-[8rem] truncate rounded bg-slate-50 border border-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400 font-mono">
+                        <code className="max-w-[8rem] truncate rounded bg-surface-muted border border-slate-100 px-1.5 py-0.5 text-[10px] text-slate-400 font-mono">
                           {row.traceId || "-"}
                         </code>
                         {row.traceId ? (
                           <button
                             type="button"
                             onClick={() => void copyTraceId(row.traceId)}
-                            className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50 transition-colors"
+                            className="shrink-0 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[9px] font-black text-slate-500 uppercase tracking-widest hover:bg-surface-muted transition-colors"
                           >
                             {copiedTraceId === row.traceId ? "Copied" : "Copy"}
                           </button>

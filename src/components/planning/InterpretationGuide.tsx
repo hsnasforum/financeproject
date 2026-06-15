@@ -66,13 +66,13 @@ function verdictBadge(code: "GOOD" | "CAUTION" | "RISK" | "UNKNOWN"): { label: s
   if (code === "GOOD") {
     return {
       label: "양호",
-      className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      className: "border-primary/20 bg-primary/5 text-navy",
       variant: "success",
     };
   }
   return {
     label: "확인 필요",
-    className: "border-slate-200 bg-slate-50 text-slate-600",
+    className: "border-slate-200 bg-surface-muted text-slate-600",
     variant: "secondary",
   };
 }
@@ -80,7 +80,7 @@ function verdictBadge(code: "GOOD" | "CAUTION" | "RISK" | "UNKNOWN"): { label: s
 function diagnosticTone(severity: "risk" | "caution" | "info"): string {
   if (severity === "risk") return "border-rose-100 bg-rose-50/50 text-rose-900";
   if (severity === "caution") return "border-amber-100 bg-amber-50/50 text-amber-900";
-  return "border-slate-100 bg-slate-50/50 text-slate-900";
+  return "border-slate-100 bg-surface-muted/50 text-navy";
 }
 
 function warningLevelText(level: "info" | "warn" | "critical"): string {
@@ -98,8 +98,8 @@ function severityLabel(severity: "risk" | "caution" | "info"): string {
 function guideToneClass(tone: "slate" | "amber" | "rose" | "emerald"): string {
   if (tone === "rose") return "border-rose-100 bg-rose-50/30 text-rose-900 shadow-sm";
   if (tone === "amber") return "border-amber-100 bg-amber-50/30 text-amber-900 shadow-sm";
-  if (tone === "emerald") return "border-emerald-100 bg-emerald-50/30 text-emerald-900 shadow-sm";
-  return "border-slate-100 bg-slate-50/30 text-slate-900 shadow-sm";
+  if (tone === "emerald") return "border-primary/10 bg-primary/30 text-navy shadow-sm";
+  return "border-slate-100 bg-surface-muted/30 text-navy shadow-sm";
 }
 
 function isHashHref(href: string | undefined): href is `#${string}` {
@@ -170,16 +170,16 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
         <div className="flex items-center justify-between gap-4 mb-8">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">결과 해석</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-900">한눈에 보는 결과 해석</h2>
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-navy">한눈에 보는 결과 해석</h2>
           </div>
           <Badge variant={badge.variant} className="rounded-full px-4 py-1 font-black">
             {badge.label}
           </Badge>
         </div>
 
-        <section className="rounded-[2rem] bg-slate-50 p-8 border border-slate-100/50 shadow-inner">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">핵심 요약</p>
-          <p className="mt-3 text-xl font-black leading-snug text-slate-900">{vm.verdict.headline}</p>
+        <section className="rounded-[2rem] bg-surface-muted p-8 border border-slate-100/50 shadow-inner">
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary">핵심 요약</p>
+          <p className="mt-3 text-xl font-black leading-snug text-navy">{vm.verdict.headline}</p>
           <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">
             {primaryAction
               ? `가장 먼저 할 일은 '${primaryAction.title}'입니다. 아래 핵심 지표 3가지를 통해 현재 상황을 파악해 보세요.`
@@ -208,7 +208,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
           >
             <div className="px-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">운영 가이드</p>
-              <p className="mt-2 text-lg font-black tracking-tight text-slate-900">{props.monthlyOperatingGuide.headline}</p>
+              <p className="mt-2 text-lg font-black tracking-tight text-navy">{props.monthlyOperatingGuide.headline}</p>
               <p className="mt-1 text-xs font-bold text-slate-400 italic">※ {props.monthlyOperatingGuide.basisLabel}</p>
             </div>
 
@@ -227,7 +227,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
             </div>
 
             <div className="space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 ml-1">{props.monthlyOperatingGuide.nextPlanTitle}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-primary ml-1">{props.monthlyOperatingGuide.nextPlanTitle}</p>
               <div className="grid gap-4 md:grid-cols-3">
                 {props.monthlyOperatingGuide.nextPlan.map((item) => (
                   <article className={cn("rounded-[1.5rem] border p-5", guideToneClass(item.tone))} key={`guide-plan-${item.title}`}>
@@ -253,13 +253,13 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-4 px-1">우선 액션</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-4 px-1">우선 액션</p>
           {primaryAction ? (
-            <article className="rounded-3xl border border-emerald-100 bg-emerald-50/20 p-6 shadow-sm">
+            <article className="rounded-3xl border border-primary/10 bg-primary/20 p-6 shadow-sm">
               <div className="flex items-center justify-between mb-4">
-                <span className="rounded-lg bg-emerald-500 px-2 py-1 text-[10px] font-black text-white uppercase tracking-widest shadow-sm">Priority 1</span>
+                <span className="rounded-lg bg-primary px-2 py-1 text-[10px] font-black text-white uppercase tracking-widest shadow-sm">Priority 1</span>
               </div>
-              <h3 className="text-xl font-black text-slate-900 tracking-tight leading-snug">{primaryAction.title}</h3>
+              <h3 className="text-xl font-black text-navy tracking-tight leading-snug">{primaryAction.title}</h3>
               <p className="mt-3 text-sm font-bold text-slate-600 leading-relaxed">{primaryAction.description}</p>
               {primaryAction.steps.length > 0 ? (
                 <div className="mt-6 space-y-3">
@@ -267,7 +267,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                   <ol className="space-y-2 text-xs font-bold text-slate-700">
                     {primaryAction.steps.slice(0, 3).map((step, index) => (
                       <li key={`${primaryAction.id}-step-${index}`} className="flex gap-3">
-                        <span className="text-emerald-500 font-black">{index + 1}.</span>
+                        <span className="text-primary font-black">{index + 1}.</span>
                         <span className="leading-relaxed">{step}</span>
                       </li>
                     ))}
@@ -278,7 +278,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                 <div className="mt-8">
                   {isHashHref(primaryAction.href) ? (
                     <Button
-                      className="w-full rounded-2xl h-12 font-black shadow-lg shadow-emerald-900/10"
+                      className="w-full rounded-2xl h-12 font-black shadow-lg shadow-navy/10"
                       variant="primary"
                       onClick={() => {
                         if (isHashHref(primaryAction.href)) {
@@ -290,7 +290,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                     </Button>
                   ) : (
                     <Link href={primaryAction.href} className="block">
-                      <Button className="w-full rounded-2xl h-12 font-black shadow-lg shadow-emerald-900/10" variant="primary">
+                      <Button className="w-full rounded-2xl h-12 font-black shadow-lg shadow-navy/10" variant="primary">
                         바로 확인하기
                       </Button>
                     </Link>
@@ -299,7 +299,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
               ) : null}
             </article>
           ) : (
-            <div className="rounded-3xl border border-slate-100 bg-slate-50 p-8 text-center">
+            <div className="rounded-3xl border border-slate-100 bg-surface-muted p-8 text-center">
               <p className="text-sm font-bold text-slate-400 italic">현재 즉시 실행이 필요한 항목이 없습니다.</p>
             </div>
           )}
@@ -318,7 +318,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
         </Card>
       </div>
 
-      <details className="group no-print rounded-[2rem] border border-slate-200 bg-slate-50/50 p-6 transition-all" data-testid="interpretation-detail-panel">
+      <details className="group no-print rounded-[2rem] border border-slate-200 bg-surface-muted/50 p-6 transition-all" data-testid="interpretation-detail-panel">
         <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-400 group-open:text-slate-600 list-none flex items-center gap-2">
           <span className="transition-transform group-open:rotate-90">▶</span>
           상세 근거와 추가 제안 보기
@@ -327,7 +327,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
         <div className="mt-8 space-y-10" id={REPORT_SECTION_IDS.evidence}>
           <div className="px-1">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">자세히 보기</p>
-            <h3 className="mt-1 text-lg font-black text-slate-900">왜 이렇게 분석했나요?</h3>
+            <h3 className="mt-1 text-lg font-black text-navy">왜 이렇게 분석했나요?</h3>
           </div>
           
           {vm.diagnostics.length === 0 ? (
@@ -342,7 +342,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                       {severityLabel(diag.severity)}
                     </Badge>
                   </div>
-                  <p className="text-sm font-black text-slate-900 tabular-nums">{diag.evidence}</p>
+                  <p className="text-sm font-black text-navy tabular-nums">{diag.evidence}</p>
                   <p className="mt-2 text-xs font-bold text-slate-500 leading-relaxed">{diag.description}</p>
                   {diag.evidenceItem ? (
                     <EvidencePanel className="mt-4" item={diag.evidenceItem} tone="light" />
@@ -357,15 +357,15 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">이어서 하면 좋은 일</p>
               <div className="grid gap-4 md:grid-cols-2" data-testid="interpretation-actions">
                 {secondaryActions.map((action, index) => (
-                  <article className="rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-sm transition-all hover:border-emerald-100" key={`${action.id}-${index}`}>
-                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600/60">Next {index + 2}</p>
-                    <p className="mt-1 text-sm font-black text-slate-900">{action.title}</p>
+                  <article className="rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-sm transition-all hover:border-primary/10" key={`${action.id}-${index}`}>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-primary/80">Next {index + 2}</p>
+                    <p className="mt-1 text-sm font-black text-navy">{action.title}</p>
                     <p className="mt-2 text-xs font-bold text-slate-500 leading-relaxed">{action.description}</p>
                     {action.href ? (
                       <div className="mt-4">
                         {isHashHref(action.href) ? (
                           <button
-                            className="text-[10px] font-black text-emerald-600 uppercase tracking-widest underline underline-offset-4 decoration-emerald-200"
+                            className="text-[10px] font-black text-primary uppercase tracking-widest underline underline-offset-4 decoration-primary/20"
                             onClick={() => {
                               if (isHashHref(action.href)) {
                                 handleHashAction(action.href);
@@ -377,7 +377,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                           </button>
                         ) : (
                           <Link
-                            className="text-[10px] font-black text-emerald-600 uppercase tracking-widest underline underline-offset-4 decoration-emerald-200"
+                            className="text-[10px] font-black text-primary uppercase tracking-widest underline underline-offset-4 decoration-primary/20"
                             href={action.href}
                           >
                             관련 내용 보기 →
@@ -403,7 +403,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                       <Badge variant={warning.severity === "critical" ? "destructive" : "warning"} className="h-5 px-1.5 text-[9px] font-black">
                         {warningLevelText(warning.severity)}
                       </Badge>
-                      <p className="text-xs font-black text-slate-900">{warning.title}</p>
+                      <p className="text-xs font-black text-navy">{warning.title}</p>
                     </div>
                     <p className="mt-2 text-xs font-bold text-slate-600 leading-relaxed">상세: {warning.plainDescription}</p>
                     <p className="mt-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -411,7 +411,7 @@ export default function InterpretationGuide(props: InterpretationGuideProps) {
                       {warning.subjectLabel ? ` / 대상: ${warning.subjectLabel}` : ""}
                     </p>
                     {warning.suggestedActionId ? (
-                      <p className="mt-1 text-[10px] font-black text-emerald-600">권장 액션 ID: {warning.suggestedActionId}</p>
+                      <p className="mt-1 text-[10px] font-black text-primary">권장 액션 ID: {warning.suggestedActionId}</p>
                     ) : null}
                     <details className="mt-3 group/code">
                       <summary className="cursor-pointer text-[10px] font-black text-slate-300 hover:text-slate-500 uppercase tracking-widest list-none flex items-center gap-1">

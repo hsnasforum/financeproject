@@ -49,9 +49,14 @@ export function InlineTodoEditor({ item, onPatch, disabled = false }: InlineTodo
   const requestSeqRef = useRef(0);
 
   useEffect(() => {
-    setPriority(item.priority);
-    setDueDate(item.dueDate ?? "");
-    setTasks(item.tasks);
+    const timeoutId = window.setTimeout(() => {
+      setPriority(item.priority);
+      setDueDate(item.dueDate ?? "");
+      setTasks(item.tasks);
+    }, 0);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [item.dueDate, item.id, item.priority, item.tasks]);
 
   const patch = useMemo<InlineTodoPatch>(() => {
@@ -71,13 +76,17 @@ export function InlineTodoEditor({ item, onPatch, disabled = false }: InlineTodo
 
   useEffect(() => {
     if (disabled) {
-      setSaving(false);
-      return;
+      const timeoutId = window.setTimeout(() => setSaving(false), 0);
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
     const hasPatch = Object.keys(patch).length > 0;
     if (!hasPatch) {
-      setSaving(false);
-      return;
+      const timeoutId = window.setTimeout(() => setSaving(false), 0);
+      return () => {
+        window.clearTimeout(timeoutId);
+      };
     }
 
     const seq = requestSeqRef.current + 1;

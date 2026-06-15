@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { tsImport } from "tsx/esm/api";
+import { runPnpmBuffered } from "./pnpm_runner.mjs";
 import {
   OPS_LOGS_RELATIVE,
   OPS_REPORTS_RELATIVE,
@@ -91,28 +91,25 @@ function hasScript(scripts, name) {
 function createRunner(cwd) {
   return function runScript(scriptName, extraArgs = []) {
     return new Promise((resolve, reject) => {
-      const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
       const args = [scriptName, ...extraArgs];
       const startedAtMs = Date.now();
       const out = [];
       const err = [];
-      const child = spawn(command, args, {
+      runPnpmBuffered(args, {
         cwd,
         env: process.env,
-      });
-      child.stdout.on("data", (chunk) => out.push(String(chunk)));
-      child.stderr.on("data", (chunk) => err.push(String(chunk)));
-      child.on("error", reject);
-      child.on("close", (code) => {
+        onStdout: (chunk) => out.push(String(chunk)),
+        onStderr: (chunk) => err.push(String(chunk)),
+      }).then((result) => {
         resolve({
-          command,
+          command: "pnpm",
           args,
-          exitCode: Number.isFinite(code) ? code : 1,
+          exitCode: result.code,
           durationMs: Date.now() - startedAtMs,
           stdout: out.join(""),
-          stderr: err.join(""),
+          stderr: result.error ? `${err.join("")}${String(result.error)}` : err.join(""),
         });
-      });
+      }, reject);
     });
   };
 }

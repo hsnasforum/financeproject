@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { NextResponse } from "next/server";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevMutationRequest, guardDevReadRequest } from "@/lib/dev/devGuards";
 import { decideTrustedOrigin, parseHostPatterns } from "@/lib/security/trustedOrigin";
 
 export const runtime = "nodejs";
@@ -123,7 +123,7 @@ function enforceTrustedOrigin(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   const decision = enforceTrustedOrigin(request);
@@ -136,7 +136,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const blocked = onlyDev();
+  const blocked = guardDevMutationRequest(request);
   if (blocked) return blocked;
 
   const decision = enforceTrustedOrigin(request);

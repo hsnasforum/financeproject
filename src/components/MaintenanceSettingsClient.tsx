@@ -133,11 +133,14 @@ export function MaintenanceSettingsClient() {
   ]);
 
   useEffect(() => {
-    const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
-    const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
-    if (unlocked && csrf) {
-      setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
-    }
+    const timeoutId = window.setTimeout(() => {
+      const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
+      const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
+      if (unlocked && csrf) {
+        setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   useEffect(() => {
@@ -295,7 +298,7 @@ export function MaintenanceSettingsClient() {
           <SubSectionHeader title="Dev 잠금 해제" description="정책 저장 및 정리 실행을 위해 인증이 필요합니다." />
           <div className="mt-6 flex flex-col gap-3 sm:grid sm:grid-cols-[1fr_auto] sm:items-center">
             <input
-              className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50/50 px-5 text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all shadow-inner"
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-surface-muted/50 px-5 text-sm font-bold text-navy outline-none focus:bg-white focus:ring-1 focus:ring-primary transition-all shadow-inner"
               type="password"
               placeholder="인증 토큰 입력"
               value={unlockToken}
@@ -311,7 +314,7 @@ export function MaintenanceSettingsClient() {
             </Button>
           </div>
           <div className="mt-4 flex items-center gap-2 px-1">
-            <span className={cn("w-2 h-2 rounded-full", unlock.unlocked ? "bg-emerald-500" : "bg-slate-300")} />
+            <span className={cn("w-2 h-2 rounded-full", unlock.unlocked ? "bg-primary" : "bg-slate-300")} />
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
               인증 상태: {unlock.unlocked ? "UNLOCKED" : "LOCKED"}
             </span>
@@ -329,33 +332,33 @@ export function MaintenanceSettingsClient() {
             <div className="grid gap-x-8 gap-y-6 md:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Policy Version</label>
-                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={version} onChange={(event) => setVersion(event.target.value)} />
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-primary" value={version} onChange={(event) => setVersion(event.target.value)} />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Feedback Max Items</label>
-                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={feedbackMaxItems} onChange={(event) => setFeedbackMaxItems(event.target.value)} />
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-primary" value={feedbackMaxItems} onChange={(event) => setFeedbackMaxItems(event.target.value)} />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Fix History Max Items</label>
-                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={fixHistoryMaxItems} onChange={(event) => setFixHistoryMaxItems(event.target.value)} />
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-primary" value={fixHistoryMaxItems} onChange={(event) => setFixHistoryMaxItems(event.target.value)} />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Log Max Bytes</label>
-                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={refreshLogMaxBytes} onChange={(event) => setRefreshLogMaxBytes(event.target.value)} />
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-primary" value={refreshLogMaxBytes} onChange={(event) => setRefreshLogMaxBytes(event.target.value)} />
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Log Keep Tail Bytes</label>
-                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-emerald-500" value={refreshLogKeepTailBytes} onChange={(event) => setRefreshLogKeepTailBytes(event.target.value)} />
+                <input className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 tabular-nums outline-none focus:ring-1 focus:ring-primary" value={refreshLogKeepTailBytes} onChange={(event) => setRefreshLogKeepTailBytes(event.target.value)} />
               </div>
               <div className="flex items-center pt-6">
                 <label className="flex items-center gap-3 cursor-pointer group">
                   <input
                     type="checkbox"
-                    className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary"
                     checked={keepBackupRestorePoint}
                     onChange={(event) => setKeepBackupRestorePoint(event.target.checked)}
                   />
-                  <span className="text-sm font-black text-slate-700 group-hover:text-emerald-600 transition-colors">Keep Backup Restore Point</span>
+                  <span className="text-sm font-black text-slate-700 group-hover:text-primary transition-colors">Keep Backup Restore Point</span>
                 </label>
               </div>
             </div>
@@ -373,14 +376,14 @@ export function MaintenanceSettingsClient() {
           {(notice || error || cleanupSummary) && (
             <div className={cn(
               "mt-8 rounded-2xl p-5 text-sm font-black animate-in fade-in slide-in-from-bottom-2",
-              error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+              error ? "bg-rose-50 text-rose-700" : "bg-primary/5 text-navy"
             )}>
               <p>{error || notice}</p>
               {cleanupSummary && <p className="mt-2 text-xs font-bold opacity-80 font-mono">{cleanupSummary}</p>}
             </div>
           )}
 
-          <div className="mt-8 rounded-2xl border border-slate-100 bg-slate-50/50 p-4">
+          <div className="mt-8 rounded-2xl border border-slate-100 bg-surface-muted/50 p-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Policy Preview (JSON)</p>
             <pre className="overflow-x-auto text-[10px] font-bold text-slate-500 scrollbar-none">{JSON.stringify(previewPolicy, null, 2)}</pre>
           </div>

@@ -72,12 +72,19 @@ export function DraftsListClient({
 
   const csrfToken = useMemo(() => readDevCsrfToken(), []);
 
+  const fetchDrafts = useCallback((signal?: AbortSignal) => fetchDraftList((input, init) => (
+    fetch(input, {
+      ...init,
+      signal,
+    })
+  ), csrfToken), [csrfToken]);
+
   const loadDrafts = useCallback(async () => {
     setLoading(true);
     setMessage("");
 
     try {
-      const list = await fetchDraftList(fetch, csrfToken);
+      const list = await fetchDrafts();
       setRows(list);
     } catch (error) {
       setRows([]);
@@ -85,12 +92,34 @@ export function DraftsListClient({
     } finally {
       setLoading(false);
     }
-  }, [csrfToken]);
+  }, [fetchDrafts]);
 
   useEffect(() => {
     if (disableAutoLoad) return;
-    void loadDrafts();
-  }, [disableAutoLoad, loadDrafts]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialDrafts() {
+      try {
+        const list = await fetchDrafts(controller.signal);
+        if (!active) return;
+        setRows(list);
+        setMessage("");
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        setRows([]);
+        setMessage(error instanceof Error ? error.message : "초안 목록을 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialDrafts();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [disableAutoLoad, fetchDrafts]);
 
   async function handleImportPreview() {
     if (!file || importing) return;
@@ -165,7 +194,7 @@ export function DraftsListClient({
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Drafts</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Drafts</h1>
           <p className="text-sm text-slate-600">CSV 업로드 후 draft 미리보기를 확인하고, 저장 버튼으로 로컬에 보관합니다.</p>
 
           <BodyInset className="space-y-2">
@@ -207,7 +236,7 @@ export function DraftsListClient({
             </div>
 
             {preview ? (
-              <div className="rounded-lg border border-emerald-200 bg-white p-2 text-xs text-slate-700" data-testid="v3-csv-draft-preview">
+              <div className="rounded-lg border border-primary/20 bg-white p-2 text-xs text-slate-700" data-testid="v3-csv-draft-preview">
                 <p>rows: {preview.draftSummary.rows.toLocaleString("ko-KR")}</p>
                 <p>columns: {preview.draftSummary.columns.toLocaleString("ko-KR")}</p>
                 <p>months: {preview.meta.months.toLocaleString("ko-KR")}</p>
@@ -253,7 +282,7 @@ export function DraftsListClient({
           {rows.length > 0 ? (
             <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-drafts-list">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                   <tr>
                     <th className="px-3 py-2 text-left">생성일</th>
                     <th className="px-3 py-2 text-right">months</th>
@@ -267,7 +296,7 @@ export function DraftsListClient({
                 <tbody className="divide-y divide-slate-100">
                   {rows.map((row) => (
                     <tr
-                      className={selectedDraftId === row.id ? "bg-emerald-50" : undefined}
+                      className={selectedDraftId === row.id ? "bg-primary/5" : undefined}
                       data-testid={`v3-draft-row-${row.id}`}
                       key={row.id}
                     >
@@ -276,7 +305,7 @@ export function DraftsListClient({
                       <td className="px-3 py-2 text-right text-slate-800">{asNumber(row.source.rows) ?? "-"}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.summary.medianIncomeKrw))}</td>
                       <td className="px-3 py-2 text-right text-slate-800">{formatKrw(asNumber(row.summary.medianExpenseKrw))}</td>
-                      <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatKrw(asNumber(row.summary.avgNetKrw))}</td>
+                      <td className="px-3 py-2 text-right font-semibold text-navy">{formatKrw(asNumber(row.summary.avgNetKrw))}</td>
                       <td className="px-3 py-2">
                         <div className={bodyDenseActionRowClassName}>
                           <BodyActionLink href={`/planning/v3/drafts/${encodeURIComponent(row.id)}`}>
@@ -312,7 +341,7 @@ export function DraftsListClient({
           role="dialog"
         >
           <BodyDialogSurface data-testid="v3-draft-delete-dialog">
-            <h2 className="text-base font-black text-slate-900" id="v3-draft-delete-title">초안 삭제 확인</h2>
+            <h2 className="text-base font-black text-navy" id="v3-draft-delete-title">초안 삭제 확인</h2>
             <p className="mt-2 text-sm text-slate-700">이 초안을 삭제할까요? 삭제 후 복구할 수 없습니다.</p>
             <div className={bodyDialogActionsClassName}>
               <Button

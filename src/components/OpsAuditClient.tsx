@@ -35,9 +35,18 @@ type OpsAuditPayload = {
 
 type OpsAuditClientProps = {
   csrf: string;
+  initialEventType?: string;
+  initialTaskName?: string;
 };
 
 type PolicyDiffFilter = "all" | "increase" | "decrease" | "same";
+type AuditFilterState = {
+  eventType: string;
+  taskName: string;
+  policyDiffFilter: PolicyDiffFilter;
+};
+
+const CSRF_ERROR_MESSAGE = "Dev unlock/CSRF가 없어 감사 로그를 조회할 수 없습니다.";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -115,8 +124,8 @@ function matchesPolicyDiffFilter(row: OpsAuditEvent, filter: PolicyDiffFilter): 
 
 function schedulerDeltaBadgeClass(delta: number): string {
   if (delta > 0) return "border-rose-200 bg-rose-50 text-rose-700";
-  if (delta < 0) return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  return "border-slate-200 bg-slate-100 text-slate-600";
+  if (delta < 0) return "border-primary/20 bg-primary/5 text-navy";
+  return "border-slate-200 bg-surface-muted text-slate-600";
 }
 
 function formatDelta(delta: number): string {
@@ -166,75 +175,120 @@ function toSchedulerPolicyDiff(eventType: string, meta: Record<string, unknown> 
   };
 }
 
-export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
+export function OpsAuditClient({ csrf, initialEventType = "", initialTaskName = "" }: OpsAuditClientProps) {
+  const hasCsrf = asString(csrf).length > 0;
   const [rows, setRows] = useState<OpsAuditEvent[]>([]);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [taskNames, setTaskNames] = useState<string[]>([]);
-  const [eventType, setEventType] = useState("");
-  const [taskName, setTaskName] = useState("");
+  const [eventType, setEventType] = useState(initialEventType);
+  const [taskName, setTaskName] = useState(initialTaskName);
   const [policyDiffFilter, setPolicyDiffFilter] = useState<PolicyDiffFilter>("all");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const hasCsrf = asString(csrf).length > 0;
+  const [loading, setLoading] = useState(hasCsrf);
+  const [error, setError] = useState(hasCsrf ? "" : CSRF_ERROR_MESSAGE);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const nextEventType = asString(params.get("eventType")).toUpperCase();
-    const nextTaskName = asString(params.get("taskName")).toUpperCase();
-    if (nextEventType) setEventType(nextEventType);
-    if (nextTaskName) setTaskName(nextTaskName);
+  const fetchAudit = useCallback(async (signal?: AbortSignal): Promise<OpsAuditPayload> => {
+    const params = new URLSearchParams();
+    params.set("csrf", csrf);
+    params.set("limit", "200");
+    if (asString(eventType)) {
+      params.set("eventType", eventType);
+    }
+    if (asString(taskName)) {
+      params.set("taskName", taskName);
+    }
+
+    const response = await fetch(`/api/ops/audit?${params.toString()}`, { cache: "no-store", signal });
+    const payload = (await response.json().catch(() => null)) as OpsAuditPayload | null;
+    if (!response.ok || !payload?.ok || !Array.isArray(payload.data)) {
+      const apiError = resolveClientApiError(payload, "감사 로그를 불러오지 못했습니다.");
+      throw new Error(apiError.message);
+    }
+    return payload;
+  }, [csrf, eventType, taskName]);
+
+  const applyAuditPayload = useCallback((payload: OpsAuditPayload) => {
+    setRows((payload.data ?? []).filter((row) => matchesPolicyDiffFilter(row, policyDiffFilter)));
+    const nextTypes = Array.isArray(payload.meta?.types)
+      ? payload.meta?.types.map((row) => asString(row)).filter((row) => row.length > 0)
+      : [];
+    const nextTaskNames = Array.isArray(payload.meta?.taskNames)
+      ? payload.meta.taskNames.map((row) => asString(row).toUpperCase()).filter((row) => row.length > 0)
+      : [];
+    setEventTypes(nextTypes);
+    setTaskNames(nextTaskNames);
+    setError("");
+  }, [policyDiffFilter]);
+
+  const applyAuditError = useCallback((loadError: unknown) => {
+    setRows([]);
+    setEventTypes([]);
+    setTaskNames([]);
+    setError(loadError instanceof Error ? loadError.message : "감사 로그를 불러오지 못했습니다.");
   }, []);
 
   const loadAudit = useCallback(async () => {
     if (!hasCsrf) {
       setRows([]);
-      setError("Dev unlock/CSRF가 없어 감사 로그를 조회할 수 없습니다.");
+      setError(CSRF_ERROR_MESSAGE);
       return;
     }
 
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      params.set("csrf", csrf);
-      params.set("limit", "200");
-      if (asString(eventType)) {
-        params.set("eventType", eventType);
-      }
-      if (asString(taskName)) {
-        params.set("taskName", taskName);
-      }
-
-      const response = await fetch(`/api/ops/audit?${params.toString()}`, { cache: "no-store" });
-      const payload = (await response.json().catch(() => null)) as OpsAuditPayload | null;
-      if (!response.ok || !payload?.ok || !Array.isArray(payload.data)) {
-        const apiError = resolveClientApiError(payload, "감사 로그를 불러오지 못했습니다.");
-        throw new Error(apiError.message);
-      }
-
-      setRows(payload.data.filter((row) => matchesPolicyDiffFilter(row, policyDiffFilter)));
-      const nextTypes = Array.isArray(payload.meta?.types)
-        ? payload.meta?.types.map((row) => asString(row)).filter((row) => row.length > 0)
-        : [];
-      const nextTaskNames = Array.isArray(payload.meta?.taskNames)
-        ? payload.meta.taskNames.map((row) => asString(row).toUpperCase()).filter((row) => row.length > 0)
-        : [];
-      setEventTypes(nextTypes);
-      setTaskNames(nextTaskNames);
+      const payload = await fetchAudit();
+      applyAuditPayload(payload);
     } catch (loadError) {
-      setRows([]);
-      setEventTypes([]);
-      setTaskNames([]);
-      setError(loadError instanceof Error ? loadError.message : "감사 로그를 불러오지 못했습니다.");
+      applyAuditError(loadError);
     } finally {
       setLoading(false);
     }
-  }, [csrf, eventType, hasCsrf, policyDiffFilter, taskName]);
+  }, [applyAuditError, applyAuditPayload, fetchAudit, hasCsrf]);
+
+  const updateAuditFilters = useCallback((nextFilters: Partial<AuditFilterState>) => {
+    const nextEventType = nextFilters.eventType ?? eventType;
+    const nextTaskName = nextFilters.taskName ?? taskName;
+    const nextPolicyDiffFilter = nextFilters.policyDiffFilter ?? policyDiffFilter;
+    if (
+      nextEventType === eventType
+      && nextTaskName === taskName
+      && nextPolicyDiffFilter === policyDiffFilter
+    ) {
+      return;
+    }
+    if (hasCsrf) {
+      setLoading(true);
+      setError("");
+    }
+    setEventType(nextEventType);
+    setTaskName(nextTaskName);
+    setPolicyDiffFilter(nextPolicyDiffFilter);
+  }, [eventType, hasCsrf, policyDiffFilter, taskName]);
 
   useEffect(() => {
-    void loadAudit();
-  }, [loadAudit]);
+    if (!hasCsrf) return;
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialAudit() {
+      try {
+        const payload = await fetchAudit(controller.signal);
+        if (!active) return;
+        applyAuditPayload(payload);
+      } catch (loadError) {
+        if (!active || controller.signal.aborted) return;
+        applyAuditError(loadError);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialAudit();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [applyAuditError, applyAuditPayload, fetchAudit, hasCsrf]);
 
   return (
     <PageShell>
@@ -261,14 +315,14 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
       ) : null}
 
       <Card className="mb-4 p-4">
-        <h2 className="text-base font-black text-slate-900">필터</h2>
+        <h2 className="text-base font-black text-navy">필터</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="block text-xs text-slate-600">
             Event Type
             <select
               className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"
               value={eventType}
-              onChange={(event) => setEventType(event.target.value)}
+              onChange={(event) => updateAuditFilters({ eventType: event.target.value })}
             >
               <option value="">ALL</option>
               {eventTypes.map((row) => (
@@ -281,7 +335,7 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             <select
               className="mt-1 h-9 w-full rounded-md border border-slate-300 px-2 text-sm"
               value={taskName}
-              onChange={(event) => setTaskName(event.target.value)}
+              onChange={(event) => updateAuditFilters({ taskName: event.target.value })}
             >
               <option value="">ALL</option>
               {taskNames.map((row) => (
@@ -296,8 +350,10 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             size="sm"
             variant="outline"
             onClick={() => {
-              setEventType("SCHEDULED_TASK");
-              setTaskName("OPS_SCHEDULER_HEALTH");
+              updateAuditFilters({
+                eventType: "SCHEDULED_TASK",
+                taskName: "OPS_SCHEDULER_HEALTH",
+              });
             }}
           >
             스케줄러 헬스만 보기
@@ -307,9 +363,11 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             size="sm"
             variant="outline"
             onClick={() => {
-              setEventType("OPS_SCHEDULER_POLICY_UPDATE");
-              setTaskName("");
-              setPolicyDiffFilter("all");
+              updateAuditFilters({
+                eventType: "OPS_SCHEDULER_POLICY_UPDATE",
+                taskName: "",
+                policyDiffFilter: "all",
+              });
             }}
           >
             임계치 변경 이력만 보기
@@ -319,9 +377,11 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             size="sm"
             variant="outline"
             onClick={() => {
-              setEventType("");
-              setTaskName("");
-              setPolicyDiffFilter("all");
+              updateAuditFilters({
+                eventType: "",
+                taskName: "",
+                policyDiffFilter: "all",
+              });
             }}
           >
             필터 초기화
@@ -332,7 +392,7 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             type="button"
             size="sm"
             variant={policyDiffFilter === "all" ? "primary" : "outline"}
-            onClick={() => setPolicyDiffFilter("all")}
+            onClick={() => updateAuditFilters({ policyDiffFilter: "all" })}
           >
             변경 요약 전체
           </Button>
@@ -341,9 +401,11 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             size="sm"
             variant={policyDiffFilter === "increase" ? "primary" : "outline"}
             onClick={() => {
-              setEventType("OPS_SCHEDULER_POLICY_UPDATE");
-              setTaskName("");
-              setPolicyDiffFilter("increase");
+              updateAuditFilters({
+                eventType: "OPS_SCHEDULER_POLICY_UPDATE",
+                taskName: "",
+                policyDiffFilter: "increase",
+              });
             }}
           >
             임계치 증가만
@@ -353,9 +415,11 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             size="sm"
             variant={policyDiffFilter === "decrease" ? "primary" : "outline"}
             onClick={() => {
-              setEventType("OPS_SCHEDULER_POLICY_UPDATE");
-              setTaskName("");
-              setPolicyDiffFilter("decrease");
+              updateAuditFilters({
+                eventType: "OPS_SCHEDULER_POLICY_UPDATE",
+                taskName: "",
+                policyDiffFilter: "decrease",
+              });
             }}
           >
             임계치 감소만
@@ -365,9 +429,11 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
             size="sm"
             variant={policyDiffFilter === "same" ? "primary" : "outline"}
             onClick={() => {
-              setEventType("OPS_SCHEDULER_POLICY_UPDATE");
-              setTaskName("");
-              setPolicyDiffFilter("same");
+              updateAuditFilters({
+                eventType: "OPS_SCHEDULER_POLICY_UPDATE",
+                taskName: "",
+                policyDiffFilter: "same",
+              });
             }}
           >
             동일값만
@@ -391,7 +457,7 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
       {rows.length > 0 ? (
         <Card className="overflow-x-auto p-0">
           <table className="min-w-full border-collapse text-left text-xs">
-            <thead className="bg-slate-100 text-slate-600">
+            <thead className="bg-surface-muted text-slate-600">
               <tr>
                 <th className="px-3 py-2 font-semibold">시각</th>
                 <th className="px-3 py-2 font-semibold">이벤트</th>
@@ -404,7 +470,7 @@ export function OpsAuditClient({ csrf }: OpsAuditClientProps) {
               {rows.map((row, index) => (
                 <tr key={`${row.at}-${row.eventType}-${index}`} className="border-t border-slate-200 align-top">
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{formatDateTime(row.at)}</td>
-                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-slate-900">{row.eventType}</td>
+                  <td className="whitespace-nowrap px-3 py-2 font-semibold text-navy">{row.eventType}</td>
                   <td className="px-3 py-2 text-slate-700">
                     {(() => {
                       const diff = toSchedulerPolicyDiff(row.eventType, row.meta);

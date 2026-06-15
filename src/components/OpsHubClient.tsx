@@ -155,9 +155,13 @@ export function OpsHubClient({ csrf }: OpsHubClientProps) {
   }, []);
 
   useEffect(() => {
-    void loadRestorePoint();
-    void loadPolicy();
-    void loadRecentErrors();
+    const timeoutId = window.setTimeout(() => {
+      void loadRestorePoint();
+      void loadPolicy();
+      void loadRecentErrors();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadRestorePoint, loadPolicy, loadRecentErrors]);
 
   return (
@@ -240,7 +244,7 @@ export function OpsHubClient({ csrf }: OpsHubClientProps) {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="text-base font-black text-slate-900">Backup / Restore</h2>
+          <h2 className="text-base font-black text-navy">Backup / Restore</h2>
           <p className="mt-2 text-sm text-slate-600">restore point 상태를 확인하고 백업/복원 도구로 이동합니다.</p>
 
           {loadingRestorePoint ? (
@@ -269,7 +273,7 @@ export function OpsHubClient({ csrf }: OpsHubClientProps) {
         </Card>
 
         <Card>
-          <h2 className="text-base font-black text-slate-900">Retention / Cleanup</h2>
+          <h2 className="text-base font-black text-navy">Retention / Cleanup</h2>
           <p className="mt-2 text-sm text-slate-600">현재 리텐션 정책을 확인하고 정리 도구로 이동합니다.</p>
 
           {loadingPolicy ? (
@@ -285,12 +289,12 @@ export function OpsHubClient({ csrf }: OpsHubClientProps) {
             />
           ) : (
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">version: <span className="font-semibold">{policy?.version ?? "-"}</span></div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">feedbackMaxItems: <span className="font-semibold">{policy?.feedbackMaxItems ?? "-"}</span></div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">fixHistoryMaxItems: <span className="font-semibold">{policy?.fixHistoryMaxItems ?? "-"}</span></div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">logMax: <span className="font-semibold">{toMb(policy?.refreshLogMaxBytes)}</span></div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">tailKeep: <span className="font-semibold">{toMb(policy?.refreshLogKeepTailBytes)}</span></div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2">keepRestorePoint: <span className="font-semibold">{policy?.keepBackupRestorePoint ? "true" : "false"}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-2 py-2">version: <span className="font-semibold">{policy?.version ?? "-"}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-2 py-2">feedbackMaxItems: <span className="font-semibold">{policy?.feedbackMaxItems ?? "-"}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-2 py-2">fixHistoryMaxItems: <span className="font-semibold">{policy?.fixHistoryMaxItems ?? "-"}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-2 py-2">logMax: <span className="font-semibold">{toMb(policy?.refreshLogMaxBytes)}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-2 py-2">tailKeep: <span className="font-semibold">{toMb(policy?.refreshLogKeepTailBytes)}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-2 py-2">keepRestorePoint: <span className="font-semibold">{policy?.keepBackupRestorePoint ? "true" : "false"}</span></div>
             </div>
           )}
 
@@ -303,7 +307,7 @@ export function OpsHubClient({ csrf }: OpsHubClientProps) {
       <AuditLogCard limit={30} />
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Recent Errors</h2>
+        <h2 className="text-base font-black text-navy">Recent Errors</h2>
         <p className="mt-2 text-sm text-slate-600">최근 오류 ring-buffer를 요약합니다.</p>
 
         {loadingErrors ? <LoadingState className="mt-4" title="최근 오류를 불러오는 중입니다" /> : null}
@@ -329,7 +333,7 @@ export function OpsHubClient({ csrf }: OpsHubClientProps) {
         {!loadingErrors && !errorsError && recentErrors.length > 0 ? (
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="min-w-full border-collapse text-left text-xs">
-              <thead className="bg-slate-100 text-slate-600">
+              <thead className="bg-surface-muted text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-semibold">시각</th>
                   <th className="px-3 py-2 font-semibold">코드</th>

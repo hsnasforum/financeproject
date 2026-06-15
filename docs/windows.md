@@ -14,6 +14,7 @@
 
 - WSL에서는 `pnpm dev`가 기본적으로 `0.0.0.0`에 바인드하고, Windows 브라우저용 `127.0.0.1 -> WSL IPv4` localhost bridge를 함께 엽니다.
 - 기본 접속 경로는 `http://localhost:PORT` 입니다.
+- WSL에서 `powershell.exe`가 PATH에 없으면 localhost bridge는 건너뛰고 `Open (LAN)` URL을 사용합니다. 이 경우 앱은 계속 실행 중이며, Windows interop PATH를 복구하면 localhost bridge를 다시 사용할 수 있습니다.
 - Windows 브라우저에서 localhost forwarding이 막힌 환경이면 같은 출력의 `Open (LAN)` URL을 사용합니다.
 
 ## Stop / Shutdown

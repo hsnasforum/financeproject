@@ -20,7 +20,7 @@ const PRODUCT_CARDS = [
     description: "예금 상품군을 먼저 보며 금리, 기간, 보호 여부를 좁혀 볼 때",
     entryLabel: "이 상품군 보기",
     badge: "Deposit",
-    badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-100",
+    badgeClass: "bg-primary/5 text-navy border-primary/10",
   },
   {
     href: "/products/saving",
@@ -74,8 +74,8 @@ export default function ProductsHomePage() {
 
       <Card className="mb-12 rounded-[2.5rem] border border-slate-100 bg-white p-10 shadow-sm">
         <div className="max-w-3xl">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600">비교 시작점</p>
-          <h2 className="mt-4 text-3xl font-black tracking-tight text-slate-900 leading-tight">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary">비교 시작점</p>
+          <h2 className="mt-4 text-3xl font-black tracking-tight text-navy leading-tight">
             무엇을 먼저 비교할지 고르세요.
             <br />
             통합 카탈로그에서 기준을 잡아보세요.
@@ -86,7 +86,7 @@ export default function ProductsHomePage() {
           </p>
           <div className="mt-10">
             <Link href="/products/catalog">
-              <Button size="lg" variant="primary" className="h-14 rounded-2xl px-10 font-black shadow-xl shadow-emerald-900/20">
+              <Button size="lg" variant="primary" className="h-14 rounded-2xl px-10 font-black shadow-xl shadow-navy/20">
                 통합 카탈로그에서 비교 시작
               </Button>
             </Link>
@@ -106,15 +106,15 @@ export default function ProductsHomePage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {PRODUCT_CARDS.map((item) => (
             <Link key={item.href} href={item.href} className="group">
-              <Card className="flex flex-col h-full rounded-[2rem] p-8 border-slate-100 transition-all hover:border-emerald-200 hover:shadow-xl hover:-translate-y-1 active:scale-[0.98]">
+              <Card className="flex flex-col h-full rounded-[2rem] p-8 border-slate-100 transition-all hover:border-primary/20 hover:shadow-xl hover:-translate-y-1 active:scale-[0.98]">
                 <div className="mb-6">
                   <span className={`inline-flex rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${item.badgeClass}`}>
                     {item.badge}
                   </span>
                 </div>
-                <h3 className="text-xl font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">{item.title} 상품</h3>
+                <h3 className="text-xl font-black tracking-tight text-navy group-hover:text-primary transition-colors">{item.title} 상품</h3>
                 <p className="mt-3 text-sm font-medium text-slate-500 flex-1 leading-relaxed">{item.description}</p>
-                <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-primary">
                   {item.entryLabel}
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1">
                     <path d="M5 12h14" />

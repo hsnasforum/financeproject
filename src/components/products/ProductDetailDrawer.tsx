@@ -83,10 +83,10 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm p-4 md:items-center" role="dialog" aria-modal="true">
       <div className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-[2.5rem] bg-white shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-300" onClick={(e) => e.stopPropagation()}>
-        <div className="p-8 lg:p-10 border-b border-slate-100 flex items-start justify-between bg-slate-50/50">
+        <div className="p-8 lg:p-10 border-b border-slate-100 flex items-start justify-between bg-surface-muted/50">
           <div className="space-y-2">
-            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{summary} 상세 정보</span>
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">{product.fin_prdt_nm ?? "상품 상세"}</h2>
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest">{summary} 상세 정보</span>
+            <h2 className="text-2xl font-black text-navy tracking-tight leading-tight">{product.fin_prdt_nm ?? "상품 상세"}</h2>
             <p className="text-sm font-bold text-slate-500">{product.kor_co_nm ?? "-"}</p>
             <p className="max-w-2xl text-xs font-medium leading-relaxed text-slate-500">
               이 창은 확정 추천이 아니라, 현재 비교 기준으로 금리, 가입 조건, 우대사항을 다시 확인하는 단계입니다.
@@ -100,7 +100,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
             <SubSectionHeader title="상품 안내" description="현재 비교 기준에서 먼저 읽어야 할 기본 조건과 공시 정보입니다." />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {presentBySpecs(kind, product.raw, config?.productFields).map((entry) => (
-                <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4" key={`overview-${entry.label}`}>
+                <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-4" key={`overview-${entry.label}`}>
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{entry.label}</p>
                   <p className="text-sm font-bold text-slate-700 leading-relaxed">{entry.valueText}</p>
                 </div>
@@ -110,16 +110,16 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
 
           <section className="space-y-4">
             <SubSectionHeader title="다음 확인 포인트" description="실제 가입 전에 다시 볼 우대조건과 제한 사항입니다." />
-            <div className="rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 lg:p-8">
+            <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/30 p-6 lg:p-8">
               {notes.length === 0 ? (
                 <p className="text-sm font-bold text-slate-400 italic text-center py-4">공시된 추가 유의사항 정보가 없습니다.</p>
               ) : (
                 <ul className="space-y-4">
                   {notes.map((note) => (
                     <li key={note.label} className="flex items-start gap-3">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                       <p className="text-sm font-medium leading-relaxed text-slate-700">
-                        <span className="font-black text-slate-900 mr-2">{note.label}</span>
+                        <span className="font-black text-navy mr-2">{note.label}</span>
                         {note.value}
                       </p>
                     </li>
@@ -140,8 +140,8 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                   className={cn(
                     "rounded-full border px-4 py-2 text-xs font-black transition-all shadow-sm",
                     selectedOptionIndex === index
-                      ? "border-emerald-200 bg-emerald-500 text-white shadow-emerald-100"
-                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                      ? "border-primary/20 bg-primary text-white shadow-primary/10"
+                      : "border-slate-200 bg-white text-slate-500 hover:bg-surface-muted"
                   )}
                 >
                   {option.save_trm ? formatGlossaryValue("save_trm", option.save_trm) : `옵션 ${index + 1}`}
@@ -162,8 +162,8 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                     {product.options.map((option, index) => {
                       const shown = optionRows[index] ?? [];
                       return (
-                        <tr key={`${product.fin_prdt_cd}-opt-row-${index}`} className={cn("group transition-colors", selectedOptionIndex === index ? "bg-emerald-50/30" : "hover:bg-slate-50/50")}>
-                          <td className="px-4 py-4 font-black text-slate-900 tabular-nums">
+                        <tr key={`${product.fin_prdt_cd}-opt-row-${index}`} className={cn("group transition-colors", selectedOptionIndex === index ? "bg-primary/30" : "hover:bg-surface-muted/50")}>
+                          <td className="px-4 py-4 font-black text-navy tabular-nums">
                             {option.save_trm ? formatGlossaryValue("save_trm", option.save_trm) : `옵션 ${index + 1}`}
                           </td>
                           <td className="px-4 py-4">
@@ -186,7 +186,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
           </section>
 
           {(kind === "deposit" || kind === "saving") && selectedOption && (
-            <section className="space-y-6 rounded-[2.5rem] bg-slate-50 border border-slate-100 p-8 lg:p-10 shadow-sm">
+            <section className="space-y-6 rounded-[2.5rem] bg-surface-muted border border-slate-100 p-8 lg:p-10 shadow-sm">
               <SubSectionHeader
                 title="금리 계산기"
                 description="입력한 금액과 세율 가정으로 보는 단순 비교값입니다."
@@ -199,7 +199,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                   </label>
                   <div className="relative">
                     <input
-                      className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums shadow-sm"
+                      className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-primary transition-all tabular-nums shadow-sm"
                       value={(kind === "deposit" ? amountWon : savingMonthlyWon).toLocaleString()}
                       onChange={(e) => {
                         const val = Number(e.target.value.replace(/[^0-9]/g, "")) || 0;
@@ -212,15 +212,15 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">기간</label>
-                  <input className="h-11 w-full rounded-xl bg-slate-100/50 border border-slate-100 px-4 text-sm font-black text-slate-400 outline-none tabular-nums" value={formatGlossaryValue("save_trm", String(parseTerm(selectedOption)))} readOnly />
+                  <input className="h-11 w-full rounded-xl bg-surface-muted/50 border border-slate-100 px-4 text-sm font-black text-slate-400 outline-none tabular-nums" value={formatGlossaryValue("save_trm", String(parseTerm(selectedOption)))} readOnly />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">세율(%)</label>
-                  <input className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-emerald-500 transition-all tabular-nums shadow-sm" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} />
+                  <input className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-primary transition-all tabular-nums shadow-sm" value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value.replace(/[^0-9.]/g, "")) || 0)} />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">금리 기준</label>
-                  <select className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-emerald-500 transition-all shadow-sm" value={usePrimeRate ? "prime" : "base"} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
+                  <select className="h-11 w-full rounded-xl bg-white border border-slate-200 px-4 text-sm font-black text-slate-700 outline-none focus:ring-1 focus:ring-primary transition-all shadow-sm" value={usePrimeRate ? "prime" : "base"} onChange={(e) => setUsePrimeRate(e.target.value === "prime") }>
                     <option value="base">기본금리</option>
                     <option value="prime">최고금리</option>
                   </select>
@@ -239,10 +239,10 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
                   </div>
                   <div className="rounded-2xl bg-white p-4 border border-slate-100 shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">세후 이자</p>
-                    <p className="mt-1 text-base font-black tabular-nums text-emerald-600">{formatKrwWithEok(calc.netInterestWon)}</p>
+                    <p className="mt-1 text-base font-black tabular-nums text-primary">{formatKrwWithEok(calc.netInterestWon)}</p>
                   </div>
-                  <div className="rounded-2xl bg-emerald-500 p-5 shadow-lg shadow-emerald-900/20">
-                    <p className="text-[10px] font-black text-emerald-900 uppercase tracking-widest">예상 수령액</p>
+                  <div className="rounded-2xl bg-primary p-5 shadow-lg shadow-navy/20">
+                    <p className="text-[10px] font-black text-navy uppercase tracking-widest">예상 수령액</p>
                     <p className="mt-1 text-xl font-black tabular-nums text-white">{formatKrwWithEok(calc.maturityWon)}</p>
                   </div>
                 </div>
@@ -251,7 +251,7 @@ export function ProductDetailDrawer({ open, onOpenChange, kind, product, amountW
           )}
         </div>
 
-        <div className="p-8 lg:p-10 border-t border-slate-100 bg-slate-50/50 flex justify-center">
+        <div className="p-8 lg:p-10 border-t border-slate-100 bg-surface-muted/50 flex justify-center">
           <Button variant="outline" className="rounded-2xl h-12 px-12 font-black shadow-sm" onClick={() => onOpenChange(false)}>
             상품 상세 창 닫기
           </Button>

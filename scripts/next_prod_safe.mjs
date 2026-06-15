@@ -10,6 +10,7 @@ import {
   pruneStandaloneShadowNextArtifacts,
 } from "./next_artifact_prune.mjs";
 import { sanitizeInheritedColorEnv } from "./runtime_color_env.mjs";
+import { ensureStandaloneRuntimeAssets } from "./standalone_runtime_assets.mjs";
 
 const FORCED_HOST = "127.0.0.1";
 const DEFAULT_PORT = 3100;
@@ -184,45 +185,6 @@ function resolveStandaloneServer(cwd = process.cwd()) {
   return null;
 }
 
-function sameResolvedPath(left, right) {
-  try {
-    return fs.realpathSync(left) === fs.realpathSync(right);
-  } catch {
-    return false;
-  }
-}
-
-function ensureStandaloneAssetLink({ sourcePath, targetPath, label }) {
-  if (!fs.existsSync(sourcePath)) return;
-
-  if (fs.existsSync(targetPath) || fs.lstatSync(targetPath, { throwIfNoEntry: false })) {
-    if (sameResolvedPath(sourcePath, targetPath)) return;
-    fs.rmSync(targetPath, { recursive: true, force: true });
-  }
-
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  const linkType = process.platform === "win32" ? "junction" : "dir";
-  fs.symlinkSync(fs.realpathSync(sourcePath), targetPath, linkType);
-  console.log(`[next_prod_safe] linked ${label}: ${targetPath} -> ${sourcePath}`);
-}
-
-function ensureStandaloneRuntimeAssets({ standaloneServer, distDir, cwd = process.cwd() }) {
-  const standaloneDir = path.dirname(standaloneServer);
-  const distDirPath = path.join(cwd, distDir);
-
-  ensureStandaloneAssetLink({
-    sourcePath: path.join(distDirPath, "static"),
-    targetPath: path.join(standaloneDir, distDir, "static"),
-    label: `${distDir}/static`,
-  });
-
-  ensureStandaloneAssetLink({
-    sourcePath: path.join(cwd, "public"),
-    targetPath: path.join(standaloneDir, "public"),
-    label: "public",
-  });
-}
-
 async function main() {
   const { overridePort, scanRange, passthroughArgs } = parseCliArgs(process.argv.slice(2));
   const standaloneRuntime = resolveStandaloneServer(process.cwd());
@@ -285,6 +247,7 @@ async function main() {
       standaloneServer: standaloneRuntime.serverPath,
       distDir: standaloneRuntime.distDir,
       cwd: process.cwd(),
+      log: (message) => console.log(message.replace("[standalone_runtime_assets]", "[next_prod_safe]")),
     });
     console.log(
       `[next_prod_safe] mode=standalone distDir=${standaloneRuntime.distDir} server=${standaloneRuntime.serverPath}`,

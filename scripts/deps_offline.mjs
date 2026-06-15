@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { runPnpmSync } from "./pnpm_runner.mjs";
 
 const STORE_DIR = "./.pnpm-store";
 
@@ -8,8 +8,7 @@ function printUsage() {
 }
 
 function runPnpm(args, extraEnv = {}) {
-  const pnpmBin = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const result = spawnSync(pnpmBin, args, {
+  const result = runPnpmSync(args, {
     stdio: "inherit",
     env: {
       ...process.env,

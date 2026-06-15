@@ -2,7 +2,6 @@ import path from "node:path";
 import { defineConfig } from "@playwright/test";
 import { sanitizePlaywrightColorEnv } from "./scripts/runtime_color_env.mjs";
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3126;
 const configuredBaseUrl = (
   process.env.BASE_URL
   || process.env.E2E_BASE_URL
@@ -11,6 +10,19 @@ const configuredBaseUrl = (
 ).trim().replace(/\/+$/, "");
 const externalBaseUrl = (process.env.E2E_EXTERNAL_BASE_URL || "").trim().replace(/\/+$/, "");
 const explicitBaseUrl = externalBaseUrl || configuredBaseUrl;
+function parsePortFromBaseUrl(value: string): number | null {
+  if (!value) return null;
+  try {
+    const parsed = new URL(value);
+    if (!parsed.port) return parsed.protocol === "https:" ? 443 : parsed.protocol === "http:" ? 80 : null;
+    const port = Number(parsed.port);
+    return Number.isInteger(port) && port > 0 ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+const PORT = process.env.PORT ? Number(process.env.PORT) : parsePortFromBaseUrl(configuredBaseUrl) ?? 3126;
 const baseURL = explicitBaseUrl || `http://127.0.0.1:${PORT}`;
 const webServerMode = (process.env.E2E_WEB_SERVER_MODE || "development").trim().toLowerCase();
 const resolvedWebServerMode = webServerMode === "production" ? "production" : "development";
@@ -76,7 +88,7 @@ export default defineConfig({
     ...(typeof resolvedHeadless === "boolean" ? { headless: resolvedHeadless } : {}),
     trace: "retain-on-failure",
   },
-  ...(explicitBaseUrl
+  ...(externalBaseUrl
     ? {}
     : {
         webServer: {

@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 type PlanningReportsPageProps = {
   searchParams?: Promise<{
+    baseRunId?: string | string[];
     runId?: string | string[];
     profileId?: string | string[];
   }>;
@@ -31,6 +32,7 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
   const searchParams = await props.searchParams;
   const requestedProfileId = normalizeProfileId(searchParams?.profileId);
   const requestedRunId = asString(searchParams?.runId);
+  const requestedBaseRunId = asString(searchParams?.baseRunId);
 
   let effectiveProfileId = requestedProfileId;
   let runs: Awaited<ReturnType<typeof listRuns>> = [];
@@ -107,7 +109,7 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
         <PageHeader
           title="플래닝 리포트"
           description="저장된 실행 결과를 다시 읽는 도착 화면이지만, 아직 저장된 실행이 없어 열 수 있는 리포트가 없습니다."
-          action={<Link className="font-semibold text-emerald-700" href={planningHref}>플래닝으로 돌아가 실행 저장하기</Link>}
+          action={<Link className="font-semibold text-navy" href={planningHref}>플래닝으로 돌아가 실행 저장하기</Link>}
         />
         <EmptyState
           title="아직 저장된 실행이 없습니다"
@@ -120,6 +122,7 @@ export default async function PlanningReportsPage(props: PlanningReportsPageProp
 
   return (
     <PlanningReportsDashboardBoundary
+      initialBaseRunId={requestedBaseRunId}
       initialRuns={initialScopeReady ? runs : undefined}
       initialProfileId={effectiveProfileId}
       initialRunId={initialRunId}

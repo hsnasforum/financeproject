@@ -133,22 +133,54 @@ export function ProfileDraftsListClient({
   const [draftBatchId, setDraftBatchId] = useState("");
   const [message, setMessage] = useState("");
 
+  const fetchDraftRows = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch(`/api/planning/v3/profile/drafts${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !isListResponse(json)) {
+      throw new Error("profile draft list unavailable");
+    }
+    return normalizeRows(json.data);
+  }, []);
+
+  useEffect(() => {
+    if (disableAutoLoad) return;
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialDrafts() {
+      try {
+        const nextRows = await fetchDraftRows(controller.signal);
+        if (!active) return;
+        setRows(nextRows);
+        setLoadFailed(false);
+        setMessage("");
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setRows([]);
+        setLoadFailed(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialDrafts();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [disableAutoLoad, fetchDraftRows]);
+
   const loadDrafts = useCallback(async () => {
     setLoading(true);
     setLoadFailed(false);
     setMessage("");
     try {
-      const response = await fetch(`/api/planning/v3/profile/drafts${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !isListResponse(json)) {
-        setRows([]);
-        setLoadFailed(true);
-        return;
-      }
-      setRows(normalizeRows(json.data));
+      const nextRows = await fetchDraftRows();
+      setRows(nextRows);
       setLoadFailed(false);
     } catch {
       setRows([]);
@@ -156,12 +188,7 @@ export function ProfileDraftsListClient({
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (disableAutoLoad) return;
-    void loadDrafts();
-  }, [disableAutoLoad, loadDrafts]);
+  }, [fetchDraftRows]);
 
   async function handleCreate() {
     const batchId = asString(draftBatchId);
@@ -239,8 +266,8 @@ export function ProfileDraftsListClient({
       <div className="space-y-5">
         <Card className="space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Import-to-Planning Beta</p>
-            <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Drafts</h1>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Import-to-Planning Beta</p>
+            <h1 className="text-xl font-black text-navy">Planning v3 Profile Drafts</h1>
             <p className="text-sm text-slate-600">
               배치 기반 초안을 로컬에 저장하고 review 할 수 있습니다. 이 화면은 stable planning handoff 직전 검토 축입니다.
             </p>
@@ -290,7 +317,7 @@ export function ProfileDraftsListClient({
               새로고침
             </Button>
           </div>
-          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-surface-muted px-4 py-3">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Support / Internal</p>
             <div className={bodyActionLinkGroupClassName}>
               <BodyActionLink className="text-xs text-slate-600" href="/planning/v3/import/csv">
@@ -316,7 +343,7 @@ export function ProfileDraftsListClient({
           {rows.length > 0 ? (
             <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-drafts-list">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                   <tr>
                     <th className="px-3 py-2 text-left">createdAt</th>
                     <th className="px-3 py-2 text-left">batchId</th>
@@ -368,7 +395,7 @@ export function ProfileDraftsListClient({
           role="dialog"
         >
           <BodyDialogSurface data-testid="v3-profile-draft-delete-dialog">
-            <h2 className="text-base font-black text-slate-900" id="v3-profile-draft-delete-title">초안 삭제 확인</h2>
+            <h2 className="text-base font-black text-navy" id="v3-profile-draft-delete-title">초안 삭제 확인</h2>
             <p className="mt-2 text-sm text-slate-700">이 초안을 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.</p>
             <div className={bodyDialogActionsClassName}>
               <Button

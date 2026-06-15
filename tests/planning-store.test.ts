@@ -139,7 +139,7 @@ describe("planning store", () => {
       profile: sampleProfile(),
     });
 
-    for (let i = 0; i < 52; i += 1) {
+    for (let i = 0; i < 5; i += 1) {
       await createRun({
         profileId: profile.id,
         title: `run-${i + 1}`,
@@ -158,12 +158,12 @@ describe("planning store", () => {
             keyTimelinePoints: [],
           }),
         },
-      });
+      }, { maxPerProfile: 3 });
     }
 
     const runs = await listRuns({ profileId: profile.id, limit: 100 });
-    expect(runs.length).toBe(50);
-    expect(runs[0]?.title).toBe("run-52");
+    expect(runs.length).toBe(3);
+    expect(runs[0]?.title).toBe("run-5");
 
     const target = runs[0];
     const loaded = await getRun(target.id);

@@ -437,7 +437,7 @@ export function OpsBackupClient() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="text-base font-black text-slate-900">1) Export</h2>
+          <h2 className="text-base font-black text-navy">1) Export</h2>
           <p className="mt-2 text-sm text-slate-600">
             profile/run(meta+blobs+index)/assumptions/action-progress를 암호화 아카이브로 내보냅니다.
           </p>
@@ -483,7 +483,7 @@ export function OpsBackupClient() {
         </Card>
 
         <Card>
-          <h2 className="text-base font-black text-slate-900">2) Import Preview / Restore</h2>
+          <h2 className="text-base font-black text-navy">2) Import Preview / Restore</h2>
           <p className="mt-2 text-sm text-slate-600">
             암호화 백업 파일 업로드 후 preview를 확인하고 merge/replace 모드로 복원하세요.
           </p>
@@ -497,7 +497,7 @@ export function OpsBackupClient() {
               type="password"
               value={passphrase}
             />
-            <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            <label className="inline-flex cursor-pointer items-center rounded-md border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-muted">
               백업 파일 선택
               <input
                 accept=".json,.enc,application/json,application/octet-stream"
@@ -563,7 +563,7 @@ export function OpsBackupClient() {
         <LoadingState className="mt-6" title={previewing ? "preview를 생성하는 중입니다" : "restore를 적용하는 중입니다"} />
       ) : null}
 
-      {notice ? <p className="mt-6 text-sm font-semibold text-emerald-700">{notice}</p> : null}
+      {notice ? <p className="mt-6 text-sm font-semibold text-navy">{notice}</p> : null}
       {error ? (
         <p className="mt-2 text-sm font-semibold text-rose-700">
           {error}
@@ -578,7 +578,7 @@ export function OpsBackupClient() {
 
       {preview ? (
         <Card className="mt-6" data-testid="ops-backup-preview-card">
-          <h3 className="text-base font-black text-slate-900">Preview 결과</h3>
+          <h3 className="text-base font-black text-navy">Preview 결과</h3>
           <p className="mt-2 text-xs text-slate-600">
             kind={preview.manifest?.kind ?? "-"} · mode={preview.manifest?.mode ?? "full"} · formatVersion={preview.manifest?.formatVersion ?? "-"} · appVersion={preview.manifest?.appVersion ?? "-"} · createdAt={formatDateTime(preview.manifest?.createdAt)}
           </p>
@@ -589,7 +589,7 @@ export function OpsBackupClient() {
           ) : null}
           <ul className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
             {summaryRows.map((row) => (
-              <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1" key={row}>{row}</li>
+              <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1" key={row}>{row}</li>
             ))}
           </ul>
           <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -627,17 +627,17 @@ export function OpsBackupClient() {
 
       {restoreResult ? (
         <Card className="mt-6" data-testid="ops-backup-restore-card">
-          <h3 className="text-base font-black text-slate-900">Restore 결과</h3>
+          <h3 className="text-base font-black text-navy">Restore 결과</h3>
           <p className="mt-2 text-xs text-slate-600">mode: {restoreResult.mode ?? "-"}</p>
           <ul className="mt-3 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">profiles: {restoreResult.imported?.profiles ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">runs: {restoreResult.imported?.runs ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">runBlobs: {restoreResult.imported?.runBlobs ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">actionPlans: {restoreResult.imported?.actionPlans ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">actionProgress: {restoreResult.imported?.actionProgress ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">assumptionsHistory: {restoreResult.imported?.assumptionsHistory ?? 0}</li>
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">latestSnapshot: {restoreResult.imported?.latestSnapshot ? "yes" : "no"}</li>
-            <li className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1">policies: {restoreResult.imported?.policies ?? 0}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">profiles: {restoreResult.imported?.profiles ?? 0}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">runs: {restoreResult.imported?.runs ?? 0}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">runBlobs: {restoreResult.imported?.runBlobs ?? 0}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">actionPlans: {restoreResult.imported?.actionPlans ?? 0}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">actionProgress: {restoreResult.imported?.actionProgress ?? 0}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">assumptionsHistory: {restoreResult.imported?.assumptionsHistory ?? 0}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">latestSnapshot: {restoreResult.imported?.latestSnapshot ? "yes" : "no"}</li>
+            <li className="rounded-md border border-slate-200 bg-surface-muted px-2 py-1">policies: {restoreResult.imported?.policies ?? 0}</li>
           </ul>
           {restoreWarnings.length > 0 ? (
             <div className="mt-4">
@@ -687,13 +687,13 @@ export function OpsBackupClient() {
           aria-labelledby="ops-backup-restore-confirm-title"
         >
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 id="ops-backup-restore-confirm-title" className="text-base font-black text-slate-900">Restore 실행 확인</h3>
+            <h3 id="ops-backup-restore-confirm-title" className="text-base font-black text-navy">Restore 실행 확인</h3>
             <p className="mt-2 text-sm text-slate-700">
               {mode === "replace"
                 ? "replace 모드는 기존 데이터를 삭제 후 복원합니다. 계속 진행할까요?"
                 : "merge 모드로 복원합니다. 계속 진행할까요?"}
             </p>
-            <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700">
+            <div className="mt-2 rounded-md border border-slate-200 bg-surface-muted px-2 py-1 text-xs text-slate-700">
               mode: <span className="font-semibold">{mode}</span> / file: <span className="font-semibold">{selectedName || "-"}</span>
             </div>
             <div className="mt-4 flex justify-end gap-2">

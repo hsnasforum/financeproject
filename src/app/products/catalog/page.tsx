@@ -57,6 +57,13 @@ type UnifiedResponse = {
   };
 };
 
+type CatalogState = {
+  queryKey: string;
+  rows: UnifiedItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
 function formatRate(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "-";
   return `${value.toFixed(2)}%`;
@@ -69,12 +76,28 @@ export default function ProductsCatalogPage() {
   const [q, setQ] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<string>("all");
   const [includeSamplebank, setIncludeSamplebank] = useState(false);
-  const [rows, setRows] = useState<UnifiedItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [catalogState, setCatalogState] = useState<CatalogState>({
+    queryKey: "",
+    rows: [],
+    nextCursor: null,
+    hasMore: false,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [compareNotice, setCompareNotice] = useState("");
+  const catalogQueryKey = useMemo(() => {
+    const sourcesKey = includeSamplebank ? "finlife,datago_kdb,samplebank" : "finlife,datago_kdb";
+    return [kind, sourcesKey, q.trim()].join("\u0000");
+  }, [includeSamplebank, kind, q]);
+  const currentCatalog = useMemo(() => {
+    const isCurrent = catalogState.queryKey === catalogQueryKey;
+    return {
+      rows: isCurrent ? catalogState.rows : [],
+      nextCursor: isCurrent ? catalogState.nextCursor : null,
+      hasMore: isCurrent && catalogState.hasMore,
+    };
+  }, [catalogQueryKey, catalogState.hasMore, catalogState.nextCursor, catalogState.queryKey, catalogState.rows]);
+  const { rows, nextCursor, hasMore } = currentCatalog;
 
   const providers = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
@@ -116,23 +139,38 @@ export default function ProductsCatalogPage() {
       const pageItems = Array.isArray(json.data?.items)
         ? json.data?.items
         : (Array.isArray(json.data?.merged) ? json.data.merged : []);
-      setRows((prev) => (append ? [...prev, ...pageItems] : pageItems));
-      setHasMore(Boolean(json.data?.pageInfo?.hasMore));
-      setNextCursor(typeof json.data?.pageInfo?.nextCursor === "string" ? json.data.pageInfo.nextCursor : null);
+      const responseHasMore = Boolean(json.data?.pageInfo?.hasMore);
+      const responseNextCursor = typeof json.data?.pageInfo?.nextCursor === "string" ? json.data.pageInfo.nextCursor : null;
+      setCatalogState((prev) => ({
+        queryKey: catalogQueryKey,
+        rows: append && prev.queryKey === catalogQueryKey ? [...prev.rows, ...pageItems] : pageItems,
+        hasMore: responseHasMore,
+        nextCursor: responseNextCursor,
+      }));
       setCompareNotice("");
     } catch {
       setError("UPSTREAM: 통합 카탈로그 조회 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [includeSamplebank, kind, q]);
+  }, [catalogQueryKey, includeSamplebank, kind, q]);
 
   useEffect(() => {
-    setRows([]);
-    setNextCursor(null);
-    setHasMore(false);
-    void run({ append: false });
-  }, [kind, q, run]);
+    let active = true;
+
+    async function refreshCatalog() {
+      await Promise.resolve();
+      if (active) {
+        void run({ append: false });
+      }
+    }
+
+    void refreshCatalog();
+
+    return () => {
+      active = false;
+    };
+  }, [run]);
 
   const filteredRows = useMemo(() => {
     const termFilter = Number(termMonths);
@@ -192,7 +230,7 @@ export default function ProductsCatalogPage() {
                     onClear={() => setQ("")}
                     isLoading={loading && rows.length === 0}
                   />
-                  <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-emerald-900/20" onClick={() => void run({ append: false })} disabled={loading}>
+                  <Button variant="primary" className="h-12 rounded-2xl px-8 font-black shadow-md shadow-navy/20" onClick={() => void run({ append: false })} disabled={loading}>
                     {loading ? "조회 중" : "지금 기준으로 보기"}
                   </Button>
                 </div>
@@ -231,16 +269,16 @@ export default function ProductsCatalogPage() {
                 <label className="flex cursor-pointer items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">
                   <input
                     type="checkbox"
-                    className="h-5 w-5 rounded-lg border-slate-200 text-emerald-600 focus:ring-emerald-500 transition-all"
+                    className="h-5 w-5 rounded-lg border-slate-200 text-primary focus:ring-primary transition-all"
                     checked={includeSamplebank}
                     onChange={(e) => setIncludeSamplebank(e.target.checked)}
                   />
                   샘플 데이터 포함
                 </label>
-                <div className="flex items-center gap-3 rounded-2xl bg-emerald-50/50 px-4 py-2 border border-emerald-100/50">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shadow-sm shadow-emerald-200" />
-                  <span className="text-sm font-black text-emerald-700">
-                    {filteredRows.length.toLocaleString()} <span className="text-[10px] font-black text-emerald-600/60 uppercase tracking-widest ml-1">비교 후보</span>
+                <div className="flex items-center gap-3 rounded-2xl bg-primary/10 px-4 py-2 border border-primary/10">
+                  <span className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/20" />
+                  <span className="text-sm font-black text-navy">
+                    {filteredRows.length.toLocaleString()} <span className="text-[10px] font-black text-primary/80 uppercase tracking-widest ml-1">비교 후보</span>
                   </span>
                 </div>
               </div>
@@ -250,9 +288,9 @@ export default function ProductsCatalogPage() {
       </div>
 
       {compareNotice && (
-        <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 text-center animate-in fade-in slide-in-from-top-2">
-          <p className="text-sm font-black text-emerald-700">{compareNotice}</p>
-          <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-700/80">
+        <div className="mb-8 rounded-2xl border border-primary/10 bg-primary/10 p-4 text-center animate-in fade-in slide-in-from-top-2">
+          <p className="text-sm font-black text-navy">{compareNotice}</p>
+          <p className="mt-2 text-[11px] font-medium leading-relaxed text-navy/80">
             지금은 후보를 담아 두는 단계이며, 나란히 다시 보는 일은 비교 화면에서 이어집니다.
           </p>
         </div>
@@ -276,12 +314,12 @@ export default function ProductsCatalogPage() {
           <>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filteredRows.map((item) => (
-                <Card key={item.stableId} className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100 hover:-translate-y-1">
+                <Card key={item.stableId} className="group relative flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm transition-all hover:shadow-xl hover:border-primary/10 hover:-translate-y-1">
                   <div className="flex items-start justify-between gap-4 mb-6">
                     <ProviderLogo providerName={item.providerName} className="h-12 w-12 rounded-2xl shadow-sm" />
                     <div className="flex flex-wrap justify-end gap-1.5">
                       {item.badges?.slice(0, 2).map((badge) => (
-                        <span key={badge} className="rounded-lg bg-emerald-50 border border-emerald-100/50 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-700">
+                        <span key={badge} className="rounded-lg bg-primary/5 border border-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-navy">
                           {badge}
                         </span>
                       ))}
@@ -290,7 +328,7 @@ export default function ProductsCatalogPage() {
 
                   <div className="flex-1">
                     <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{item.providerName}</p>
-                    <h2 className="mt-2 text-xl font-black text-slate-900 leading-snug group-hover:text-emerald-600 transition-colors tracking-tight line-clamp-2">
+                    <h2 className="mt-2 text-xl font-black text-navy leading-snug group-hover:text-primary transition-colors tracking-tight line-clamp-2">
                       {item.productName}
                     </h2>
                     {item.summary && (
@@ -303,11 +341,11 @@ export default function ProductsCatalogPage() {
                   <div className="mt-8 space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 mb-2">지금 비교 중인 대표 옵션</p>
                     {item.options?.slice(0, 2).map((option, idx) => (
-                      <div key={idx} className="flex items-center justify-between rounded-xl bg-slate-50/50 p-4 border border-slate-100/50">
+                      <div key={idx} className="flex items-center justify-between rounded-xl bg-surface-muted/50 p-4 border border-slate-100/50">
                         <span className="text-xs font-black text-slate-600 tabular-nums">{option.termMonths ? `${option.termMonths}개월` : option.saveTrm}</span>
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">대표 금리</span>
-                          <span className="text-base font-black text-emerald-600 tabular-nums">{formatRate(option.intrRate2)}</span>
+                          <span className="text-base font-black text-primary tabular-nums">{formatRate(option.intrRate2)}</span>
                         </div>
                       </div>
                     ))}
@@ -322,7 +360,7 @@ export default function ProductsCatalogPage() {
                   <div className="mt-10 flex gap-3">
                     <Link
                       href={`/products/catalog/${encodeURIComponent(item.stableId)}`}
-                      className="flex-1 rounded-2xl bg-emerald-600 py-4 text-center text-xs font-black text-white shadow-lg shadow-emerald-900/20 transition-all hover:bg-emerald-700 active:scale-95"
+                      className="flex-1 rounded-2xl bg-primary py-4 text-center text-xs font-black text-white shadow-lg shadow-navy/20 transition-all hover:bg-navy active:scale-95"
                     >
                       상세에서 다시 확인
                     </Link>

@@ -1,6 +1,6 @@
 import housingSalesMock from "@/data/public/housing-sales.mock.json";
 import { toWonFromManwon } from "@/lib/housing/money";
-import { fetchExternal, requireServerEnv } from "../../http/fetchExternal";
+import { ExternalApiError, fetchExternal, requireServerEnv } from "../../http/fetchExternal";
 import { type HousingBenchmark, type PublicApiResult } from "@/lib/publicApis/contracts/types";
 import {
   buildApiUrl,
@@ -13,6 +13,9 @@ import {
   isMolitSuccessCode,
   normalizeBaseUrl,
 } from "@/lib/publicApis/providers/molitNormalize";
+
+const DEFAULT_MOLIT_SALES_BASE = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade";
+const FALLBACK_SUMMARY_STATUSES = new Set([401, 403, 404]);
 
 function quantile(sorted: number[], q: number): number {
   if (!sorted.length) return 0;
@@ -53,6 +56,43 @@ function toNumbers(values: number[]): { min: number; median: number; p75: number
   };
 }
 
+function resolveSalesEndpointName(base: string): string {
+  return /RTMSDataSvcAptTradeDev/i.test(base) ? "getRTMSDataSvcAptTradeDev" : "getRTMSDataSvcAptTrade";
+}
+
+function resolveSalesSummaryFallbackBase(base: string): string | null {
+  if (!/RTMSDataSvcAptTradeDev/i.test(base)) return null;
+  return base.replace(/RTMSDataSvcAptTradeDev/gi, "RTMSDataSvcAptTrade");
+}
+
+function shouldRetrySalesSummary(base: string, error: unknown): boolean {
+  return Boolean(
+    resolveSalesSummaryFallbackBase(base)
+    && error instanceof ExternalApiError
+    && typeof error.status === "number"
+    && FALLBACK_SUMMARY_STATUSES.has(error.status),
+  );
+}
+
+async function fetchHousingSalesBody(base: string, key: string, params: Record<string, string>, options?: { allowHttpError?: boolean }) {
+  const endpoint = buildEndpoint(base, resolveSalesEndpointName(base));
+  const url = buildApiUrl(endpoint, key, params);
+  const fetched = await fetchExternal(url, {
+    sourceKey: "housing:sales",
+    timeoutMs: 12_000,
+    retries: 2,
+    retryOn: [429, 500, 502, 503, 504],
+    throwOnHttpError: options?.allowHttpError ? false : undefined,
+  });
+  if (!fetched.ok) {
+    throw new ExternalApiError(
+      { code: "UPSTREAM", message: "외부 API 호출에 실패했습니다." },
+      { status: fetched.status, retryAfterSeconds: fetched.retryAfterSeconds },
+    );
+  }
+  return fetched;
+}
+
 export async function getHousingSalesBenchmark(regionCode: string, month: string, areaBand: string): Promise<PublicApiResult<HousingBenchmark>> {
   const useMock = process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0" && !process.env.MOLIT_SALES_API_KEY;
   if (useMock) {
@@ -72,16 +112,19 @@ export async function getHousingSalesBenchmark(regionCode: string, month: string
 
   try {
     const key = requireServerEnv("MOLIT_SALES_API_KEY");
-    const base = normalizeBaseUrl(process.env.MOLIT_SALES_API_URL ?? "", "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade");
-    const endpoint = buildEndpoint(base, "getRTMSDataSvcAptTrade");
-    const url = buildApiUrl(endpoint, key, { LAWD_CD: regionCode, DEAL_YMD: month, numOfRows: "100", pageNo: "1" });
-
-    const fetched = await fetchExternal(url, {
-      sourceKey: "housing:sales",
-      timeoutMs: 12_000,
-      retries: 2,
-      retryOn: [429, 500, 502, 503, 504],
-    });
+    const base = normalizeBaseUrl(process.env.MOLIT_SALES_API_URL ?? "", DEFAULT_MOLIT_SALES_BASE);
+    const params = { LAWD_CD: regionCode, DEAL_YMD: month, numOfRows: "100", pageNo: "1" };
+    let fetched;
+    try {
+      fetched = await fetchHousingSalesBody(base, key, params, { allowHttpError: Boolean(resolveSalesSummaryFallbackBase(base)) });
+    } catch (error) {
+      const fallbackBase = resolveSalesSummaryFallbackBase(base);
+      if (!fallbackBase || !shouldRetrySalesSummary(base, error)) throw error;
+      console.warn("[housing:sales] detail endpoint unavailable; retrying summary endpoint", {
+        status: error instanceof ExternalApiError ? error.status : undefined,
+      });
+      fetched = await fetchHousingSalesBody(fallbackBase, key, params);
+    }
     const header = getMolitHeader(fetched.body);
     if (header.resultCode && !isMolitSuccessCode(header.resultCode)) {
       const detail = header.resultMsg ? `: ${header.resultMsg}` : "";

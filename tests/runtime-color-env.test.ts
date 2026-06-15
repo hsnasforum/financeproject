@@ -5,6 +5,7 @@ import { sanitizeInheritedColorEnv, sanitizePlaywrightColorEnv } from "../script
 describe("runtime color env sanitizer", () => {
   it("drops FORCE_COLOR when NO_COLOR is already set", () => {
     const sanitized = sanitizeInheritedColorEnv({
+      NODE_ENV: "test",
       NO_COLOR: "1",
       FORCE_COLOR: "1",
       DEBUG: "pw:webserver",
@@ -17,10 +18,12 @@ describe("runtime color env sanitizer", () => {
 
   it("keeps FORCE_COLOR when NO_COLOR is empty or missing", () => {
     expect(sanitizeInheritedColorEnv({
+      NODE_ENV: "test",
       FORCE_COLOR: "1",
     }).FORCE_COLOR).toBe("1");
 
     expect(sanitizeInheritedColorEnv({
+      NODE_ENV: "test",
       NO_COLOR: "   ",
       FORCE_COLOR: "1",
     }).FORCE_COLOR).toBe("1");
@@ -28,6 +31,7 @@ describe("runtime color env sanitizer", () => {
 
   it("drops NO_COLOR on playwright-owned envs", () => {
     const sanitized = sanitizePlaywrightColorEnv({
+      NODE_ENV: "test",
       NO_COLOR: "1",
       DEBUG: "pw:webserver",
     });

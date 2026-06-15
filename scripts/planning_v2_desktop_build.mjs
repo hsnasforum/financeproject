@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { runPnpm } from "./pnpm_runner.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -27,24 +27,6 @@ function parseArgs(argv) {
     if (key === "artifact-dir") out.artifactDir = asString(value) || out.artifactDir;
   }
   return out;
-}
-
-function runCommand(command, args, cwd) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd,
-      env: process.env,
-      stdio: "inherit",
-    });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`${command} ${args.join(" ")} failed (${code ?? "unknown"})`));
-      }
-    });
-  });
 }
 
 async function ensureFileExists(target) {
@@ -152,8 +134,14 @@ async function main() {
   const artifactDir = path.resolve(cwd, args.artifactDir);
 
   if (args.withNextBuild) {
-    const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-    await runCommand(pnpmCmd, ["build"], cwd);
+    const result = await runPnpm(["build"], {
+      cwd,
+      env: process.env,
+      stdio: "inherit",
+    });
+    if (result.code !== 0) {
+      throw new Error(`pnpm build failed with code ${result.code}`);
+    }
   }
 
   await ensureFileExists(path.join(cwd, "src"));

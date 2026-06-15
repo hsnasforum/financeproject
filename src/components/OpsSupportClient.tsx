@@ -72,14 +72,14 @@ export function OpsSupportClient({ csrf }: OpsSupportClientProps) {
 
       {error ? <ErrorState className="mb-4" message={error} /> : null}
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50">
-          <p className="text-sm font-semibold text-emerald-800">{notice}</p>
+        <Card className="mb-4 border border-primary/20 bg-primary/5">
+          <p className="text-sm font-semibold text-navy">{notice}</p>
         </Card>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="text-base font-black text-slate-900">진단 번들 내보내기</h2>
+          <h2 className="text-base font-black text-navy">진단 번들 내보내기</h2>
           <p className="mt-2 text-sm text-slate-700">
             doctor/migration/policy/audit/metrics와 data-sources 카드 기준 요약만 포함한 zip을 생성합니다.
           </p>
@@ -100,10 +100,10 @@ export function OpsSupportClient({ csrf }: OpsSupportClientProps) {
         </Card>
 
         <Card>
-          <h2 className="text-base font-black text-slate-900">포함 / 제외 항목</h2>
+          <h2 className="text-base font-black text-navy">포함 / 제외 항목</h2>
           <div className="mt-3 grid gap-4 text-sm text-slate-700 md:grid-cols-2">
             <div>
-              <p className="font-semibold text-slate-900">포함</p>
+              <p className="font-semibold text-navy">포함</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">
                 <li>OPS Doctor 요약 리포트</li>
                 <li>Migration 상태 요약</li>
@@ -114,7 +114,7 @@ export function OpsSupportClient({ csrf }: OpsSupportClientProps) {
               </ul>
             </div>
             <div>
-              <p className="font-semibold text-slate-900">제외</p>
+              <p className="font-semibold text-navy">제외</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">
                 <li>프로필 원본 값</li>
                 <li>Run raw/blob 데이터</li>

@@ -95,6 +95,18 @@ function emptySummary(): AlertSummary {
   };
 }
 
+function toAlertSummary(summary: NonNullable<AlertsResponse["data"]>["summary"]): AlertSummary {
+  return {
+    highTotal: Math.max(0, Number(summary?.highTotal ?? 0)),
+    visibleTotal: Math.max(0, Number(summary?.visibleTotal ?? 0)),
+    pendingTotal: Math.max(0, Number(summary?.pendingTotal ?? 0)),
+    acknowledgedTotal: Math.max(0, Number(summary?.acknowledgedTotal ?? 0)),
+    hiddenTotal: Math.max(0, Number(summary?.hiddenTotal ?? 0)),
+    latestVisibleTitle: asString(summary?.latestVisibleTitle) || null,
+    latestVisibleCreatedAt: asString(summary?.latestVisibleCreatedAt) || null,
+  };
+}
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -115,7 +127,7 @@ function formatDateTime(value: string | null | undefined): string {
 function levelBadgeClass(level: AlertLevel): string {
   if (level === "high") return "bg-rose-50 text-rose-700 border-rose-100";
   if (level === "medium") return "bg-amber-50 text-amber-700 border-amber-100";
-  return "bg-slate-50 text-slate-600 border-slate-100";
+  return "bg-surface-muted text-slate-600 border-slate-100";
 }
 
 function levelLabel(level: AlertLevel): string {
@@ -145,15 +157,15 @@ function alertsHeaderToggleClassName(active: boolean): string {
   return cn(
     "rounded-md border px-3 py-1.5 text-sm font-semibold transition-colors",
     active
-      ? "border-slate-300 bg-white text-slate-900 shadow-sm"
-      : "border-transparent bg-transparent text-slate-600 hover:bg-white hover:text-slate-900",
+      ? "border-slate-300 bg-white text-navy shadow-sm"
+      : "border-transparent bg-transparent text-slate-600 hover:bg-white hover:text-navy",
   );
 }
 
 function alertsHeaderChipClassName(active: boolean, tone: "neutral" | "emerald" | "sky" | "rose" | "slate" = "neutral"): string {
   const activeToneClassName = {
-    neutral: "border-slate-300 bg-white text-slate-900 shadow-sm",
-    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm",
+    neutral: "border-slate-300 bg-white text-navy shadow-sm",
+    emerald: "border-primary/20 bg-primary/5 text-navy shadow-sm",
     sky: "border-sky-200 bg-sky-50 text-sky-700 shadow-sm",
     rose: "border-rose-200 bg-rose-50 text-rose-700 shadow-sm",
     slate: "border-slate-300 bg-slate-200 text-slate-800 shadow-sm",
@@ -161,7 +173,7 @@ function alertsHeaderChipClassName(active: boolean, tone: "neutral" | "emerald" 
 
   return cn(
     "rounded-full border px-3 py-1 text-sm font-semibold transition-colors",
-    active ? activeToneClassName : "border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-900",
+    active ? activeToneClassName : "border-slate-200 bg-white/80 text-slate-600 hover:border-slate-300 hover:bg-white hover:text-navy",
   );
 }
 
@@ -225,51 +237,64 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [groups, setGroups] = useState<AlertGroup[]>([]);
-  const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<AlertSummary>(() => emptySummary());
   const [levelFilter, setLevelFilter] = useState<AlertLevelFilter>("all");
   const [sourceFilter, setSourceFilter] = useState<AlertSourceFilter>("all");
   const [statusFilter, setStatusFilter] = useState<AlertStatusFilter>("visible");
   const [savingEventId, setSavingEventId] = useState("");
 
-  const load = useCallback(async (windowDays: 7 | 30) => {
-    setLoading(true);
-    setErrorMessage("");
-    try {
-      const response = await fetch(`/api/planning/v3/news/alerts?days=${windowDays}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as AlertsResponse | null;
-      if (!response.ok || payload?.ok !== true || !payload.data) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
-      setGroups(payload.data.groups ?? []);
-      setTotal(Math.max(0, Number(payload.data.total ?? 0)));
-      setSummary({
-        highTotal: Math.max(0, Number(payload.data.summary?.highTotal ?? 0)),
-        visibleTotal: Math.max(0, Number(payload.data.summary?.visibleTotal ?? 0)),
-        pendingTotal: Math.max(0, Number(payload.data.summary?.pendingTotal ?? 0)),
-        acknowledgedTotal: Math.max(0, Number(payload.data.summary?.acknowledgedTotal ?? 0)),
-        hiddenTotal: Math.max(0, Number(payload.data.summary?.hiddenTotal ?? 0)),
-        latestVisibleTitle: asString(payload.data.summary?.latestVisibleTitle) || null,
-        latestVisibleCreatedAt: asString(payload.data.summary?.latestVisibleCreatedAt) || null,
-      });
-    } catch (error) {
-      setGroups([]);
-      setTotal(0);
-      setSummary(emptySummary());
-      setErrorMessage(error instanceof Error ? error.message : "알림함 데이터를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
+  const load = useCallback(async (windowDays: 7 | 30, signal?: AbortSignal) => {
+    const response = await fetch(`/api/planning/v3/news/alerts?days=${windowDays}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as AlertsResponse | null;
+    if (!response.ok || payload?.ok !== true || !payload.data) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
+    return {
+      groups: payload.data.groups ?? [],
+      summary: toAlertSummary(payload.data.summary),
+    };
   }, []);
 
   useEffect(() => {
-    void load(days);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadAlerts() {
+      try {
+        const next = await load(days, controller.signal);
+        if (!active) return;
+        setGroups(next.groups);
+        setSummary(next.summary);
+        setErrorMessage("");
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        setGroups([]);
+        setSummary(emptySummary());
+        setErrorMessage(error instanceof Error ? error.message : "알림함 데이터를 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadAlerts();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [days, load]);
 
-  const dayCount = useMemo(() => groups.length, [groups]);
+  const selectDays = useCallback((nextDays: 7 | 30) => {
+    if (days === nextDays) return;
+    setDays(nextDays);
+    setLoading(true);
+    setErrorMessage("");
+  }, [days]);
+
   const filteredGroups = useMemo(() => {
     return groups
       .map((group) => ({
@@ -306,16 +331,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
         throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
       }
       setGroups(payload.data.groups ?? []);
-      setTotal(Math.max(0, Number(payload.data.total ?? 0)));
-      setSummary({
-        highTotal: Math.max(0, Number(payload.data.summary?.highTotal ?? 0)),
-        visibleTotal: Math.max(0, Number(payload.data.summary?.visibleTotal ?? 0)),
-        pendingTotal: Math.max(0, Number(payload.data.summary?.pendingTotal ?? 0)),
-        acknowledgedTotal: Math.max(0, Number(payload.data.summary?.acknowledgedTotal ?? 0)),
-        hiddenTotal: Math.max(0, Number(payload.data.summary?.hiddenTotal ?? 0)),
-        latestVisibleTitle: asString(payload.data.summary?.latestVisibleTitle) || null,
-        latestVisibleCreatedAt: asString(payload.data.summary?.latestVisibleCreatedAt) || null,
-      });
+      setSummary(toAlertSummary(payload.data.summary));
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "알림 상태를 저장하지 못했습니다.");
     } finally {
@@ -335,17 +351,17 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
               <Link href={NEWS_ALERT_RULES_SETTINGS_HREF} className={reportHeroActionLinkClassName}>
                 알림 설정
               </Link>
-              <div className="ml-2 flex items-center rounded-lg border border-slate-200 bg-slate-100 p-1">
+              <div className="ml-2 flex items-center rounded-lg border border-slate-200 bg-surface-muted p-1">
                 <button
                   type="button"
-                  onClick={() => setDays(7)}
+                  onClick={() => selectDays(7)}
                   className={alertsHeaderToggleClassName(days === 7)}
                 >
                   7일
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDays(30)}
+                  onClick={() => selectDays(30)}
                   className={alertsHeaderToggleClassName(days === 30)}
                 >
                   30일
@@ -427,27 +443,27 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
           <SubSectionHeader
             title="알림 이벤트"
             description="중요한 신호를 먼저 확인하고 상태를 관리하세요."
-            action={<span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full tabular-nums">필터 결과 {filteredTotal}건</span>}
+            action={<span className="text-[10px] font-black text-slate-400 bg-surface-muted px-2 py-0.5 rounded-full tabular-nums">필터 결과 {filteredTotal}건</span>}
           />
 
           {loading ? (
             <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
           ) : groups.length < 1 ? (
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
-              <p className="text-sm font-bold text-slate-900">최근 조건 충족 이벤트가 없습니다.</p>
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-surface-muted p-12 text-center">
+              <p className="text-sm font-bold text-navy">최근 조건 충족 이벤트가 없습니다.</p>
               <p className="mt-2 text-xs font-medium text-slate-500">흐름 화면에서 급증 토픽을 보고, 필요하면 설정에서 기준을 조정할 수 있습니다.</p>
               <div className="mt-6 flex flex-wrap justify-center gap-3">
-                <Link href="/planning/v3/news/trends" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+                <Link href="/planning/v3/news/trends" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all">
                   최근 흐름 보기
                 </Link>
-                <Link href={NEWS_ALERT_RULES_SETTINGS_HREF} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+                <Link href={NEWS_ALERT_RULES_SETTINGS_HREF} className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all">
                   알림 기준 조정
                 </Link>
               </div>
             </div>
           ) : filteredGroups.length < 1 ? (
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
-              <p className="text-sm font-bold text-slate-900">필터 조건에 맞는 알림이 없습니다.</p>
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-surface-muted p-12 text-center">
+              <p className="text-sm font-bold text-navy">필터 조건에 맞는 알림이 없습니다.</p>
               <p className="mt-2 text-xs font-medium text-slate-500">상태나 중요도 필터를 변경해 보세요.</p>
               <div className="mt-6 flex justify-center">
                 <button
@@ -457,7 +473,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                     setSourceFilter("all");
                     setStatusFilter("visible");
                   }}
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all"
                 >
                   필터 전체 초기화
                 </button>
@@ -472,8 +488,8 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                     {group.events.map((event) => (
                       <li key={event.id} className={cn(
                         "group rounded-2xl border p-5 transition-all shadow-sm",
-                        isHidden(event) ? "border-slate-200 bg-slate-50/50 opacity-60" :
-                        isAcknowledged(event) ? "border-sky-100 bg-sky-50/20" : "border-slate-200 bg-white hover:border-emerald-200 hover:shadow-md"
+                        isHidden(event) ? "border-slate-200 bg-surface-muted/50 opacity-60" :
+                        isAcknowledged(event) ? "border-sky-100 bg-sky-50/20" : "border-slate-200 bg-white hover:border-primary/20 hover:shadow-md"
                       )}>
                         <div className="flex flex-wrap items-center gap-3 mb-3">
                           <span className={cn("rounded-lg border px-2 py-0.5 text-[10px] font-black tabular-nums", levelBadgeClass(event.level))}>
@@ -482,7 +498,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{formatDateTime(event.createdAt)}</span>
                             <span className="h-1 w-1 rounded-full bg-slate-200" />
-                            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">{buildAlertLead(event)}</span>
+                            <span className="text-[10px] font-black text-primary uppercase tracking-widest">{buildAlertLead(event)}</span>
                           </div>
                           {isAcknowledged(event) ? (
                             <span className="ml-auto rounded-lg bg-sky-100 px-2 py-0.5 text-[10px] font-black text-sky-700">ACKNOWLEDGED</span>
@@ -491,7 +507,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                           ) : null}
                         </div>
 
-                        <p className="text-base font-black text-slate-900 tracking-tight leading-snug">{event.title}</p>
+                        <p className="text-base font-black text-navy tracking-tight leading-snug">{event.title}</p>
                         <p className="mt-2 text-sm font-medium text-slate-600 leading-relaxed">{formatAlertSummary(event.summary)}</p>
                         <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">TARGET: {targetTypeLabel(event.targetType)} · {event.targetId}</p>
 
@@ -502,7 +518,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                                 type="button"
                                 onClick={() => void saveEventState(event.id, "unhide")}
                                 disabled={savingEventId === event.id}
-                                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[10px] font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60 transition-colors"
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[10px] font-black text-slate-700 hover:bg-surface-muted disabled:opacity-60 transition-colors"
                               >
                                 {savingEventId === event.id ? "저장 중..." : "숨김 해제"}
                               </button>
@@ -514,7 +530,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                                   disabled={savingEventId === event.id}
                                   className={cn(
                                     "rounded-lg border px-3 py-1.5 text-[10px] font-black transition-colors disabled:opacity-60",
-                                    isAcknowledged(event) ? "border-slate-200 text-slate-500 hover:bg-slate-50" : "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                                    isAcknowledged(event) ? "border-slate-200 text-slate-500 hover:bg-surface-muted" : "border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
                                   )}
                                 >
                                   {savingEventId === event.id ? "저장 중..." : isAcknowledged(event) ? "미확인 상태로 변경" : "확인 완료"}
@@ -523,7 +539,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                                   type="button"
                                   onClick={() => void saveEventState(event.id, "hide")}
                                   disabled={savingEventId === event.id}
-                                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-slate-50 disabled:opacity-60 transition-colors"
+                                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[10px] font-black text-slate-500 hover:bg-surface-muted disabled:opacity-60 transition-colors"
                                 >
                                   {savingEventId === event.id ? "저장 중..." : "숨기기"}
                                 </button>
@@ -536,7 +552,7 @@ export function NewsAlertsClient({ csrf }: NewsAlertsClientProps) {
                               href={event.link}
                               target={isInternalLink(event.link) ? undefined : "_blank"}
                               rel="noopener noreferrer"
-                              className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest"
+                              className="text-[10px] font-black text-primary hover:underline uppercase tracking-widest"
                             >
                               상세 보기 ▶
                             </a>

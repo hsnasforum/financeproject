@@ -89,6 +89,7 @@ function isWslBridgeIp(raw: string): boolean {
 }
 
 function isAllowRemote(env: NodeJS.ProcessEnv): boolean {
+  if (asString(env.NODE_ENV).toLowerCase() === "production") return false;
   const raw = asString(env.ALLOW_REMOTE).toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }

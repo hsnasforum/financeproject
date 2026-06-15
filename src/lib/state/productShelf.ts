@@ -3,6 +3,7 @@ const LEGACY_COMPARE_STORAGE_KEY = "products_compare_ids_v1";
 const PRODUCT_SHELF_SCHEMA_VERSION = 1 as const;
 const MAX_RECENT_VIEWED = 30;
 const MAX_COMPARE_BASKET = 4;
+export const PRODUCT_SHELF_UPDATED_EVENT = "products:shelf-updated";
 
 export type ProductShelfState = {
   schemaVersion: typeof PRODUCT_SHELF_SCHEMA_VERSION;
@@ -114,6 +115,19 @@ export function loadShelf(raw: string | null): ProductShelfState {
   }
 }
 
+export function loadShelfFromSnapshot(currentRaw: string | null, legacyCompareRaw: string | null): ProductShelfState {
+  const loaded = loadShelf(currentRaw);
+  if (loaded.compareBasket.length > 0 || currentRaw) return loaded;
+
+  const legacyCompare = loadLegacyCompare(legacyCompareRaw);
+  if (legacyCompare.length === 0) return loaded;
+
+  return {
+    ...loaded,
+    compareBasket: clampCompareBasket(legacyCompare),
+  };
+}
+
 export function saveShelf(state: ProductShelfState): string {
   return JSON.stringify(toPersisted(state));
 }
@@ -121,17 +135,10 @@ export function saveShelf(state: ProductShelfState): string {
 export function loadShelfFromStorage(): ProductShelfState {
   if (!inBrowser()) return emptyShelf();
   const current = window.localStorage.getItem(PRODUCT_SHELF_STORAGE_KEY);
-  const loaded = loadShelf(current);
-  if (loaded.compareBasket.length > 0 || current) return loaded;
-
   const legacyCompareRaw = window.localStorage.getItem(LEGACY_COMPARE_STORAGE_KEY);
-  const legacyCompare = loadLegacyCompare(legacyCompareRaw);
-  if (legacyCompare.length === 0) return loaded;
+  const migrated = loadShelfFromSnapshot(current, legacyCompareRaw);
+  if (current || migrated.compareBasket.length === 0) return migrated;
 
-  const migrated: ProductShelfState = {
-    ...loaded,
-    compareBasket: clampCompareBasket(legacyCompare),
-  };
   persistShelf(migrated);
   return migrated;
 }
@@ -152,6 +159,9 @@ function persistShelf(state: ProductShelfState): ProductShelfState {
   if (!inBrowser()) return next;
   window.localStorage.setItem(PRODUCT_SHELF_STORAGE_KEY, JSON.stringify(persisted));
   window.localStorage.setItem(LEGACY_COMPARE_STORAGE_KEY, JSON.stringify(next.compareBasket));
+  window.dispatchEvent(new CustomEvent(PRODUCT_SHELF_UPDATED_EVENT, {
+    detail: { compareCount: next.compareBasket.length, favoriteCount: next.favorites.size },
+  }));
   return next;
 }
 
@@ -224,6 +234,7 @@ export const migrate = migrateProductShelf;
 
 export const productShelfConfig = {
   storageKey: PRODUCT_SHELF_STORAGE_KEY,
+  legacyCompareStorageKey: LEGACY_COMPARE_STORAGE_KEY,
   schemaVersion: PRODUCT_SHELF_SCHEMA_VERSION,
   maxRecentViewed: MAX_RECENT_VIEWED,
   maxCompareBasket: MAX_COMPARE_BASKET,

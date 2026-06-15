@@ -106,15 +106,18 @@ export function LabelingClient() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
 
   useEffect(() => {
-    const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
-    const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
-    if (unlocked && csrf) {
-      setUnlock((prev) => ({
-        ...prev,
-        unlocked: true,
-        csrf,
-      }));
-    }
+    const timeoutId = window.setTimeout(() => {
+      const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
+      const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
+      if (unlocked && csrf) {
+        setUnlock((prev) => ({
+          ...prev,
+          unlocked: true,
+          csrf,
+        }));
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const filteredItems = useMemo(() => {
@@ -133,18 +136,6 @@ export function LabelingClient() {
     const found = filteredItems.find((item) => item.key === activeKey);
     return found ?? filteredItems[0];
   }, [activeKey, filteredItems]);
-
-  useEffect(() => {
-    if (filteredItems.length < 1) {
-      setActiveKey(null);
-      return;
-    }
-    if (!currentItem) {
-      setActiveKey(filteredItems[0].key);
-      return;
-    }
-    setActiveKey(currentItem.key);
-  }, [filteredItems, currentItem]);
 
   const loadQueue = useCallback(async () => {
     setLoading(true);
@@ -178,7 +169,10 @@ export function LabelingClient() {
   }, []);
 
   useEffect(() => {
-    void loadQueue();
+    const timeoutId = window.setTimeout(() => {
+      void loadQueue();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadQueue]);
 
   async function handleUnlock() {
@@ -342,11 +336,11 @@ export function LabelingClient() {
       />
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Dev Unlock</h2>
+        <h2 className="text-base font-black text-navy">Dev Unlock</h2>
         <p className="mt-2 text-sm text-slate-600">라벨 저장(POST) 전 unlock이 필요합니다.</p>
         <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
           <input
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-emerald-200 transition focus:border-emerald-400 focus:ring"
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-navy outline-none ring-primary/20 transition focus:border-primary focus:ring"
             type="password"
             placeholder="DEV_TOKEN"
             value={unlockToken}
@@ -360,26 +354,32 @@ export function LabelingClient() {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">진행 상태</h2>
+        <h2 className="text-base font-black text-navy">진행 상태</h2>
         <div className="mt-3 grid gap-2 text-sm md:grid-cols-4">
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">전체: <span className="font-semibold">{summary.total}</span></p>
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">완료: <span className="font-semibold">{summary.labeledCount}</span></p>
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">대기: <span className="font-semibold">{summary.unlabeledCount}</span></p>
-          <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">진행률: <span className="font-semibold">{progressRate}%</span></p>
+          <p className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">전체: <span className="font-semibold">{summary.total}</span></p>
+          <p className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">완료: <span className="font-semibold">{summary.labeledCount}</span></p>
+          <p className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">대기: <span className="font-semibold">{summary.unlabeledCount}</span></p>
+          <p className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">진행률: <span className="font-semibold">{progressRate}%</span></p>
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
           <input
-            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-emerald-200 transition focus:border-emerald-400 focus:ring"
+            className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-navy outline-none ring-primary/20 transition focus:border-primary focus:ring"
             placeholder="회사/종목코드/제목 검색"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setActiveKey(null);
+            }}
           />
           <label className="flex h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700">
             <input
               type="checkbox"
               checked={uncertainOnly}
-              onChange={(event) => setUncertainOnly(event.target.checked)}
+              onChange={(event) => {
+                setUncertainOnly(event.target.checked);
+                setActiveKey(null);
+              }}
             />
             불확실만
           </label>
@@ -392,12 +392,12 @@ export function LabelingClient() {
             message={error}
           />
         ) : null}
-        {notice ? <p className="mt-3 text-sm font-semibold text-emerald-700">{notice}</p> : null}
+        {notice ? <p className="mt-3 text-sm font-semibold text-navy">{notice}</p> : null}
       </Card>
 
       <Card className="mt-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-black text-slate-900">현재 항목</h2>
+          <h2 className="text-base font-black text-navy">현재 항목</h2>
           <p className="text-xs text-slate-500">
             {filteredItems.length > 0 && currentIndex >= 0 ? `${currentIndex + 1}/${filteredItems.length}` : "0/0"}
           </p>
@@ -409,15 +409,15 @@ export function LabelingClient() {
           <p className="mt-4 text-sm text-slate-500">표시할 항목이 없습니다. (필터 또는 큐 상태 확인)</p>
         ) : (
           <>
-            <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-surface-muted p-4">
               <p className="text-xs text-slate-500">corpCode</p>
-              <p className="text-sm font-semibold text-slate-900">{currentItem.corpCode} / {currentItem.corpName}</p>
+              <p className="text-sm font-semibold text-navy">{currentItem.corpCode} / {currentItem.corpName}</p>
               <p className="text-xs text-slate-500">rceptDt</p>
-              <p className="text-sm font-semibold text-slate-900">{formatDate(currentItem.rceptDt)}</p>
+              <p className="text-sm font-semibold text-navy">{formatDate(currentItem.rceptDt)}</p>
               <p className="text-xs text-slate-500">reportNm</p>
-              <p className="text-sm font-semibold text-slate-900">{currentItem.reportNm}</p>
+              <p className="text-sm font-semibold text-navy">{currentItem.reportNm}</p>
               <p className="text-xs text-slate-500">추천 라벨</p>
-              <p className="text-sm font-semibold text-slate-900">
+              <p className="text-sm font-semibold text-navy">
                 {currentItem.suggestion?.predictedCategoryId ?? "-"}
                 {" "}
                 (score {currentItem.suggestion?.score ?? 0}, {currentItem.suggestion?.level ?? "-"})

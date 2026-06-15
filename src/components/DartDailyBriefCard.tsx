@@ -53,7 +53,7 @@ export function DartDailyBriefCard({ showQuickActions = false }: { showQuickActi
           <h3 className="text-sm font-bold text-slate-800">일일 브리핑</h3>
           <p className="text-xs text-slate-400 mt-1">DART 신규/업데이트 요약</p>
         </div>
-        <Link href="/public/dart" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">
+        <Link href="/public/dart" className="text-xs font-bold text-navy hover:text-navy">
           전체 보기
         </Link>
       </div>
@@ -67,7 +67,7 @@ export function DartDailyBriefCard({ showQuickActions = false }: { showQuickActi
       ) : (
         <ul className="mt-4 space-y-2">
           {lines.map((line, index) => (
-            <li key={`${index}-${line}`} className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+            <li key={`${index}-${line}`} className="rounded-xl border border-slate-100 bg-surface-muted/60 px-3 py-2">
               <p className="text-xs font-bold text-slate-800 leading-relaxed">{line}</p>
               <p className="mt-1 text-[11px] text-slate-500">핵심 라인 {index + 1}</p>
             </li>

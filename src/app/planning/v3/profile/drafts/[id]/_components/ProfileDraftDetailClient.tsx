@@ -130,6 +130,13 @@ type Props = {
   disableAutoLoad?: boolean;
 };
 
+type DetailLoadResult = {
+  draft: DraftDetail;
+  profiles: ProfileOption[];
+};
+
+const DETAIL_LOAD_FAILED_MESSAGE = "초안 상세를 불러오지 못했습니다.";
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -241,52 +248,85 @@ export function ProfileDraftDetailClient({
             ? "경고를 확인한 뒤 적용할 수 있습니다."
             : "오류 없음. 이 기준으로 프로필 생성(초안 적용)을 진행할 수 있습니다.";
 
-  const loadDetail = useCallback(async () => {
+  const loadDetailData = useCallback(async (signal?: AbortSignal): Promise<DetailLoadResult> => {
+    const [detailResponse, profilesResponse] = await Promise.all([
+      fetch(`/api/planning/v3/profile/drafts/${encodeURIComponent(id)}${buildCsrfQuery()}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+      fetch(`/api/planning/v3/profiles${buildCsrfQuery()}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+    ]);
+
+    const detailJson = await detailResponse.json().catch(() => null);
+    const profilesJson = await profilesResponse.json().catch(() => null);
+
+    if (!detailResponse.ok || !isDetailResponse(detailJson)) {
+      throw new Error(DETAIL_LOAD_FAILED_MESSAGE);
+    }
+
+    return {
+      draft: detailJson.data,
+      profiles: profilesResponse.ok && isProfilesResponse(profilesJson) ? profilesJson.data : [],
+    };
+  }, [id]);
+
+  const applyDetailLoadResult = useCallback((result: DetailLoadResult) => {
+    setDraft(result.draft);
+    setProfiles(result.profiles);
+    setPreflight(null);
+    setApplyResult("");
+    setMessage("");
+  }, []);
+
+  const reloadDetail = useCallback(async () => {
     if (disableAutoLoad) return;
     setLoading(true);
     setMessage("");
     try {
-      const [detailResponse, profilesResponse] = await Promise.all([
-        fetch(`/api/planning/v3/profile/drafts/${encodeURIComponent(id)}${buildCsrfQuery()}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch(`/api/planning/v3/profiles${buildCsrfQuery()}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ]);
-
-      const detailJson = await detailResponse.json().catch(() => null);
-      const profilesJson = await profilesResponse.json().catch(() => null);
-
-      if (!detailResponse.ok || !isDetailResponse(detailJson)) {
-        setDraft(null);
-        setMessage("초안 상세를 불러오지 못했습니다.");
-        return;
-      }
-
-      setDraft(detailJson.data);
-      setPreflight(null);
-      setApplyResult("");
-
-      if (profilesResponse.ok && isProfilesResponse(profilesJson)) {
-        setProfiles(profilesJson.data);
-      } else {
-        setProfiles([]);
-      }
+      const result = await loadDetailData();
+      applyDetailLoadResult(result);
     } catch {
       setDraft(null);
       setProfiles([]);
-      setMessage("초안 상세를 불러오지 못했습니다.");
+      setMessage(DETAIL_LOAD_FAILED_MESSAGE);
     } finally {
       setLoading(false);
     }
-  }, [disableAutoLoad, id]);
+  }, [applyDetailLoadResult, disableAutoLoad, loadDetailData]);
 
   useEffect(() => {
-    void loadDetail();
-  }, [loadDetail]);
+    if (disableAutoLoad) return;
+
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialDetail() {
+      try {
+        const result = await loadDetailData(controller.signal);
+        if (!active) return;
+        applyDetailLoadResult(result);
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setDraft(null);
+        setProfiles([]);
+        setMessage(DETAIL_LOAD_FAILED_MESSAGE);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialDetail();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [applyDetailLoadResult, disableAutoLoad, loadDetailData]);
 
   const downloadPayload = useMemo(() => {
     if (!draft) return "";
@@ -399,7 +439,7 @@ export function ProfileDraftDetailClient({
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Draft Detail</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Profile Draft Detail</h1>
           <p className="text-sm text-slate-700">
             이 화면은 stable planning handoff 직전의 개별 초안 검토 surface입니다. 다음 단계는 draft 검토 후
             preflight에서 영향 범위를 확인하고, apply 뒤 planning에서 실행을 저장한 다음 stable report를 확인하는
@@ -484,7 +524,7 @@ export function ProfileDraftDetailClient({
                 <Button data-testid="v3-draft-copy" onClick={() => { void handleCopy(); }} size="sm" type="button" variant="outline">
                   JSON 복사
                 </Button>
-                <Button onClick={() => { void loadDetail(); }} size="sm" type="button" variant="outline">
+                <Button onClick={() => { void reloadDetail(); }} size="sm" type="button" variant="outline">
                   새로고침
                 </Button>
               </div>
@@ -548,7 +588,7 @@ export function ProfileDraftDetailClient({
               </p>
               {applyResult ? (
                 <p
-                  className={`text-sm font-semibold ${applyResult.includes("실패") ? "text-rose-700" : "text-emerald-700"}`}
+                  className={`text-sm font-semibold ${applyResult.includes("실패") ? "text-rose-700" : "text-navy"}`}
                   data-testid="v3-draft-apply-result"
                 >
                   {applyResult}
@@ -655,7 +695,7 @@ export function ProfileDraftDetailClient({
                   preflight.changes.length > 0 ? (
                     <BodyTableFrame>
                       <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
-                        <thead className="bg-slate-50">
+                        <thead className="bg-surface-muted">
                           <tr>
                             <th className="px-2 py-1 text-left">path</th>
                             <th className="px-2 py-1 text-left">kind</th>

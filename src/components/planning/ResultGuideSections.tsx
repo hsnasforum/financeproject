@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BodyEmptyState, BodyTableFrame } from "@/components/ui/BodyTone";
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { formatKrw } from "@/lib/planning/i18n/format";
 import { type Locale } from "@/lib/planning/i18n";
 import { LIMITS } from "@/lib/planning/v2/limits";
@@ -44,7 +45,7 @@ type AdvancedJsonPanelProps = {
 };
 
 const BADGE_STYLE: Record<ResultBadgeStatus, string> = {
-  ok: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  ok: "border-primary/20 bg-primary/5 text-navy",
   warn: "border-amber-200 bg-amber-50 text-amber-800",
   risk: "border-rose-200 bg-rose-50 text-rose-800",
 };
@@ -90,7 +91,7 @@ export function ResultGuideCard(props: ResultGuideCardProps) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex-1 min-w-[240px]">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">10초 요약</p>
-          <p className="mt-3 text-lg font-bold text-slate-900 leading-snug tracking-tight">{props.reason}</p>
+          <p className="mt-3 text-lg font-bold text-navy leading-snug tracking-tight">{props.reason}</p>
         </div>
         <span className={cn("rounded-full border px-4 py-1.5 text-xs font-black tracking-tight", BADGE_STYLE[props.status])}>
           상태: {BADGE_LABEL[props.status]}
@@ -98,31 +99,31 @@ export function ResultGuideCard(props: ResultGuideCardProps) {
       </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <div className="rounded-[1.5rem] bg-slate-50 px-5 py-4 border border-slate-100/80">
+        <div className="rounded-[1.5rem] bg-surface-muted px-5 py-4 border border-slate-100/80">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">현금 최저</p>
-          <p className="mt-2 text-xl font-black text-slate-900 tabular-nums tracking-tight">{formatKrw(props.locale, props.minCashKrw)}</p>
+          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{formatKrw(props.locale, props.minCashKrw)}</p>
         </div>
-        <div className="rounded-[1.5rem] bg-slate-50 px-5 py-4 border border-slate-100/80">
+        <div className="rounded-[1.5rem] bg-surface-muted px-5 py-4 border border-slate-100/80">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">목표 달성</p>
-          <p className="mt-2 text-xl font-black text-slate-900 tabular-nums tracking-tight">
+          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">
             {props.achievedGoals} <span className="text-sm font-bold text-slate-400">/ {props.totalGoals}</span>
           </p>
         </div>
-        <div className="rounded-[1.5rem] bg-slate-50 px-5 py-4 border border-slate-100/80">
+        <div className="rounded-[1.5rem] bg-surface-muted px-5 py-4 border border-slate-100/80">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">최대 DSR</p>
-          <p className="mt-2 text-xl font-black text-slate-900 tabular-nums tracking-tight">{toDsrPct(props.maxDsr)}</p>
+          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{toDsrPct(props.maxDsr)}</p>
         </div>
       </div>
 
-      <div className="mt-6 rounded-[2rem] bg-emerald-50/40 px-6 py-5 border border-emerald-100/50">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700/60">추천 TOP 3 액션</p>
+      <div className="mt-6 rounded-[2rem] bg-primary/10 px-6 py-5 border border-primary/10">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-navy/60">추천 TOP 3 액션</p>
         {props.topActions.length === 0 ? (
-          <p className="mt-3 text-sm font-medium text-emerald-800/80 italic">권장 액션이 없습니다. 목표와 경고 표를 먼저 확인하세요.</p>
+          <p className="mt-3 text-sm font-medium text-navy/80 italic">권장 액션이 없습니다. 목표와 경고 표를 먼저 확인하세요.</p>
         ) : (
           <ul className="mt-3 space-y-2.5">
             {props.topActions.slice(0, 3).map((action, index) => (
-              <li className="flex items-start gap-3 text-sm font-bold text-emerald-900" key={`${action}-${index}`}>
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-black">{index + 1}</span>
+              <li className="flex items-start gap-3 text-sm font-bold text-navy" key={`${action}-${index}`}>
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black">{index + 1}</span>
                 <span className="leading-tight pt-0.5">{action}</span>
               </li>
             ))}
@@ -145,11 +146,11 @@ export function WarningsTable(props: WarningsTableProps) {
         <p className="mt-1 text-xs text-slate-500 font-medium">동일 경고 코드는 합쳐서 표시합니다. 반복 횟수와 발생 구간을 확인하세요.</p>
       </div>
       {props.warnings.length === 0 ? (
-        <BodyEmptyState className="rounded-[2.5rem] border-emerald-100 bg-emerald-50/30 px-6 py-8" description="현재 가정에서는 위험 신호가 관측되지 않았습니다." title="경고가 없습니다." />
+        <BodyEmptyState className="rounded-[2.5rem] border-primary/10 bg-primary/30 px-6 py-8" description="현재 가정에서는 위험 신호가 관측되지 않았습니다." title="경고가 없습니다." />
       ) : (
         <BodyTableFrame>
           <table className="min-w-full divide-y divide-slate-100">
-            <thead className="bg-slate-50">
+            <thead className="bg-surface-muted">
               <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <th className="px-6 py-4 text-left">코드</th>
                 <th className="px-6 py-4 text-left">심각도</th>
@@ -160,8 +161,8 @@ export function WarningsTable(props: WarningsTableProps) {
             </thead>
             <tbody className="divide-y divide-slate-50 bg-white">
               {visibleWarnings.map((warning) => (
-                <tr className="hover:bg-slate-50/50 transition-colors" key={warning.code}>
-                  <td className="px-6 py-4 text-xs font-black text-slate-900 tracking-tight">{warning.code}</td>
+                <tr className="hover:bg-surface-muted/50 transition-colors" key={warning.code}>
+                  <td className="px-6 py-4 text-xs font-black text-navy tracking-tight">{warning.code}</td>
                   <td className="px-6 py-4">
                     <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black", SEVERITY_COLOR[warning.severity])}>
                       {SEVERITY_LABEL[warning.severity]}
@@ -177,10 +178,10 @@ export function WarningsTable(props: WarningsTableProps) {
         </BodyTableFrame>
       )}
       {props.warnings.length > LIMITS.warningsTop ? (
-        <div className="flex items-center justify-between px-4 py-3 rounded-[1.5rem] bg-slate-50 border border-slate-100 text-[11px]">
+        <div className="flex items-center justify-between px-4 py-3 rounded-[1.5rem] bg-surface-muted border border-slate-100 text-[11px]">
           <span className="font-bold text-slate-500">{expanded ? `전체 ${props.warnings.length}개 표시 중` : `추가 ${omittedCount}개 경고가 생략되었습니다.`}</span>
           <button
-            className="font-black text-emerald-600 uppercase tracking-widest hover:text-emerald-700 transition-colors"
+            className="font-black text-primary uppercase tracking-widest hover:text-navy transition-colors"
             onClick={() => setExpanded((prev) => !prev)}
             type="button"
           >
@@ -204,7 +205,7 @@ export function GoalsTable(props: GoalsTableProps) {
       ) : (
         <BodyTableFrame>
           <table className="min-w-full divide-y divide-slate-100">
-            <thead className="bg-slate-50">
+            <thead className="bg-surface-muted">
               <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <th className="px-6 py-4 text-left">목표</th>
                 <th className="px-6 py-4 text-right">기한(월)</th>
@@ -216,23 +217,23 @@ export function GoalsTable(props: GoalsTableProps) {
             </thead>
             <tbody className="divide-y divide-slate-50 bg-white">
               {props.goals.map((goal) => (
-                <tr className="group/row hover:bg-slate-50/50 transition-colors" key={goal.goalId}>
-                  <td className="px-6 py-4 text-xs font-black text-slate-900">{goal.name}</td>
+                <tr className="group/row hover:bg-surface-muted/50 transition-colors" key={goal.goalId}>
+                  <td className="px-6 py-4 text-xs font-black text-navy">{goal.name}</td>
                   <td className="px-6 py-4 text-right text-xs font-bold text-slate-400 tabular-nums">{goal.targetMonth > 0 ? `M${goal.targetMonth}` : "-"}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex flex-col items-end gap-1.5">
-                      <span className="text-xs font-black text-slate-900 tabular-nums">{goal.progressPct.toFixed(1)}%</span>
-                      <div className="h-1 w-20 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={cn("h-full transition-all duration-500", goal.achieved ? "bg-emerald-500" : "bg-sky-400")}
-                          style={{ width: `${Math.min(100, goal.progressPct)}%` }}
+                      <span className="text-xs font-black text-navy tabular-nums">{goal.progressPct.toFixed(1)}%</span>
+                      <div className="h-1 w-20 overflow-hidden rounded-full bg-surface-muted">
+                        <CspSafeProgressBar
+                          fillClassName={goal.achieved ? "text-primary" : "text-sky-400"}
+                          value={goal.progressPct}
                         />
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums group-hover/row:text-rose-600 transition-colors">{formatKrw(props.locale, goal.shortfallKrw)}</td>
                   <td className="px-6 py-4">
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black", goal.achieved ? "text-emerald-600 bg-emerald-50" : "text-slate-400 bg-slate-50")}>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-black", goal.achieved ? "text-success bg-success/10" : "text-slate-400 bg-surface-muted")}>
                       {goal.achieved ? "달성" : "미달성"}
                     </span>
                   </td>
@@ -259,7 +260,7 @@ export function TimelineSummaryTable(props: TimelineSummaryTableProps) {
       ) : (
         <BodyTableFrame>
           <table className="min-w-full divide-y divide-slate-100">
-            <thead className="bg-slate-50">
+            <thead className="bg-surface-muted">
               <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                 <th className="px-6 py-4 text-left">구간</th>
                 <th className="px-6 py-4 text-right">월</th>
@@ -272,13 +273,13 @@ export function TimelineSummaryTable(props: TimelineSummaryTableProps) {
             </thead>
             <tbody className="divide-y divide-slate-50 bg-white">
               {props.rows.map((row) => (
-                <tr className="hover:bg-slate-50/50 transition-colors" key={`${row.label}-${row.monthIndex}`}>
-                  <td className="px-6 py-4 text-xs font-black text-slate-900">{row.label}</td>
+                <tr className="hover:bg-surface-muted/50 transition-colors" key={`${row.label}-${row.monthIndex}`}>
+                  <td className="px-6 py-4 text-xs font-black text-navy">{row.label}</td>
                   <td className="px-6 py-4 text-right text-xs font-black text-slate-400 tabular-nums">M{row.month}</td>
                   <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums">{formatKrw(props.locale, row.liquidAssetsKrw)}</td>
-                  <td className="px-6 py-4 text-right text-xs font-bold text-emerald-600 tabular-nums">{formatKrw(props.locale, row.netWorthKrw)}</td>
+                  <td className="px-6 py-4 text-right text-xs font-bold text-primary tabular-nums">{formatKrw(props.locale, row.netWorthKrw)}</td>
                   <td className="px-6 py-4 text-right text-xs font-bold text-slate-700 tabular-nums">{formatKrw(props.locale, row.totalDebtKrw)}</td>
-                  <td className="px-6 py-4 text-right text-xs font-black text-slate-900 tabular-nums">{toDsrPct(row.debtServiceRatio)}</td>
+                  <td className="px-6 py-4 text-right text-xs font-black text-navy tabular-nums">{toDsrPct(row.debtServiceRatio)}</td>
                   <td className="px-6 py-4 text-xs font-medium text-slate-600 leading-relaxed">{row.interpretation}</td>
                 </tr>
               ))}
@@ -293,7 +294,7 @@ export function TimelineSummaryTable(props: TimelineSummaryTableProps) {
 export function AdvancedJsonPanel(props: AdvancedJsonPanelProps) {
   const title = props.title ?? "고급 보기 (원본 JSON)";
   return (
-    <details className="group rounded-[2rem] border border-slate-200 bg-slate-50/50 p-5 transition-all">
+    <details className="group rounded-[2rem] border border-slate-200 bg-surface-muted/50 p-5 transition-all">
       <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-400 group-open:text-slate-600 list-none flex items-center gap-2">
         <span className="transition-transform group-open:rotate-90">▶</span>
         {title}

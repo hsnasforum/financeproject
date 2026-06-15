@@ -1,17 +1,16 @@
-import { spawnSync } from "node:child_process";
+import { runPnpmSync } from "./pnpm_runner.mjs";
 
 const steps = [
-  ["pnpm", ["deps:approve-builds"]],
-  ["pnpm", ["rebuild"]],
-  ["pnpm", ["prisma:generate"]],
-  ["pnpm", ["prisma", "db", "push"]],
-  ["pnpm", ["products:sync"]],
+  ["deps:approve-builds"],
+  ["rebuild"],
+  ["prisma:generate"],
+  ["prisma", "db", "push"],
+  ["products:sync"],
 ];
 
-function run(name, args) {
-  console.log(`[bootstrap:local] run: ${name} ${args.join(" ")}`);
-  const cmd = process.platform === "win32" && name === "pnpm" ? "pnpm.cmd" : name;
-  const result = spawnSync(cmd, args, {
+function run(args) {
+  console.log(`[bootstrap:local] run: pnpm ${args.join(" ")}`);
+  const result = runPnpmSync(args, {
     stdio: "inherit",
     env: {
       ...process.env,
@@ -20,14 +19,14 @@ function run(name, args) {
   });
 
   if ((result.status ?? 1) !== 0) {
-    console.error(`[bootstrap:local] failed at: ${name} ${args.join(" ")}`);
+    console.error(`[bootstrap:local] failed at: pnpm ${args.join(" ")}`);
     console.error("[bootstrap:local] 점검: .env.local의 DATABASE_URL/FINLIFE_API_KEY/KDB_DATAGO_SERVICE_KEY 설정");
     process.exit(result.status ?? 1);
   }
 }
 
-for (const [name, args] of steps) {
-  run(name, args);
+for (const args of steps) {
+  run(args);
 }
 
 console.log("[bootstrap:local] done");

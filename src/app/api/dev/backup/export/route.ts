@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { isServerPathWhitelisted } from "@/lib/backup/backupBundle";
 import { collectServerPaths as collectBackupServerPaths } from "@/lib/backup/exportPaths";
 import { append as appendAuditLog } from "@/lib/audit/auditLogStore";
-import { onlyDev } from "@/lib/dev/onlyDev";
+import { guardDevReadRequest } from "@/lib/dev/devGuards";
 
 function countPlanningPaths(paths: string[]): { planningFileCount: number; planningIncluded: boolean } {
   const planningFileCount = paths.filter((entry) => entry.startsWith(".data/planning/")).length;
@@ -38,8 +38,8 @@ function resolveSafePath(cwd: string, relativePath: string): string | null {
   return null;
 }
 
-export async function GET() {
-  const blocked = onlyDev();
+export async function GET(request: Request) {
+  const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
 
   const cwd = process.cwd();

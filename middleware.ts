@@ -1,29 +1,53 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isLocalRequest } from "./src/lib/dev/localRequest";
-const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-function buildContentSecurityPolicy(): string {
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const PREFETCH_MATCHER = [
+  { type: "header" as const, key: "next-router-prefetch" },
+  { type: "header" as const, key: "purpose", value: "prefetch" },
+];
+
+function buildContentSecurityPolicy(options?: { nonce?: string }): string {
   const isProduction = process.env.NODE_ENV === "production";
-  const scriptSrc = ["'self'", "'unsafe-inline'", "blob:"];
+  const scriptSrc = ["'self'"];
+  if (options?.nonce) {
+    scriptSrc.push(`'nonce-${options.nonce}'`);
+  }
+  scriptSrc.push("blob:");
+  const connectSrc = isProduction
+    ? ["'self'", "https:", "wss:"]
+    : ["'self'", "ws:", "wss:", "http:", "https:"];
+  const styleDirectives = isProduction
+    ? [
+      "style-src 'self'",
+      "style-src-elem 'self'",
+      "style-src-attr 'none'",
+    ]
+    : ["style-src 'self' 'unsafe-inline'"];
   if (!isProduction) {
+    scriptSrc.push("'unsafe-inline'");
     scriptSrc.push("'unsafe-eval'");
   }
 
-  return [
+  const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
     `script-src ${scriptSrc.join(" ")}`,
-    "style-src 'self' 'unsafe-inline'",
+    ...styleDirectives,
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' ws: wss: http: https:",
-  ].join("; ");
+    `connect-src ${connectSrc.join(" ")}`,
+  ];
+  if (isProduction) {
+    directives.push("upgrade-insecure-requests");
+  }
+  return directives.join("; ");
 }
 
-function withSecurityHeaders(response: NextResponse): NextResponse {
+function withSecurityHeaders(response: NextResponse, contentSecurityPolicy: string): NextResponse {
   response.headers.set("x-content-type-options", "nosniff");
   response.headers.set("referrer-policy", "strict-origin-when-cross-origin");
   response.headers.set("x-frame-options", "DENY");
@@ -31,7 +55,7 @@ function withSecurityHeaders(response: NextResponse): NextResponse {
   response.headers.set("cross-origin-resource-policy", "same-site");
   response.headers.set("origin-agent-cluster", "?1");
   response.headers.set("permissions-policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
-  response.headers.set("content-security-policy", buildContentSecurityPolicy());
+  response.headers.set("content-security-policy", contentSecurityPolicy);
   return response;
 }
 
@@ -47,7 +71,34 @@ function isPlanningMutationPath(pathname: string, method: string): boolean {
   return STATE_CHANGING_METHODS.has(method.toUpperCase());
 }
 
-function blockResponse(request: NextRequest): NextResponse {
+function isDevOnlyPath(pathname: string): boolean {
+  return pathname === "/api/dev"
+    || pathname.startsWith("/api/dev/")
+    || pathname === "/dev"
+    || pathname.startsWith("/dev/")
+    || pathname === "/debug"
+    || pathname.startsWith("/debug/")
+    || pathname === "/dashboard/artifacts";
+}
+
+function shouldAttachNonce(request: NextRequest): boolean {
+  if (request.nextUrl.pathname.startsWith("/api/")) return false;
+  const method = request.method.toUpperCase();
+  if (method !== "GET" && method !== "HEAD") return false;
+  return !/\/[^/]+\.[a-z0-9]+$/i.test(request.nextUrl.pathname);
+}
+
+function createNonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function blockResponse(request: NextRequest, contentSecurityPolicy: string): NextResponse {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     return withSecurityHeaders(NextResponse.json(
       {
@@ -58,22 +109,46 @@ function blockResponse(request: NextRequest): NextResponse {
         },
       },
       { status: 403 },
-    ));
+    ), contentSecurityPolicy);
   }
-  return withSecurityHeaders(new NextResponse("Forbidden", { status: 403 }));
+  return withSecurityHeaders(new NextResponse("Forbidden", { status: 403 }), contentSecurityPolicy);
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isProduction = process.env.NODE_ENV === "production";
+  const nonce = shouldAttachNonce(request) ? createNonce() : null;
+  const contentSecurityPolicy = buildContentSecurityPolicy(
+    nonce ? { nonce } : undefined,
+  );
 
-  const needsLocalOnly = isOpsPath(pathname) || isPlanningMutationPath(pathname, request.method);
+  const needsLocalOnly = isOpsPath(pathname)
+    || isPlanningMutationPath(pathname, request.method)
+    || (!isProduction && isDevOnlyPath(pathname));
   if (needsLocalOnly && !isLocalRequest(request)) {
-    return blockResponse(request);
+    return blockResponse(request, contentSecurityPolicy);
   }
 
-  return withSecurityHeaders(NextResponse.next());
+  if (!nonce) {
+    return withSecurityHeaders(NextResponse.next(), contentSecurityPolicy);
+  }
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("content-security-policy", contentSecurityPolicy);
+
+  return withSecurityHeaders(NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  }), contentSecurityPolicy);
 }
 
 export const config = {
-  matcher: ["/:path*"],
+  matcher: [
+    {
+      source: "/((?!_next/static|_next/image|favicon.ico).*)",
+      missing: PREFETCH_MATCHER,
+    },
+  ],
 };

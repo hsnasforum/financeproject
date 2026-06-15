@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import readline from "node:readline/promises";
 import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
+import { runPnpm } from "./pnpm_runner.mjs";
 
 const CORPUS_DIR = path.join("tests", "planning-v2", "regression", "corpus");
 const BASELINE_DIR = path.join("tests", "planning-v2", "regression", "baseline");
 const LATEST_REPORT_PATH = path.join(".data", "planning", "eval", "latest.json");
+const DEFAULT_REGRESSION_NOW_ISO = "2026-03-05T00:00:00.000Z";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -45,6 +46,13 @@ function toYyyyMmDd(date = new Date()) {
 
 function toYyyyMmDdCompact(date = new Date()) {
   return toYyyyMmDd(date).replaceAll("-", "");
+}
+
+function resolveRegressionNowIso(env = process.env) {
+  const raw = asString(env.PLANNING_V2_REGRESSION_NOW_ISO);
+  if (!raw) return DEFAULT_REGRESSION_NOW_ISO;
+  const parsed = new Date(raw);
+  return Number.isFinite(parsed.getTime()) ? parsed.toISOString() : DEFAULT_REGRESSION_NOW_ISO;
 }
 
 function normalizeRiskTolerance(raw) {
@@ -223,19 +231,14 @@ function readLatestReport(cwd) {
 }
 
 function runPnpmScript(script, cwd, extraEnv = {}) {
-  return new Promise((resolve, reject) => {
-    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-    const child = spawn(command, [script], {
+  return runPnpm([script], {
       cwd,
       env: {
         ...process.env,
         ...extraEnv,
       },
       stdio: "inherit",
-    });
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? 1));
-  });
+    }).then((result) => result.code);
 }
 
 async function loadTsExports(specifier) {
@@ -275,6 +278,7 @@ function buildCaseError(id, title, message) {
 async function runRegression() {
   const cwd = process.cwd();
   const generatedAt = new Date().toISOString();
+  const regressionNowIso = resolveRegressionNowIso();
   const args = parseArgs(process.argv.slice(2));
 
   if (args.reportOnly) {
@@ -404,6 +408,7 @@ async function runRegression() {
           debtRates: assumptions.debtRates,
         },
         snapshotMeta,
+        nowIso: regressionNowIso,
       });
       const riskWarnings = assessRiskAssumptionConsistency(
         riskTolerance,

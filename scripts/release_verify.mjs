@@ -3,9 +3,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { runCompleteCli } from "./planning_v2_complete.mjs";
+import { runPnpm } from "./pnpm_runner.mjs";
 
 const PREFLIGHT_REQUIRED_GATES = [
   "cleanup:next-artifacts",
+  "deps:audit",
 ];
 const EARLY_REQUIRED_GATES = [
   "planning:v2:complete",
@@ -33,17 +35,24 @@ function runCommand(command, args, options = {}) {
       env: options.env ?? process.env,
       cwd: options.cwd ?? cwd,
     });
+    child.on("error", () => resolve(1));
     child.on("exit", (code) => resolve(typeof code === "number" ? code : 1));
   });
 }
 
-function runPnpm(scriptName, args = []) {
-  return runCommand("pnpm", [scriptName, ...args]);
+async function runPnpmScript(scriptName, args = []) {
+  const result = await runPnpm([scriptName, ...args], {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    env: process.env,
+    cwd,
+  });
+  return result.code;
 }
 
 async function runGate(gate) {
   if (gate === "cleanup:next-artifacts") {
-    return runPnpm(gate, ["--", "--build-preflight"]);
+    return runPnpmScript(gate, ["--", "--build-preflight"]);
   }
   if (gate === "planning:v2:complete") {
     try {
@@ -61,7 +70,7 @@ async function runGate(gate) {
   if (gate === "planning:v2:regress") {
     return runCommand("node", ["--import", "tsx", "scripts/planning_v2_regression.mjs"], { shell: false });
   }
-  return runPnpm(gate);
+  return runPnpmScript(gate);
 }
 
 async function getAvailableScripts() {
@@ -113,7 +122,7 @@ async function main() {
       continue;
     }
     console.log(`[release:verify] run advisory ${gate}`);
-    const code = await runPnpm(gate);
+    const code = await runPnpmScript(gate);
     if (code !== 0) {
       console.warn(`[release:verify] WARN advisory failed gate=${gate} exit=${code}`);
     }

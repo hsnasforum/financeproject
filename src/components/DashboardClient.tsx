@@ -474,28 +474,28 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-surface-muted active:scale-95"
                 >
                   {refreshing ? "새로고침 중..." : "새로고침"}
                 </button>
                 <Link
                   href={latestRunReportHref}
                   prefetch={devPlanningPrefetch(latestRunReportHref)}
-                  className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
+                  className="rounded-full bg-primary px-6 py-2 text-sm font-black text-white shadow-lg shadow-primary/10 transition hover:bg-navy active:scale-95"
                 >
                   재무 상태 다시 보기
                 </Link>
                 <Link
                   href="/recommend"
                   prefetch={devPlanningPrefetch("/recommend")}
-                  className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 active:scale-95"
+                  className="rounded-full border border-primary/20 bg-primary/5 px-5 py-2 text-sm font-black text-navy transition hover:bg-primary/10 active:scale-95"
                 >
                   조건에 맞는 상품 비교
                 </Link>
                 <Link
                   href={latestRunPlanningHref}
                   prefetch={devPlanningPrefetch(latestRunPlanningHref)}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-surface-muted active:scale-95"
                 >
                   같은 조건으로 다시 계산
                 </Link>
@@ -505,21 +505,21 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 <Link
                   href="/planning"
                   prefetch={devPlanningPrefetch("/planning")}
-                  className="rounded-full bg-emerald-600 px-6 py-2 text-sm font-black text-white shadow-lg shadow-emerald-100 transition hover:bg-emerald-700 active:scale-95"
+                  className="rounded-full bg-primary px-6 py-2 text-sm font-black text-white shadow-lg shadow-primary/10 transition hover:bg-navy active:scale-95"
                 >
                   재무 상태 진단 시작
                 </Link>
                 <Link
                   href="/recommend"
                   prefetch={devPlanningPrefetch("/recommend")}
-                  className="rounded-full border border-emerald-200 bg-emerald-50 px-5 py-2 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 active:scale-95"
+                  className="rounded-full border border-primary/20 bg-primary/5 px-5 py-2 text-sm font-black text-navy transition hover:bg-primary/10 active:scale-95"
                 >
                   조건에 맞는 상품 비교
                 </Link>
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-slate-50 active:scale-95"
+                  className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-black text-slate-600 transition hover:bg-surface-muted active:scale-95"
                 >
                   {refreshing ? "새로고침 중..." : "새로고침"}
                 </button>
@@ -532,7 +532,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
               최근 실행 {latestRun ? `${formatDateTime(latestRun.createdAt)} · ${formatRunStatus(latestRun.overallStatus)}` : "없음"}
             </p>
             <div className="h-1 w-1 rounded-full bg-slate-200" />
-            <p className="text-emerald-600">
+            <p className="text-primary">
               {latestRun
                 ? "먼저 재무 상태를 다시 확인하고, 상품 비교는 필요할 때 추천 허브로 이어집니다."
                 : "먼저 재무 상태 진단을 시작하고, 상품 비교는 필요할 때 추천 허브에서 이어집니다."}
@@ -566,13 +566,13 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             />
           </ReportHeroStatGrid>
           <div className="flex flex-wrap gap-2 text-xs font-black">
-            <span className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-slate-400">
+            <span className="rounded-full border border-slate-100 bg-surface-muted px-3 py-1 text-slate-400">
               상품 소스 freshness {freshSources}/{state.sourceStatuses.length || 0}
             </span>
-            <span className="rounded-full border border-slate-100 bg-slate-50 px-3 py-1 text-slate-400">
+            <span className="rounded-full border border-slate-100 bg-surface-muted px-3 py-1 text-slate-400">
               최저 현금 {formatKrw(latestSummary.worstCashKrw)}
             </span>
-            <Link href="/recommend" className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-600 hover:bg-emerald-100 transition-colors">
+            <Link href="/recommend" className="rounded-full border border-primary/10 bg-primary/5 px-3 py-1 text-primary hover:bg-primary/10 transition-colors">
               상품 비교로 이어보기 →
             </Link>
           </div>
@@ -597,7 +597,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 <Link
                   href="/planning/runs"
                   prefetch={devPlanningPrefetch("/planning/runs")}
-                  className="text-sm font-black text-emerald-600 hover:underline uppercase tracking-widest"
+                  className="text-sm font-black text-primary hover:underline uppercase tracking-widest"
                 >
                   View All →
                 </Link>
@@ -606,8 +606,8 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             {loading && state.runs.length < 1 ? (
               <p className="text-sm text-slate-400 animate-pulse">최근 실행을 불러오는 중입니다.</p>
             ) : state.runs.length < 1 ? (
-              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-slate-50/50 px-5 py-16 text-center">
-                <p className="text-sm font-black text-slate-900">저장된 실행이 아직 없습니다.</p>
+              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-surface-muted/50 px-5 py-16 text-center">
+                <p className="text-sm font-black text-navy">저장된 실행이 아직 없습니다.</p>
                 <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">플래닝을 한 번 저장하면 이곳에서 먼저 리포트를 다시 열고, 필요하면 같은 조건으로 다시 계산할 수 있습니다.</p>
               </div>
             ) : (
@@ -615,24 +615,24 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 {state.runs.slice(0, 3).map((run) => {
                   const summary = runSummary(run);
                   return (
-                    <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:border-emerald-100 hover:bg-white" key={run.id}>
+                    <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:border-primary/10 hover:bg-white" key={run.id}>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{formatDate(run.createdAt)}</p>
-                      <p className="mt-4 text-lg font-black tracking-tight text-slate-900">{truncate(run.title || "플래닝 실행", 24)}</p>
+                      <p className="mt-4 text-lg font-black tracking-tight text-navy">{truncate(run.title || "플래닝 실행", 24)}</p>
                       <p className="mt-1 text-xs font-bold text-slate-500">{formatRunStatus(run.overallStatus)} · {run.input?.horizonMonths ?? "-"}개월</p>
                       <div className="mt-6 space-y-2 text-xs font-medium text-slate-600">
-                        <p className="flex justify-between"><span>말기 순자산</span> <span className="font-black text-slate-900 tabular-nums">{formatKrw(summary.endNetWorthKrw)}</span></p>
-                        <p className="flex justify-between"><span>최저 현금</span> <span className="font-black text-slate-900 tabular-nums">{formatKrw(summary.worstCashKrw)}</span></p>
+                        <p className="flex justify-between"><span>말기 순자산</span> <span className="font-black text-navy tabular-nums">{formatKrw(summary.endNetWorthKrw)}</span></p>
+                        <p className="flex justify-between"><span>최저 현금</span> <span className="font-black text-navy tabular-nums">{formatKrw(summary.worstCashKrw)}</span></p>
                       </div>
                       <div className="mt-8 flex items-center gap-6">
                         <Link
-                          className="text-xs font-black text-emerald-600 hover:underline uppercase tracking-widest"
+                          className="text-xs font-black text-primary hover:underline uppercase tracking-widest"
                           href={`/planning/reports?runId=${encodeURIComponent(run.id)}`}
                           prefetch={devPlanningPrefetch("/planning/reports")}
                         >
                           리포트 다시 보기 →
                         </Link>
                         <Link
-                          className="text-xs font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest"
+                          className="text-xs font-black text-slate-400 hover:text-navy uppercase tracking-widest"
                           href={`/planning?profileId=${encodeURIComponent(run.profileId)}`}
                           prefetch={devPlanningPrefetch("/planning")}
                         >
@@ -654,7 +654,7 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 <Link
                   href={latestRun ? latestRunReportHref : "/recommend"}
                   prefetch={devPlanningPrefetch(latestRun ? latestRunReportHref : "/recommend")}
-                  className="text-sm font-black text-emerald-600 hover:underline uppercase tracking-widest"
+                  className="text-sm font-black text-primary hover:underline uppercase tracking-widest"
                 >
                   {latestRun ? "Action Hub →" : "Pick Hub →"}
                 </Link>
@@ -665,13 +665,13 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 {latestActions.length > 0 ? (
                   <div className="space-y-4">
                     {latestActions.map((action) => (
-                      <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/50 p-5 group hover:bg-white transition-all" key={action.code || action.title}>
+                      <div className="rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 p-5 group hover:bg-white transition-all" key={action.code || action.title}>
                         <div className="flex flex-wrap items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-black text-slate-900 group-hover:text-emerald-600 transition-colors">{action.title}</p>
+                            <p className="text-sm font-black text-navy group-hover:text-primary transition-colors">{action.title}</p>
                             <p className="mt-1 text-xs font-medium text-slate-500 leading-relaxed">{action.summary}</p>
                           </div>
-                          <Link className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest" href={action.href}>액션 이어보기 →</Link>
+                          <Link className="text-[10px] font-black text-primary hover:underline uppercase tracking-widest" href={action.href}>액션 이어보기 →</Link>
                         </div>
                         {action.steps.length > 0 ? (
                           <div className="mt-4 space-y-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-tight">
@@ -691,17 +691,17 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 {latestCandidates.length > 0 ? (
                   <div className="grid gap-4 sm:grid-cols-2">
                     {latestCandidates.map((candidate) => (
-                      <div className="rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-sm hover:border-emerald-100 transition-all" key={candidate.id}>
+                      <div className="rounded-[1.5rem] border border-slate-100 bg-white p-5 shadow-sm hover:border-primary/10 transition-all" key={candidate.id}>
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
-                            <p className="text-sm font-black text-slate-900 truncate">{candidate.productName}</p>
+                            <p className="text-sm font-black text-navy truncate">{candidate.productName}</p>
                             <p className="mt-1 text-[10px] font-black text-slate-400 uppercase tracking-[0.12em]">
                               {candidate.providerName} · {candidate.termMonths ? `${candidate.termMonths}개월` : "기간 미상"}
                             </p>
                           </div>
                           <div className="text-right shrink-0">
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rate</p>
-                            <p className="text-sm font-black text-emerald-600 tabular-nums">
+                            <p className="text-sm font-black text-primary tabular-nums">
                               {candidate.rateMaxPct && candidate.rateMaxPct > (candidate.rateMinPct ?? 0)
                                 ? `${formatPct(candidate.rateMinPct)} ~ ${formatPct(candidate.rateMaxPct)}`
                                 : formatPct(candidate.rateMinPct)}
@@ -717,8 +717,8 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 ) : null}
               </div>
             ) : (
-              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-slate-50/50 px-5 py-16 text-center">
-                <p className="text-sm font-black text-slate-900">저장된 액션과 후보가 없습니다.</p>
+              <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-surface-muted/50 px-5 py-16 text-center">
+                <p className="text-sm font-black text-navy">저장된 액션과 후보가 없습니다.</p>
                 <p className="mt-2 text-xs text-slate-500 font-medium leading-relaxed">먼저 플랜을 저장하면 이곳에서 저장된 액션을 다시 보고, 필요하면 추천 허브에서 직접 비교를 이어갈 수 있습니다.</p>
               </div>
             )}
@@ -730,13 +730,13 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             <SubSectionHeader
               title="혜택 바로보기"
               description="보조금24 탐색 API 기반 최근 후보"
-              action={<Link href="/benefits" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-[0.15em]">All Benefits →</Link>}
+              action={<Link href="/benefits" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">All Benefits →</Link>}
             />
             {state.benefits.length > 0 ? (
               <div className="space-y-4">
                 {state.benefits.map((item) => (
-                  <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50/50 p-5 group hover:bg-white transition-all" key={item.serviceId || item.title}>
-                    <p className="text-sm font-black text-slate-900">{item.title}</p>
+                  <div className="rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 p-5 group hover:bg-white transition-all" key={item.serviceId || item.title}>
+                    <p className="text-sm font-black text-navy">{item.title}</p>
                     <p className="mt-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.org || "주관 기관 미상"}</p>
                     <p className="mt-4 text-[11px] font-medium leading-relaxed text-slate-500 line-clamp-2">{item.summary}</p>
                   </div>
@@ -752,23 +752,23 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
               <SubSectionHeader
                 title="환율과 생활 도구"
                 description="공식 환율 API와 계산 도구"
-                action={<Link href="/tools/fx" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-[0.15em]">FX Tool ▶</Link>}
+                action={<Link href="/tools/fx" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">FX Tool ▶</Link>}
               />
               <div className="grid gap-4 md:grid-cols-3">
                 {state.fxItems.map((item) => (
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5" key={item.currency}>
+                  <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5" key={item.currency}>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.currency} {item.amount.toLocaleString("ko-KR")}</p>
-                    <p className="mt-3 text-xl font-black text-slate-900 tabular-nums">{formatKrw(item.krw)}</p>
+                    <p className="mt-3 text-xl font-black text-navy tabular-nums">{formatKrw(item.krw)}</p>
                     <p className="mt-1.5 text-[10px] font-bold text-slate-400">Rate: {typeof item.rate === "number" ? item.rate.toLocaleString("ko-KR") : "-"}</p>
                   </div>
                 ))}
               </div>
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-5 flex items-center justify-between">
+              <div className="rounded-2xl border border-primary/10 bg-primary/30 p-5 flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Market Standard</p>
-                  <p className="text-sm font-black text-emerald-900">USD 1 = {state.exchangeUsdRate ? `${state.exchangeUsdRate.toLocaleString("ko-KR")}원` : "-"}</p>
+                  <p className="text-[10px] font-black text-primary uppercase tracking-widest">Market Standard</p>
+                  <p className="text-sm font-black text-navy">USD 1 = {state.exchangeUsdRate ? `${state.exchangeUsdRate.toLocaleString("ko-KR")}원` : "-"}</p>
                 </div>
-                <p className="text-[10px] font-bold text-emerald-600/50 tabular-nums">As of {state.exchangeAsOf || "-"}</p>
+                <p className="text-[10px] font-bold text-primary/80 tabular-nums">As of {state.exchangeAsOf || "-"}</p>
               </div>
             </Card>
 
@@ -776,21 +776,21 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
               <SubSectionHeader
                 title="데이터 신뢰 상태"
                 description="추천과 탐색에 쓰는 주요 데이터 기준 점검"
-                action={<Link href="/settings/data-sources" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-[0.15em]">데이터 신뢰 ▶</Link>}
+                action={<Link href="/settings/data-sources" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">데이터 신뢰 ▶</Link>}
               />
               <div className="grid gap-6 lg:grid-cols-2">
                 <div className="space-y-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Critical ENV</p>
                   <div className="space-y-2">
                     {state.dataSources.filter((row) => row.priority === "P0").map((row) => (
-                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-5 py-4" key={row.id}>
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-surface-muted/50 px-5 py-4" key={row.id}>
                         <div>
-                          <p className="text-xs font-black text-slate-900">{row.label}</p>
+                          <p className="text-xs font-black text-navy">{row.label}</p>
                           {row.status?.message ? <p className="mt-1 text-[10px] font-medium text-slate-400 truncate max-w-[120px]">{row.status.message}</p> : null}
                         </div>
                         <span className={cn(
                           "rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border",
-                          row.status?.state === "configured" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                          row.status?.state === "configured" ? "bg-primary/5 text-primary border-primary/10" : "bg-amber-50 text-amber-600 border-amber-100"
                         )}>
                           {row.status?.state === "configured" ? "ACTIVE" : "CHECK"}
                         </span>
@@ -802,14 +802,14 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1">Data Freshness</p>
                   <div className="space-y-2">
                     {state.sourceStatuses.map((row) => (
-                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50/50 px-5 py-4" key={`${row.sourceId}:${row.kind}`}>
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-100 bg-surface-muted/50 px-5 py-4" key={`${row.sourceId}:${row.kind}`}>
                         <div>
-                          <p className="text-xs font-black text-slate-900">{row.sourceId} · {row.kind}</p>
+                          <p className="text-xs font-black text-navy">{row.sourceId} · {row.kind}</p>
                           <p className="mt-1 text-[10px] font-bold text-slate-400 tabular-nums">{row.counts.toLocaleString("ko-KR")}건 · {formatDate(row.lastSyncedAt || "")}</p>
                         </div>
                         <span className={cn(
                           "rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-widest border",
-                          row.isFresh ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-amber-50 text-amber-600 border-amber-100"
+                          row.isFresh ? "bg-primary/5 text-primary border-primary/10" : "bg-amber-50 text-amber-600 border-amber-100"
                         )}>
                           {row.isFresh ? "FRESH" : "SYNC"}
                         </span>
@@ -836,8 +836,8 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 { href: "/products/catalog", title: "상품 탐색", description: "상품 카탈로그 둘러보기" },
                 { href: "/public/dart", title: "공시 탐색", description: "기업 공시 바로 확인하기" },
               ].map((item) => (
-                <Link className="group rounded-[2rem] border border-slate-100 bg-slate-50/50 p-6 transition-all hover:-translate-y-1 hover:border-emerald-200 hover:bg-white" href={item.href} key={item.href}>
-                  <p className="text-base font-black text-slate-900 group-hover:text-emerald-600 transition-colors">{item.title}</p>
+                <Link className="group rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-6 transition-all hover:-translate-y-1 hover:border-primary/20 hover:bg-white" href={item.href} key={item.href}>
+                  <p className="text-base font-black text-navy group-hover:text-primary transition-colors">{item.title}</p>
                   <p className="mt-3 text-[11px] font-medium leading-relaxed text-slate-500">{item.description}</p>
                 </Link>
               ))}
@@ -848,18 +848,18 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
             <SubSectionHeader
               title="최근 피드백"
               description="최근에 남긴 메모와 개선 요청 흐름을 다시 확인하세요"
-              action={<Link href="/feedback/list" className="text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-[0.15em]">View Feed →</Link>}
+              action={<Link href="/feedback/list" className="text-[10px] font-black text-primary hover:underline uppercase tracking-[0.15em]">View Feed →</Link>}
             />
             {state.feedback.length > 0 ? (
               <div className="space-y-4">
                 {state.feedback.slice(0, 4).map((item) => (
-                  <Link className="block rounded-[1.5rem] border border-slate-100 bg-slate-50/50 p-5 transition-all hover:border-emerald-100 hover:bg-white group" href={`/feedback/${encodeURIComponent(item.id)}`} key={item.id}>
+                  <Link className="block rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 p-5 transition-all hover:border-primary/10 hover:bg-white group" href={`/feedback/${encodeURIComponent(item.id)}`} key={item.id}>
                     <div className="flex items-center justify-between gap-4">
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{item.category || "메모"}</p>
                       <p className="text-[10px] font-bold text-slate-300 tabular-nums">{formatDate(item.createdAt)}</p>
                     </div>
-                    <p className="mt-3 text-sm font-bold text-slate-700 line-clamp-2 leading-relaxed group-hover:text-slate-900 transition-colors">{truncate(item.message, 72)}</p>
-                    <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-600">자세한 내용 다시 보기</p>
+                    <p className="mt-3 text-sm font-bold text-slate-700 line-clamp-2 leading-relaxed group-hover:text-navy transition-colors">{truncate(item.message, 72)}</p>
+                    <p className="mt-3 text-[10px] font-black uppercase tracking-[0.16em] text-primary">자세한 내용 다시 보기</p>
                   </Link>
                 ))}
               </div>

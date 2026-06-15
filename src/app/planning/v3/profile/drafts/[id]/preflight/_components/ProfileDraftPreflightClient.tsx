@@ -136,7 +136,7 @@ export function ProfileDraftPreflightClient({ id, initialProfileId = "", initial
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Draft Preflight (Diff Only)</h1>
+          <h1 className="text-xl font-black text-navy">Draft Preflight (Diff Only)</h1>
           <p className="text-sm text-slate-700">
             이 화면은 apply 직전 영향 범위 확인 surface입니다. draft 검토를 마친 뒤 변경 수, 경고, 오류를 확인하고
             planning에 반영할 준비를 맞춘 다음 stable report 도착점으로 이어지기 전 마지막 체크를 수행합니다.
@@ -280,7 +280,7 @@ export function ProfileDraftPreflightClient({ id, initialProfileId = "", initial
               result.changes.length > 0 ? (
                 <BodyTableFrame>
                   <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
-                    <thead className="bg-slate-50">
+                    <thead className="bg-surface-muted">
                       <tr>
                         <th className="px-2 py-1 text-left">path</th>
                         <th className="px-2 py-1 text-left">kind</th>

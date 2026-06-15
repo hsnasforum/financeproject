@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import net from "node:net";
 import { spawn } from "node:child_process";
+import { runPnpm } from "./pnpm_runner.mjs";
 
 const DEFAULT_RUNS = 2;
 const DEFAULT_DEV_PORT_BASE = 3126;
 const DEFAULT_PROD_PORT_BASE = 3210;
 const MODE_VALUES = new Set(["both", "development", "production", "dev", "prod"]);
-const pnpmCommand = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const flakePlaywrightArgs = [
   "test",
   "tests/e2e/flow-planner-to-history.spec.ts",
@@ -151,11 +151,21 @@ function runCommand({ command, args, env, label }) {
 }
 
 async function runBuildOnce() {
-  return runCommand({
-    label: "production build",
-    command: pnpmCommand,
-    args: ["build"],
+  const startedAt = Date.now();
+  const label = "production build";
+  console.log(`[e2e:parallel:classify] START ${label}`);
+  const result = await runPnpm(["build"], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: "inherit",
   });
+  const durationMs = Date.now() - startedAt;
+  const ok = result.code === 0;
+  const signalSuffix = result.signal ? ` signal=${result.signal}` : "";
+  console.log(
+    `[e2e:parallel:classify] ${ok ? "PASS" : "FAIL"} ${label} duration=${formatDuration(durationMs)} exit=${result.code}${signalSuffix}`,
+  );
+  return { ok, exitCode: result.code, signal: result.signal ?? null, durationMs };
 }
 
 async function runDevelopmentAttempt(attempt, runs, port, devHmr) {

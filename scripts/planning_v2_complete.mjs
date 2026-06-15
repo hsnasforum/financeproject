@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
+import { runPnpm } from "./pnpm_runner.mjs";
 
 const COMPLETE_STEPS = [
   "planning:v2:guard",
@@ -37,16 +37,11 @@ async function loadRedactText() {
 }
 
 function runPnpmScript(script, cwd = process.cwd(), options = {}) {
-  return new Promise((resolve, reject) => {
-    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-    const child = spawn(command, [script, ...(options.args ?? [])], {
+  return runPnpm([script, ...(options.args ?? [])], {
       cwd,
       env: options.env ?? process.env,
       stdio: "inherit",
-    });
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? 1));
-  });
+    }).then((result) => result.code);
 }
 
 export async function runComplete(options = {}) {

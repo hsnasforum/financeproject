@@ -122,7 +122,7 @@ function staleTag(days: number | undefined): { label: string; className: string 
   if (days > 45) {
     return { label: `신선도 경과일: ${days}일 (경고)`, className: "text-amber-700 font-semibold" };
   }
-  return { label: `신선도 경과일: ${days}일`, className: "text-emerald-700 font-semibold" };
+  return { label: `신선도 경과일: ${days}일`, className: "text-navy font-semibold" };
 }
 
 export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProps) {
@@ -259,7 +259,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
         )}
       />
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-navy">
           {notice}
         </Card>
       ) : null}
@@ -278,7 +278,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">가정 스냅샷 상태</h2>
+            <h2 className="text-base font-black text-navy">가정 스냅샷 상태</h2>
             <div className="flex items-center gap-2">
               <Link href="/ops/assumptions">
                 <Button type="button" variant="outline" size="sm">/ops/assumptions 이동</Button>
@@ -297,19 +297,19 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
           ) : null}
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">스냅샷 ID: <span className="font-semibold">{props.assumptions.snapshotId ?? "-"}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">누락 여부: <span className="font-semibold">{props.assumptions.missing ? "true" : "false"}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">asOf: <span className="font-semibold">{props.assumptions.asOf ?? "-"}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">fetchedAt: <span className="font-semibold">{formatDateTime(props.assumptions.fetchedAt)}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">경고 수: <span className="font-semibold">{props.assumptions.warningsCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">소스 수: <span className="font-semibold">{props.assumptions.sourcesCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히스토리 개수: <span className="font-semibold">{props.assumptions.historyCount}</span></div>
-            <div className={`rounded-md border border-slate-200 bg-slate-50 px-3 py-2 ${stale.className}`}>{stale.label}</div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">스냅샷 ID: <span className="font-semibold">{props.assumptions.snapshotId ?? "-"}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">누락 여부: <span className="font-semibold">{props.assumptions.missing ? "true" : "false"}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">asOf: <span className="font-semibold">{props.assumptions.asOf ?? "-"}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">fetchedAt: <span className="font-semibold">{formatDateTime(props.assumptions.fetchedAt)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">경고 수: <span className="font-semibold">{props.assumptions.warningsCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">소스 수: <span className="font-semibold">{props.assumptions.sourcesCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">히스토리 개수: <span className="font-semibold">{props.assumptions.historyCount}</span></div>
+            <div className={`rounded-md border border-slate-200 bg-surface-muted px-3 py-2 ${stale.className}`}>{stale.label}</div>
           </div>
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
             {props.assumptions.metrics.length > 0 ? props.assumptions.metrics.map((metric) => (
-              <div key={metric.label} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div key={metric.label} className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
                 {metric.label}: <span className="font-semibold">{formatMetric(metric.value)}</span>
               </div>
             )) : <p className="text-xs text-slate-500">표시 가능한 주요 금리/물가 값이 없습니다.</p>}
@@ -318,7 +318,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">회귀 상태</h2>
+            <h2 className="text-base font-black text-navy">회귀 상태</h2>
             <div className="flex items-center gap-2">
               <Link href="/ops/planning-eval">
                 <Button type="button" variant="outline" size="sm">/ops/planning-eval 이동</Button>
@@ -330,14 +330,14 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
           </div>
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">마지막 실행: <span className="font-semibold">{formatDateTime(props.regression.generatedAt)}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 케이스: <span className="font-semibold">{props.regression.totalCases}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">통과: <span className="font-semibold">{props.regression.passCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">실패: <span className="font-semibold">{props.regression.failCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">마지막 실행: <span className="font-semibold">{formatDateTime(props.regression.generatedAt)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">총 케이스: <span className="font-semibold">{props.regression.totalCases}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">통과: <span className="font-semibold">{props.regression.passCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">실패: <span className="font-semibold">{props.regression.failCount}</span></div>
           </div>
 
           <div className="mt-4">
-            <h3 className="text-sm font-black text-slate-900">상위 실패 케이스 (최대 5건)</h3>
+            <h3 className="text-sm font-black text-navy">상위 실패 케이스 (최대 5건)</h3>
             {props.regression.topFails.length === 0 ? (
               <p className="mt-2 text-xs text-slate-500">실패 케이스가 없습니다.</p>
             ) : (
@@ -355,7 +355,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">캐시 상태</h2>
+            <h2 className="text-base font-black text-navy">캐시 상태</h2>
             <div className="flex items-center gap-2">
               <Link href="/ops/planning-cache">
                 <Button type="button" variant="outline" size="sm">/ops/planning-cache 이동</Button>
@@ -374,10 +374,10 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
           ) : null}
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-2">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 엔트리: <span className="font-semibold">{props.cache.totalEntries}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">총 조회: <span className="font-semibold">{props.cache.totalLookups}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">히트율: <span className="font-semibold">{formatPercent(props.cache.hitRate)}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">갱신 시각: <span className="font-semibold">{formatDateTime(props.cache.updatedAt)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">총 엔트리: <span className="font-semibold">{props.cache.totalEntries}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">총 조회: <span className="font-semibold">{props.cache.totalLookups}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">히트율: <span className="font-semibold">{formatPercent(props.cache.hitRate)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">갱신 시각: <span className="font-semibold">{formatDateTime(props.cache.updatedAt)}</span></div>
           </div>
 
           <div className="mt-4 overflow-x-auto">
@@ -391,7 +391,7 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
               <tbody>
                 {["simulate", "scenarios", "monteCarlo", "actions"].map((kind) => (
                   <tr key={kind} className="border-b border-slate-100">
-                    <td className="px-2 py-2 font-semibold text-slate-900">{kind}</td>
+                    <td className="px-2 py-2 font-semibold text-navy">{kind}</td>
                     <td className="px-2 py-2">{props.cache.byKind[kind] ?? 0}</td>
                   </tr>
                 ))}
@@ -402,21 +402,21 @@ export function OpsPlanningDashboardClient(props: OpsPlanningDashboardClientProp
 
         <Card>
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-black text-slate-900">저장소 상태</h2>
+            <h2 className="text-base font-black text-navy">저장소 상태</h2>
             <Link href="/planning">
               <Button type="button" variant="outline" size="sm">/planning 이동</Button>
             </Link>
           </div>
 
           <div className="mt-4 grid gap-2 text-sm md:grid-cols-3">
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">프로필 수: <span className="font-semibold">{props.store.profilesCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">실행 기록 수: <span className="font-semibold">{props.store.runsCount}</span></div>
-            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">예상 용량: <span className="font-semibold">{formatBytes(props.store.approxBytes)}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">프로필 수: <span className="font-semibold">{props.store.profilesCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">실행 기록 수: <span className="font-semibold">{props.store.runsCount}</span></div>
+            <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">예상 용량: <span className="font-semibold">{formatBytes(props.store.approxBytes)}</span></div>
           </div>
 
-          <div className="mt-5 rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+          <div className="mt-5 rounded-md border border-slate-200 bg-surface-muted px-3 py-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-black text-slate-900">플래닝 무결성 점검(Doctor)</h3>
+              <h3 className="text-sm font-black text-navy">플래닝 무결성 점검(Doctor)</h3>
               <div className="flex items-center gap-2">
                 <label className="inline-flex items-center gap-1 text-xs text-slate-600">
                   <input

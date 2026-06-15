@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type FinlifeCardFreshnessMeta, type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
 import { applyFilters, collectFilterOptions } from "@/lib/finlife/filters";
@@ -38,7 +38,8 @@ import {
 } from "@/lib/products/listUtils";
 import {
   addRecent,
-  loadShelfFromStorage,
+  loadShelfFromSnapshot,
+  PRODUCT_SHELF_UPDATED_EVENT,
   productShelfConfig,
   toggleCompare,
   toggleFavorite,
@@ -54,6 +55,7 @@ type Props = {
   ratePreference: RatePreference;
   initialTopFinGrpNo: string;
   initialPageNo?: number;
+  scriptNonce?: string;
 };
 
 type SortKey = ProductListSortKey;
@@ -73,6 +75,7 @@ type StatusApiResponse = {
 };
 
 const FINLIFE_PAGE_SIZE = 50;
+const OPTION_SORT_KEYS: OptionSortKey[] = ["best_desc", "base_desc", "bonus_desc", "term_asc", "term_desc", "provider_asc", "product_asc"];
 
 function parseAmountInput(value: string): number {
   const parsed = Number(value.replace(/[^0-9]/g, ""));
@@ -127,6 +130,53 @@ function isValidSortKey(value: string | null): value is SortKey {
   return value === "rateDesc" || value === "rateAsc" || value === "nameAsc" || value === "termAsc";
 }
 
+function isValidOptionSortKey(value: string | null): value is OptionSortKey {
+  return OPTION_SORT_KEYS.includes(value as OptionSortKey);
+}
+
+function parseMaxPagesParam(value: string | null): number | "auto" {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (normalized === "auto" || !normalized) return "auto";
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.min(80, Math.trunc(parsed)) : "auto";
+}
+
+function subscribeProductShelf(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  const handleStoreChange = () => onStoreChange();
+  const hydrationTimer = window.setTimeout(handleStoreChange, 0);
+  window.addEventListener("storage", handleStoreChange);
+  window.addEventListener(PRODUCT_SHELF_UPDATED_EVENT, handleStoreChange);
+  return () => {
+    window.clearTimeout(hydrationTimer);
+    window.removeEventListener("storage", handleStoreChange);
+    window.removeEventListener(PRODUCT_SHELF_UPDATED_EVENT, handleStoreChange);
+  };
+}
+
+function getProductShelfStorageSnapshot(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return [
+      window.localStorage.getItem(productShelfConfig.storageKey) ?? "",
+      window.localStorage.getItem(productShelfConfig.legacyCompareStorageKey) ?? "",
+    ].join("\n---product-shelf---\n");
+  } catch {
+    return "";
+  }
+}
+
+function getServerProductShelfStorageSnapshot(): string {
+  return "";
+}
+
+function readProductShelfFromSnapshot(snapshot: string): ProductShelfState {
+  const [currentRaw = "", legacyCompareRaw = ""] = snapshot.split("\n---product-shelf---\n");
+  return loadShelfFromSnapshot(currentRaw || null, legacyCompareRaw || null);
+}
+
+const COMPARE_COUNT_BOOTSTRAP_SCRIPT = `(function(){try{var raw=window.localStorage.getItem(${JSON.stringify(productShelfConfig.storageKey)});var ids=[];if(raw){var parsed=JSON.parse(raw);if(parsed&&Array.isArray(parsed.compareBasket))ids=parsed.compareBasket;}if(!ids.length){var legacy=window.localStorage.getItem(${JSON.stringify(productShelfConfig.legacyCompareStorageKey)});if(legacy){var legacyParsed=JSON.parse(legacy);if(Array.isArray(legacyParsed))ids=legacyParsed;}}var seen=Object.create(null);var count=0;ids.forEach(function(entry){if(typeof entry!=="string")return;var id=entry.trim();if(!id||seen[id])return;seen[id]=true;count+=1;});count=Math.min(count,${productShelfConfig.maxCompareBasket});document.querySelectorAll("[data-product-compare-count]").forEach(function(node){node.textContent="비교함 "+count;});}catch(error){}})();`;
+
 function buildUnifiedDetailId(product: NormalizedProduct): string | null {
   const raw = (product.raw as Record<string, unknown> | null) ?? null;
   const stableId = typeof raw?.stableId === "string" ? raw.stableId.trim() : "";
@@ -148,49 +198,64 @@ function GroupedOptionMobileItem({ row }: { row: OptionRow }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">만기 기간</p>
-          <p className="mt-1 text-sm font-black text-slate-900">{term}</p>
+          <p className="mt-1 text-sm font-black text-navy">{term}</p>
         </div>
         <div className="text-right">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">최고 금리</p>
-          <p className="mt-1 text-lg font-black tabular-nums text-emerald-600">{formatOptionRate(rates.best)}</p>
+          <p className="mt-1 text-lg font-black tabular-nums text-primary">{formatOptionRate(rates.best)}</p>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-xl bg-slate-50 p-3">
+        <div className="rounded-xl bg-surface-muted p-3">
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">기본 금리</p>
           <p className="mt-1 text-xs font-bold tabular-nums text-slate-700">{formatOptionRate(rates.base)}</p>
         </div>
-        <div className="rounded-xl bg-emerald-50/50 p-3">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600/50">우대 폭</p>
-          <p className="mt-1 text-xs font-bold tabular-nums text-emerald-700">{formatOptionBonus(rates.bonus)}</p>
+        <div className="rounded-xl bg-primary/10 p-3">
+          <p className="text-[10px] font-black uppercase tracking-widest text-primary/80">우대 폭</p>
+          <p className="mt-1 text-xs font-bold tabular-nums text-navy">{formatOptionBonus(rates.bonus)}</p>
         </div>
       </div>
     </div>
   );
 }
 
-export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1 }: Props) {
+export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpNo, initialPageNo = 1, scriptNonce }: Props) {
   const router = useRouter();
-  const [topFinGrpNo, setTopFinGrpNo] = useState(initialTopFinGrpNo);
-  const [selectedFinCoNo, setSelectedFinCoNo] = useState<string | null>(null);
-  const [pageNo, setPageNo] = useState(initialPageNo);
-  const [scanMode, setScanMode] = useState<"page" | "all">("page");
-  const [maxPages, setMaxPages] = useState<number | "auto">("auto");
-  const [viewMode, setViewMode] = useState<"product" | "option">("product");
+  const searchParams = useSearchParams();
+  const productShelfStorageSnapshot = useSyncExternalStore(
+    subscribeProductShelf,
+    getProductShelfStorageSnapshot,
+    getServerProductShelfStorageSnapshot,
+  );
+  const shelf = readProductShelfFromSnapshot(productShelfStorageSnapshot);
   const defaultSortKey: SortKey = ratePreference === "higher" ? "rateDesc" : "rateAsc";
-  const [sortKey, setSortKey] = useState<SortKey>(defaultSortKey);
-  const [optionSortKey, setOptionSortKey] = useState<OptionSortKey>("best_desc");
-  const [optionGroup, setOptionGroup] = useState(false);
+  const [topFinGrpNo, setTopFinGrpNo] = useState(initialTopFinGrpNo);
+  const [selectedFinCoNo, setSelectedFinCoNo] = useState<string | null>(() => {
+    const parsed = (searchParams?.get("finCoNo") ?? "").trim();
+    return parsed || null;
+  });
+  const [pageNo, setPageNo] = useState(initialPageNo);
+  const [scanMode, setScanMode] = useState<"page" | "all">(() => (searchParams?.get("scan") === "all" ? "all" : "page"));
+  const [maxPages, setMaxPages] = useState<number | "auto">(() => parseMaxPagesParam(searchParams?.get("maxPages") ?? null));
+  const [viewMode, setViewMode] = useState<"product" | "option">(() => (searchParams?.get("view") === "option" ? "option" : "product"));
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    const parsedSort = searchParams?.get("sort") ?? null;
+    return isValidSortKey(parsedSort) ? parsedSort : defaultSortKey;
+  });
+  const [optionSortKey, setOptionSortKey] = useState<OptionSortKey>(() => {
+    const parsedOptSort = searchParams?.get("optSort") ?? null;
+    return isValidOptionSortKey(parsedOptSort) ? parsedOptSort : "best_desc";
+  });
+  const [optionGroup, setOptionGroup] = useState(() => searchParams?.get("optGroup") === "1");
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [showAllProviders, setShowAllProviders] = useState(false);
 
-  const [selectedTerms, setSelectedTerms] = useState<string[]>([]);
-  const [amountInput, setAmountInput] = useState("10000000");
-  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([]);
-  const [selectedBenefits, setSelectedBenefits] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [onlyFavorites, setOnlyFavorites] = useState(false);
-  const [shelf, setShelf] = useState<ProductShelfState | null>(null);
+  const [selectedTerms, setSelectedTerms] = useState<string[]>(() => parseCsvParam(searchParams?.get("terms") ?? null));
+  const [amountInput, setAmountInput] = useState(() => (searchParams?.get("amount") ?? "").trim() || "10000000");
+  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>(() => parseCsvParam(searchParams?.get("types") ?? null));
+  const [selectedBenefits, setSelectedBenefits] = useState<string[]>(() => parseCsvParam(searchParams?.get("benefits") ?? null));
+  const [searchQuery, setSearchQuery] = useState(() => (searchParams?.get("q") ?? "").trim());
+  const [onlyFavorites, setOnlyFavorites] = useState(() => searchParams?.get("fav") === "1");
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -202,59 +267,20 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   const sourceStatusAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    setShelf(loadShelfFromStorage());
-  }, []);
-
-  useEffect(() => {
-    const sp = new URLSearchParams(window.location.search);
-    if (sp.get("scan") === "all") {
-      setScanMode("all");
-      const mp = (sp.get("maxPages") ?? "").trim().toLowerCase();
-      if (mp === "auto") setMaxPages("auto");
-      else if (mp) {
-        const parsed = Number(mp);
-        if (Number.isFinite(parsed) && parsed > 0) setMaxPages(Math.min(80, Math.trunc(parsed)));
-      }
-    }
-    const parsedSort = sp.get("sort");
-    if (isValidSortKey(parsedSort)) setSortKey(parsedSort);
-    const parsedQuery = (sp.get("q") ?? "").trim();
-    if (parsedQuery) setSearchQuery(parsedQuery);
-    if (sp.get("fav") === "1") setOnlyFavorites(true);
-    const parsedTerms = parseCsvParam(sp.get("terms"));
-    if (parsedTerms.length > 0) setSelectedTerms(parsedTerms);
-    const parsedTypes = parseCsvParam(sp.get("types"));
-    if (parsedTypes.length > 0) setSelectedProductTypes(parsedTypes);
-    const parsedBenefits = parseCsvParam(sp.get("benefits"));
-    if (parsedBenefits.length > 0) setSelectedBenefits(parsedBenefits);
-    const parsedAmount = (sp.get("amount") ?? "").trim();
-    if (parsedAmount) setAmountInput(parsedAmount);
-    const parsedFinCoNo = (sp.get("finCoNo") ?? "").trim();
-    if (parsedFinCoNo) setSelectedFinCoNo(parsedFinCoNo);
-    if (sp.get("view") === "option") setViewMode("option");
-    const parsedOptSort = sp.get("optSort");
-    if (parsedOptSort && ["best_desc", "base_desc", "bonus_desc", "term_asc", "term_desc", "provider_asc", "product_asc"].includes(parsedOptSort)) {
-      setOptionSortKey(parsedOptSort as OptionSortKey);
-    }
-    if (sp.get("optGroup") === "1") setOptionGroup(true);
-  }, [kind]);
-
-  useEffect(() => {
-    const onStorage = () => setShelf(loadShelfFromStorage());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  useEffect(() => {
-    setAvailability([]);
-    setAvailabilityNotice("");
+    const availabilityTimer = window.setTimeout(() => {
+      setAvailability([]);
+      setAvailabilityNotice("");
+    }, 0);
+    return () => window.clearTimeout(availabilityTimer);
   }, [kind]);
 
   useEffect(() => {
     if (kind !== "deposit" && kind !== "saving") {
       sourceStatusAbortRef.current?.abort();
-      setSourceStatusRows([]);
-      return;
+      const sourceStatusTimer = window.setTimeout(() => {
+        setSourceStatusRows([]);
+      }, 0);
+      return () => window.clearTimeout(sourceStatusTimer);
     }
 
     sourceStatusAbortRef.current?.abort();
@@ -322,9 +348,12 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
     if (providerOptions.length === 0) return;
     if (providerOptions.some((entry) => entry.id === topFinGrpNo)) return;
 
-    setTopFinGrpNo(providerOptions[0].id);
-    setPageNo(1);
-    setSelectionNotice("선택한 권역에 공시 상품이 없어 가능한 권역으로 자동 변경했습니다.");
+    const providerFallbackTimer = window.setTimeout(() => {
+      setTopFinGrpNo(providerOptions[0].id);
+      setPageNo(1);
+      setSelectionNotice("선택한 권역에 공시 상품이 없어 가능한 권역으로 자동 변경했습니다.");
+    }, 0);
+    return () => window.clearTimeout(providerFallbackTimer);
   }, [providerOptions, topFinGrpNo]);
 
   useEffect(() => {
@@ -473,7 +502,10 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
 
   useEffect(() => {
     if (!optionGroup) return;
-    setOpenGroups((prev) => pruneOpen(prev, validOptionGroupKeys));
+    const openGroupsTimer = window.setTimeout(() => {
+      setOpenGroups((prev) => pruneOpen(prev, validOptionGroupKeys));
+    }, 0);
+    return () => window.clearTimeout(openGroupsTimer);
   }, [optionGroup, validOptionGroupKeys]);
 
   const totals = useMemo(() => {
@@ -510,18 +542,15 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   const compareCount = shelf?.compareBasket.length ?? 0;
 
   const handleToggleFavorite = (id: string) => {
-    const next = toggleFavorite(id);
-    setShelf(next);
+    toggleFavorite(id);
   };
 
   const handleToggleCompare = (id: string) => {
-    const next = toggleCompare(id);
-    setShelf(next);
+    toggleCompare(id);
   };
 
   const handleViewed = (id: string) => {
-    const next = addRecent(id);
-    setShelf(next);
+    addRecent(id);
   };
 
   const snapshotStatus = useMemo(() => {
@@ -576,7 +605,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
         데이터 신뢰 및 연동 상태는{" "}
-        <Link href="/settings/data-sources" className="font-black text-emerald-600 hover:text-emerald-700">
+        <Link href="/settings/data-sources" className="font-black text-primary hover:text-navy">
           내 설정 &gt; 데이터 신뢰 및 연동 상태
         </Link>
         에서 확인할 수 있습니다.
@@ -585,7 +614,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
       {snapshotStatus ? (
         <Card className="mb-8 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
             <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">{snapshotStatus.text}</p>
           </div>
           {(snapshotStatus.hasNarrowGroup || snapshotStatus.hasIncomplete || snapshotStatus.isMock || snapshotStatus.note) && (
@@ -593,7 +622,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
               {snapshotStatus.hasNarrowGroup ? <span className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 border border-amber-100">업권 범위 좁음</span> : null}
               {snapshotStatus.hasIncomplete ? <span className="rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 border border-amber-100">미완주 스캔</span> : null}
               {snapshotStatus.isMock ? <span className="rounded-lg bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700 border border-rose-100">MOCK 데이터</span> : null}
-              {snapshotStatus.note ? <span className="rounded-lg bg-slate-50 px-2 py-1 text-[10px] font-bold text-slate-500 border border-slate-100">{snapshotStatus.note}</span> : null}
+              {snapshotStatus.note ? <span className="rounded-lg bg-surface-muted px-2 py-1 text-[10px] font-bold text-slate-500 border border-slate-100">{snapshotStatus.note}</span> : null}
             </div>
           )}
         </Card>
@@ -663,13 +692,13 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                   setPageNo(1);
                 }}
                 placeholder="은행명 또는 상품명을 입력하세요"
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-100"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 text-sm font-black text-slate-700 outline-none transition-all focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/10"
               />
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">정렬</label>
               <select
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-700 outline-none cursor-pointer transition-all focus:border-emerald-500 focus:bg-white"
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 text-sm font-black text-slate-700 outline-none cursor-pointer transition-all focus:border-primary focus:bg-white"
                 value={sortKey}
                 onChange={(event) => setSortKey(event.target.value as SortKey)}
               >
@@ -681,7 +710,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
               </select>
             </div>
             <div className="flex gap-2">
-              <label className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 transition-all hover:bg-white px-4">
+              <label className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-surface-muted transition-all hover:bg-white px-4">
                 <input
                   type="checkbox"
                   checked={onlyFavorites}
@@ -689,16 +718,19 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                     setOnlyFavorites(event.target.checked);
                     setPageNo(1);
                   }}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                 />
                 <span className="text-xs font-black text-slate-600">즐겨찾기</span>
               </label>
               <Link
                 href="/products/compare"
-                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-lg shadow-emerald-900/10 transition-all hover:bg-emerald-700 active:scale-95 px-4"
+                className="flex h-12 flex-1 items-center justify-center rounded-2xl bg-primary text-white shadow-lg shadow-navy/10 transition-all hover:bg-navy active:scale-95 px-4"
               >
-                <span className="text-xs font-black">비교함 {compareCount}</span>
+                <span data-product-compare-count className="text-xs font-black" suppressHydrationWarning>
+                  비교함 {compareCount}
+                </span>
               </Link>
+              <script nonce={scriptNonce} dangerouslySetInnerHTML={{ __html: COMPARE_COUNT_BOOTSTRAP_SCRIPT }} />
             </div>
           </div>
 
@@ -724,12 +756,12 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
             {loading ? (
               Array.from({ length: 5 }).map((_, idx) => (
                 <div key={`loading-${idx}`} className="flex items-center gap-6 py-8 px-4">
-                  <Skeleton className="h-14 w-14 rounded-2xl bg-slate-100" />
+                  <Skeleton className="h-14 w-14 rounded-2xl bg-surface-muted" />
                   <div className="flex-1 space-y-3">
-                    <Skeleton className="h-4 w-1/4 bg-slate-100 rounded-full" />
-                    <Skeleton className="h-6 w-3/4 bg-slate-100 rounded-full" />
+                    <Skeleton className="h-4 w-1/4 bg-surface-muted rounded-full" />
+                    <Skeleton className="h-6 w-3/4 bg-surface-muted rounded-full" />
                   </div>
-                  <Skeleton className="h-12 w-28 rounded-2xl bg-slate-100" />
+                  <Skeleton className="h-12 w-28 rounded-2xl bg-surface-muted" />
                 </div>
               ))
             ) : error ? (
@@ -784,12 +816,12 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                     return (
                       <div key={groupKey} className="py-6">
                         <Card className={cn("overflow-hidden border border-slate-100 transition-all", open ? "shadow-md" : "shadow-sm")}>
-                          <div className="flex items-start justify-between gap-4 p-6 bg-slate-50/30">
+                          <div className="flex items-start justify-between gap-4 p-6 bg-surface-muted/30">
                             <div className="flex min-w-0 items-start gap-4">
                               <ProviderLogo providerKey={group.product.fin_co_no} providerName={group.product.kor_co_nm ?? "-"} size={48} className="rounded-2xl shadow-sm" />
                               <div className="min-w-0">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{group.product.kor_co_nm ?? "-"}</p>
-                                <h3 className="truncate text-base font-black text-slate-900 tracking-tight">{group.product.fin_prdt_nm ?? "-"}</h3>
+                                <h3 className="truncate text-base font-black text-navy tracking-tight">{group.product.fin_prdt_nm ?? "-"}</h3>
                                 {cardFreshnessMeta ? (
                                   <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] font-black">
                                     {cardFreshnessMeta.lastSyncedAt ? (
@@ -802,7 +834,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                                         className={cn(
                                           "rounded-full border px-2.5 py-1",
                                           cardFreshnessMeta.freshnessStatus === "ok"
-                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                            ? "border-primary/20 bg-primary/5 text-navy"
                                             : cardFreshnessMeta.freshnessStatus === "stale"
                                               ? "border-amber-200 bg-amber-50 text-amber-800"
                                               : cardFreshnessMeta.freshnessStatus === "error"
@@ -826,7 +858,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                                   </div>
                                 ) : null}
                                 <p className="mt-1 text-[11px] font-bold text-slate-500">
-                                  {summaryTerm} · 최고 <span className="text-emerald-600">{formatOptionRate(rep.best)}</span> (기본 {formatOptionRate(rep.base)})
+                                  {summaryTerm} · 최고 <span className="text-primary">{formatOptionRate(rep.best)}</span> (기본 {formatOptionRate(rep.base)})
                                 </p>
                               </div>
                             </div>
@@ -837,7 +869,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                                 event.stopPropagation();
                                 setOpenGroups((prev) => toggleOpen(prev, groupKey));
                               }}
-                              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] font-black text-slate-600 transition-all hover:border-emerald-200 hover:text-emerald-600"
+                              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[11px] font-black text-slate-600 transition-all hover:border-primary/20 hover:text-primary"
                             >
                               {open ? "옵션 접기" : "옵션 보기"}
                             </button>
@@ -852,7 +884,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                               </div>
                               <div className="hidden overflow-hidden rounded-2xl border border-slate-100 md:block">
                                 <table className="min-w-full text-xs">
-                                  <thead className="bg-slate-50 text-slate-400">
+                                  <thead className="bg-surface-muted text-slate-400">
                                     <tr>
                                       <th className="px-4 py-3 text-left font-black uppercase tracking-widest">기간(개월)</th>
                                       <th className="px-4 py-3 text-right font-black uppercase tracking-widest">기본 금리</th>
@@ -865,10 +897,10 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
                                       const rates = getOptionRates(row.option);
                                       const term = row.option.save_trm ?? "-";
                                       return (
-                                        <tr key={row.key} className="text-slate-700 hover:bg-slate-50 transition-colors">
+                                        <tr key={row.key} className="text-slate-700 hover:bg-surface-muted transition-colors">
                                           <td className="px-4 py-3 font-black">{term}</td>
                                           <td className="px-4 py-3 text-right tabular-nums font-bold">{formatOptionRate(rates.base)}</td>
-                                          <td className="px-4 py-3 text-right tabular-nums font-black text-emerald-600">{formatOptionRate(rates.best)}</td>
+                                          <td className="px-4 py-3 text-right tabular-nums font-black text-primary">{formatOptionRate(rates.best)}</td>
                                           <td className="px-4 py-3 text-right tabular-nums font-bold text-slate-400">{formatOptionBonus(rates.bonus)}</td>
                                         </tr>
                                       );
@@ -908,7 +940,7 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
               >
                 이전 페이지
               </Button>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 border border-slate-200 text-sm font-black text-slate-600 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted border border-slate-200 text-sm font-black text-slate-600 shadow-sm">
                 {payload?.meta.nowPage ?? pageNo}
               </div>
               <Button

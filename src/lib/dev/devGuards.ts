@@ -1,4 +1,6 @@
+import { NextResponse } from "next/server";
 import { isLocalRequest } from "./localRequest";
+import { onlyDev } from "./onlyDev";
 
 export class DevGuardError extends Error {
   status: number;
@@ -156,6 +158,87 @@ export function requireCsrf(
 ): void {
   if (options.allowWhenCookieMissing && !hasCsrfCookie(request)) return;
   assertCsrf(request, body);
+}
+
+type GuardDevMutationOptions = {
+  body?: CsrfBody;
+  requireCsrf?: boolean;
+  allowWhenCookieMissing?: boolean;
+  onBlocked?: () => Response;
+  onError?: (guard: { status: number; code: string; message: string }) => Response;
+};
+
+function toGuardNextResponse(error: unknown): Response {
+  const guard = toGuardErrorResponse(error);
+  if (!guard) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "INTERNAL",
+          message: "요청 검증 중 오류가 발생했습니다.",
+        },
+      },
+      { status: 500 },
+    );
+  }
+
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: guard.code,
+        message: guard.message,
+      },
+    },
+    { status: guard.status },
+  );
+}
+
+type GuardDevReadOptions = {
+  onBlocked?: () => Response;
+  onError?: (guard: { status: number; code: string; message: string }) => Response;
+};
+
+export function guardDevReadRequest(request: Request, options: GuardDevReadOptions = {}): Response | null {
+  const blocked = onlyDev();
+  if (blocked) return options.onBlocked?.() ?? blocked;
+
+  try {
+    assertLocalHost(request);
+    return null;
+  } catch (error) {
+    const guard = toGuardErrorResponse(error);
+    if (guard && options.onError) {
+      return options.onError(guard);
+    }
+    return toGuardNextResponse(error);
+  }
+}
+
+export function guardDevMutationRequest(
+  request: Request,
+  options: GuardDevMutationOptions = {},
+): Response | null {
+  const blocked = onlyDev();
+  if (blocked) return options.onBlocked?.() ?? blocked;
+
+  try {
+    assertLocalHost(request);
+    assertSameOrigin(request);
+    if (options.requireCsrf) {
+      requireCsrf(request, options.body, {
+        allowWhenCookieMissing: options.allowWhenCookieMissing,
+      });
+    }
+    return null;
+  } catch (error) {
+    const guard = toGuardErrorResponse(error);
+    if (guard && options.onError) {
+      return options.onError(guard);
+    }
+    return toGuardNextResponse(error);
+  }
 }
 
 export function toGuardErrorResponse(error: unknown): { status: number; code: string; message: string } | null {

@@ -148,7 +148,7 @@ function chainLabel(chainId: DoctorChainId): string {
 function badgeClass(status: DoctorStatus): string {
   if (status === "FAIL") return "border-rose-200 bg-rose-50 text-rose-700";
   if (status === "WARN") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 function formatDateTime(value: string): string {
@@ -205,7 +205,7 @@ function normalizeChainPlan(
 }
 
 function resultTextClass(ok: boolean | null): string {
-  if (ok === true) return "text-emerald-700";
+  if (ok === true) return "text-navy";
   if (ok === false) return "text-rose-700";
   return "text-slate-700";
 }
@@ -213,14 +213,14 @@ function resultTextClass(ok: boolean | null): string {
 function riskBadgeClass(risk: FixChainRisk): string {
   if (risk === "HIGH") return "border-rose-200 bg-rose-50 text-rose-700";
   if (risk === "MEDIUM") return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 function ChainStepsTable({ steps }: { steps: DoctorFixStep[] }) {
   return (
     <div className="mt-2 overflow-x-auto rounded-md border border-slate-200 bg-white">
       <table className="min-w-full divide-y divide-slate-200 text-[10px] text-slate-700">
-        <thead className="bg-slate-50 text-slate-600">
+        <thead className="bg-surface-muted text-slate-600">
           <tr>
             <th className="px-2 py-1 text-left font-semibold">step</th>
             <th className="px-2 py-1 text-left font-semibold">ok</th>
@@ -290,7 +290,10 @@ export function DoctorSummaryCard() {
   }, []);
 
   useEffect(() => {
-    void loadSummary();
+    const timeoutId = window.setTimeout(() => {
+      void loadSummary();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadSummary]);
 
   const loadHistory = useCallback(async () => {
@@ -314,7 +317,10 @@ export function DoctorSummaryCard() {
   }, []);
 
   useEffect(() => {
-    void loadHistory();
+    const timeoutId = window.setTimeout(() => {
+      void loadHistory();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadHistory]);
 
   const topActions = useMemo(() => {
@@ -564,7 +570,7 @@ export function DoctorSummaryCard() {
     <Card>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-black text-slate-900">Doctor 요약</h2>
+          <h2 className="text-base font-black text-navy">Doctor 요약</h2>
           <p className="mt-1 text-xs text-slate-500">현재 상태와 다음 조치 명령</p>
         </div>
         <span className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold ${badgeClass(overall)}`}>
@@ -582,7 +588,7 @@ export function DoctorSummaryCard() {
             const fixState = fixStates[item.id];
             const running = fixState?.running === true;
             return (
-              <li key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <li key={item.id} className="rounded-xl border border-slate-200 bg-surface-muted px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-slate-800">{item.title}</p>
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${badgeClass(item.status)}`}>
@@ -610,8 +616,8 @@ export function DoctorSummaryCard() {
                 {fixState && !fixState.running ? (
                   <div className="mt-2 rounded-md border border-slate-200 bg-white p-2">
                     <DevUnlockShortcutMessage
-                      className={`text-[11px] font-semibold ${fixState.ok ? "text-emerald-700" : "text-rose-700"}`}
-                      linkClassName={fixState.ok ? "text-emerald-700" : "text-rose-700"}
+                      className={`text-[11px] font-semibold ${fixState.ok ? "text-navy" : "text-rose-700"}`}
+                      linkClassName={fixState.ok ? "text-navy" : "text-rose-700"}
                       message={fixState.message}
                     />
                     {fixState.stdoutTail ? (
@@ -669,7 +675,7 @@ export function DoctorSummaryCard() {
                   ) : null}
                 </div>
                 {state.plan ? (
-                  <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                  <div className="mt-2 rounded-md border border-slate-200 bg-surface-muted p-2">
                     <div className="flex items-center gap-2">
                       <p className="text-[11px] font-semibold text-slate-800">{state.plan.title}</p>
                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold ${riskBadgeClass(state.plan.risk)}`}>
@@ -711,7 +717,7 @@ export function DoctorSummaryCard() {
                 {!state.running && state.message ? (
                   <DevUnlockShortcutMessage
                     className={`mt-2 text-[11px] font-semibold ${resultTextClass(state.ok)}`}
-                    linkClassName={state.ok ? "text-emerald-700" : "text-rose-700"}
+                    linkClassName={state.ok ? "text-navy" : "text-rose-700"}
                     message={`${chainLabel(chainId)}: ${state.message}`}
                   />
                 ) : null}
@@ -733,7 +739,7 @@ export function DoctorSummaryCard() {
             const needsConfirm = state.plan?.risk === "HIGH";
             const confirmed = !needsConfirm || state.confirmText.trim() === expected;
             return (
-              <div key={chain.id} className="rounded-md border border-slate-200 bg-slate-50 p-2">
+              <div key={chain.id} className="rounded-md border border-slate-200 bg-surface-muted p-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-[11px] font-semibold text-slate-800">{chain.label}</p>
                   <Button
@@ -794,7 +800,7 @@ export function DoctorSummaryCard() {
                 {!state.running && state.message ? (
                   <DevUnlockShortcutMessage
                     className={`mt-2 text-[11px] font-semibold ${resultTextClass(state.ok)}`}
-                    linkClassName={state.ok ? "text-emerald-700" : "text-rose-700"}
+                    linkClassName={state.ok ? "text-navy" : "text-rose-700"}
                     message={state.message}
                   />
                 ) : null}
@@ -813,7 +819,7 @@ export function DoctorSummaryCard() {
           <button
             type="button"
             onClick={() => void loadHistory()}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-surface-muted"
           >
             새로고침
           </button>
@@ -827,7 +833,7 @@ export function DoctorSummaryCard() {
         ) : (
           <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-[11px]">
-              <thead className="bg-slate-50 text-slate-600">
+              <thead className="bg-surface-muted text-slate-600">
                 <tr>
                   <th className="px-2 py-2 text-left font-semibold">시간</th>
                   <th className="px-2 py-2 text-left font-semibold">fixId</th>
@@ -860,7 +866,7 @@ export function DoctorSummaryCard() {
                             onClick={() => {
                               setHistoryExpanded((prev) => ({ ...prev, [row.id]: !prev[row.id] }));
                             }}
-                            className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                            className="rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-surface-muted"
                           >
                             {opened ? "숨기기" : "보기"}
                           </button>
@@ -868,7 +874,7 @@ export function DoctorSummaryCard() {
                       </tr>
                       {opened ? (
                         <tr>
-                          <td colSpan={5} className="bg-slate-50 px-2 py-2">
+                          <td colSpan={5} className="bg-surface-muted px-2 py-2">
                             {!row.ok && row.analysis ? (
                               <div className="mb-2 rounded-md border border-rose-200 bg-rose-50 p-2">
                                 <p className="text-[11px] font-semibold text-rose-700">
@@ -906,8 +912,8 @@ export function DoctorSummaryCard() {
                                     return (
                                       <div key={`${stateKey}:result`} className="mt-2 rounded-md border border-slate-200 bg-white p-2">
                                         <DevUnlockShortcutMessage
-                                          className={`text-[11px] font-semibold ${state.ok ? "text-emerald-700" : "text-rose-700"}`}
-                                          linkClassName={state.ok ? "text-emerald-700" : "text-rose-700"}
+                                          className={`text-[11px] font-semibold ${state.ok ? "text-navy" : "text-rose-700"}`}
+                                          linkClassName={state.ok ? "text-navy" : "text-rose-700"}
                                           message={state.message}
                                         />
                                         {state.stdoutTail ? (
@@ -971,7 +977,7 @@ export function DoctorSummaryCard() {
           <button
             type="button"
             onClick={() => setShowRunbookSummary((prev) => !prev)}
-            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-surface-muted"
           >
             {showRunbookSummary ? "요약 숨기기" : "요약 표시"}
           </button>

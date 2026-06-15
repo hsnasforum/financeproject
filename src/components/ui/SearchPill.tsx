@@ -21,16 +21,16 @@ const SearchPill = React.forwardRef<HTMLInputElement, SearchPillProps>(
             value={value}
             onChange={onChange}
             className={cn(
-              "h-11 w-full rounded-full border border-slate-200 bg-slate-50 pl-11 pr-10 text-sm shadow-sm outline-none transition-all duration-300",
+              "h-11 w-full rounded-full border border-slate-200 bg-surface-muted pl-11 pr-10 text-sm shadow-sm outline-none transition-all duration-300",
               "placeholder:text-slate-400",
-              "focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 focus:bg-white",
-              hasValue && "border-emerald-200 bg-emerald-50/20"
+              "focus:border-primary focus:ring-2 focus:ring-primary/10 focus:bg-white",
+              hasValue && "border-primary/20 bg-primary/20"
             )}
             {...props}
           />
           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
             {isLoading ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             ) : (
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -52,7 +52,7 @@ const SearchPill = React.forwardRef<HTMLInputElement, SearchPillProps>(
             <button
               type="button"
               onClick={onClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-500 transition-colors"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-300 hover:bg-surface-muted hover:text-slate-500 transition-colors"
               aria-label="Clear search"
             >
               <svg

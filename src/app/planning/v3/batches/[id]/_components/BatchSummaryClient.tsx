@@ -89,32 +89,57 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
   const [summary, setSummary] = useState<BatchSummary | null>(initialSummary);
   const [createLoading, setCreateLoading] = useState(false);
 
+  const fetchSummary = useCallback(async (signal?: AbortSignal): Promise<BatchSummary> => {
+    const response = await fetch(`/api/planning/v3/batches/${encodeURIComponent(id)}/summary${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !isSummaryResponse(json)) {
+      throw new Error("배치 요약을 불러오지 못했습니다.");
+    }
+    return json.data;
+  }, [id]);
+
   const loadSummary = useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      const response = await fetch(`/api/planning/v3/batches/${encodeURIComponent(id)}/summary${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !isSummaryResponse(json)) {
-        setSummary(null);
-        setMessage("배치 요약을 불러오지 못했습니다.");
-        return;
-      }
-      setSummary(json.data);
+      setSummary(await fetchSummary());
     } catch {
       setSummary(null);
       setMessage("배치 요약을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [fetchSummary]);
 
   useEffect(() => {
-    void loadSummary();
-  }, [loadSummary]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialSummary() {
+      try {
+        const nextSummary = await fetchSummary(controller.signal);
+        if (!active) return;
+        setSummary(nextSummary);
+        setMessage("");
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setSummary(null);
+        setMessage("배치 요약을 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialSummary();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [fetchSummary]);
 
   async function handleCreateDraft(): Promise<void> {
     if (!summary || createLoading) return;
@@ -146,7 +171,7 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Batch Summary</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Batch Summary</h1>
           <div className={bodyActionLinkGroupClassName}>
             <BodyActionLink href="/planning/v3/batches">
               배치 목록
@@ -221,7 +246,7 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
             <BodySectionHeading title="월별 요약" />
             <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-xs text-slate-700">
-                <thead className="bg-slate-50">
+                <thead className="bg-surface-muted">
                   <tr>
                     <th className="px-2 py-1 text-left">ym</th>
                     <th className="px-2 py-1 text-right">income</th>

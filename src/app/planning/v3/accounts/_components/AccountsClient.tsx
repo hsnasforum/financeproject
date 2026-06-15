@@ -23,6 +23,13 @@ type OpeningBalance = {
   amountKrw: number;
 };
 
+type AccountsSnapshot = {
+  accounts: Account[];
+  openingByAccount: Record<string, OpeningBalance>;
+  openingDateDrafts: Record<string, string>;
+  openingAmountDrafts: Record<string, string>;
+};
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -74,6 +81,54 @@ function defaultAsOfDate(): string {
   return `${year}-${month}-01`;
 }
 
+function buildAccountsSnapshot(accounts: Account[], openingData: Record<string, unknown>): AccountsSnapshot {
+  const openingByAccount: Record<string, OpeningBalance> = {};
+  for (const account of accounts) {
+    const opening = openingData[account.id];
+    if (!isRecord(opening)) continue;
+    const asOfDate = asString(opening.asOfDate);
+    const amountKrw = Number(opening.amountKrw);
+    if (!asOfDate || !Number.isFinite(amountKrw) || !Number.isInteger(amountKrw)) continue;
+    openingByAccount[account.id] = {
+      accountId: account.id,
+      asOfDate,
+      amountKrw,
+    };
+  }
+
+  return {
+    accounts,
+    openingByAccount,
+    openingDateDrafts: Object.fromEntries(
+      accounts.map((account) => [account.id, openingByAccount[account.id]?.asOfDate ?? defaultAsOfDate()]),
+    ),
+    openingAmountDrafts: Object.fromEntries(
+      accounts.map((account) => {
+        const existing = openingByAccount[account.id]?.amountKrw;
+        if (Number.isInteger(existing)) return [account.id, String(existing)];
+        if (Number.isInteger(account.startingBalanceKrw)) return [account.id, String(account.startingBalanceKrw)];
+        return [account.id, ""];
+      }),
+    ),
+  };
+}
+
+function normalizeAccountsSnapshot(accountsPayload: unknown, openingPayload: unknown, openingOk: boolean): AccountsSnapshot | null {
+  if (!isRecord(accountsPayload) || accountsPayload.ok !== true || !Array.isArray(accountsPayload.items)) {
+    return null;
+  }
+
+  const accounts = accountsPayload.items.filter(isAccount);
+  const openingData = (
+    openingOk
+    && isRecord(openingPayload)
+    && openingPayload.ok === true
+    && isRecord(openingPayload.data)
+  ) ? openingPayload.data : {};
+
+  return buildAccountsSnapshot(accounts, openingData);
+}
+
 export function AccountsClient() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -96,64 +151,42 @@ export function AccountsClient() {
   const openingCount = rows.filter((row) => Boolean(openingByAccount[row.id])).length;
   const notedCount = rows.filter((row) => asString(row.note).length > 0).length;
 
+  const fetchAccounts = useCallback(async (signal?: AbortSignal): Promise<AccountsSnapshot> => {
+    const [accountsResponse, openingResponse] = await Promise.all([
+      fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+      fetch(`/api/planning/v3/opening-balances${buildCsrfQuery()}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal,
+      }),
+    ]);
+    const accountsPayload = await accountsResponse.json().catch(() => null);
+    const openingPayload = await openingResponse.json().catch(() => null);
+    const snapshot = accountsResponse.ok
+      ? normalizeAccountsSnapshot(accountsPayload, openingPayload, openingResponse.ok)
+      : null;
+    if (!snapshot) {
+      throw new Error("계좌 목록을 불러오지 못했습니다.");
+    }
+    return snapshot;
+  }, []);
+
+  const applyAccountsSnapshot = useCallback((snapshot: AccountsSnapshot) => {
+    setRows(snapshot.accounts);
+    setOpeningByAccount(snapshot.openingByAccount);
+    setOpeningDateDrafts(snapshot.openingDateDrafts);
+    setOpeningAmountDrafts(snapshot.openingAmountDrafts);
+  }, []);
+
   const loadAccounts = useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      const [accountsResponse, openingResponse] = await Promise.all([
-        fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-        fetch(`/api/planning/v3/opening-balances${buildCsrfQuery()}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-        }),
-      ]);
-      const accountsPayload = await accountsResponse.json().catch(() => null);
-      const openingPayload = await openingResponse.json().catch(() => null);
-
-      if (!accountsResponse.ok || !isRecord(accountsPayload) || accountsPayload.ok !== true || !Array.isArray(accountsPayload.items)) {
-        setRows([]);
-        setMessage("계좌 목록을 불러오지 못했습니다.");
-        return;
-      }
-
-      const accounts = accountsPayload.items.filter(isAccount);
-      const openingData = (
-        openingResponse.ok
-        && isRecord(openingPayload)
-        && openingPayload.ok === true
-        && isRecord(openingPayload.data)
-      ) ? openingPayload.data : {};
-
-      const openings: Record<string, OpeningBalance> = {};
-      for (const account of accounts) {
-        const opening = openingData[account.id];
-        if (!isRecord(opening)) continue;
-        const asOfDate = asString(opening.asOfDate);
-        const amountKrw = Number(opening.amountKrw);
-        if (!asOfDate || !Number.isFinite(amountKrw) || !Number.isInteger(amountKrw)) continue;
-        openings[account.id] = {
-          accountId: account.id,
-          asOfDate,
-          amountKrw,
-        };
-      }
-
-      setRows(accounts);
-      setOpeningByAccount(openings);
-      setOpeningDateDrafts(Object.fromEntries(
-        accounts.map((account) => [account.id, openings[account.id]?.asOfDate ?? defaultAsOfDate()]),
-      ));
-      setOpeningAmountDrafts(Object.fromEntries(
-        accounts.map((account) => {
-          const existing = openings[account.id]?.amountKrw;
-          if (Number.isInteger(existing)) return [account.id, String(existing)];
-          if (Number.isInteger(account.startingBalanceKrw)) return [account.id, String(account.startingBalanceKrw)];
-          return [account.id, ""];
-        }),
-      ));
+      applyAccountsSnapshot(await fetchAccounts());
     } catch {
       setRows([]);
       setOpeningByAccount({});
@@ -161,11 +194,34 @@ export function AccountsClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyAccountsSnapshot, fetchAccounts]);
 
   useEffect(() => {
-    void loadAccounts();
-  }, [loadAccounts]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialAccounts() {
+      try {
+        const snapshot = await fetchAccounts(controller.signal);
+        if (!active) return;
+        applyAccountsSnapshot(snapshot);
+        setMessage("");
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setRows([]);
+        setOpeningByAccount({});
+        setMessage("계좌 목록을 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialAccounts();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [applyAccountsSnapshot, fetchAccounts]);
 
   async function handleCreate() {
     if (creating) return;
@@ -313,7 +369,7 @@ export function AccountsClient() {
         </ReportHeroCard>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">계좌 추가</h2>
+          <h2 className="text-sm font-bold text-navy">계좌 추가</h2>
           <div className="grid gap-2 sm:grid-cols-4">
             <input
               className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
@@ -363,7 +419,7 @@ export function AccountsClient() {
         </Card>
 
         <Card className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">계좌 목록</h2>
+          <h2 className="text-sm font-bold text-navy">계좌 목록</h2>
           {loading ? <p className="text-sm text-slate-600">불러오는 중...</p> : null}
           {!loading && rows.length < 1 ? <p className="text-sm text-slate-600">등록된 계좌가 없습니다.</p> : null}
 
@@ -371,7 +427,7 @@ export function AccountsClient() {
             <div className="space-y-2">
               {rows.map((row) => (
                 <div
-                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                  className="rounded-2xl border border-slate-200 bg-surface-muted p-4"
                   data-testid={`v3-account-row-${row.id}`}
                   key={row.id}
                 >
@@ -433,11 +489,11 @@ export function AccountsClient() {
                   ) : (
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{row.name}</p>
+                        <p className="text-sm font-semibold text-navy">{row.name}</p>
                         <p className="text-xs text-slate-600">{row.kind} / {row.currency}</p>
                         {row.note ? <p className="text-xs text-slate-500">{row.note}</p> : null}
                         {openingByAccount[row.id] ? (
-                          <p className="text-xs font-semibold text-emerald-700">
+                          <p className="text-xs font-semibold text-navy">
                             opening: {openingByAccount[row.id].asOfDate} / {openingByAccount[row.id].amountKrw.toLocaleString("ko-KR")}원
                           </p>
                         ) : (

@@ -268,13 +268,13 @@ export function InvestCompaniesClient() {
                 <option value="name_desc">이름 역순</option>
                 <option value="stock_first">상장사 우선</option>
               </FilterSelect>
-              <Button variant="primary" type="submit" className="rounded-2xl px-10 h-12 font-black shadow-md shadow-emerald-900/20" disabled={searchLoading}>
+              <Button variant="primary" type="submit" className="rounded-2xl px-10 h-12 font-black shadow-md shadow-navy/20" disabled={searchLoading}>
                 {searchLoading ? "조회 중" : "회사 후보 보기"}
               </Button>
             </FilterWrapper>
           </form>
           <div className="mt-6 flex items-center gap-4 px-1">
-            <span className="text-sm font-black text-emerald-600">현재 조건 기준 {searchItems.length.toLocaleString()}건</span>
+            <span className="text-sm font-black text-primary">현재 조건 기준 {searchItems.length.toLocaleString()}건</span>
             {indexMeta && (
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   인덱스 생성일: {new Date(indexMeta.generatedAt || "").toLocaleDateString()}
@@ -286,8 +286,8 @@ export function InvestCompaniesClient() {
 
       <div className="grid gap-8 lg:grid-cols-2">
         <Card className="flex flex-col rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
-          <div className="bg-slate-50/50 p-6 px-8 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">검색된 회사 후보</h2>
+          <div className="bg-surface-muted/50 p-6 px-8 border-b border-slate-100 flex items-center justify-between">
+            <h2 className="text-sm font-black text-navy uppercase tracking-widest">검색된 회사 후보</h2>
             {searchItems.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded border border-slate-100">1페이지</span>}
           </div>
           
@@ -343,20 +343,20 @@ export function InvestCompaniesClient() {
                   <li 
                     key={item.corpCode} 
                     className={cn(
-                      "group cursor-pointer rounded-2xl border border-slate-100 p-5 transition-all hover:border-emerald-200 hover:bg-emerald-50/20 active:scale-[0.99]",
-                      selectedCode === item.corpCode && "border-emerald-500 bg-emerald-50/40 ring-1 ring-emerald-500"
+                      "group cursor-pointer rounded-2xl border border-slate-100 p-5 transition-all hover:border-primary/20 hover:bg-primary/20 active:scale-[0.99]",
+                      selectedCode === item.corpCode && "border-primary bg-primary/10 ring-1 ring-primary"
                     )}
                     onClick={() => void loadCompany(item.corpCode)}
                   >
                     <div className="flex items-center justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-base font-black text-slate-900 group-hover:text-emerald-700 transition-colors tracking-tight">{item.corpName}</p>
+                        <p className="text-base font-black text-navy group-hover:text-navy transition-colors tracking-tight">{item.corpName}</p>
                         <p className="mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                           공시 코드 {item.corpCode}
                           {item.stockCode ? ` · 종목 코드 ${item.stockCode}` : " · 비상장"}
                         </p>
                       </div>
-                      <div className="shrink-0 rounded-full bg-slate-50 p-2 text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                      <div className="shrink-0 rounded-full bg-surface-muted p-2 text-slate-300 group-hover:bg-primary group-hover:text-white transition-all">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                       </div>
                     </div>
@@ -368,8 +368,8 @@ export function InvestCompaniesClient() {
         </Card>
 
         <Card className="flex flex-col rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
-          <div className="bg-slate-50/50 p-6 px-8 border-b border-slate-100">
-            <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">기업 기본 정보</h2>
+          <div className="bg-surface-muted/50 p-6 px-8 border-b border-slate-100">
+            <h2 className="text-sm font-black text-navy uppercase tracking-widest">기업 기본 정보</h2>
           </div>
 
           <div className="flex-1 p-8">
@@ -388,8 +388,8 @@ export function InvestCompaniesClient() {
             ) : (
               <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="rounded-[2.5rem] bg-white border border-slate-100 p-10 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-600">기업 기본 정보</p>
-                  <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-900">{detail.corpName}</h3>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-primary">기업 기본 정보</p>
+                  <h3 className="mt-4 text-3xl font-black tracking-tight text-navy">{detail.corpName}</h3>
                   {detail.industry && <p className="mt-3 text-sm font-bold text-slate-500 leading-relaxed">{detail.industry}</p>}
                   <p className="mt-4 text-xs font-bold leading-relaxed text-slate-500">
                     이 정보는 기업 개황을 빠르게 다시 보는 요약입니다. 실제 공시 판단은 DART 공시와 공시서류에서 이어서 확인하세요.
@@ -397,25 +397,25 @@ export function InvestCompaniesClient() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50/30 p-5">
+                  <div className="rounded-2xl border border-slate-100 bg-surface-muted/30 p-5">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">대표자</p>
                     <p className="text-sm font-black text-slate-700">{detail.ceo || "-"}</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-100 bg-slate-50/30 p-5">
+                  <div className="rounded-2xl border border-slate-100 bg-surface-muted/30 p-5">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">종목 코드</p>
                     <p className="text-sm font-black text-slate-700 tabular-nums">{detail.stockCode || "비상장"}</p>
                   </div>
-                  <div className="col-span-2 rounded-2xl border border-slate-100 bg-slate-50/30 p-5">
+                  <div className="col-span-2 rounded-2xl border border-slate-100 bg-surface-muted/30 p-5">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">공식 홈페이지</p>
-                    <p className="text-sm font-black text-emerald-600 break-all">
+                    <p className="text-sm font-black text-primary break-all">
                       {detail.homepage ? (
-                        <a href={detail.homepage.startsWith("http") ? detail.homepage : `http://${detail.homepage}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-emerald-200 decoration-2">
+                        <a href={detail.homepage.startsWith("http") ? detail.homepage : `http://${detail.homepage}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 decoration-primary/20 decoration-2">
                           {detail.homepage}
                         </a>
                       ) : "-"}
                     </p>
                   </div>
-                  <div className="col-span-2 rounded-2xl border border-slate-100 bg-slate-50/30 p-5">
+                  <div className="col-span-2 rounded-2xl border border-slate-100 bg-surface-muted/30 p-5">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">본점 주소</p>
                     <p className="text-sm font-bold text-slate-600 leading-relaxed">{detail.address || "-"}</p>
                   </div>

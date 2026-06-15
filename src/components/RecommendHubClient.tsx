@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { type FinlifeKind, type FinlifeSourceResult, type NormalizedProduct } from "@/lib/finlife/types";
 import { parseFinlifeApiResponse } from "@/lib/finlife/apiSchema";
 import { scoreProducts, type RecommendProfile } from "@/lib/recommend/score";
@@ -70,7 +69,11 @@ export function RecommendHubClient() {
   }, []);
 
   useEffect(() => {
-    void loadData();
+    const timeoutId = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadData]);
 
   const filteredByTab = useMemo(() => {
@@ -103,7 +106,7 @@ export function RecommendHubClient() {
   }, [activeTab, filteredByTab, selectedProviderId, loanPurpose, loanTerms, savingTerms, savingLiquidity, savingRate]);
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
+    <main className="min-h-screen bg-surface-muted py-8 md:py-12">
       <Container>
         <PageHeader
           title="추천 허브"
@@ -138,7 +141,7 @@ export function RecommendHubClient() {
                 />
               </section>
 
-              <div className="h-px bg-slate-100" />
+              <div className="h-px bg-surface-muted" />
 
               <section>
                 <p className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -207,7 +210,7 @@ export function RecommendHubClient() {
 
         <div className="space-y-6">
           <div className="flex items-center justify-between px-2">
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">분석 결과 <span className="ml-1 text-emerald-600">{finalResults.length}</span></h2>
+            <h2 className="text-xl font-black text-navy tracking-tight">분석 결과 <span className="ml-1 text-primary">{finalResults.length}</span></h2>
             <Button variant="ghost" size="sm" className="rounded-full text-slate-400 font-bold" onClick={() => void loadData()}>실시간 갱신</Button>
           </div>
 
@@ -227,16 +230,24 @@ export function RecommendHubClient() {
               {finalResults.map((res) => (
                 <Card key={res.product.fin_prdt_cd + res.product.kor_co_nm} className="group flex flex-col rounded-[2.5rem] border-slate-200/60 bg-white p-6 shadow-sm transition-all hover:shadow-md">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="relative h-8 w-8 overflow-hidden rounded-full border border-slate-100 bg-slate-50">
-                      <Image src={`/logos/${res.product.kor_co_nm}.png`} alt="" fill className="object-contain p-1" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                    <div className="relative h-8 w-8 overflow-hidden rounded-full border border-slate-100 bg-surface-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/logos/${res.product.kor_co_nm}.png`}
+                        alt=""
+                        className="h-full w-full object-contain p-1"
+                        onError={(event) => {
+                          event.currentTarget.hidden = true;
+                        }}
+                      />
                     </div>
                     <span className="text-[10px] font-bold text-slate-400">{res.product.kor_co_nm}</span>
-                    <Badge variant="secondary" className="ml-auto text-[9px] font-bold px-2 py-0 border-none bg-slate-100 text-slate-500 uppercase">
+                    <Badge variant="secondary" className="ml-auto text-[9px] font-bold px-2 py-0 border-none bg-surface-muted text-slate-500 uppercase">
                       {(res.product as ProductWithKind).kind}
                     </Badge>
                   </div>
 
-                  <h3 className="text-base font-black text-slate-900 group-hover:text-emerald-600 transition-colors line-clamp-1 mb-2">
+                  <h3 className="text-base font-black text-navy group-hover:text-primary transition-colors line-clamp-1 mb-2">
                     {res.product.fin_prdt_nm}
                   </h3>
 
@@ -244,14 +255,14 @@ export function RecommendHubClient() {
                     <div className="flex items-end justify-between">
                       <div className="space-y-1">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">최고 금리</p>
-                        <p className="text-xl font-black text-emerald-600 tabular-nums">{res.explain.pickedOption.intr_rate2}%</p>
+                        <p className="text-xl font-black text-primary tabular-nums">{res.explain.pickedOption.intr_rate2}%</p>
                       </div>
                       <div className="text-right space-y-1">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">적합도</p>
                         <p className="text-lg font-black text-slate-700 tabular-nums">{res.explain.finalPoints.toFixed(1)}<span className="text-xs text-slate-300">/10</span></p>
                       </div>
                     </div>
-                    <Button variant="outline" className="w-full rounded-2xl h-10 text-xs font-bold bg-slate-50/50 border-slate-100 hover:bg-emerald-50 hover:border-emerald-100 hover:text-emerald-700">
+                    <Button variant="outline" className="w-full rounded-2xl h-10 text-xs font-bold bg-surface-muted/50 border-slate-100 hover:bg-primary/5 hover:border-primary/10 hover:text-navy">
                       상세 분석 보기
                     </Button>
                   </div>

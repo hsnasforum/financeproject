@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { append, list } from "../src/lib/audit/auditLogStore";
+import { type AuditLogItem, append, list } from "../src/lib/audit/auditLogStore";
 
 const TEST_AUDIT_PATH = path.join(process.cwd(), "tmp", "audit_log.test.json");
 
@@ -11,6 +11,21 @@ function cleanup() {
   if (fs.existsSync(TEST_AUDIT_PATH)) {
     fs.unlinkSync(TEST_AUDIT_PATH);
   }
+}
+
+function writeAuditFixture(items: AuditLogItem[]) {
+  fs.mkdirSync(path.dirname(TEST_AUDIT_PATH), { recursive: true });
+  fs.writeFileSync(TEST_AUDIT_PATH, `${JSON.stringify(items, null, 2)}\n`, "utf-8");
+}
+
+function makeAuditItem(index: number): AuditLogItem {
+  return {
+    id: `audit-${index}`,
+    createdAt: new Date(Date.UTC(2026, 1, 27, 10, 0, index)).toISOString(),
+    event: `E${index}`,
+    route: "/api/dev/test",
+    summary: `summary-${index}`,
+  };
 }
 
 describe("audit log store", () => {
@@ -45,13 +60,9 @@ describe("audit log store", () => {
   });
 
   it("keeps at most 500 items", () => {
-    for (let i = 0; i < 520; i += 1) {
-      append({
-        event: `E${i}`,
-        route: "/api/dev/test",
-        summary: `summary-${i}`,
-      });
-    }
+    writeAuditFixture(Array.from({ length: 519 }, (_, index) => makeAuditItem(index)));
+    vi.setSystemTime(new Date("2026-02-27T10:08:39.000Z"));
+    append({ event: "E519", route: "/api/dev/test", summary: "summary-519" });
 
     const rows = list(600);
     expect(rows).toHaveLength(500);

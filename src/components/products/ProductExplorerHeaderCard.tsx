@@ -135,7 +135,7 @@ export function ProductExplorerHeaderCard({
 
         <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
           <div className="space-y-8 min-w-0">
-            <section className="rounded-[1.5rem] border border-slate-100 bg-slate-50/50 p-6 shadow-inner">
+            <section className="rounded-[1.5rem] border border-slate-100 bg-surface-muted/50 p-6 shadow-inner">
               <div className="flex items-start justify-between gap-3 mb-4">
                 <SubSectionHeader 
                   title="제공자 선택" 
@@ -193,7 +193,7 @@ export function ProductExplorerHeaderCard({
                   type="checkbox"
                   checked={showAllProviders}
                   onChange={(event) => onToggleShowAllProviders(event.target.checked)}
-                  className="h-5 w-5 rounded-lg border-slate-200 text-emerald-600 focus:ring-emerald-500 transition-all"
+                  className="h-5 w-5 rounded-lg border-slate-200 text-primary focus:ring-primary transition-all"
                 />
                 전체 권역 보기
               </label>
@@ -220,7 +220,7 @@ export function ProductExplorerHeaderCard({
             </div>
 
             {viewMode === "option" ? (
-              <div className="flex flex-col gap-3 rounded-2xl bg-slate-50 p-4 border border-slate-100 shadow-inner mt-2">
+              <div className="flex flex-col gap-3 rounded-2xl bg-surface-muted p-4 border border-slate-100 shadow-inner mt-2">
                 <label className="flex min-w-0 flex-1 items-center gap-3">
                   <span className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">정렬</span>
                   <select
@@ -241,7 +241,7 @@ export function ProductExplorerHeaderCard({
                     type="checkbox"
                     checked={optionGroup}
                     onChange={(event) => onOptionGroupChange(event.target.checked)}
-                    className="h-5 w-5 rounded-lg border-slate-200 text-emerald-600 focus:ring-emerald-500 transition-all"
+                    className="h-5 w-5 rounded-lg border-slate-200 text-primary focus:ring-primary transition-all"
                   />
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 group-hover:text-slate-700 transition-colors">상품별 그룹화</span>
                 </label>
@@ -252,7 +252,7 @@ export function ProductExplorerHeaderCard({
               <Button
                 type="button"
                 variant={isFilterOpen ? "primary" : "outline"}
-                className="flex-1 rounded-2xl h-12 font-black shadow-md shadow-emerald-900/10"
+                className="flex-1 rounded-2xl h-12 font-black shadow-md shadow-navy/10"
                 onClick={() => setIsFilterOpen((prev) => !prev)}
               >
                 상세 필터
@@ -270,7 +270,7 @@ export function ProductExplorerHeaderCard({
         </div>
 
         {hasAnyFilters && (
-          <div className="rounded-2xl bg-slate-50/50 px-5 py-4 border border-slate-100/50">
+          <div className="rounded-2xl bg-surface-muted/50 px-5 py-4 border border-slate-100/50">
             <div className="flex flex-wrap items-center gap-3">
               <span className="mr-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Selected</span>
               {selectedFinCoNo ? (
@@ -311,8 +311,8 @@ export function ProductExplorerHeaderCard({
 
             <div className="space-y-4">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">금액 설정</p>
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4 shadow-inner focus-within:bg-white focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100 transition-all group">
-                <span className="text-slate-300 font-black group-focus-within:text-emerald-500 transition-colors">₩</span>
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-surface-muted px-5 py-4 shadow-inner focus-within:bg-white focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10 transition-all group">
+                <span className="text-slate-300 font-black group-focus-within:text-primary transition-colors">₩</span>
                 <input
                   className="min-w-0 flex-1 bg-transparent text-sm font-black text-slate-700 outline-none tabular-nums"
                   value={amountInput}

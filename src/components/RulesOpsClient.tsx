@@ -235,11 +235,14 @@ export function RulesOpsClient() {
   }
 
   useEffect(() => {
-    const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
-    const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
-    if (unlocked && csrf) {
-      setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
-    }
+    const timeoutId = window.setTimeout(() => {
+      const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
+      const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
+      if (unlocked && csrf) {
+        setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   const canRun = useMemo(
@@ -512,11 +515,11 @@ export function RulesOpsClient() {
       />
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Dev Unlock</h2>
+        <h2 className="text-base font-black text-navy">Dev Unlock</h2>
         <p className="mt-2 text-sm text-slate-600">실행(POST) 전에 unlock이 필요합니다.</p>
         <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
           <input
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none ring-emerald-200 transition focus:border-emerald-400 focus:ring"
+            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-navy outline-none ring-primary/20 transition focus:border-primary focus:ring"
             type="password"
             placeholder="DEV_TOKEN"
             value={unlockToken}
@@ -530,13 +533,13 @@ export function RulesOpsClient() {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Actions</h2>
+        <h2 className="text-base font-black text-navy">Actions</h2>
         <p className="mt-2 text-sm text-slate-600">허용된 action만 서버에서 실행됩니다.</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           {ACTIONS.map((row) => (
-            <div key={row.action} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div key={row.action} className="rounded-xl border border-slate-200 bg-surface-muted p-3">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900">{row.label}</p>
+                <p className="text-sm font-semibold text-navy">{row.label}</p>
                 <Button
                   type="button"
                   variant="outline"
@@ -559,11 +562,11 @@ export function RulesOpsClient() {
             message={error}
           />
         ) : null}
-        {notice ? <p className="mt-4 text-sm font-semibold text-emerald-700">{notice}</p> : null}
+        {notice ? <p className="mt-4 text-sm font-semibold text-navy">{notice}</p> : null}
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Result</h2>
+        <h2 className="text-base font-black text-navy">Result</h2>
         {!result ? (
           <p className="mt-3 text-sm text-slate-500">아직 실행 결과가 없습니다.</p>
         ) : (
@@ -571,7 +574,7 @@ export function RulesOpsClient() {
             <p className="text-sm text-slate-700">
               action: <span className="font-semibold">{result.action}</span>
               {" / "}
-              ok: <span className={`font-semibold ${result.ok ? "text-emerald-700" : "text-rose-700"}`}>{result.ok ? "true" : "false"}</span>
+              ok: <span className={`font-semibold ${result.ok ? "text-navy" : "text-rose-700"}`}>{result.ok ? "true" : "false"}</span>
               {" / "}
               tookMs: <span className="font-semibold">{result.tookMs}</span>
             </p>
@@ -599,7 +602,7 @@ export function RulesOpsClient() {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">PR 준비</h2>
+        <h2 className="text-base font-black text-navy">PR 준비</h2>
         <p className="mt-2 text-sm text-slate-600">룰/라벨 변경을 브랜치+커밋+patch까지 준비합니다. (push/PR 생성은 미포함)</p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => { void handlePreparePr(); }} disabled={!canRun}>
@@ -615,7 +618,7 @@ export function RulesOpsClient() {
         ) : (
           <div className="mt-3 space-y-2 text-sm">
             <p className="text-slate-700">
-              ok: <span className={`font-semibold ${prResult.ok ? "text-emerald-700" : "text-rose-700"}`}>{prResult.ok ? "true" : "false"}</span>
+              ok: <span className={`font-semibold ${prResult.ok ? "text-navy" : "text-rose-700"}`}>{prResult.ok ? "true" : "false"}</span>
               {" / "}
               tookMs: <span className="font-semibold">{prResult.tookMs}</span>
             </p>
@@ -646,7 +649,7 @@ export function RulesOpsClient() {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">GitHub PR 자동 생성</h2>
+        <h2 className="text-base font-black text-navy">GitHub PR 자동 생성</h2>
         <p className="mt-2 text-sm text-slate-600">`workflow_dispatch`로 rules-tune-pr workflow를 실행합니다. (Dev 전용)</p>
         <div className="mt-4 flex flex-wrap items-end gap-2">
           <label className="flex min-w-[220px] flex-col gap-1">
@@ -656,7 +659,7 @@ export function RulesOpsClient() {
               value={dispatchRef}
               onChange={(event) => setDispatchRef(event.target.value)}
               placeholder="main"
-              className="h-9 rounded-xl border border-slate-300 px-3 text-sm text-slate-900"
+              className="h-9 rounded-xl border border-slate-300 px-3 text-sm text-navy"
               disabled={dispatchRunning}
             />
           </label>
@@ -664,17 +667,17 @@ export function RulesOpsClient() {
             {dispatchRunning ? "요청 중..." : "PR 자동 생성(Workflow 실행)"}
           </Button>
         </div>
-        {dispatchMessage ? <p className="mt-3 text-sm font-semibold text-emerald-700">{dispatchMessage}</p> : null}
+        {dispatchMessage ? <p className="mt-3 text-sm font-semibold text-navy">{dispatchMessage}</p> : null}
         {dispatchRunUrl ? (
           <p className="mt-3 text-sm">
-            <a href={dispatchRunUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
+            <a href={dispatchRunUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-navy underline">
               Actions Run 링크 열기
             </a>
           </p>
         ) : null}
         {dispatchPrUrl ? (
           <p className="mt-2 text-sm">
-            <a href={dispatchPrUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
+            <a href={dispatchPrUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-navy underline">
               PR 열기{dispatchPrTitle ? `: ${dispatchPrTitle}` : ""}
             </a>
           </p>
@@ -686,7 +689,7 @@ export function RulesOpsClient() {
               <span
                 className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${
                   prChecksState === "PASSED"
-                    ? "bg-emerald-100 text-emerald-700"
+                    ? "bg-primary/10 text-navy"
                     : prChecksState === "FAILED"
                       ? "bg-rose-100 text-rose-700"
                       : "bg-amber-100 text-amber-800"
@@ -695,7 +698,7 @@ export function RulesOpsClient() {
                 {prChecksState}
               </span>
             ) : (
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <span className="inline-flex items-center rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-slate-600">
                 조회 중...
               </span>
             )}
@@ -703,7 +706,7 @@ export function RulesOpsClient() {
               ({prChecksCompleted}/{prChecksTotal}, failed {prChecksFailed})
             </span>
             {prChecksDetailsUrl ? (
-              <a href={prChecksDetailsUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
+              <a href={prChecksDetailsUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-navy underline">
                 checks 링크
               </a>
             ) : null}

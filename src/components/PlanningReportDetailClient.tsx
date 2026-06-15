@@ -180,7 +180,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
         action={(
           <div className="no-print flex items-center gap-4">
             {recommendHistoryHref ? (
-              <Link className="text-sm font-black text-emerald-600 hover:text-emerald-700 transition-colors" href={recommendHistoryHref}>
+              <Link className="text-sm font-black text-primary hover:text-navy transition-colors" href={recommendHistoryHref}>
                 추천 비교 기록으로 돌아가기
               </Link>
             ) : null}
@@ -192,7 +192,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
             >
               PDF 인쇄
             </Button>
-            <Link className="text-sm font-black text-slate-400 hover:text-emerald-600 transition-colors" href="/planning/reports">리포트 목록으로</Link>
+            <Link className="text-sm font-black text-slate-400 hover:text-primary transition-colors" href="/planning/reports">리포트 목록으로</Link>
           </div>
         )}
       />
@@ -202,7 +202,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
 
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           <p className="text-sm font-black text-slate-400 uppercase tracking-widest">리포트를 불러오는 중입니다</p>
         </div>
       ) : error ? (
@@ -211,7 +211,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
           <Button className="mt-6 rounded-xl font-black h-11 px-8" variant="outline" onClick={() => window.location.reload()}>다시 시도</Button>
         </Card>
       ) : !report ? (
-        <Card className="border-slate-200 bg-slate-50 p-12 text-center rounded-[2rem]">
+        <Card className="border-slate-200 bg-surface-muted p-12 text-center rounded-[2rem]">
           <p className="text-sm font-black text-slate-400 uppercase tracking-widest">리포트를 찾을 수 없습니다</p>
         </Card>
       ) : (
@@ -222,33 +222,33 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
                 <Badge variant="secondary" className="mb-3 px-3 py-1 text-[10px] font-black uppercase tracking-widest bg-slate-900 text-white border-none">
                   실행 기반 리포트
                 </Badge>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-tight">
+                <h1 className="text-3xl font-black text-navy tracking-tight leading-tight">
                   {report.runId ? "플래닝 실행 분석 결과" : "수동 생성 리포트"}
                 </h1>
               </div>
               <div className="flex flex-col items-end gap-1">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">생성 시각</p>
-                <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(report.createdAt)}</p>
+                <p className="text-sm font-black text-navy tabular-nums">{formatDateTime(report.createdAt)}</p>
               </div>
             </div>
 
-            <div className="mb-8 rounded-2xl border border-emerald-100 bg-emerald-50/70 px-5 py-4 text-sm font-bold leading-relaxed text-emerald-900">
+            <div className="mb-8 rounded-2xl border border-primary/10 bg-primary/10 px-5 py-4 text-sm font-bold leading-relaxed text-navy">
               {detailHelperText}
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+              <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">리포트 ID</p>
                 <p className="text-xs font-black text-slate-700 font-mono break-all">{report.id}</p>
               </div>
               {report.runId && (
-                <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">원본 실행 ID</p>
                   <p className="text-xs font-black text-slate-700 font-mono break-all">{report.runId}</p>
                 </div>
               )}
               {report.recommendRunId && (
-                <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">추천 실행 ID</p>
                   <p className="text-xs font-black text-slate-700 font-mono break-all">{report.recommendRunId}</p>
                 </div>
@@ -289,7 +289,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
               </Button>
               <a
                 href={`/api/planning/v2/reports/${encodeURIComponent(report.id)}/download`}
-                className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-8 h-12 text-sm font-black text-slate-700 transition-all hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 shadow-sm"
+                className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-8 h-12 text-sm font-black text-slate-700 transition-all hover:border-primary/20 hover:bg-primary/5 active:scale-95 shadow-sm"
               >
                 마크다운 원문 다운로드
               </a>

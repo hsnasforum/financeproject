@@ -299,13 +299,12 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
   useEffect(() => {
     if (initializedFromQueryRef.current) return;
     initializedFromQueryRef.current = true;
+    let active = true;
 
     const queryPreset = parseBenefitsQueryPreset(searchParams, initialQuery);
     const topicsFromUrl = parseTopicKeys((searchParams.get("topics") ?? "").split(",").map((entry) => entry.trim()).filter(Boolean));
     const parsedSido = queryPreset.sido || normalizeSido(searchParams.get("sido") ?? "") || "";
     const parsedSigungu = queryPreset.sigungu || (searchParams.get("sigungu") ?? "").trim();
-    const hasIncludeNationwideParam = searchParams.has("includeNationwide");
-    const hasIncludeUnknownParam = searchParams.has("includeUnknown");
     const parsedIncludeNationwide = parseFlag(searchParams.get("includeNationwide"), parsedSido ? false : true);
     const parsedIncludeUnknown = parseFlag(searchParams.get("includeUnknown"), parsedSido ? false : true);
     const parsedScan = (searchParams.get("scan") ?? "").trim().toLowerCase();
@@ -327,26 +326,31 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       maxPages: parsedMaxPages,
     };
 
-    setPlannerContext({
-      category: queryPreset.category,
-      region: queryPreset.region,
-      ageBand: queryPreset.ageBand,
-      incomeBand: queryPreset.incomeBand,
-    });
-    setQuery(initialState.query);
-    setSelectedTopics(initialState.topics);
-    setSido(initialState.sido);
-    setSigungu(initialState.sigungu);
-    setIncludeNationwide(initialState.includeNationwide);
-    setIncludeUnknown(initialState.includeUnknown);
-    if (!hasIncludeNationwideParam && parsedSido) setIncludeNationwide(false);
-    if (!hasIncludeUnknownParam && parsedSido) setIncludeUnknown(false);
-    setScanAll(initialState.scanAll);
-    setPageSize(initialState.pageSize);
-    setMaxPages(initialState.maxPages);
-    void run(initialState, { cursor: 0, includeFacets: true });
+    async function applyInitialState() {
+      await Promise.resolve();
+      if (!active) return;
+      setPlannerContext({
+        category: queryPreset.category,
+        region: queryPreset.region,
+        ageBand: queryPreset.ageBand,
+        incomeBand: queryPreset.incomeBand,
+      });
+      setQuery(initialState.query);
+      setSelectedTopics(initialState.topics);
+      setSido(initialState.sido);
+      setSigungu(initialState.sigungu);
+      setIncludeNationwide(initialState.includeNationwide);
+      setIncludeUnknown(initialState.includeUnknown);
+      setScanAll(initialState.scanAll);
+      setPageSize(initialState.pageSize);
+      setMaxPages(initialState.maxPages);
+      void run(initialState, { cursor: 0, includeFacets: true });
+    }
+
+    void applyInitialState();
 
     return () => {
+      active = false;
       requestControllerRef.current?.abort();
     };
   }, [initialQuery, run, searchParams]);
@@ -401,7 +405,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
               <Button variant="outline" className="rounded-2xl h-11 px-6 font-black" onClick={() => setAdvancedOpen((prev) => !prev)}>
                 키워드 검색 {advancedOpen ? "닫기" : "열기"}
               </Button>
-              <div className="hidden h-8 w-px bg-slate-100 lg:block" />
+              <div className="hidden h-8 w-px bg-surface-muted lg:block" />
 
               <FilterSelect
                 label="지역"
@@ -429,7 +433,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
               <div className="ml-auto flex items-center gap-2">
                 <Button
                   variant="primary"
-                  className="rounded-2xl px-10 h-11 font-black shadow-md shadow-emerald-900/20"
+                  className="rounded-2xl px-10 h-11 font-black shadow-md shadow-navy/20"
                   onClick={() => void run({ query, topics: selectedTopics, sido, sigungu, includeNationwide, includeUnknown, scanAll, pageSize, maxPages }, { cursor: 0, includeFacets: true })}
                 >
                   {loading ? "조회 중..." : "지금 기준으로 찾기"}
@@ -454,7 +458,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4 px-2">
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-black text-emerald-600">{totalMatched.toLocaleString()}건의 혜택 후보</span>
+          <span className="text-sm font-black text-primary">{totalMatched.toLocaleString()}건의 혜택 후보</span>
           <p className="text-xs font-medium leading-relaxed text-slate-500">
             현재 검색과 지역 기준으로 다시 읽는 결과입니다. 상세에서 지원 조건과 신청 방법을 다시 확인하세요.
           </p>
@@ -477,7 +481,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="ghost" className="h-8 rounded-full text-[10px] font-black text-slate-400 hover:text-emerald-600 uppercase tracking-widest" onClick={() => setAdvancedConfigOpen((prev) => !prev)}>
+          <Button variant="ghost" className="h-8 rounded-full text-[10px] font-black text-slate-400 hover:text-primary uppercase tracking-widest" onClick={() => setAdvancedConfigOpen((prev) => !prev)}>
             고급 설정
           </Button>
           {assumption && <span className="text-[10px] font-bold text-slate-400 italic">※ {assumption}</span>}
@@ -493,10 +497,10 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
              </div>
              <div className="flex items-center gap-2">
                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">현재 반영 범위</span>
-               <span className="font-black text-slate-900 tabular-nums">{Math.round((meta.snapshot?.completionRate ?? 0) * 100)}%</span>
+               <span className="font-black text-navy tabular-nums">{Math.round((meta.snapshot?.completionRate ?? 0) * 100)}%</span>
              </div>
              {process.env.NODE_ENV !== "production" && (
-               <Button variant="outline" className="h-8 rounded-full text-[10px] font-black px-4 bg-slate-50" onClick={() => void refreshSnapshot()}>
+               <Button variant="outline" className="h-8 rounded-full text-[10px] font-black px-4 bg-surface-muted" onClick={() => void refreshSnapshot()}>
                  스냅샷 강제 갱신
                </Button>
              )}
@@ -520,19 +524,19 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                 const quality = getBenefitQualityBucket(item);
                 const applyShortcut = extractShortcutFromApplyHow(item.id, item.applyHow);
                 return (
-                  <Card key={item.id} className="group flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-0 shadow-sm transition-all hover:shadow-xl hover:border-emerald-100">
+                  <Card key={item.id} className="group flex flex-col overflow-hidden rounded-[2.5rem] border-slate-100 bg-white p-0 shadow-sm transition-all hover:shadow-xl hover:border-primary/10">
                     <div className="flex flex-1 flex-col p-8 pb-6">
                       <div className="mb-6 flex items-start justify-between gap-4">
                         <div className="space-y-1">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-primary">
                             {item.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[item.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : "지원 혜택"}
                           </span>
-                          <h3 className="text-xl font-black leading-snug text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tight">{item.title}</h3>
+                          <h3 className="text-xl font-black leading-snug text-navy group-hover:text-primary transition-colors tracking-tight">{item.title}</h3>
                         </div>
                         <Badge variant="secondary" className={cn(
                           "border-none px-2.5 py-1 text-[10px] font-black uppercase tracking-wider",
-                          quality === "HIGH" ? "bg-emerald-50 text-emerald-700" :
-                          quality === "MED" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-500"
+                          quality === "HIGH" ? "bg-primary/5 text-navy" :
+                          quality === "MED" ? "bg-blue-50 text-blue-700" : "bg-surface-muted text-slate-500"
                         )}>
                           {quality === "HIGH" ? "정보 충분" : quality === "MED" ? "보통" : "정보 부족"}
                         </Badge>
@@ -540,7 +544,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
                       <p className="mb-8 flex-1 text-sm font-medium leading-relaxed text-slate-500 line-clamp-3">{item.summary}</p>
 
-                      <div className="space-y-3 rounded-2xl bg-slate-50/50 p-5 border border-slate-100/50">
+                      <div className="space-y-3 rounded-2xl bg-surface-muted/50 p-5 border border-slate-100/50">
                         <div className="flex items-center gap-4 text-xs">
                           <span className="w-14 text-[10px] font-black uppercase tracking-widest text-slate-400 shrink-0">운영기관</span>
                           <span className="font-bold text-slate-700 truncate">{item.org || "-"}</span>
@@ -550,20 +554,20 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                           <div className="flex flex-col gap-1 font-bold text-slate-700">
                             <span className="line-clamp-1">{item.applyHow || "-"}</span>
                             {applyShortcut && (
-                              <a href={applyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex text-emerald-600 underline underline-offset-4 decoration-emerald-200 hover:text-emerald-700 transition-colors">신청 링크 ▶</a>
+                              <a href={applyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex text-primary underline underline-offset-4 decoration-primary/20 hover:text-navy transition-colors">신청 링크 ▶</a>
                             )}
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-50 bg-slate-50/30 p-5 px-8">
+                    <div className="flex items-center justify-between border-t border-slate-50 bg-surface-muted/30 p-5 px-8">
                       <div className="flex gap-2">
                         {(item.eligibilityChips ?? []).slice(0, 2).map((chip) => (
                           <span key={chip} className="rounded-lg bg-white border border-slate-100 px-3 py-1 text-[10px] font-black text-slate-500 uppercase tracking-wider shadow-sm">{chip}</span>
                         ))}
                       </div>
-                      <Button variant="ghost" className="h-9 rounded-xl text-xs font-black text-emerald-600 hover:bg-emerald-50 px-4" onClick={() => void openDetail(item)}>
+                      <Button variant="ghost" className="h-9 rounded-xl text-xs font-black text-primary hover:bg-primary/5 px-4" onClick={() => void openDetail(item)}>
                         조건 다시 확인
                       </Button>
                     </div>
@@ -600,12 +604,12 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       {selected ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-sm p-4 md:p-8" onClick={() => setSelected(null)}>
           <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden rounded-[3rem] p-0 shadow-2xl animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-slate-50/80 p-8 md:p-10 border-b border-slate-100 flex items-start justify-between">
+            <div className="bg-surface-muted/80 p-8 md:p-10 border-b border-slate-100 flex items-start justify-between">
               <div className="space-y-2">
-                <span className="rounded-lg bg-emerald-100 text-emerald-700 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm">
+                <span className="rounded-lg bg-primary/10 text-navy px-2.5 py-1 text-[10px] font-black uppercase tracking-widest shadow-sm">
                   {selected.topicMatch?.matchedTopics?.[0] ? BENEFIT_TOPICS[selected.topicMatch.matchedTopics[0] as BenefitTopicKey]?.label : "지원 혜택"}
                 </span>
-                <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight leading-tight">{selected.title}</h3>
+                <h3 className="text-2xl md:text-3xl font-black text-navy tracking-tight leading-tight">{selected.title}</h3>
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{selected.org}</p>
               </div>
               <Button size="sm" variant="ghost" className="h-10 w-10 rounded-full p-0 bg-white shadow-sm" onClick={() => setSelected(null)}>
@@ -616,7 +620,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
             <div className="flex-1 overflow-y-auto p-8 md:p-10 space-y-10 scrollbar-thin scrollbar-thumb-slate-200">
               <section>
                 <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">현재 읽는 혜택 요약</p>
-                <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8 text-sm font-medium leading-relaxed text-slate-700 shadow-inner">
+                <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-8 text-sm font-medium leading-relaxed text-slate-700 shadow-inner">
                   {selected.summary}
                 </div>
               </section>
@@ -626,14 +630,14 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                 <div className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm">
                   {detailLoading ? (
                     <div className="space-y-4 animate-pulse">
-                      <div className="h-4 w-3/4 rounded-full bg-slate-100" />
-                      <div className="h-4 w-1/2 rounded-full bg-slate-100" />
+                      <div className="h-4 w-3/4 rounded-full bg-surface-muted" />
+                      <div className="h-4 w-1/2 rounded-full bg-surface-muted" />
                     </div>
                   ) : detail?.conditions?.length ? (
                     <ul className="space-y-5">
                       {detail.conditions.map((line, idx) => (
                         <li key={idx} className="flex gap-4 text-sm font-medium text-slate-700">
-                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                           <span className="leading-relaxed">{line}</span>
                         </li>
                       ))}
@@ -645,7 +649,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
               </section>
 
               {selected.applyHow && (
-                <section className="rounded-[2.5rem] bg-slate-50 p-8 md:p-10 border border-slate-100 shadow-sm transition-all">
+                <section className="rounded-[2.5rem] bg-surface-muted p-8 md:p-10 border border-slate-100 shadow-sm transition-all">
                   <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">다음 신청 확인</p>
                   <div className="text-sm font-bold text-slate-700 leading-relaxed">
                     <p className="mb-4 text-xs font-medium leading-relaxed text-slate-500">
@@ -656,7 +660,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
                     </p>
                     {selectedApplyShortcut && (
                       <div className="mt-8">
-                        <a href={selectedApplyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-8 text-sm font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98]">
+                        <a href={selectedApplyShortcut} target="_blank" rel="noopener noreferrer" className="inline-flex h-12 items-center rounded-2xl bg-primary px-8 text-sm font-black text-white shadow-lg shadow-primary/20 transition-all hover:bg-navy hover:scale-[1.02] active:scale-[0.98]">
                           신청 바로가기
                           <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -669,7 +673,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
               )}
             </div>
 
-            <div className="bg-slate-50/80 p-6 px-10 border-t border-slate-100 flex items-center justify-between">
+            <div className="bg-surface-muted/80 p-6 px-10 border-t border-slate-100 flex items-center justify-between">
                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">출처: 보조금24 Open API</p>
                <Button variant="ghost" className="text-xs font-black text-slate-400" onClick={() => setSelected(null)}>닫기</Button>
             </div>

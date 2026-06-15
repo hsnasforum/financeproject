@@ -191,12 +191,12 @@ function RunIdentifierDisclosure({
 }) {
   const openedClassName = tone === "emerald"
     ? "rounded-2xl border border-white/10 bg-white/5 px-4 py-3"
-    : "rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3";
+    : "rounded-2xl border border-slate-200 bg-surface-muted/70 px-4 py-3";
   const summaryClassName = tone === "emerald"
     ? "cursor-pointer list-none text-[11px] font-semibold text-white/75 marker:hidden"
     : "cursor-pointer list-none text-[11px] font-semibold text-slate-500 marker:hidden";
   const bodyClassName = tone === "emerald"
-    ? "mt-3 space-y-2 text-[11px] font-medium leading-relaxed text-emerald-50/90"
+    ? "mt-3 space-y-2 text-[11px] font-medium leading-relaxed text-primary/80"
     : "mt-3 space-y-2 text-[11px] font-medium leading-relaxed text-slate-500";
   const idClassName = tone === "emerald" ? "font-mono text-white" : "font-mono text-slate-700";
 
@@ -303,7 +303,7 @@ export function RecommendHistoryClient({
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 md:py-12">
+    <main className="min-h-screen bg-surface-muted py-8 md:py-12">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4">
         <PageHeader
           title="추천 비교 기록"
@@ -333,13 +333,13 @@ export function RecommendHistoryClient({
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">저장된 실행</span>
-              <span className="text-sm font-black text-emerald-600">{runs.length} / 50</span>
+              <span className="text-sm font-black text-primary">{runs.length} / 50</span>
             </div>
           </div>
           <p className="mt-4 text-sm font-medium leading-relaxed text-slate-600">
             이 기록은 확정 답안을 저장하는 곳이 아니라, 조건이나 시점을 바꿔 다시 본 결과를 비교해 보는 용도입니다.
           </p>
-          {notice ? <p className="mt-4 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-2 rounded-lg inline-block">{notice}</p> : null}
+          {notice ? <p className="mt-4 text-xs font-bold text-primary bg-primary/5 px-3 py-2 rounded-lg inline-block">{notice}</p> : null}
         </Card>
 
         <section className="grid gap-6 lg:grid-cols-2">
@@ -372,13 +372,13 @@ export function RecommendHistoryClient({
                     <li key={run.runId}>
                       <div className={cn(
                         "rounded-2xl border p-4 transition-all",
-                        active ? "border-emerald-500 bg-emerald-50/30 ring-1 ring-emerald-500" : "border-slate-100 bg-slate-50/50 hover:border-slate-200"
+                        active ? "border-primary bg-primary/30 ring-1 ring-primary" : "border-slate-100 bg-surface-muted/50 hover:border-slate-200"
                       )}>
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                           <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
                             <input
                               type="checkbox"
-                              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                              className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                               checked={selected}
                               onChange={() => toggleRunSelection(run.runId)}
                             />
@@ -397,7 +397,7 @@ export function RecommendHistoryClient({
                         <div className="flex items-start justify-between gap-4">
                           <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">저장 시점</p>
-                            <p className="mt-1 text-sm font-black text-slate-900">{formatDateTime(run.savedAt)}</p>
+                            <p className="mt-1 text-sm font-black text-navy">{formatDateTime(run.savedAt)}</p>
                             <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400">저장 조건</p>
                             <p className="mt-1 text-xs font-bold text-slate-700">
                               {formatPurposeLabel(run.profile.purpose)} · {formatKindLabel(run.profile.kind)} · 상위 {run.items.length}건 저장
@@ -418,7 +418,7 @@ export function RecommendHistoryClient({
                                 </p>
                                 <Link
                                   href={planningReportHref}
-                                  className="mt-3 inline-flex text-[11px] font-black uppercase tracking-widest text-emerald-600 hover:underline"
+                                  className="mt-3 inline-flex text-[11px] font-black uppercase tracking-widest text-primary hover:underline"
                                 >
                                   저장 당시 플래닝 보기 →
                                 </Link>
@@ -475,31 +475,31 @@ export function RecommendHistoryClient({
                     activePlanningReportHref = `/planning/reports?${params.toString()}`;
                   }
                   return (
-                <div className="rounded-2xl bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
+                <div className="rounded-2xl bg-primary p-6 text-white shadow-xl shadow-navy/20">
                   <div className="flex items-center justify-between gap-4 mb-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">현재 선택한 기록</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/80">현재 선택한 기록</p>
                     {openedFromQuery && <Badge className="bg-white/20 text-white border-none px-2 py-0.5 text-[9px] font-black uppercase">링크로 열기</Badge>}
                   </div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100/80">저장 시점</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary/80">저장 시점</p>
                   <p className="text-xl font-black tracking-tight">{formatDateTime(activeRun.savedAt)}</p>
-                  <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-100/80">저장 조건</p>
-                  <p className="mt-1 text-sm font-bold text-emerald-100/90">
+                  <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-primary/80">저장 조건</p>
+                  <p className="mt-1 text-sm font-bold text-primary/80">
                     {formatPurposeLabel(activeRun.profile.purpose)} · {formatKindLabel(activeRun.profile.kind)} · 상위 {activeRun.items.length}건 저장
                   </p>
-                  <p className="mt-1 text-xs font-medium leading-relaxed text-emerald-50/90">
+                  <p className="mt-1 text-xs font-medium leading-relaxed text-primary/80">
                     {buildRunConditionSummary(activeRun.profile)}
                   </p>
-                  <p className="mt-3 text-sm font-medium leading-relaxed text-emerald-50/90">
+                  <p className="mt-3 text-sm font-medium leading-relaxed text-primary/80">
                     저장 당시 조건에서 왜 이 후보들이 남았는지 다시 읽고, 필요할 때만 다음 행동으로 이어 보세요.
                   </p>
                   <div className="mt-6 rounded-2xl border border-white/15 bg-white/10 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100/80">다음에 할 일</p>
-                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-50/90">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-primary/80">다음에 할 일</p>
+                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-primary/80">
                       {buildNextActionHelper(activePlanningRunId)}
                     </p>
                     <div className="mt-4 flex flex-wrap items-center gap-3">
                       <div className="flex items-center gap-2 bg-white/10 rounded-xl px-3 py-2 border border-white/10">
-                        <span className="text-[10px] font-bold text-emerald-100 uppercase">비교 담기</span>
+                        <span className="text-[10px] font-bold text-primary/80 uppercase">비교 담기</span>
                         <select
                           className="bg-transparent text-xs font-black outline-none cursor-pointer"
                           value={compareTopN}
@@ -508,9 +508,9 @@ export function RecommendHistoryClient({
                             setCompareTopN(next === 2 || next === 4 ? next : 3);
                           }}
                         >
-                          <option className="text-slate-900" value={2}>2개</option>
-                          <option className="text-slate-900" value={3}>3개</option>
-                          <option className="text-slate-900" value={4}>4개</option>
+                          <option className="text-navy" value={2}>2개</option>
+                          <option className="text-navy" value={3}>3개</option>
+                          <option className="text-navy" value={4}>4개</option>
                         </select>
                       </div>
                       <Button
@@ -518,7 +518,7 @@ export function RecommendHistoryClient({
                         onClick={() => addTopItemsToCompare(activeRun)}
                         disabled={activeRun.items.length < 2}
                         variant="primary"
-                        className="rounded-xl h-9 px-4 font-black bg-white text-emerald-600 hover:bg-emerald-50 border-none shadow-lg shadow-emerald-900/10"
+                        className="rounded-xl h-9 px-4 font-black bg-white text-primary hover:bg-primary/5 border-none shadow-lg shadow-navy/10"
                       >
                         상위 {compareTopN}개 비교 후보 담기
                       </Button>
@@ -537,7 +537,7 @@ export function RecommendHistoryClient({
                   </div>
 
                   <div className="mt-4 border-t border-white/10 pt-4">
-                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-emerald-50/90">
+                    <p className="mt-2 text-[11px] font-medium leading-relaxed text-primary/80">
                       식별자는 첫 화면에서 바로 읽어야 할 핵심 정보가 아니라, 공유나 복구, 지원 대응이 필요할 때만 확인하는 보조 정보입니다.
                     </p>
                     <div className="mt-3">
@@ -554,7 +554,7 @@ export function RecommendHistoryClient({
 
                 <div className="overflow-hidden rounded-2xl border border-slate-100">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50">
+                    <thead className="bg-surface-muted">
                       <tr className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
                         <th className="px-4 py-3">순위</th>
                         <th className="px-4 py-3">상품 정보</th>
@@ -567,14 +567,14 @@ export function RecommendHistoryClient({
                         .sort((a, b) => a.rank - b.rank)
                         .slice(0, 10)
                         .map((item) => (
-                          <tr key={`${activeRun.runId}-${item.unifiedId}`} className="hover:bg-slate-50/50 transition-colors">
+                          <tr key={`${activeRun.runId}-${item.unifiedId}`} className="hover:bg-surface-muted/50 transition-colors">
                             <td className="px-4 py-4 font-black text-slate-400 text-center w-12">{item.rank}</td>
                             <td className="px-4 py-4">
-                              <p className="font-bold text-slate-900 leading-tight">{item.productName}</p>
+                              <p className="font-bold text-navy leading-tight">{item.productName}</p>
                               <p className="mt-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-tight">{item.providerName}</p>
                             </td>
                             <td className="px-4 py-4 text-right">
-                              <p className="font-black text-emerald-600 tabular-nums">{formatRate(item.appliedRate)}</p>
+                              <p className="font-black text-primary tabular-nums">{formatRate(item.appliedRate)}</p>
                               <p className="text-[10px] font-bold text-slate-400">{formatTerm(item.termMonths)}</p>
                             </td>
                           </tr>
@@ -600,23 +600,23 @@ export function RecommendHistoryClient({
             />
           ) : (
             <div className="space-y-8">
-              <div className="rounded-[2rem] bg-emerald-50/50 p-8 border border-emerald-100 flex flex-wrap items-end justify-between gap-6">
+              <div className="rounded-[2rem] bg-primary/10 p-8 border border-primary/10 flex flex-wrap items-end justify-between gap-6">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600 mb-2">Comparison Analysis</p>
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">
-                    {formatDateTime(diff.previous.savedAt)} <span className="mx-2 text-emerald-300">→</span> {formatDateTime(diff.current.savedAt)}
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-2">Comparison Analysis</p>
+                  <h3 className="text-xl font-black text-navy tracking-tight">
+                    {formatDateTime(diff.previous.savedAt)} <span className="mx-2 text-primary/30">→</span> {formatDateTime(diff.current.savedAt)}
                   </h3>
                 </div>
                 <div className="flex gap-4">
-                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-emerald-100 min-w-[100px]">
+                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-primary/10 min-w-[100px]">
                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">변경</p>
-                    <p className="text-lg font-black text-emerald-600">{diff.changed.length}<span className="text-xs ml-0.5">건</span></p>
+                    <p className="text-lg font-black text-primary">{diff.changed.length}<span className="text-xs ml-0.5">건</span></p>
                   </div>
-                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-emerald-100 min-w-[100px]">
+                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-primary/10 min-w-[100px]">
                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">신규</p>
-                    <p className="text-lg font-black text-emerald-600">{diff.added.length}<span className="text-xs ml-0.5">건</span></p>
+                    <p className="text-lg font-black text-primary">{diff.added.length}<span className="text-xs ml-0.5">건</span></p>
                   </div>
-                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-emerald-100 min-w-[100px]">
+                  <div className="text-center bg-white px-6 py-3 rounded-2xl shadow-sm border border-primary/10 min-w-[100px]">
                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">제외</p>
                     <p className="text-lg font-black text-slate-400">{diff.removed.length}<span className="text-xs ml-0.5">건</span></p>
                   </div>
@@ -625,10 +625,10 @@ export function RecommendHistoryClient({
 
               {diff.changed.length > 0 && (
                 <div className="space-y-4">
-                  <p className="text-sm font-black text-slate-900 px-1">상위 변경 테이블</p>
+                  <p className="text-sm font-black text-navy px-1">상위 변경 테이블</p>
                   <div className="overflow-hidden rounded-2xl border border-slate-100">
                     <table className="min-w-full text-sm">
-                      <thead className="bg-slate-50">
+                      <thead className="bg-surface-muted">
                         <tr className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
                           <th className="px-4 py-3">상품명</th>
                           <th className="px-4 py-3">순위 변화</th>
@@ -638,16 +638,16 @@ export function RecommendHistoryClient({
                       </thead>
                       <tbody className="divide-y divide-slate-50 bg-white">
                         {diff.changed.slice(0, 12).map((item) => (
-                          <tr key={item.unifiedId} className="hover:bg-slate-50/50 transition-colors">
+                          <tr key={item.unifiedId} className="hover:bg-surface-muted/50 transition-colors">
                             <td className="px-4 py-4">
-                              <p className="font-bold text-slate-900 leading-tight">{item.productName}</p>
+                              <p className="font-bold text-navy leading-tight">{item.productName}</p>
                               <p className="mt-0.5 text-[10px] font-medium text-slate-400 uppercase tracking-tight">{item.providerName}</p>
                             </td>
                             <td className="px-4 py-4 text-xs font-bold text-slate-600">
                               {item.previousRank}위 <span className="mx-1 text-slate-300">→</span> {item.currentRank}위
                             </td>
-                            <td className="px-4 py-4 text-xs font-bold text-emerald-600 tabular-nums">
-                              {formatRate(item.previousRate)} <span className="mx-1 text-emerald-200">→</span> {formatRate(item.currentRate)}
+                            <td className="px-4 py-4 text-xs font-bold text-primary tabular-nums">
+                              {formatRate(item.previousRate)} <span className="mx-1 text-primary/20">→</span> {formatRate(item.currentRate)}
                             </td>
                             <td className="px-4 py-4 text-right text-xs font-black text-slate-400 tabular-nums">
                               {formatScore(item.previousScore)} <span className="mx-1 text-slate-200">→</span> {formatScore(item.currentScore)}
@@ -661,22 +661,22 @@ export function RecommendHistoryClient({
               )}
 
               <div className="grid gap-6 md:grid-cols-2">
-                <div className="rounded-2xl border border-slate-100 p-6 bg-slate-50/30">
-                  <p className="text-xs font-black uppercase tracking-widest text-emerald-600 mb-4">신규 진입 상품</p>
+                <div className="rounded-2xl border border-slate-100 p-6 bg-surface-muted/30">
+                  <p className="text-xs font-black uppercase tracking-widest text-primary mb-4">신규 진입 상품</p>
                   {diff.added.length === 0 ? (
                     <p className="text-sm font-medium text-slate-400 italic text-center py-4">목록에 새로 추가된 상품이 없습니다.</p>
                   ) : (
                     <ul className="space-y-3">
                       {diff.added.slice(0, 8).map((item) => (
                         <li key={`added-${item.unifiedId}`} className="flex items-center gap-3">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
                           <span className="text-sm font-bold text-slate-700">{item.productName}</span>
                         </li>
                       ))}
                     </ul>
                   )}
                 </div>
-                <div className="rounded-2xl border border-slate-100 p-6 bg-slate-50/30">
+                <div className="rounded-2xl border border-slate-100 p-6 bg-surface-muted/30">
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">순위권 제외 상품</p>
                   {diff.removed.length === 0 ? (
                     <p className="text-sm font-medium text-slate-400 italic text-center py-4">목록에서 제외된 상품이 없습니다.</p>

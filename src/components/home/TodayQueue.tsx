@@ -24,19 +24,19 @@ const featurePanels = [
     title: "리포트에서 바로 추천",
     description: "저장된 플랜 기준으로 예적금과 혜택 후보를 이어서 봅니다.",
     href: "/planning/reports",
-    tone: "bg-[#eaf3ff]",
+    tone: "bg-[#e0ecff]",
   },
   {
     title: "상품 비교는 더 간단하게",
     description: "복잡한 목록 대신 핵심 후보부터 빠르게 확인합니다.",
     href: "/products/catalog",
-    tone: "bg-[#f4f6fb]",
+    tone: "bg-[#ede9fe]",
   },
   {
     title: "실행 중심 플래닝",
     description: "이번 달 액션과 위험 신호를 한 흐름으로 정리합니다.",
     href: "/planning",
-    tone: "bg-[#eefaf4]",
+    tone: "bg-[#d1faf0]",
   },
 ];
 
@@ -47,36 +47,36 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           {actionSummary ? (
             <>
-              <div className="rounded-[2.5rem] bg-white border border-slate-100 p-10 shadow-sm transition-all hover:shadow-md">
+              <div className="rounded-[2rem] bg-white border border-slate-100 p-10 shadow-[var(--shadow-card)] transition-all hover:shadow-[var(--shadow-card-hover)]">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-white shadow-sm shadow-emerald-200">
+                  <span className="rounded-lg bg-accent px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-accent-foreground shadow-sm">
                     {actionSummary.badge}
                   </span>
                   {actionSummary.quickRuleLabel ? (
-                    <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-600">
+                    <span className="rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-primary">
                       quick rules · {actionSummary.quickRuleLabel}
                     </span>
                   ) : null}
                 </div>
-                <h2 className="mt-6 text-3xl font-black leading-tight tracking-tight text-slate-900">
+                <h2 className="mt-6 text-3xl font-black leading-tight tracking-tight text-navy">
                   {actionSummary.title}
                 </h2>
-                <p className="mt-4 max-w-md text-sm font-medium leading-relaxed text-slate-500">
+                <p className="mt-4 max-w-md text-sm font-medium leading-relaxed text-muted">
                   {actionSummary.summary}
                 </p>
                 <div className="mt-8 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">계산 기준</p>
-                  <p className="max-w-md text-xs font-bold text-slate-400">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted ml-1">계산 기준</p>
+                  <p className="max-w-md text-xs font-bold text-muted">
                     {actionSummary.basis}
                   </p>
                 </div>
                 {actionSummary.quickRuleDetail ? (
-                  <p className="mt-3 max-w-md text-xs font-bold text-emerald-600/80 italic">
+                  <p className="mt-3 max-w-md text-xs font-bold text-primary/80 italic">
                     상태 읽기: {actionSummary.quickRuleDetail}
                   </p>
                 ) : null}
                 <Link
-                  className="mt-10 inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-10 text-sm font-black text-white shadow-lg shadow-emerald-100 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98]"
+                  className="mt-10 inline-flex h-12 items-center rounded-2xl bg-primary px-10 text-sm font-black text-white shadow-[0_16px_32px_-12px_rgba(30,58,138,0.5)] transition-all hover:bg-primary-hover hover:scale-[1.02] active:scale-[0.98]"
                   href={actionSummary.href}
                   prefetch={devPlanningPrefetch("/planning/reports")}
                 >
@@ -87,30 +87,33 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
               <div className="grid gap-4 md:grid-cols-3">
                 {actionSummary.metrics.map((metric) => (
                   <div
-                    className="rounded-[2rem] border border-slate-100 bg-white p-8 shadow-sm transition-all hover:border-emerald-100 hover:shadow-md group"
+                    className="rounded-[1.5rem] border border-slate-100 bg-white p-8 shadow-[var(--shadow-card)] transition-all hover:border-primary/20 hover:shadow-[var(--shadow-card-hover)] group"
                     key={metric.label}
                   >
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{metric.label}</p>
-                    <p className="mt-4 text-3xl font-black tracking-tight text-slate-900 group-hover:text-emerald-600 transition-colors">{metric.value}</p>
-                    <p className="mt-4 text-xs font-medium leading-relaxed text-slate-500">{metric.hint}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted">{metric.label}</p>
+                    <p className="mt-4 text-3xl font-black tracking-tight text-navy font-numeric tabular-nums group-hover:text-primary transition-colors">{metric.value}</p>
+                    <p className="mt-4 text-xs font-medium leading-relaxed text-muted">{metric.hint}</p>
                   </div>
                 ))}
               </div>
             </>
           ) : (
             <>
-              <div className="rounded-[2.5rem] bg-emerald-50 p-10 border border-emerald-100">
-                <p className="text-sm font-black uppercase tracking-widest text-emerald-600">Daily Action</p>
-                <h2 className="mt-6 text-3xl font-black leading-tight tracking-tight text-slate-900">
+              <div
+                className="bg-hero-gradient-surface relative overflow-hidden rounded-[2rem] p-10 text-white"
+              >
+                <div aria-hidden className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-[#00d9a3]/20 blur-3xl" />
+                <p className="relative text-sm font-black uppercase tracking-widest text-[#00d9a3]">Daily Action</p>
+                <h2 className="relative mt-6 text-3xl font-black leading-tight tracking-tight text-white">
                   내 상황에 필요한 흐름만
                   <br />
                   MMD에서 바로 엽니다
                 </h2>
-                <p className="mt-4 max-w-md text-base font-medium leading-relaxed text-slate-600">
+                <p className="relative mt-4 max-w-md text-base font-medium leading-relaxed text-white/80">
                   플래닝에서 시작하고, 리포트와 추천, 혜택으로 바로 이어지는 흐름만 남겼습니다.
                 </p>
                 <Link
-                  className="mt-10 inline-flex h-12 items-center rounded-2xl bg-emerald-600 px-10 text-sm font-black text-white shadow-lg shadow-emerald-200 transition-all hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98]"
+                  className="relative mt-10 inline-flex h-12 items-center rounded-2xl bg-accent px-10 text-sm font-black text-accent-foreground shadow-[0_16px_32px_-12px_rgba(0,217,163,0.5)] transition-all hover:scale-[1.02] active:scale-[0.98]"
                   href="/planning"
                   prefetch={devPlanningPrefetch("/planning")}
                 >
@@ -124,12 +127,12 @@ export function TodayQueue({ actionSummary }: { actionSummary?: TodayQueueAction
                     key={panel.href}
                     href={panel.href}
                     prefetch={devPlanningPrefetch(panel.href)}
-                    className="group rounded-[2rem] border border-slate-100 bg-white p-8 transition-all hover:-translate-y-1 hover:shadow-xl hover:border-emerald-100"
+                    className="group rounded-[1.5rem] border border-slate-100 bg-white p-8 transition-all hover:-translate-y-1 hover:shadow-[var(--shadow-card-hover)] hover:border-primary/20"
                   >
-                    <p className="text-sm font-black tracking-tight text-slate-950 group-hover:text-emerald-600 transition-colors">{panel.title}</p>
-                    <p className="mt-4 text-xs font-medium leading-relaxed text-slate-500">{panel.description}</p>
+                    <p className="text-sm font-black tracking-tight text-navy group-hover:text-primary transition-colors">{panel.title}</p>
+                    <p className="mt-4 text-xs font-medium leading-relaxed text-muted">{panel.description}</p>
                     <div className="mt-10 flex justify-end">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-emerald-500 transition-colors">Start ▶</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-300 group-hover:text-primary transition-colors">Start →</span>
                     </div>
                   </Link>
                 ))}

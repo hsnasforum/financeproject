@@ -133,7 +133,7 @@ export function ProfileDraftClient() {
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-3">
-          <h1 className="text-xl font-black text-slate-900">Planning v3 Profile Draft</h1>
+          <h1 className="text-xl font-black text-navy">Planning v3 Profile Draft</h1>
           <p className="text-sm font-semibold text-amber-700">
             이 초안은 자동 저장되지 않습니다.
           </p>

@@ -2,7 +2,7 @@
 
 ## Release Ops (P97-138)
 - [ ] `pnpm release:prepare -- --version=x.y.z` (버전 bump + changelog 스텁 갱신)
-- [x] `pnpm release:verify` (시작 preflight: `pnpm cleanup:next-artifacts`; 필수: `pnpm test` + `pnpm planning:v2:complete` + `pnpm multi-agent:guard`; script가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`; advisory `pnpm planning:ssot:check`)
+- [x] `pnpm release:verify` (시작 preflight: `pnpm cleanup:next-artifacts` + `pnpm deps:audit`; 필수: `pnpm test` + `pnpm planning:v2:complete` + `pnpm multi-agent:guard`; script가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`; advisory `pnpm planning:ssot:check`)
 - [x] 루트 [`RELEASE_CHECKLIST.md`](../RELEASE_CHECKLIST.md) 단계와 CI 게이트 정합성 확인
 
 ## 자동 체크
@@ -29,6 +29,7 @@
 - [ ] `docs/planning-v2-policy-defaults.md` 기준으로 기본 정책값(Planning/Ops) 변경 없음 확인
 
 ## Release Verify Gate Snapshot
+- [x] `pnpm deps:audit` PASS
 - [x] `pnpm test` PASS
 - [x] `pnpm planning:v2:complete` PASS
 - [x] `pnpm multi-agent:guard` PASS

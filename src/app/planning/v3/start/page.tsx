@@ -144,20 +144,20 @@ export default function PlanningV3StartPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Planning v3</p>
-              <h1 className="mt-1 text-2xl font-black text-slate-900">첫 실행 체크리스트</h1>
+              <h1 className="mt-1 text-2xl font-black text-navy">첫 실행 체크리스트</h1>
               <p className="mt-2 text-sm text-slate-600">
                 로컬 산출물 존재 여부만 읽기 전용으로 점검합니다. 자동 저장/자동 수정은 수행하지 않습니다.
               </p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+            <div className="rounded-xl border border-slate-200 bg-surface-muted px-4 py-3 text-right">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">완료</p>
-              <p className="text-xl font-black text-slate-900">{completed} / {total}</p>
+              <p className="text-xl font-black text-navy">{completed} / {total}</p>
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
               href="/planning/v3/start"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-surface-muted"
             >
               상태 새로고침
             </Link>
@@ -169,7 +169,7 @@ export default function PlanningV3StartPage() {
             </Link>
             <Link
               href="/planning/v3/news/settings"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-surface-muted"
             >
               뉴스 설정
             </Link>
@@ -182,10 +182,10 @@ export default function PlanningV3StartPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-bold ${item.completed ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                    <span className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-bold ${item.completed ? "bg-primary/10 text-navy" : "bg-amber-100 text-amber-700"}`}>
                       {item.completed ? "완료" : "대기"}
                     </span>
-                    <h2 className="text-base font-bold text-slate-900">{item.label}</h2>
+                    <h2 className="text-base font-bold text-navy">{item.label}</h2>
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{item.description}</p>
                   <p className="mt-1 text-sm font-semibold text-slate-800">{item.detail}</p>
@@ -195,7 +195,7 @@ export default function PlanningV3StartPage() {
                 </div>
                 <Link
                   href={item.href}
-                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  className="shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-surface-muted"
                 >
                   {item.cta}
                 </Link>

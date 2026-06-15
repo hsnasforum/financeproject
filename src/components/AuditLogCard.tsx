@@ -66,14 +66,26 @@ export function AuditLogCard({ limit = 50 }: AuditLogCardProps) {
   }, [limit]);
 
   useEffect(() => {
-    void loadAudit();
+    let active = true;
+
+    async function loadInitialAudit() {
+      await Promise.resolve();
+      if (!active) return;
+      void loadAudit();
+    }
+
+    void loadInitialAudit();
+
+    return () => {
+      active = false;
+    };
   }, [loadAudit]);
 
   return (
     <Card className="mt-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-black text-slate-900">최근 Dev Audit Log</h2>
+          <h2 className="text-base font-black text-navy">최근 Dev Audit Log</h2>
           <p className="mt-1 text-sm text-slate-600">설정/복구/백업 관련 Dev 변경 이력을 보여줍니다.</p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => void loadAudit()} disabled={loading}>
@@ -85,7 +97,7 @@ export function AuditLogCard({ limit = 50 }: AuditLogCardProps) {
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
         <table className="min-w-full border-collapse text-left text-xs">
-          <thead className="bg-slate-100 text-slate-600">
+          <thead className="bg-surface-muted text-slate-600">
             <tr>
               <th className="px-3 py-2 font-semibold">시각</th>
               <th className="px-3 py-2 font-semibold">이벤트</th>

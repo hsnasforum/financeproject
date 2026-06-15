@@ -13,7 +13,7 @@ function Flag({ label, className }: { label: string; className: string }) {
 export function RowFlags({ isNew, isUpdated, isTouched }: Props) {
   return (
     <div className="flex flex-wrap gap-1">
-      {isNew ? <Flag label="NEW" className="bg-emerald-100 text-emerald-800" /> : null}
+      {isNew ? <Flag label="NEW" className="bg-primary/10 text-navy" /> : null}
       {isUpdated ? <Flag label="UPDATED" className="bg-amber-100 text-amber-900" /> : null}
       {isTouched ? <Flag label="TOUCHED" className="bg-sky-100 text-sky-800" /> : null}
     </div>

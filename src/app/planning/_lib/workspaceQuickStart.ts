@@ -281,7 +281,7 @@ export function buildWorkspaceQuickStartVm(input: {
         : !beginnerStepRunDone
         ? "border-amber-200 bg-amber-50"
         : !beginnerStepSaveDone
-          ? "border-emerald-200 bg-emerald-50"
+          ? "border-primary/20 bg-primary/5"
           : "border-slate-200 bg-slate-50";
 
   return {

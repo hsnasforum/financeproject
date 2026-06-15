@@ -81,8 +81,8 @@ function burstBadgeClass(value: string): string {
   const normalized = asString(value).toLowerCase();
   if (normalized === "high" || normalized === "상") return "bg-rose-50 text-rose-700 border-rose-100";
   if (normalized === "medium" || normalized === "중") return "bg-amber-50 text-amber-700 border-amber-100";
-  if (normalized === "low" || normalized === "하") return "bg-emerald-50 text-emerald-700 border-emerald-100";
-  return "bg-slate-50 text-slate-500 border-slate-100";
+  if (normalized === "low" || normalized === "하") return "bg-primary/5 text-navy border-primary/10";
+  return "bg-surface-muted text-slate-500 border-slate-100";
 }
 
 export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
@@ -91,32 +91,58 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const [data, setData] = useState<TrendsResponse["data"]>(null);
 
-  const load = useCallback(async (windowArg: 7 | 30) => {
-    setLoading(true);
-    setErrorMessage("");
-    try {
-      const response = await fetch(`/api/planning/v3/news/trends?window=${windowArg}`, {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as TrendsResponse | null;
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
-      setData(payload.data ?? null);
-      setWindowDays(payload?.windowDays === 30 ? 30 : 7);
-    } catch (error) {
-      setData(null);
-      setErrorMessage(error instanceof Error ? error.message : "트렌드를 불러오지 못했습니다.");
-    } finally {
-      setLoading(false);
+  const load = useCallback(async (windowArg: 7 | 30, signal?: AbortSignal) => {
+    const response = await fetch(`/api/planning/v3/news/trends?window=${windowArg}`, {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as TrendsResponse | null;
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
+    const responseWindowDays: 7 | 30 = payload?.windowDays === 30 ? 30 : 7;
+    return {
+      data: payload.data ?? null,
+      windowDays: responseWindowDays,
+    };
   }, []);
 
   useEffect(() => {
-    void load(windowDays);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadTrends() {
+      try {
+        const next = await load(windowDays, controller.signal);
+        if (!active) return;
+        setData(next.data);
+        setWindowDays(next.windowDays);
+        setErrorMessage("");
+      } catch (error) {
+        if (!active || controller.signal.aborted) return;
+        setData(null);
+        setErrorMessage(error instanceof Error ? error.message : "트렌드를 불러오지 못했습니다.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadTrends();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [load, windowDays]);
+
+  const selectWindowDays = useCallback((nextWindowDays: 7 | 30) => {
+    if (windowDays === nextWindowDays) return;
+    setWindowDays(nextWindowDays);
+    setLoading(true);
+    setErrorMessage("");
+  }, [windowDays]);
 
   const topicRows = data?.topics ?? [];
   const burstCount = topicRows.filter((row) => {
@@ -136,14 +162,14 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
             <div className="flex items-center bg-white/10 rounded-lg p-1">
               <button
                 type="button"
-                onClick={() => setWindowDays(7)}
+                onClick={() => selectWindowDays(7)}
                 className={reportHeroToggleButtonClassName(windowDays === 7)}
               >
                 7일
               </button>
               <button
                 type="button"
-                onClick={() => setWindowDays(30)}
+                onClick={() => selectWindowDays(30)}
                 className={reportHeroToggleButtonClassName(windowDays === 30)}
               >
                 30일
@@ -183,18 +209,18 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
           {loading ? (
             <p className="text-sm text-slate-500 animate-pulse">불러오는 중...</p>
           ) : !data?.topics?.length ? (
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-slate-50 p-12 text-center">
-              <p className="text-sm font-bold text-slate-900">{errorMessage || "비교할 데이터가 없습니다."}</p>
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-surface-muted p-12 text-center">
+              <p className="text-sm font-bold text-navy">{errorMessage || "비교할 데이터가 없습니다."}</p>
               <p className="mt-2 text-xs font-medium text-slate-500">기간을 바꾸거나 뉴스 탐색에서 더 넓게 다시 찾아보세요.</p>
               <div className="mt-6 flex justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setWindowDays(windowDays === 7 ? 30 : 7)}
-                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                  onClick={() => selectWindowDays(windowDays === 7 ? 30 : 7)}
+                  className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all"
                 >
                   {windowDays === 7 ? "30일 구간으로 변경" : "7일 구간으로 변경"}
                 </button>
-                <Link href="/planning/v3/news/explore" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-slate-50 shadow-sm transition-all">
+                <Link href="/planning/v3/news/explore" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-black text-slate-700 hover:bg-surface-muted shadow-sm transition-all">
                   뉴스 탐색으로 이동
                 </Link>
               </div>
@@ -207,11 +233,11 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
                   <Link
                     key={`mobile-${asString(row.topicId)}-${index}`}
                     href={`/planning/v3/news/explore?topics=${row.topicId}`}
-                    className="block group rounded-2xl border border-slate-100 bg-white p-4 hover:border-emerald-200 hover:bg-emerald-50/20 transition-all shadow-sm active:scale-[0.98]"
+                    className="block group rounded-2xl border border-slate-100 bg-white p-4 hover:border-primary/20 hover:bg-primary/20 transition-all shadow-sm active:scale-[0.98]"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <p className="font-black text-slate-900 tracking-tight leading-tight">{asString(row.topicLabel) || asString(row.topicId) || "-"}</p>
+                        <p className="font-black text-navy tracking-tight leading-tight">{asString(row.topicLabel) || asString(row.topicId) || "-"}</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{asString(row.topicId)}</p>
                       </div>
                       <span className={cn("shrink-0 inline-block rounded-lg border px-2 py-0.5 text-[9px] font-black uppercase tracking-wider", burstBadgeClass(asString(row.burstGrade)))}>
@@ -233,7 +259,7 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
                             strokeWidth="3"
                             strokeLinejoin="round"
                             strokeLinecap="round"
-                            className="text-emerald-500"
+                            className="text-primary"
                           />
                           {(row.series ?? []).map((point, pointIndex, arr) => {
                             if (point.hasBurstMarker !== true) return null;
@@ -287,23 +313,23 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
                   </thead>
                   <tbody className="space-y-2">
                     {data.topics.map((row, index) => (
-                      <tr key={`${asString(row.topicId)}-${index}`} className="group hover:bg-slate-50/50 transition-colors">
-                        <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-100 bg-white group-hover:bg-slate-50/50 transition-colors">
-                          <p className="font-black text-slate-900 tracking-tight leading-tight">{asString(row.topicLabel) || asString(row.topicId) || "-"}</p>
+                      <tr key={`${asString(row.topicId)}-${index}`} className="group hover:bg-surface-muted/50 transition-colors">
+                        <td className="px-4 py-4 rounded-l-2xl border-y border-l border-slate-100 bg-white group-hover:bg-surface-muted/50 transition-colors">
+                          <p className="font-black text-navy tracking-tight leading-tight">{asString(row.topicLabel) || asString(row.topicId) || "-"}</p>
                           <p className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{asString(row.topicId)}</p>
                         </td>
-                        <td className="px-4 py-4 border-y border-slate-100 bg-white text-right tabular-nums font-bold text-slate-700 group-hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-4 border-y border-slate-100 bg-white text-right tabular-nums font-bold text-slate-700 group-hover:bg-surface-muted/50 transition-colors">
                           {Number(row.count ?? 0).toLocaleString("ko-KR")}
                         </td>
-                        <td className="px-4 py-4 border-y border-slate-100 bg-white text-center group-hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-4 border-y border-slate-100 bg-white text-center group-hover:bg-surface-muted/50 transition-colors">
                           <span className={cn("inline-block rounded-lg border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider tabular-nums", burstBadgeClass(asString(row.burstGrade)))}>
                             {burstLabel(asString(row.burstGrade))}
                           </span>
                         </td>
-                        <td className="px-4 py-4 border-y border-slate-100 bg-white text-right tabular-nums font-bold text-slate-700 group-hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-4 border-y border-slate-100 bg-white text-right tabular-nums font-bold text-slate-700 group-hover:bg-surface-muted/50 transition-colors">
                           {formatPercent(row.sourceDiversity)}
                         </td>
-                        <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-100 bg-white group-hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-4 rounded-r-2xl border-y border-r border-slate-100 bg-white group-hover:bg-surface-muted/50 transition-colors">
                           {!row.series?.length ? (
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">데이터 없음</span>
                           ) : (
@@ -317,7 +343,7 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
                                     strokeWidth="2.5"
                                     strokeLinejoin="round"
                                     strokeLinecap="round"
-                                    className="text-emerald-500"
+                                    className="text-primary"
                                   />
                                   {(row.series ?? []).map((point, pointIndex, arr) => {
                                     if (point.hasBurstMarker !== true) return null;
@@ -336,7 +362,7 @@ export function NewsTrendsTableClient({ csrf }: NewsTrendsTableClientProps) {
                                   })}
                                 </svg>
                               </div>
-                              <Link href={`/planning/v3/news/explore?topics=${row.topicId}`} className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-[10px] font-black text-emerald-600 hover:underline uppercase tracking-widest whitespace-nowrap">탐색 ▶</Link>
+                              <Link href={`/planning/v3/news/explore?topics=${row.topicId}`} className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-[10px] font-black text-primary hover:underline uppercase tracking-widest whitespace-nowrap">탐색 ▶</Link>
                             </div>
                           )}
                         </td>

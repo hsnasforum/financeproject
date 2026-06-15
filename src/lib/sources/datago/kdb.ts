@@ -3,7 +3,7 @@ import { requestDatagoText } from "./client";
 import { type NormalizedExternalProduct } from "../types";
 import { parseKdbDepositXml } from "./xml";
 
-const KDB_ENDPOINT = "http://apis.data.go.kr/B190030/GetDepositProductInfoService/getDepositProductList";
+export const KDB_ENDPOINT = "https://apis.data.go.kr/B190030/GetDepositProductInfoService/getDepositProductList";
 
 export type KdbFetchOptions = {
   fromYmd: string;

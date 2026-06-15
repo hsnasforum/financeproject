@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import {
@@ -61,7 +61,7 @@ function renderPreviewSummary(preview: PlanningQuickStartPreview): string[] {
 function quickRuleToneClassName(status: PlanningQuickRuleStatus): string {
   if (status.tone === "danger") return "border-rose-200 bg-rose-50 text-rose-800";
   if (status.tone === "warning") return "border-amber-200 bg-amber-50 text-amber-800";
-  return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  return "border-primary/20 bg-primary/5 text-navy";
 }
 
 export default function PlanningQuickStartGate({
@@ -82,12 +82,19 @@ export default function PlanningQuickStartGate({
   const [appliedPreview, setAppliedPreview] = useState<PlanningQuickStartPreview | null>(null);
   const [profileSaveRequiredAfterApply, setProfileSaveRequiredAfterApply] = useState(false);
   const [profileUnsavedStateSeenAfterApply, setProfileUnsavedStateSeenAfterApply] = useState(false);
+  const hydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   const ready = useMemo(() => isPlanningQuickStartReady(draft), [draft]);
   const preview = useMemo(
     () => (ready ? buildPlanningQuickStartPreview(draft) : null),
     [draft, ready],
   );
+  const interactionDisabled = disabled || !hydrated;
+
   useEffect(() => {
     if (!profileSaveRequiredAfterApply || profileSyncState === "saved" || profileUnsavedStateSeenAfterApply) return;
     const timeoutId = window.setTimeout(() => {
@@ -120,7 +127,7 @@ export default function PlanningQuickStartGate({
   }
 
   function applyQuickStart(): void {
-    if (!ready || disabled || !previewOpen || !preview) return;
+    if (!ready || interactionDisabled || !previewOpen || !preview) return;
     setProfileSaveRequiredAfterApply(true);
     setProfileUnsavedStateSeenAfterApply(false);
     setAppliedPreview(preview);
@@ -129,7 +136,7 @@ export default function PlanningQuickStartGate({
   }
 
   function openPreview(): void {
-    if (!ready || disabled) return;
+    if (!ready || interactionDisabled) return;
     setPreviewOpen(true);
   }
 
@@ -245,7 +252,7 @@ export default function PlanningQuickStartGate({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">간단 시작</p>
-            <h2 className="mt-2 text-lg font-black tracking-tight text-slate-950">
+            <h2 className="mt-2 text-lg font-black tracking-tight text-navy">
               월 수입, 고정지출, 목표 1개만 넣고 첫 초안을 시작합니다.
             </h2>
             <p className="mt-2 text-sm text-slate-700">
@@ -253,11 +260,11 @@ export default function PlanningQuickStartGate({
             </p>
           </div>
           {previewOpen ? (
-            <Button disabled={disabled} onClick={() => setPreviewOpen(false)} variant="outline">
+            <Button disabled={interactionDisabled} onClick={() => setPreviewOpen(false)} variant="outline">
               다시 입력
             </Button>
           ) : (
-            <Button data-testid="planning-quickstart-open-preview" disabled={disabled || !ready} onClick={openPreview} variant="primary">
+            <Button data-testid="planning-quickstart-open-preview" disabled={interactionDisabled || !ready} onClick={openPreview} variant="primary">
               초안 미리보기
             </Button>
           )}
@@ -270,6 +277,7 @@ export default function PlanningQuickStartGate({
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
+              disabled={interactionDisabled}
               value={formatGroupedIntegerInput(draft.monthlyIncomeNet)}
               onChange={(event) => updateField("monthlyIncomeNet", toNumber(event.target.value))}
             />
@@ -280,6 +288,7 @@ export default function PlanningQuickStartGate({
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
+              disabled={interactionDisabled}
               value={formatGroupedIntegerInput(draft.fixedExpense)}
               onChange={(event) => updateField("fixedExpense", toNumber(event.target.value))}
             />
@@ -289,6 +298,7 @@ export default function PlanningQuickStartGate({
             <input
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               placeholder="예: 비상금 1,000만 원"
+              disabled={interactionDisabled}
               value={draft.goalName ?? ""}
               onChange={(event) => updateField("goalName", event.target.value)}
             />
@@ -299,6 +309,7 @@ export default function PlanningQuickStartGate({
               className="mt-1 h-10 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm"
               inputMode="numeric"
               type="text"
+              disabled={interactionDisabled}
               value={formatGroupedIntegerInput(draft.goalTargetAmount)}
               onChange={(event) => updateField("goalTargetAmount", toNumber(event.target.value))}
             />
@@ -310,6 +321,7 @@ export default function PlanningQuickStartGate({
               inputMode="numeric"
               type="number"
               min={1}
+              disabled={interactionDisabled}
               value={draft.goalTargetMonth ?? ""}
               onChange={(event) => updateField("goalTargetMonth", toNumber(event.target.value))}
             />
@@ -325,13 +337,13 @@ export default function PlanningQuickStartGate({
 
         {appliedPreview && !previewOpen ? (
           <div
-            className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5"
+            className="rounded-2xl border border-primary/20 bg-primary/10 p-5"
             data-testid="planning-quickstart-applied-state"
           >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">간단 시작 후속 안내</p>
-                <h3 className="text-base font-black text-slate-950">{appliedTitle}</h3>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">간단 시작 후속 안내</p>
+                <h3 className="text-base font-black text-navy">{appliedTitle}</h3>
                 <p className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${quickRuleToneClassName(appliedPreview.quickRuleStatus)}`}>
                   quick rules · {appliedPreview.quickRuleStatus.label}
                 </p>
@@ -339,7 +351,7 @@ export default function PlanningQuickStartGate({
                   <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">완료 상태</p>
                     <p
-                      className="mt-1 text-sm font-black text-slate-950"
+                      className="mt-1 text-sm font-black text-navy"
                       data-testid="planning-quickstart-followthrough-summary"
                     >
                       {appliedCompletedSummary}
@@ -347,14 +359,14 @@ export default function PlanningQuickStartGate({
                   </div>
                   <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">다음 단계</p>
-                    <p className="mt-1 text-sm font-black text-slate-950">{appliedNextStepSummary}</p>
+                    <p className="mt-1 text-sm font-black text-navy">{appliedNextStepSummary}</p>
                   </div>
                 </div>
                 <p className="text-sm leading-6 text-slate-700">{appliedPreview.quickRuleStatus.detail}</p>
                 <p className="text-sm leading-6 text-slate-700">{appliedDescription}</p>
               </div>
               {nextStepLabel && nextStepTargetId ? (
-                <Button data-testid="planning-quickstart-next-step" disabled={disabled} onClick={focusNextStep} variant="primary">
+                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
                   {nextStepLabel}
                 </Button>
               ) : null}
@@ -370,21 +382,21 @@ export default function PlanningQuickStartGate({
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-700">현재 상태 기준 후속 안내</p>
-                <h3 className="text-base font-black text-slate-950">{restoredTitle}</h3>
+                <h3 className="text-base font-black text-navy">{restoredTitle}</h3>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">완료 상태</p>
-                    <p className="mt-1 text-sm font-black text-slate-950">{restoredCompletedSummary}</p>
+                    <p className="mt-1 text-sm font-black text-navy">{restoredCompletedSummary}</p>
                   </div>
                   <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">다음 단계</p>
-                    <p className="mt-1 text-sm font-black text-slate-950">{restoredNextStepSummary}</p>
+                    <p className="mt-1 text-sm font-black text-navy">{restoredNextStepSummary}</p>
                   </div>
                 </div>
                 <p className="text-sm leading-6 text-slate-700">{restoredDescription}</p>
               </div>
               {nextStepLabel && nextStepTargetId ? (
-                <Button data-testid="planning-quickstart-next-step" disabled={disabled} onClick={focusNextStep} variant="primary">
+                <Button data-testid="planning-quickstart-next-step" disabled={interactionDisabled} onClick={focusNextStep} variant="primary">
                   {nextStepLabel}
                 </Button>
               ) : null}
@@ -395,32 +407,32 @@ export default function PlanningQuickStartGate({
         {previewOpen && preview ? (
           <div
             data-testid="planning-quickstart-preview"
-            className="rounded-2xl border border-emerald-200 bg-white/90 p-5"
+            className="rounded-2xl border border-primary/20 bg-white/90 p-5"
           >
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="max-w-2xl">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">적용 전 미리보기</p>
-                <h3 className="mt-2 text-base font-black text-slate-950">이 초안으로 시작하면 아래 값이 먼저 채워집니다.</h3>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-navy">적용 전 미리보기</p>
+                <h3 className="mt-2 text-base font-black text-navy">이 초안으로 시작하면 아래 값이 먼저 채워집니다.</h3>
               </div>
-              <Button data-testid="planning-quickstart-apply" disabled={disabled} onClick={applyQuickStart} variant="primary">
+              <Button data-testid="planning-quickstart-apply" disabled={interactionDisabled} onClick={applyQuickStart} variant="primary">
                 이 초안으로 시작
               </Button>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-surface-muted p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">월 잉여금 예상</p>
-                <p className="mt-3 text-2xl font-black tracking-tight text-slate-950">{formatSignedAmount(preview.monthlySurplus)}</p>
+                <p className="mt-3 text-2xl font-black tracking-tight text-navy">{formatSignedAmount(preview.monthlySurplus)}</p>
                 <p className="mt-2 text-xs leading-6 text-slate-600">고정지출 반영 뒤 선택지출 0원 기준으로 먼저 계산합니다.</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-surface-muted p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">목표 월 적립 기준</p>
-                <p className="mt-3 text-2xl font-black tracking-tight text-slate-950">{formatSignedAmount(preview.targetMonthlyContribution)}</p>
+                <p className="mt-3 text-2xl font-black tracking-tight text-navy">{formatSignedAmount(preview.targetMonthlyContribution)}</p>
                 <p className="mt-2 text-xs leading-6 text-slate-600">{preview.goalName} 목표를 {preview.goalTargetMonth}개월 안에 보는 단순 기준입니다.</p>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-surface-muted p-4">
                 <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-500">기본 적용 범위</p>
-                <p className="mt-3 text-sm font-bold text-slate-950">선택지출·자산·부채는 기본값으로 시작</p>
+                <p className="mt-3 text-sm font-bold text-navy">선택지출·자산·부채는 기본값으로 시작</p>
                 <p className="mt-2 text-xs leading-6 text-slate-600">적용 직후에도 워크스페이스 아래에서 값을 다시 바꿀 수 있습니다.</p>
               </div>
             </div>

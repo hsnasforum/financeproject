@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { CLIENT_STORAGE_WHITELIST } from "@/lib/backup/backupBundle";
 import { DoctorSummaryCard } from "@/components/DoctorSummaryCard";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,21 @@ import { cn } from "@/lib/utils";
 
 const DEV_UNLOCKED_SESSION_KEY = "dev_action_unlocked_v1";
 const DEV_CSRF_SESSION_KEY = "dev_action_csrf_v1";
+
+function subscribeDevUnlockSession(onStoreChange: () => void): () => void {
+  window.addEventListener("storage", onStoreChange);
+  return () => window.removeEventListener("storage", onStoreChange);
+}
+
+function readDevUnlockSessionCsrf(): string | null {
+  const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
+  const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
+  return unlocked && csrf ? csrf : null;
+}
+
+function readDevUnlockServerSnapshot(): string | null {
+  return null;
+}
 
 type UnlockState = {
   loading: boolean;
@@ -83,21 +98,25 @@ export function RecoveryClient() {
         .filter((key) => serverTargets[key]),
     [serverTargets],
   );
+  const sessionCsrf = useSyncExternalStore(
+    subscribeDevUnlockSession,
+    readDevUnlockSessionCsrf,
+    readDevUnlockServerSnapshot,
+  );
+  const effectiveUnlock = useMemo<UnlockState>(() => ({
+    ...unlock,
+    unlocked: unlock.unlocked || sessionCsrf !== null,
+    csrf: unlock.csrf ?? sessionCsrf,
+  }), [sessionCsrf, unlock]);
 
-  useEffect(() => {
-    const unlocked = window.sessionStorage.getItem(DEV_UNLOCKED_SESSION_KEY) === "1";
-    const csrf = window.sessionStorage.getItem(DEV_CSRF_SESSION_KEY);
-    if (unlocked && csrf) {
-      setUnlock((prev) => ({ ...prev, unlocked: true, csrf }));
+  function handleConfirmTextChange(next: string) {
+    setConfirmText(next);
+    if (next !== "RESET") {
+      setArmLocalReset(false);
+      setArmServerReset(false);
+      setArmOfflineRepair(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (confirmText === "RESET") return;
-    setArmLocalReset(false);
-    setArmServerReset(false);
-    setArmOfflineRepair(false);
-  }, [confirmText]);
+  }
 
   async function handleUnlock() {
     const token = unlockToken.trim();
@@ -141,7 +160,7 @@ export function RecoveryClient() {
   }
 
   function ensureDevReady(): boolean {
-    if (!unlock.unlocked || !unlock.csrf) {
+    if (!effectiveUnlock.unlocked || !effectiveUnlock.csrf) {
       setError("먼저 Dev 잠금 해제를 완료해 주세요.");
       setNotice("");
       return false;
@@ -206,7 +225,7 @@ export function RecoveryClient() {
         body: JSON.stringify({
           targets: selectedServerTargets,
           confirm: "RESET",
-          csrf: unlock.csrf,
+          csrf: effectiveUnlock.csrf,
         }),
       });
       const payload = (await response.json().catch(() => null)) as ResetApiPayload | null;
@@ -245,7 +264,7 @@ export function RecoveryClient() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           confirm: "RESET",
-          csrf: unlock.csrf,
+          csrf: effectiveUnlock.csrf,
         }),
       });
       const payload = (await response.json().catch(() => null)) as OfflineRepairPayload | null;
@@ -292,24 +311,24 @@ export function RecoveryClient() {
                   placeholder="DEV_ACTION_TOKEN"
                   value={unlockToken}
                   onChange={(event) => setUnlockToken(event.target.value)}
-                  className="h-11 flex-1 rounded-2xl border border-slate-200 bg-slate-50/50 px-5 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 transition-all shadow-inner"
+                  className="h-11 flex-1 rounded-2xl border border-slate-200 bg-surface-muted/50 px-5 text-sm font-bold text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-primary transition-all shadow-inner"
                 />
                 <Button 
                   type="button" 
                   className="h-11 px-8 rounded-2xl font-black shadow-md" 
                   onClick={() => void handleUnlock()} 
-                  disabled={unlock.loading}
+                  disabled={effectiveUnlock.loading}
                 >
-                  {unlock.loading ? "인증 중..." : "잠금 해제"}
+                  {effectiveUnlock.loading ? "인증 중..." : "잠금 해제"}
                 </Button>
               </div>
               <div className="flex items-center gap-2 px-1">
-                <span className={cn("w-2 h-2 rounded-full", unlock.unlocked ? "bg-emerald-500" : "bg-slate-300")} />
+                <span className={cn("w-2 h-2 rounded-full", effectiveUnlock.unlocked ? "bg-primary" : "bg-slate-300")} />
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  인증 상태: {unlock.unlocked ? "UNLOCKED" : "LOCKED"}
+                  인증 상태: {effectiveUnlock.unlocked ? "UNLOCKED" : "LOCKED"}
                 </span>
               </div>
-              {unlock.error ? <p className="text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{unlock.error}</p> : null}
+              {effectiveUnlock.error ? <p className="text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{effectiveUnlock.error}</p> : null}
             </div>
           </Card>
 
@@ -319,7 +338,7 @@ export function RecoveryClient() {
               <input
                 type="text"
                 value={confirmText}
-                onChange={(event) => setConfirmText(event.target.value)}
+                onChange={(event) => handleConfirmTextChange(event.target.value)}
                 placeholder="RESET"
                 className="h-12 w-full rounded-2xl border border-rose-200 bg-white px-6 text-xl font-black text-rose-700 tracking-[0.2em] shadow-sm focus:ring-1 focus:ring-rose-500 transition-all outline-none placeholder:text-rose-100 placeholder:tracking-normal"
               />
@@ -347,7 +366,7 @@ export function RecoveryClient() {
                 {armLocalReset ? "2단계 확인: 초기화 실행" : "1단계 확인: Local 초기화"}
               </Button>
               {localResetResult ? (
-                <p className="mt-3 text-[10px] font-black text-emerald-600 text-center">
+                <p className="mt-3 text-[10px] font-black text-primary text-center">
                   제거된 키: {localResetResult.removed.length}개
                 </p>
               ) : null}
@@ -358,7 +377,7 @@ export function RecoveryClient() {
             <SubSectionHeader title="B) 서버 tmp 초기화" description="서버측 캐시 및 임시 파일을 삭제합니다." />
             <div className="mt-4 space-y-2">
               {(["feedback", "dart", "refresh"] as const).map((target) => (
-                <label key={target} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/50 p-3 cursor-pointer hover:bg-white transition-all">
+                <label key={target} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-surface-muted/50 p-3 cursor-pointer hover:bg-white transition-all">
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
@@ -383,7 +402,7 @@ export function RecoveryClient() {
                 {loadingServerReset ? "처리 중..." : armServerReset ? "2단계 확인: 실행" : "1단계 확인: 서버 초기화"}
               </Button>
               {serverResetResult ? (
-                <p className="mt-3 text-[10px] font-black text-emerald-600 text-center">
+                <p className="mt-3 text-[10px] font-black text-primary text-center">
                   Removed {serverResetResult.removed.length} / Recreated {serverResetResult.recreated.length}
                 </p>
               ) : null}
@@ -392,7 +411,7 @@ export function RecoveryClient() {
 
           <Card className="rounded-[2rem] p-8 shadow-sm border-slate-100 flex flex-col">
             <SubSectionHeader title="C) 오프라인 복구" description="데이터베이스 및 로컬 에이전트를 재구동합니다." />
-            <div className="mt-4 rounded-xl bg-slate-50 p-4 border border-slate-100">
+            <div className="mt-4 rounded-xl bg-surface-muted p-4 border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">실행 순서</p>
               <ul className="space-y-1 text-[10px] font-bold text-slate-500">
                 <li>1. Prisma DB Push</li>
@@ -414,7 +433,7 @@ export function RecoveryClient() {
               </Button>
               {offlineRepairResult ? (
                 <div className="mt-3 text-[10px] font-bold text-center">
-                  <span className={offlineRepairResult.ok ? "text-emerald-600" : "text-rose-600"}>
+                  <span className={offlineRepairResult.ok ? "text-success" : "text-danger"}>
                     {offlineRepairResult.ok ? "복구 완료" : "일부 실패"}
                   </span>
                 </div>
@@ -426,7 +445,7 @@ export function RecoveryClient() {
         {(notice || error) && (
           <div className={cn(
             "rounded-[1.5rem] p-5 text-sm font-black animate-in fade-in slide-in-from-bottom-2",
-            error ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
+            error ? "bg-rose-50 text-rose-700" : "bg-primary/5 text-navy"
           )}>
             {error || notice}
           </div>

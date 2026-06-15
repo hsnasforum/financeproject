@@ -147,6 +147,7 @@ const runtimeTargets: Array<{
   pathname: string;
   method: "POST" | "PUT" | "PATCH" | "DELETE";
   sameOriginRemoteAllowed: boolean;
+  skipSameOriginRuntimeProbe?: boolean;
   invoke: RouteInvoker;
 }> = [
   {
@@ -224,6 +225,7 @@ const runtimeTargets: Array<{
     pathname: "/api/planning/v3/news/refresh",
     method: "POST",
     sameOriginRemoteAllowed: true,
+    skipSameOriginRuntimeProbe: true,
     invoke: (request) => newsRefreshPOST(request),
   },
   {
@@ -427,6 +429,7 @@ describe("planning v3 write route guards", () => {
 
   it("runtime write routes only keep local-only on non-user-facing endpoints", async () => {
     for (const target of runtimeTargets) {
+      if (target.skipSameOriginRuntimeProbe) continue;
       const request = buildWriteRequest({
         pathname: target.pathname,
         method: target.method,

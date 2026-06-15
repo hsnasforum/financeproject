@@ -13,7 +13,7 @@ NODE_BIN_DIR_DEFAULT="${HOME}/.nvm/versions/node/v22.22.0/bin"
 NODE_BIN_DIR="${NODE_BIN_DIR:-${NODE_BIN_DIR_DEFAULT}}"
 export PATH="${NODE_BIN_DIR}:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
-PNPM_BIN="${PNPM_BIN:-pnpm}"
+PNPM_BIN="${PNPM_BIN:-corepack pnpm}"
 MODE="${1:-weekly}"
 
 run_cmd() {

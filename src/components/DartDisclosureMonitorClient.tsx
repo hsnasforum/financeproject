@@ -75,7 +75,7 @@ function priorityBadgeClass(reason: "pending" | "unchecked" | "checked"): string
   if (reason === "unchecked") {
     return "bg-amber-100 text-amber-700";
   }
-  return "bg-slate-100 text-slate-600";
+  return "bg-surface-muted text-slate-600";
 }
 
 function priorityBadgeLabel(reason: "pending" | "unchecked" | "checked"): string {
@@ -134,17 +134,20 @@ export function DartDisclosureMonitorClient() {
   }, []);
 
   useEffect(() => {
-    const nextSettings = getDisclosureSettings();
-    const nextView = getDisclosureMonitorView();
-    setSettings(nextSettings);
-    setFocusMode(nextView.focusMode);
-    setFromInput(nextSettings.from ?? "");
-    setToInput(nextSettings.to ?? "");
-    refreshWatchlist();
+    const timeoutId = window.setTimeout(() => {
+      const nextSettings = getDisclosureSettings();
+      const nextView = getDisclosureMonitorView();
+      setSettings(nextSettings);
+      setFocusMode(nextView.focusMode);
+      setFromInput(nextSettings.from ?? "");
+      setToInput(nextSettings.to ?? "");
+      refreshWatchlist();
+    }, 0);
     const onFavoritesUpdated = () => refreshWatchlist();
     window.addEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
     window.addEventListener("storage", onFavoritesUpdated);
     return () => {
+      window.clearTimeout(timeoutId);
       window.removeEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
       window.removeEventListener("storage", onFavoritesUpdated);
     };
@@ -329,7 +332,7 @@ export function DartDisclosureMonitorClient() {
     <div className="space-y-4">
       <Card>
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-base font-semibold text-slate-900">공시 모니터링</h2>
+          <h2 className="text-base font-semibold text-navy">공시 모니터링</h2>
           <Button size="sm" onClick={refreshWatchlist}>즐겨찾기 새로고침</Button>
           <Button
             size="sm"
@@ -343,10 +346,10 @@ export function DartDisclosureMonitorClient() {
           워치리스트는 OpenDART 즐겨찾기 기업을 사용합니다.
         </p>
         {normalizedWatchlist.length > 0 ? (
-          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-surface-muted/80 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900">모니터링 요약</p>
+                <p className="text-sm font-semibold text-navy">모니터링 요약</p>
                 <p className="mt-1 text-xs text-slate-600">
                   새 공시가 보이면 확인 처리로 신규 표시를 정리하고, 기간을 넓히면 과거 공시가 다시 보일 수 있습니다.
                 </p>
@@ -362,7 +365,7 @@ export function DartDisclosureMonitorClient() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="dart-monitor-summary">
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">모니터링 기업</p>
-                <p className="mt-2 text-2xl font-bold text-slate-900">{summary.watchlistCount}</p>
+                <p className="mt-2 text-2xl font-bold text-navy">{summary.watchlistCount}</p>
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">신규 공시</p>
@@ -374,7 +377,7 @@ export function DartDisclosureMonitorClient() {
               </div>
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">아직 미조회</p>
-                <p className="mt-2 text-2xl font-bold text-slate-900">{summary.neverCheckedCorpCount}</p>
+                <p className="mt-2 text-2xl font-bold text-navy">{summary.neverCheckedCorpCount}</p>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -407,7 +410,7 @@ export function DartDisclosureMonitorClient() {
               <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-testid="dart-monitor-priority-list">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">지금 먼저 볼 기업</p>
+                    <p className="text-sm font-semibold text-navy">지금 먼저 볼 기업</p>
                     <p className="mt-1 text-xs text-slate-600">
                       신규 공시가 있거나 아직 조회하지 않은 기업을 먼저 추렸습니다.
                     </p>
@@ -421,12 +424,12 @@ export function DartDisclosureMonitorClient() {
                     return (
                       <li
                         key={`priority-${item.corpCode}`}
-                        className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3"
+                        className="rounded-2xl border border-slate-200 bg-surface-muted/80 px-4 py-3"
                         data-testid={`dart-monitor-priority-${item.corpCode}`}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
-                            <p className="text-sm font-semibold text-slate-900">{item.corpName ?? item.corpCode}</p>
+                            <p className="text-sm font-semibold text-navy">{item.corpName ?? item.corpCode}</p>
                             <p className="mt-1 text-xs text-slate-600">
                               {priorityDescription(item.reason, item.newCount, item.lastCheckedAt)}
                             </p>
@@ -441,7 +444,7 @@ export function DartDisclosureMonitorClient() {
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link
                             href={companyHref}
-                            className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 transition-all duration-300 hover:scale-[1.02] hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 active:scale-95"
+                            className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 transition-all duration-300 hover:scale-[1.02] hover:border-primary/30 hover:bg-primary/5 hover:text-navy active:scale-95"
                             data-testid={`dart-monitor-priority-company-link-${item.corpCode}`}
                           >
                             회사 상세
@@ -543,7 +546,7 @@ export function DartDisclosureMonitorClient() {
             title="모니터링할 기업이 없습니다"
             description="기업 상세 화면에서 즐겨찾기를 추가하면 이곳에서 새 공시를 한 번에 확인할 수 있습니다."
             icon="data"
-            className="rounded-2xl border-slate-200 bg-slate-50/80 p-8"
+            className="rounded-2xl border-slate-200 bg-surface-muted/80 p-8"
           />
         </Card>
       ) : (
@@ -551,7 +554,7 @@ export function DartDisclosureMonitorClient() {
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900">보기 옵션</p>
+                <p className="text-sm font-semibold text-navy">보기 옵션</p>
                 <p className="mt-1 text-xs text-slate-600" data-testid="dart-monitor-visibility-summary">
                   {focusMode === "pending"
                     ? `신규 공시가 있는 기업 ${visibleWatchlist.length}곳만 보고 있습니다.`
@@ -594,7 +597,7 @@ export function DartDisclosureMonitorClient() {
                 title={focusMode === "unchecked" ? "아직 확인하지 않은 기업이 없습니다" : "지금 바로 확인할 신규 공시가 없습니다"}
                 description="전체 보기를 다시 켜면 최근에 확인한 기업과 아직 미조회인 기업을 함께 볼 수 있습니다."
                 icon="data"
-                className="rounded-2xl border-slate-200 bg-slate-50/80 p-8"
+                className="rounded-2xl border-slate-200 bg-surface-muted/80 p-8"
               />
               <div className="mt-4 flex justify-center">
                 <Button
@@ -615,7 +618,7 @@ export function DartDisclosureMonitorClient() {
                 <Card key={corp.corpCode}>
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">{corp.corpName ?? corp.corpCode}</p>
+                      <p className="text-sm font-semibold text-navy">{corp.corpName ?? corp.corpCode}</p>
                       <p className="text-xs text-slate-600">
                         {corp.corpCode} · 마지막 확인 {formatDateTime(row.lastCheckedAt)}
                       </p>
@@ -626,13 +629,13 @@ export function DartDisclosureMonitorClient() {
                           신규 {row.newItems.length}
                         </span>
                       ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-semibold text-slate-600">
                           신규 없음
                         </span>
                       )}
                       <Link
                         href={companyHref}
-                        className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 transition-all duration-300 hover:scale-[1.02] hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 active:scale-95"
+                        className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-xs font-bold text-slate-700 transition-all duration-300 hover:scale-[1.02] hover:border-primary/30 hover:bg-primary/5 hover:text-navy active:scale-95"
                         data-testid={`dart-monitor-company-link-${corp.corpCode}`}
                       >
                         회사 상세
@@ -677,13 +680,13 @@ export function DartDisclosureMonitorClient() {
                           <li key={`${corp.corpCode}-${item.receiptNo ?? index}`} className="rounded-lg border border-slate-100 px-2 py-1 text-xs">
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <p className="font-medium text-slate-900">{item.reportName ?? "(제목 없음)"}</p>
+                                <p className="font-medium text-navy">{item.reportName ?? "(제목 없음)"}</p>
                                 <p className="text-slate-600">{item.receiptDate ?? "-"} · {item.receiptNo ?? "-"}</p>
                               </div>
                               <div className="flex items-center gap-2">
-                                {isNew ? <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">NEW</span> : null}
+                                {isNew ? <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-navy">NEW</span> : null}
                                 {item.viewerUrl ? (
-                                  <Link href={item.viewerUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-emerald-700 hover:underline">
+                                  <Link href={item.viewerUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-navy hover:underline">
                                     원문
                                   </Link>
                                 ) : null}

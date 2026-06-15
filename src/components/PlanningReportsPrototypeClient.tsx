@@ -93,16 +93,16 @@ function statusLabel(value: PlanningRunOverallStatus | undefined): string {
 }
 
 function statusTone(value: PlanningRunOverallStatus | undefined): string {
-  if (value === "SUCCESS") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (value === "SUCCESS") return "border-primary/20 bg-primary/5 text-navy";
   if (value === "PARTIAL_SUCCESS") return "border-amber-200 bg-amber-50 text-amber-800";
   if (value === "FAILED") return "border-rose-200 bg-rose-50 text-rose-800";
-  return "border-slate-200 bg-slate-100 text-slate-700";
+  return "border-slate-200 bg-surface-muted text-slate-700";
 }
 
 function severityTone(value: ReportActionRow["severity"]): string {
   if (value === "critical") return "border-rose-200 bg-rose-50";
   if (value === "warn") return "border-amber-200 bg-amber-50";
-  return "border-slate-200 bg-slate-50";
+  return "border-slate-200 bg-surface-muted";
 }
 
 function severityLabel(value: ReportActionRow["severity"]): string {
@@ -115,21 +115,21 @@ function monthlySurplusTone(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "border-slate-200 bg-white";
   if (value < 0) return "border-rose-300 bg-rose-50";
   if (value < 300_000) return "border-amber-300 bg-amber-50";
-  return "border-emerald-300 bg-emerald-50";
+  return "border-primary/30 bg-primary/5";
 }
 
 function emergencyFundTone(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "border-slate-200 bg-white";
   if (value < 3) return "border-rose-300 bg-rose-50";
   if (value < 6) return "border-amber-300 bg-amber-50";
-  return "border-emerald-300 bg-emerald-50";
+  return "border-primary/30 bg-primary/5";
 }
 
 function dsrTone(value: number | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "border-slate-200 bg-white";
   if (value >= 40) return "border-rose-300 bg-rose-50";
   if (value >= 30) return "border-amber-300 bg-amber-50";
-  return "border-emerald-300 bg-emerald-50";
+  return "border-primary/30 bg-primary/5";
 }
 
 type ScenarioChoiceMeta = {
@@ -229,9 +229,9 @@ function canUseScenarioChoices(vm: ReportVM): boolean {
 }
 
 function scenarioDeltaTone(deltaKrw: number): string {
-  if (deltaKrw > 0) return "text-emerald-700";
+  if (deltaKrw > 0) return "text-navy";
   if (deltaKrw < 0) return "text-rose-700";
-  return "text-slate-900";
+  return "text-navy";
 }
 
 type AdvisoryVerdict = {
@@ -268,7 +268,7 @@ function resolveAdvisoryVerdict(vm: ReportVM): AdvisoryVerdict {
   return {
     label: "안정",
     message: "핵심 지표는 안정 범위이며 목표 달성 효율 최적화 단계입니다.",
-    tone: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    tone: "border-primary/30 bg-primary/5 text-navy",
   };
 }
 
@@ -906,11 +906,11 @@ function RunContextPanel(props: {
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-[#d7e3f5] bg-white p-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">실행 시각</p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">{formatDateTime(props.run.createdAt)}</p>
+          <p className="mt-2 text-sm font-semibold text-navy">{formatDateTime(props.run.createdAt)}</p>
         </div>
         <div className="rounded-xl border border-[#d7e3f5] bg-white p-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">스냅샷 상태</p>
-          <p className="mt-2 text-sm font-semibold text-slate-900">
+          <p className="mt-2 text-sm font-semibold text-navy">
             {props.vm.snapshot.missing
               ? "스냅샷 누락"
               : typeof props.vm.snapshot.staleDays === "number"
@@ -1017,7 +1017,7 @@ function MonthlyOperatingPanel({ vm }: { vm: ReportVM }) {
           </div>
         </>
       ) : (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="rounded-xl border border-slate-200 bg-surface-muted p-4 text-sm text-slate-600">
           현재 run에는 월급 운영 가이드를 만들기 위한 기초 수치가 부족합니다.
         </div>
       )}
@@ -1051,7 +1051,7 @@ function GoalsAndRiskSection({ vm }: { vm: ReportVM }) {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {vm.goalsTable.map((goal, index) => (
                   <tr key={`${goal.name}:${index}`}>
-                    <td className="px-3 py-2 font-semibold text-slate-900">{goal.name}</td>
+                    <td className="px-3 py-2 font-semibold text-navy">{goal.name}</td>
                     <td className="px-3 py-2 text-right">{goal.targetMonth > 0 ? formatMonths("ko-KR", goal.targetMonth) : "-"}</td>
                     <td className="px-3 py-2 text-right">{formatMoney(goal.shortfall)}</td>
                     <td className="px-3 py-2">{goal.achieved ? "달성" : goal.comment}</td>
@@ -1069,7 +1069,7 @@ function GoalsAndRiskSection({ vm }: { vm: ReportVM }) {
           <p className="mt-1 text-xs text-slate-700">반복 발생 경고와 고심각도 항목을 우선 점검합니다.</p>
         </div>
         {warnings.length < 1 ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm text-navy">
             현재 run에서는 눈에 띄는 반복 경고가 없습니다.
           </div>
         ) : (
@@ -1087,7 +1087,7 @@ function GoalsAndRiskSection({ vm }: { vm: ReportVM }) {
                 {warnings.map((warning) => (
                   <tr key={`${warning.code}:${warning.subjectKey ?? "-"}`}>
                     <td className="px-3 py-2">
-                      <p className="font-semibold text-slate-900">{warning.title}</p>
+                      <p className="font-semibold text-navy">{warning.title}</p>
                       <p className="text-[11px] text-slate-500">{warning.code}</p>
                     </td>
                     <td className="px-3 py-2">{warning.severityMax}</td>
@@ -1146,18 +1146,18 @@ function ScenarioPanel({ vm }: { vm: ReportVM }) {
                     <div className="space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
+                          <span className="rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] font-semibold text-navy">
                             {meta.badge}
                           </span>
-                          <h4 className="mt-3 text-base font-bold text-slate-900">{meta.title}</h4>
+                          <h4 className="mt-3 text-base font-bold text-navy">{meta.title}</h4>
                         </div>
                         <div className="text-right">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">목표 달성</p>
-                          <p className="text-lg font-black text-slate-950">{row.goalsAchievedCount.toLocaleString("ko-KR")}</p>
+                          <p className="text-lg font-black text-navy">{row.goalsAchievedCount.toLocaleString("ko-KR")}</p>
                         </div>
                       </div>
                       <p className="text-sm leading-6 text-slate-700">{meta.summary}</p>
-                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <div className="rounded-xl border border-slate-200 bg-surface-muted p-3">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">가정 해석</p>
                         <p className="mt-2 text-xs leading-5 text-slate-700">{meta.assumptionsHint}</p>
                       </div>
@@ -1167,7 +1167,7 @@ function ScenarioPanel({ vm }: { vm: ReportVM }) {
                       <div className="grid grid-cols-2 gap-3 rounded-xl border border-[#dbe7f8] bg-[#f4f8ff] p-3 text-sm">
                         <div>
                           <p className="text-[11px] text-slate-500">말기 순자산</p>
-                          <p className="font-semibold text-slate-900">{formatMoney(row.endNetWorthKrw)}</p>
+                          <p className="font-semibold text-navy">{formatMoney(row.endNetWorthKrw)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-slate-500">기준 대비 변화</p>
@@ -1177,18 +1177,18 @@ function ScenarioPanel({ vm }: { vm: ReportVM }) {
                         </div>
                         <div>
                           <p className="text-[11px] text-slate-500">최저 현금</p>
-                          <p className="font-semibold text-slate-900">{formatMoney(row.worstCashKrw)}</p>
+                          <p className="font-semibold text-navy">{formatMoney(row.worstCashKrw)}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-slate-500">경고 수</p>
-                          <p className="font-semibold text-slate-900">{row.warningsCount.toLocaleString("ko-KR")}</p>
+                          <p className="font-semibold text-navy">{row.warningsCount.toLocaleString("ko-KR")}</p>
                         </div>
                       </div>
 
                       <div className="grid gap-2 rounded-xl border border-[#d7e3f5] bg-white p-3 text-xs leading-5 text-slate-700">
-                        <p><span className="font-semibold text-slate-900">누가 볼 만한가:</span> {meta.whoFor}</p>
-                        <p><span className="font-semibold text-slate-900">주의할 점:</span> {meta.riskNote}</p>
-                        <p><span className="font-semibold text-slate-900">결과 해석:</span> {buildScenarioInterpretation(vm, row)}</p>
+                        <p><span className="font-semibold text-navy">누가 볼 만한가:</span> {meta.whoFor}</p>
+                        <p><span className="font-semibold text-navy">주의할 점:</span> {meta.riskNote}</p>
+                        <p><span className="font-semibold text-navy">결과 해석:</span> {buildScenarioInterpretation(vm, row)}</p>
                       </div>
                     </div>
                   </div>
@@ -1211,14 +1211,14 @@ function RetirementPanel({ vm }: { vm: ReportVM }) {
           <p className="mt-1 text-xs text-slate-700">평균 수치보다 하방(P10)에서 버틸 수 있는지 중심으로 확인합니다.</p>
         </div>
         {vm.monteProbabilityRows.length > 0 ? (
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+          <span className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-navy">
             확률 분석 포함
           </span>
         ) : null}
       </div>
 
       {vm.monteProbabilityRows.length < 1 && vm.montePercentileRows.length < 1 ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="rounded-xl border border-slate-200 bg-surface-muted p-4 text-sm text-slate-600">
           현재 run에는 몬테카를로 결과가 없습니다. 은퇴 목표를 더 명확히 두거나 장기 시뮬레이션 옵션이 켜진 실행에서 값이 나옵니다.
         </div>
       ) : (
@@ -1228,7 +1228,7 @@ function RetirementPanel({ vm }: { vm: ReportVM }) {
               {vm.monteProbabilityRows.map((row) => (
                 <article className="rounded-2xl border border-[#d7e3f5] bg-white p-4 shadow-sm shadow-slate-200/60 ring-1 ring-white" key={row.label}>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{row.label}</p>
-                  <p className="mt-2 text-2xl font-black text-slate-950">{row.value}</p>
+                  <p className="mt-2 text-2xl font-black text-navy">{row.value}</p>
                   <p className="mt-2 text-xs leading-5 text-slate-600">{row.interpretation}</p>
                 </article>
               ))}
@@ -1249,7 +1249,7 @@ function RetirementPanel({ vm }: { vm: ReportVM }) {
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {vm.montePercentileRows.map((row) => (
                     <tr key={row.metric}>
-                      <td className="px-3 py-2 font-semibold text-slate-900">{row.metric}</td>
+                      <td className="px-3 py-2 font-semibold text-navy">{row.metric}</td>
                       <td className="px-3 py-2 text-right">{formatMoney(row.p10)}</td>
                       <td className="px-3 py-2 text-right">{formatMoney(row.p50)}</td>
                       <td className="px-3 py-2 text-right">{formatMoney(row.p90)}</td>
@@ -1261,7 +1261,7 @@ function RetirementPanel({ vm }: { vm: ReportVM }) {
           ) : null}
 
           {vm.monteCarloSummary?.notes?.length ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-xl border border-slate-200 bg-surface-muted p-4">
               <p className="text-xs font-semibold text-slate-700">해석 메모</p>
               <ul className="mt-2 space-y-1 text-xs leading-5 text-slate-600">
                 {vm.monteCarloSummary.notes.map((note) => (
@@ -1385,8 +1385,8 @@ export default function PlanningReportsPrototypeClient(props: PlanningReportsPro
         description="최소 입력만 받고 자동으로 진단과 실행오더를 만드는 상담형 프로토타입입니다."
         action={(
           <div className="flex items-center gap-3 text-sm">
-            <Link className="font-semibold text-emerald-700" href={currentReportHref}>기존 리포트</Link>
-            <Link className="font-semibold text-emerald-700" href={planningHref}>플래닝</Link>
+            <Link className="font-semibold text-navy" href={currentReportHref}>기존 리포트</Link>
+            <Link className="font-semibold text-navy" href={planningHref}>플래닝</Link>
           </div>
         )}
       />

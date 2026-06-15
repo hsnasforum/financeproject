@@ -131,8 +131,13 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     );
 
     const html = await response.text();
+    const csp = response.headers.get("content-security-policy") ?? "";
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
+    expect(csp).toContain("script-src 'none'");
+    expect(csp).toContain("style-src 'self' 'nonce-");
+    expect(csp).toContain("style-src-attr 'none'");
+    expect(csp).not.toContain("'unsafe-inline'");
     expect(html).toContain("Executive Summary");
     expect(html).toContain("Warnings");
     expect(html).toContain("목표 진행상황");
@@ -143,25 +148,51 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     expect(html).toContain("@page");
     expect(html).toContain("display: table-header-group");
     expect(html).toContain("@media print");
+    expect(html).toMatch(/<style nonce="[^"]+">/);
+    expect(html).not.toContain("style=");
     expect(html).not.toContain("<pre>{");
     expect(html).not.toContain("```json");
     expect(html).not.toContain(".data/");
     expect(html).not.toContain("process.env");
+    expect(html).not.toContain("window.print()");
     expect(html).not.toContain("GITHUB_TOKEN");
     expect(html).not.toContain("ECOS_API_KEY");
     expect(html).not.toContain("Bearer ");
   });
 
-  it("supports print view mode with inline disposition and print script", async () => {
+  it("keeps local html download available in production builds", async () => {
+    const runId = await createRunForExport();
+    env.NODE_ENV = "production";
+
+    const response = await exportHtmlGET(
+      buildGetRequest(`/api/planning/reports/${runId}/export.html`),
+      { params: Promise.resolve({ runId }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain(
+      `attachment; filename=\"planning-run-${runId}-report.html\"`,
+    );
+  });
+
+  it("supports print view mode with inline disposition and external print script", async () => {
     const runId = await createRunForExport();
     const response = await exportHtmlGET(
       buildGetRequest(`/api/planning/reports/${runId}/export.html?view=print`),
       { params: Promise.resolve({ runId }) },
     );
     const html = await response.text();
+    const csp = response.headers.get("content-security-policy") ?? "";
     expect(response.status).toBe(200);
     expect(response.headers.get("content-disposition")).toContain("inline;");
-    expect(html).toContain("window.print()");
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("style-src 'self' 'nonce-");
+    expect(csp).toContain("style-src-attr 'none'");
+    expect(csp).not.toContain("'unsafe-inline'");
+    expect(html).toMatch(/<style nonce="[^"]+">/);
+    expect(html).not.toContain("style=");
+    expect(html).toContain("src=\"/planning-report-print.js\"");
+    expect(html).not.toContain("<script>window.addEventListener('load'");
   });
 
   it("supports strict contract mode for canonical exported runs", async () => {

@@ -77,7 +77,7 @@ function formatTime(value: Date): string {
 }
 
 function badgeClass(state: "PASS" | "PENDING" | "FAIL" | "UNKNOWN"): string {
-  if (state === "PASS") return "bg-emerald-100 text-emerald-700";
+  if (state === "PASS") return "bg-primary/10 text-navy";
   if (state === "FAIL") return "bg-rose-100 text-rose-700";
   if (state === "UNKNOWN") return "bg-slate-200 text-slate-700";
   return "bg-amber-100 text-amber-800";
@@ -306,6 +306,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     if (restoredRef.current) return;
     restoredRef.current = true;
     if (typeof window === "undefined") return;
+    let active = true;
 
     const parsed = parseArmPersistPayload(window.sessionStorage.getItem(AUTO_MERGE_ARM_SESSION_KEY));
     const pruned = pruneArmedState(
@@ -314,51 +315,62 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
     );
     const restoredArmed = toNumericArmedMap(pruned.armed);
 
-    if (Object.keys(restoredArmed).length > 0) {
-      armByPrRef.current = restoredArmed;
-      setArmByPr(restoredArmed);
-      setConfirmByPr((prev) => {
-        const next = { ...prev };
-        for (const [rawPr, entry] of Object.entries(restoredArmed)) {
-          const prNumber = normalizePrNumber(rawPr);
-          if (!prNumber) continue;
-          next[prNumber] = entry.confirmText;
-        }
-        return next;
-      });
-      setArmStatusByPr((prev) => {
-        const next = { ...prev };
-        for (const [rawPr, entry] of Object.entries(restoredArmed)) {
-          const prNumber = normalizePrNumber(rawPr);
-          if (!prNumber) continue;
-          next[prNumber] = {
-            polling: false,
-            lastCheckedAt: entry.lastCheckAt ? formatTime(new Date(entry.lastCheckAt)) : "",
-            reasonCode: entry.lastReasonCode || "UNKNOWN",
-            reasonMessage: entry.lastReasonCode ? `복원됨 (${entry.lastReasonCode})` : "복원됨",
-            eligible: false,
-            currentIntervalMs: baseIntervalMs,
-          };
-          pollMetaRef.current[prNumber] = {
-            nextPollAt: 0,
-            backoffMs: 0,
-          };
-        }
-        return next;
-      });
+    async function restoreArmedState() {
+      await Promise.resolve();
+      if (!active) return;
+
+      if (Object.keys(restoredArmed).length > 0) {
+        armByPrRef.current = restoredArmed;
+        setArmByPr(restoredArmed);
+        setConfirmByPr((prev) => {
+          const next = { ...prev };
+          for (const [rawPr, entry] of Object.entries(restoredArmed)) {
+            const prNumber = normalizePrNumber(rawPr);
+            if (!prNumber) continue;
+            next[prNumber] = entry.confirmText;
+          }
+          return next;
+        });
+        setArmStatusByPr((prev) => {
+          const next = { ...prev };
+          for (const [rawPr, entry] of Object.entries(restoredArmed)) {
+            const prNumber = normalizePrNumber(rawPr);
+            if (!prNumber) continue;
+            next[prNumber] = {
+              polling: false,
+              lastCheckedAt: entry.lastCheckAt ? formatTime(new Date(entry.lastCheckAt)) : "",
+              reasonCode: entry.lastReasonCode || "UNKNOWN",
+              reasonMessage: entry.lastReasonCode ? `복원됨 (${entry.lastReasonCode})` : "복원됨",
+              eligible: false,
+              currentIntervalMs: baseIntervalMs,
+            };
+            pollMetaRef.current[prNumber] = {
+              nextPollAt: 0,
+              backoffMs: 0,
+            };
+          }
+          return next;
+        });
+      }
+
+      window.sessionStorage.setItem(
+        AUTO_MERGE_ARM_SESSION_KEY,
+        JSON.stringify({
+          version: AUTO_MERGE_ARM_SESSION_VERSION,
+          armed: pruned.armed,
+        }),
+      );
+
+      if (pruned.removedShaMismatch.length > 0) {
+        pushNotice(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
+      }
     }
 
-    window.sessionStorage.setItem(
-      AUTO_MERGE_ARM_SESSION_KEY,
-      JSON.stringify({
-        version: AUTO_MERGE_ARM_SESSION_VERSION,
-        armed: pruned.armed,
-      }),
-    );
+    void restoreArmedState();
 
-    if (pruned.removedShaMismatch.length > 0) {
-      pushNotice(`ARM 자동 해제: head SHA 변경(PR ${pruned.removedShaMismatch.join(", ")})`);
-    }
+    return () => {
+      active = false;
+    };
   }, [baseIntervalMs, props.candidates, pushNotice]);
 
   useEffect(() => {
@@ -855,13 +867,13 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
         </Card>
       ) : null}
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50">
-          <p className="text-sm font-semibold text-emerald-700">{notice}</p>
+        <Card className="mb-4 border border-primary/20 bg-primary/5">
+          <p className="text-sm font-semibold text-navy">{notice}</p>
         </Card>
       ) : null}
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Policy</h2>
+        <h2 className="text-base font-black text-navy">Policy</h2>
         <p className="mt-2 text-sm text-slate-600">required checks: <span className="font-semibold">{requiredChecksLabel}</span></p>
         <p className="mt-1 text-sm text-slate-600">required label: <span className="font-semibold">{props.requiredLabel}</span></p>
         <p className="mt-1 text-sm text-slate-600">confirm template: <span className="font-semibold">{props.confirmTemplate}</span></p>
@@ -892,7 +904,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Batch Actions</h2>
+        <h2 className="text-base font-black text-navy">Batch Actions</h2>
         <p className="mt-1 text-xs text-slate-500">ARM은 이 탭에서만 유지됩니다. 조건: enabled=true + required label + checks success + confirm match + sha match</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" disabled={Boolean(batchPending) || mergePending || refreshPending} onClick={handleBatchArmAllEligible}>
@@ -911,10 +923,10 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Open PRs</h2>
+        <h2 className="text-base font-black text-navy">Open PRs</h2>
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
           <table className="min-w-full border-collapse text-left text-xs">
-            <thead className="bg-slate-100 text-slate-600">
+            <thead className="bg-surface-muted text-slate-600">
               <tr>
                 <th className="px-3 py-2 font-semibold">PR</th>
                 <th className="px-3 py-2 font-semibold">Head SHA</th>
@@ -953,7 +965,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                 return (
                   <tr key={candidate.number} className="border-t border-slate-200 align-top">
                     <td className="px-3 py-2 text-slate-700">
-                      <a href={candidate.prUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-emerald-700 underline">
+                      <a href={candidate.prUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-navy underline">
                         #{candidate.number} {candidate.title || "(no title)"}
                       </a>
                       <p className="mt-1 text-[11px] text-slate-500">
@@ -983,7 +995,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                     </td>
                     <td className="px-3 py-2">
                       <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                        liveEligible ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                        liveEligible ? "bg-primary/10 text-navy" : "bg-rose-100 text-rose-700"
                       }`}
                       >
                         {liveEligible ? "ELIGIBLE" : "BLOCKED"}
@@ -1011,7 +1023,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                         <input
                           readOnly
                           value={candidate.expectedConfirmText}
-                          className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 font-mono text-[11px] text-slate-700"
+                          className="h-8 w-full rounded-lg border border-slate-200 bg-surface-muted px-2 font-mono text-[11px] text-slate-700"
                           aria-label={`PR ${candidate.number} expected confirm text`}
                         />
                         <Button
@@ -1026,7 +1038,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                       <input
                         id={confirmInputId}
                         type="text"
-                        className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-slate-900 outline-none ring-emerald-200 transition focus:border-emerald-400 focus:ring"
+                        className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-xs text-navy outline-none ring-primary/20 transition focus:border-primary focus:ring"
                         value={confirmValue}
                         onChange={(event) => {
                           const nextValue = event.target.value;
@@ -1098,7 +1110,7 @@ export function AutoMergeClient(props: AutoMergeClientProps) {
                           비활성 사유: {disabledReasons.join(" / ")}
                         </p>
                       ) : (
-                        <p className="mt-1 text-[11px] text-emerald-700">병합 가능: 서버에서 최종 재검증 후 실행됩니다.</p>
+                        <p className="mt-1 text-[11px] text-navy">병합 가능: 서버에서 최종 재검증 후 실행됩니다.</p>
                       )}
                     </td>
                   </tr>

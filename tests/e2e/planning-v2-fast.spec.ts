@@ -97,6 +97,14 @@ test("/planning/reports shows run-based dashboard by default and keeps embedded 
   await expect(page).toHaveURL(/\/planning\/reports(\?|$)/, { timeout: 30_000 });
 
   await expect(page.getByTestId("report-print-button")).toBeVisible({ timeout: 30_000 });
+  const exportHtmlButton = page.getByTestId("report-export-html-button");
+  await expect(exportHtmlButton).toBeVisible({ timeout: 30_000 });
+  await expect(exportHtmlButton).toHaveAccessibleName("HTML 저장");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    exportHtmlButton.click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(`planning-run-${seeded.runId}-report.html`);
   await expect(page.getByTestId("report-dashboard")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("report-summary-cards")).toBeVisible({ timeout: 30_000 });
   const monthlyEvidenceToggle = page.getByTestId("evidence-toggle-monthlySurplus");

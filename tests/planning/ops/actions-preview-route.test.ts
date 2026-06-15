@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as actionPreviewPOST } from "../../../src/app/api/ops/actions/preview/route";
-import { createRun } from "../../../src/lib/planning/server/store/runStore";
 import { clearOpsActionPreviewTokensForTests } from "../../../src/lib/ops/actions/previewToken";
 
 const env = process.env as Record<string, string | undefined>;
@@ -24,6 +23,32 @@ function localHeaders(host = LOCAL_HOST, csrf = "csrf-token"): HeadersInit {
     cookie: `dev_action=1; dev_csrf=${encodeURIComponent(csrf)}`,
     "content-type": "application/json",
   };
+}
+
+function writeRunsIndexFixture(count: number) {
+  const runsDir = env.PLANNING_RUNS_DIR as string;
+  fs.mkdirSync(runsDir, { recursive: true });
+  const entries = Array.from({ length: count }, (_, index) => {
+    const id = `preview-run-${String(index).padStart(2, "0")}`;
+    return {
+      id,
+      profileId: "preview_profile",
+      title: `preview ${id}`,
+      createdAt: new Date(Date.UTC(2026, 2, 1, 0, 0, index)).toISOString(),
+      snapshot: {
+        id: "snapshot-1",
+        asOf: "2026-03-01",
+      },
+      warningsCount: 0,
+      criticalCount: 0,
+    };
+  });
+
+  fs.writeFileSync(
+    path.join(runsDir, "index.json"),
+    `${JSON.stringify({ version: 1, entries }, null, 2)}\n`,
+    "utf-8",
+  );
 }
 
 describe.sequential("ops actions preview route", () => {
@@ -75,29 +100,7 @@ describe.sequential("ops actions preview route", () => {
   });
 
   it("caps preview sampleIds to 20", async () => {
-    for (let index = 0; index < 28; index += 1) {
-      const id = `preview-run-${String(index).padStart(2, "0")}`;
-      await createRun({
-        id,
-        profileId: "preview_profile",
-        title: `preview ${id}`,
-        input: {
-          horizonMonths: 12,
-        },
-        meta: {
-          snapshot: {
-            id: "snapshot-1",
-            asOf: "2026-03-01",
-            fetchedAt: "2026-03-01T00:00:00.000Z",
-          },
-          health: {
-            warningsCodes: [],
-            criticalCount: 0,
-          },
-        },
-        outputs: {},
-      }, { enforceRetention: false });
-    }
+    writeRunsIndexFixture(28);
 
     const response = await actionPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/actions/preview`, {
       method: "POST",
@@ -128,4 +131,3 @@ describe.sequential("ops actions preview route", () => {
     expect(payload.data?.summary?.truncated).toBe(true);
   });
 });
-

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openNewsDatabase, closeNewsDatabase, resolveNewsDbPath, resolveNewsSearchIndexPath } from "../src/lib/news/storageSqlite";
 import { searchNewsIndex, writeNewsSearchIndex } from "../src/lib/news/searchIndex";
 
@@ -87,11 +87,14 @@ function insertItem(db: ReturnType<typeof openNewsDatabase>, row: {
 
 describe("news search index", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-05T00:00:00.000Z"));
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-search-index-"));
     env.PLANNING_DATA_DIR = path.join(root, "planning");
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
     else delete env.PLANNING_DATA_DIR;
     if (root) fs.rmSync(root, { recursive: true, force: true });

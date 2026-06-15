@@ -5,6 +5,12 @@ import { GET } from "../src/app/api/dev/dart/alerts/route";
 
 const ALERTS_PATH = path.join(process.cwd(), "tmp", "dart", "disclosure_alerts.json");
 
+function localRequest(): Request {
+  return new Request("http://localhost:3000/api/dev/dart/alerts", {
+    headers: { host: "localhost:3000" },
+  });
+}
+
 describe("dart alerts route", () => {
   it("returns empty data when alerts file is missing", async () => {
     const backup = fs.existsSync(ALERTS_PATH) ? fs.readFileSync(ALERTS_PATH, "utf-8") : null;
@@ -12,7 +18,7 @@ describe("dart alerts route", () => {
     if (backup !== null) fs.unlinkSync(ALERTS_PATH);
 
     try {
-      const response = await GET();
+      const response = await GET(localRequest());
       const json = (await response.json()) as { ok?: boolean; data?: { generatedAt: string | null; newHigh: unknown[] } };
       expect(response.status).toBe(200);
       expect(json.ok).toBe(true);

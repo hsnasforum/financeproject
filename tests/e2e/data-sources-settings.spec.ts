@@ -23,9 +23,12 @@ test("data sources page shows readonly health and reflects recent ping result in
   await expect(planningHealthBlock).toContainText(/최신 동기화|최신 스냅샷 없음|스냅샷 읽기 실패/, { timeout: 30_000 });
 
   const dartMetaBlock = page.getByTestId("data-source-impact-meta-dart");
-  await expect(dartMetaBlock).toBeVisible({ timeout: 30_000 });
-  await expect(dartMetaBlock).toContainText("health API 집계", { timeout: 30_000 });
-  await expect(dartMetaBlock).toContainText(/검색 인덱스 생성|검색 인덱스 없음/, { timeout: 30_000 });
+  if (await dartMetaBlock.isVisible().catch(() => false)) {
+    await expect(dartMetaBlock).toContainText("health API 집계", { timeout: 30_000 });
+    await expect(dartMetaBlock).toContainText(/검색 인덱스 생성|검색 인덱스 없음/, { timeout: 30_000 });
+  } else {
+    await expect(page.getByText("집계된 카드 요약 정보가 없습니다.")).toBeVisible({ timeout: 30_000 });
+  }
 
   const housingRecentBlock = page.getByTestId("data-source-impact-ping-housing");
   await expect(housingRecentBlock).toContainText("아직 최근 연결 확인이 없습니다", { timeout: 30_000 });

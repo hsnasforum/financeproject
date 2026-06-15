@@ -1,9 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import dotenv from "dotenv";
+import { runPnpmBuffered } from "./pnpm_runner.mjs";
 
-const PNPM_BIN = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const MAX_TAIL_LENGTH = 2_000;
 
 function parseArgs(argv) {
@@ -61,43 +60,24 @@ function sanitizeTail(text) {
 }
 
 function runPnpmScript(scriptName, cwd) {
-  return new Promise((resolve) => {
-    const child = spawn(PNPM_BIN, [scriptName], {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
-    });
-    let stdoutTail = "";
-    let stderrTail = "";
-
-    child.stdout?.on("data", (chunk) => {
-      const text = chunk instanceof Buffer ? chunk.toString("utf-8") : String(chunk);
+  let stdoutTail = "";
+  let stderrTail = "";
+  return runPnpmBuffered([scriptName], {
+    cwd,
+    env: process.env,
+    onStdout: (text) => {
       process.stdout.write(text);
       stdoutTail = appendTail(stdoutTail, text);
-    });
-
-    child.stderr?.on("data", (chunk) => {
-      const text = chunk instanceof Buffer ? chunk.toString("utf-8") : String(chunk);
+    },
+    onStderr: (text) => {
       process.stderr.write(text);
       stderrTail = appendTail(stderrTail, text);
-    });
-
-    child.on("error", (error) => {
-      console.error(`[daily:refresh] failed to start "${scriptName}": ${String(error)}`);
-      resolve({
-        code: 1,
-        stdoutTail: sanitizeTail(stdoutTail),
-        stderrTail: sanitizeTail(`${stderrTail}\n${String(error)}`),
-      });
-    });
-    child.on("close", (code) => {
-      resolve({
-        code: typeof code === "number" ? code : 1,
-        stdoutTail: sanitizeTail(stdoutTail),
-        stderrTail: sanitizeTail(stderrTail),
-      });
-    });
-  });
+    },
+  }).then((result) => ({
+    code: result.code,
+    stdoutTail: sanitizeTail(stdoutTail),
+    stderrTail: sanitizeTail(result.error ? `${stderrTail}\n${String(result.error)}` : stderrTail),
+  }));
 }
 
 function shouldMarkDartWatchSkipped(stepName, result, hasOpenDartKey) {

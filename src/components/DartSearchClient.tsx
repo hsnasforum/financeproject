@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -15,14 +15,12 @@ import {
   clearRecentSearches,
   DART_FAVORITES_UPDATED_EVENT,
   isFavorite,
+  dartStoreConfig,
   listFavorites,
   listRecent,
   listRecentSearches,
   pushRecentSearch,
   removeFavorite,
-  type DartFavorite,
-  type DartRecent,
-  type DartRecentSearch,
 } from "@/lib/dart/dartStore";
 import {
   buildDartCompanyHref,
@@ -177,17 +175,84 @@ function readFreshStoredSearchSnapshot(
   }
 }
 
+function subscribeDartLocalLists(onStoreChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  const handleStoreChange = () => onStoreChange();
+  window.addEventListener("storage", handleStoreChange);
+  window.addEventListener(DART_FAVORITES_UPDATED_EVENT, handleStoreChange);
+  return () => {
+    window.removeEventListener("storage", handleStoreChange);
+    window.removeEventListener(DART_FAVORITES_UPDATED_EVENT, handleStoreChange);
+  };
+}
+
+function getDartLocalListsStorageSnapshot(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return [
+      window.localStorage.getItem(dartStoreConfig.favoritesKey) ?? "",
+      window.localStorage.getItem(dartStoreConfig.recentKey) ?? "",
+      window.localStorage.getItem(dartStoreConfig.recentSearchesKey) ?? "",
+    ].join("\n---dart-store---\n");
+  } catch {
+    return "";
+  }
+}
+
+function getServerDartLocalListsStorageSnapshot(): string {
+  return "";
+}
+
+type DartLocalLists = {
+  favorites: ReturnType<typeof listFavorites>;
+  recent: ReturnType<typeof listRecent>;
+  recentSearches: ReturnType<typeof listRecentSearches>;
+};
+
+const EMPTY_DART_LOCAL_LISTS: DartLocalLists = {
+  favorites: [],
+  recent: [],
+  recentSearches: [],
+};
+
+function readDartLocalLists(): DartLocalLists {
+  if (typeof window === "undefined") return EMPTY_DART_LOCAL_LISTS;
+  try {
+    return {
+      favorites: listFavorites(),
+      recent: listRecent(),
+      recentSearches: listRecentSearches(),
+    };
+  } catch {
+    return EMPTY_DART_LOCAL_LISTS;
+  }
+}
+
 export function DartSearchClient() {
   const searchParams = useSearchParams();
   const isDev = process.env.NODE_ENV !== "production";
   const isMountedRef = useRef(true);
   const didRestoreSearchRef = useRef(false);
+  const scheduledSearchRestoreRef = useRef(false);
   const didApplyMonitorContextRef = useRef(false);
-  const [isHydrated, setIsHydrated] = useState(false);
-  const [tab, setTab] = useState<"search" | "monitor">(
-    () => (searchParams?.get("tab") === "monitor" ? "monitor" : "search"),
+  const urlQuery = normalizeDartSearchQuery(searchParams?.get("q"));
+  const urlTab = searchParams?.get("tab") === "monitor" ? "monitor" : "search";
+  const urlMonitorCorpCode = normalizeCorpCode(searchParams?.get("corpCode"));
+  const urlMonitorCorpName = normalizeDartSearchQuery(searchParams?.get("corpName"), 120);
+  const isHydrated = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
   );
-  const [q, setQ] = useState("");
+  useSyncExternalStore(
+    subscribeDartLocalLists,
+    getDartLocalListsStorageSnapshot,
+    getServerDartLocalListsStorageSnapshot,
+  );
+  const [, setLocalListsRevision] = useState(0);
+  const [tabOverride, setTabOverride] = useState<"search" | "monitor" | null>(null);
+  const tab = tabOverride ?? urlTab;
+  const [q, setQ] = useState(() => urlQuery);
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -198,24 +263,18 @@ export function DartSearchClient() {
   const [buildLoading, setBuildLoading] = useState(false);
   const [favoritesOpen, setFavoritesOpen] = useState(true);
   const [recentOpen, setRecentOpen] = useState(true);
-  const [favorites, setFavorites] = useState<DartFavorite[]>([]);
-  const [recent, setRecent] = useState<DartRecent[]>([]);
-  const [recentSearches, setRecentSearches] = useState<DartRecentSearch[]>([]);
-  const urlQuery = normalizeDartSearchQuery(searchParams?.get("q"));
-  const urlTab = searchParams?.get("tab") === "monitor" ? "monitor" : "search";
-  const urlMonitorCorpCode = normalizeCorpCode(searchParams?.get("corpCode"));
-  const urlMonitorCorpName = normalizeDartSearchQuery(searchParams?.get("corpName"), 120);
 
   const refreshLocalLists = useCallback(() => {
-    setFavorites(listFavorites());
-    setRecent(listRecent());
-    setRecentSearches(listRecentSearches());
+    setLocalListsRevision((value) => value + 1);
   }, []);
 
-  const favoriteCorpCodes = useMemo(
-    () => new Set(favorites.map((item) => item.corpCode)),
-    [favorites],
-  );
+  const {
+    favorites,
+    recent,
+    recentSearches,
+  } = isHydrated ? readDartLocalLists() : EMPTY_DART_LOCAL_LISTS;
+
+  const favoriteCorpCodes = new Set(favorites.map((item) => item.corpCode));
 
   const buildCompanyHref = useCallback(
     (corpCode: string, fromQuery?: string, corpName?: string) => buildDartCompanyHref(corpCode, fromQuery, corpName),
@@ -309,25 +368,19 @@ export function DartSearchClient() {
     };
   }, []);
 
-  useEffect(() => {
-    setIsHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    setTab(urlTab);
-  }, [urlTab]);
-
-  useEffect(() => {
-    refreshLocalLists();
-    const onStorage = () => refreshLocalLists();
-    const onFavoritesUpdated = () => refreshLocalLists();
-    window.addEventListener("storage", onStorage);
-    window.addEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
+  const scheduleSearchRestore = useCallback((restore: () => void): (() => void) => {
+    if (scheduledSearchRestoreRef.current || didRestoreSearchRef.current) return () => undefined;
+    scheduledSearchRestoreRef.current = true;
+    const restoreTimer = window.setTimeout(() => {
+      scheduledSearchRestoreRef.current = false;
+      didRestoreSearchRef.current = true;
+      restore();
+    }, 0);
     return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener(DART_FAVORITES_UPDATED_EVENT, onFavoritesUpdated);
+      window.clearTimeout(restoreTimer);
+      scheduledSearchRestoreRef.current = false;
     };
-  }, [refreshLocalLists]);
+  }, []);
 
   useEffect(() => {
     if (!isHydrated || urlTab !== "monitor" || !urlMonitorCorpCode) return;
@@ -517,7 +570,10 @@ export function DartSearchClient() {
       DART_SEARCH_DRAFT_QUERY_MAX_AGE_MS,
     );
     if (!draftQuery) return;
-    setQ((current) => (current === draftQuery ? current : draftQuery));
+    const restoreTimer = window.setTimeout(() => {
+      setQ((current) => (current === draftQuery ? current : draftQuery));
+    }, 0);
+    return () => window.clearTimeout(restoreTimer);
   }, [isDev, isHydrated, q]);
 
   useLayoutEffect(() => {
@@ -525,26 +581,27 @@ export function DartSearchClient() {
     if (typeof window === "undefined" || window.location.pathname !== "/public/dart") return;
     if (!urlQuery) return;
 
-    didRestoreSearchRef.current = true;
-    setQ((current) => (current === urlQuery ? current : urlQuery));
-
     const lastSuccessfulSnapshot = readFreshStoredSearchSnapshot(
       DART_LAST_SUCCESSFUL_SEARCH_SNAPSHOT_STORAGE_KEY,
       DART_LAST_SUCCESSFUL_SEARCH_SNAPSHOT_MAX_AGE_MS,
     );
     if (lastSuccessfulSnapshot && lastSuccessfulSnapshot.query === urlQuery) {
-      setActiveSearchQuery(urlQuery);
-      setHasSearched(true);
-      setLoading(false);
-      setError("");
-      setNotice("");
-      setMissing(null);
-      setItems(lastSuccessfulSnapshot.items);
-      return;
+      return scheduleSearchRestore(() => {
+        setQ((current) => (current === urlQuery ? current : urlQuery));
+        setActiveSearchQuery(urlQuery);
+        setHasSearched(true);
+        setLoading(false);
+        setError("");
+        setNotice("");
+        setMissing(null);
+        setItems(lastSuccessfulSnapshot.items);
+      });
     }
 
-    void search(urlQuery);
-  }, [isHydrated, search, urlQuery]);
+    return scheduleSearchRestore(() => {
+      void search(urlQuery);
+    });
+  }, [isHydrated, scheduleSearchRestore, search, urlQuery]);
 
   useLayoutEffect(() => {
     if (!isDev || !isHydrated || didRestoreSearchRef.current) return;
@@ -557,10 +614,10 @@ export function DartSearchClient() {
     clearPendingSearchQuery();
     if (!pendingQuery) return;
 
-    didRestoreSearchRef.current = true;
-    setQ((current) => (current === pendingQuery ? current : pendingQuery));
-    void search(pendingQuery);
-  }, [clearPendingSearchQuery, isDev, isHydrated, search]);
+    return scheduleSearchRestore(() => {
+      void search(pendingQuery);
+    });
+  }, [clearPendingSearchQuery, isDev, isHydrated, scheduleSearchRestore, search]);
 
   useLayoutEffect(() => {
     if (!isDev || !isHydrated || didRestoreSearchRef.current) return;
@@ -572,16 +629,16 @@ export function DartSearchClient() {
       DART_LAST_SUCCESSFUL_SEARCH_SNAPSHOT_MAX_AGE_MS,
     );
     if (lastSuccessfulSnapshot) {
-      didRestoreSearchRef.current = true;
-      setQ((current) => (current === lastSuccessfulSnapshot.query ? current : lastSuccessfulSnapshot.query));
-      setActiveSearchQuery(lastSuccessfulSnapshot.query);
-      setHasSearched(true);
-      setLoading(false);
-      setError("");
-      setNotice("");
-      setMissing(null);
-      setItems(lastSuccessfulSnapshot.items);
-      return;
+      return scheduleSearchRestore(() => {
+        setQ((current) => (current === lastSuccessfulSnapshot.query ? current : lastSuccessfulSnapshot.query));
+        setActiveSearchQuery(lastSuccessfulSnapshot.query);
+        setHasSearched(true);
+        setLoading(false);
+        setError("");
+        setNotice("");
+        setMissing(null);
+        setItems(lastSuccessfulSnapshot.items);
+      });
     }
 
     const lastSuccessfulQuery = readFreshStoredSearchQuery(
@@ -590,40 +647,26 @@ export function DartSearchClient() {
     );
     if (!lastSuccessfulQuery) return;
 
-    didRestoreSearchRef.current = true;
-    setQ((current) => (current === lastSuccessfulQuery ? current : lastSuccessfulQuery));
-    void search(lastSuccessfulQuery);
-  }, [isDev, isHydrated, search]);
+    return scheduleSearchRestore(() => {
+      void search(lastSuccessfulQuery);
+    });
+  }, [isDev, isHydrated, scheduleSearchRestore, search]);
 
   function toggleFavorite(item: SearchItem) {
-    setFavorites((current) => {
-      const exists = current.some((favorite) => favorite.corpCode === item.corpCode);
-      const nextFavorites = exists
-        ? current.filter((favorite) => favorite.corpCode !== item.corpCode)
-        : [
-            {
-              corpCode: item.corpCode,
-              corpName: item.corpName,
-              savedAt: new Date().toISOString(),
-            },
-            ...current.filter((favorite) => favorite.corpCode !== item.corpCode),
-          ];
-
-      try {
-        if (exists) {
-          removeFavorite(item.corpCode);
-        } else {
-          addFavorite({
-            corpCode: item.corpCode,
-            corpName: item.corpName,
-          });
-        }
-      } catch {
-        // Keep the optimistic UI state even if persistence fails.
+    const exists = favoriteCorpCodes.has(item.corpCode);
+    try {
+      if (exists) {
+        removeFavorite(item.corpCode);
+      } else {
+        addFavorite({
+          corpCode: item.corpCode,
+          corpName: item.corpName,
+        });
       }
-
-      return nextFavorites;
-    });
+    } catch {
+      // Keep the current UI if persistence fails.
+    }
+    refreshLocalLists();
   }
 
 
@@ -671,20 +714,24 @@ export function DartSearchClient() {
       <div className="flex items-center gap-2 mb-8">
         <button
           type="button"
-          onClick={() => setTab("search")}
+          onClick={() => setTabOverride("search")}
+          disabled={!isHydrated}
           className={cn(
             "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
-            tab === "search" ? "bg-emerald-600 text-white shadow-emerald-900/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+            tab === "search" ? "bg-primary text-white shadow-navy/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-surface-muted",
+            !isHydrated ? "cursor-wait opacity-70" : "",
           )}
         >
           기업 검색
         </button>
         <button
           type="button"
-          onClick={() => setTab("monitor")}
+          onClick={() => setTabOverride("monitor")}
+          disabled={!isHydrated}
           className={cn(
             "rounded-full px-6 py-2.5 text-sm font-black transition-all shadow-sm active:scale-95",
-            tab === "monitor" ? "bg-emerald-600 text-white shadow-emerald-900/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-slate-50"
+            tab === "monitor" ? "bg-primary text-white shadow-navy/10" : "bg-white text-slate-500 border border-slate-200 hover:bg-surface-muted",
+            !isHydrated ? "cursor-wait opacity-70" : "",
           )}
         >
           공시 모니터링
@@ -708,7 +755,7 @@ export function DartSearchClient() {
                 </label>
                 <input
                   data-testid="dart-search-input"
-                  className="block w-full h-12 rounded-2xl border border-slate-200 bg-slate-50/50 px-5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:bg-white transition-all shadow-inner"
+                  className="block w-full h-12 rounded-2xl border border-slate-200 bg-surface-muted/50 px-5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-primary focus:bg-white transition-all shadow-inner"
                   value={q}
                   onChange={(event) => {
                     clearLastSuccessfulSearchQuery();
@@ -737,7 +784,7 @@ export function DartSearchClient() {
               </Button>
             </form>
             
-            {notice ? <p className="mt-4 text-xs font-black text-emerald-600 bg-emerald-50 p-3 rounded-xl">{notice}</p> : null}
+            {notice ? <p className="mt-4 text-xs font-black text-primary bg-primary/5 p-3 rounded-xl">{notice}</p> : null}
             {error ? <p className="mt-4 text-xs font-black text-rose-600 bg-rose-50 p-3 rounded-xl">{error}</p> : null}
             
             <div className="mt-6 border-t border-slate-50 pt-6">
@@ -755,7 +802,7 @@ export function DartSearchClient() {
                           key={item.query}
                           data-testid="dart-recent-search-chip"
                           type="button"
-                          className="rounded-full border border-slate-100 bg-white px-4 py-1.5 text-xs font-bold text-slate-600 transition-all hover:border-emerald-200 hover:text-emerald-600 shadow-sm disabled:opacity-50"
+                          className="rounded-full border border-slate-100 bg-white px-4 py-1.5 text-xs font-bold text-slate-600 transition-all hover:border-primary/20 hover:text-primary shadow-sm disabled:opacity-50"
                           disabled={!isHydrated || loading}
                           onClick={() => {
                             setQ(item.query);
@@ -827,7 +874,7 @@ export function DartSearchClient() {
             <div className="lg:col-span-2 space-y-6">
               <Card className="rounded-[2rem] p-0 overflow-hidden shadow-sm border-slate-100">
                 <div data-testid="dart-search-results">
-                  <div className="bg-slate-50/50 px-8 py-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="bg-surface-muted/50 px-8 py-5 border-b border-slate-100 flex items-center justify-between">
                      <SubSectionHeader title="검색 결과" description="기업 개황이나 공시 모니터링으로 이어 갈 회사를 고르세요." className="mb-0" />
                      {items.length > 0 && <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-1 rounded-lg border border-slate-100">{items.length}건</span>}
                   </div>
@@ -840,14 +887,14 @@ export function DartSearchClient() {
 
                   {!loading && !error && !missing && items.length === 0 && !hasSearched ? (
                     <div data-testid="dart-search-idle" className="p-20 text-center">
-                      <p className="text-base font-black text-slate-900 tracking-tight">회사명을 입력하고 검색해 보세요</p>
+                      <p className="text-base font-black text-navy tracking-tight">회사명을 입력하고 검색해 보세요</p>
                       <p className="mt-2 text-sm font-medium text-slate-400">현재 공시 기준으로 회사 개황과 최근 공시 흐름을 이어서 확인할 수 있습니다.</p>
                     </div>
                   ) : null}
 
                   {!loading && !error && !missing && items.length === 0 && hasSearched ? (
-                    <div data-testid="dart-search-empty" className="p-20 text-center bg-slate-50/30">
-                      <p className="text-base font-black text-slate-900 tracking-tight">검색 결과가 없습니다</p>
+                    <div data-testid="dart-search-empty" className="p-20 text-center bg-surface-muted/30">
+                      <p className="text-base font-black text-navy tracking-tight">검색 결과가 없습니다</p>
                       <p className="mt-2 text-sm font-medium text-slate-400">정확한 회사명이나 줄임말(예: 삼성전자)로 다시 시도해 보세요.</p>
                     </div>
                   ) : null}
@@ -856,7 +903,7 @@ export function DartSearchClient() {
                     <ul className="divide-y divide-slate-50 bg-white">
                       {items.map((item) => (
                         <li key={item.corpCode}>
-                          <div className="flex items-center gap-4 p-5 px-8 transition-all hover:bg-emerald-50/30 group">
+                          <div className="flex items-center gap-4 p-5 px-8 transition-all hover:bg-primary/30 group">
                             <a
                               data-testid="dart-search-item"
                               href={buildCompanyHref(item.corpCode, activeSearchQuery || q, item.corpName)}
@@ -867,17 +914,17 @@ export function DartSearchClient() {
                               }}
                             >
                               <div className="min-w-0">
-                                 <p className="text-lg font-black text-slate-900 group-hover:text-emerald-600 transition-colors tracking-tight">{item.corpName}</p>
+                                 <p className="text-lg font-black text-navy group-hover:text-primary transition-colors tracking-tight">{item.corpName}</p>
                                  <div className="mt-1 flex items-center gap-3">
                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">DART {item.corpCode}</span>
                                    {item.stockCode ? (
-                                     <span className="rounded-lg bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-black text-slate-500">KRX {item.stockCode}</span>
+                                     <span className="rounded-lg bg-surface-muted px-2 py-0.5 font-mono text-[10px] font-black text-slate-500">KRX {item.stockCode}</span>
                                    ) : (
-                                     <span className="rounded-lg bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-400">비상장</span>
+                                     <span className="rounded-lg bg-surface-muted px-2 py-0.5 text-[10px] font-bold text-slate-400">비상장</span>
                                    )}
                                  </div>
                               </div>
-                              <div className="ml-4 shrink-0 rounded-2xl bg-slate-50 p-2 text-slate-300 group-hover:bg-emerald-500 group-hover:text-white transition-all">
+                              <div className="ml-4 shrink-0 rounded-2xl bg-surface-muted p-2 text-slate-300 group-hover:bg-primary group-hover:text-white transition-all">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
                               </div>
                             </a>
@@ -887,8 +934,8 @@ export function DartSearchClient() {
                               className={cn(
                                 "shrink-0 rounded-full border px-4 py-2 text-[11px] font-black transition-all active:scale-95 shadow-sm",
                                 favoriteCorpCodes.has(item.corpCode)
-                                  ? "border-emerald-200 bg-emerald-500 text-white"
-                                  : "border-slate-200 bg-white text-slate-500 hover:border-emerald-300 hover:text-emerald-600"
+                                  ? "border-primary/20 bg-primary text-white"
+                                  : "border-slate-200 bg-white text-slate-500 hover:border-primary/30 hover:text-primary"
                               )}
                               aria-pressed={favoriteCorpCodes.has(item.corpCode)}
                               onClick={(event) => {
@@ -913,13 +960,13 @@ export function DartSearchClient() {
                 <button
                   type="button"
                   onClick={() => setFavoritesOpen((prev) => !prev)}
-                  className="w-full flex items-center justify-between bg-slate-50/50 px-6 py-5 border-b border-slate-100 group"
+                  className="w-full flex items-center justify-between bg-surface-muted/50 px-6 py-5 border-b border-slate-100 group"
                 >
                   <div className="flex items-center gap-2">
                     <div className="rounded-xl bg-amber-100 p-1.5 text-amber-500">
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                     </div>
-                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">즐겨찾기</span>
+                    <span className="text-sm font-black text-navy uppercase tracking-widest">즐겨찾기</span>
                   </div>
                   <span className="text-[10px] font-black text-slate-400 bg-white px-2 py-0.5 rounded-lg border border-slate-100">{favorites.length}</span>
                 </button>
@@ -933,7 +980,7 @@ export function DartSearchClient() {
                           <li key={item.corpCode}>
                             <a
                               href={buildCompanyHref(item.corpCode)}
-                              className="block p-4 px-6 hover:bg-slate-50 transition-colors"
+                              className="block p-4 px-6 hover:bg-surface-muted transition-colors"
                               onClick={(event) => {
                                 if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
                                 rememberPendingCompanyHref(buildCompanyHref(item.corpCode));
@@ -951,7 +998,7 @@ export function DartSearchClient() {
               </Card>
 
               <Card className="rounded-[2.5rem] p-0 overflow-hidden shadow-sm border-slate-100">
-                <div className="flex items-center justify-between bg-slate-50/50 px-6 py-5 border-b border-slate-100">
+                <div className="flex items-center justify-between bg-surface-muted/50 px-6 py-5 border-b border-slate-100">
                   <button
                     type="button"
                     onClick={() => setRecentOpen((prev) => !prev)}
@@ -960,7 +1007,7 @@ export function DartSearchClient() {
                     <div className="rounded-xl bg-slate-200 p-1.5 text-slate-500">
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     </div>
-                    <span className="text-sm font-black text-slate-900 uppercase tracking-widest">최근 기록</span>
+                    <span className="text-sm font-black text-navy uppercase tracking-widest">최근 기록</span>
                   </button>
                   <button
                     type="button"
@@ -984,7 +1031,7 @@ export function DartSearchClient() {
                           <li key={item.corpCode}>
                             <a
                               href={buildCompanyHref(item.corpCode)}
-                              className="block p-4 px-6 hover:bg-slate-50 transition-colors"
+                              className="block p-4 px-6 hover:bg-surface-muted transition-colors"
                               onClick={(event) => {
                                 if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
                                 rememberPendingCompanyHref(buildCompanyHref(item.corpCode));

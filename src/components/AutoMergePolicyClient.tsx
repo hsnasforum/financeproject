@@ -189,7 +189,7 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
       />
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Effective Status</h2>
+        <h2 className="text-base font-black text-navy">Effective Status</h2>
         <p className="mt-2 text-sm text-slate-700">env kill switch (`AUTO_MERGE_ENABLED`): <span className="font-semibold">{effective.envEnabledFlag ? "true" : "false"}</span></p>
         <p className="mt-1 text-sm text-slate-700">policy.enabled: <span className="font-semibold">{effective.policyEnabled ? "true" : "false"}</span></p>
         <p className="mt-1 text-sm text-slate-700">effective enabled(env AND policy): <span className="font-semibold">{effective.enabled ? "true" : "false"}</span></p>
@@ -203,7 +203,7 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
       </Card>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Policy Form</h2>
+        <h2 className="text-base font-black text-navy">Policy Form</h2>
         <p className="mt-2 text-sm text-slate-600">저장 위치: 로컬 ops policy 저장소(JSON)</p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
@@ -298,7 +298,7 @@ export function AutoMergePolicyClient(props: AutoMergePolicyClientProps) {
           </div>
         ) : null}
         {notice ? (
-          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          <div className="mt-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-navy">
             <p>{notice}</p>
           </div>
         ) : null}

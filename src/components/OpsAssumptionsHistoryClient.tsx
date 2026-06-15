@@ -238,12 +238,18 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
   }, [historyById, selectedForDiffA, selectedForDiffB]);
 
   useEffect(() => {
-    void loadHistory();
-    void loadLatestRef();
+    const timeoutId = window.setTimeout(() => {
+      void loadHistory();
+      void loadLatestRef();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadHistory, loadLatestRef]);
 
   useEffect(() => {
-    void loadDetail(selectedId);
+    const timeoutId = window.setTimeout(() => {
+      void loadDetail(selectedId);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadDetail, selectedId]);
 
   return (
@@ -266,13 +272,13 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
         )}
       />
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-800">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-navy">
           {notice}
         </Card>
       ) : null}
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">History</h2>
+        <h2 className="text-base font-black text-navy">History</h2>
         <p className="mt-2 text-sm text-slate-600">현재 latest snapshotId: <span className="font-semibold">{currentLatestId || "-"}</span></p>
         {!hasCsrf ? (
           <p className="mt-3 text-sm font-semibold text-amber-700">
@@ -308,7 +314,7 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
             </thead>
             <tbody>
               {history.map((row) => (
-                <tr key={row.id} className={row.id === selectedId ? "bg-emerald-50" : ""}>
+                <tr key={row.id} className={row.id === selectedId ? "bg-primary/5" : ""}>
                   <td className="px-2 py-2 font-mono">{row.id}</td>
                   <td className="px-2 py-2">{row.asOf ?? "-"}</td>
                   <td className="px-2 py-2">{formatDateTime(row.fetchedAt)}</td>
@@ -329,12 +335,12 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
       </Card>
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Snapshot Detail</h2>
+        <h2 className="text-base font-black text-navy">Snapshot Detail</h2>
         <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">snapshotId: <span className="font-semibold">{selectedId || "-"}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">asOf: <span className="font-semibold">{selectedSnapshot?.asOf ?? "-"}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">fetchedAt: <span className="font-semibold">{formatDateTime(selectedSnapshot?.fetchedAt)}</span></div>
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">warnings: <span className="font-semibold">{selectedSnapshot?.warnings.length ?? 0}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">snapshotId: <span className="font-semibold">{selectedId || "-"}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">asOf: <span className="font-semibold">{selectedSnapshot?.asOf ?? "-"}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">fetchedAt: <span className="font-semibold">{formatDateTime(selectedSnapshot?.fetchedAt)}</span></div>
+          <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">warnings: <span className="font-semibold">{selectedSnapshot?.warnings.length ?? 0}</span></div>
         </div>
 
         <div className="mt-4 grid gap-2 text-sm md:grid-cols-2 lg:grid-cols-3">
@@ -342,7 +348,7 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
             const value = selectedSnapshot?.korea[field.key];
             if (typeof value !== "number") return null;
             return (
-              <div key={field.key} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div key={field.key} className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
                 {field.label}: <span className="font-semibold">{formatPct(value)}</span>
               </div>
             );
@@ -351,7 +357,7 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
 
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <div>
-            <h3 className="text-sm font-black text-slate-900">Warnings ({selectedSnapshot?.warnings.length ?? 0})</h3>
+            <h3 className="text-sm font-black text-navy">Warnings ({selectedSnapshot?.warnings.length ?? 0})</h3>
             {selectedSnapshot?.warnings.length ? (
               <ul className="mt-2 space-y-1 text-xs text-rose-700">
                 {selectedSnapshot.warnings.map((warning, index) => <li key={`${warning}-${index}`}>- {warning}</li>)}
@@ -361,7 +367,7 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
             )}
           </div>
           <div>
-            <h3 className="text-sm font-black text-slate-900">Sources ({selectedSnapshot?.sources.length ?? 0})</h3>
+            <h3 className="text-sm font-black text-navy">Sources ({selectedSnapshot?.sources.length ?? 0})</h3>
             <label className="mt-2 inline-flex items-center gap-2 text-xs text-slate-600">
               <input
                 checked={showSourceDetails}
@@ -387,7 +393,7 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
       </Card>
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Diff</h2>
+        <h2 className="text-base font-black text-navy">Diff</h2>
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
           <label className="font-semibold" htmlFor="diff-left">Left</label>
           <select
@@ -440,7 +446,7 @@ export function OpsAssumptionsHistoryClient(props: OpsAssumptionsHistoryClientPr
       </Card>
 
       <Card>
-        <h2 className="text-base font-black text-slate-900">Set As Latest</h2>
+        <h2 className="text-base font-black text-navy">Set As Latest</h2>
         <p className="mt-2 text-sm text-slate-600">
           confirm 입력: <span className="font-mono">SET_LATEST {selectedId || "{snapshotId}"}</span>
         </p>

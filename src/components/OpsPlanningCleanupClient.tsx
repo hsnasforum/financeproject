@@ -138,14 +138,14 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
         </Card>
       ) : null}
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+        <Card className="mb-4 border border-primary/20 bg-primary/5 p-3 text-sm font-semibold text-navy">
           {notice}
         </Card>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h2 className="text-base font-black text-slate-900">정리 대상</h2>
+          <h2 className="text-base font-black text-navy">정리 대상</h2>
           <p className="mt-2 text-sm text-slate-600">dry-run 결과를 확인한 뒤 confirm 문구를 입력해 apply 하세요.</p>
 
           {!hasCsrf ? (
@@ -191,10 +191,10 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
         </Card>
 
         <Card>
-          <h2 className="text-base font-black text-slate-900">보존 정책</h2>
+          <h2 className="text-base font-black text-navy">보존 정책</h2>
           <div className="mt-3 grid gap-2 text-sm">
             {policyRows.map((row) => (
-              <div key={row.key} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <div key={row.key} className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
                 {row.key}: <span className="font-semibold">{row.value}</span>
               </div>
             ))}
@@ -203,36 +203,36 @@ export function OpsPlanningCleanupClient(props: OpsPlanningCleanupClientProps) {
       </div>
 
       <Card className="mt-6">
-        <h2 className="text-base font-black text-slate-900">Dry-run 요약</h2>
+        <h2 className="text-base font-black text-navy">Dry-run 요약</h2>
         {planData ? (
           <>
             <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">대상: <span className="font-semibold">{planData.target}</span></div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">삭제 예정 건수: <span className="font-semibold">{planData.summary.deleteCount}</span></div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">예상 용량: <span className="font-semibold">{formatBytes(planData.summary.totalBytes)}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">대상: <span className="font-semibold">{planData.target}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">삭제 예정 건수: <span className="font-semibold">{planData.summary.deleteCount}</span></div>
+              <div className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">예상 용량: <span className="font-semibold">{formatBytes(planData.summary.totalBytes)}</span></div>
             </div>
             <div className="mt-3 grid gap-2 text-sm md:grid-cols-4">
               {(["runs", "cache", "opsReports", "assumptionsHistory", "trash"] as const).map((key) => (
-                <div key={key} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                <div key={key} className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
                   {key}: <span className="font-semibold">{byTarget[key] ?? 0}</span>
                 </div>
               ))}
             </div>
             {planData.applied ? (
-              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              <div className="mt-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-navy">
                 삭제={planData.applied.deleted}, 실패={planData.applied.failedCount}, 용량={formatBytes(planData.applied.bytes)}
               </div>
             ) : null}
 
             <div className="mt-4">
-              <h3 className="text-sm font-black text-slate-900">샘플 파일 (최대 10개)</h3>
+              <h3 className="text-sm font-black text-navy">샘플 파일 (최대 10개)</h3>
               {planData.sample.length < 1 ? (
                 <p className="mt-2 text-xs text-slate-500">삭제 예정 파일이 없습니다.</p>
               ) : (
                 <ul className="mt-2 space-y-2 text-xs">
                   {planData.sample.map((row, idx) => (
-                    <li key={`${row.path}-${idx}`} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="font-semibold text-slate-900">{row.path}</p>
+                    <li key={`${row.path}-${idx}`} className="rounded-md border border-slate-200 bg-surface-muted px-3 py-2">
+                      <p className="font-semibold text-navy">{row.path}</p>
                       <p className="text-slate-600">사유: {row.reason} / 용량: {formatBytes(row.sizeBytes)}</p>
                     </li>
                   ))}

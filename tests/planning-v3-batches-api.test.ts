@@ -52,7 +52,7 @@ async function saveStoredShadowBatch(input: {
       parsed: number;
       skipped: number;
     };
-    provenance?: {
+    provenance: {
       fileName?: string;
       fileNameProvided?: boolean;
     };

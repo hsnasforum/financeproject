@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import dotenv from "dotenv";
+import { runPnpmSync } from "./pnpm_runner.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, ".data");
+
+for (const name of [".env.local", "env.local", ".env"]) {
+  const filePath = path.join(ROOT, name);
+  if (!fs.existsSync(filePath)) continue;
+  dotenv.config({ path: filePath, override: false, quiet: true });
+}
 
 const POLICY = {
   finlife: { maxAgeDays: 1 },
@@ -39,9 +46,9 @@ function isStaleByFile(filePath, maxAgeDays) {
   return ageMs > maxAgeDays * DAY_MS;
 }
 
-function runStep(name, cmd, args) {
-  console.log(`[warm] ${name}: ${cmd} ${args.join(" ")}`);
-  const result = spawnSync(cmd, args, {
+function runStep(name, args) {
+  console.log(`[warm] ${name}: pnpm ${args.join(" ")}`);
+  const result = runPnpmSync(args, {
     stdio: "inherit",
     cwd: ROOT,
     env: process.env,
@@ -135,13 +142,13 @@ async function main() {
   let ok = true;
 
   if (finlifeStale) {
-    ok = runStep("finlife", "pnpm", ["finlife:sync:if-stale"]) && ok;
+    ok = runStep("finlife", ["finlife:sync:if-stale"]) && ok;
   } else {
     console.log("[warm] finlife: fresh, skip");
   }
 
   if (gov24Stale || benefitsStale) {
-    ok = runStep("gov24/benefits", "pnpm", ["gov24:sync:if-stale"]) && ok;
+    ok = runStep("gov24/benefits", ["gov24:sync:if-stale"]) && ok;
   } else {
     console.log("[warm] gov24/benefits: fresh, skip");
   }

@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { ProductListPage } from "@/components/ProductListPage";
 
 export default async function MortgageLoanProductsPage({
@@ -9,6 +10,8 @@ export default async function MortgageLoanProductsPage({
   const topFinGrpNo = typeof params.topFinGrpNo === "string" ? params.topFinGrpNo : "020000";
   const pageNoRaw = typeof params.pageNo === "string" ? Number(params.pageNo) : 1;
   const pageNo = Number.isFinite(pageNoRaw) && pageNoRaw > 0 ? pageNoRaw : 1;
+  const requestHeaders = await headers();
+  const scriptNonce = requestHeaders.get("x-nonce") ?? undefined;
 
-  return <ProductListPage kind="mortgage-loan" title="주택담보대출 상품" ratePreference="lower" initialTopFinGrpNo={topFinGrpNo} initialPageNo={pageNo} />;
+  return <ProductListPage kind="mortgage-loan" title="주택담보대출 상품" ratePreference="lower" initialTopFinGrpNo={topFinGrpNo} initialPageNo={pageNo} scriptNonce={scriptNonce} />;
 }

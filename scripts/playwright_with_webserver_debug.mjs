@@ -4,7 +4,15 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { sanitizePlaywrightColorEnv } from "./runtime_color_env.mjs";
 
-const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+const commandCandidates = process.platform === "win32"
+  ? [
+      { command: "pnpm.cmd", args: [] },
+      { command: "corepack.cmd", args: ["pnpm"] },
+    ]
+  : [
+      { command: "pnpm", args: [] },
+      { command: "corepack", args: ["pnpm"] },
+    ];
 const env = sanitizePlaywrightColorEnv({
   ...process.env,
   DEBUG: process.env.DEBUG || "pw:webserver",
@@ -94,13 +102,38 @@ for (let index = 0; index < rawArgs.length; index += 1) {
 const args = ["exec", "playwright", ...playwrightArgs];
 const nextEnvSnapshot = await captureFile(nextEnvPath);
 
-const child = spawn(command, args, {
-  cwd: process.cwd(),
-  env,
-  stdio: "inherit",
-});
-
 let finalized = false;
+
+function runPlaywright(candidateIndex = 0) {
+  const candidate = commandCandidates[candidateIndex];
+  let startedFallback = false;
+  const child = spawn(candidate.command, [...candidate.args, ...args], {
+    cwd: process.cwd(),
+    env,
+    stdio: "inherit",
+  });
+
+  child.on("error", (error) => {
+    if (
+      error
+      && typeof error === "object"
+      && "code" in error
+      && error.code === "ENOENT"
+      && candidateIndex + 1 < commandCandidates.length
+    ) {
+      startedFallback = true;
+      runPlaywright(candidateIndex + 1);
+      return;
+    }
+
+    void finalize(1, `[playwright_with_webserver_debug] FAIL ${error.message}`);
+  });
+
+  child.on("close", (code) => {
+    if (startedFallback) return;
+    void finalize(code ?? 1);
+  });
+}
 
 async function finalize(code, message) {
   if (finalized) return;
@@ -121,10 +154,4 @@ async function finalize(code, message) {
   process.exit(code);
 }
 
-child.on("error", (error) => {
-  void finalize(1, `[playwright_with_webserver_debug] FAIL ${error.message}`);
-});
-
-child.on("close", (code) => {
-  void finalize(code ?? 1);
-});
+runPlaywright();

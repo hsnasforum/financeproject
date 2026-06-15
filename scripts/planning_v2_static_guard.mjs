@@ -315,13 +315,32 @@ function normalizeRouteRoot(value) {
   return first;
 }
 
+async function hasAppRouteSurface(dirPath) {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    const absolute = path.join(dirPath, entry.name);
+    if (entry.isFile() && /^(page|route)\.(ts|tsx|js|jsx)$/.test(entry.name)) {
+      return true;
+    }
+    if (entry.isDirectory() && await hasAppRouteSurface(absolute)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function collectTopLevelRouteRoots() {
   const entries = await fs.readdir(APP_DIR, { withFileTypes: true }).catch(() => []);
-  return entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => normalizeRouteRoot(`/${entry.name}`))
-    .filter((item) => item.length > 0)
-    .sort((a, b) => a.localeCompare(b));
+  const roots = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const root = normalizeRouteRoot(`/${entry.name}`);
+    if (!root) continue;
+    const absolute = path.join(APP_DIR, entry.name);
+    if (!await hasAppRouteSurface(absolute)) continue;
+    roots.push(root);
+  }
+  return Array.from(new Set(roots)).sort((a, b) => a.localeCompare(b));
 }
 
 function parseDocumentedRouteRoots(content) {

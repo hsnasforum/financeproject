@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type InputHTMLAttributes } from "react";
+import { useEffect, useMemo, useRef, type InputHTMLAttributes } from "react";
 
 type NumberFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onChange"> & {
   value: number | null;
@@ -32,18 +32,21 @@ export function NumberField({
   ...props
 }: NumberFieldProps) {
   const formatted = useMemo(() => formatWithComma(value), [value]);
-  const [text, setText] = useState(formatted);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setText(formatted);
+    if (inputRef.current) {
+      inputRef.current.value = formatted;
+    }
   }, [formatted]);
 
   return (
     <input
       {...props}
+      ref={inputRef}
       type="text"
       inputMode={inputMode}
-      value={text}
+      defaultValue={formatted}
       onFocus={(event) => {
         onFocus?.(event);
       }}
@@ -51,24 +54,23 @@ export function NumberField({
         const raw = event.target.value;
         const parsed = parseNumericText(raw);
         if (raw.trim() === "") {
-          setText("");
+          event.currentTarget.value = "";
           onValueChange(null);
           return;
         }
         if (parsed === null) {
-          setText(raw);
           return;
         }
-        setText(formatWithComma(parsed));
+        event.currentTarget.value = formatWithComma(parsed);
         onValueChange(parsed);
       }}
       onBlur={(event) => {
         const parsed = parseNumericText(event.target.value);
         if (event.target.value.trim() === "") {
-          setText("");
+          event.currentTarget.value = "";
           onValueChange(null);
         } else if (parsed !== null) {
-          setText(formatWithComma(parsed));
+          event.currentTarget.value = formatWithComma(parsed);
           onValueChange(parsed);
         }
         onBlur?.(event);

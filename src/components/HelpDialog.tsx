@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { lockDocumentScroll } from "@/lib/browser/scrollLock";
 import { uiTextKo } from "@/lib/uiText.ko";
 
 export function HelpDialog() {
@@ -14,9 +15,7 @@ export function HelpDialog() {
 
   useEffect(() => {
     if (!open) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScrollLock = lockDocumentScroll();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -27,7 +26,7 @@ export function HelpDialog() {
     window.addEventListener("keydown", onKeyDown);
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScrollLock();
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
@@ -55,7 +54,7 @@ export function HelpDialog() {
                 </h2>
                 <button
                   type="button"
-                  className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+                  className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-surface-muted"
                   onClick={() => setOpen(false)}
                 >
                   {uiTextKo.help.close}
@@ -87,7 +86,7 @@ export function HelpDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+        className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-surface-muted"
       >
         {uiTextKo.help.open}
       </button>

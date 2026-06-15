@@ -61,6 +61,9 @@ type Props = {
   initialLoadFailed?: boolean;
 };
 
+type BatchRowsLoadResult = BatchRow[];
+type AccountsLoadResult = Account[];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -186,62 +189,72 @@ export function TransactionsBatchListClient({
   const [uploadError, setUploadError] = useState("");
   const [uploadStatus, setUploadStatus] = useState("");
 
+  const loadRowsData = useCallback(async (signal?: AbortSignal): Promise<BatchRowsLoadResult> => {
+    const response = await fetch(`/api/planning/v3/transactions/batches?limit=50${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const json = await response.json().catch(() => null);
+    if (!response.ok || !isListResponse(json)) {
+      throw new Error("배치 목록을 불러오지 못했습니다.");
+    }
+
+    return json.items.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt,
+      kind: "csv",
+      ...(asString(item.fileName) ? { fileName: asString(item.fileName) } : {}),
+      total: asNumber(item.total),
+      ok: asNumber(item.ok),
+      failed: asNumber(item.failed),
+    }));
+  }, []);
+
+  const applyRowsResult = useCallback((nextRows: BatchRowsLoadResult) => {
+    setLoadFailed(false);
+    setRows(nextRows);
+    setMessage("");
+  }, []);
+
+  const applyRowsFailure = useCallback(() => {
+    setRows([]);
+    setLoadFailed(true);
+    setMessage("");
+  }, []);
+
   const loadRows = useCallback(async () => {
     setLoading(true);
     setLoadFailed(false);
     setMessage("");
 
     try {
-      const response = await fetch(`/api/planning/v3/transactions/batches?limit=50${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const json = await response.json().catch(() => null);
-      if (!response.ok || !isListResponse(json)) {
-        setRows([]);
-        setLoadFailed(true);
-        return;
-      }
-
-      setLoadFailed(false);
-      setRows(json.items.map((item) => ({
-        id: item.id,
-        createdAt: item.createdAt,
-        kind: "csv",
-        ...(asString(item.fileName) ? { fileName: asString(item.fileName) } : {}),
-        total: asNumber(item.total),
-        ok: asNumber(item.ok),
-        failed: asNumber(item.failed),
-      })));
+      const nextRows = await loadRowsData();
+      applyRowsResult(nextRows);
     } catch {
-      setRows([]);
-      setLoadFailed(true);
+      applyRowsFailure();
     } finally {
       setLoading(false);
     }
+  }, [applyRowsFailure, applyRowsResult, loadRowsData]);
+
+  const loadAccountsData = useCallback(async (signal?: AbortSignal): Promise<AccountsLoadResult> => {
+    const response = await fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
+      return [];
+    }
+    return payload.items.filter(isAccount);
   }, []);
 
-  const loadAccounts = useCallback(async () => {
-    setAccountLoading(true);
-    try {
-      const response = await fetch(`/api/planning/v3/accounts${buildCsrfQuery()}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || !isRecord(payload) || payload.ok !== true || !Array.isArray(payload.items)) {
-        setAccounts([]);
-        return;
-      }
-      const items = payload.items.filter(isAccount);
-      setAccounts(items);
-      if (items.length > 0) {
-        setSelectedAccountId((prev) => prev || items[0].id);
-      }
-    } catch {
-      setAccounts([]);
-    } finally {
-      setAccountLoading(false);
+  const applyAccountsResult = useCallback((items: AccountsLoadResult) => {
+    setAccounts(items);
+    if (items.length > 0) {
+      setSelectedAccountId((prev) => prev || items[0].id);
     }
   }, []);
 
@@ -302,17 +315,52 @@ export function TransactionsBatchListClient({
 
   useEffect(() => {
     if (disableAutoLoad) return;
-    void loadRows();
-    void loadAccounts();
-  }, [disableAutoLoad, loadRows, loadAccounts]);
+
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialRows() {
+      try {
+        const nextRows = await loadRowsData(controller.signal);
+        if (!active) return;
+        applyRowsResult(nextRows);
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        applyRowsFailure();
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    async function loadInitialAccounts() {
+      try {
+        const items = await loadAccountsData(controller.signal);
+        if (!active) return;
+        applyAccountsResult(items);
+      } catch {
+        if (!active || controller.signal.aborted) return;
+        setAccounts([]);
+      } finally {
+        if (active) setAccountLoading(false);
+      }
+    }
+
+    void loadInitialRows();
+    void loadInitialAccounts();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [applyAccountsResult, applyRowsFailure, applyRowsResult, disableAutoLoad, loadAccountsData, loadRowsData]);
 
   return (
     <PageShell>
       <div className="space-y-5">
         <Card className="space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700">Import-to-Planning Beta</p>
-            <h1 className="text-2xl font-black text-slate-900">거래내역 가져오기 시작</h1>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-navy">Import-to-Planning Beta</p>
+            <h1 className="text-2xl font-black text-navy">거래내역 가져오기 시작</h1>
             <p className="max-w-3xl text-sm text-slate-600">
               이 화면은 official beta entry 기준의 시작 surface입니다. CSV를 배치로 가져오고, 최근 배치를 확인한 뒤
               <span className="font-semibold text-slate-800"> balances 확인</span>,
@@ -322,7 +370,7 @@ export function TransactionsBatchListClient({
 
           <div className={bodyActionLinkGroupClassName}>
             <a
-              className="inline-flex items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 no-underline shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100"
+              className="inline-flex items-center rounded-xl border border-primary/20 bg-primary/5 px-3 py-1.5 text-sm font-semibold text-navy no-underline shadow-sm transition hover:border-primary/30 hover:bg-primary/10"
               href="#transactions-upload"
             >
               CSV 업로드
@@ -333,7 +381,7 @@ export function TransactionsBatchListClient({
               </BodyActionLink>
             ) : (
               <a
-                className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                className="inline-flex items-center rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:border-primary/20 hover:bg-primary/5 hover:text-navy"
                 href="#transactions-batch-list"
               >
                 최근 배치 확인
@@ -481,7 +529,7 @@ export function TransactionsBatchListClient({
             </BodyActionLink>
           </div>
 
-          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="space-y-2 rounded-2xl border border-dashed border-slate-200 bg-surface-muted px-4 py-3">
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Support / Internal</p>
             <div className={`${bodyActionLinkGroupClassName} text-xs`}>
               <BodyActionLink className="text-xs text-slate-500" href="/planning/v3/accounts">
@@ -502,7 +550,7 @@ export function TransactionsBatchListClient({
           {!loading && !loadFailed && rows.length < 1 ? <p className="text-sm text-slate-600">저장된 배치가 없습니다.</p> : null}
 
           <div className="rounded-2xl border border-slate-100 bg-white/70 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">다음 handoff</p>
+            <p className="text-sm font-semibold text-navy">다음 handoff</p>
             <p className="mt-1 text-sm text-slate-600">
               최근 배치를 확인한 뒤
               {" "}
@@ -517,7 +565,7 @@ export function TransactionsBatchListClient({
           {rows.length > 0 ? (
             <BodyTableFrame>
               <table className="min-w-full divide-y divide-slate-200 text-sm" data-testid="v3-batch-list">
-                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+                <thead className="bg-surface-muted text-xs uppercase tracking-wide text-slate-600">
                   <tr>
                     <th className="px-3 py-2 text-left">생성일</th>
                     <th className="px-3 py-2 text-left">file</th>

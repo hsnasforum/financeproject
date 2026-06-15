@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { tsImport } from "tsx/esm/api";
 import { writeJsonAtomic, writeTextAtomic } from "./planning_v2_ops_common.mjs";
+import { runPnpmBuffered } from "./pnpm_runner.mjs";
 let redactTextImpl = fallbackRedactText;
 
 function asString(value) {
@@ -75,31 +76,28 @@ async function readPackageJson(cwd) {
 
 function runPnpm(scriptName, extraArgs = [], cwd = process.cwd(), extraEnv = {}) {
   return new Promise((resolve, reject) => {
-    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
     const args = [scriptName, ...extraArgs];
     const out = [];
     const err = [];
     const startedAtMs = Date.now();
-    const child = spawn(command, args, {
+    runPnpmBuffered(args, {
       cwd,
       env: {
         ...process.env,
         ...extraEnv,
       },
-    });
-    child.stdout.on("data", (chunk) => out.push(String(chunk)));
-    child.stderr.on("data", (chunk) => err.push(String(chunk)));
-    child.on("error", reject);
-    child.on("close", (code) => {
+      onStdout: (chunk) => out.push(String(chunk)),
+      onStderr: (chunk) => err.push(String(chunk)),
+    }).then((result) => {
       resolve({
-        command,
+        command: "pnpm",
         args,
-        exitCode: Number.isFinite(code) ? code : 1,
+        exitCode: result.code,
         durationMs: Date.now() - startedAtMs,
         stdout: out.join(""),
-        stderr: err.join(""),
+        stderr: result.error ? `${err.join("")}${String(result.error)}` : err.join(""),
       });
-    });
+    }, reject);
   });
 }
 

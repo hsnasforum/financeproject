@@ -1,5 +1,6 @@
 "use client";
 
+import { CspSafeProgressBar } from "@/components/ui/CspSafeProgressBar";
 import { type PlannerSnapshot } from "@/lib/planner/storage";
 import { type PlannerInput } from "@/lib/planner/plan";
 
@@ -14,8 +15,8 @@ function progressPct(value: number, target: number): number {
 }
 
 function deltaBadge(improved: boolean, changed: boolean): { label: string; className: string } {
-  if (!changed) return { label: "변화 없음", className: "bg-slate-100 text-slate-600" };
-  if (improved) return { label: "개선", className: "bg-emerald-100 text-emerald-700" };
+  if (!changed) return { label: "변화 없음", className: "bg-surface-muted text-slate-600" };
+  if (improved) return { label: "개선", className: "bg-primary/10 text-navy" };
   return { label: "악화", className: "bg-rose-100 text-rose-700" };
 }
 
@@ -127,7 +128,7 @@ export function SnapshotDeltaCards({ prev, next }: { prev: PlannerSnapshot | nul
         <div className="rounded border bg-white p-3">
           <p className="text-sm font-medium">비상금 목표 달성률</p>
           <div className="mt-2 h-2 w-full rounded bg-slate-200">
-            <div className="h-2 rounded bg-emerald-500" style={{ width: `${Math.min(100, emergencyProgress)}%` }} />
+            <CspSafeProgressBar value={emergencyProgress} />
           </div>
           <p className="mt-1 text-xs text-slate-600">{emergencyProgress.toFixed(1)}% (현금성자산/비상금 목표)</p>
         </div>
@@ -135,7 +136,7 @@ export function SnapshotDeltaCards({ prev, next }: { prev: PlannerSnapshot | nul
         <div className="rounded border bg-white p-3">
           <p className="text-sm font-medium">목표 월적립 커버율</p>
           <div className="mt-2 h-2 w-full rounded bg-slate-200">
-            <div className="h-2 rounded bg-blue-500" style={{ width: `${Math.min(100, goalProgress)}%` }} />
+            <CspSafeProgressBar fillClassName="text-blue-500" value={goalProgress} />
           </div>
           <p className="mt-1 text-xs text-slate-600">{goalProgress.toFixed(1)}% (현재 월저축/필요 월적립)</p>
         </div>

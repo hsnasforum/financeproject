@@ -172,6 +172,7 @@
 - 입력값: `regionCode`, `month(YYYYMM)`, `areaBand`.
 - 캐싱/주의: TTL 14d~30d, 트래픽 절감을 위해 파라미터별 캐시 강제.
 - 엔드포인트: `https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade` + `getRTMSDataSvcAptTrade`.
+- 상세 매매 API를 쓰는 경우 base는 `https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev`, operation은 `getRTMSDataSvcAptTradeDev`를 사용한다. 상세 API 권한이 없어 401/403/404가 나면 벤치마크 계산에 필요한 일반 매매 API로 재시도한다.
 - 성공 코드 처리: `resultCode`는 `00`뿐 아니라 `000`(all-zero 계열)도 성공으로 처리한다.
 - 면적대 가정: `areaBand`는 대표 전용면적(㎡)으로 해석하고 `±10㎡` 허용 범위를 적용한다.
 
@@ -281,6 +282,7 @@
     - REB 자동 보완: `/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail`
   - MOLIT(실거래)은 ODcloud가 아니라 `apis.data.go.kr` 계열 base URL을 사용한다.
   - MOLIT `*_API_URL`은 base URL 입력을 권장하지만 full endpoint를 넣어도 suffix 중복 없이 동작한다.
+  - MOLIT 매매 상세 API(`RTMSDataSvcAptTradeDev`)는 별도 활용 신청/권한이 필요할 수 있다. 상세 API가 401/403/404를 반환하면 서버는 일반 매매 API(`RTMSDataSvcAptTrade`)로 재시도한다.
   - MOLIT `serviceKey`는 Encoding/Decoding 키 모두 허용하며, 이미 인코딩된 값(`%xx`)은 재인코딩하지 않는다.
 
 ### URL 설정 런북 (REB/MOIS/MOLIT 공통)

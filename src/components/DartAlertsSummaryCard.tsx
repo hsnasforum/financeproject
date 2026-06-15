@@ -158,9 +158,12 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
 
   useEffect(() => {
     let active = true;
-    setAlertState(loadAlertState());
-    setAlertRules(loadRules());
-    setLocalPrefs(mergePrefs(defaultAlertPrefs(), loadUserPrefs(ALERT_PREFS_STORAGE_KEY)));
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return;
+      setAlertState(loadAlertState());
+      setAlertRules(loadRules());
+      setLocalPrefs(mergePrefs(defaultAlertPrefs(), loadUserPrefs(ALERT_PREFS_STORAGE_KEY)));
+    }, 0);
 
     const onRulesChanged = () => setAlertRules(loadRules());
     const onPrefsChanged = () => {
@@ -196,6 +199,7 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
     void load();
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
       window.removeEventListener(ALERT_RULES_CHANGED_EVENT, onRulesChanged);
       window.removeEventListener(ALERT_PREFS_CHANGED_EVENT, onPrefsChanged);
       window.removeEventListener("storage", onStorage);
@@ -236,7 +240,7 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
           <Link href="/settings/alerts" className="text-xs font-bold text-slate-600 hover:text-slate-800">
             규칙 설정
           </Link>
-          <Link href="/public/dart" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">
+          <Link href="/public/dart" className="text-xs font-bold text-navy hover:text-navy">
             전체 보기
           </Link>
         </div>
@@ -251,12 +255,12 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
       ) : (
         <ul className="mt-4 space-y-2">
           {visibleItems.map((item) => (
-            <li key={item.id} className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+            <li key={item.id} className="rounded-xl border border-slate-100 bg-surface-muted/60 px-3 py-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-xs font-bold text-slate-800">{item.corpName} · {item.title}</p>
                 <div className="flex shrink-0 items-center gap-1">
                   {item.showNewBadge ? (
-                    <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">NEW</span>
+                    <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-navy">NEW</span>
                   ) : null}
                   {item.isPinned ? (
                     <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">PIN</span>
@@ -269,7 +273,7 @@ export function DartAlertsSummaryCard({ showQuickActions = false }: { showQuickA
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button
                   type="button"
-                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:border-primary/30 hover:text-navy"
                   onClick={() => updateAlertState((prev) => markRead(item.id, prev))}
                 >
                   읽음

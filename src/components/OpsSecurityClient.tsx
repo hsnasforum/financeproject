@@ -84,7 +84,11 @@ export function OpsSecurityClient() {
   }, []);
 
   useEffect(() => {
-    void loadStatus();
+    const timeoutId = window.setTimeout(() => {
+      void loadStatus();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [loadStatus]);
 
   async function runAction(path: string, body: Record<string, unknown>): Promise<void> {
@@ -151,7 +155,7 @@ export function OpsSecurityClient() {
       {!loading && !error && status ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
-            <h2 className="text-base font-black text-slate-900">상태</h2>
+            <h2 className="text-base font-black text-navy">상태</h2>
             <p className="mt-2 text-sm text-slate-700">vault: <span className="font-semibold">{statusText}</span></p>
             <p className="mt-1 text-sm text-slate-700">auto-lock: <span className="font-semibold">{status.autoLockMinutes}분</span></p>
             <p className="mt-1 text-sm text-slate-700">failedAttempts: <span className="font-semibold">{status.failedAttempts}</span></p>
@@ -160,11 +164,11 @@ export function OpsSecurityClient() {
               lock policy: maxFailed={status.lockPolicy.maxFailedAttempts}, window={status.lockPolicy.failedWindowSeconds}s, base={status.lockPolicy.backoffBaseSeconds}s
             </p>
             <p className="mt-1 text-xs text-slate-600">unlockedAt: {status.unlockedAt ?? "-"}</p>
-            {notice ? <p className="mt-3 text-xs font-semibold text-emerald-700">{notice}</p> : null}
+            {notice ? <p className="mt-3 text-xs font-semibold text-navy">{notice}</p> : null}
           </Card>
 
           <Card>
-            <h2 className="text-base font-black text-slate-900">{status.configured ? "잠금 제어" : "초기 설정"}</h2>
+            <h2 className="text-base font-black text-navy">{status.configured ? "잠금 제어" : "초기 설정"}</h2>
             <div className="mt-3 space-y-2">
               <label className="block text-xs font-semibold text-slate-700" htmlFor="vault-passphrase">암호</label>
               <input
@@ -235,7 +239,7 @@ export function OpsSecurityClient() {
 
           {status.configured ? (
             <Card>
-              <h2 className="text-base font-black text-slate-900">암호 변경</h2>
+              <h2 className="text-base font-black text-navy">암호 변경</h2>
               <div className="mt-3 space-y-2">
                 {!status.unlocked ? (
                   <>

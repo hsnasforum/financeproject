@@ -195,7 +195,7 @@ test("planning quickstart keeps review fallback focused on runs history when pro
   await expect(quickStartStatus).toContainText("다음 단계 · 진행 상태 다시 확인");
   await expect(page.getByTestId("planning-quickstart-run-cta")).toHaveCount(0);
 
-  const runsLink = page.getByTestId("planning-quickstart-runs-link");
+  const runsLink = page.locator("#planning-quickstart-runs-link");
   await expect(runsLink).toBeVisible({ timeout: 30_000 });
   await expect(runsLink).toHaveClass(/bg-emerald-600/);
 

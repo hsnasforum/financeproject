@@ -323,6 +323,7 @@ export function buildSameIdCoexistenceUserFacingInternalFailure(): SameIdCoexist
 export function toSameIdCoexistenceUserFacingInternalFailure(
   _input: SameIdCoexistenceSecondaryFailureSequenceResult,
 ): SameIdCoexistenceUserFacingInternalFailure {
+  void _input;
   return buildSameIdCoexistenceUserFacingInternalFailure();
 }
 

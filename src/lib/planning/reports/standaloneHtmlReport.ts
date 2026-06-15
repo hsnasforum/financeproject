@@ -113,6 +113,7 @@ export type StandaloneReportRenderInput = {
     policy: unknown;
   };
   printView?: boolean;
+  styleNonce?: string;
 };
 
 function escapeHtml(value: unknown): string {
@@ -161,6 +162,9 @@ function guideToneClass(tone: "slate" | "amber" | "rose" | "emerald"): string {
 }
 
 export function renderStandaloneHtml(input: StandaloneReportRenderInput): string {
+  const styleNonceAttribute = input.styleNonce
+    ? ` nonce="${escapeHtml(input.styleNonce)}"`
+    : "";
   const warningRows = input.warnings.length > 0
     ? input.warnings
       .map((warning) => `
@@ -215,7 +219,7 @@ export function renderStandaloneHtml(input: StandaloneReportRenderInput): string
           <p><strong>${escapeHtml(diag.evidence)}</strong></p>
           <p>${escapeHtml(diag.description)}</p>
           ${diag.evidenceDetail ? `
-            <details class="card" style="margin-top:8px;">
+            <details class="card detail-card">
               <summary>계산 근거</summary>
               <p>공식: ${escapeHtml(diag.evidenceDetail.formula)}</p>
               <p>입력:</p>
@@ -261,7 +265,7 @@ export function renderStandaloneHtml(input: StandaloneReportRenderInput): string
         </article>
       `).join("")}
     </div>
-    <h3 style="margin-top:14px;">${escapeHtml(input.monthlyOperatingGuide.nextPlanTitle)}</h3>
+    <h3 class="section-subhead">${escapeHtml(input.monthlyOperatingGuide.nextPlanTitle)}</h3>
     <div class="grid">
       ${input.monthlyOperatingGuide.nextPlan.map((item) => `
         <article class="card ${guideToneClass(item.tone)}">
@@ -404,7 +408,7 @@ export function renderStandaloneHtml(input: StandaloneReportRenderInput): string
     : "";
 
   const printModeScript = input.printView
-    ? "<script>window.addEventListener('load', () => { window.print(); });</script>"
+    ? "<script src=\"/planning-report-print.js\" defer></script>"
     : "";
 
   return `<!doctype html>
@@ -413,7 +417,7 @@ export function renderStandaloneHtml(input: StandaloneReportRenderInput): string
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Planning Report ${escapeHtml(input.runId)}</title>
-<style>
+<style${styleNonceAttribute}>
   @page { size: A4; margin: 12mm; }
   :root { color-scheme: light; }
   body { font-family: "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #0f172a; background: linear-gradient(180deg, #f8fafc 0%, #ffffff 240px); }
@@ -426,6 +430,8 @@ export function renderStandaloneHtml(input: StandaloneReportRenderInput): string
   .eyebrow { color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 6px; }
   .grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
   .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 12px; background: #ffffff; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+  .detail-card { margin-top: 8px; }
+  .section-subhead { margin-top: 14px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; page-break-inside: auto; }
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }

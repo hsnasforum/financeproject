@@ -265,23 +265,32 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
   }
 
   useEffect(() => {
-    void loadReports();
+    const timeoutId = window.setTimeout(() => {
+      void loadReports();
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [loadReports]);
 
   useEffect(() => {
     if (!selectedId) return;
-    void loadReportDetail(selectedId);
+    const timeoutId = window.setTimeout(() => {
+      void loadReportDetail(selectedId);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selectedId]);
 
   useEffect(() => {
     const runId = selected?.runId ?? "";
-    if (!runId) {
-      setSelectedRun(null);
+    const timeoutId = window.setTimeout(() => {
+      if (!runId) {
+        setSelectedRun(null);
+        setShowAllActions(false);
+        return;
+      }
       setShowAllActions(false);
-      return;
-    }
-    setShowAllActions(false);
-    void loadRunDetail(runId);
+      void loadRunDetail(runId);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [selected?.runId]);
 
   const selectedVm = useMemo(
@@ -394,21 +403,21 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
         </Card>
       ) : null}
       {notice ? (
-        <Card className="print-card mb-4 border-emerald-200 bg-emerald-50 p-4">
-          <p className="text-sm font-semibold text-emerald-700">{notice}</p>
+        <Card className="print-card mb-4 border-primary/20 bg-primary/5 p-4">
+          <p className="text-sm font-semibold text-navy">{notice}</p>
         </Card>
       ) : null}
       <div className="report-root grid gap-8 xl:grid-cols-[1fr_1.8fr]">
         <div className="space-y-8">
           <Card className="print-card overflow-hidden rounded-[2rem] border-slate-100 p-0 shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 p-6 px-8">
-              <h2 className="text-sm font-black uppercase tracking-widest text-slate-900">리포트 목록</h2>
+            <div className="flex items-center justify-between border-b border-slate-50 bg-surface-muted/50 p-6 px-8">
+              <h2 className="text-sm font-black uppercase tracking-widest text-navy">리포트 목록</h2>
               <Button className="no-print h-8 rounded-full px-4 font-black" disabled={loadingList} onClick={() => void loadReports()} size="sm" variant="outline">새로고침</Button>
             </div>
             <div className="p-4">
               <div className="overflow-x-auto rounded-2xl border border-slate-100">
                 <table className="min-w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-400">
+                  <thead className="bg-surface-muted text-slate-400">
                     <tr>
                       <th className="px-4 py-3 font-black uppercase tracking-widest">ID</th>
                       <th className="px-4 py-3 font-black uppercase tracking-widest">생성시각</th>
@@ -421,10 +430,10 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                     ) : reports.length === 0 ? (
                       <tr><td className="px-4 py-6 text-slate-400 text-center font-bold" colSpan={3}>저장된 리포트가 없습니다.</td></tr>
                     ) : reports.map((report) => (
-                      <tr className={cn("group transition-colors hover:bg-slate-50", selectedId === report.id && "bg-emerald-50/30")} key={report.id}>
+                      <tr className={cn("group transition-colors hover:bg-surface-muted", selectedId === report.id && "bg-primary/30")} key={report.id}>
                         <td className="px-4 py-3">
                           <button
-                            className={cn("font-black text-slate-900 transition-colors group-hover:text-emerald-600", selectedId === report.id && "text-emerald-600 underline underline-offset-4 decoration-emerald-200")}
+                            className={cn("font-black text-navy transition-colors group-hover:text-primary", selectedId === report.id && "text-primary underline underline-offset-4 decoration-primary/20")}
                             onClick={() => setSelectedId(report.id)}
                             type="button"
                           >
@@ -436,7 +445,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                           <div className="no-print flex items-center justify-end gap-3">
                             {report.recommendRunId ? (
                               <Link
-                                className="font-black text-emerald-600 hover:underline"
+                                className="font-black text-primary hover:underline"
                                 href={buildRecommendHistoryHref(report.recommendRunId)}
                               >
                                 추천 실행
@@ -474,7 +483,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
               </div>
             ) : (
               <div className="space-y-10">
-                <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-slate-50 px-5 py-4 border border-slate-100">
+                <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-surface-muted px-5 py-4 border border-slate-100">
                   <div className="space-y-1">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Report Context</p>
                     <p className="text-[11px] font-bold text-slate-700">
@@ -487,20 +496,20 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
 
                 <div className="no-print flex flex-wrap gap-3">
                   <a
-                    className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-700 transition-all hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 shadow-sm"
+                    className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-700 transition-all hover:border-primary/20 hover:bg-primary/5 active:scale-95 shadow-sm"
                     href={`/api/planning/v2/reports/${encodeURIComponent(selected.id)}/download`}
                   >
                     마크다운 다운로드
                   </a>
                   <Link
-                    className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-700 transition-all hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 shadow-sm"
+                    className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-700 transition-all hover:border-primary/20 hover:bg-primary/5 active:scale-95 shadow-sm"
                     href={`/planning/reports/${encodeURIComponent(selected.id)}`}
                   >
                     고정 링크 열기
                   </Link>
                   {selectedRecommendHistoryHref ? (
                     <Link
-                      className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-700 transition-all hover:border-emerald-200 hover:bg-emerald-50 active:scale-95 shadow-sm"
+                      className="inline-flex items-center rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-xs font-black text-slate-700 transition-all hover:border-primary/20 hover:bg-primary/5 active:scale-95 shadow-sm"
                       href={selectedRecommendHistoryHref}
                     >
                       추천 실행으로 돌아가기
@@ -514,7 +523,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                   </div>
                 ) : loadingRun ? (
                   <div className="py-12 flex justify-center">
-                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
                   </div>
                 ) : runError ? (
                   <div className="rounded-2xl bg-rose-50 p-6 text-center border border-rose-100">
@@ -551,33 +560,33 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         title="1) 기준 정보"
                       />
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">스냅샷 ID</p>
-                          <p className="text-sm font-black text-slate-900">{selectedRun.meta.snapshot?.id ?? selectedRun.input.snapshotId ?? "latest"}</p>
+                          <p className="text-sm font-black text-navy">{selectedRun.meta.snapshot?.id ?? selectedRun.input.snapshotId ?? "latest"}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">기준 시점 (asOf)</p>
-                          <p className="text-sm font-black text-slate-900 tabular-nums">{selectedRun.meta.snapshot?.asOf ?? "-"}</p>
+                          <p className="text-sm font-black text-navy tabular-nums">{selectedRun.meta.snapshot?.asOf ?? "-"}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">데이터 수집일</p>
-                          <p className="text-sm font-black text-slate-900 tabular-nums">{selectedRun.meta.snapshot?.fetchedAt ? formatDateTime(selectedRun.meta.snapshot.fetchedAt) : "-"}</p>
+                          <p className="text-sm font-black text-navy tabular-nums">{selectedRun.meta.snapshot?.fetchedAt ? formatDateTime(selectedRun.meta.snapshot.fetchedAt) : "-"}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">플래닝 실행 시각</p>
-                          <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(selectedRun.createdAt)}</p>
+                          <p className="text-sm font-black text-navy tabular-nums">{formatDateTime(selectedRun.createdAt)}</p>
                         </div>
                       </div>
                       
                       <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-inner">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2">가정 요약 (Overrides)</p>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-2">가정 요약 (Overrides)</p>
                         {assumptionsLines.length === 0 ? (
                           <p className="text-sm font-medium text-slate-400 italic">명시된 override 가정이 없습니다.</p>
                         ) : (
                           <ul className="space-y-2">
                             {assumptionsLines.map((line) => (
                               <li key={line} className="flex gap-3 text-sm font-bold text-slate-700">
-                                <span className="text-emerald-500 font-black">•</span>
+                                <span className="text-primary font-black">•</span>
                                 <span>{line}</span>
                               </li>
                             ))}
@@ -592,23 +601,23 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         title="2) Executive Summary"
                       />
                       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 hover:bg-white hover:shadow-md transition-all">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5 hover:bg-white hover:shadow-md transition-all">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">말기 순자산</p>
-                          <p className="mt-2 text-xl font-black text-slate-900 tabular-nums tracking-tight">{toMoney(summaryCards.endNetWorthKrw)}</p>
+                          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{toMoney(summaryCards.endNetWorthKrw)}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 hover:bg-white hover:shadow-md transition-all">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5 hover:bg-white hover:shadow-md transition-all">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">최저 현금</p>
-                          <p className="mt-2 text-xl font-black text-slate-900 tabular-nums tracking-tight">{toMoney(summaryCards.worstCashKrw)}</p>
+                          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{toMoney(summaryCards.worstCashKrw)}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 hover:bg-white hover:shadow-md transition-all">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5 hover:bg-white hover:shadow-md transition-all">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">목표 달성</p>
-                          <p className="mt-2 text-xl font-black text-slate-900 tabular-nums tracking-tight">{achievedGoals} / {goalRows.length}</p>
+                          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{achievedGoals} / {goalRows.length}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 hover:bg-white hover:shadow-md transition-all">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5 hover:bg-white hover:shadow-md transition-all">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">최대 DSR</p>
-                          <p className="mt-2 text-xl font-black text-slate-900 tabular-nums tracking-tight">{formatRatioPct(badge.maxDsr)}</p>
+                          <p className="mt-2 text-xl font-black text-navy tabular-nums tracking-tight">{formatRatioPct(badge.maxDsr)}</p>
                         </div>
-                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5 hover:bg-white hover:shadow-md transition-all">
+                        <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5 hover:bg-white hover:shadow-md transition-all">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">치명 경고</p>
                           <p className="mt-2 text-xl font-black text-rose-600 tabular-nums tracking-tight">{criticalWarningsCount}건</p>
                         </div>
@@ -625,20 +634,20 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         title={`5) Action Plan (Top ${LIMITS.actionsTop})`}
                       />
                       {actionRows.length === 0 ? (
-                        <div className="rounded-2xl bg-slate-50 p-8 text-center border border-slate-100">
+                        <div className="rounded-2xl bg-surface-muted p-8 text-center border border-slate-100">
                           <p className="text-sm font-bold text-slate-400 italic">권장 액션이 없습니다.</p>
                         </div>
                       ) : (
                         <div className="space-y-4">
                           {visibleActionRows.map((action, index) => (
-                            <article className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:border-emerald-100" key={`${action.code}-${index}`}>
+                            <article className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:border-primary/10" key={`${action.code}-${index}`}>
                               <div className="flex items-center justify-between mb-4">
                                 <Badge variant={action.severity === "critical" ? "destructive" : action.severity === "warn" ? "warning" : "secondary"} className="h-6 rounded-lg px-2.5 text-[10px] font-black border-none uppercase tracking-widest">
                                   {severityLabel(action.severity)}
                                 </Badge>
                                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[10px] font-black text-slate-700 shadow-sm">{index + 1}</span>
                               </div>
-                              <h3 className="text-lg font-black text-slate-900 tracking-tight leading-snug">{action.title}</h3>
+                              <h3 className="text-lg font-black text-navy tracking-tight leading-snug">{action.title}</h3>
                               <p className="mt-3 text-sm font-bold text-slate-600 leading-relaxed">{action.summary || "핵심 경고를 줄이기 위한 실행 계획입니다."}</p>
                               <div className="mt-6 flex flex-wrap items-center gap-4 text-[10px] font-black uppercase tracking-widest text-slate-400">
                                 <span>Evidence {action.whyCount}</span>
@@ -652,7 +661,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         </div>
                       )}
                       {actionRows.length > LIMITS.actionsTop ? (
-                        <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-6 py-4 border border-slate-100">
+                        <div className="flex items-center justify-between rounded-2xl bg-surface-muted px-6 py-4 border border-slate-100">
                           <span className="text-xs font-bold text-slate-500">
                             {showAllActions
                               ? `전체 ${actionRows.length}개 액션 표시 중`
@@ -678,7 +687,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         />
                         <div className="overflow-hidden rounded-[2rem] border border-slate-100 bg-white shadow-sm">
                           <table className="min-w-full divide-y divide-slate-100 text-sm">
-                            <thead className="bg-slate-50 text-slate-400">
+                            <thead className="bg-surface-muted text-slate-400">
                               <tr>
                                 <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">시나리오</th>
                                 <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">말기 순자산</th>
@@ -690,15 +699,15 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                               {scenarioRows.map((row) => (
-                                <tr className="group transition-colors hover:bg-slate-50/50" key={row.id}>
-                                  <td className="px-4 py-4 font-black text-slate-900">{row.title}</td>
+                                <tr className="group transition-colors hover:bg-surface-muted/50" key={row.id}>
+                                  <td className="px-4 py-4 font-black text-navy">{row.title}</td>
                                   <td className="px-4 py-4 text-right font-bold tabular-nums">{toMoney(row.endNetWorthKrw)}</td>
-                                  <td className={cn("px-4 py-4 text-right font-black tabular-nums", row.endNetWorthDeltaKrw < 0 ? "text-rose-600" : "text-emerald-600")}>
+                                  <td className={cn("px-4 py-4 text-right font-black tabular-nums", row.endNetWorthDeltaKrw < 0 ? "text-danger" : "text-success")}>
                                     {row.endNetWorthDeltaKrw >= 0 ? "+" : ""}{toMoney(row.endNetWorthDeltaKrw)}
                                   </td>
                                   <td className="px-4 py-4 text-right font-bold tabular-nums text-slate-700">{toMoney(row.worstCashKrw)}</td>
-                                  <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900">{row.goalsAchievedCount}</td>
-                                  <td className="px-4 py-4 text-right font-black tabular-nums text-slate-900">{row.warningsCount}</td>
+                                  <td className="px-4 py-4 text-right font-black tabular-nums text-navy">{row.goalsAchievedCount}</td>
+                                  <td className="px-4 py-4 text-right font-black tabular-nums text-navy">{row.warningsCount}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -715,7 +724,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                             <div key={row.label} className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
                               <div className="flex items-center justify-between mb-2">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{row.label}</p>
-                                <span className="text-lg font-black text-emerald-600 tabular-nums">{row.value}</span>
+                                <span className="text-lg font-black text-primary tabular-nums">{row.value}</span>
                               </div>
                               <p className="text-xs font-bold text-slate-600 leading-relaxed">{row.interpretation}</p>
                             </div>
@@ -724,7 +733,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                         {montePercentileRows.length > 0 ? (
                           <div className="overflow-hidden rounded-[2rem] border border-slate-100 bg-white shadow-sm">
                             <table className="min-w-full divide-y divide-slate-100 text-sm">
-                              <thead className="bg-slate-50 text-slate-400">
+                              <thead className="bg-surface-muted text-slate-400">
                                 <tr>
                                   <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">지표</th>
                                   <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">P10 (Worst)</th>
@@ -734,11 +743,11 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                               </thead>
                               <tbody className="divide-y divide-slate-50">
                                 {montePercentileRows.map((row) => (
-                                  <tr className="group transition-colors hover:bg-slate-50/50" key={row.metric}>
-                                    <td className="px-4 py-4 font-black text-slate-900">{row.metric}</td>
+                                  <tr className="group transition-colors hover:bg-surface-muted/50" key={row.metric}>
+                                    <td className="px-4 py-4 font-black text-navy">{row.metric}</td>
                                     <td className="px-4 py-4 text-right font-bold tabular-nums text-rose-600">{toMoney(row.p10)}</td>
                                     <td className="px-4 py-4 text-right font-bold tabular-nums text-slate-700">{toMoney(row.p50)}</td>
-                                    <td className="px-4 py-4 text-right font-bold tabular-nums text-emerald-600">{toMoney(row.p90)}</td>
+                                    <td className="px-4 py-4 text-right font-bold tabular-nums text-primary">{toMoney(row.p90)}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -755,19 +764,19 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                           title="8) Debt Analysis"
                         />
                         <div className="grid gap-4 md:grid-cols-2">
-                          <div className="rounded-[1.5rem] bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 mb-1">현재 DSR</p>
+                          <div className="rounded-[1.5rem] bg-primary p-6 text-white shadow-xl shadow-navy/20">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-primary/80 mb-1">현재 DSR</p>
                             <p className="text-3xl font-black tabular-nums tracking-tight">{formatRatioPct(debtSummaryMeta?.debtServiceRatio)}</p>
                           </div>
-                          <div className="rounded-[1.5rem] bg-slate-50 p-6 border border-slate-100">
+                          <div className="rounded-[1.5rem] bg-surface-muted p-6 border border-slate-100">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">월 총상환액</p>
-                            <p className="text-2xl font-black text-slate-900 tabular-nums tracking-tight">{toMoney(debtSummaryMeta?.totalMonthlyPaymentKrw)}</p>
+                            <p className="text-2xl font-black text-navy tabular-nums tracking-tight">{toMoney(debtSummaryMeta?.totalMonthlyPaymentKrw)}</p>
                           </div>
                         </div>
                         
                         <div className="overflow-hidden rounded-[2rem] border border-slate-100 bg-white shadow-sm">
                           <table className="min-w-full divide-y divide-slate-100 text-sm">
-                            <thead className="bg-slate-50 text-slate-400">
+                            <thead className="bg-surface-muted text-slate-400">
                               <tr>
                                 <th className="px-4 py-4 text-left font-black uppercase tracking-widest text-[10px]">부채명</th>
                                 <th className="px-4 py-4 text-right font-black uppercase tracking-widest text-[10px]">원금</th>
@@ -779,10 +788,10 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                             </thead>
                             <tbody className="divide-y divide-slate-50">
                               {debtSummaries.map((row) => (
-                                <tr className="group transition-colors hover:bg-slate-50/50" key={`${row.liabilityId}-${row.name}`}>
-                                  <td className="px-4 py-4 font-black text-slate-900">{row.name}</td>
+                                <tr className="group transition-colors hover:bg-surface-muted/50" key={`${row.liabilityId}-${row.name}`}>
+                                  <td className="px-4 py-4 font-black text-navy">{row.name}</td>
                                   <td className="px-4 py-4 text-right font-bold tabular-nums">{toMoney(row.principalKrw)}</td>
-                                  <td className="px-4 py-4 text-right font-black tabular-nums text-emerald-600">{typeof row.aprPct === "number" ? `${row.aprPct.toFixed(2)}%` : "-"}</td>
+                                  <td className="px-4 py-4 text-right font-black tabular-nums text-primary">{typeof row.aprPct === "number" ? `${row.aprPct.toFixed(2)}%` : "-"}</td>
                                   <td className="px-4 py-4 text-right font-bold tabular-nums text-slate-700">{toMoney(row.monthlyPaymentKrw)}</td>
                                   <td className="px-4 py-4 text-right font-bold tabular-nums text-rose-600">{toMoney(row.totalInterestRemainingKrw)}</td>
                                   <td className="px-4 py-4 text-right font-black tabular-nums text-slate-400">{typeof row.payoffMonthIndex === "number" ? `M${row.payoffMonthIndex + 1}` : "-"}</td>
@@ -796,7 +805,7 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
                   </div>
                 )}
 
-                <details className="no-print group rounded-[2rem] border border-slate-200 bg-slate-50/50 p-6 transition-all">
+                <details className="no-print group rounded-[2rem] border border-slate-200 bg-surface-muted/50 p-6 transition-all">
                   <summary className="cursor-pointer text-xs font-black uppercase tracking-widest text-slate-400 group-open:text-slate-600 list-none flex items-center gap-2">
                     <span className="transition-transform group-open:rotate-90">▶</span>
                     고급 보기 (Contract/VM/Markdown)
@@ -824,13 +833,13 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
           role="dialog"
         >
           <BodyDialogSurface className="max-w-lg rounded-[2.5rem] p-8 shadow-2xl">
-            <h3 className="text-xl font-black text-slate-900 tracking-tight" id="planning-reports-delete-title">리포트 삭제 확인</h3>
+            <h3 className="text-xl font-black text-navy tracking-tight" id="planning-reports-delete-title">리포트 삭제 확인</h3>
             <p className="mt-3 text-sm font-bold text-slate-600 leading-relaxed">이 작업은 되돌릴 수 없습니다. 삭제를 진행하려면 아래 확인 문구를 정확히 입력해 주세요.</p>
-            <div className="my-6 rounded-2xl bg-slate-100 p-4 font-mono text-[11px] font-black text-slate-700 border border-slate-200 shadow-inner break-all">
+            <div className="my-6 rounded-2xl bg-surface-muted p-4 font-mono text-[11px] font-black text-slate-700 border border-slate-200 shadow-inner break-all">
               {deleteExpectedConfirm}
             </div>
             <input
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-black text-slate-700 outline-none focus:border-emerald-500 focus:bg-white transition-all shadow-sm"
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 text-sm font-black text-slate-700 outline-none focus:border-primary focus:bg-white transition-all shadow-sm"
               value={deleteConfirmText}
               onChange={(event) => setDeleteConfirmText(event.target.value)}
               placeholder="위의 확인 문구를 입력하세요"
@@ -885,8 +894,8 @@ export function PlanningReportsClient(props: PlanningReportsClientProps = {}) {
               PDF 인쇄
             </Button>
             <div className="flex gap-4 text-sm font-black">
-              <Link className="text-slate-400 hover:text-emerald-600 transition-colors" href="/planning/trash">휴지통</Link>
-              <Link className="text-slate-400 hover:text-emerald-600 transition-colors" href="/planning/runs">실행 기록</Link>
+              <Link className="text-slate-400 hover:text-primary transition-colors" href="/planning/trash">휴지통</Link>
+              <Link className="text-slate-400 hover:text-primary transition-colors" href="/planning/runs">실행 기록</Link>
             </div>
           </div>
         )}

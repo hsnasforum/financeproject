@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { runPnpm } from "./pnpm_runner.mjs";
 
 let findRedactionIssues = () => [];
 let diffRuns = null;
@@ -41,16 +41,11 @@ function parseArgs(argv) {
 }
 
 function runPnpmScript(script, env) {
-  return new Promise((resolve, reject) => {
-    const command = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-    const child = spawn(command, [script], {
+  return runPnpm([script], {
       cwd: process.cwd(),
       env,
       stdio: "inherit",
-    });
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? 1));
-  });
+    }).then((result) => result.code);
 }
 
 async function runPlaywrightAcceptance(baseUrl, suite) {

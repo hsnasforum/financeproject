@@ -30,6 +30,11 @@ import { cn } from "@/lib/utils";
 
 const PLANNER_LAST_SNAPSHOT_KEY = "planner_last_snapshot_v1";
 
+type RecommendationPageState = {
+  runId: string;
+  page: number;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -175,7 +180,10 @@ export function ReportClient({
 }) {
   const [includeDisclosuresFromDigest, setIncludeDisclosuresFromDigest] = useState(false);
   const [includeDailyBrief, setIncludeDailyBrief] = useState(false);
-  const [recommendationPage, setRecommendationPage] = useState(1);
+  const [recommendationPageState, setRecommendationPageState] = useState<RecommendationPageState>({
+    runId: "",
+    page: 1,
+  });
   const [benefitsLoading, setBenefitsLoading] = useState(false);
   const [benefitsError, setBenefitsError] = useState("");
   const [benefitItems, setBenefitItems] = useState<BenefitCandidate[]>([]);
@@ -260,10 +268,6 @@ export function ReportClient({
   }), [plannerSnapshot, savedRun, includeDisclosuresFromDigest, disclosureDigest, digestError]);
 
   useEffect(() => {
-    setRecommendationPage(1);
-  }, [savedRun?.runId]);
-
-  useEffect(() => {
     let active = true;
 
     async function loadBenefits(): Promise<void> {
@@ -311,6 +315,10 @@ export function ReportClient({
 
   const recommendationPageSize = 5;
   const recommendationItems = reportModel.recommendation.run?.items ?? [];
+  const recommendationRunId = savedRun?.runId ?? "";
+  const recommendationPage = recommendationPageState.runId === recommendationRunId
+    ? recommendationPageState.page
+    : 1;
   const recommendationTotalPages = Math.max(1, Math.ceil(recommendationItems.length / recommendationPageSize));
   const recommendationCurrentPage = Math.min(recommendationPage, recommendationTotalPages);
   const recommendationPageItems = recommendationItems.slice(
@@ -364,21 +372,21 @@ export function ReportClient({
         description="입력하신 재무 현황과 AI 추천 결과를 종합하여 분석한 맞춤형 보고서입니다."
         action={(
           <div className="no-print flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-full border border-slate-200 transition-all hover:border-emerald-200 shadow-sm">
+            <label className="flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-full border border-slate-200 transition-all hover:border-primary/20 shadow-sm">
               <input
                 type="checkbox"
                 checked={includeDisclosuresFromDigest}
                 onChange={(event) => setIncludeDisclosuresFromDigest(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
               <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">공시 Digest</span>
             </label>
-            <label className="flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-full border border-slate-200 transition-all hover:border-emerald-200 shadow-sm">
+            <label className="flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-full border border-slate-200 transition-all hover:border-primary/20 shadow-sm">
               <input
                 type="checkbox"
                 checked={includeDailyBrief}
                 onChange={(event) => setIncludeDailyBrief(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
               <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Daily Brief</span>
             </label>
@@ -386,8 +394,8 @@ export function ReportClient({
               PDF 인쇄
             </Button>
             <div className="flex gap-1 ml-2 pl-3 border-l border-slate-200">
-              <Button variant="ghost" size="sm" onClick={exportMarkdown} className="h-9 px-3 text-[10px] font-black text-slate-400 hover:text-slate-900 rounded-full">MD</Button>
-              <Button variant="ghost" size="sm" onClick={exportJson} className="h-9 px-3 text-[10px] font-black text-slate-400 hover:text-slate-900 rounded-full">JSON</Button>
+              <Button variant="ghost" size="sm" onClick={exportMarkdown} className="h-9 px-3 text-[10px] font-black text-slate-400 hover:text-navy rounded-full">MD</Button>
+              <Button variant="ghost" size="sm" onClick={exportJson} className="h-9 px-3 text-[10px] font-black text-slate-400 hover:text-navy rounded-full">JSON</Button>
             </div>
           </div>
         )}
@@ -403,26 +411,26 @@ export function ReportClient({
           </div>
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">보고서 생성</p>
-              <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(reportModel.generatedAt)}</p>
+              <p className="text-sm font-black text-navy tabular-nums">{formatDateTime(reportModel.generatedAt)}</p>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">추천 상품</p>
-              <p className="text-sm font-black text-slate-900 tabular-nums">{reportModel.overview.recommendationCount}개</p>
+              <p className="text-sm font-black text-navy tabular-nums">{reportModel.overview.recommendationCount}개</p>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">플래너 갱신</p>
-              <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(reportModel.overview.plannerSavedAt)}</p>
+              <p className="text-sm font-black text-navy tabular-nums">{formatDateTime(reportModel.overview.plannerSavedAt)}</p>
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-5">
+            <div className="rounded-2xl border border-slate-100 bg-surface-muted/50 p-5">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">데이터 갱신</p>
-              <p className="text-sm font-black text-slate-900 tabular-nums">{formatDateTime(reportModel.overview.recommendSavedAt)}</p>
+              <p className="text-sm font-black text-navy tabular-nums">{formatDateTime(reportModel.overview.recommendSavedAt)}</p>
             </div>
           </div>
 
-          <div className="mt-8 rounded-2xl border border-emerald-100 bg-emerald-50/20 p-6 shadow-inner">
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-2 px-1">Disclaimer & Context</p>
+          <div className="mt-8 rounded-2xl border border-primary/10 bg-primary/20 p-6 shadow-inner">
+            <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-2 px-1">Disclaimer & Context</p>
             <p className="text-sm font-bold text-slate-700 leading-relaxed mb-1">{reportModel.disclaimer}</p>
             <p className="text-xs font-medium text-slate-500 italic">※ {reportModel.dataAsOfNote}</p>
           </div>
@@ -438,15 +446,15 @@ export function ReportClient({
           ) : (
             <div className="space-y-10">
               <div className="grid gap-4 md:grid-cols-3">
-                 <div className="rounded-[1.5rem] bg-emerald-600 p-6 text-white shadow-xl shadow-emerald-900/20">
-                   <p className="text-[10px] font-black uppercase tracking-widest text-emerald-100 mb-1">월 순소득</p>
+                 <div className="rounded-[1.5rem] bg-primary p-6 text-white shadow-xl shadow-navy/20">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-primary/80 mb-1">월 순소득</p>
                    <p className="text-2xl font-black tabular-nums tracking-tight">{reportModel.planner.snapshot.input.monthlyIncomeNet.toLocaleString()}원</p>
                  </div>
-                 <div className="rounded-[1.5rem] bg-slate-50 p-6 border border-slate-100">
+                 <div className="rounded-[1.5rem] bg-surface-muted p-6 border border-slate-100">
                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">고정 지출</p>
                    <p className="text-xl font-black text-rose-600 tabular-nums tracking-tight">{reportModel.planner.snapshot.input.monthlyFixedExpenses.toLocaleString()}원</p>
                  </div>
-                 <div className="rounded-[1.5rem] bg-slate-50 p-6 border border-slate-100">
+                 <div className="rounded-[1.5rem] bg-surface-muted p-6 border border-slate-100">
                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">변동 지출</p>
                    <p className="text-xl font-black text-rose-600 tabular-nums tracking-tight">{reportModel.planner.snapshot.input.monthlyVariableExpenses.toLocaleString()}원</p>
                  </div>
@@ -456,7 +464,7 @@ export function ReportClient({
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">핵심 지표 분석</p>
                 <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
                   <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-400">
+                    <thead className="bg-surface-muted text-slate-400">
                       <tr>
                         <th className="py-4 px-6 text-left font-black uppercase tracking-widest text-[10px]">지표 명칭</th>
                         <th className="py-4 px-6 text-right font-black uppercase tracking-widest text-[10px]">산출 값</th>
@@ -465,9 +473,9 @@ export function ReportClient({
                     </thead>
                     <tbody className="divide-y divide-slate-50 bg-white">
                       {reportModel.planner.snapshot.result.metrics.map((metric) => (
-                        <tr key={metric.key} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 px-6 font-black text-slate-900">{metric.label}</td>
-                          <td className="py-4 px-6 text-right font-black text-emerald-600 tabular-nums text-lg">
+                        <tr key={metric.key} className="hover:bg-surface-muted/50 transition-colors">
+                          <td className="py-4 px-6 font-black text-navy">{metric.label}</td>
+                          <td className="py-4 px-6 text-right font-black text-primary tabular-nums text-lg">
                             {formatMetricValue(metric.value, metric.unit)}
                           </td>
                           <td className="py-4 px-6 text-[11px] font-bold text-slate-400 font-mono leading-relaxed">{metric.formula ?? "-"}</td>
@@ -485,12 +493,12 @@ export function ReportClient({
                 ) : (
                   <div className="grid gap-4 md:grid-cols-2">
                     {reportModel.planner.snapshot.result.actions.map((action, index) => (
-                      <div key={`${action.title}-${index}`} className="flex gap-4 p-6 rounded-[1.5rem] border border-slate-100 bg-slate-50/30 hover:bg-white hover:shadow-md transition-all shadow-sm">
+                      <div key={`${action.title}-${index}`} className="flex gap-4 p-6 rounded-[1.5rem] border border-slate-100 bg-surface-muted/30 hover:bg-white hover:shadow-md transition-all shadow-sm">
                         <Badge variant={action.priority === "high" ? "destructive" : action.priority === "mid" ? "warning" : "success"} className="h-6 rounded-lg px-2 text-[9px] font-black border-none uppercase tracking-widest shrink-0">
                           {action.priority}
                         </Badge>
                         <div className="min-w-0">
-                          <p className="font-black text-slate-900 mb-1 leading-snug">{action.title}</p>
+                          <p className="font-black text-navy mb-1 leading-snug">{action.title}</p>
                           <p className="text-xs font-bold text-slate-500 leading-relaxed line-clamp-2">{action.action}</p>
                         </div>
                       </div>
@@ -511,14 +519,14 @@ export function ReportClient({
             </div>
           ) : (
             <div className="space-y-8">
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 px-5 py-4 text-sm font-bold text-emerald-800 flex items-center gap-3">
-                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-[10px] font-black shrink-0">!</span>
+              <div className="rounded-2xl border border-primary/10 bg-primary/30 px-5 py-4 text-sm font-bold text-navy flex items-center gap-3">
+                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-black shrink-0">!</span>
                  <p>고객님의 <strong>&quot;{reportModel.recommendation.run.profile.purpose}&quot;</strong> 목적에 최적화된 상위 결과입니다.</p>
               </div>
               
               <div className="overflow-hidden rounded-2xl border border-slate-100 shadow-inner">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-400">
+                  <thead className="bg-surface-muted text-slate-400">
                     <tr>
                       <th className="py-4 px-6 text-center font-black uppercase tracking-widest text-[10px] w-16">순위</th>
                       <th className="py-4 px-6 text-left font-black uppercase tracking-widest text-[10px]">상품명 및 금융사</th>
@@ -530,31 +538,31 @@ export function ReportClient({
                   </thead>
                   <tbody className="divide-y divide-slate-50 bg-white">
                     {recommendationPageItems.map((item) => (
-                      <tr key={item.unifiedId} className="hover:bg-slate-50/50 transition-colors">
+                      <tr key={item.unifiedId} className="hover:bg-surface-muted/50 transition-colors">
                         <td className="py-4 px-6 text-center">
                           <span className={cn(
                             "inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-black shadow-sm",
-                            item.rank === 1 ? "bg-emerald-500 text-white" :
+                            item.rank === 1 ? "bg-primary text-white" :
                             item.rank === 2 ? "bg-slate-200 text-slate-700" :
-                            item.rank === 3 ? "bg-slate-100 text-slate-500" : "bg-white text-slate-300 border border-slate-100"
+                            item.rank === 3 ? "bg-surface-muted text-slate-500" : "bg-white text-slate-300 border border-slate-100"
                           )}>
                             {item.rank}
                           </span>
                         </td>
                         <td className="py-4 px-6">
-                          <p className="font-black text-slate-900 text-base leading-tight">{item.productName}</p>
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-1.5">{item.providerName}</p>
+                          <p className="font-black text-navy text-base leading-tight">{item.productName}</p>
+                          <p className="text-[10px] font-black text-primary uppercase tracking-widest mt-1.5">{item.providerName}</p>
                         </td>
-                        <td className="py-4 px-6 text-right font-black text-emerald-600 text-xl tabular-nums tracking-tight">{formatRate(item.appliedRate)}</td>
+                        <td className="py-4 px-6 text-right font-black text-primary text-xl tabular-nums tracking-tight">{formatRate(item.appliedRate)}</td>
                         <td className="py-4 px-6 text-right font-bold text-slate-500 tabular-nums">{formatTerm(item.termMonths)}</td>
                         <td className="py-4 px-6 text-right">
-                           <Badge variant="outline" className="bg-slate-50 text-[10px] font-black border-slate-200 text-slate-600 tabular-nums px-2 py-0.5">
+                           <Badge variant="outline" className="bg-surface-muted text-[10px] font-black border-slate-200 text-slate-600 tabular-nums px-2 py-0.5">
                              {formatScore(item.finalScore)}
                            </Badge>
                         </td>
                         <td className="py-4 px-6 text-center no-print">
                           <Link href={`/products/catalog/${encodeURIComponent(item.unifiedId)}`}>
-                             <Button variant="ghost" size="sm" className="h-10 w-10 p-0 rounded-xl text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition-all">
+                             <Button variant="ghost" size="sm" className="h-10 w-10 p-0 rounded-xl text-slate-300 hover:text-primary hover:bg-primary/5 transition-all">
                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                              </Button>
                           </Link>
@@ -565,17 +573,20 @@ export function ReportClient({
                 </table>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-100 bg-slate-50/50 px-5 py-3 text-xs font-bold text-slate-500">
+              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-100 bg-surface-muted/50 px-5 py-3 text-xs font-bold text-slate-500">
                 <p>
-                  Showing <span className="text-slate-900 font-black">{recommendationStart}-{recommendationEnd}</span> of <span className="text-slate-900 font-black">{recommendationItems.length}</span>
+                  Showing <span className="text-navy font-black">{recommendationStart}-{recommendationEnd}</span> of <span className="text-navy font-black">{recommendationItems.length}</span>
                   {" · "}
-                  Page <span className="text-slate-900 font-black">{recommendationCurrentPage}</span> / {recommendationTotalPages}
+                  Page <span className="text-navy font-black">{recommendationCurrentPage}</span> / {recommendationTotalPages}
                 </p>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setRecommendationPage((prev) => Math.max(1, prev - 1))}
+                    onClick={() => setRecommendationPageState({
+                      runId: recommendationRunId,
+                      page: Math.max(1, recommendationCurrentPage - 1),
+                    })}
                     disabled={recommendationCurrentPage <= 1}
                     className="rounded-full px-4 h-8 font-black"
                   >
@@ -584,7 +595,10 @@ export function ReportClient({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setRecommendationPage((prev) => Math.min(recommendationTotalPages, prev + 1))}
+                    onClick={() => setRecommendationPageState({
+                      runId: recommendationRunId,
+                      page: Math.min(recommendationTotalPages, recommendationCurrentPage + 1),
+                    })}
                     disabled={recommendationCurrentPage >= recommendationTotalPages}
                     className="rounded-full px-4 h-8 font-black"
                   >
@@ -599,9 +613,9 @@ export function ReportClient({
         <section className="print-card rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10">
           <SubSectionHeader title="보조금24 · 정부지원 혜택" description="현재 재무 계획과 목적에 부합하는 주요 공공 혜택을 선별했습니다." />
 
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 px-5 py-4 text-sm font-bold text-emerald-800 mb-8 shadow-inner">
+          <div className="rounded-2xl border border-primary/10 bg-primary/30 px-5 py-4 text-sm font-bold text-navy mb-8 shadow-inner">
             분석 키워드: <strong>{benefitTopics.map((topic) => BENEFIT_TOPICS[topic].label).join(", ")}</strong>
-            {benefitQuery ? <span className="text-emerald-600/60 ml-2"> (Context: &quot;{benefitQuery}&quot;)</span> : ""}
+            {benefitQuery ? <span className="text-primary/80 ml-2"> (Context: &quot;{benefitQuery}&quot;)</span> : ""}
           </div>
 
           {benefitsLoading ? (
@@ -619,7 +633,7 @@ export function ReportClient({
           ) : (
             <div className="grid gap-6 md:grid-cols-2">
               {scoredBenefits.map((row, index) => (
-                <article key={row.item.id} className="group flex flex-col rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 hover:bg-white hover:shadow-lg transition-all shadow-sm">
+                <article key={row.item.id} className="group flex flex-col rounded-[2rem] border border-slate-100 bg-surface-muted/30 p-6 hover:bg-white hover:shadow-lg transition-all shadow-sm">
                   {(() => {
                     const ctas = resolveBenefitCtas(row.item);
                     const isDetailLoading = benefitDetailLoadingId === row.item.id;
@@ -628,7 +642,7 @@ export function ReportClient({
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="min-w-0">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Top {index + 1} · Recommendation</p>
-                      <h3 className="mt-1 text-lg font-black text-slate-900 group-hover:text-emerald-600 transition-colors leading-snug line-clamp-2">{row.item.title}</h3>
+                      <h3 className="mt-1 text-lg font-black text-navy group-hover:text-primary transition-colors leading-snug line-clamp-2">{row.item.title}</h3>
                       <p className="mt-1 text-[11px] font-bold text-slate-500">{row.item.org ?? "기관 정보 미상"}</p>
                     </div>
                     <Badge variant="outline" className="bg-white text-[10px] font-black tabular-nums border-slate-200 text-slate-600 shrink-0">
@@ -639,12 +653,12 @@ export function ReportClient({
                   <div className="flex flex-wrap gap-2 mb-6">
                     <Badge variant="secondary" className="bg-white text-slate-500 border-slate-100 text-[10px] font-black px-2">{benefitRegionLabel(row.item)}</Badge>
                     {(row.explain.matched.topics.length > 0 ? row.explain.matched.topics : ["일반"]).map((topic) => (
-                      <Badge key={`${row.item.id}-${topic}`} variant="secondary" className="bg-emerald-50 text-emerald-700 border-none text-[10px] font-black px-2">{topic}</Badge>
+                      <Badge key={`${row.item.id}-${topic}`} variant="secondary" className="bg-primary/5 text-navy border-none text-[10px] font-black px-2">{topic}</Badge>
                     ))}
                   </div>
 
                   <div className="flex-1 space-y-3">
-                    <p className="text-sm font-bold text-slate-700 leading-relaxed border-l-4 border-emerald-500 pl-3 bg-white/50 py-2 rounded-r-lg shadow-sm">{row.explain.why.summary}</p>
+                    <p className="text-sm font-bold text-slate-700 leading-relaxed border-l-4 border-primary pl-3 bg-white/50 py-2 rounded-r-lg shadow-sm">{row.explain.why.summary}</p>
                     <p className="text-xs font-medium text-slate-500 leading-relaxed line-clamp-3">{row.item.summary}</p>
                   </div>
 
@@ -660,7 +674,7 @@ export function ReportClient({
                     </Button>
                     {ctas.applyUrl ? (
                       <a href={ctas.applyUrl} rel="noopener noreferrer" target="_blank" className="flex-1">
-                        <Button variant="primary" size="sm" className="w-full rounded-xl h-10 font-black shadow-md shadow-emerald-900/10">바로 신청하기</Button>
+                        <Button variant="primary" size="sm" className="w-full rounded-xl h-10 font-black shadow-md shadow-navy/10">바로 신청하기</Button>
                       </a>
                     ) : null}
                   </div>
@@ -688,13 +702,13 @@ export function ReportClient({
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-2 border border-slate-100 w-fit">
+                <div className="flex items-center gap-3 rounded-xl bg-surface-muted px-4 py-2 border border-slate-100 w-fit">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Update</span>
                   <span className="text-[11px] font-black text-slate-700 tabular-nums">{formatDateTime(dailyBrief.generatedAt)}</span>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   {dailyBrief.lines.slice(0, 10).map((line, index) => (
-                    <div key={`daily-brief-${index}`} className="flex items-start gap-4 p-5 rounded-2xl bg-slate-50/30 border border-slate-100/50 shadow-sm">
+                    <div key={`daily-brief-${index}`} className="flex items-start gap-4 p-5 rounded-2xl bg-surface-muted/30 border border-slate-100/50 shadow-sm">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-200 text-[10px] font-black text-slate-700 shrink-0 shadow-sm">{index + 1}</span>
                       <p className="text-sm font-bold text-slate-700 leading-snug">{line}</p>
                     </div>
@@ -718,8 +732,8 @@ export function ReportClient({
               </div>
             ) : reportModel.disclosures.source === "digest" && reportModel.disclosures.digest ? (
               <div className="space-y-10">
-                <div className="rounded-[2rem] border border-slate-100 bg-slate-50/50 p-8 shadow-inner">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-6 flex items-center gap-2 px-1">
+                <div className="rounded-[2rem] border border-slate-100 bg-surface-muted/50 p-8 shadow-inner">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-6 flex items-center gap-2 px-1">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     Market Highlights
                   </p>
@@ -731,8 +745,8 @@ export function ReportClient({
                             {digestLevel(item)}
                           </Badge>
                           <div className="min-w-0 flex-1">
-                            <p className="font-black text-slate-900 leading-tight">
-                              <span className="text-emerald-600 mr-2">[{item.corpName ?? item.corpCode ?? "-"}]</span>
+                            <p className="font-black text-navy leading-tight">
+                              <span className="text-primary mr-2">[{item.corpName ?? item.corpCode ?? "-"}]</span>
                               {digestTitle(item)}
                               {typeof item.count === "number" ? <span className="text-slate-400 font-bold ml-2">({item.count}건)</span> : ""}
                             </p>
@@ -754,10 +768,10 @@ export function ReportClient({
                         <Card key={company.corpCode} className="rounded-[2rem] border border-slate-100 bg-white p-6 shadow-sm hover:shadow-lg transition-all">
                           <div className="flex justify-between items-start mb-4 border-b border-slate-50 pb-4">
                             <div>
-                              <p className="text-lg font-black text-slate-900 leading-tight">{company.corpName ?? company.corpCode}</p>
+                              <p className="text-lg font-black text-navy leading-tight">{company.corpName ?? company.corpCode}</p>
                               <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest tabular-nums">{company.corpCode}</p>
                             </div>
-                            <Badge variant="outline" className="bg-slate-50 text-[10px] font-black border-slate-200 text-slate-500 h-6 px-2">
+                            <Badge variant="outline" className="bg-surface-muted text-[10px] font-black border-slate-200 text-slate-500 h-6 px-2">
                               New {company.newCount ?? 0}
                             </Badge>
                           </div>
@@ -769,7 +783,7 @@ export function ReportClient({
                                 .slice(0, 5)
                                 .map((line, index) => (
                                   <li key={`${company.corpCode}-summary-${index}`} className="flex items-start gap-3 text-[13px] font-bold text-slate-600 leading-relaxed">
-                                    <span className="text-emerald-500 font-black mt-0.5">•</span>
+                                    <span className="text-primary font-black mt-0.5">•</span>
                                     <span>{line}</span>
                                   </li>
                                 ))}
@@ -784,10 +798,10 @@ export function ReportClient({
             ) : (
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {reportModel.disclosures.entries.map((entry) => (
-                  <Card key={entry.corpCode} className="rounded-[2rem] border border-slate-100 bg-slate-50/30 p-6 transition-all hover:bg-white hover:shadow-lg shadow-sm">
+                  <Card key={entry.corpCode} className="rounded-[2rem] border border-slate-100 bg-surface-muted/30 p-6 transition-all hover:bg-white hover:shadow-lg shadow-sm">
                     <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
                       <div>
-                        <p className="text-base font-black text-slate-900">{entry.corpName ?? entry.corpCode}</p>
+                        <p className="text-base font-black text-navy">{entry.corpName ?? entry.corpCode}</p>
                         <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest tabular-nums">{entry.corpCode}</p>
                       </div>
                       <Badge variant="outline" className="bg-white text-[10px] font-black border-slate-200 text-slate-500 h-6 px-2">New {entry.newCount ?? 0}</Badge>

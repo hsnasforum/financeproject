@@ -223,38 +223,51 @@ export function ExposureProfileClient({ csrf }: ExposureProfileClientProps) {
     { label: "환율/완충", value: `${summarizeFxIncome(draft)} · ${summarizeLiquidity(draft)}`, hint: "해외 지출·외화 소득·현금 버팀력 기준" },
   ]), [completedFields, draft]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/planning/v3/exposure/profile", {
-        method: "GET",
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-      const payload = (await response.json().catch(() => null)) as ExposureResponse | null;
-      if (!response.ok || payload?.ok !== true) {
-        throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
-      }
-
-      const next = profileToDraft(payload.profile ?? null);
-      setDraft(next);
-      setInitialDraft(next);
-      setSavedAt(payload.profile?.savedAt ?? null);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "노출 프로필을 불러오지 못했습니다.");
-      const reset = defaultDraft();
-      setDraft(reset);
-      setInitialDraft(reset);
-      setSavedAt(null);
-    } finally {
-      setLoading(false);
+  const fetchProfile = useCallback(async (signal?: AbortSignal) => {
+    const response = await fetch("/api/planning/v3/exposure/profile", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
+      signal,
+    });
+    const payload = (await response.json().catch(() => null)) as ExposureResponse | null;
+    if (!response.ok || payload?.ok !== true) {
+      throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
+    return payload.profile ?? null;
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const controller = new AbortController();
+    let active = true;
+
+    async function loadInitialProfile() {
+      try {
+        const profile = await fetchProfile(controller.signal);
+        if (!active) return;
+        const next = profileToDraft(profile);
+        setDraft(next);
+        setInitialDraft(next);
+        setSavedAt(profile?.savedAt ?? null);
+        setError("");
+      } catch (loadError) {
+        if (!active || controller.signal.aborted) return;
+        setError(loadError instanceof Error ? loadError.message : "노출 프로필을 불러오지 못했습니다.");
+        const reset = defaultDraft();
+        setDraft(reset);
+        setInitialDraft(reset);
+        setSavedAt(null);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadInitialProfile();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [fetchProfile]);
 
   function setField<K extends keyof ExposureDraft>(key: K, value: ExposureDraft[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -319,16 +332,16 @@ export function ExposureProfileClient({ csrf }: ExposureProfileClientProps) {
               <ReportHeroStatCard key={card.label} label={card.label} value={card.value} description={card.hint} />
             ))}
           </ReportHeroStatGrid>
-          <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3 text-xs text-emerald-100">
+          <div className="rounded-2xl border border-primary/20 bg-primary/10 p-3 text-xs text-primary/80">
             모든 항목을 다 채울 필요는 없습니다. 모르는 값은 그대로 두고, 내 생활비와 부채 구조를 설명하는 항목부터 입력하면 됩니다.
           </div>
-          {notice ? <p className="text-xs font-semibold text-emerald-300">{notice}</p> : null}
+          {notice ? <p className="text-xs font-semibold text-primary/30">{notice}</p> : null}
           {error ? <p className="text-xs font-semibold text-rose-300">{error}</p> : null}
         </ReportHeroCard>
 
         <Card className="space-y-3">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">부채와 금리</h2>
+            <h2 className="text-sm font-bold text-navy">부채와 금리</h2>
             <p className="text-xs text-slate-500">대출이 있으면 금리 인상이나 재조정 시점의 영향을 더 크게 받습니다.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -340,7 +353,7 @@ export function ExposureProfileClient({ csrf }: ExposureProfileClientProps) {
 
         <Card className="space-y-3">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">생활비와 물가</h2>
+            <h2 className="text-sm font-bold text-navy">생활비와 물가</h2>
             <p className="text-xs text-slate-500">필수지출, 주거비, 에너지비 비중이 높을수록 물가 상승을 더 민감하게 느낄 수 있습니다.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -352,7 +365,7 @@ export function ExposureProfileClient({ csrf }: ExposureProfileClientProps) {
 
         <Card className="space-y-3">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">환율, 소득, 현금 완충력</h2>
+            <h2 className="text-sm font-bold text-navy">환율, 소득, 현금 완충력</h2>
             <p className="text-xs text-slate-500">해외 소비와 외화 소득, 그리고 몇 달 버틸 현금이 있는지가 변동성 대응력에 직접 연결됩니다.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">

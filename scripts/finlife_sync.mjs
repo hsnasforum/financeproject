@@ -25,6 +25,9 @@ let prismaClient = null;
 const SUPPORTED_KINDS = ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"];
 const PRIORITY_KIND_ORDER = ["saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan", "deposit"];
 const KIND_PRIORITY = new Map(PRIORITY_KIND_ORDER.map((kind, index) => [kind, index + 1]));
+const DEFAULT_GROUPS_BY_KIND = {
+  pension: "050000,060000",
+};
 
 function parseArgs(argv) {
   const out = {
@@ -256,14 +259,39 @@ function computeCompletion({ groups, pagesFetchedByGroup, maxPageByGroup, lastHa
   };
 }
 
-function parseGroups() {
-  const raw = (process.env.FINLIFE_TOPFIN_GRP_LIST || "").trim();
-  if (!raw) {
-    console.error("[finlife:sync] FINLIFE_TOPFIN_GRP_LIST가 비어 있습니다.");
-    console.error("[finlife:sync] 먼저 pnpm finlife:probe로 유효 그룹을 찾고 Recommended 값을 설정하세요.");
+export function finlifeGroupEnvKey(kind) {
+  return `FINLIFE_${String(kind || "").toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_TOPFIN_GRP_LIST`;
+}
+
+function parseGroupList(raw) {
+  return [...new Set(
+    String(raw || "")
+      .split(",")
+      .map((v) => v.replace(/\D/g, "").padStart(6, "0").slice(0, 6))
+      .filter((v) => /^\d{6}$/.test(v)),
+  )];
+}
+
+export function resolveFinlifeGroupsForKind(kind, env = process.env) {
+  const kindKey = finlifeGroupEnvKey(kind);
+  const kindRaw = (env[kindKey] || "").trim();
+  const defaultRaw = DEFAULT_GROUPS_BY_KIND[kind] ?? "";
+  const globalRaw = (env.FINLIFE_TOPFIN_GRP_LIST || "").trim();
+  const sourceKey = kindRaw ? kindKey : (defaultRaw ? `${kindKey} default` : "FINLIFE_TOPFIN_GRP_LIST");
+  return {
+    sourceKey,
+    groups: parseGroupList(kindRaw || defaultRaw || globalRaw),
+  };
+}
+
+function parseGroups(kind) {
+  const { sourceKey, groups } = resolveFinlifeGroupsForKind(kind);
+  if (groups.length === 0) {
+    console.error(`[finlife:sync] ${sourceKey}가 비어 있습니다.`);
+    console.error(`[finlife:sync] 먼저 pnpm finlife:probe로 유효 그룹을 찾고, FINLIFE_TOPFIN_GRP_LIST 또는 ${finlifeGroupEnvKey(kind)}에 설정하세요.`);
     process.exit(2);
   }
-  return [...new Set(raw.split(",").map((v) => v.replace(/\D/g, "").padStart(6, "0").slice(0, 6)).filter((v) => /^\d{6}$/.test(v)))];
+  return groups;
 }
 
 export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
@@ -282,7 +310,6 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
     : 50;
   const topFinGrpNo = typeof options.topFinGrpNo === "string" && /^\d{6}$/.test(options.topFinGrpNo) ? options.topFinGrpNo : "";
 
-  const groups = fromFile ? [] : (topFinGrpNo ? [topFinGrpNo] : parseGroups());
   const config = fromFile ? null : getFinlifeConfig();
   const ttlMs = parsePositiveInt(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS, 43_200, 60, 7 * 24 * 60 * 60) * 1000;
   const hardCapPagesEnv = parsePositiveInt(process.env.FINLIFE_SCAN_HARD_CAP_PAGES, 200, 1, 10_000);
@@ -291,6 +318,7 @@ export async function runSyncKinds(kinds = PRIORITY_KIND_ORDER, options = {}) {
   const replayKinds = replay?.kind ? [replay.kind] : kinds;
 
   for (const kind of replayKinds) {
+    const groups = fromFile ? [] : (topFinGrpNo ? [topFinGrpNo] : parseGroups(kind));
     const pagesFetchedByGroup = {};
     const maxPageByGroup = {};
     const lastHasNextByGroup = {};

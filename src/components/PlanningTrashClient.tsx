@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -123,8 +123,9 @@ export function PlanningTrashClient() {
       setLoading(false);
     }
   }
-  const loadTrashRef = useRef(loadTrash);
-  loadTrashRef.current = loadTrash;
+  const loadTrashEvent = useEffectEvent((nextKind: TrashKindOrAll) => {
+    void loadTrash(nextKind);
+  });
 
   function openRestoreDialog(kind: TrashKind, id: string): void {
     const expectedConfirm = buildConfirmString(`RESTORE ${kind}`, id);
@@ -252,7 +253,11 @@ export function PlanningTrashClient() {
   }
 
   useEffect(() => {
-    void loadTrashRef.current("all");
+    const timeoutId = window.setTimeout(() => {
+      loadTrashEvent("all");
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   return (
@@ -262,8 +267,8 @@ export function PlanningTrashClient() {
         description="삭제한 실행과 리포트를 잠시 보관했다가 복구하거나, 더 이상 필요 없을 때 정리하는 화면입니다."
         action={(
           <div className="flex items-center gap-4 text-sm">
-            <Link className="font-semibold text-emerald-700" href="/planning/runs">실행 기록 보기</Link>
-            <Link className="font-semibold text-emerald-700" href="/planning">플래닝으로 돌아가기</Link>
+            <Link className="font-semibold text-navy" href="/planning/runs">실행 기록 보기</Link>
+            <Link className="font-semibold text-navy" href="/planning">플래닝으로 돌아가기</Link>
           </div>
         )}
       />
@@ -281,8 +286,8 @@ export function PlanningTrashClient() {
         </Card>
       ) : null}
       {notice ? (
-        <Card className="mb-4 border border-emerald-200 bg-emerald-50">
-          <p className="text-sm font-semibold text-emerald-700">{notice}</p>
+        <Card className="mb-4 border border-primary/20 bg-primary/5">
+          <p className="text-sm font-semibold text-navy">{notice}</p>
         </Card>
       ) : null}
 
@@ -336,7 +341,7 @@ export function PlanningTrashClient() {
                   <td className="px-2 py-2">{formatBytes(item.sizeBytes)}</td>
                   <td className="px-2 py-2">
                     <button
-                      className="font-semibold text-emerald-700"
+                      className="font-semibold text-navy"
                       onClick={() => openRestoreDialog(item.kind, item.id)}
                       type="button"
                     >
@@ -365,7 +370,7 @@ export function PlanningTrashClient() {
           role="dialog"
         >
           <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
-            <h3 className="text-base font-black text-slate-900" id="planning-trash-confirm-title">
+            <h3 className="text-base font-black text-navy" id="planning-trash-confirm-title">
               {confirmDialog.mode === "restore"
                 ? "휴지통 항목 복구"
                 : confirmDialog.mode === "delete"
@@ -375,7 +380,7 @@ export function PlanningTrashClient() {
             <p className="mt-2 text-sm text-slate-700">
               {getConfirmDialogDescription(confirmDialog)}
             </p>
-            <p className="mt-2 rounded-md bg-slate-100 px-2 py-1 font-mono text-xs text-slate-700">{confirmDialog.expectedConfirm}</p>
+            <p className="mt-2 rounded-md bg-surface-muted px-2 py-1 font-mono text-xs text-slate-700">{confirmDialog.expectedConfirm}</p>
             <input
               className="mt-3 h-10 w-full rounded-lg border border-slate-300 px-3 text-sm"
               value={confirmText}

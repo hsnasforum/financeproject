@@ -14,6 +14,7 @@
 `release:verify`는 다음을 순차 실행합니다.
 
 - `pnpm cleanup:next-artifacts -- --build-preflight`
+- `pnpm deps:audit`
 - `pnpm planning:v2:complete`
 - `pnpm multi-agent:guard`
 - 추가 게이트가 스크립트에 존재하면 실행:

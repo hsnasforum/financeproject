@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as alertsGET, POST as alertsPOST } from "../src/app/api/planning/v3/news/alerts/route";
 import { resolveAlertEventStatePath, resolveAlertEventsPath } from "../src/lib/news/alerts";
 
@@ -95,12 +95,15 @@ describe("planning v3 news alerts api", () => {
   let root = "";
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-05T00:00:00.000Z"));
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-news-alerts-api-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = path.join(root, "planning");
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
     if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;

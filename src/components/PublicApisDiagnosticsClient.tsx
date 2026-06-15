@@ -146,7 +146,11 @@ export function PublicApisDiagnosticsClient() {
   }
 
   useEffect(() => {
-    void loadStatus();
+    const timeoutId = window.setTimeout(() => {
+      void loadStatus();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   return (
