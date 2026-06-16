@@ -8,6 +8,10 @@ import {
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../lib/http/apiResponse";
 import {
+  planningAuthErrorResponse as toAuthErrorResponse,
+  withPlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
+import {
   getDefaultProfileId,
   getProfile,
   listProfileMetas,
@@ -86,10 +90,20 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const row = await toMeta(id);
-    if (!row) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-    return jsonOk({ data: row });
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const row = await toMeta(id);
+      if (!row) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+      return jsonOk({
+        data: row,
+        meta: {
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
+    });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "프로필 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
@@ -120,20 +134,30 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   try {
-    if (nextName) {
-      const updated = await updateProfile(id, { name: nextName });
-      if (!updated) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-    } else {
-      const existing = await getProfile(id);
-      if (!existing) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-    }
-    if (isDefault === true) {
-      await setDefaultProfile(id);
-    }
-    const row = await toMeta(id);
-    if (!row) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-    return jsonOk({ data: row });
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      if (nextName) {
+        const updated = await updateProfile(id, { name: nextName });
+        if (!updated) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+      } else {
+        const existing = await getProfile(id);
+        if (!existing) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+      }
+      if (isDefault === true) {
+        await setDefaultProfile(id);
+      }
+      const row = await toMeta(id);
+      if (!row) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+      return jsonOk({
+        data: row,
+        meta: {
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
+    });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "프로필 수정에 실패했습니다.";
     return jsonError("INPUT", message, { status: 400 });
   }

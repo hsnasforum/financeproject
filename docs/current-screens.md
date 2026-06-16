@@ -1,7 +1,8 @@
 # 현재 제공 화면/기능 카탈로그 (v1.0 RC)
 
-기준일: 2026-03-09
+기준일: 2026-06-01
 기준 소스: `src/app/**/page.tsx`
+최근 검증: page route 95개, `pnpm planning:current-screens:guard`, `pnpm planning:ssot:check`
 
 ## Public IA 기준 (2026-03-16)
 - 상위 메뉴는 아래 5개 축으로 고정한다.
@@ -107,7 +108,7 @@
 - official beta entry overlay는 `/planning/v3/transactions`, `/planning/v3/transactions/batches`, `/planning/v3/balances`, `/planning/v3/profile/drafts` 4개로만 읽는다.
 - deep-link only는 `/planning/v3/transactions/batches/[id]`, `/planning/v3/profile/drafts/[id]`, `/planning/v3/profile/drafts/[id]/preflight`로 유지한다.
 - stable destination tier는 `Public Stable`인 `/planning`, `/planning/runs`, `/planning/reports`, `/planning/reports/[id]`다.
-- `/planning/v3/start`, `/planning/v3/news*`, `/planning/v3/journal`, `/planning/v3/exposure`, `/planning/v3/scenarios`, raw `/planning/v3/batches`, `/planning/v3/import/csv`, `/planning/v3/drafts*`, `/planning/v3/accounts`는 current official entry policy 밖의 non-entry/internal 또는 onboarding wrapper 후보로 둔다.
+- `/planning/v3/start`, `/planning/v3/news*`, `/planning/v3/journal`, `/planning/v3/exposure`, `/planning/v3/scenarios`, raw `/planning/v3/batches`, `/planning/v3/batches/[id]`, `/planning/v3/import/csv`, `/planning/v3/drafts*`, `/planning/v3/accounts`는 current official entry policy 밖의 non-entry/internal 또는 onboarding wrapper 후보로 둔다.
 
 ## Ops/Admin 화면 (Local-only Ops / local-only 또는 packaged runtime)
 - `/ops`
@@ -142,6 +143,9 @@
 
 ## API 노출 규칙
 - `/api/dev/*`는 production에서 공통 차단(404)된다.
+- 예외: packaged desktop runtime의 로컬 요청에서는 `/api/dev/unlock`만 vault/ops action CSRF 발급을 위해 허용한다. 다른 `/api/dev/*` action은 계속 production 차단을 유지한다.
+- `/api/auth/*`는 Auth.js 로그인/콜백/session route로 취급한다. OAuth provider env가 없으면 provider가 비어 있을 수 있으며, Prisma adapter는 Auth.js 테이블 마이그레이션 후 `AUTH_PRISMA_ADAPTER_ENABLED=true`에서만 활성화한다.
+- `/api/planning/*`는 `PLANNING_AUTH_REQUIRED=true`일 때 middleware에서 Auth.js session cookie 또는 내부 신뢰 auth header가 없는 요청을 401로 차단한다. route handler에서는 `requireCurrentPlanningUser()`/request user scope를 사용해 저장소 접근을 현재 사용자 경계 안에서 수행한다.
 
 ## 정합성 체크 규칙
 - 헤더/홈/문서의 내부 링크(`href`)는 반드시 위 실존 경로만 가리킨다.

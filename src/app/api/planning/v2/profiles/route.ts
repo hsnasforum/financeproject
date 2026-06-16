@@ -6,6 +6,10 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import {
+  planningAuthErrorResponse as toAuthErrorResponse,
+  withPlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
+import {
   createProfile,
   listProfiles,
 } from "../../../../../lib/planning/server/store/profileStore";
@@ -84,9 +88,19 @@ export async function GET(request: Request) {
   if (guardFailure) return guardFailure;
 
   try {
-    const records = await listProfiles();
-    return jsonOk({ data: records });
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const records = await listProfiles();
+      return jsonOk({
+        data: records,
+        meta: {
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
+    });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "프로필 목록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
@@ -105,27 +119,33 @@ export async function POST(request: Request) {
 
   const name = asString(body?.name);
   try {
-    const canonical = normalizeCanonicalProfile(body?.profile);
-    const created = await createProfile({
-      name: name || "기본 프로필",
-      profile: canonical.profile,
-    });
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const canonical = normalizeCanonicalProfile(body?.profile);
+      const created = await createProfile({
+        name: name || "기본 프로필",
+        profile: canonical.profile,
+      });
 
-    appendProfileAudit({
-      event: "PLANNING_PROFILE_CREATE",
-      route: "/api/planning/v2/profiles",
-      result: "SUCCESS",
-      recordId: created.id,
-      message: "planning profile created",
-    });
+      appendProfileAudit({
+        event: "PLANNING_PROFILE_CREATE",
+        route: "/api/planning/v2/profiles",
+        result: "SUCCESS",
+        recordId: created.id,
+        message: "planning profile created",
+      });
 
-    return jsonOk({
-      data: created,
-      meta: {
-        normalization: canonical.normalization,
-      },
-    }, { status: 201 });
+      return jsonOk({
+        data: created,
+        meta: {
+          normalization: canonical.normalization,
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      }, { status: 201 });
+    });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     if (error instanceof PlanningV2ValidationError) {
       const message = error.issues.map((issue) => `${issue.path}: ${issue.message}`).join(", ");
       appendProfileAudit({

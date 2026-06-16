@@ -4,7 +4,6 @@ import path from "node:path";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
 import { atomicWriteJson } from "../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../storage/dataDir";
 import { type ProfileV2 } from "../v2/types";
 import { loadCanonicalProfile } from "../v2/loadCanonicalProfile";
 import { PROFILE_SCHEMA_VERSION } from "../v2/schemaVersion";
@@ -133,48 +132,14 @@ function resolveProfileMetaPath(cwd = process.cwd()): string {
     return path.join(path.dirname(path.resolve(cwd, registryOverride)), "profiles.meta.json");
   }
 
-  const partitionsOverride = asString(process.env.PLANNING_PROFILE_PARTITIONS_DIR);
-  if (partitionsOverride) {
-    return path.join(path.dirname(path.resolve(cwd, partitionsOverride)), "profiles.meta.json");
-  }
-
-  const profilesOverride = asString(process.env.PLANNING_PROFILES_DIR);
-  if (profilesOverride) {
-    const profilesDir = path.resolve(cwd, profilesOverride);
-    return path.join(path.dirname(profilesDir), "vault", "profiles.meta.json");
-  }
-
-  const runsOverride = asString(process.env.PLANNING_RUNS_DIR);
-  if (runsOverride) {
-    const runsDir = path.resolve(cwd, runsOverride);
-    return path.join(path.dirname(runsDir), "vault", "profiles.meta.json");
-  }
-
-  return path.join(resolvePlanningDataDir({ cwd }), "vault", "profiles.meta.json");
+  return path.join(path.dirname(resolveProfilePartitionsDir(cwd)), "profiles.meta.json");
 }
 
 function resolveProfileRegistryPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_PROFILE_REGISTRY_PATH);
   if (override) return path.resolve(cwd, override);
 
-  const partitionsOverride = asString(process.env.PLANNING_PROFILE_PARTITIONS_DIR);
-  if (partitionsOverride) {
-    return path.join(path.resolve(cwd, partitionsOverride), "index.json");
-  }
-
-  const profilesOverride = asString(process.env.PLANNING_PROFILES_DIR);
-  if (profilesOverride) {
-    const profilesDir = path.resolve(cwd, profilesOverride);
-    return path.join(path.dirname(profilesDir), "vault", "profiles", "index.json");
-  }
-
-  const runsOverride = asString(process.env.PLANNING_RUNS_DIR);
-  if (runsOverride) {
-    const runsDir = path.resolve(cwd, runsOverride);
-    return path.join(path.dirname(runsDir), "vault", "profiles", "index.json");
-  }
-
-  return path.join(resolvePlanningDataDir({ cwd }), "vault", "profiles", "index.json");
+  return path.join(resolveProfilePartitionsDir(cwd), "index.json");
 }
 
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {

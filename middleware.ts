@@ -2,6 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isLocalRequest } from "./src/lib/dev/localRequest";
 
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const AUTH_SESSION_COOKIE_NAMES = [
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+];
 const PREFETCH_MATCHER = [
   { type: "header" as const, key: "next-router-prefetch" },
   { type: "header" as const, key: "purpose", value: "prefetch" },
@@ -71,6 +77,10 @@ function isPlanningMutationPath(pathname: string, method: string): boolean {
   return STATE_CHANGING_METHODS.has(method.toUpperCase());
 }
 
+function isPlanningApiPath(pathname: string): boolean {
+  return pathname === "/api/planning" || pathname.startsWith("/api/planning/");
+}
+
 function isDevOnlyPath(pathname: string): boolean {
   return pathname === "/api/dev"
     || pathname.startsWith("/api/dev/")
@@ -98,6 +108,31 @@ function createNonce(): string {
   return btoa(binary);
 }
 
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") return false;
+  return fallback;
+}
+
+function isPlanningAuthRequired(): boolean {
+  return parseBoolean(process.env.PLANNING_AUTH_REQUIRED, false);
+}
+
+function hasAuthSessionCookie(request: NextRequest): boolean {
+  return AUTH_SESSION_COOKIE_NAMES.some((name) => Boolean(request.cookies.get(name)?.value));
+}
+
+function hasTrustedPlanningAuthHeader(request: NextRequest): boolean {
+  if (!parseBoolean(process.env.PLANNING_TRUST_AUTH_HEADERS, false)) return false;
+  const userId = request.headers.get("x-planning-user-id")?.trim()
+    || request.headers.get("x-auth-user-id")?.trim()
+    || "";
+  return Boolean(userId) && isLocalRequest(request);
+}
+
 function blockResponse(request: NextRequest, contentSecurityPolicy: string): NextResponse {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     return withSecurityHeaders(NextResponse.json(
@@ -114,6 +149,19 @@ function blockResponse(request: NextRequest, contentSecurityPolicy: string): Nex
   return withSecurityHeaders(new NextResponse("Forbidden", { status: 403 }), contentSecurityPolicy);
 }
 
+function authRequiredResponse(contentSecurityPolicy: string): NextResponse {
+  return withSecurityHeaders(NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: "UNAUTHENTICATED",
+        message: "로그인이 필요합니다.",
+      },
+    },
+    { status: 401 },
+  ), contentSecurityPolicy);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProduction = process.env.NODE_ENV === "production";
@@ -127,6 +175,15 @@ export function middleware(request: NextRequest) {
     || (!isProduction && isDevOnlyPath(pathname));
   if (needsLocalOnly && !isLocalRequest(request)) {
     return blockResponse(request, contentSecurityPolicy);
+  }
+
+  if (
+    isPlanningAuthRequired()
+    && isPlanningApiPath(pathname)
+    && !hasAuthSessionCookie(request)
+    && !hasTrustedPlanningAuthHeader(request)
+  ) {
+    return authRequiredResponse(contentSecurityPolicy);
   }
 
   if (!nonce) {
