@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { tsImport } from "tsx/esm/api";
 
 const FIXTURE_PATH = path.join("tests", "planning-v2", "regression", "corpus", "case-002.json");
 const DEFAULT_MC_PATHS = 200;
@@ -59,7 +58,7 @@ function logSection(title) {
 }
 
 async function loadTsExports(specifier) {
-  const raw = await tsImport(specifier, { parentURL: import.meta.url });
+  const raw = await import(new URL(specifier, import.meta.url).href);
   if (raw && typeof raw === "object" && raw.default && typeof raw.default === "object") {
     return raw.default;
   }
@@ -80,12 +79,12 @@ async function run() {
       throw new Error("fixture input missing");
     }
 
-    const validateModule = await loadTsExports("../src/lib/planning/v2/validate.ts");
-    const simulateModule = await loadTsExports("../src/lib/planning/v2/simulateMonthly.ts");
-    const scenariosModule = await loadTsExports("../src/lib/planning/v2/runScenarios.ts");
-    const monteCarloModule = await loadTsExports("../src/lib/planning/v2/monteCarlo.ts");
-    const actionsModule = await loadTsExports("../src/lib/planning/v2/actions/buildActions.ts");
-    const debtModule = await loadTsExports("../src/lib/planning/v2/debt/strategy.ts");
+    const validateModule = await loadTsExports("../src/lib/planning/core/v2/validate.ts");
+    const simulateModule = await loadTsExports("../src/lib/planning/core/v2/simulateMonthly.ts");
+    const scenariosModule = await loadTsExports("../src/lib/planning/core/v2/runScenarios.ts");
+    const monteCarloModule = await loadTsExports("../src/lib/planning/core/v2/monteCarlo.ts");
+    const actionsModule = await loadTsExports("../src/lib/planning/core/v2/actions/buildActions.ts");
+    const debtModule = await loadTsExports("../src/lib/planning/core/v2/debt/strategy.ts");
 
     const validateProfileV2 = validateModule.validateProfileV2;
     const validateHorizonMonths = validateModule.validateHorizonMonths;

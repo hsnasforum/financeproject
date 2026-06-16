@@ -7,6 +7,7 @@
 - `package.json`
 - `pnpm-lock.yaml`
 - `prisma/schema.prisma`
+- `scripts/planning_v2_smoke.mjs`
 - `src/auth.ts`
 - `src/app/api/auth/[...nextauth]/route.ts`
 - `src/app/api/planning/profiles/route.ts`
@@ -70,9 +71,25 @@
 - PASS `corepack pnpm deps:audit && corepack pnpm lint`
 - PASS `corepack pnpm test`
 - PASS `corepack pnpm sec:check && corepack pnpm planning:ssot:check && corepack pnpm build`
+- FAIL GitHub Actions `verify`
+  - 실패 경계: `planning:v2:smoke`에서 `tsx` 4.22 계열의 namespace query import와 `__filename` 참조가 충돌했습니다.
+- FAIL `DATABASE_URL="file:./prisma/ci.db" corepack pnpm release:verify`
+  - 로컬 재현 결과: `planning:v2:smoke`가 `*.ts?namespace=...` import 경로에서 실패했습니다.
+- 변경: `scripts/planning_v2_smoke.mjs`의 TS 로딩을 `tsx/esm/api`의 `tsImport` 대신 `node --import tsx` 기반 표준 dynamic import로 바꿨습니다.
+- PASS `planning:v2:complete`
+  - `DATABASE_URL="file:./prisma/ci.db" corepack pnpm release:verify` 중 `planning:v2:complete` 구간에서 smoke와 `planning:v2:e2e:fast` 6개 테스트가 통과했습니다.
+- FAIL `DATABASE_URL="file:./prisma/ci.db" corepack pnpm release:verify`
+  - 실패 경계: `multi-agent:guard`가 `/work` 기록의 `남은 리스크`, `다음 라운드` 헤더를 요구했습니다.
+- PASS `DATABASE_URL="file:./prisma/ci.db" corepack pnpm release:verify`
+  - 포함 범위: `deps:audit`, `planning:v2:complete`, `multi-agent:guard`, `planning:v2:compat`, `planning:v2:regress`, `test`, `planning:ssot:check`.
 
-## 잔여 리스크
+## 남은 리스크
 - 이번 PR은 모든 planning API route의 전면 routeAuth 표준화를 완료하지 않습니다. 남은 route 전면 표준화는 별도 PR 범위입니다.
 - page-level RSC 초기 로드 scope, ops wrapper, products/recommend, generated data/docs 변경은 원본 dirty worktree에 남아 있습니다.
 - `AUTH_PRISMA_ADAPTER_ENABLED=true` 운영 전환은 DB migration/backfill 검증과 별도 rollout이 필요합니다.
 - `pnpm e2e:rc`는 이번 API/middleware/store 중심 PR에서는 실행하지 않았습니다.
+
+## 다음 라운드
+- 남은 원본 dirty는 page-level RSC 초기 로드 scope, ops wrapper, products/recommend, generated data/docs 순서로 별도 PR 후보를 나눕니다.
+- 전체 planning API routeAuth 표준화는 현 PR merge 뒤 독립 검증 범위로 분리합니다.
+- 운영 auth rollout은 DB migration/backfill과 함께 별도 배포 체크리스트로 다룹니다.
