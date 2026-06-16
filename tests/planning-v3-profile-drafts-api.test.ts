@@ -166,9 +166,10 @@ describe("planning v3 profile drafts API", () => {
   it("POST returns 400 when batchId is missing", async () => {
     const response = await draftsPOST(requestPost({ csrf: "test" }));
     expect(response.status).toBe(400);
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
+    const payload = await response.json() as { ok?: boolean; error?: { code?: string; message?: string } };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INPUT");
+    expect(payload.error?.message).toBe("상담 자료 번호가 필요합니다.");
   });
 
   it("GET list returns stable shape", async () => {
@@ -250,9 +251,10 @@ describe("planning v3 profile drafts API", () => {
       { params: Promise.resolve({ id: "d_missing" }) },
     );
     expect(response.status).toBe(404);
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
+    const payload = await response.json() as { ok?: boolean; error?: { code?: string; message?: string } };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("NO_DATA");
+    expect(payload.error?.message).toBe("상담 정보 초안을 찾을 수 없습니다.");
   });
 
   it("DELETE requires csrf in body and does not accept query fallback", async () => {
@@ -290,9 +292,10 @@ describe("planning v3 profile drafts API", () => {
       { params: Promise.resolve({ id: forbiddenId }) },
     );
     expect(response.status).toBe(500);
-    const payload = await response.json() as { ok?: boolean; error?: { code?: string } };
+    const payload = await response.json() as { ok?: boolean; error?: { code?: string; message?: string } };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INTERNAL");
+    expect(payload.error?.message).toBe("상담 정보 초안 내용을 확인하지 못했습니다.");
   });
 
   it("allows same-origin remote host across profile draft routes and still blocks cross-origin", async () => {

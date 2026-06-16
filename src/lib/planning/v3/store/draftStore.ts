@@ -3,7 +3,6 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { roundKrw } from "../../calc";
 import { atomicWriteJson } from "../../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import {
   type V3DraftCashflowRow,
@@ -17,6 +16,7 @@ import {
   generateDraftPatchFromBatch,
 } from "../service/generateDraftPatchFromBatch";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "../service/forbiddenDraftKeys";
+import { resolvePlanningV3DataDir, resolvePlanningV3LegacyDataDir } from "./dataDir";
 
 type CreateDraftInput = Omit<V3DraftRecord, "id" | "createdAt" | "summary"> & {
   summary?: V3DraftSummary;
@@ -51,11 +51,11 @@ function normalizeCreatedAt(value: unknown): string {
 function resolveDraftsDir(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_V3_DRAFTS_DIR);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "planning-v3", "drafts");
+  return path.join(resolvePlanningV3DataDir(cwd), "drafts");
 }
 
 function resolveLegacyDraftsDir(cwd = process.cwd()): string {
-  return path.join(resolvePlanningDataDir({ cwd }), "v3", "drafts");
+  return path.join(resolvePlanningV3LegacyDataDir(cwd), "drafts");
 }
 
 function resolveDraftPath(id: string, cwd = process.cwd()): string {

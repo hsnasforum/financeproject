@@ -8,6 +8,11 @@ import { getProfile } from "@/lib/planning/v3/profiles/store";
 import { preflightDraftPatch } from "@/lib/planning/v3/draft/service";
 import { getProfileDraft } from "@/lib/planning/v3/store/draftStore";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -52,13 +57,16 @@ export async function POST(request: Request, context: RouteContext) {
 
   const guarded = withGuard(request, body?.csrf);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const { id } = await context.params;
     const draft = await getProfileDraft(id);
     if (!draft) {
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "초안을 찾을 수 없습니다." } },
+        { ok: false, error: { code: "NO_DATA", message: "상담 정보 초안을 찾을 수 없습니다." }, meta: userMeta },
         { status: 404 },
       );
     }
@@ -69,7 +77,7 @@ export async function POST(request: Request, context: RouteContext) {
       const base = await getProfile(profileId);
       if (!base) {
         return NextResponse.json(
-          { ok: false, error: { code: "NO_DATA", message: "기준 프로필을 찾을 수 없습니다." } },
+          { ok: false, error: { code: "NO_DATA", message: "기준 상담 정보를 찾을 수 없습니다." }, meta: userMeta },
           { status: 404 },
         );
       }
@@ -90,18 +98,18 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof ForbiddenDraftKeyError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "프리플라이트 데이터 검증에 실패했습니다." } },
+        { ok: false, error: { code: "INTERNAL", message: "적용 전 점검 결과를 확인하지 못했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
     if (error instanceof Error && error.message === "Invalid record id") {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "draftId 또는 profileId 형식이 올바르지 않습니다." } },
+        { ok: false, error: { code: "INPUT", message: "상담 정보 초안 번호 또는 기준 상담 정보 번호 형식이 올바르지 않습니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "프리플라이트 실행에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "적용 전 점검을 완료하지 못했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

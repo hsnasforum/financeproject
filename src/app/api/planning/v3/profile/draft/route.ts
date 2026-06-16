@@ -8,6 +8,11 @@ import {
   GenerateDraftPatchFromBatchError,
   generateDraftPatchFromBatch,
 } from "@/lib/planning/v3/service/generateDraftPatchFromBatch";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -37,11 +42,14 @@ function withReadGuard(request: Request): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const batchId = asString(new URL(request.url).searchParams.get("batchId"));
   if (!batchId) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "batchId가 필요합니다." } },
+      { ok: false, error: { code: "INPUT", message: "상담 자료 번호가 필요합니다." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -98,29 +106,29 @@ export async function GET(request: Request) {
     if (error instanceof GenerateDraftPatchFromBatchError) {
       if (error.code === "INPUT") {
         return NextResponse.json(
-          { ok: false, error: { code: "INPUT", message: "batchId 형식이 올바르지 않습니다." } },
+          { ok: false, error: { code: "INPUT", message: "상담 자료 번호 형식이 올바르지 않습니다." }, meta: userMeta },
           { status: 400 },
         );
       }
       if (error.code === "NOT_FOUND") {
         return NextResponse.json(
-          { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." } },
+          { ok: false, error: { code: "NO_DATA", message: "해당 상담 자료를 찾을 수 없습니다." }, meta: userMeta },
           { status: 404 },
         );
       }
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "초안을 생성할 데이터가 부족합니다." } },
+        { ok: false, error: { code: "NO_DATA", message: "상담 정보 초안을 만들 거래 데이터가 부족합니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     if (error instanceof Error && error.message === "Invalid record id") {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "batchId 형식이 올바르지 않습니다." } },
+        { ok: false, error: { code: "INPUT", message: "상담 자료 번호 형식이 올바르지 않습니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "프로필 초안 생성에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "상담 정보 초안 미리보기를 계산하지 못했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

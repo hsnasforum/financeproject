@@ -64,10 +64,11 @@ describe("GET /api/planning/v3/profile/draft", () => {
     expect(response.status).toBe(400);
     const payload = await response.json() as {
       ok?: boolean;
-      error?: { code?: string };
+      error?: { code?: string; message?: string };
     };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("INPUT");
+    expect(payload.error?.message).toBe("상담 자료 번호가 필요합니다.");
   });
 
   it("returns 404 when batch does not exist", async () => {
@@ -75,10 +76,11 @@ describe("GET /api/planning/v3/profile/draft", () => {
     expect(response.status).toBe(404);
     const payload = await response.json() as {
       ok?: boolean;
-      error?: { code?: string };
+      error?: { code?: string; message?: string };
     };
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("NO_DATA");
+    expect(payload.error?.message).toBe("해당 상담 자료를 찾을 수 없습니다.");
   });
 
   it("returns whitelisted summary payload without raw fields", async () => {
@@ -116,4 +118,3 @@ describe("GET /api/planning/v3/profile/draft", () => {
     expect(joined.includes("csvText")).toBe(false);
   });
 });
-

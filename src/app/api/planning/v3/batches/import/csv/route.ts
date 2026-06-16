@@ -6,6 +6,11 @@ import {
 } from "@/lib/dev/devGuards";
 import { getBatchSummary, ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/batches/store";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -63,10 +68,13 @@ export async function POST(request: Request) {
   const payload = await readCsvPayload(request);
   const guarded = withWriteGuard(request, payload.csrf);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   if (!payload.csvText.trim()) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "CSV 파일을 선택해 주세요." } },
+      { ok: false, error: { code: "INPUT", message: "CSV 파일을 선택해 주세요." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -97,18 +105,18 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof ImportCsvToBatchInputError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "CSV 파싱에 실패했습니다. 파일 형식을 확인해 주세요." } },
+        { ok: false, error: { code: "INPUT", message: "CSV 파싱에 실패했습니다. 파일 형식을 확인해 주세요." }, meta: userMeta },
         { status: 400 },
       );
     }
     if (error instanceof ForbiddenDraftKeyError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "응답 데이터 검증에 실패했습니다." } },
+        { ok: false, error: { code: "INTERNAL", message: "응답 데이터 검증에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 생성에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "배치 생성에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

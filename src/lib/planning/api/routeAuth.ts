@@ -34,7 +34,11 @@ export async function requirePlanningRouteUser(request: Request): Promise<Planni
 }
 
 export function isPlanningRouteUser(value: PlanningRouteUser | Response): value is PlanningRouteUser {
-  return !(value instanceof Response);
+  if (value instanceof Response) return false;
+  // Direct route guards call this after awaiting requirePlanningRouteUser();
+  // refresh the scope in the caller context before storage helpers run.
+  enterPlanningUserScope({ userId: value.id });
+  return true;
 }
 
 export function planningUserMeta(user: PlanningRouteUser): Record<string, string> {
