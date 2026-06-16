@@ -5,6 +5,10 @@ import {
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../../lib/planning/api/response";
 import {
+  planningAuthErrorResponse as toAuthErrorResponse,
+  withPlanningRouteUser,
+} from "../../../../../../../lib/planning/api/routeAuth";
+import {
   getRunActionProgress,
   summarizeRunActionProgress,
   updateRunActionProgress,
@@ -65,17 +69,23 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const progress = await getRunActionProgress(id);
-    if (!progress) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
-    }
-    return jsonOk({
-      data: progress,
-      meta: {
-        summary: summarizeRunActionProgress(progress),
-      },
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const progress = await getRunActionProgress(id);
+      if (!progress) {
+        return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
+      }
+      return jsonOk({
+        data: progress,
+        meta: {
+          summary: summarizeRunActionProgress(progress),
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
     });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "action-progress 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
@@ -105,18 +115,24 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const updated = await updateRunActionProgress(id, {
-      actionKey,
-      ...(status ? { status } : {}),
-      ...(note !== undefined ? { note } : {}),
-    });
-    return jsonOk({
-      data: updated,
-      meta: {
-        summary: summarizeRunActionProgress(updated),
-      },
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const updated = await updateRunActionProgress(id, {
+        actionKey,
+        ...(status ? { status } : {}),
+        ...(note !== undefined ? { note } : {}),
+      });
+      return jsonOk({
+        data: updated,
+        meta: {
+          summary: summarizeRunActionProgress(updated),
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
     });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "action-progress 업데이트에 실패했습니다.";
     if (message === "RUN_NOT_FOUND") {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });

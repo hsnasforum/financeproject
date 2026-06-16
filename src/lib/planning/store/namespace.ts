@@ -1,5 +1,6 @@
 import path from "node:path";
 import { resolvePlanningDataDir } from "../storage/dataDir";
+import { getScopedPlanningUserId } from "./userScope";
 
 export const DEFAULT_PLANNING_USER_ID = "default";
 export const PLANNING_USERS_DIR = ".data/planning/users";
@@ -31,7 +32,7 @@ export function resolvePlanningUserId(
   userId?: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const candidate = (userId ?? env.PLANNING_USER_ID ?? DEFAULT_PLANNING_USER_ID).trim();
+  const candidate = (userId ?? getScopedPlanningUserId() ?? env.PLANNING_USER_ID ?? DEFAULT_PLANNING_USER_ID).trim();
   return sanitizePlanningUserId(candidate || DEFAULT_PLANNING_USER_ID);
 }
 

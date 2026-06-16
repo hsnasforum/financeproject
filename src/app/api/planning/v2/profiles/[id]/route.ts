@@ -5,6 +5,10 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
+import {
+  planningAuthErrorResponse as toAuthErrorResponse,
+  withPlanningRouteUser,
+} from "../../../../../../lib/planning/api/routeAuth";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import {
   deleteProfile,
@@ -116,12 +120,22 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    const record = await getProfile(id);
-    if (!record) {
-      return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-    }
-    return jsonOk({ data: record });
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const record = await getProfile(id);
+      if (!record) {
+        return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+      }
+      return jsonOk({
+        data: record,
+        meta: {
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
+    });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "프로필 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
@@ -144,50 +158,58 @@ export async function PATCH(request: Request, context: RouteContext) {
   let normalizationMeta: ReturnType<typeof normalizeCanonicalProfile>["normalization"] | undefined;
 
   try {
-    const patch: { name?: string; profile?: ReturnType<typeof normalizeCanonicalProfile>["profile"] } = {};
-    if (name) patch.name = name;
-    if (hasProfilePatch) {
-      const canonical = normalizeCanonicalProfile(body?.profile);
-      patch.profile = canonical.profile;
-      normalizationMeta = canonical.normalization;
-    }
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const patch: { name?: string; profile?: ReturnType<typeof normalizeCanonicalProfile>["profile"] } = {};
+      if (name) patch.name = name;
+      if (hasProfilePatch) {
+        const canonical = normalizeCanonicalProfile(body?.profile);
+        patch.profile = canonical.profile;
+        normalizationMeta = canonical.normalization;
+      }
 
-    if (!patch.name && !patch.profile) {
+      if (!patch.name && !patch.profile) {
+        appendProfileAudit({
+          event: "PLANNING_PROFILE_UPDATE",
+          route: "/api/planning/v2/profiles/[id]",
+          result: "ERROR",
+          recordId: id,
+          message: "no update fields",
+        });
+        return jsonError("INPUT", "No update fields provided");
+      }
+
+      const updated = await updateProfile(id, patch);
+      if (!updated) {
+        appendProfileAudit({
+          event: "PLANNING_PROFILE_UPDATE",
+          route: "/api/planning/v2/profiles/[id]",
+          result: "ERROR",
+          recordId: id,
+          message: "profile not found",
+        });
+        return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+      }
+
       appendProfileAudit({
         event: "PLANNING_PROFILE_UPDATE",
         route: "/api/planning/v2/profiles/[id]",
-        result: "ERROR",
-        recordId: id,
-        message: "no update fields",
+        result: "SUCCESS",
+        recordId: updated.id,
+        message: "planning profile updated",
       });
-      return jsonError("INPUT", "No update fields provided");
-    }
 
-    const updated = await updateProfile(id, patch);
-    if (!updated) {
-      appendProfileAudit({
-        event: "PLANNING_PROFILE_UPDATE",
-        route: "/api/planning/v2/profiles/[id]",
-        result: "ERROR",
-        recordId: id,
-        message: "profile not found",
+      return jsonOk({
+        data: updated,
+        meta: {
+          ...(normalizationMeta ? { normalization: normalizationMeta } : {}),
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
       });
-      return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-    }
-
-    appendProfileAudit({
-      event: "PLANNING_PROFILE_UPDATE",
-      route: "/api/planning/v2/profiles/[id]",
-      result: "SUCCESS",
-      recordId: updated.id,
-      message: "planning profile updated",
-    });
-
-    return jsonOk({
-      data: updated,
-      ...(normalizationMeta ? { meta: { normalization: normalizationMeta } } : {}),
     });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     if (error instanceof PlanningV2ValidationError) {
       const message = error.issues.map((issue) => `${issue.path}: ${issue.message}`).join(", ");
       appendProfileAudit({
@@ -243,34 +265,44 @@ export async function DELETE(request: Request, context: RouteContext) {
   }
 
   try {
-    const deleted = await deleteProfile(id);
-    if (!deleted) {
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const deleted = await deleteProfile(id);
+      if (!deleted) {
+        appendProfileAudit({
+          event: "PLANNING_PROFILE_DELETE",
+          route: "/api/planning/v2/profiles/[id]",
+          result: "ERROR",
+          recordId: id,
+          message: "profile not found",
+        });
+        return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+      }
+
       appendProfileAudit({
         event: "PLANNING_PROFILE_DELETE",
         route: "/api/planning/v2/profiles/[id]",
-        result: "ERROR",
+        result: "SUCCESS",
         recordId: id,
-        message: "profile not found",
+        message: "planning profile deleted",
       });
-      return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-    }
+      appendTrashAudit({
+        result: "SUCCESS",
+        kind: "profile",
+        id,
+        message: "planning profile moved to trash",
+      });
 
-    appendProfileAudit({
-      event: "PLANNING_PROFILE_DELETE",
-      route: "/api/planning/v2/profiles/[id]",
-      result: "SUCCESS",
-      recordId: id,
-      message: "planning profile deleted",
+      return jsonOk({
+        data: { id, deleted: true, softDeleted: true },
+        meta: {
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
     });
-    appendTrashAudit({
-      result: "SUCCESS",
-      kind: "profile",
-      id,
-      message: "planning profile moved to trash",
-    });
-
-    return jsonOk({ data: { id, deleted: true, softDeleted: true } });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "프로필 삭제에 실패했습니다.";
     appendProfileAudit({
       event: "PLANNING_PROFILE_DELETE",

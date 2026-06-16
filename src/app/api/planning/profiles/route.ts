@@ -8,6 +8,10 @@ import {
 import { onlyDev } from "../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../lib/http/apiResponse";
 import {
+  planningAuthErrorResponse as toAuthErrorResponse,
+  withPlanningRouteUser,
+} from "../../../../lib/planning/api/routeAuth";
+import {
   createProfile,
   getDefaultProfileId,
   listProfileMetas,
@@ -94,17 +98,23 @@ export async function GET(request: Request) {
   if (guardFailure) return guardFailure;
 
   try {
-    const [items, defaultProfileId] = await Promise.all([
-      listProfileMetas(),
-      getDefaultProfileId(),
-    ]);
-    return jsonOk({
-      data: items.map((item) => toProfileMetaRow(item)),
-      meta: {
-        ...(defaultProfileId ? { defaultProfileId } : {}),
-      },
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const [items, defaultProfileId] = await Promise.all([
+        listProfileMetas(),
+        getDefaultProfileId(),
+      ]);
+      return jsonOk({
+        data: items.map((item) => toProfileMetaRow(item)),
+        meta: {
+          ...(defaultProfileId ? { defaultProfileId } : {}),
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      });
     });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "프로필 목록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
@@ -125,31 +135,39 @@ export async function POST(request: Request) {
   if (guardFailure) return guardFailure;
 
   try {
-    const canonicalProfile = body?.profile !== undefined
-      ? loadCanonicalProfile(body.profile).profile
-      : defaultCanonicalProfile();
-    const created = await createProfile({
-      name: asString(body?.name) || "기본 프로필",
-      profile: canonicalProfile,
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const canonicalProfile = body?.profile !== undefined
+        ? loadCanonicalProfile(body.profile).profile
+        : defaultCanonicalProfile();
+      const created = await createProfile({
+        name: asString(body?.name) || "기본 프로필",
+        profile: canonicalProfile,
+      });
+      const setAsDefault = asBoolean(body?.isDefault) === true;
+      if (setAsDefault) {
+        await setDefaultProfile(created.id);
+      }
+      const metas = await listProfileMetas();
+      const meta = metas.find((item) => item.profileId === created.id);
+      return jsonOk({
+        data: meta
+          ? toProfileMetaRow(meta)
+          : toProfileMetaRow({
+            profileId: created.id,
+            name: created.name,
+            createdAt: created.createdAt,
+            updatedAt: created.updatedAt,
+            isDefault: setAsDefault,
+          }),
+        meta: {
+          userId: currentUser.id,
+          authSource: currentUser.source,
+        },
+      }, { status: 201 });
     });
-    const setAsDefault = asBoolean(body?.isDefault) === true;
-    if (setAsDefault) {
-      await setDefaultProfile(created.id);
-    }
-    const metas = await listProfileMetas();
-    const meta = metas.find((item) => item.profileId === created.id);
-    return jsonOk({
-      data: meta
-        ? toProfileMetaRow(meta)
-        : toProfileMetaRow({
-          profileId: created.id,
-          name: created.name,
-          createdAt: created.createdAt,
-          updatedAt: created.updatedAt,
-          isDefault: setAsDefault,
-        }),
-    }, { status: 201 });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "프로필 생성에 실패했습니다.";
     return jsonError("INPUT", message, { status: 400 });
   }

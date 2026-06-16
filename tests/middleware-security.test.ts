@@ -4,6 +4,8 @@ import { middleware } from "../middleware";
 
 const originalAllowRemote = process.env.ALLOW_REMOTE;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalPlanningAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
+const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
 const mutableEnv = process.env as Record<string, string | undefined>;
 
 function makeRequest(url: string, init?: { method?: string; headers?: Record<string, string> }) {
@@ -21,6 +23,10 @@ afterEach(() => {
   else delete mutableEnv.ALLOW_REMOTE;
   if (typeof originalNodeEnv === "string") mutableEnv.NODE_ENV = originalNodeEnv;
   else delete mutableEnv.NODE_ENV;
+  if (typeof originalPlanningAuthRequired === "string") mutableEnv.PLANNING_AUTH_REQUIRED = originalPlanningAuthRequired;
+  else delete mutableEnv.PLANNING_AUTH_REQUIRED;
+  if (typeof originalPlanningTrustAuthHeaders === "string") mutableEnv.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
+  else delete mutableEnv.PLANNING_TRUST_AUTH_HEADERS;
 });
 
 describe("security middleware", () => {
@@ -83,6 +89,38 @@ describe("security middleware", () => {
       },
     }));
     expect(response.status).toBe(403);
+  });
+
+  it("blocks planning API requests without an auth signal when planning auth is required", async () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles"));
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("allows planning API requests with an Auth.js session cookie when planning auth is required", () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles", {
+      headers: {
+        cookie: "authjs.session-token=session",
+      },
+    }));
+
+    expect(response.status).toBe(200);
+  });
+
+  it("allows trusted planning auth headers only when the internal bridge is enabled", () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    mutableEnv.PLANNING_TRUST_AUTH_HEADERS = "1";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles", {
+      headers: {
+        "x-planning-user-id": "alice",
+      },
+    }));
+
+    expect(response.status).toBe(200);
   });
 
   it("blocks remote access to /api/dev in development", () => {
