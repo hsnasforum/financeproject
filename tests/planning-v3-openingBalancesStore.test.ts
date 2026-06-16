@@ -3,10 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getOpeningBalances, upsertOpeningBalance } from "../src/lib/planning/v3/store/openingBalancesStore";
+import { runWithPlanningUserScope } from "../src/lib/planning/store/userScope";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+const originalNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalPlanningUserId = process.env.PLANNING_USER_ID;
 
 describe("planning v3 openingBalancesStore", () => {
   let root = "";
@@ -23,6 +26,12 @@ describe("planning v3 openingBalancesStore", () => {
 
     if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
     else delete env.PLANNING_DATA_DIR;
+
+    if (typeof originalNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+
+    if (typeof originalPlanningUserId === "string") env.PLANNING_USER_ID = originalPlanningUserId;
+    else delete env.PLANNING_USER_ID;
 
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -50,5 +59,25 @@ describe("planning v3 openingBalancesStore", () => {
       asOfDate: "2026-02-01",
       amountKrw: 1500,
     });
+  });
+
+  it("isolates opening balances by planning namespace when enabled", async () => {
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    env.PLANNING_USER_ID = "default";
+
+    const aliceBalances = await runWithPlanningUserScope({ userId: "alice" }, async () => {
+      await upsertOpeningBalance("acc-main", "2026-03-01", 1000);
+      return getOpeningBalances();
+    });
+
+    const bobBalances = await runWithPlanningUserScope({ userId: "bob" }, async () => {
+      await upsertOpeningBalance("acc-main", "2026-03-01", 2000);
+      return getOpeningBalances();
+    });
+
+    expect(aliceBalances["acc-main"]?.amountKrw).toBe(1000);
+    expect(bobBalances["acc-main"]?.amountKrw).toBe(2000);
+    expect(fs.existsSync(path.join(root, "users", "alice", "planning-v3", "opening-balances.json"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "users", "bob", "planning-v3", "opening-balances.json"))).toBe(true);
   });
 });
