@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import { type OpeningBalance } from "../domain/types";
+import { resolvePlanningV3DataDir } from "./dataDir";
 
 type OpeningBalancesState = {
   version: 1;
@@ -61,7 +61,7 @@ function normalizeAmount(value: unknown): number {
 function resolveOpeningBalancesPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_V3_OPENING_BALANCES_PATH);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "planning-v3", "opening-balances.json");
+  return path.join(resolvePlanningV3DataDir(cwd), "opening-balances.json");
 }
 
 function normalizeOpeningBalance(value: unknown): OpeningBalance | null {
