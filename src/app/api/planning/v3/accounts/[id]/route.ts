@@ -9,6 +9,10 @@ import {
   deleteAccount,
   updateAccount,
 } from "@/lib/planning/v3/accounts/store";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -67,32 +71,36 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
 
-  try {
-    const updated = await updateAccount(id, {
-      ...(body?.name !== undefined ? { name: body.name } : {}),
-      ...(body?.kind !== undefined ? { kind: body.kind } : {}),
-      ...(body?.note !== undefined ? { note: body.note } : {}),
-      ...(body?.startingBalanceKrw !== undefined ? { startingBalanceKrw: body.startingBalanceKrw } : {}),
-    });
-    if (!updated) {
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+
+    try {
+      const updated = await updateAccount(id, {
+        ...(body?.name !== undefined ? { name: body.name } : {}),
+        ...(body?.kind !== undefined ? { kind: body.kind } : {}),
+        ...(body?.note !== undefined ? { note: body.note } : {}),
+        ...(body?.startingBalanceKrw !== undefined ? { startingBalanceKrw: body.startingBalanceKrw } : {}),
+      });
+      if (!updated) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ ok: true, account: updated });
+    } catch (error) {
+      if (error instanceof AccountsStoreInputError || isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "계좌 입력이 올바르지 않습니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." } },
-        { status: 404 },
+        { ok: false, error: { code: "INTERNAL", message: "계좌를 수정하지 못했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json({ ok: true, account: updated });
-  } catch (error) {
-    if (error instanceof AccountsStoreInputError || isInvalidIdError(error)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "계좌 입력이 올바르지 않습니다." } },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "계좌를 수정하지 못했습니다." } },
-      { status: 500 },
-    );
-  }
+  });
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
@@ -108,25 +116,29 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
 
-  try {
-    const deleted = await deleteAccount(id);
-    if (!deleted) {
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+
+    try {
+      const deleted = await deleteAccount(id);
+      if (!deleted) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ ok: true, deleted: true });
+    } catch (error) {
+      if (isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." } },
-        { status: 404 },
+        { ok: false, error: { code: "INTERNAL", message: "계좌를 삭제하지 못했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json({ ok: true, deleted: true });
-  } catch (error) {
-    if (isInvalidIdError(error)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." } },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "계좌를 삭제하지 못했습니다." } },
-      { status: 500 },
-    );
-  }
+  });
 }
