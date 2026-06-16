@@ -5,6 +5,10 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { createJournalEntry, listJournalEntries } from "@/lib/planning/v3/journal/store";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function withReadGuard(request: Request): Response | null {
   try {
@@ -49,9 +53,11 @@ export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
-  return NextResponse.json({
-    ok: true,
-    entries: listJournalEntries(),
+  return withPlanningRouteUser(request, async () => {
+    return NextResponse.json({
+      ok: true,
+      entries: listJournalEntries(),
+    });
   });
 }
 
@@ -66,14 +72,18 @@ export async function POST(request: Request) {
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
 
-  try {
-    const payload = body as { entry?: unknown } | null;
-    const entry = createJournalEntry(payload?.entry ?? {});
-    return NextResponse.json({ ok: true, entry });
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." } },
-      { status: 400 },
-    );
-  }
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+
+    try {
+      const payload = body as { entry?: unknown } | null;
+      const entry = createJournalEntry(payload?.entry ?? {});
+      return NextResponse.json({ ok: true, entry });
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+  });
 }

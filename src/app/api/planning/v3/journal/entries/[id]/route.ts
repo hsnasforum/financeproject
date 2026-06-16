@@ -5,6 +5,10 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { getJournalEntry, updateJournalEntry } from "@/lib/planning/v3/journal/store";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function withReadGuard(request: Request): Response | null {
   try {
@@ -55,15 +59,19 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 
   const params = await context.params;
   const id = asString(params.id);
-  const entry = getJournalEntry(id);
-  if (!entry) {
-    return NextResponse.json(
-      { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." } },
-      { status: 404 },
-    );
-  }
 
-  return NextResponse.json({ ok: true, entry });
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+    const entry = getJournalEntry(id);
+    if (!entry) {
+      return NextResponse.json(
+        { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." }, meta: userMeta },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ ok: true, entry });
+  });
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -79,20 +87,24 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
   const params = await context.params;
   const id = asString(params.id);
-  try {
-    const payload = body as { entry?: unknown } | null;
-    const entry = updateJournalEntry(id, payload?.entry ?? {});
-    return NextResponse.json({ ok: true, entry });
-  } catch (error) {
-    if (error instanceof Error && error.message === "NOT_FOUND") {
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+
+    try {
+      const payload = body as { entry?: unknown } | null;
+      const entry = updateJournalEntry(id, payload?.entry ?? {});
+      return NextResponse.json({ ok: true, entry });
+    } catch (error) {
+      if (error instanceof Error && error.message === "NOT_FOUND") {
+        return NextResponse.json(
+          { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." } },
-        { status: 404 },
+        { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." } },
-      { status: 400 },
-    );
-  }
+  });
 }

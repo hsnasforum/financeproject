@@ -3,6 +3,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { resolveDataDir } from "../../../src/lib/planning/storage/dataDir";
 import {
+  getPlanningUserDir,
+  isPlanningNamespaceEnabled,
+  resolvePlanningUserId,
+} from "../../../src/lib/planning/store/namespace";
+import {
   JournalEntrySchema,
   parseJournalEntry,
   parseJournalEntryInput,
@@ -42,6 +47,9 @@ function dedupe(values: string[]): string[] {
 }
 
 function resolveJournalDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), cwd), "planning-v3", "journal", "entries");
+  }
   return path.join(resolveDataDir({ cwd }), "journal", "entries");
 }
 
