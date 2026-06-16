@@ -16,6 +16,10 @@ import {
   listAccounts,
 } from "@/lib/planning/v3/balances/monthly";
 import { applyStoredFirstBatchAccountBinding } from "@/lib/planning/v3/transactions/store";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -51,86 +55,89 @@ export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
-  const url = new URL(request.url);
-  const batchId = asString(url.searchParams.get("batchId"));
-  if (!batchId) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "batchId를 입력해 주세요." } },
-      { status: 400 },
-    );
-  }
-  const includeTransfers = asBoolean(url.searchParams.get("includeTransfers"));
-
-  try {
-    const [
-      readableBatch,
-      openingBalances,
-      overridesByTxnId,
-      accounts,
-      accountOverrides,
-      transferOverrides,
-    ] = await Promise.all([
-      loadStoredFirstBatchTransactions(batchId),
-      getOpeningBalances(),
-      getBatchTxnOverrides(batchId).catch(() => ({})),
-      listAccounts(),
-      getAccountMappingOverrides(batchId).catch(() => ({})),
-      getTransferOverrides(batchId).catch(() => ({})),
-    ]);
-
-    // Balances keeps the same stored-first visible binding as detail/cashflow/summary.
-    const transactions = readableBatch
-      ? applyStoredFirstBatchAccountBinding(readableBatch)
-      : [];
-    if (transactions.length < 1) {
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+    const url = new URL(request.url);
+    const batchId = asString(url.searchParams.get("batchId"));
+    if (!batchId) {
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." } },
-        { status: 404 },
+        { ok: false, error: { code: "INPUT", message: "batchId를 입력해 주세요." }, meta: userMeta },
+        { status: 400 },
       );
     }
+    const includeTransfers = asBoolean(url.searchParams.get("includeTransfers"));
 
-    const openingByAccount = { ...openingBalances };
-    for (const account of accounts) {
-      if (openingByAccount[account.id]) continue;
-      if (Number.isInteger(account.startingBalanceKrw)) {
-        openingByAccount[account.id] = {
-          accountId: account.id,
-          asOfDate: "1970-01-01",
-          amountKrw: Number(account.startingBalanceKrw),
-        };
+    try {
+      const [
+        readableBatch,
+        openingBalances,
+        overridesByTxnId,
+        accounts,
+        accountOverrides,
+        transferOverrides,
+      ] = await Promise.all([
+        loadStoredFirstBatchTransactions(batchId),
+        getOpeningBalances(),
+        getBatchTxnOverrides(batchId).catch(() => ({})),
+        listAccounts(),
+        getAccountMappingOverrides(batchId).catch(() => ({})),
+        getTransferOverrides(batchId).catch(() => ({})),
+      ]);
+
+      // Balances keeps the same stored-first visible binding as detail/cashflow/summary.
+      const transactions = readableBatch
+        ? applyStoredFirstBatchAccountBinding(readableBatch)
+        : [];
+      if (transactions.length < 1) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
       }
-    }
 
-    const mapped = applyAccountMappingOverrides(transactions, accountOverrides);
-    const transferDetected = detectTransfers({
-      batchId,
-      transactions: mapped,
-      overridesByTxnId: transferOverrides,
-    });
+      const openingByAccount = { ...openingBalances };
+      for (const account of accounts) {
+        if (openingByAccount[account.id]) continue;
+        if (Number.isInteger(account.startingBalanceKrw)) {
+          openingByAccount[account.id] = {
+            accountId: account.id,
+            asOfDate: "1970-01-01",
+            amountKrw: Number(account.startingBalanceKrw),
+          };
+        }
+      }
 
-    const computed = computeMonthlyBalances({
-      transactions: transferDetected.transactions.map((row) => ({
-        ...row,
-        txnId: asString(row.txnId).toLowerCase(),
+      const mapped = applyAccountMappingOverrides(transactions, accountOverrides);
+      const transferDetected = detectTransfers({
         batchId,
-      })),
-      openingBalancesByAccount: openingByAccount,
-      includeTransfers,
-      overridesByTxnId,
-    });
+        transactions: mapped,
+        overridesByTxnId: transferOverrides,
+      });
 
-    return NextResponse.json({
-      ok: true,
-      batchId,
-      data: computed.data,
-      warnings: computed.warnings,
-      // Backward-compatible alias for existing UIs still reading `items`.
-      items: computed.data,
-    });
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "월별 잔액 조회에 실패했습니다." } },
-      { status: 500 },
-    );
-  }
+      const computed = computeMonthlyBalances({
+        transactions: transferDetected.transactions.map((row) => ({
+          ...row,
+          txnId: asString(row.txnId).toLowerCase(),
+          batchId,
+        })),
+        openingBalancesByAccount: openingByAccount,
+        includeTransfers,
+        overridesByTxnId,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        batchId,
+        data: computed.data,
+        warnings: computed.warnings,
+        // Backward-compatible alias for existing UIs still reading `items`.
+        items: computed.data,
+      });
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "월별 잔액 조회에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
+    }
+  });
 }

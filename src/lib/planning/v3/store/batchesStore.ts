@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { roundKrw } from "../../calc";
 import { atomicWriteFile, atomicWriteJson } from "../../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import { type ImportBatchMeta, type StoredImportMetadata, type StoredTransaction } from "../domain/transactions";
+import { resolvePlanningV3DataDir } from "./dataDir";
 
 type BatchesIndexState = {
   version: 1;
@@ -119,7 +119,7 @@ function normalizeStoredImportMetadata(value: unknown): StoredImportMetadata | u
 function resolveBatchesRootDir(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_V3_BATCHES_DIR);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "planning-v3", "batches");
+  return path.join(resolvePlanningV3DataDir(cwd), "batches");
 }
 
 function resolveIndexPath(cwd = process.cwd()): string {
