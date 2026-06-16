@@ -58,6 +58,18 @@
 - PASS `corepack pnpm planning:ssot:check`
 - PASS `corepack pnpm sec:check`
 - PASS `corepack pnpm test`
+- FAIL GitHub Actions `verify`
+  - 실패 경계: `pnpm deps:audit`에서 `esbuild`, `vite`, `hono`, `js-yaml` 취약점이 감지되었습니다.
+- FAIL `corepack pnpm deps:audit`
+  - 로컬 재현 결과: 11 vulnerabilities.
+- 변경: `vite`, `vitest`, `tsx`를 갱신하고 `pnpm.overrides`에 `esbuild`, `hono`, `js-yaml` 안전 버전을 고정했습니다.
+- FAIL `corepack pnpm install`
+  - 실패 경계: postinstall의 Prisma generate에 `DATABASE_URL`이 필요했습니다.
+- PASS `DATABASE_URL="file:./prisma/dev.db" corepack pnpm install`
+- PASS `corepack pnpm deps:audit`
+- PASS `corepack pnpm deps:audit && corepack pnpm lint`
+- PASS `corepack pnpm test`
+- PASS `corepack pnpm sec:check && corepack pnpm planning:ssot:check && corepack pnpm build`
 
 ## 잔여 리스크
 - 이번 PR은 모든 planning API route의 전면 routeAuth 표준화를 완료하지 않습니다. 남은 route 전면 표준화는 별도 PR 범위입니다.
