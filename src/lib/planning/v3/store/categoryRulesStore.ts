@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import { type CategoryId, type CategoryRule } from "../domain/types";
+import { resolvePlanningV3DataDir } from "./dataDir";
 
 type RulesState = {
   version: 1;
@@ -87,7 +87,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function resolveRulesPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_V3_CATEGORY_RULES_PATH);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "planning-v3", "category-rules.json");
+  return path.join(resolvePlanningV3DataDir(cwd), "category-rules.json");
 }
 
 function normalizeCategoryId(value: unknown): CategoryId {
@@ -228,4 +228,3 @@ export async function deleteRule(id: unknown): Promise<boolean> {
   await writeState(state);
   return true;
 }
-

@@ -9,6 +9,10 @@ import {
   listRules,
   upsertRule,
 } from "@/lib/planning/v3/categories/store";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RuleBody = {
   id?: unknown;
@@ -69,15 +73,19 @@ export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
-  try {
-    const items = await listRules();
-    return NextResponse.json({ ok: true, items });
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 목록 조회에 실패했습니다." } },
-      { status: 500 },
-    );
-  }
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+
+    try {
+      const items = await listRules();
+      return NextResponse.json({ ok: true, items });
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 목록 조회에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
+    }
+  });
 }
 
 export async function POST(request: Request) {
@@ -91,33 +99,42 @@ export async function POST(request: Request) {
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
 
-  if (!body) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "룰 입력값이 필요합니다." } },
-      { status: 400 },
-    );
-  }
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const rule = await upsertRule({
-      ...(body.id !== undefined ? { id: body.id } : {}),
-      categoryId: body.categoryId,
-      match: body.match,
-      priority: body.priority,
-      enabled: body.enabled,
-      note: body.note,
-    });
-    return NextResponse.json({ ok: true, rule });
-  } catch (error) {
-    if (error instanceof CategoryRulesStoreInputError) {
+    if (!body) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "룰 입력값이 올바르지 않습니다." }, details: error.details },
+        { ok: false, error: { code: "INPUT", message: "룰 입력값이 필요합니다." }, meta: userMeta },
         { status: 400 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 저장에 실패했습니다." } },
-      { status: 500 },
-    );
-  }
+
+    try {
+      const rule = await upsertRule({
+        ...(body.id !== undefined ? { id: body.id } : {}),
+        categoryId: body.categoryId,
+        match: body.match,
+        priority: body.priority,
+        enabled: body.enabled,
+        note: body.note,
+      });
+      return NextResponse.json({ ok: true, rule });
+    } catch (error) {
+      if (error instanceof CategoryRulesStoreInputError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: { code: "INPUT", message: "룰 입력값이 올바르지 않습니다." },
+            details: error.details,
+            meta: userMeta,
+          },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 저장에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
+    }
+  });
 }
