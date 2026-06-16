@@ -11,6 +11,10 @@ import {
 } from "@/lib/planning/v3/service/importCsvToDraft";
 import { parseCsvText } from "@/lib/planning/v3/providers/csv/csvParse";
 import { type CsvColumnMapping } from "@/lib/planning/v3/providers/csv/types";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 export const runtime = "nodejs";
 
@@ -36,6 +40,7 @@ type ApiErrorPayload = {
     message: string;
     details?: Record<string, unknown>;
   };
+  meta?: Record<string, string>;
 };
 
 type ApiSuccessPayload = {
@@ -113,6 +118,7 @@ function jsonError(
   code: ApiErrorCode,
   message: string,
   details?: Record<string, unknown>,
+  meta?: Record<string, string>,
 ): NextResponse<ApiErrorPayload> {
   return NextResponse.json(
     {
@@ -122,6 +128,7 @@ function jsonError(
         message,
         ...(details ? { details } : {}),
       },
+      ...(meta ? { meta } : {}),
     },
     { status },
   );
@@ -269,24 +276,32 @@ export async function POST(request: Request) {
   const guarded = guardRequest(request);
   if (guarded) return guarded;
 
-  const parsedBody = await parseInputBody(request);
-  if (!parsedBody.ok) return parsedBody.response;
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const imported = importCsvToDraft(parsedBody.csvText, {
-      ...(parsedBody.mapping ? { mapping: parsedBody.mapping } : {}),
-    });
-    return jsonOk(imported, parsedBody.csvText);
-  } catch (error) {
-    if (error instanceof CsvImportInputError) {
-      return jsonError(
-        400,
-        error.code === "PARSE" ? "PARSE" : "INPUT",
-        error.message,
-        error.meta,
-      );
+    const parsedBody = await parseInputBody(request);
+    if (!parsedBody.ok) {
+      const payload = await parsedBody.response.json() as ApiErrorPayload;
+      return NextResponse.json({ ...payload, meta: userMeta }, { status: parsedBody.response.status });
     }
 
-    return jsonError(500, "INTERNAL", "CSV 처리 중 오류가 발생했습니다.");
-  }
+    try {
+      const imported = importCsvToDraft(parsedBody.csvText, {
+        ...(parsedBody.mapping ? { mapping: parsedBody.mapping } : {}),
+      });
+      return jsonOk(imported, parsedBody.csvText);
+    } catch (error) {
+      if (error instanceof CsvImportInputError) {
+        return jsonError(
+          400,
+          error.code === "PARSE" ? "PARSE" : "INPUT",
+          error.message,
+          error.meta,
+          userMeta,
+        );
+      }
+
+      return jsonError(500, "INTERNAL", "CSV 처리 중 오류가 발생했습니다.", undefined, userMeta);
+    }
+  });
 }

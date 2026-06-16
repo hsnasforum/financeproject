@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import {
+  getPlanningUserDir,
+  isPlanningNamespaceEnabled,
+  resolvePlanningUserId,
+} from "../../../src/lib/planning/store/namespace";
 import { parseWithV3Whitelist } from "../security/whitelist";
 import { TopicScenarioTemplateSchema, type TopicScenarioTemplate } from "../news/scenario/contracts";
 
@@ -112,7 +117,12 @@ export const SCENARIO_LIBRARY_SSOT: ScenarioLibraryEntry[] = RAW_SCENARIO_LIBRAR
     order: index,
   }));
 
-const DEFAULT_DATA_DIR = path.join(process.cwd(), ".data", "scenarios");
+function defaultDataDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), cwd), "scenarios");
+  }
+  return path.join(cwd, ".data", "scenarios");
+}
 
 function defaultOverrides(): ScenarioLibraryOverrides {
   return ScenarioLibraryOverridesSchema.parse({
@@ -140,11 +150,11 @@ function dedupeOverrides(items: ScenarioLibraryOverrideItem[]): ScenarioLibraryO
   return [...map.values()].sort((a, b) => a.topicId.localeCompare(b.topicId));
 }
 
-export function resolveScenarioOverridesPath(dataDir = DEFAULT_DATA_DIR): string {
+export function resolveScenarioOverridesPath(dataDir = defaultDataDir()): string {
   return path.join(dataDir, "overrides.json");
 }
 
-export function readScenarioLibraryOverrides(dataDir = DEFAULT_DATA_DIR): ScenarioLibraryOverrides {
+export function readScenarioLibraryOverrides(dataDir = defaultDataDir()): ScenarioLibraryOverrides {
   const filePath = resolveScenarioOverridesPath(dataDir);
   if (!fs.existsSync(filePath)) return defaultOverrides();
   try {
@@ -157,7 +167,7 @@ export function readScenarioLibraryOverrides(dataDir = DEFAULT_DATA_DIR): Scenar
 
 export function writeScenarioLibraryOverrides(
   input: Pick<ScenarioLibraryOverrides, "items">,
-  dataDir = DEFAULT_DATA_DIR,
+  dataDir = defaultDataDir(),
 ): ScenarioLibraryOverrides {
   const next = parseWithV3Whitelist(ScenarioLibraryOverridesSchema, {
     schemaVersion: 1,
@@ -211,7 +221,7 @@ function toTopicTemplate(entry: ScenarioLibraryEntry): TopicScenarioTemplate {
   });
 }
 
-export function loadEffectiveScenarioLibrary(dataDir = DEFAULT_DATA_DIR): {
+export function loadEffectiveScenarioLibrary(dataDir = defaultDataDir()): {
   updatedAt: string | null;
   entries: ScenarioLibraryEntry[];
   templates: TopicScenarioTemplate[];

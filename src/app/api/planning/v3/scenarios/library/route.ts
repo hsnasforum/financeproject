@@ -13,6 +13,10 @@ import {
   writeScenarioLibraryOverrides,
 } from "@/lib/planning/v3/scenarios/library";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 const SaveBodySchema = z.object({
   csrf: z.string().optional(),
@@ -120,15 +124,17 @@ export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
-  const data = toRows();
-  const payload = parseWithV3Whitelist(GetResponseSchema, {
-    ok: true,
-    data,
-  }, {
-    scope: "response",
-    context: "api.v3.scenarios.library.get",
+  return withPlanningRouteUser(request, async () => {
+    const data = toRows();
+    const payload = parseWithV3Whitelist(GetResponseSchema, {
+      ok: true,
+      data,
+    }, {
+      scope: "response",
+      context: "api.v3.scenarios.library.get",
+    });
+    return NextResponse.json(payload);
   });
-  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {
@@ -142,34 +148,38 @@ export async function POST(request: Request) {
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
 
-  const parsed = SaveBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "시나리오 라이브러리 입력 형식이 올바르지 않습니다." } },
-      { status: 400 },
-    );
-  }
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const allowedTopicIds = new Set(SCENARIO_LIBRARY_SSOT.map((row) => row.topicId.toLowerCase()));
-  const items = parsed.data.items
-    .filter((row) => allowedTopicIds.has(row.topicId.toLowerCase()))
-    .map((row) => ({
-      topicId: row.topicId.toLowerCase(),
-      enabled: typeof row.enabled === "boolean" ? row.enabled : undefined,
-      order: Number.isInteger(row.order) ? Number(row.order) : undefined,
-    }));
+    const parsed = SaveBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "시나리오 라이브러리 입력 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
 
-  const written = writeScenarioLibraryOverrides({ items });
-  const data = toRows();
-  const payload = parseWithV3Whitelist(PostResponseSchema, {
-    ok: true,
-    data: {
-      ...data,
-      overrideCount: written.items.length,
-    },
-  }, {
-    scope: "response",
-    context: "api.v3.scenarios.library.post",
+    const allowedTopicIds = new Set(SCENARIO_LIBRARY_SSOT.map((row) => row.topicId.toLowerCase()));
+    const items = parsed.data.items
+      .filter((row) => allowedTopicIds.has(row.topicId.toLowerCase()))
+      .map((row) => ({
+        topicId: row.topicId.toLowerCase(),
+        enabled: typeof row.enabled === "boolean" ? row.enabled : undefined,
+        order: Number.isInteger(row.order) ? Number(row.order) : undefined,
+      }));
+
+    const written = writeScenarioLibraryOverrides({ items });
+    const data = toRows();
+    const payload = parseWithV3Whitelist(PostResponseSchema, {
+      ok: true,
+      data: {
+        ...data,
+        overrideCount: written.items.length,
+      },
+    }, {
+      scope: "response",
+      context: "api.v3.scenarios.library.post",
+    });
+    return NextResponse.json(payload);
   });
-  return NextResponse.json(payload);
 }
