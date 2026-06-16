@@ -11,6 +11,10 @@ import {
   listStoredBatchListCandidates,
   toStoredFirstPublicImportBatchMeta,
 } from "@/lib/planning/v3/transactions/store";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -95,79 +99,82 @@ export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
 
-  const url = new URL(request.url);
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+    const url = new URL(request.url);
 
-  try {
-    const limit = asPositiveInt(url.searchParams.get("limit")) ?? 50;
-    const [legacyListed, storedListed] = await Promise.all([
-      listLegacyBatches({
-        ...(limit ? { limit: Math.max(limit, 200) } : {}),
-        ...(asString(url.searchParams.get("cursor")) ? { cursor: asString(url.searchParams.get("cursor")) } : {}),
-      }),
-      listStoredBatchListCandidates(),
-    ]);
+    try {
+      const limit = asPositiveInt(url.searchParams.get("limit")) ?? 50;
+      const [legacyListed, storedListed] = await Promise.all([
+        listLegacyBatches({
+          ...(limit ? { limit: Math.max(limit, 200) } : {}),
+          ...(asString(url.searchParams.get("cursor")) ? { cursor: asString(url.searchParams.get("cursor")) } : {}),
+        }),
+        listStoredBatchListCandidates(),
+      ]);
 
-    const legacyItems = legacyListed.items as LegacyBatchRow[];
-    const legacyById = new Map(legacyItems.map((item) => [item.id, item]));
-    const mergedById = new Map<string, MergedBatchListMeta>();
+      const legacyItems = legacyListed.items as LegacyBatchRow[];
+      const legacyById = new Map(legacyItems.map((item) => [item.id, item]));
+      const mergedById = new Map<string, MergedBatchListMeta>();
 
-    for (const item of legacyItems) {
-      mergedById.set(item.id, {
-        meta: toMetaFromLegacy(item),
-        metadataSource: "legacy-derived",
-      });
-    }
-    for (const item of storedListed) {
-      const existing = mergedById.get(item.meta.id);
-      if (!existing) {
-        mergedById.set(item.meta.id, item);
-        continue;
+      for (const item of legacyItems) {
+        mergedById.set(item.id, {
+          meta: toMetaFromLegacy(item),
+          metadataSource: "legacy-derived",
+        });
       }
-      const existingTs = Date.parse(existing.meta.createdAt);
-      const nextTs = Date.parse(item.meta.createdAt);
-      if (!Number.isFinite(existingTs) || (Number.isFinite(nextTs) && nextTs > existingTs)) {
-        mergedById.set(item.meta.id, item);
+      for (const item of storedListed) {
+        const existing = mergedById.get(item.meta.id);
+        if (!existing) {
+          mergedById.set(item.meta.id, item);
+          continue;
+        }
+        const existingTs = Date.parse(existing.meta.createdAt);
+        const nextTs = Date.parse(item.meta.createdAt);
+        if (!Number.isFinite(existingTs) || (Number.isFinite(nextTs) && nextTs > existingTs)) {
+          mergedById.set(item.meta.id, item);
+        }
       }
+
+      const mergedMeta = sortByCreatedAtDesc([...mergedById.values()]).slice(0, limit);
+      const data = mergedMeta.map((row) => {
+        const publicMeta = toStoredFirstPublicImportBatchMeta({
+          meta: row.meta,
+          metadataSource: row.metadataSource,
+        });
+        const createdAt = getStoredFirstPublicCreatedAtString({
+          createdAt: row.meta.createdAt,
+          policy: { metadataSource: row.metadataSource },
+        });
+        return {
+          ...publicMeta,
+          createdAt,
+        };
+      });
+      const items = mergedMeta.map((row) => {
+        const createdAt = getStoredFirstPublicCreatedAtString({
+          createdAt: row.meta.createdAt,
+          policy: { metadataSource: row.metadataSource },
+        });
+        const legacy = legacyById.get(row.meta.id);
+        return {
+          ...(legacy ?? toLegacyFromMeta(row.meta)),
+          // Transaction batch list keeps the legacy string contract for createdAt.
+          createdAt,
+        };
+      });
+
+      return NextResponse.json({
+        ok: true,
+        items,
+        data,
+        ...(legacyListed.nextCursor ? { nextCursor: legacyListed.nextCursor } : {}),
+      });
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "배치 목록 조회에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
     }
-
-    const mergedMeta = sortByCreatedAtDesc([...mergedById.values()]).slice(0, limit);
-    const data = mergedMeta.map((row) => {
-      const publicMeta = toStoredFirstPublicImportBatchMeta({
-        meta: row.meta,
-        metadataSource: row.metadataSource,
-      });
-      const createdAt = getStoredFirstPublicCreatedAtString({
-        createdAt: row.meta.createdAt,
-        policy: { metadataSource: row.metadataSource },
-      });
-      return {
-        ...publicMeta,
-        createdAt,
-      };
-    });
-    const items = mergedMeta.map((row) => {
-      const createdAt = getStoredFirstPublicCreatedAtString({
-        createdAt: row.meta.createdAt,
-        policy: { metadataSource: row.metadataSource },
-      });
-      const legacy = legacyById.get(row.meta.id);
-      return {
-        ...(legacy ?? toLegacyFromMeta(row.meta)),
-        // Transaction batch list keeps the legacy string contract for createdAt.
-        createdAt,
-      };
-    });
-
-    return NextResponse.json({
-      ok: true,
-      items,
-      data,
-      ...(legacyListed.nextCursor ? { nextCursor: legacyListed.nextCursor } : {}),
-    });
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 목록 조회에 실패했습니다." } },
-      { status: 500 },
-    );
-  }
+  });
 }
