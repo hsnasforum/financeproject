@@ -10,6 +10,10 @@ import {
   getBatchTxnOverrides,
   upsertBatchTxnOverride,
 } from "@/lib/planning/v3/store/txnOverridesStore";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -84,25 +88,30 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
 
-  try {
-    const items = await getBatchTxnOverrides(id);
-    return NextResponse.json({ ok: true, data: items });
-  } catch (error) {
-    if (error instanceof TxnOverridesStoreInputError) {
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
+
+    try {
+      const items = await getBatchTxnOverrides(id);
+      return NextResponse.json({ ok: true, data: items });
+    } catch (error) {
+      if (error instanceof TxnOverridesStoreInputError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: { code: "INPUT", message: "배치 식별자가 올바르지 않습니다." },
+            details: error.details,
+            meta: userMeta,
+          },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        {
-          ok: false,
-          error: { code: "INPUT", message: "배치 식별자가 올바르지 않습니다." },
-          details: error.details,
-        },
-        { status: 400 },
+        { ok: false, error: { code: "INTERNAL", message: "거래 오버라이드 조회에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "거래 오버라이드 조회에 실패했습니다." } },
-      { status: 500 },
-    );
-  }
+  });
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -116,61 +125,66 @@ export async function POST(request: Request, context: RouteContext) {
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
 
-  if (!body) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "오버라이드 입력이 필요합니다." } },
-      { status: 400 },
-    );
-  }
+  return withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id } = await context.params;
-  const txnId = asString(body.txnId);
-  const mappedKind = mapKind(body.kind);
-  const categoryId = asString(body.categoryId);
-  const note = asString(body.note);
-
-  if (!txnId) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "txnId가 필요합니다." } },
-      { status: 400 },
-    );
-  }
-
-  if (asString(body.kind) && !mappedKind) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "kind 값이 올바르지 않습니다." } },
-      { status: 400 },
-    );
-  }
-
-  try {
-    if (mappedKind === "auto" && !categoryId) {
-      await deleteBatchTxnOverride({ batchId: id, txnId });
-      return NextResponse.json({ ok: true, data: { deleted: true } });
-    }
-
-    const override = await upsertBatchTxnOverride({
-      batchId: id,
-      txnId,
-      ...(mappedKind && mappedKind !== "auto" ? { kind: mappedKind } : {}),
-      ...(categoryId ? { categoryId } : {}),
-      ...(note ? { note } : {}),
-    });
-    return NextResponse.json({ ok: true, data: override });
-  } catch (error) {
-    if (error instanceof TxnOverridesStoreInputError) {
+    if (!body) {
       return NextResponse.json(
-        {
-          ok: false,
-          error: { code: "INPUT", message: "오버라이드 입력이 올바르지 않습니다." },
-          details: error.details,
-        },
+        { ok: false, error: { code: "INPUT", message: "오버라이드 입력이 필요합니다." }, meta: userMeta },
         { status: 400 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "오버라이드 저장에 실패했습니다." } },
-      { status: 500 },
-    );
-  }
+
+    const { id } = await context.params;
+    const txnId = asString(body.txnId);
+    const mappedKind = mapKind(body.kind);
+    const categoryId = asString(body.categoryId);
+    const note = asString(body.note);
+
+    if (!txnId) {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "txnId가 필요합니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+
+    if (asString(body.kind) && !mappedKind) {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "kind 값이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+
+    try {
+      if (mappedKind === "auto" && !categoryId) {
+        await deleteBatchTxnOverride({ batchId: id, txnId });
+        return NextResponse.json({ ok: true, data: { deleted: true } });
+      }
+
+      const override = await upsertBatchTxnOverride({
+        batchId: id,
+        txnId,
+        ...(mappedKind && mappedKind !== "auto" ? { kind: mappedKind } : {}),
+        ...(categoryId ? { categoryId } : {}),
+        ...(note ? { note } : {}),
+      });
+      return NextResponse.json({ ok: true, data: override });
+    } catch (error) {
+      if (error instanceof TxnOverridesStoreInputError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: { code: "INPUT", message: "오버라이드 입력이 올바르지 않습니다." },
+            details: error.details,
+            meta: userMeta,
+          },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "오버라이드 저장에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
+    }
+  });
 }

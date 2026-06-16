@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import { type CategoryId, type TxnOverride } from "../domain/types";
 import { isTxnId } from "../service/txnId";
+import { resolvePlanningV3DataDir, resolvePlanningV3LegacyDataDir } from "./dataDir";
 
 type OverridesState = {
   version: 1;
@@ -74,13 +74,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function resolveLegacyOverridesPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_V3_TXN_OVERRIDES_PATH);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "v3", "txn-overrides.json");
+  return path.join(resolvePlanningV3LegacyDataDir(cwd), "txn-overrides.json");
 }
 
 function resolveOverridesDir(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_V3_TXN_OVERRIDES_DIR);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "planning-v3", "txn-overrides");
+  return path.join(resolvePlanningV3DataDir(cwd), "txn-overrides");
 }
 
 function resolveBatchOverridesPath(batchId: string, cwd = process.cwd()): string {
