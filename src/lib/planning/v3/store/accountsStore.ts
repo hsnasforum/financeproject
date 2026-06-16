@@ -2,9 +2,9 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { atomicWriteJson } from "../../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import { type Account } from "../domain/types";
+import { resolvePlanningV3DataDir, resolvePlanningV3LegacyDataDir } from "./dataDir";
 
 type AccountStoreState = {
   version: 2;
@@ -134,11 +134,11 @@ function normalizeAccountId(value: unknown): string {
 function resolveAccountsPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_V3_ACCOUNTS_PATH);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "planning-v3", "accounts.json");
+  return path.join(resolvePlanningV3DataDir(cwd), "accounts.json");
 }
 
 function resolveLegacyAccountsPath(cwd = process.cwd()): string {
-  return path.join(resolvePlanningDataDir({ cwd }), "v3", "accounts", "accounts.json");
+  return path.join(resolvePlanningV3LegacyDataDir(cwd), "accounts", "accounts.json");
 }
 
 function normalizeAccount(value: unknown): Account | null {
