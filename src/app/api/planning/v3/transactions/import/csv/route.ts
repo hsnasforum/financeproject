@@ -4,7 +4,12 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { appendBatchFromCsv, TransactionStoreInputError } from "@/lib/planning/v3/transactions/store";
+import { appendBatchFromCsv, TransactionStoreInputError } from "@/lib/planning/v3/service/transactionStore";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type ImportBody = {
   csvText?: unknown;
@@ -65,11 +70,14 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const csvText = asString(body?.csvText);
   if (!csvText) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "CSV 텍스트를 입력해 주세요." } },
+      { ok: false, error: { code: "INPUT", message: "CSV 텍스트를 입력해 주세요." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -77,7 +85,7 @@ export async function POST(request: Request) {
   const mapping = normalizeMapping(body?.mapping);
   if (body?.mapping !== undefined && body?.mapping !== null && !mapping) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "매핑 형식이 올바르지 않습니다." } },
+      { ok: false, error: { code: "INPUT", message: "매핑 형식이 올바르지 않습니다." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -85,7 +93,7 @@ export async function POST(request: Request) {
   const accountId = asString(body?.accountId);
   if (!accountId) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "거래 계좌를 선택해 주세요." } },
+      { ok: false, error: { code: "INPUT", message: "거래 계좌를 선택해 주세요." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -104,6 +112,7 @@ export async function POST(request: Request) {
       batch: imported.batch,
       stats: imported.stats,
       sample: imported.sampleRedactedRows.slice(0, 10),
+      meta: userMeta,
     }, { status: 201 });
   } catch (error) {
     if (error instanceof TransactionStoreInputError) {
@@ -118,13 +127,14 @@ export async function POST(request: Request) {
               : "CSV 임포트 입력 검증에 실패했습니다.",
           },
           details: error.details,
+          meta: userMeta,
         },
         { status: 400 },
       );
     }
 
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 저장에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "배치 저장에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

@@ -13,6 +13,7 @@ const originalProfilesDir = process.env.PLANNING_PROFILES_DIR;
 const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const originalAuditPath = process.env.AUDIT_LOG_PATH;
 const originalAssumptionsOverridesPath = process.env.PLANNING_ASSUMPTIONS_OVERRIDES_PATH;
+const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -43,13 +44,14 @@ function buildJsonRequest(method: string, urlPath: string, body: unknown, header
   });
 }
 
-function buildGetRequest(urlPath: string): Request {
+function buildGetRequest(urlPath: string, headers?: Record<string, string>): Request {
   return new Request(`${LOCAL_ORIGIN}${urlPath}`, {
     method: "GET",
     headers: {
       host: LOCAL_HOST,
       origin: LOCAL_ORIGIN,
       referer: `${LOCAL_ORIGIN}/planning/reports`,
+      ...(headers ?? {}),
     },
   });
 }
@@ -109,6 +111,8 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     else delete env.AUDIT_LOG_PATH;
     if (typeof originalAssumptionsOverridesPath === "string") env.PLANNING_ASSUMPTIONS_OVERRIDES_PATH = originalAssumptionsOverridesPath;
     else delete env.PLANNING_ASSUMPTIONS_OVERRIDES_PATH;
+    if (typeof originalPlanningTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
+    else delete env.PLANNING_TRUST_AUTH_HEADERS;
 
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -160,12 +164,13 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     expect(html).not.toContain("Bearer ");
   });
 
-  it("keeps local html download available in production builds", async () => {
+  it("keeps local html download available in production builds for authenticated local bridge requests", async () => {
     const runId = await createRunForExport();
     env.NODE_ENV = "production";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
 
     const response = await exportHtmlGET(
-      buildGetRequest(`/api/planning/reports/${runId}/export.html`),
+      buildGetRequest(`/api/planning/reports/${runId}/export.html`, { "x-planning-user-id": "default" }),
       { params: Promise.resolve({ runId }) },
     );
 

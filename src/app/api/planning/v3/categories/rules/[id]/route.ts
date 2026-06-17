@@ -6,11 +6,12 @@ import {
 } from "@/lib/dev/devGuards";
 import {
   CategoryRulesStoreInputError,
-  deleteRule,
-} from "@/lib/planning/v3/categories/store";
+  deleteCurrentUserCategoryRule,
+} from "@/lib/planning/v3/service/categoryRulesRepository";
 import {
+  isPlanningRouteUser,
   planningUserMeta,
-  withPlanningRouteUser,
+  requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
@@ -45,30 +46,29 @@ function withDeleteGuard(request: Request): Response | null {
 export async function DELETE(request: Request, context: RouteContext) {
   const guarded = withDeleteGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
-
-    try {
-      const deleted = await deleteRule(id);
-      return NextResponse.json({ ok: true, deleted });
-    } catch (error) {
-      if (error instanceof CategoryRulesStoreInputError) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: { code: "INPUT", message: "룰 삭제 입력이 올바르지 않습니다." },
-            details: error.details,
-            meta: userMeta,
-          },
-          { status: 400 },
-        );
-      }
+  try {
+    const deleted = await deleteCurrentUserCategoryRule(id);
+    return NextResponse.json({ ok: true, deleted, meta: userMeta });
+  } catch (error) {
+    if (error instanceof CategoryRulesStoreInputError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 삭제에 실패했습니다." }, meta: userMeta },
-        { status: 500 },
+        {
+          ok: false,
+          error: { code: "INPUT", message: "룰 삭제 입력이 올바르지 않습니다." },
+          details: error.details,
+          meta: userMeta,
+        },
+        { status: 400 },
       );
     }
-  });
+    return NextResponse.json(
+      { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 삭제에 실패했습니다." }, meta: userMeta },
+      { status: 500 },
+    );
+  }
 }

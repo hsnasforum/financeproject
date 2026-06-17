@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { type Dirent } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "./namespace";
 
 export type PlanningTrashKind = "profiles" | "runs" | "reports";
 
@@ -59,6 +60,9 @@ function sanitizeId(id: unknown): string {
 }
 
 function resolveTrashRoot(baseDir = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), baseDir), "trash");
+  }
   const override = asString(process.env.PLANNING_TRASH_DIR);
   if (override) return path.resolve(baseDir, override);
   return path.join(resolvePlanningDataDir({ cwd: baseDir }), "trash");

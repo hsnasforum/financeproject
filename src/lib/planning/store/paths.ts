@@ -24,21 +24,25 @@ export function sanitizeRecordId(id: unknown): string {
 }
 
 export function resolveProfilesDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    const userId = resolvePlanningUserId();
+    return path.join(getPlanningUserDir(userId, cwd), "profiles");
+  }
+
   const override = (process.env.PLANNING_PROFILES_DIR ?? "").trim();
   if (override) return path.resolve(cwd, override);
-  if (!isPlanningNamespaceEnabled()) return path.join(resolvePlanningDataDir({ cwd }), "profiles");
-
-  const userId = resolvePlanningUserId();
-  return path.join(getPlanningUserDir(userId, cwd), "profiles");
+  return path.join(resolvePlanningDataDir({ cwd }), "profiles");
 }
 
 export function resolveRunsDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    const userId = resolvePlanningUserId();
+    return path.join(getPlanningUserDir(userId, cwd), "runs");
+  }
+
   const override = (process.env.PLANNING_RUNS_DIR ?? "").trim();
   if (override) return path.resolve(cwd, override);
-  if (!isPlanningNamespaceEnabled()) return path.join(resolvePlanningDataDir({ cwd }), "runs");
-
-  const userId = resolvePlanningUserId();
-  return path.join(getPlanningUserDir(userId, cwd), "runs");
+  return path.join(resolvePlanningDataDir({ cwd }), "runs");
 }
 
 export function resolveProfilePath(id: string, cwd = process.cwd()): string {
@@ -52,6 +56,11 @@ export function resolveRunPath(id: string, cwd = process.cwd()): string {
 }
 
 export function resolveProfilePartitionsDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    const userId = resolvePlanningUserId();
+    return path.join(getPlanningUserDir(userId, cwd), "vault", "profiles");
+  }
+
   const override = (process.env.PLANNING_PROFILE_PARTITIONS_DIR ?? "").trim();
   if (override) return path.resolve(cwd, override);
   const profilesOverride = (process.env.PLANNING_PROFILES_DIR ?? "").trim();
@@ -64,10 +73,7 @@ export function resolveProfilePartitionsDir(cwd = process.cwd()): string {
     const runsDir = path.resolve(cwd, runsOverride);
     return path.join(path.dirname(runsDir), "vault", "profiles");
   }
-  if (!isPlanningNamespaceEnabled()) return path.join(resolvePlanningDataDir({ cwd }), "vault", "profiles");
-
-  const userId = resolvePlanningUserId();
-  return path.join(getPlanningUserDir(userId, cwd), "vault", "profiles");
+  return path.join(resolvePlanningDataDir({ cwd }), "vault", "profiles");
 }
 
 export function resolveProfilePartitionDir(profileId: string, cwd = process.cwd()): string {

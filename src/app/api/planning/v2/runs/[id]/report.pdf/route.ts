@@ -5,12 +5,17 @@ import {
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
 import { getPlanningFeatureFlags } from "../../../../../../../lib/planning/config";
-import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
+import { getCurrentUserRun } from "../../../../../../../lib/planning/server/runs/repository";
 import {
   PdfReportError,
   renderPdfReportFromHtml,
 } from "../../../../../../../lib/planning/v2/report/pdfReport";
 import { buildStandaloneReportArtifactsFromRun } from "../../../../../../planning/reports/_lib/standaloneReportArtifacts";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../../lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -33,18 +38,24 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const flags = getPlanningFeatureFlags();
   if (!flags.pdfEnabled) {
-    return jsonError("DISABLED", "서버 설정으로 PDF 리포트 기능이 비활성화되어 있습니다.", { status: 403 });
+    return jsonError("DISABLED", "서버 설정으로 PDF 리포트 기능이 비활성화되어 있습니다.", {
+      status: 403,
+      meta: userMeta,
+    });
   }
 
   const { id } = await context.params;
 
   try {
-    const run = await getRun(id);
+    const run = await getCurrentUserRun(id);
     if (!run) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
     const { html } = buildStandaloneReportArtifactsFromRun(run);
@@ -63,10 +74,10 @@ export async function GET(request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof PdfReportError) {
       if (error.code === "PDF_FONT_MISSING" || error.code === "PDF_ENGINE_MISSING") {
-        return jsonError("INTERNAL", error.message, { status: 503 });
+        return jsonError("INTERNAL", error.message, { status: 503, meta: userMeta });
       }
-      return jsonError("INTERNAL", error.message, { status: 500 });
+      return jsonError("INTERNAL", error.message, { status: 500, meta: userMeta });
     }
-    return jsonError("INTERNAL", "PDF 리포트 생성에 실패했습니다.", { status: 500 });
+    return jsonError("INTERNAL", "PDF 리포트 생성에 실패했습니다.", { status: 500, meta: userMeta });
   }
 }

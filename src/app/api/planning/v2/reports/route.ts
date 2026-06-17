@@ -5,9 +5,14 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import {
-  createReportFromRun,
-  listReports,
-} from "../../../../../lib/planning/server/reports/storage";
+  planningAuthErrorResponse as toAuthErrorResponse,
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
+import {
+  createCurrentUserReportFromRun,
+  listCurrentUserReports,
+} from "../../../../../lib/planning/server/reports/repository";
 
 type ReportsCreateBody = {
   runId?: unknown;
@@ -54,19 +59,31 @@ export async function GET(request: Request) {
   if (guardFailure) return guardFailure;
 
   try {
-    const url = new URL(request.url);
-    const limit = Math.max(1, Math.min(200, Math.trunc(Number(url.searchParams.get("limit"))) || 50));
-    const rows = await listReports(limit);
-    return jsonOk({
-      data: rows.map((row) => ({
-        id: row.id,
-        createdAt: row.createdAt,
-        kind: row.kind,
-        ...(row.runId ? { runId: row.runId } : {}),
-        ...(row.recommendRunId ? { recommendRunId: row.recommendRunId } : {}),
-      })),
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      try {
+        const url = new URL(request.url);
+        const limit = Math.max(1, Math.min(200, Math.trunc(Number(url.searchParams.get("limit"))) || 50));
+        const rows = await listCurrentUserReports(limit);
+        return jsonOk({
+          data: rows.map((row) => ({
+            id: row.id,
+            createdAt: row.createdAt,
+            kind: row.kind,
+            ...(row.runId ? { runId: row.runId } : {}),
+            ...(row.recommendRunId ? { recommendRunId: row.recommendRunId } : {}),
+          })),
+        }, { meta: planningUserMeta(currentUser) });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "리포트 목록 조회에 실패했습니다.";
+        return jsonError("INTERNAL", message, {
+          status: 500,
+          meta: planningUserMeta(currentUser),
+        });
+      }
     });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "리포트 목록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }
@@ -84,21 +101,42 @@ export async function POST(request: Request) {
   if (guardFailure) return guardFailure;
 
   try {
-    const runId = asString(body?.runId);
-    const recommendRunId = asString(body?.recommendRunId);
-    if (!runId) {
-      return jsonError("INPUT", "runId는 필수입니다.", { status: 400 });
-    }
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      try {
+        const runId = asString(body?.runId);
+        const recommendRunId = asString(body?.recommendRunId);
+        if (!runId) {
+          return jsonError("INPUT", "runId는 필수입니다.", {
+            status: 400,
+            meta: planningUserMeta(currentUser),
+          });
+        }
 
-    const created = await createReportFromRun(runId, {
-      ...(recommendRunId ? { recommendRunId } : {}),
+        const created = await createCurrentUserReportFromRun(runId, {
+          ...(recommendRunId ? { recommendRunId } : {}),
+        });
+        return jsonOk({ data: created }, {
+          status: 201,
+          meta: planningUserMeta(currentUser),
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "리포트 생성에 실패했습니다.";
+        if (message.includes("not found")) {
+          return jsonError("NO_DATA", "run 또는 profile을 찾을 수 없습니다.", {
+            status: 404,
+            meta: planningUserMeta(currentUser),
+          });
+        }
+        return jsonError("INTERNAL", message, {
+          status: 500,
+          meta: planningUserMeta(currentUser),
+        });
+      }
     });
-    return jsonOk({ data: created }, { status: 201 });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "리포트 생성에 실패했습니다.";
-    if (message.includes("not found")) {
-      return jsonError("NO_DATA", "run 또는 profile을 찾을 수 없습니다.", { status: 404 });
-    }
     return jsonError("INTERNAL", message, { status: 500 });
   }
 }

@@ -10,6 +10,8 @@ import { onlyDev } from "../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../lib/ops/errorContract";
 import { loadOpsPolicy } from "../../../../lib/ops/opsPolicy";
 import { listRunIndexEntries, type RunIndexEntry } from "../../../../lib/planning/server/store/runStore";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "../../../../lib/planning/api/routeAuth";
+import { isPlanningNamespaceEnabled } from "../../../../lib/planning/store/namespace";
 import { type PlanningRunOverallStatus } from "../../../../lib/planning/store/types";
 
 type RunSummary = {
@@ -121,6 +123,8 @@ export async function GET(request: Request) {
   const csrf = asString(searchParams.get("csrf"));
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const profileId = asString(searchParams.get("profileId"));
   const status = asStatus(searchParams.get("status"));
@@ -153,6 +157,8 @@ export async function GET(request: Request) {
         limit,
         offset,
         hasMore: offset + items.length < total,
+        ...planningUserMeta(currentUser),
+        ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
       },
     });
   } catch (error) {

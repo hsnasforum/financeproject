@@ -3,10 +3,11 @@ import { toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { consumeVaultCsrfOrThrow } from "../../../../../lib/planning/security/vaultCsrf";
 import { resetVaultAndPlanningData } from "../../../../../lib/planning/security/vaultReset";
 import { getVaultStatus } from "../../../../../lib/planning/security/vaultState";
-import { asString, guardLocalRequest, withVaultCsrf } from "../_lib";
+import { asString, guardLocalRequest, securityUserMeta, withVaultCsrf } from "../_lib";
 
 const RESET_CONFIRM_PHRASE = "RESET VAULT DATA";
 
@@ -44,6 +45,8 @@ export async function POST(request: Request) {
 
   try {
     consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const confirmText = asString(body?.confirmText);
     if (confirmText !== RESET_CONFIRM_PHRASE) {
       throw new Error("CONFIRM_MISMATCH");
@@ -66,9 +69,9 @@ export async function POST(request: Request) {
     return withVaultCsrf(request, NextResponse.json({
       ok: true,
       data: status,
-      meta: {
+      meta: securityUserMeta(currentUser, {
         reset,
-      },
+      }),
     }));
   } catch (error) {
     const guardError = toGuardErrorResponse(error);

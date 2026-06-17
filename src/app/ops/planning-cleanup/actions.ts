@@ -17,6 +17,11 @@ import {
   type CleanupTarget,
 } from "../../../lib/planning/retention/cleanup";
 import { loadPlanningRetentionPolicy } from "../../../lib/planning/retention/policy";
+import {
+  isPlanningAuthError,
+  type PlanningCurrentUser,
+} from "../../../lib/planning/auth/currentUser";
+import { withCurrentPlanningPageUser } from "../../../lib/planning/server/pageAuth";
 import { buildConfirmString, verifyConfirm } from "../../../lib/ops/confirm";
 
 type CleanupActionInput = {
@@ -35,6 +40,10 @@ type CleanupActionResult = {
     summary: CleanupPlan["summary"];
     sample: Array<{ path: string; reason: string; sizeBytes?: number }>;
     expectedConfirm?: string;
+    meta?: {
+      userId: string;
+      authSource: string;
+    };
     applied?: {
       deleted: number;
       bytes?: number;
@@ -61,6 +70,17 @@ function parseTarget(value: unknown): CleanupTarget {
 
 function expectedConfirmText(target: CleanupTarget, deleteCount: number): string {
   return buildConfirmString(`CLEANUP ${target}`, String(deleteCount));
+}
+
+function targetRequiresPlanningUser(target: CleanupTarget): boolean {
+  return target === "runs" || target === "cache" || target === "trash" || target === "all";
+}
+
+function cleanupUserMeta(user: PlanningCurrentUser): NonNullable<NonNullable<CleanupActionResult["data"]>["meta"]> {
+  return {
+    userId: user.id,
+    authSource: user.source,
+  };
 }
 
 function sampleActions(plan: CleanupPlan): NonNullable<CleanupActionResult["data"]>["sample"] {
@@ -110,6 +130,7 @@ function appendCleanupAudit(input: {
   deleteCount?: number;
   bytes?: number;
   message: string;
+  user?: PlanningCurrentUser;
 }): void {
   try {
     appendAuditLog({
@@ -122,10 +143,44 @@ function appendCleanupAudit(input: {
         deleteCount: input.deleteCount ?? null,
         bytes: input.bytes ?? null,
         message: input.message,
+        ...(input.user
+          ? {
+              planningUserId: input.user.id,
+              authSource: input.user.source,
+            }
+          : {}),
       },
     });
   } catch (error) {
     console.error("[audit] failed to append planning cleanup log", error);
+  }
+}
+
+async function withCleanupUserScope(
+  event: "PLANNING_CLEANUP_DRYRUN" | "PLANNING_CLEANUP_APPLY",
+  target: CleanupTarget,
+  callback: (user: PlanningCurrentUser) => Promise<CleanupActionResult>,
+): Promise<CleanupActionResult> {
+  try {
+    return await withCurrentPlanningPageUser(callback);
+  } catch (error) {
+    if (isPlanningAuthError(error)) {
+      appendCleanupAudit({
+        event,
+        result: "REJECTED",
+        target,
+        message: error.message,
+      });
+      return {
+        ok: false,
+        message: error.message,
+        error: {
+          code: error.code,
+          message: error.message,
+        },
+      };
+    }
+    throw error;
   }
 }
 
@@ -168,47 +223,57 @@ export async function dryRunCleanupAction(input: CleanupActionInput = {}): Promi
     return guard;
   }
 
-  try {
-    const policy = loadPlanningRetentionPolicy();
-    const plan = await planPlanningCleanup({ target, policy });
-    const message = `삭제 예정 ${plan.summary.deleteCount}건을 계산했습니다.`;
-    appendCleanupAudit({
-      event: "PLANNING_CLEANUP_DRYRUN",
-      result: "SUCCESS",
-      target: plan.target,
-      deleteCount: plan.summary.deleteCount,
-      bytes: plan.summary.totalBytes,
-      message,
-    });
-    return {
-      ok: true,
-      message,
-      data: {
+  const run = async (currentUser?: PlanningCurrentUser): Promise<CleanupActionResult> => {
+    try {
+      const policy = loadPlanningRetentionPolicy();
+      const plan = await planPlanningCleanup({ target, policy });
+      const message = `삭제 예정 ${plan.summary.deleteCount}건을 계산했습니다.`;
+      appendCleanupAudit({
+        event: "PLANNING_CLEANUP_DRYRUN",
+        result: "SUCCESS",
         target: plan.target,
-        nowIso: plan.nowIso,
-        policy: plan.policy,
-        summary: plan.summary,
-        sample: sampleActions(plan),
-        expectedConfirm: expectedConfirmText(plan.target, plan.summary.deleteCount),
-      },
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "cleanup dry-run에 실패했습니다.";
-    appendCleanupAudit({
-      event: "PLANNING_CLEANUP_DRYRUN",
-      result: "ERROR",
-      target,
-      message,
-    });
-    return {
-      ok: false,
-      message,
-      error: {
-        code: "INTERNAL",
+        deleteCount: plan.summary.deleteCount,
+        bytes: plan.summary.totalBytes,
         message,
-      },
-    };
+        ...(currentUser ? { user: currentUser } : {}),
+      });
+      return {
+        ok: true,
+        message,
+        data: {
+          target: plan.target,
+          nowIso: plan.nowIso,
+          policy: plan.policy,
+          summary: plan.summary,
+          sample: sampleActions(plan),
+          expectedConfirm: expectedConfirmText(plan.target, plan.summary.deleteCount),
+          ...(currentUser ? { meta: cleanupUserMeta(currentUser) } : {}),
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "cleanup dry-run에 실패했습니다.";
+      appendCleanupAudit({
+        event: "PLANNING_CLEANUP_DRYRUN",
+        result: "ERROR",
+        target,
+        message,
+        ...(currentUser ? { user: currentUser } : {}),
+      });
+      return {
+        ok: false,
+        message,
+        error: {
+          code: "INTERNAL",
+          message,
+        },
+      };
+    }
+  };
+
+  if (targetRequiresPlanningUser(target)) {
+    return withCleanupUserScope("PLANNING_CLEANUP_DRYRUN", target, run);
   }
+  return run();
 }
 
 export async function applyCleanupAction(input: CleanupActionInput = {}): Promise<CleanupActionResult> {
@@ -225,85 +290,97 @@ export async function applyCleanupAction(input: CleanupActionInput = {}): Promis
     return guard;
   }
 
-  try {
-    const policy = loadPlanningRetentionPolicy();
-    const plan = await planPlanningCleanup({ target, policy });
-    const expected = expectedConfirmText(plan.target, plan.summary.deleteCount);
-    const confirmText = asString(input.confirmText);
+  const run = async (currentUser?: PlanningCurrentUser): Promise<CleanupActionResult> => {
+    try {
+      const policy = loadPlanningRetentionPolicy();
+      const plan = await planPlanningCleanup({ target, policy });
+      const expected = expectedConfirmText(plan.target, plan.summary.deleteCount);
+      const confirmText = asString(input.confirmText);
 
-    if (!verifyConfirm(confirmText, expected)) {
-      const message = `확인 문구가 일치하지 않습니다. (${expected})`;
+      if (!verifyConfirm(confirmText, expected)) {
+        const message = `확인 문구가 일치하지 않습니다. (${expected})`;
+        appendCleanupAudit({
+          event: "PLANNING_CLEANUP_APPLY",
+          result: "REJECTED",
+          target: plan.target,
+          deleteCount: plan.summary.deleteCount,
+          message,
+          ...(currentUser ? { user: currentUser } : {}),
+        });
+        return {
+          ok: false,
+          message,
+          error: {
+            code: "CONFIRM_MISMATCH",
+            message,
+          },
+          data: {
+            target: plan.target,
+            nowIso: plan.nowIso,
+            policy: plan.policy,
+            summary: plan.summary,
+            sample: sampleActions(plan),
+            expectedConfirm: expected,
+            ...(currentUser ? { meta: cleanupUserMeta(currentUser) } : {}),
+          },
+        };
+      }
+
+      const applied = await applyPlanningCleanup(plan);
+      const failedCount = applied.failed?.length ?? 0;
+      const message = failedCount > 0
+        ? `정리 ${applied.deleted}건 완료, 실패 ${failedCount}건`
+        : `정리 ${applied.deleted}건 완료`;
+
       appendCleanupAudit({
         event: "PLANNING_CLEANUP_APPLY",
-        result: "REJECTED",
+        result: "SUCCESS",
         target: plan.target,
-        deleteCount: plan.summary.deleteCount,
+        deleteCount: applied.deleted,
+        bytes: applied.bytes,
         message,
+        ...(currentUser ? { user: currentUser } : {}),
       });
+
       return {
-        ok: false,
+        ok: true,
         message,
-        error: {
-          code: "CONFIRM_MISMATCH",
-          message,
-        },
         data: {
           target: plan.target,
           nowIso: plan.nowIso,
           policy: plan.policy,
           summary: plan.summary,
           sample: sampleActions(plan),
-          expectedConfirm: expected,
+          ...(currentUser ? { meta: cleanupUserMeta(currentUser) } : {}),
+          applied: {
+            deleted: applied.deleted,
+            ...(typeof applied.bytes === "number" ? { bytes: applied.bytes } : {}),
+            failedCount,
+          },
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "cleanup 적용에 실패했습니다.";
+      appendCleanupAudit({
+        event: "PLANNING_CLEANUP_APPLY",
+        result: "ERROR",
+        target,
+        message,
+        ...(currentUser ? { user: currentUser } : {}),
+      });
+      return {
+        ok: false,
+        message,
+        error: {
+          code: "INTERNAL",
+          message,
         },
       };
     }
+  };
 
-    const applied = await applyPlanningCleanup(plan);
-    const failedCount = applied.failed?.length ?? 0;
-    const message = failedCount > 0
-      ? `정리 ${applied.deleted}건 완료, 실패 ${failedCount}건`
-      : `정리 ${applied.deleted}건 완료`;
-
-    appendCleanupAudit({
-      event: "PLANNING_CLEANUP_APPLY",
-      result: "SUCCESS",
-      target: plan.target,
-      deleteCount: applied.deleted,
-      bytes: applied.bytes,
-      message,
-    });
-
-    return {
-      ok: true,
-      message,
-      data: {
-        target: plan.target,
-        nowIso: plan.nowIso,
-        policy: plan.policy,
-        summary: plan.summary,
-        sample: sampleActions(plan),
-        applied: {
-          deleted: applied.deleted,
-          ...(typeof applied.bytes === "number" ? { bytes: applied.bytes } : {}),
-          failedCount,
-        },
-      },
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "cleanup 적용에 실패했습니다.";
-    appendCleanupAudit({
-      event: "PLANNING_CLEANUP_APPLY",
-      result: "ERROR",
-      target,
-      message,
-    });
-    return {
-      ok: false,
-      message,
-      error: {
-        code: "INTERNAL",
-        message,
-      },
-    };
+  if (targetRequiresPlanningUser(target)) {
+    return withCleanupUserScope("PLANNING_CLEANUP_APPLY", target, run);
   }
+  return run();
 }

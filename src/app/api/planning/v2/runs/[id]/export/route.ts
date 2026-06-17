@@ -4,7 +4,12 @@ import {
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
 import { resolveReportResultDtoFromRun } from "../../../../../../../lib/planning/reports/reportInputContract";
-import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
+import { getCurrentUserRun } from "../../../../../../../lib/planning/server/runs/repository";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../../lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -24,12 +29,15 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
   try {
-    const run = await getRun(id);
+    const run = await getCurrentUserRun(id);
     if (!run) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
     const resultDto = resolveReportResultDtoFromRun(run);
@@ -44,6 +52,6 @@ export async function GET(request: Request, context: RouteContext) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 export에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }

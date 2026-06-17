@@ -4,7 +4,10 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { deleteProfileDraft, getProfileDraft } from "@/lib/planning/v3/store/draftStore";
+import {
+  deleteCurrentUserProfileDraft,
+  getCurrentUserProfileDraft,
+} from "@/lib/planning/v3/service/profileDraftRepository";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
   isPlanningRouteUser,
@@ -54,7 +57,7 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const found = await getProfileDraft(id);
+    const found = await getCurrentUserProfileDraft(id);
     if (!found) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "상담 정보 초안을 찾을 수 없습니다." }, meta: userMeta },
@@ -63,6 +66,7 @@ export async function GET(request: Request, context: RouteContext) {
     }
     const payload = {
       ok: true,
+      meta: userMeta,
       data: found,
     };
     assertNoForbiddenDraftKeys(payload);
@@ -103,7 +107,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const found = await getProfileDraft(id);
+    const found = await getCurrentUserProfileDraft(id);
     if (!found) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "상담 정보 초안을 찾을 수 없습니다." }, meta: userMeta },
@@ -111,7 +115,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       );
     }
 
-    const deleted = await deleteProfileDraft(id);
+    const deleted = await deleteCurrentUserProfileDraft(id);
     if (!deleted.deleted) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "상담 정보 초안을 찾을 수 없습니다." }, meta: userMeta },
@@ -120,6 +124,7 @@ export async function DELETE(request: Request, context: RouteContext) {
     }
     const payload = {
       ok: true,
+      meta: userMeta,
       data: {
         deleted: deleted.deleted,
       },

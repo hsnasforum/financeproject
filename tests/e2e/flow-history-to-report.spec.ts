@@ -155,8 +155,8 @@ test("planning runs and reports pages render", async ({ page }) => {
 
   await gotoWithAbortRetry(page, "/planning/reports");
   await expect(page.getByRole("heading", { name: /플래닝 리포트|재무설계 리포트/i })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/저장된 실행 결과를 다시 읽/)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/실행 기록 화면/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/저장된 (실행|상담) 결과를 다시 읽/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/(실행|상담) 기록 화면/)).toBeVisible({ timeout: 30_000 });
 });
 
 test("planning runs no-selection fallback distinguishes empty history from next-step guidance", async ({ page, request }) => {

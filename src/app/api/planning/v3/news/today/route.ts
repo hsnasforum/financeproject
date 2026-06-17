@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { readTodayCache } from "@/lib/planning/v3/news/store";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import { readCurrentUserTodayNewsCache } from "@/lib/planning/v3/service/newsRepository";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 export const runtime = "nodejs";
 
@@ -38,24 +43,37 @@ function withReadGuard(request: Request): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-  const cached = readTodayCache();
-  if (!cached) {
+  try {
+    const cached = readCurrentUserTodayNewsCache();
+    if (!cached) {
+      const payload = parseWithV3Whitelist(TodayApiSchema, {
+        ok: true,
+        data: null,
+        hint: "캐시가 없습니다. 수동 갱신을 실행해 주세요.",
+      }, { scope: "response", context: "api.v3.news.today" });
+      return NextResponse.json(payload);
+    }
+
     const payload = parseWithV3Whitelist(TodayApiSchema, {
       ok: true,
-      data: null,
-      hint: "캐시가 없습니다. 수동 갱신을 실행해 주세요.",
+      data: {
+        lastRefreshedAt: cached.lastRefreshedAt,
+        digest: cached.digest,
+        scenarios: cached.scenarios,
+      },
     }, { scope: "response", context: "api.v3.news.today" });
     return NextResponse.json(payload);
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INTERNAL", message: "오늘의 뉴스 캐시를 불러오는 중 오류가 발생했습니다." },
+        meta: planningUserMeta(currentUser),
+      },
+      { status: 500 },
+    );
   }
-
-  const payload = parseWithV3Whitelist(TodayApiSchema, {
-    ok: true,
-    data: {
-      lastRefreshedAt: cached.lastRefreshedAt,
-      digest: cached.digest,
-      scenarios: cached.scenarios,
-    },
-  }, { scope: "response", context: "api.v3.news.today" });
-  return NextResponse.json(payload);
 }

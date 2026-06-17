@@ -4,7 +4,13 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys, listProfileMetas } from "@/lib/planning/v3/profiles/store";
+import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+import { listCurrentUserProfileMetas } from "@/lib/planning/v3/service/profileRepository";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type ProfileRow = {
   profileId: string;
@@ -64,9 +70,12 @@ export async function GET(request: Request) {
   const csrf = asString(new URL(request.url).searchParams.get("csrf"));
   const guarded = withGuard(request, csrf);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
-    const items = await listProfileMetas();
+    const items = await listCurrentUserProfileMetas();
     const rows = sortProfileRows(items.map((item) => ({
       profileId: item.profileId,
       ...(asString(item.name) ? { name: asString(item.name) } : {}),
@@ -75,18 +84,19 @@ export async function GET(request: Request) {
     const payload = {
       ok: true,
       data: rows,
+      meta: userMeta,
     };
     assertNoForbiddenDraftKeys(payload);
     return NextResponse.json(payload);
   } catch (error) {
     if (error instanceof ForbiddenDraftKeyError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "프로필 데이터 검증에 실패했습니다." } },
+        { ok: false, error: { code: "INTERNAL", message: "프로필 데이터 검증에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "프로필 목록 조회에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "프로필 목록 조회에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

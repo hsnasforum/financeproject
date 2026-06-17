@@ -15,6 +15,11 @@ import {
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type OptimizeRequestBody = {
   profile?: unknown;
@@ -246,6 +251,10 @@ export async function POST(request: Request) {
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
+
   let profile: ProfileV2;
   let horizonMonths: number;
   let assumptionsOverrides: Record<string, unknown>;
@@ -310,6 +319,7 @@ export async function POST(request: Request) {
 
     return ok(data, {
       generatedAt: new Date().toISOString(),
+      ...userMeta,
       snapshot: context.snapshotMeta,
       health: context.health.summary,
     });

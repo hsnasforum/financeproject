@@ -6,6 +6,11 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -54,6 +59,9 @@ export async function GET(request: Request) {
 
   const guardFailure = withLocalReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { searchParams } = new URL(request.url);
   const limit = toSafeLimit(asString(searchParams.get("limit")));
@@ -71,7 +79,7 @@ export async function GET(request: Request) {
       latestId: latest?.id ?? null,
       latestLabel: latest ? formatSnapshotLabel(latest, "latest") : "LATEST · unavailable",
       items: items.map((item) => toResponseItem(item)),
-    });
+    }, { meta: userMeta });
   } catch (error) {
     return jsonError(
       "INTERNAL",

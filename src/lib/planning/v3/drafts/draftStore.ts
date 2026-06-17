@@ -5,6 +5,11 @@ import { atomicWriteJson } from "../../storage/atomicWrite";
 import { resolveDataDir } from "../../storage/dataDir";
 import { sanitizeRecordId } from "../../store/paths";
 import {
+  getPlanningUserDir,
+  isPlanningNamespaceEnabled,
+  resolvePlanningUserId,
+} from "../../store/namespace";
+import {
   DraftRecordSchema,
   DraftSourceSchema,
   normalizeDraftMeta,
@@ -47,6 +52,9 @@ function nowIso(): string {
 }
 
 function resolveDraftsDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), cwd), "planning_v3_drafts");
+  }
   const override = asString(process.env.PLANNING_V3_DRAFTS_DIR);
   if (override) return path.resolve(cwd, override);
   return path.join(resolveDataDir({ cwd }), "planning_v3_drafts");

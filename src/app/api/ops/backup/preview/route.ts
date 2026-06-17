@@ -5,14 +5,23 @@ import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
+import { formatBackupUploadLimit, toBackupArchiveClientError } from "../../../../../lib/ops/backup/clientErrors";
 import {
   decryptPlanningDataVaultArchive,
   previewPlanningDataVaultZip,
 } from "../../../../../lib/ops/backup/planningDataVault";
+import {
+  getOrCreateBackupPreviewSessionToken,
+  setBackupPreviewSessionCookie,
+} from "../../../../../lib/ops/backup/previewSession";
+import { createBackupPreviewToken } from "../../../../../lib/ops/backup/previewToken";
 import { readUploadBufferViaTemp } from "../../../../../lib/ops/backup/uploadTemp";
 import { loadOpsPolicy } from "../../../../../lib/ops/opsPolicy";
-import { redactText } from "../../../../../lib/planning/privacy/redact";
-import { consumeVaultCsrfOrThrow, ensureVaultCsrfCookie } from "../../../../../lib/planning/security/vaultCsrf";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import {
+  consumeVaultCsrfOrThrow,
+  ensureVaultCsrfCookie,
+} from "../../../../../lib/planning/security/vaultCsrf";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -32,25 +41,6 @@ function appendBackupAudit(result: "SUCCESS" | "ERROR", detail: Record<string, u
   } catch (error) {
     console.error("[audit] failed to append backup preview log", error);
   }
-}
-
-function toClientError(error: unknown): { status: number; code: string; message: string } {
-  const message = redactText(error instanceof Error ? error.message : "preview failed");
-  if (message.startsWith("VAULT_PASSPHRASE_REQUIRED")) {
-    return { status: 400, code: "VALIDATION", message: "복구 암호를 입력해 주세요." };
-  }
-  if (message.startsWith("VAULT_PASSPHRASE_INVALID")) {
-    return { status: 401, code: "VALIDATION", message: "암호가 올바르지 않습니다." };
-  }
-  if (
-    message.startsWith("INVALID_ZIP")
-    || message.startsWith("MANIFEST_")
-    || message.startsWith("ZIP_")
-    || message.startsWith("ENCRYPTED_PACKAGE_")
-  ) {
-    return { status: 400, code: "BACKUP_INVALID", message };
-  }
-  return { status: 500, code: "PREVIEW_FAILED", message };
 }
 
 export async function POST(request: Request) {
@@ -95,6 +85,11 @@ export async function POST(request: Request) {
     ensureVaultCsrfCookie(request, response);
     return response;
   }
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) {
+    ensureVaultCsrfCookie(request, currentUser);
+    return currentUser;
+  }
 
   const fileValue = formData.get("file");
   if (!(fileValue instanceof File)) {
@@ -118,7 +113,7 @@ export async function POST(request: Request) {
   if (fileValue.size > policy.backup.maxUploadBytes) {
     const response = opsErrorResponse({
       code: "VALIDATION",
-      message: `업로드 크기가 제한(${policy.backup.maxUploadBytes} bytes)을 초과했습니다.`,
+      message: `백업 파일이 너무 큽니다. 최대 ${formatBackupUploadLimit(policy.backup.maxUploadBytes)}까지 업로드할 수 있습니다.`,
       status: 413,
     });
     ensureVaultCsrfCookie(request, response);
@@ -158,14 +153,21 @@ export async function POST(request: Request) {
         warningCount: summary.warnings.length,
       },
     }).catch(() => undefined);
+    const previewSessionToken = getOrCreateBackupPreviewSessionToken(request);
     const response = NextResponse.json({
       ok: true,
       data: summary,
+      previewToken: await createBackupPreviewToken({
+        archiveBytes: encryptedBytes,
+        passphrase,
+        sessionToken: previewSessionToken,
+      }),
     });
     ensureVaultCsrfCookie(request, response);
+    setBackupPreviewSessionCookie(response, previewSessionToken);
     return response;
   } catch (error) {
-    const clientError = toClientError(error);
+    const clientError = toBackupArchiveClientError(error, "preview");
     const contractError = toOpsContractError({
       code: clientError.code,
       message: clientError.message,

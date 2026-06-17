@@ -7,6 +7,11 @@ import {
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import { sanitizeRunRecordForResponse } from "../../../../../lib/planning/api/runResponseSanitizer";
 import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
+import {
   findAssumptionsSnapshotId,
   loadAssumptionsSnapshotById,
   loadLatestAssumptionsSnapshot,
@@ -35,9 +40,17 @@ import { checkMonteCarloBudget } from "../../../../../lib/planning/server/v2/bud
 import { buildActionsFromPlan } from "../../../../../lib/planning/server/v2/actions/buildActions";
 import { matchCandidates } from "../../../../../lib/planning/server/v2/actions/matchFinlifeCandidates";
 import { computeDebtStrategy } from "../../../../../lib/planning/server/v2/debt/strategy";
-import { getProfile } from "../../../../../lib/planning/server/store/profileStore";
-import { createRun, getRun, listRuns } from "../../../../../lib/planning/server/store/runStore";
-import { ensureRunActionPlan, getRunActionProgress, summarizeRunActionProgress } from "../../../../../lib/planning/server/store/runActionStore";
+import {
+  createCurrentUserRun,
+  ensureCurrentUserRunActionPlan,
+  getCurrentUserRun,
+  getCurrentUserRunActionProgress,
+  getCurrentUserRunProfile,
+  listCurrentUserRuns,
+  summarizeCurrentUserRunActionProgress,
+  type CurrentUserPlanningRunRecord,
+  type CurrentUserPlanningRunStageResult,
+} from "../../../../../lib/planning/server/runs/repository";
 import { runStagePipeline } from "../../../../../lib/planning/v2/stagePipeline";
 import { preflightRun } from "../../../../../lib/planning/v2/preflight";
 import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
@@ -50,7 +63,6 @@ import { buildPlanningRunArtifacts } from "../../../../../lib/planning/server/v2
 import { PlanningV2ValidationError, type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths } from "../../../../../lib/planning/server/v2/validate";
 import { type LiabilityV2, type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
-import { type PlanningRunRecord, type PlanningRunStageResult } from "../../../../../lib/planning/store/types";
 
 type RunsCreateBody = {
   profileId?: unknown;
@@ -72,7 +84,7 @@ type RunsCreateBody = {
   csrf?: unknown;
 } | null;
 
-type RunInputScenario = NonNullable<PlanningRunRecord["input"]["scenario"]>;
+type RunInputScenario = NonNullable<CurrentUserPlanningRunRecord["input"]["scenario"]>;
 
 type SnapshotShape = Awaited<ReturnType<typeof loadLatestAssumptionsSnapshot>>;
 
@@ -611,7 +623,7 @@ async function appendRunStageMetrics(input: {
   runId?: string;
   profileId: string;
   overallStatus: string;
-  stages: PlanningRunStageResult[];
+  stages: CurrentUserPlanningRunStageResult[];
   totalDurationMs?: number;
 }) {
   const tasks = input.stages.map((stage) => appendOpsMetricEvent({
@@ -634,6 +646,9 @@ async function appendRunStageMetrics(input: {
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const url = new URL(request.url);
   const profileId = asString(url.searchParams.get("profileId"));
@@ -641,26 +656,29 @@ export async function GET(request: Request) {
   const offset = url.searchParams.get("offset");
 
   try {
-    const runs = await listRuns({
+    const runs = await listCurrentUserRuns({
       ...(profileId ? { profileId } : {}),
       ...(limit !== null ? { limit: Number(limit) } : {}),
       ...(offset !== null ? { offset: Number(offset) } : {}),
     });
     const sanitizedRuns = runs.map((run) => sanitizeRunRecordForResponse(run));
-    const progressSummaryByRunId: Record<string, ReturnType<typeof summarizeRunActionProgress>> = {};
+    const progressSummaryByRunId: Record<string, ReturnType<typeof summarizeCurrentUserRunActionProgress>> = {};
     for (const run of sanitizedRuns) {
       try {
-        const progress = await getRunActionProgress(run.id);
+        const progress = await getCurrentUserRunActionProgress(run.id);
         if (!progress) continue;
-        progressSummaryByRunId[run.id] = summarizeRunActionProgress(progress);
+        progressSummaryByRunId[run.id] = summarizeCurrentUserRunActionProgress(progress);
       } catch {
         continue;
       }
     }
-    return jsonOk({ data: sanitizedRuns, meta: { actionProgressSummaryByRunId: progressSummaryByRunId } });
+    return jsonOk(
+      { data: sanitizedRuns, meta: { actionProgressSummaryByRunId: progressSummaryByRunId } },
+      { meta: userMeta },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }
 
@@ -674,6 +692,9 @@ export async function POST(request: Request) {
 
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   if (!isRecord(body) || !isRecord(body.input)) {
     appendRunAudit({
@@ -682,7 +703,7 @@ export async function POST(request: Request) {
       result: "ERROR",
       message: "invalid request body",
     });
-    return jsonError("INPUT", "Invalid request body");
+    return jsonError("INPUT", "Invalid request body", { meta: userMeta });
   }
 
   const profileId = asString(body.profileId);
@@ -697,7 +718,7 @@ export async function POST(request: Request) {
       result: "ERROR",
       message: "missing profileId",
     });
-    return jsonError("INPUT", "profileId is required");
+    return jsonError("INPUT", "profileId is required", { meta: userMeta });
   }
 
   let horizonMonths: number;
@@ -738,6 +759,7 @@ export async function POST(request: Request) {
       });
       return jsonError("INPUT", error.message, {
         issues: error.issues.map((issue) => `${issue.path}: ${issue.message}`),
+        meta: userMeta,
       });
     }
     appendRunAudit({
@@ -746,7 +768,7 @@ export async function POST(request: Request) {
       result: "ERROR",
       message: "invalid input",
     });
-    return jsonError("INPUT", "Invalid input");
+    return jsonError("INPUT", "Invalid input", { meta: userMeta });
   }
   const featureFlags = getPlanningFeatureFlags();
   if (includeProducts && !featureFlags.includeProductsEnabled) {
@@ -756,7 +778,10 @@ export async function POST(request: Request) {
       result: "ERROR",
       message: "includeProducts disabled by server feature flag",
     });
-    return jsonError("INPUT", "서버 설정으로 includeProducts 기능이 비활성화되어 있습니다.", { status: 400 });
+    return jsonError("INPUT", "서버 설정으로 includeProducts 기능이 비활성화되어 있습니다.", {
+      status: 400,
+      meta: userMeta,
+    });
   }
   if (monteCarloConfig && !featureFlags.monteCarloEnabled) {
     appendRunAudit({
@@ -765,10 +790,13 @@ export async function POST(request: Request) {
       result: "ERROR",
       message: "monteCarlo disabled by server feature flag",
     });
-    return jsonError("INPUT", "서버 설정으로 Monte Carlo 기능이 비활성화되어 있습니다.", { status: 400 });
+    return jsonError("INPUT", "서버 설정으로 Monte Carlo 기능이 비활성화되어 있습니다.", {
+      status: 400,
+      meta: userMeta,
+    });
   }
 
-  const profileRecord = await getProfile(profileId);
+  const profileRecord = await getCurrentUserRunProfile(profileId);
   if (!profileRecord) {
     appendRunAudit({
       event: "PLANNING_RUN_CREATE",
@@ -777,12 +805,12 @@ export async function POST(request: Request) {
       recordId: profileId,
       message: "profile not found",
     });
-    return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
+    return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.", { meta: userMeta });
   }
 
   const scenarioBaselineRunId = scenarioInput?.baseRunId || scenarioMeta?.baselineRunId;
   if (scenarioBaselineRunId) {
-    const baselineRun = await getRun(scenarioBaselineRunId);
+    const baselineRun = await getCurrentUserRun(scenarioBaselineRunId);
     if (!baselineRun) {
       appendRunAudit({
         event: "PLANNING_RUN_CREATE",
@@ -794,6 +822,7 @@ export async function POST(request: Request) {
       return jsonError("INPUT", "scenario baseline runId를 찾을 수 없습니다.", {
         status: 400,
         issues: [`input.scenario.baseRunId: '${scenarioBaselineRunId}' not found`],
+        meta: userMeta,
       });
     }
   }
@@ -825,6 +854,7 @@ export async function POST(request: Request) {
       return jsonError("INPUT", error.message, {
         status: 400,
         issues: error.issues.map((issue) => `${issue.path}: ${issue.message}`),
+        meta: userMeta,
       });
     }
     appendRunAudit({
@@ -834,7 +864,7 @@ export async function POST(request: Request) {
       recordId: profileId,
       message: "profile canonicalization failed",
     });
-    return jsonError("INTERNAL", "실행 저장 검증 중 오류가 발생했습니다.");
+    return jsonError("INTERNAL", "실행 저장 검증 중 오류가 발생했습니다.", { meta: userMeta });
   }
 
   if (scenarioInput) {
@@ -852,10 +882,12 @@ export async function POST(request: Request) {
         return jsonError("INPUT", "scenario patch 검증에 실패했습니다.", {
           status: 400,
           issues: error.issues.map((issue) => `${issue.path}: ${issue.message}`),
+          meta: userMeta,
         });
       }
       return jsonError("INPUT", error instanceof Error ? error.message : "scenario 적용에 실패했습니다.", {
         status: 400,
+        meta: userMeta,
       });
     }
   } else if (scenarioMeta) {
@@ -871,6 +903,7 @@ export async function POST(request: Request) {
       return jsonError("INPUT", "scenario patch 검증에 실패했습니다.", {
         status: 400,
         issues: scenarioIssues.map((issue) => `${issue.path}: ${issue.message}`),
+        meta: userMeta,
       });
     }
     try {
@@ -885,6 +918,7 @@ export async function POST(request: Request) {
       });
       return jsonError("INPUT", error instanceof Error ? error.message : "scenario 적용에 실패했습니다.", {
         status: 400,
+        meta: userMeta,
       });
     }
   }
@@ -924,6 +958,7 @@ export async function POST(request: Request) {
       status: 400,
       issues: preflightBlockIssues.map((issue) => formatPreflightIssueLine(issue)),
       meta: {
+        ...userMeta,
         preflight: {
           blocks: preflightBlockIssues,
         },
@@ -948,6 +983,7 @@ export async function POST(request: Request) {
         return jsonError("SNAPSHOT_NOT_FOUND", "snapshotId를 찾을 수 없습니다. latest 또는 /ops/assumptions 목록에서 선택하세요.", {
           status: 400,
           issues: [`input.snapshotId: '${requestedSnapshotId}' not found`],
+          meta: userMeta,
         });
       }
     } else {
@@ -963,7 +999,7 @@ export async function POST(request: Request) {
       recordId: profileId,
       message,
     });
-    return jsonError("SNAPSHOT", message, { status: 500 });
+    return jsonError("SNAPSHOT", message, { status: 500, meta: userMeta });
   }
 
   let storedAssumptionsOverrides = [] as Awaited<ReturnType<typeof loadAssumptionsOverridesByProfile>>;
@@ -978,7 +1014,10 @@ export async function POST(request: Request) {
       recordId: profileId,
       message,
     });
-    return jsonError("INTERNAL", "저장된 가정 오버라이드 로드에 실패했습니다.", { status: 500 });
+    return jsonError("INTERNAL", "저장된 가정 오버라이드 로드에 실패했습니다.", {
+      status: 500,
+      meta: userMeta,
+    });
   }
 
   const mappedFromSnapshot = mapSnapshotToAssumptionsV2(snapshot);
@@ -1030,7 +1069,7 @@ export async function POST(request: Request) {
   let monteCarloResult: ReturnType<typeof runMonteCarlo> | null = null;
   let actionsResult: Awaited<ReturnType<typeof matchCandidates>> | ReturnType<typeof buildActionsFromPlan> | null = null;
   let debtStrategyResult: ReturnType<typeof computeDebtStrategy> | null = null;
-  let stages: PlanningRunStageResult[] = [];
+  let stages: CurrentUserPlanningRunStageResult[] = [];
 
   try {
     const pipeline = await runStagePipeline({
@@ -1152,6 +1191,7 @@ export async function POST(request: Request) {
       return jsonError("INTERNAL", "simulate 단계 실행에 실패했습니다.", {
         status: 500,
         meta: {
+          ...userMeta,
           overallStatus: pipeline.overallStatus,
           stages,
         },
@@ -1179,7 +1219,7 @@ export async function POST(request: Request) {
     });
     const scenarioMetaForRecord = scenarioMeta ?? (scenarioInput ? toLegacyScenarioMetaFromInput(scenarioInput) : undefined);
 
-    const created = await createRun({
+    const created = await createCurrentUserRun({
       profileId: profileRecord.id,
       ...(title ? { title } : {}),
       ...(scenarioMetaForRecord ? { scenario: scenarioMetaForRecord } : {}),
@@ -1215,12 +1255,12 @@ export async function POST(request: Request) {
       outputs: {
         resultDto,
         ...outputs,
-      } as unknown as PlanningRunRecord["outputs"],
+      } as unknown as CurrentUserPlanningRunRecord["outputs"],
     }, {
       storeRawOutputs: asString(process.env.PLANNING_RUN_STORE_RAW_OUTPUTS).toLowerCase() === "true",
     });
     try {
-      await ensureRunActionPlan(created);
+      await ensureCurrentUserRunActionPlan(created);
     } catch (error) {
       console.error("[planning] failed to initialize action plan", error);
     }
@@ -1251,7 +1291,7 @@ export async function POST(request: Request) {
         stages,
       },
       data: sanitizeRunRecordForResponse(created),
-    }, { status: 201 });
+    }, { status: 201, meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 저장에 실패했습니다.";
     if (stages.length > 0) {
@@ -1272,7 +1312,10 @@ export async function POST(request: Request) {
     });
     return jsonError("INTERNAL", message, {
       status: 500,
-      ...(stages.length > 0 ? { meta: { stages } } : {}),
+      meta: {
+        ...userMeta,
+        ...(stages.length > 0 ? { stages } : {}),
+      },
     });
   }
 }

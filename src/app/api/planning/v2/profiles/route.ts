@@ -6,13 +6,14 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import {
+  planningUserMeta,
   planningAuthErrorResponse as toAuthErrorResponse,
   withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 import {
-  createProfile,
-  listProfiles,
-} from "../../../../../lib/planning/server/store/profileStore";
+  createCurrentUserProfile,
+  listCurrentUserProfiles,
+} from "../../../../../lib/planning/server/profiles/repository";
 import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
 import { loadCanonicalProfile } from "../../../../../lib/planning/v2/loadCanonicalProfile";
 
@@ -89,13 +90,10 @@ export async function GET(request: Request) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const records = await listProfiles();
+      const records = await listCurrentUserProfiles();
       return jsonOk({
         data: records,
-        meta: {
-          userId: currentUser.id,
-          authSource: currentUser.source,
-        },
+        meta: planningUserMeta(currentUser),
       });
     });
   } catch (error) {
@@ -121,7 +119,7 @@ export async function POST(request: Request) {
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
       const canonical = normalizeCanonicalProfile(body?.profile);
-      const created = await createProfile({
+      const created = await createCurrentUserProfile({
         name: name || "기본 프로필",
         profile: canonical.profile,
       });
@@ -138,8 +136,7 @@ export async function POST(request: Request) {
         data: created,
         meta: {
           normalization: canonical.normalization,
-          userId: currentUser.id,
-          authSource: currentUser.source,
+          ...planningUserMeta(currentUser),
         },
       }, { status: 201 });
     });

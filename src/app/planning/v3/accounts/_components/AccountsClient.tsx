@@ -8,7 +8,7 @@ import { PageShell } from "@/components/ui/PageShell";
 import { reportHeroActionLinkClassName, ReportHeroCard, ReportHeroStatCard, ReportHeroStatGrid } from "@/components/ui/ReportTone";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
-type Account = {
+export type Account = {
   id: string;
   name: string;
   kind: "checking" | "saving" | "card" | "cash" | "other" | "bank" | "broker";
@@ -17,7 +17,7 @@ type Account = {
   startingBalanceKrw?: number;
 };
 
-type OpeningBalance = {
+export type OpeningBalance = {
   accountId: string;
   asOfDate: string;
   amountKrw: number;
@@ -28,6 +28,13 @@ type AccountsSnapshot = {
   openingByAccount: Record<string, OpeningBalance>;
   openingDateDrafts: Record<string, string>;
   openingAmountDrafts: Record<string, string>;
+};
+
+type AccountsClientProps = {
+  disableAutoLoad?: boolean;
+  initialMessage?: string;
+  initialAccounts?: Account[];
+  initialOpeningBalances?: Record<string, OpeningBalance>;
 };
 
 function asString(value: unknown): string {
@@ -129,11 +136,17 @@ function normalizeAccountsSnapshot(accountsPayload: unknown, openingPayload: unk
   return buildAccountsSnapshot(accounts, openingData);
 }
 
-export function AccountsClient() {
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
-  const [rows, setRows] = useState<Account[]>([]);
-  const [openingByAccount, setOpeningByAccount] = useState<Record<string, OpeningBalance>>({});
+export function AccountsClient({
+  disableAutoLoad = false,
+  initialMessage = "",
+  initialAccounts = [],
+  initialOpeningBalances = {},
+}: AccountsClientProps = {}) {
+  const initialSnapshot = buildAccountsSnapshot(initialAccounts, initialOpeningBalances);
+  const [loading, setLoading] = useState(!disableAutoLoad);
+  const [message, setMessage] = useState(initialMessage);
+  const [rows, setRows] = useState<Account[]>(initialSnapshot.accounts);
+  const [openingByAccount, setOpeningByAccount] = useState<Record<string, OpeningBalance>>(initialSnapshot.openingByAccount);
 
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -145,8 +158,8 @@ export function AccountsClient() {
   const [editKind, setEditKind] = useState<Account["kind"]>("bank");
   const [editNote, setEditNote] = useState("");
 
-  const [openingDateDrafts, setOpeningDateDrafts] = useState<Record<string, string>>({});
-  const [openingAmountDrafts, setOpeningAmountDrafts] = useState<Record<string, string>>({});
+  const [openingDateDrafts, setOpeningDateDrafts] = useState<Record<string, string>>(initialSnapshot.openingDateDrafts);
+  const [openingAmountDrafts, setOpeningAmountDrafts] = useState<Record<string, string>>(initialSnapshot.openingAmountDrafts);
   const [savingOpeningId, setSavingOpeningId] = useState("");
   const openingCount = rows.filter((row) => Boolean(openingByAccount[row.id])).length;
   const notedCount = rows.filter((row) => asString(row.note).length > 0).length;
@@ -197,6 +210,8 @@ export function AccountsClient() {
   }, [applyAccountsSnapshot, fetchAccounts]);
 
   useEffect(() => {
+    if (disableAutoLoad) return;
+
     const controller = new AbortController();
     let active = true;
 
@@ -221,7 +236,7 @@ export function AccountsClient() {
       active = false;
       controller.abort();
     };
-  }, [applyAccountsSnapshot, fetchAccounts]);
+  }, [applyAccountsSnapshot, disableAutoLoad, fetchAccounts]);
 
   async function handleCreate() {
     if (creating) return;

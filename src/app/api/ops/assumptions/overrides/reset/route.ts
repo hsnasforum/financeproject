@@ -8,9 +8,11 @@ import {
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import { resetAssumptionsOverrides } from "@/lib/planning/assumptions/overridesStorage";
 import { getDefaultProfileId } from "@/lib/planning/server/store/profileStore";
 import { sanitizeRecordId } from "@/lib/planning/store/paths";
+import { assumptionsUserMeta } from "../../_lib";
 
 type ResetBody = {
   csrf?: unknown;
@@ -71,12 +73,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const profileId = await resolveTargetProfileId(body?.profileId);
     await resetAssumptionsOverrides(profileId);
     return NextResponse.json({
       ok: true,
       ...(profileId ? { profileId } : {}),
       items: [],
+      meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 초기화했습니다.",
     });
   } catch (error) {

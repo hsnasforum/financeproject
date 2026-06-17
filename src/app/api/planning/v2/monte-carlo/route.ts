@@ -23,6 +23,11 @@ import {
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import { PlanningV2ValidationError, type ProfileV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type MonteCarloRequestBody = {
   profile?: unknown;
@@ -164,6 +169,9 @@ export async function POST(request: Request) {
   }
   const guardFailure = withLocalWriteGuard(request, body);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
   const featureFlags = getPlanningFeatureFlags();
   if (!featureFlags.monteCarloEnabled) {
     return fail("INPUT", "서버 설정으로 Monte Carlo 기능이 비활성화되어 있습니다.", { status: 400 });
@@ -275,6 +283,7 @@ export async function POST(request: Request) {
       const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
       return ok(data, {
         ...cached.data.meta,
+        ...userMeta,
         cache: {
           hit: true,
           keyPrefix,
@@ -333,6 +342,7 @@ export async function POST(request: Request) {
 
     return ok(payload.data, {
       ...payload.meta,
+      ...userMeta,
       cache: {
         hit: false,
         keyPrefix,

@@ -3,9 +3,10 @@ import { toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { consumeVaultCsrfOrThrow } from "../../../../../lib/planning/security/vaultCsrf";
 import { changeVaultPassphrase } from "../../../../../lib/planning/security/vaultState";
-import { asString, guardLocalRequest, withVaultCsrf } from "../_lib";
+import { asString, guardLocalRequest, securityUserMeta, withVaultCsrf } from "../_lib";
 
 function toClientError(error: unknown): { status: number; code: string; message: string } {
   const message = error instanceof Error ? error.message : "vault passphrase change failed";
@@ -42,6 +43,8 @@ export async function POST(request: Request) {
 
   try {
     consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const status = await changeVaultPassphrase({
       oldPassphrase: asString(body?.oldPassphrase),
       newPassphrase: asString(body?.newPassphrase),
@@ -52,7 +55,11 @@ export async function POST(request: Request) {
         unlocked: status.unlocked,
       },
     }).catch(() => undefined);
-    return withVaultCsrf(request, NextResponse.json({ ok: true, data: status }));
+    return withVaultCsrf(request, NextResponse.json({
+      ok: true,
+      data: status,
+      meta: securityUserMeta(currentUser),
+    }));
   } catch (error) {
     const guardError = toGuardErrorResponse(error);
     if (guardError) {

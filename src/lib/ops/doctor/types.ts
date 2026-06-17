@@ -17,4 +17,3 @@ export type DoctorIssue = {
   evidence?: string;
   fix?: DoctorIssueFix;
 };
-

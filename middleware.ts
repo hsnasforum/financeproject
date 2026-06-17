@@ -118,7 +118,8 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 }
 
 function isPlanningAuthRequired(): boolean {
-  return parseBoolean(process.env.PLANNING_AUTH_REQUIRED, false);
+  if ((process.env.NODE_ENV ?? "").trim().toLowerCase() === "production") return true;
+  return parseBoolean(process.env.PLANNING_AUTH_REQUIRED, true);
 }
 
 function hasAuthSessionCookie(request: NextRequest): boolean {
@@ -126,11 +127,26 @@ function hasAuthSessionCookie(request: NextRequest): boolean {
 }
 
 function hasTrustedPlanningAuthHeader(request: NextRequest): boolean {
-  if (!parseBoolean(process.env.PLANNING_TRUST_AUTH_HEADERS, false)) return false;
   const userId = request.headers.get("x-planning-user-id")?.trim()
     || request.headers.get("x-auth-user-id")?.trim()
     || "";
-  return Boolean(userId) && isLocalRequest(request);
+  return Boolean(userId)
+    && parseBoolean(process.env.PLANNING_TRUST_AUTH_HEADERS, false)
+    && isLocalRequest(request);
+}
+
+function trustedPlanningAuthHeaderError(request: NextRequest): string {
+  const userId = request.headers.get("x-planning-user-id")?.trim()
+    || request.headers.get("x-auth-user-id")?.trim()
+    || "";
+  if (!userId) return "";
+  if (!parseBoolean(process.env.PLANNING_TRUST_AUTH_HEADERS, false)) {
+    return "신뢰된 인증 헤더가 비활성화되어 있습니다.";
+  }
+  if (!isLocalRequest(request)) {
+    return "신뢰된 인증 헤더는 로컬 또는 내부 프록시 요청에서만 사용할 수 있습니다.";
+  }
+  return "";
 }
 
 function blockResponse(request: NextRequest, contentSecurityPolicy: string): NextResponse {
@@ -162,6 +178,19 @@ function authRequiredResponse(contentSecurityPolicy: string): NextResponse {
   ), contentSecurityPolicy);
 }
 
+function authForbiddenResponse(contentSecurityPolicy: string, message: string): NextResponse {
+  return withSecurityHeaders(NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message,
+      },
+    },
+    { status: 403 },
+  ), contentSecurityPolicy);
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProduction = process.env.NODE_ENV === "production";
@@ -175,6 +204,13 @@ export function middleware(request: NextRequest) {
     || (!isProduction && isDevOnlyPath(pathname));
   if (needsLocalOnly && !isLocalRequest(request)) {
     return blockResponse(request, contentSecurityPolicy);
+  }
+
+  if (isPlanningApiPath(pathname)) {
+    const trustedHeaderError = trustedPlanningAuthHeaderError(request);
+    if (trustedHeaderError) {
+      return authForbiddenResponse(contentSecurityPolicy, trustedHeaderError);
+    }
   }
 
   if (

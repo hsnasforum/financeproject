@@ -3,9 +3,10 @@ import { toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { consumeVaultCsrfOrThrow } from "../../../../../lib/planning/security/vaultCsrf";
 import { lockVault } from "../../../../../lib/planning/security/vaultState";
-import { asString, guardLocalRequest, withVaultCsrf } from "../_lib";
+import { asString, guardLocalRequest, securityUserMeta, withVaultCsrf } from "../_lib";
 
 export async function POST(request: Request) {
   const blocked = onlyDev();
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { csrf?: unknown } | null;
   try {
     consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const status = await lockVault();
     await appendOpsAuditEvent({
       eventType: "VAULT_LOCK_SUCCESS",
@@ -24,7 +27,11 @@ export async function POST(request: Request) {
         unlocked: status.unlocked,
       },
     }).catch(() => undefined);
-    return withVaultCsrf(request, NextResponse.json({ ok: true, data: status }));
+    return withVaultCsrf(request, NextResponse.json({
+      ok: true,
+      data: status,
+      meta: securityUserMeta(currentUser),
+    }));
   } catch (error) {
     const guardError = toGuardErrorResponse(error);
     if (guardError) {

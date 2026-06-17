@@ -4,16 +4,19 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import {
-  getDraft,
-  listDrafts,
-} from "@/lib/planning/v3/drafts/draftStore";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
+  getCsvDraft,
   isSaveDraftFromImportForbiddenError,
   isSaveDraftFromImportInputError,
+  listCsvDrafts,
   saveDraftFromImport,
 } from "@/lib/planning/v3/draft/service";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type DraftBody = {
   csrf?: unknown;
@@ -110,12 +113,15 @@ function summarizeDraft(cashflow: Array<{ incomeKrw: number; expenseKrw: number;
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
-    const rows = await listDrafts();
+    const rows = await listCsvDrafts();
     const details = await Promise.all(rows.map(async (row) => ({
       id: row.id,
-      draft: await getDraft(row.id),
+      draft: await getCsvDraft(row.id),
     })));
     const detailById = new Map(details.map((entry) => [entry.id, entry.draft]));
     const payload = {
@@ -137,18 +143,19 @@ export async function GET(request: Request) {
           meta: row.meta,
         };
       }),
+      meta: userMeta,
     };
     assertNoForbiddenDraftKeys(payload);
     return NextResponse.json(payload, { status: 200 });
   } catch (error) {
     if (error instanceof ForbiddenDraftKeyError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." } },
+        { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "초안 목록을 조회하지 못했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "초안 목록을 조회하지 못했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }
@@ -164,6 +171,9 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const payload = isRecord(body?.payload)
@@ -187,30 +197,31 @@ export async function POST(request: Request) {
         id: created.id,
         createdAt: created.createdAt,
       },
+      meta: userMeta,
     };
     assertNoForbiddenDraftKeys(response);
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
     if (isSaveDraftFromImportForbiddenError(error) || error instanceof ForbiddenDraftKeyError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." } },
+        { ok: false, error: { code: "INTERNAL", message: "초안 데이터 검증에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
     if (isSaveDraftFromImportInputError(error)) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: error.message } },
+        { ok: false, error: { code: "INPUT", message: error.message }, meta: userMeta },
         { status: 400 },
       );
     }
     if (error instanceof Error && error.message === "Invalid record id") {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "초안 식별자 생성에 실패했습니다." } },
+        { ok: false, error: { code: "INPUT", message: "초안 식별자 생성에 실패했습니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "초안 저장에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "초안 저장에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

@@ -5,10 +5,7 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import {
-  planningUserMeta,
-  withPlanningRouteUser,
-} from "@/lib/planning/api/routeAuth";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import { IndicatorCatalogRowSchema, buildIndicatorCatalogRows } from "@/lib/planning/v3/indicators/annotations";
 import { SeriesSpecSchema } from "@/lib/planning/v3/indicators/contracts";
 import {
@@ -20,8 +17,14 @@ import {
 } from "@/lib/planning/v3/indicators/specOverrides";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
+const UserMetaSchema = z.object({
+  userId: z.string().min(1),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+});
+
 const SpecsGetResponseSchema = z.object({
   ok: z.literal(true),
+  meta: UserMetaSchema,
   data: z.object({
     specs: z.array(SeriesSpecSchema),
     catalog: z.array(IndicatorCatalogRowSchema),
@@ -36,6 +39,7 @@ const SpecsPostBodySchema = z.object({
 
 const SpecsPostResponseSchema = z.object({
   ok: z.literal(true),
+  meta: UserMetaSchema,
   data: z.object({
     mode: z.enum(["dry_run", "apply"]),
     preview: IndicatorSpecsImportPreviewSchema,
@@ -64,15 +68,18 @@ export async function GET(request: Request) {
     return toGuardResponse(error);
   }
 
-  return withPlanningRouteUser(request, async () => {
-    const specs = exportSeriesSpecList();
-    const catalog = buildIndicatorCatalogRows(specs);
-    const payload = parseWithV3Whitelist(SpecsGetResponseSchema, {
-      ok: true,
-      data: { specs, catalog },
-    }, { scope: "response", context: "api.v3.indicators.specs.get" });
-    return NextResponse.json(payload);
-  });
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
+
+  const specs = exportSeriesSpecList();
+  const catalog = buildIndicatorCatalogRows(specs);
+  const payload = parseWithV3Whitelist(SpecsGetResponseSchema, {
+    ok: true,
+    meta: userMeta,
+    data: { specs, catalog },
+  }, { scope: "response", context: "api.v3.indicators.specs.get" });
+  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {
@@ -90,30 +97,31 @@ export async function POST(request: Request) {
     return toGuardResponse(error);
   }
 
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
-    const parsed = SpecsPostBodySchema.safeParse(body ?? {});
-    if (!parsed.success) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "지표 스펙 import 요청 형식이 올바르지 않습니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
+  const parsed = SpecsPostBodySchema.safeParse(body ?? {});
+  if (!parsed.success) {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "지표 스펙 import 요청 형식이 올바르지 않습니다." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
 
-    const preview = previewImportSeriesSpecs(parsed.data.specs);
-    const applied = parsed.data.mode === "apply"
-      ? applyImportSeriesSpecs(parsed.data.specs)
-      : null;
+  const preview = previewImportSeriesSpecs(parsed.data.specs);
+  const applied = parsed.data.mode === "apply"
+    ? applyImportSeriesSpecs(parsed.data.specs)
+    : null;
 
-    const payload = parseWithV3Whitelist(SpecsPostResponseSchema, {
-      ok: true,
-      data: {
-        mode: parsed.data.mode,
-        preview,
-        applied,
-      },
-    }, { scope: "response", context: "api.v3.indicators.specs.post" });
-    return NextResponse.json(payload);
-  });
+  const payload = parseWithV3Whitelist(SpecsPostResponseSchema, {
+    ok: true,
+    meta: userMeta,
+    data: {
+      mode: parsed.data.mode,
+      preview,
+      applied,
+    },
+  }, { scope: "response", context: "api.v3.indicators.specs.post" });
+  return NextResponse.json(payload);
 }

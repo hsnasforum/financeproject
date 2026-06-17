@@ -3,7 +3,12 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { getShareReport } from "../../../../../../../lib/planning/server/share/storage";
+import { getCurrentUserShareReport } from "../../../../../../../lib/planning/server/share/repository";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../../lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -23,12 +28,15 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const { id } = await context.params;
-    const report = await getShareReport(id);
+    const report = await getCurrentUserShareReport(id);
     if (!report) {
-      return jsonError("NO_DATA", "공유 리포트를 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "공유 리포트를 찾을 수 없습니다.", { meta: userMeta });
     }
     return new Response(report.markdown, {
       status: 200,
@@ -40,6 +48,6 @@ export async function GET(request: Request, context: RouteContext) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "공유 리포트 다운로드에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }

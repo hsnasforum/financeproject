@@ -3,6 +3,7 @@ import { redactText } from "../planning/privacy/redact";
 import { inferFixHrefByErrorCode } from "./errorFixHref";
 
 export type OpsContractErrorCode =
+  | "UNAUTHORIZED"
   | "LOCKED"
   | "CSRF"
   | "LOCAL_ONLY"
@@ -10,6 +11,7 @@ export type OpsContractErrorCode =
   | "STALE_ASSUMPTIONS"
   | "STORAGE_CORRUPT"
   | "BACKUP_INVALID"
+  | "BACKUP_RECEIPT_STORE_UNAVAILABLE"
   | "INTERNAL";
 
 type OpsErrorShape = {
@@ -28,6 +30,7 @@ type OpsErrorResponseInput = {
 };
 
 const DEFAULT_MESSAGE: Record<OpsContractErrorCode, string> = {
+  UNAUTHORIZED: "잠금 해제 후 다시 시도해 주세요.",
   LOCKED: "잠금 해제 후 다시 시도해 주세요.",
   CSRF: "요청이 차단되었습니다(CSRF). 페이지를 새로고침 후 다시 시도하세요.",
   LOCAL_ONLY: "로컬 환경에서만 사용할 수 있습니다.",
@@ -35,10 +38,12 @@ const DEFAULT_MESSAGE: Record<OpsContractErrorCode, string> = {
   STALE_ASSUMPTIONS: "가정 스냅샷이 오래되었습니다. 최신화 후 다시 시도해 주세요.",
   STORAGE_CORRUPT: "저장 데이터가 손상되었을 수 있습니다. /ops/doctor에서 점검해 주세요.",
   BACKUP_INVALID: "백업 파일 형식이 올바르지 않습니다.",
+  BACKUP_RECEIPT_STORE_UNAVAILABLE: "미리보기 확인 저장소를 사용할 수 없습니다.",
   INTERNAL: "처리 중 오류가 발생했습니다.",
 };
 
 const DEFAULT_STATUS: Record<OpsContractErrorCode, number> = {
+  UNAUTHORIZED: 403,
   LOCKED: 423,
   CSRF: 403,
   LOCAL_ONLY: 403,
@@ -46,6 +51,7 @@ const DEFAULT_STATUS: Record<OpsContractErrorCode, number> = {
   STALE_ASSUMPTIONS: 409,
   STORAGE_CORRUPT: 500,
   BACKUP_INVALID: 400,
+  BACKUP_RECEIPT_STORE_UNAVAILABLE: 503,
   INTERNAL: 500,
 };
 
@@ -60,6 +66,7 @@ function normalizeRawCode(raw: unknown): string {
 export function normalizeOpsErrorCode(raw: unknown): OpsContractErrorCode {
   const code = normalizeRawCode(raw);
   if (!code) return "INTERNAL";
+  if (code === "UNAUTHORIZED") return "UNAUTHORIZED";
   if (code === "LOCKED" || code === "VAULT_LOCKED" || code.startsWith("VAULT_UNLOCK_BACKOFF")) return "LOCKED";
   if (code === "CSRF" || code === "CSRF_MISMATCH") return "CSRF";
   if (code === "LOCAL_ONLY" || code === "ORIGIN_MISMATCH") return "LOCAL_ONLY";
@@ -70,6 +77,11 @@ export function normalizeOpsErrorCode(raw: unknown): OpsContractErrorCode {
     || code === "SNAPSHOT_NOT_FOUND"
   ) {
     return "STALE_ASSUMPTIONS";
+  }
+  if (
+    code === "BACKUP_RECEIPT_STORE_UNAVAILABLE"
+  ) {
+    return "BACKUP_RECEIPT_STORE_UNAVAILABLE";
   }
   if (
     code === "BACKUP_INVALID"

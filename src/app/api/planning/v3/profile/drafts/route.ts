@@ -5,10 +5,10 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import {
-  createDraftFromBatch,
+  createCurrentUserProfileDraftFromBatch,
   isGenerateDraftInputError,
-  listProfileDrafts,
-} from "@/lib/planning/v3/store/draftStore";
+  listCurrentUserProfileDrafts,
+} from "@/lib/planning/v3/service/profileDraftRepository";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
   isPlanningRouteUser,
@@ -68,9 +68,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const created = await createDraftFromBatch(batchId);
+    const created = await createCurrentUserProfileDraftFromBatch(batchId);
     const payload = {
       ok: true,
+      meta: userMeta,
       data: {
         draftId: created.id,
         id: created.id,
@@ -128,9 +129,10 @@ export async function GET(request: Request) {
   const userMeta = planningUserMeta(currentUser);
 
   try {
-    const rows = await listProfileDrafts();
+    const rows = await listCurrentUserProfileDrafts();
     const payload = {
       ok: true,
+      meta: userMeta,
       data: rows.map((row) => ({
         draftId: row.id,
         id: row.id,

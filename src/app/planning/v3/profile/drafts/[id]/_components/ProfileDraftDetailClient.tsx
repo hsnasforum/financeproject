@@ -15,7 +15,7 @@ import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
 
-type DraftDetail = {
+export type DraftDetail = {
   id: string;
   batchId: string;
   createdAt: string;
@@ -125,6 +125,7 @@ type ApplyProfileResponse = {
 type Props = {
   id: string;
   initialDraft?: DraftDetail | null;
+  initialMessage?: string;
   initialProfiles?: ProfileOption[];
   initialPreflight?: PreflightResult | null;
   disableAutoLoad?: boolean;
@@ -214,12 +215,13 @@ function createFailedPreflight(targetProfileId: string): PreflightResult {
 export function ProfileDraftDetailClient({
   id,
   initialDraft = null,
+  initialMessage = "",
   initialProfiles = [],
   initialPreflight = null,
   disableAutoLoad = false,
 }: Props) {
-  const [loading, setLoading] = useState(initialDraft === null && !disableAutoLoad);
-  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(initialDraft === null && !disableAutoLoad && !initialMessage);
+  const [message, setMessage] = useState(initialMessage);
   const [draft, setDraft] = useState<DraftDetail | null>(initialDraft);
   const [profiles, setProfiles] = useState<ProfileOption[]>(initialProfiles);
   const [selectedProfileId, setSelectedProfileId] = useState("");
@@ -300,6 +302,7 @@ export function ProfileDraftDetailClient({
   }, [applyDetailLoadResult, disableAutoLoad, loadDetailData]);
 
   useEffect(() => {
+    if (initialMessage) return;
     if (disableAutoLoad) return;
 
     const controller = new AbortController();
@@ -326,7 +329,7 @@ export function ProfileDraftDetailClient({
       active = false;
       controller.abort();
     };
-  }, [applyDetailLoadResult, disableAutoLoad, loadDetailData]);
+  }, [applyDetailLoadResult, disableAutoLoad, initialMessage, loadDetailData]);
 
   const downloadPayload = useMemo(() => {
     if (!draft) return "";

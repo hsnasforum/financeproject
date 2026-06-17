@@ -5,15 +5,16 @@ import {
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../../lib/planning/api/response";
 import {
+  planningUserMeta,
   planningAuthErrorResponse as toAuthErrorResponse,
   withPlanningRouteUser,
 } from "../../../../../../../lib/planning/api/routeAuth";
 import {
-  getRunActionProgress,
-  summarizeRunActionProgress,
-  updateRunActionProgress,
-} from "../../../../../../../lib/planning/server/store/runActionStore";
-import { type PlanningRunActionStatus } from "../../../../../../../lib/planning/server/store/types";
+  getCurrentUserRunActionProgress,
+  summarizeCurrentUserRunActionProgress,
+  updateCurrentUserRunActionProgress,
+  type CurrentUserPlanningRunActionStatus as PlanningRunActionStatus,
+} from "../../../../../../../lib/planning/server/runs/repository";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -70,16 +71,15 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const progress = await getRunActionProgress(id);
+      const progress = await getCurrentUserRunActionProgress(id);
       if (!progress) {
         return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
       }
       return jsonOk({
         data: progress,
         meta: {
-          summary: summarizeRunActionProgress(progress),
-          userId: currentUser.id,
-          authSource: currentUser.source,
+          summary: summarizeCurrentUserRunActionProgress(progress),
+          ...planningUserMeta(currentUser),
         },
       });
     });
@@ -116,7 +116,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const updated = await updateRunActionProgress(id, {
+      const updated = await updateCurrentUserRunActionProgress(id, {
         actionKey,
         ...(status ? { status } : {}),
         ...(note !== undefined ? { note } : {}),
@@ -124,9 +124,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       return jsonOk({
         data: updated,
         meta: {
-          summary: summarizeRunActionProgress(updated),
-          userId: currentUser.id,
-          authSource: currentUser.source,
+          summary: summarizeCurrentUserRunActionProgress(updated),
+          ...planningUserMeta(currentUser),
         },
       });
     });

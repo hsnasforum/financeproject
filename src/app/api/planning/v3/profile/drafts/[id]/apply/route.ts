@@ -90,6 +90,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
     const payload = {
       ok: true,
+      meta: userMeta,
       data: {
         profileId: result.createdProfileId,
       },

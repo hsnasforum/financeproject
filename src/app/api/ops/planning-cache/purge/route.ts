@@ -10,12 +10,24 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { purgeExpired } from "@/lib/planning/cache/storage";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+  type PlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
+import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
 
 type PurgeBody = {
   csrf?: unknown;
 } | null;
 
-function appendPurgeAudit(input: { result: "SUCCESS" | "ERROR"; purged?: number; message: string }) {
+function appendPurgeAudit(input: {
+  result: "SUCCESS" | "ERROR";
+  purged?: number;
+  message: string;
+  user?: PlanningRouteUser;
+}) {
   try {
     appendAuditLog({
       event: "PLANNING_CACHE_PURGE",
@@ -25,6 +37,11 @@ function appendPurgeAudit(input: { result: "SUCCESS" | "ERROR"; purged?: number;
         result: input.result,
         purged: input.purged ?? null,
         message: input.message,
+        ...(input.user ? {
+          planningUserId: input.user.id,
+          authSource: input.user.source,
+          ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
+        } : {}),
       },
     });
   } catch (error) {
@@ -63,6 +80,8 @@ export async function POST(request: Request) {
       status: guard.status,
     });
   }
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   try {
     const result = await purgeExpired();
@@ -72,11 +91,16 @@ export async function POST(request: Request) {
       result: "SUCCESS",
       purged: result.purged,
       message,
+      user: currentUser,
     });
 
     return NextResponse.json({
       ok: true,
       data: result,
+      meta: {
+        ...planningUserMeta(currentUser),
+        ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
+      },
       message,
     });
   } catch (error) {
@@ -84,6 +108,7 @@ export async function POST(request: Request) {
     appendPurgeAudit({
       result: "ERROR",
       message,
+      user: currentUser,
     });
 
     return opsErrorResponse({

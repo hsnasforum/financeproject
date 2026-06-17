@@ -37,6 +37,7 @@ export function inferFixHrefByErrorCode(rawCode: unknown): string | undefined {
   }
   if (
     code === "BACKUP_INVALID"
+    || code === "BACKUP_RECEIPT_STORE_UNAVAILABLE"
     || code === "INVALID_ARCHIVE"
     || code === "INVALID_ZIP"
     || code.startsWith("MANIFEST_")

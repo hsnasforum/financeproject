@@ -5,16 +5,23 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../lib/planning/api/routeAuth";
 import { sanitizeRunRecordForResponse } from "../../../../../../lib/planning/api/runResponseSanitizer";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import {
-  ensureRunActionPlan,
-  getRunActionProgress,
-  summarizeRunActionProgress,
-  updateRunActionProgress,
-} from "../../../../../../lib/planning/server/store/runActionStore";
-import { deleteRun, getRun, updateRun } from "../../../../../../lib/planning/server/store/runStore";
-import { type PlanningRunActionStatus } from "../../../../../../lib/planning/server/store/types";
+  deleteCurrentUserRun,
+  ensureCurrentUserRunActionPlan,
+  getCurrentUserRun,
+  getCurrentUserRunActionProgress,
+  summarizeCurrentUserRunActionProgress,
+  updateCurrentUserRun,
+  updateCurrentUserRunActionProgress,
+  type CurrentUserPlanningRunActionStatus as PlanningRunActionStatus,
+} from "../../../../../../lib/planning/server/runs/repository";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -127,17 +134,20 @@ function logActionCenterPersistFailure(runId: string, error: unknown) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
   try {
-    const run = await getRun(id);
+    const run = await getCurrentUserRun(id);
     if (!run) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
     let runWithActionCenter = run;
     try {
-      const plan = run.actionCenter?.plan ?? await ensureRunActionPlan(run);
-      const progress = run.actionCenter?.progress ?? await getRunActionProgress(run.id);
+      const plan = run.actionCenter?.plan ?? await ensureCurrentUserRunActionPlan(run);
+      const progress = run.actionCenter?.progress ?? await getCurrentUserRunActionProgress(run.id);
       if (progress) {
         runWithActionCenter = {
           ...run,
@@ -147,7 +157,7 @@ export async function GET(request: Request, context: RouteContext) {
           },
         };
         if (!run.actionCenter?.plan || !run.actionCenter?.progress) {
-          await updateRun(run.id, {
+          await updateCurrentUserRun(run.id, {
             actionCenter: {
               plan,
               progress,
@@ -160,10 +170,10 @@ export async function GET(request: Request, context: RouteContext) {
     } catch (error) {
       logActionCenterHydrationFailure(run.id, error);
     }
-    return jsonOk({ data: sanitizeRunRecordForResponse(runWithActionCenter) });
+    return jsonOk({ data: sanitizeRunRecordForResponse(runWithActionCenter) }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }
 
@@ -177,54 +187,63 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const actionKey = asString(body?.actionKey);
   const statusRaw = asString(body?.status);
   const status = parseActionStatus(body?.status);
   const note = body?.note === undefined ? undefined : asString(body.note);
   if (!actionKey) {
-    return jsonError("INPUT", "actionKey가 필요합니다.", { status: 400 });
+    return jsonError("INPUT", "actionKey가 필요합니다.", { status: 400, meta: userMeta });
   }
   if (statusRaw && !status) {
-    return jsonError("INPUT", "status는 todo|doing|done|snoozed 중 하나여야 합니다.", { status: 400 });
+    return jsonError("INPUT", "status는 todo|doing|done|snoozed 중 하나여야 합니다.", {
+      status: 400,
+      meta: userMeta,
+    });
   }
 
   const { id } = await context.params;
-  const run = await getRun(id);
+  const run = await getCurrentUserRun(id);
   if (!run) {
-    return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
+    return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404, meta: userMeta });
   }
 
   try {
-    const plan = run.actionCenter?.plan ?? await ensureRunActionPlan(run);
-    const updatedProgress = await updateRunActionProgress(run.id, {
+    const plan = run.actionCenter?.plan ?? await ensureCurrentUserRunActionPlan(run);
+    const updatedProgress = await updateCurrentUserRunActionProgress(run.id, {
       actionKey,
       ...(status ? { status } : {}),
       ...(note !== undefined ? { note } : {}),
     });
-    await updateRun(run.id, {
+    await updateCurrentUserRun(run.id, {
       actionCenter: {
         plan,
         progress: updatedProgress,
       },
     });
-    const summary = summarizeRunActionProgress(updatedProgress);
-    return jsonOk({
-      data: {
-        progress: updatedProgress,
-        completion: {
-          done: summary.done,
-          total: summary.total,
-          pct: summary.completionPct,
+    const summary = summarizeCurrentUserRunActionProgress(updatedProgress);
+    return jsonOk(
+      {
+        data: {
+          progress: updatedProgress,
+          completion: {
+            done: summary.done,
+            total: summary.total,
+            pct: summary.completionPct,
+          },
         },
       },
-    });
+      { meta: userMeta },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 업데이트에 실패했습니다.";
     if (message === "ACTION_KEY_REQUIRED" || message === "ACTION_KEY_NOT_FOUND" || message === "ACTION_STATUS_INVALID") {
-      return jsonError("INPUT", message, { status: 400 });
+      return jsonError("INPUT", message, { status: 400, meta: userMeta });
     }
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }
 
@@ -238,6 +257,9 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
   const expectedConfirm = buildConfirmString("DELETE run", id);
@@ -252,12 +274,12 @@ export async function DELETE(request: Request, context: RouteContext) {
     });
     return jsonError("CONFIRM_MISMATCH", message, {
       status: 400,
-      meta: { expectedConfirm },
+      meta: { expectedConfirm, ...userMeta },
     });
   }
 
   try {
-    const deleted = await deleteRun(id);
+    const deleted = await deleteCurrentUserRun(id);
     if (!deleted) {
       appendRunAudit({
         event: "PLANNING_RUN_DELETE",
@@ -266,7 +288,7 @@ export async function DELETE(request: Request, context: RouteContext) {
         recordId: id,
         message: "run not found",
       });
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
     appendRunAudit({
@@ -282,7 +304,7 @@ export async function DELETE(request: Request, context: RouteContext) {
       id,
       message: "planning run moved to trash",
     });
-    return jsonOk({ data: { id, deleted: true, softDeleted: true } });
+    return jsonOk({ data: { id, deleted: true, softDeleted: true } }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 삭제에 실패했습니다.";
     appendRunAudit({
@@ -298,6 +320,6 @@ export async function DELETE(request: Request, context: RouteContext) {
       id,
       message,
     });
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }

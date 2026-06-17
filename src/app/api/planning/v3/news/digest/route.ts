@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 import { normalizeSeriesId } from "@/lib/planning/v3/indicators/aliases";
 import { loadEffectiveSeriesSpecs } from "@/lib/planning/v3/indicators/specOverrides";
-import { readSeriesObservations } from "@/lib/planning/v3/indicators/store";
 import { computeTopicContradictions } from "@/lib/planning/v3/news/contradiction";
 import { readNewsDigestDay, type DigestDay, type DigestWatchItem } from "@/lib/planning/v3/news/digest";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import { readCurrentUserIndicatorSeriesObservations } from "@/lib/planning/v3/service/indicatorRepository";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -167,7 +172,7 @@ function inferUnknownReason(input: {
 function buildSparkline(seriesId: string, window: number): WatchSparkline | null {
   const normalizedSeriesId = normalizeSeriesId(seriesId);
   if (!normalizedSeriesId) return null;
-  const observations = readSeriesObservations(normalizedSeriesId)
+  const observations = readCurrentUserIndicatorSeriesObservations(normalizedSeriesId)
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date));
   if (observations.length < 1) return null;
@@ -250,7 +255,7 @@ function sanitizeDigest(input: DigestDay | null): RouteDigest | null {
         ? (observationsBySeries.has(normalizedSeriesId)
           ? (observationsBySeries.get(normalizedSeriesId) ?? [])
           : (() => {
-            const loaded = readSeriesObservations(normalizedSeriesId)
+            const loaded = readCurrentUserIndicatorSeriesObservations(normalizedSeriesId)
               .slice()
               .sort((a, b) => a.date.localeCompare(b.date));
             observationsBySeries.set(normalizedSeriesId, loaded);
@@ -383,19 +388,32 @@ const DigestRouteSchema = z.object({
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-  const data = sanitizeDigest(readNewsDigestDay());
-  const topicContradictions = computeTopicContradictions(
-    (data?.topItems ?? []).map((row) => ({
-      topicId: asString(row.topicId),
-      topicLabel: asString(row.topicLabel),
-      title: asString(row.title),
-      snippet: asString(row.snippet),
-    })),
-  );
-  const payload = parseWithV3Whitelist(DigestRouteSchema, { ok: true, data, topicContradictions }, {
-    scope: "response",
-    context: "api.v3.news.digest",
-  });
-  return NextResponse.json(payload);
+  try {
+    const data = sanitizeDigest(readNewsDigestDay());
+    const topicContradictions = computeTopicContradictions(
+      (data?.topItems ?? []).map((row) => ({
+        topicId: asString(row.topicId),
+        topicLabel: asString(row.topicLabel),
+        title: asString(row.title),
+        snippet: asString(row.snippet),
+      })),
+    );
+    const payload = parseWithV3Whitelist(DigestRouteSchema, { ok: true, data, topicContradictions }, {
+      scope: "response",
+      context: "api.v3.news.digest",
+    });
+    return NextResponse.json(payload);
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INTERNAL", message: "뉴스 요약을 불러오는 중 오류가 발생했습니다." },
+        meta: planningUserMeta(currentUser),
+      },
+      { status: 500 },
+    );
+  }
 }

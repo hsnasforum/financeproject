@@ -3,8 +3,15 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../../lib/planning/api/response";
-import { ensureRunActionPlan } from "../../../../../../../lib/planning/server/store/runActionStore";
-import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../../lib/planning/api/routeAuth";
+import {
+  ensureCurrentUserRunActionPlan,
+  getCurrentUserRun,
+} from "../../../../../../../lib/planning/server/runs/repository";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -24,15 +31,18 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
   try {
-    const run = await getRun(id);
+    const run = await getCurrentUserRun(id);
     if (!run) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
     }
-    const plan = await ensureRunActionPlan(run);
-    return jsonOk({ data: plan });
+    const plan = await ensureCurrentUserRunActionPlan(run);
+    return jsonOk({ data: plan }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "action-plan 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });

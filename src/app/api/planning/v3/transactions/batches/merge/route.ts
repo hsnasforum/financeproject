@@ -6,7 +6,12 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
-import { mergeBatches, TransactionStoreInputError } from "@/lib/planning/v3/transactions/store";
+import { mergeBatches, TransactionStoreInputError } from "@/lib/planning/v3/service/transactionStore";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type MergeBody = {
   fromBatchId?: unknown;
@@ -56,12 +61,15 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const fromBatchId = asString(body?.fromBatchId);
   const intoBatchId = asString(body?.intoBatchId);
   if (!fromBatchId || !intoBatchId) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "배치 병합 입력이 올바르지 않습니다." } },
+      { ok: false, error: { code: "INPUT", message: "배치 병합 입력이 올바르지 않습니다." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -72,16 +80,17 @@ export async function POST(request: Request) {
       ok: true,
       mergedCount: merged.mergedCount,
       dedupedCount: merged.dedupedCount,
+      meta: userMeta,
     });
   } catch (error) {
     if (error instanceof TransactionStoreInputError || isInvalidIdError(error)) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "배치 병합 입력이 올바르지 않습니다." } },
+        { ok: false, error: { code: "INPUT", message: "배치 병합 입력이 올바르지 않습니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 병합에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "배치 병합에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

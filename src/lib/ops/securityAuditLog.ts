@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { redactText } from "../planning/privacy/redact";
 import { resolveOpsDataDir } from "../planning/storage/dataDir";
+import { isPlanningNamespaceEnabled, resolvePlanningUserId } from "../planning/store/namespace";
+import { getScopedPlanningAuthSource } from "../planning/store/userScope";
 
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_FILES = 5;
@@ -106,6 +108,25 @@ function toLine(event: OpsAuditEvent): string {
   return JSON.stringify(compact);
 }
 
+function resolvePlanningAuditMeta(): Record<string, unknown> | null {
+  if (!isPlanningNamespaceEnabled()) return null;
+  const authSource = asString(getScopedPlanningAuthSource());
+  return {
+    planningNamespaceEnabled: true,
+    planningUserId: resolvePlanningUserId(),
+    ...(authSource ? { authSource } : {}),
+  };
+}
+
+function withPlanningAuditMeta(meta?: Record<string, unknown>): Record<string, unknown> | undefined {
+  const planningMeta = resolvePlanningAuditMeta();
+  if (!planningMeta) return meta;
+  return {
+    ...(meta ?? {}),
+    ...planningMeta,
+  };
+}
+
 async function rotateIfNeeded(filePath: string, incomingBytes: number): Promise<void> {
   const maxBytes = resolveMaxBytes();
   const maxFiles = resolveMaxFiles();
@@ -128,11 +149,12 @@ export async function appendOpsAuditEvent(input: {
   meta?: Record<string, unknown>;
 }): Promise<void> {
   const filePath = resolveAuditPath();
+  const meta = withPlanningAuditMeta(input.meta);
   const line = `${toLine({
     eventType: input.eventType,
     at: input.at ?? new Date().toISOString(),
     actor: "local",
-    ...(input.meta ? { meta: input.meta } : {}),
+    ...(meta ? { meta } : {}),
   })}\n`;
 
   await fs.mkdir(path.dirname(filePath), { recursive: true });

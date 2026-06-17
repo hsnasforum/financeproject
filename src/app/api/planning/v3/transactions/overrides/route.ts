@@ -7,14 +7,16 @@ import {
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
+import {
   TxnOverridesStoreInputError,
-  deleteBatchTxnOverride,
-  deleteLegacyUnscopedTxnOverride,
-  getBatchTxnOverrides,
-  listLegacyUnscopedTxnOverrides,
-  upsertBatchTxnOverride,
-  upsertLegacyUnscopedTxnOverride,
-} from "@/lib/planning/v3/store/txnOverridesStore";
+  deleteCurrentUserTransactionOverride,
+  listCurrentUserTransactionOverrides,
+  upsertCurrentUserTransactionOverride,
+} from "@/lib/planning/v3/service/transactionOverridesRepository";
 
 type PatchBody = {
   batchId?: unknown;
@@ -85,19 +87,24 @@ export async function GET(request: Request) {
 
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
-    const batchId = asString(new URL(request.url).searchParams.get("batchId"));
-    if (batchId) {
-      const items = await getBatchTxnOverrides(batchId);
-      return NextResponse.json({ ok: true, items, batchId, scope: "batch-scoped" });
-    }
-
-    const items = await listLegacyUnscopedTxnOverrides();
-    return NextResponse.json({ ok: true, items, batchId: null, scope: "legacy-unscoped" });
+    const result = await listCurrentUserTransactionOverrides(
+      new URL(request.url).searchParams.get("batchId"),
+    );
+    return NextResponse.json({
+      ok: true,
+      items: result.items,
+      batchId: result.batchId,
+      scope: result.scope,
+      meta: userMeta,
+    });
   } catch {
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "거래 오버라이드 목록 조회에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "거래 오버라이드 목록 조회에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }
@@ -116,32 +123,27 @@ export async function PATCH(request: Request) {
 
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   if (!body) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "오버라이드 입력이 필요합니다." } },
+      { ok: false, error: { code: "INPUT", message: "오버라이드 입력이 필요합니다." }, meta: userMeta },
       { status: 400 },
     );
   }
 
   try {
-    const batchId = asString(body.batchId);
-    const hasCategoryId = asString(body.categoryId).length > 0;
-    const scope = batchId && hasCategoryId ? "batch-scoped" : "legacy-unscoped";
-    const override = batchId && hasCategoryId
-      ? await upsertBatchTxnOverride({
-          batchId,
-          txnId: body.txnId,
-          categoryId: body.categoryId,
-          ...(body.note !== undefined ? { note: body.note } : {}),
-        })
-      : await upsertLegacyUnscopedTxnOverride(body.txnId, {
-          ...(body.kind !== undefined ? { kind: body.kind } : {}),
-          ...(body.category !== undefined ? { category: body.category } : {}),
-          ...(body.categoryId !== undefined ? { categoryId: body.categoryId } : {}),
-          ...(body.note !== undefined ? { note: body.note } : {}),
-        });
-    return NextResponse.json({ ok: true, override, scope });
+    const result = await upsertCurrentUserTransactionOverride({
+      batchId: body.batchId,
+      txnId: body.txnId,
+      categoryId: body.categoryId,
+      note: body.note,
+      kind: body.kind,
+      category: body.category,
+    });
+    return NextResponse.json({ ok: true, override: result.override, scope: result.scope, meta: userMeta });
   } catch (error) {
     if (error instanceof TxnOverridesStoreInputError) {
       return NextResponse.json(
@@ -149,12 +151,13 @@ export async function PATCH(request: Request) {
           ok: false,
           error: { code: "INPUT", message: "오버라이드 입력이 올바르지 않습니다." },
           details: error.details,
+          meta: userMeta,
         },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "오버라이드 저장에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "오버라이드 저장에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }
@@ -174,17 +177,16 @@ export async function DELETE(request: Request) {
 
   const guarded = withWriteGuard(request, body?.csrf ?? query.get("csrf"));
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
-    const batchId = asString(query.get("batchId") ?? body?.batchId);
-    const txnId = asString(query.get("txnId") ?? body?.txnId);
-    const scope = batchId && txnId ? "batch-scoped" : "legacy-unscoped";
-    if (batchId && txnId) {
-      await deleteBatchTxnOverride({ batchId, txnId });
-    } else {
-      await deleteLegacyUnscopedTxnOverride(txnId);
-    }
-    return NextResponse.json({ ok: true, deleted: true, scope });
+    const result = await deleteCurrentUserTransactionOverride({
+      batchId: query.get("batchId") ?? body?.batchId,
+      txnId: query.get("txnId") ?? body?.txnId,
+    });
+    return NextResponse.json({ ok: true, deleted: result.deleted, scope: result.scope, meta: userMeta });
   } catch (error) {
     if (error instanceof TxnOverridesStoreInputError) {
       return NextResponse.json(
@@ -192,12 +194,13 @@ export async function DELETE(request: Request) {
           ok: false,
           error: { code: "INPUT", message: "오버라이드 삭제 입력이 올바르지 않습니다." },
           details: error.details,
+          meta: userMeta,
         },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "오버라이드 삭제에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "오버라이드 삭제에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

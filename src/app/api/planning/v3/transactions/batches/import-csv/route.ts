@@ -4,11 +4,12 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/transactions/store";
+import { ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/service/importCsvToBatch";
 import { type CsvColumnMapping } from "@/lib/planning/v3/providers/csv/types";
 import {
+  isPlanningRouteUser,
   planningUserMeta,
-  withPlanningRouteUser,
+  requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type ImportBody = {
@@ -78,69 +79,72 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
-    const csvText = asString(body?.csvText);
-    if (!csvText) {
+  const csvText = asString(body?.csvText);
+  if (!csvText) {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "CSV 텍스트를 입력해 주세요." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
+
+  const mapping = normalizeMapping(body?.mapping);
+  if (body?.mapping !== undefined && body?.mapping !== null && !mapping) {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "매핑 형식이 올바르지 않습니다." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
+
+  const options = normalizeOptions(body?.options);
+  if (body?.options !== undefined && body?.options !== null && !options) {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "옵션 형식이 올바르지 않습니다." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const imported = await importCsvToBatch({
+      csvText,
+      ...(mapping ? { mapping } : {}),
+      ...(asString(body?.fileName) ? { provenance: { fileName: asString(body?.fileName) } } : {}),
+      ...(options ? { options } : {}),
+    });
+
+    return NextResponse.json({
+      ok: true,
+      batchId: imported.batchMeta.id,
+      meta: {
+        ...imported.batchMeta,
+        ...userMeta,
+      },
+    }, { status: 201 });
+  } catch (error) {
+    if (error instanceof ImportCsvToBatchInputError) {
+      const encodingIssue = error.details.some((row) => asString(row.field) === "csvEncoding");
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "CSV 텍스트를 입력해 주세요." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-
-    const mapping = normalizeMapping(body?.mapping);
-    if (body?.mapping !== undefined && body?.mapping !== null && !mapping) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "매핑 형식이 올바르지 않습니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-
-    const options = normalizeOptions(body?.options);
-    if (body?.options !== undefined && body?.options !== null && !options) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "옵션 형식이 올바르지 않습니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-
-    try {
-      const imported = await importCsvToBatch({
-        csvText,
-        ...(mapping ? { mapping } : {}),
-        ...(asString(body?.fileName) ? { provenance: { fileName: asString(body?.fileName) } } : {}),
-        ...(options ? { options } : {}),
-      });
-
-      return NextResponse.json({
-        ok: true,
-        batchId: imported.batchMeta.id,
-        meta: imported.batchMeta,
-      }, { status: 201 });
-    } catch (error) {
-      if (error instanceof ImportCsvToBatchInputError) {
-        const encodingIssue = error.details.some((row) => asString(row.field) === "csvEncoding");
-        return NextResponse.json(
-          {
-            ok: false,
-            error: {
-              code: encodingIssue ? "CSV_ENCODING" : "INPUT",
-              message: encodingIssue
-                ? "CSV 인코딩을 확인해 주세요. UTF-8로 저장한 뒤 다시 시도해 주세요."
-                : "CSV 임포트 입력 검증에 실패했습니다.",
-            },
-            details: error.details,
-            meta: userMeta,
+        {
+          ok: false,
+          error: {
+            code: encodingIssue ? "CSV_ENCODING" : "INPUT",
+            message: encodingIssue
+              ? "CSV 인코딩을 확인해 주세요. UTF-8로 저장한 뒤 다시 시도해 주세요."
+              : "CSV 임포트 입력 검증에 실패했습니다.",
           },
-          { status: 400 },
-        );
-      }
-
-      return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "CSV 배치 생성에 실패했습니다." }, meta: userMeta },
-        { status: 500 },
+          details: error.details,
+          meta: userMeta,
+        },
+        { status: 400 },
       );
     }
-  });
+
+    return NextResponse.json(
+      { ok: false, error: { code: "INTERNAL", message: "CSV 배치 생성에 실패했습니다." }, meta: userMeta },
+      { status: 500 },
+    );
+  }
 }

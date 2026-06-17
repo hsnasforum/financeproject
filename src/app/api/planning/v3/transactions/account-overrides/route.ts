@@ -6,8 +6,13 @@ import {
 } from "@/lib/dev/devGuards";
 import {
   AccountMappingOverridesStoreInputError,
-  upsertAccountMappingOverride,
-} from "@/lib/planning/v3/store/accountMappingOverridesStore";
+  upsertCurrentUserAccountMappingOverride,
+} from "@/lib/planning/v3/service/accountMappingOverridesRepository";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type PatchBody = {
   batchId?: unknown;
@@ -50,21 +55,24 @@ export async function PATCH(request: Request) {
 
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   if (!body) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "오버라이드 입력이 필요합니다." } },
+      { ok: false, error: { code: "INPUT", message: "오버라이드 입력이 필요합니다." }, meta: userMeta },
       { status: 400 },
     );
   }
 
   try {
-    const override = await upsertAccountMappingOverride({
+    const override = await upsertCurrentUserAccountMappingOverride({
       batchId: body.batchId,
       txnId: body.txnId,
       accountId: body.accountId,
     });
-    return NextResponse.json({ ok: true, override });
+    return NextResponse.json({ ok: true, override, meta: userMeta });
   } catch (error) {
     if (error instanceof AccountMappingOverridesStoreInputError) {
       return NextResponse.json(
@@ -72,12 +80,13 @@ export async function PATCH(request: Request) {
           ok: false,
           error: { code: "INPUT", message: "오버라이드 입력이 올바르지 않습니다." },
           details: error.details,
+          meta: userMeta,
         },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "오버라이드 저장에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "오버라이드 저장에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

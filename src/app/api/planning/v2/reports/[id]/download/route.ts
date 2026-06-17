@@ -3,7 +3,11 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { getReport } from "../../../../../../../lib/planning/server/reports/storage";
+import { getCurrentUserReport } from "../../../../../../../lib/planning/server/reports/repository";
+import {
+  planningAuthErrorResponse as toAuthErrorResponse,
+  withPlanningRouteUser,
+} from "../../../../../../../lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -25,21 +29,30 @@ export async function GET(request: Request, context: RouteContext) {
   if (guardFailure) return guardFailure;
 
   try {
-    const { id } = await context.params;
-    const report = await getReport(id);
-    if (!report) {
-      return jsonError("NO_DATA", "리포트를 찾을 수 없습니다.");
-    }
+    return await withPlanningRouteUser(request, async () => {
+      try {
+        const { id } = await context.params;
+        const report = await getCurrentUserReport(id);
+        if (!report) {
+          return jsonError("NO_DATA", "리포트를 찾을 수 없습니다.");
+        }
 
-    return new Response(report.markdown, {
-      status: 200,
-      headers: {
-        "content-type": "text/markdown; charset=utf-8",
-        "content-disposition": `attachment; filename="planning-report-${report.meta.id}.md"`,
-        "cache-control": "no-store",
-      },
+        return new Response(report.markdown, {
+          status: 200,
+          headers: {
+            "content-type": "text/markdown; charset=utf-8",
+            "content-disposition": `attachment; filename="planning-report-${report.meta.id}.md"`,
+            "cache-control": "no-store",
+          },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "리포트 다운로드에 실패했습니다.";
+        return jsonError("INTERNAL", message, { status: 500 });
+      }
     });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) return authError;
     const message = error instanceof Error ? error.message : "리포트 다운로드에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });
   }

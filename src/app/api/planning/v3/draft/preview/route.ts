@@ -7,10 +7,15 @@ import {
 import { loadCanonicalProfile } from "@/lib/planning/v2/loadCanonicalProfile";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
 import { applyDraftToProfile } from "@/lib/planning/v3/draft/service";
-import { getLegacyDraft, getProfileDraftBridge } from "@/lib/planning/v3/draft/store";
 import { type V3DraftRecord } from "@/lib/planning/v3/domain/draft";
 import { type EvidenceRow } from "@/lib/planning/v3/domain/types";
-import { getProfile } from "@/lib/planning/v3/profiles/store";
+import { getCurrentUserPreviewDraft } from "@/lib/planning/v3/service/draftPreviewRepository";
+import { getCurrentUserProfile } from "@/lib/planning/v3/service/profileRepository";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type PreviewBody = {
   draftPatch?: unknown;
@@ -76,44 +81,6 @@ function toInlineDraft(patch: Record<string, unknown>, draftId?: string): V3Draf
   };
 }
 
-function toPreviewDraft(input: {
-  id: string;
-  createdAt: string;
-  source?: {
-    kind?: "csv";
-    filename?: string;
-    rows?: number;
-    months?: number;
-  };
-  meta?: {
-    rowsParsed?: number;
-  };
-  monthlyCashflow: Array<{
-    ym: string;
-    incomeKrw: number;
-    expenseKrw: number;
-    netKrw: number;
-    txCount?: number;
-  }>;
-  draftPatch: Record<string, unknown>;
-}): V3DraftRecord {
-  return {
-    id: input.id,
-    createdAt: input.createdAt,
-    source: {
-      kind: "csv",
-      ...(asString(input.source?.filename) ? { filename: asString(input.source?.filename) } : {}),
-      ...(Number.isFinite(Number(input.meta?.rowsParsed)) ? { rows: Math.max(0, Math.trunc(Number(input.meta?.rowsParsed))) } : {}),
-      ...(Number.isFinite(Number(input.source?.months))
-        ? { months: Math.max(0, Math.trunc(Number(input.source?.months))) }
-        : { months: input.monthlyCashflow.length }),
-    },
-    cashflow: input.monthlyCashflow,
-    draftPatch: input.draftPatch,
-    summary: {},
-  };
-}
-
 function normalizeEvidenceRows(input: unknown): EvidenceRow[] {
   if (!Array.isArray(input)) return [];
   const rows: EvidenceRow[] = [];
@@ -154,12 +121,15 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const draftId = asString(body?.draftId);
   const hasInlinePatch = isRecord(body?.draftPatch);
   if (!hasInlinePatch && !draftId) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "draftPatch 또는 draftId가 필요합니다." } },
+      { ok: false, error: { code: "INPUT", message: "draftPatch 또는 draftId가 필요합니다." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -169,16 +139,10 @@ export async function POST(request: Request) {
     if (hasInlinePatch) {
       draft = toInlineDraft(body?.draftPatch as Record<string, unknown>, draftId || undefined);
     } else {
-      draft = await getProfileDraftBridge(draftId);
-      if (!draft) {
-        const legacyDraft = await getLegacyDraft(draftId);
-        if (legacyDraft) {
-          draft = toPreviewDraft(legacyDraft);
-        }
-      }
+      draft = await getCurrentUserPreviewDraft(draftId);
       if (!draft) {
         return NextResponse.json(
-          { ok: false, error: { code: "NO_DATA", message: "초안을 찾을 수 없습니다." } },
+          { ok: false, error: { code: "NO_DATA", message: "초안을 찾을 수 없습니다." }, meta: userMeta },
           { status: 404 },
         );
       }
@@ -190,10 +154,10 @@ export async function POST(request: Request) {
     } else {
       const baseProfileId = asString(body?.baseProfileId);
       if (baseProfileId) {
-        const baseRecord = await getProfile(baseProfileId);
+        const baseRecord = await getCurrentUserProfile(baseProfileId);
         if (!baseRecord) {
           return NextResponse.json(
-            { ok: false, error: { code: "NO_DATA", message: "기준 프로필을 찾을 수 없습니다." } },
+            { ok: false, error: { code: "NO_DATA", message: "기준 프로필을 찾을 수 없습니다." }, meta: userMeta },
             { status: 404 },
           );
         }
@@ -218,16 +182,17 @@ export async function POST(request: Request) {
         notes: applied.summary.notes,
       },
       ...(evidence.length > 0 ? { evidence } : {}),
+      meta: userMeta,
     });
   } catch (error) {
     if (isInvalidIdError(error)) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." } },
+        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "드래프트 미리보기에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "드래프트 미리보기에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

@@ -1,6 +1,7 @@
 import { loadOpsPolicy } from "../opsPolicy";
 import { planRunsRetention } from "../runsRetention";
 import { buildAssumptionsSnapshot } from "../../planning/assumptions/sync";
+import { runAllowedFix } from "../../dev/runScript";
 import { inspectPlanningMigrations, runPlanningMigrations } from "../../planning/migrations/manager";
 import { deleteRun, listRunIndexEntries } from "../../planning/server/store/runStore";
 import { checkPlanningStorageConsistency, repairRunIndexConsistency } from "../../planning/storage/consistency";
@@ -165,6 +166,24 @@ async function previewDeleteRunAction(params: OpsActionParams): Promise<OpsActio
   };
 }
 
+async function previewDartWatchAction(): Promise<OpsActionPreviewResult> {
+  return {
+    ok: true,
+    summary: {
+      text: "DART 모니터링을 실행해 공시 알림과 관련 산출물을 갱신합니다.",
+    },
+  };
+}
+
+async function previewDailyRefreshAction(): Promise<OpsActionPreviewResult> {
+  return {
+    ok: true,
+    summary: {
+      text: "일일 갱신을 실행해 DART 모니터링, 뉴스, 규칙 평가 산출물을 갱신합니다.",
+    },
+  };
+}
+
 async function runAssumptionsRefreshAction(): Promise<OpsActionRunResult> {
   const refreshed = await buildAssumptionsSnapshot();
   const latestId = asString(refreshed.snapshotId);
@@ -281,6 +300,25 @@ async function runDeleteRunAction(params: OpsActionParams): Promise<OpsActionRun
   };
 }
 
+async function runAllowedFixAction(fixId: "DART_WATCH" | "DAILY_REFRESH"): Promise<OpsActionRunResult> {
+  const result = await runAllowedFix(fixId);
+  const message = fixId === "DART_WATCH" ? "DART 모니터링 실행" : "일일 갱신 실행";
+  return {
+    ok: result.ok,
+    message: result.ok
+      ? `${message} 완료 (${result.tookMs}ms)`
+      : `${message} 실패: ${result.error?.message ?? "실행 중 오류가 발생했습니다."}`,
+    data: {
+      fixId,
+      tookMs: result.tookMs,
+      stdoutTail: result.stdoutTail,
+      stderrTail: result.stderrTail,
+      errorCode: result.error?.code ?? null,
+    },
+    ...(result.ok ? {} : { errorCode: result.error?.code ?? "INTERNAL" }),
+  };
+}
+
 const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
   ASSUMPTIONS_REFRESH: {
     id: "ASSUMPTIONS_REFRESH",
@@ -318,6 +356,16 @@ const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
     dangerous: true,
     requirePreview: true,
     confirmText: "RUN OPS_DELETE_RUN",
+  },
+  DART_WATCH: {
+    id: "DART_WATCH",
+    title: "DART 모니터링 실행",
+    description: "공시 모니터링과 관련 DART 산출물을 다시 생성합니다.",
+  },
+  DAILY_REFRESH: {
+    id: "DAILY_REFRESH",
+    title: "일일 갱신 실행",
+    description: "일일 갱신 workflow를 실행해 주요 운영 산출물을 다시 생성합니다.",
   },
 };
 
@@ -362,6 +410,8 @@ export async function previewOpsAction(actionId: OpsActionId, params: OpsActionP
   if (actionId === "REPAIR_INDEX") return previewRepairIndexAction();
   if (actionId === "RUN_MIGRATIONS") return previewRunMigrationsAction();
   if (actionId === "DELETE_RUN") return previewDeleteRunAction(params);
+  if (actionId === "DART_WATCH") return previewDartWatchAction();
+  if (actionId === "DAILY_REFRESH") return previewDailyRefreshAction();
 
   return {
     ok: true,
@@ -377,6 +427,8 @@ export async function runOpsAction(actionId: OpsActionId, params: OpsActionParam
   if (actionId === "REPAIR_INDEX") return runRepairIndexAction();
   if (actionId === "RUN_MIGRATIONS") return runMigrationsAction();
   if (actionId === "DELETE_RUN") return runDeleteRunAction(params);
+  if (actionId === "DART_WATCH") return runAllowedFixAction("DART_WATCH");
+  if (actionId === "DAILY_REFRESH") return runAllowedFixAction("DAILY_REFRESH");
 
   return {
     ok: false,

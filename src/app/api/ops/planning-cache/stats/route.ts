@@ -9,6 +9,8 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { cacheStats, getCacheUsageStats } from "@/lib/planning/cache/storage";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -41,6 +43,8 @@ export async function GET(request: Request) {
       status: guard.status,
     });
   }
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   try {
     const [entryStats, usageStats] = await Promise.all([
@@ -60,6 +64,10 @@ export async function GET(request: Request) {
           totalLookups,
           hitRate,
         },
+      },
+      meta: {
+        ...planningUserMeta(currentUser),
+        ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
       },
     });
   } catch (error) {

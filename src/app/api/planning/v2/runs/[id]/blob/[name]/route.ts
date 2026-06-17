@@ -4,8 +4,13 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../../../lib/planning/api/response";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../../../lib/planning/api/routeAuth";
 import { sanitizeRunBlobForResponse } from "../../../../../../../../lib/planning/api/runResponseSanitizer";
-import { getRunBlob } from "../../../../../../../../lib/planning/server/store/runStore";
+import { getCurrentUserRunBlob } from "../../../../../../../../lib/planning/server/runs/repository";
 import { gzipSync } from "node:zlib";
 
 type RouteContext = {
@@ -71,13 +76,16 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id, name } = await context.params;
   const url = new URL(request.url);
   const isPreview = asString(url.searchParams.get("view")).toLowerCase() === "preview";
 
   try {
-    const blob = await getRunBlob(id, name);
+    const blob = await getCurrentUserRunBlob(id, name);
     if (blob === null) {
       return jsonError("NO_DATA", "blob을 찾을 수 없습니다.", { status: 404 });
     }
@@ -85,6 +93,7 @@ export async function GET(request: Request, context: RouteContext) {
     if (!isPreview) {
       return jsonResponseWithOptionalGzip(request, {
         ok: true,
+        meta: userMeta,
         data: responseBlob,
       });
     }
@@ -105,7 +114,7 @@ export async function GET(request: Request, context: RouteContext) {
         totalChars: serialized.length,
         hasMore,
       },
-    });
+    }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "blob 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500 });

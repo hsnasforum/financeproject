@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
-type DraftDetail = {
+export type DraftDetail = {
   id: string;
   createdAt: string;
   source: {
@@ -74,6 +74,7 @@ type Props = {
   id: string;
   initialDraft?: DraftDetail | null;
   initialProfiles?: ProfileMeta[];
+  initialMessage?: string;
   disableAutoLoad?: boolean;
 };
 
@@ -198,10 +199,11 @@ export function DraftDetailClient({
   id,
   initialDraft = null,
   initialProfiles = [],
+  initialMessage = "",
   disableAutoLoad = false,
 }: Props) {
-  const [loading, setLoading] = useState(initialDraft === null && !disableAutoLoad);
-  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(initialDraft === null && !disableAutoLoad && !initialMessage);
+  const [message, setMessage] = useState(initialMessage);
   const [draft, setDraft] = useState<DraftDetail | null>(initialDraft);
   const [profiles, setProfiles] = useState<ProfileMeta[]>(initialProfiles);
   const [selectedProfileId, setSelectedProfileId] = useState("");
@@ -226,10 +228,42 @@ export function DraftDetailClient({
   const patchExpense = patchEssential + patchDiscretionary;
   const patchSurplus = patchIncome - patchExpense;
   const dsrEstimate = estimateDsrPct(mergedProfile);
+  const hasInitialDraft = initialDraft !== null;
 
   useEffect(() => {
+    if (initialMessage) return;
     if (disableAutoLoad) return;
     let disposed = false;
+
+    async function loadProfiles() {
+      try {
+        const profilesResponse = await fetch("/api/planning/profiles", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const profilesJson = await profilesResponse.json().catch(() => null);
+
+        if (!profilesResponse.ok || !isProfilesResponse(profilesJson)) {
+          if (!disposed) setProfiles([]);
+          return;
+        }
+
+        if (!disposed) {
+          setProfiles(profilesJson.data);
+          const defaultId = asString(profilesJson.meta?.defaultProfileId);
+          setSelectedProfileId(defaultId);
+        }
+      } catch {
+        if (!disposed) setProfiles([]);
+      }
+    }
+
+    if (hasInitialDraft) {
+      void loadProfiles();
+      return () => {
+        disposed = true;
+      };
+    }
 
     async function load() {
       setLoading(true);
@@ -290,7 +324,7 @@ export function DraftDetailClient({
     return () => {
       disposed = true;
     };
-  }, [disableAutoLoad, id]);
+  }, [disableAutoLoad, hasInitialDraft, id, initialMessage]);
 
   async function requestMergedPreview(): Promise<PreviewResponse | null> {
     setPreviewLoading(true);

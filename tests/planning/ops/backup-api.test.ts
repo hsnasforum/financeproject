@@ -11,13 +11,19 @@ import { decodeZip, encodeZip } from "../../../src/lib/ops/backup/zipCodec";
 import { decryptPlanningDataVaultArchive, encryptPlanningDataVaultArchive } from "../../../src/lib/ops/backup/planningDataVault";
 import { createProfile, listProfiles } from "../../../src/lib/planning/store/profileStore";
 import { createRun, getRun, listRuns } from "../../../src/lib/planning/store/runStore";
-import { resolveRunDir } from "../../../src/lib/planning/store/paths";
+import { resolveProfileRunDir, resolveRunDir } from "../../../src/lib/planning/store/paths";
 import {
   listAssumptionsHistory,
   loadAssumptionsSnapshotById,
   saveAssumptionsSnapshotToHistory,
   saveLatestAssumptionsSnapshot,
 } from "../../../src/lib/planning/assumptions/storage";
+import {
+  __BACKUP_PREVIEW_TOKEN_TTL_MS_FOR_TESTS,
+  createBackupPreviewToken,
+  resetBackupPreviewTokensForTests,
+} from "../../../src/lib/ops/backup/previewToken";
+import { listOpsAuditEvents } from "../../../src/lib/ops/securityAuditLog";
 import { configureVaultPassphrase, lockVault, resetVaultRuntimeForTests } from "../../../src/lib/planning/security/vaultState";
 
 const env = process.env as Record<string, string | undefined>;
@@ -30,11 +36,20 @@ const originalVaultConfigPath = process.env.PLANNING_VAULT_CONFIG_PATH;
 const originalProfileMetaPath = process.env.PLANNING_PROFILE_META_PATH;
 const originalBackupSyncStatePath = process.env.PLANNING_BACKUP_SYNC_STATE_PATH;
 const originalStorageJournalPath = process.env.PLANNING_STORAGE_JOURNAL_PATH;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+const originalPlanningAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
+const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
+const originalPlanningNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalPlanningUserId = process.env.PLANNING_USER_ID;
+const originalOpsAuditPath = process.env.PLANNING_OPS_AUDIT_PATH;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+const BACKUP_PREVIEW_SESSION_COOKIE = "planning_backup_preview_session";
+
+let backupPreviewSessionCookie = "";
 
 function profileFixture() {
   return {
@@ -48,11 +63,12 @@ function profileFixture() {
   };
 }
 
-async function createRunFixture(id: string, title = "backup run"): Promise<void> {
+async function createRunFixture(id: string, title = "backup run", options?: { createdAt?: string }): Promise<void> {
   await createRun({
     id,
     profileId: "backup_profile",
     title,
+    ...(options?.createdAt ? { createdAt: options.createdAt } : {}),
     input: {
       horizonMonths: 12,
     },
@@ -101,8 +117,8 @@ async function createLargeRunFixture(id: string, sizeBytes: number): Promise<voi
   }, { enforceRetention: false, storeRawOutputs: true });
 }
 
-function buildCookie(csrf = "csrf-token"): string {
-  return `planning_vault_csrf=${csrf}`;
+function buildCookie(csrf = "csrf-token", backupSessionCookie = backupPreviewSessionCookie): string {
+  return [`planning_vault_csrf=${csrf}`, backupSessionCookie].filter(Boolean).join("; ");
 }
 
 function localHeaders(csrf = "csrf-token", host = LOCAL_HOST, extra?: HeadersInit): HeadersInit {
@@ -116,8 +132,128 @@ function localHeaders(csrf = "csrf-token", host = LOCAL_HOST, extra?: HeadersIni
   };
 }
 
+function captureBackupPreviewSessionCookie(response: Response): void {
+  const setCookie = response.headers.get("set-cookie") ?? "";
+  const sessionMatch = new RegExp(`${BACKUP_PREVIEW_SESSION_COOKIE}=([^;,]+)`, "u").exec(setCookie);
+  backupPreviewSessionCookie = sessionMatch ? `${BACKUP_PREVIEW_SESSION_COOKIE}=${sessionMatch[1]}` : backupPreviewSessionCookie;
+}
+
 function hashSha256(bytes: Buffer): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
+}
+
+function previewReceiptStorePath(): string {
+  return path.join(env.PLANNING_DATA_DIR as string, "ops", "backup", "preview-receipts.json");
+}
+
+function expectNoRawBackupErrorMessage(message: string | undefined): void {
+  expect(message).toBe(
+    "선택한 파일은 이 앱에서 만든 암호화 백업 파일이 아니거나 파일이 손상되었습니다. 다시 내보낸 백업 파일을 선택해 주세요.",
+  );
+  expect(message).not.toMatch(/INVALID_|MANIFEST_|ZIP_|ENCRYPTED_PACKAGE_/u);
+}
+
+async function previewTokenForEncryptedBackup(
+  encrypted: Uint8Array | Buffer,
+  fileName = "restore.enc.json",
+  options?: { csrf?: string; passphrase?: string },
+): Promise<string> {
+  const csrf = options?.csrf ?? "csrf-token";
+  const passphrase = options?.passphrase ?? "backup-passphrase";
+  const form = new FormData();
+  form.set("csrf", csrf);
+  form.set("passphrase", passphrase);
+  form.set("file", new File([new Uint8Array(encrypted)], fileName, { type: "application/json" }));
+
+  const response = await backupPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/preview`, {
+    method: "POST",
+    headers: localHeaders(csrf),
+    body: form,
+  }));
+  const payload = await response.json() as { ok?: boolean; previewToken?: string };
+  expect(response.status).toBe(200);
+  expect(payload.ok).toBe(true);
+  expect(payload.previewToken).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u);
+  captureBackupPreviewSessionCookie(response);
+  return payload.previewToken ?? "";
+}
+
+async function keepOnlyJournalTransactionsForRun(runId: string): Promise<number> {
+  const journalPath = env.PLANNING_STORAGE_JOURNAL_PATH as string;
+  const raw = await fs.promises.readFile(journalPath, "utf-8");
+  const lines = raw.split(/\r?\n/u).filter((line) => line.trim().length > 0);
+  const parsed = lines.map((line) => JSON.parse(line) as { txId?: unknown; payload?: { runId?: unknown } });
+  const targetTxIds = new Set(parsed
+    .filter((event) => event.payload?.runId === runId)
+    .map((event) => typeof event.txId === "string" ? event.txId : "")
+    .filter((txId) => txId.length > 0));
+  const kept = lines.filter((line, index) => {
+    const txId = parsed[index]?.txId;
+    return typeof txId === "string" && targetTxIds.has(txId);
+  });
+  expect(kept.length).toBeGreaterThan(0);
+  await fs.promises.writeFile(journalPath, `${kept.join("\n")}\n`, "utf-8");
+  return kept.length;
+}
+
+async function appendRunCreateJournalTransaction(
+  runId: string,
+  outcome: "COMMIT" | "ROLLBACK",
+  at: string,
+): Promise<void> {
+  const journalPath = env.PLANNING_STORAGE_JOURNAL_PATH as string;
+  const txId = `tx_test_${runId}_${outcome.toLowerCase()}`;
+  const lines = [
+    {
+      version: 1,
+      event: "BEGIN",
+      txId,
+      kind: "RUN_CREATE",
+      at,
+      payload: { runId },
+    },
+    {
+      version: 1,
+      event: "STEP",
+      txId,
+      kind: "RUN_CREATE",
+      at,
+      step: "WRITE_META",
+      payload: { runId },
+    },
+    {
+      version: 1,
+      event: outcome,
+      txId,
+      kind: "RUN_CREATE",
+      at,
+      note: "test transaction boundary",
+    },
+  ].map((event) => JSON.stringify(event));
+  await fs.promises.appendFile(journalPath, `${lines.join("\n")}\n`, "utf-8");
+}
+
+async function withBlockedReceiptStoreDir<T>(fn: () => Promise<T>): Promise<T> {
+  const blockerPath = path.join(env.PLANNING_DATA_DIR as string, "ops", "backup");
+  await fs.promises.rm(blockerPath, { recursive: true, force: true });
+  await fs.promises.mkdir(path.dirname(blockerPath), { recursive: true });
+  await fs.promises.writeFile(blockerPath, "not-a-directory", "utf-8");
+  try {
+    return await fn();
+  } finally {
+    await fs.promises.rm(blockerPath, { recursive: true, force: true });
+  }
+}
+
+async function withMalformedReceiptLock<T>(fn: () => Promise<T>): Promise<T> {
+  const lockPath = `${previewReceiptStorePath()}.lock`;
+  await fs.promises.mkdir(path.dirname(lockPath), { recursive: true });
+  await fs.promises.writeFile(lockPath, "{ broken-lock", "utf-8");
+  try {
+    return await fn();
+  } finally {
+    await fs.promises.rm(lockPath, { force: true });
+  }
 }
 
 function makeRestoreZip(): Buffer {
@@ -309,6 +445,7 @@ describe.sequential("ops backup API", () => {
 
   beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-ops-backup-api-"));
+    backupPreviewSessionCookie = "";
     env.NODE_ENV = "test";
     env.PLANNING_PROFILES_DIR = path.join(root, "profiles");
     env.PLANNING_RUNS_DIR = path.join(root, "runs");
@@ -318,7 +455,14 @@ describe.sequential("ops backup API", () => {
     env.PLANNING_PROFILE_META_PATH = path.join(root, "vault", "profiles.meta.json");
     env.PLANNING_BACKUP_SYNC_STATE_PATH = path.join(root, "ops", "backup", "sync-state.json");
     env.PLANNING_STORAGE_JOURNAL_PATH = path.join(root, "storage", "journal.ndjson");
+    env.PLANNING_DATA_DIR = path.join(root, "planning-data");
+    env.PLANNING_AUTH_REQUIRED = "0";
+    delete env.PLANNING_TRUST_AUTH_HEADERS;
+    delete env.PLANNING_NAMESPACE_ENABLED;
+    delete env.PLANNING_USER_ID;
+    env.PLANNING_OPS_AUDIT_PATH = path.join(root, "ops", "audit", "events.ndjson");
     await resetVaultRuntimeForTests();
+    await resetBackupPreviewTokensForTests();
 
     await createProfile({
       name: "backup profile",
@@ -385,6 +529,9 @@ describe.sequential("ops backup API", () => {
   });
 
   afterEach(async () => {
+    await resetVaultRuntimeForTests();
+    await resetBackupPreviewTokensForTests();
+    backupPreviewSessionCookie = "";
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
     if (typeof originalProfilesDir === "string") env.PLANNING_PROFILES_DIR = originalProfilesDir;
@@ -403,7 +550,18 @@ describe.sequential("ops backup API", () => {
     else delete env.PLANNING_BACKUP_SYNC_STATE_PATH;
     if (typeof originalStorageJournalPath === "string") env.PLANNING_STORAGE_JOURNAL_PATH = originalStorageJournalPath;
     else delete env.PLANNING_STORAGE_JOURNAL_PATH;
-    await resetVaultRuntimeForTests();
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
+    if (typeof originalPlanningAuthRequired === "string") env.PLANNING_AUTH_REQUIRED = originalPlanningAuthRequired;
+    else delete env.PLANNING_AUTH_REQUIRED;
+    if (typeof originalPlanningTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
+    else delete env.PLANNING_TRUST_AUTH_HEADERS;
+    if (typeof originalPlanningNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalPlanningNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+    if (typeof originalPlanningUserId === "string") env.PLANNING_USER_ID = originalPlanningUserId;
+    else delete env.PLANNING_USER_ID;
+    if (typeof originalOpsAuditPath === "string") env.PLANNING_OPS_AUDIT_PATH = originalOpsAuditPath;
+    else delete env.PLANNING_OPS_AUDIT_PATH;
     fs.rmSync(root, { recursive: true, force: true });
   });
 
@@ -437,6 +595,62 @@ describe.sequential("ops backup API", () => {
     const merged = Buffer.concat([...entries.values()]).toString("utf-8");
     expect(merged.includes("ECOS_API_KEY=")).toBe(false);
     expect(merged.includes("GITHUB_TOKEN=")).toBe(false);
+  });
+
+  it("runs backup ops routes inside the current planning user scope for audit meta", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    const authHeaders = { "x-planning-user-id": "alice" };
+
+    const exportResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders("csrf-token", LOCAL_HOST, authHeaders),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+      }),
+    }));
+    expect(exportResponse.status).toBe(200);
+    await exportResponse.arrayBuffer();
+
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewForm = new FormData();
+    previewForm.set("csrf", "csrf-token");
+    previewForm.set("passphrase", "backup-passphrase");
+    previewForm.set("file", new File([new Uint8Array(encrypted)], "scoped.enc.json", { type: "application/json" }));
+    const previewResponse = await backupPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/preview`, {
+      method: "POST",
+      headers: localHeaders("csrf-token", LOCAL_HOST, authHeaders),
+      body: previewForm,
+    }));
+    expect(previewResponse.status).toBe(200);
+    captureBackupPreviewSessionCookie(previewResponse);
+    const previewPayload = await previewResponse.json() as { previewToken?: string };
+    expect(typeof previewPayload.previewToken).toBe("string");
+
+    const restoreForm = new FormData();
+    restoreForm.set("csrf", "csrf-token");
+    restoreForm.set("passphrase", "backup-passphrase");
+    restoreForm.set("mode", "merge");
+    restoreForm.set("previewToken", previewPayload.previewToken ?? "");
+    restoreForm.set("file", new File([new Uint8Array(encrypted)], "scoped.enc.json", { type: "application/json" }));
+    const restoreResponse = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders("csrf-token", LOCAL_HOST, authHeaders),
+      body: restoreForm,
+    }));
+    expect(restoreResponse.status).toBe(200);
+
+    const rows = await listOpsAuditEvents({ limit: 20 });
+    for (const eventType of ["OPS_BACKUP_EXPORT_SUCCESS", "OPS_BACKUP_PREVIEW_SUCCESS", "OPS_BACKUP_RESTORE_SUCCESS"]) {
+      const row = rows.find((entry) => entry.eventType === eventType);
+      expect(row?.meta).toMatchObject({
+        planningNamespaceEnabled: true,
+        planningUserId: "alice",
+        authSource: "trusted-header",
+      });
+    }
   });
 
   it("supports streamed+gzipped export for large synthetic blobs", async () => {
@@ -495,20 +709,373 @@ describe.sequential("ops backup API", () => {
     expect(heapAfter - heapBefore).toBeLessThan(256 * 1024 * 1024);
   }, 20_000);
 
-  it("rejects preview for invalid encrypted backup", async () => {
+  it("warns during preview when a restore entry cannot be parsed safely", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
     const form = new FormData();
     form.set("csrf", "csrf-token");
     form.set("passphrase", "backup-passphrase");
-    form.set("file", new File([new Uint8Array(Buffer.from("not-a-zip", "utf-8"))], "broken.enc.json", { type: "application/json" }));
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
 
     const response = await backupPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/preview`, {
       method: "POST",
       headers: localHeaders(),
       body: form,
     }));
-    const payload = await response.json() as { error?: { code?: string; fixHref?: string } };
+    const payload = await response.json() as {
+      ok?: boolean;
+      previewToken?: string;
+      data?: { warnings?: string[] };
+    };
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.previewToken).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u);
+    expect(payload.data?.warnings ?? []).toContain(
+      "미리보기에서 복원 파일 형식을 확인하지 못했습니다: profiles/broken-profile.json",
+    );
+    expect((payload.data?.warnings ?? []).join("\n")).not.toMatch(/Unexpected|INVALID_|restore failed|JSON/u);
+  });
+
+  it("persists preview receipts in the planning data directory", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewToken = await previewTokenForEncryptedBackup(encrypted);
+
+    expect(previewToken).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u);
+    const storePath = previewReceiptStorePath();
+    const rawStore = await fs.promises.readFile(storePath, "utf-8");
+    const store = JSON.parse(rawStore) as {
+      hmacSecret?: unknown;
+      receipts?: Record<string, unknown>;
+      version?: unknown;
+    };
+    expect(store.version).toBe(1);
+    expect(typeof store.hmacSecret).toBe("string");
+    expect(Object.keys(store.receipts ?? {})).toHaveLength(1);
+  });
+
+  it("returns preview guidance instead of crashing when the preview receipt store is corrupted", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewToken = await previewTokenForEncryptedBackup(encrypted);
+    const storePath = previewReceiptStorePath();
+    await fs.promises.writeFile(storePath, "{ broken-json", "utf-8");
+
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set("previewToken", previewToken);
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    }));
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(response.status).toBe(428);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.message).toBe("복원 전 미리보기 확인을 먼저 완료해 주세요.");
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("returns storage guidance when preview receipts cannot be saved", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await withBlockedReceiptStoreDir(() => backupPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/preview`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    })));
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(response.status).toBe(503);
+    expect(payload.error?.code).toBe("BACKUP_RECEIPT_STORE_UNAVAILABLE");
+    expect(payload.error?.message).toBe("미리보기 확인 저장소를 사용할 수 없습니다. 잠시 후 다시 시도하고, 반복되면 운영 데이터 디렉터리 권한과 잠금 파일 상태를 확인해 주세요.");
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("returns storage guidance without deleting a malformed preview receipt lock", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await withMalformedReceiptLock(async () => {
+      const previewResponse = await backupPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/preview`, {
+        method: "POST",
+        headers: localHeaders(),
+        body: form,
+      }));
+      await expect(fs.promises.readFile(`${previewReceiptStorePath()}.lock`, "utf-8")).resolves.toBe("{ broken-lock");
+      return previewResponse;
+    });
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(response.status).toBe(503);
+    expect(payload.error?.code).toBe("BACKUP_RECEIPT_STORE_UNAVAILABLE");
+    expect(payload.error?.message).toBe("미리보기 확인 저장소를 사용할 수 없습니다. 잠시 후 다시 시도하고, 반복되면 운영 데이터 디렉터리 권한과 잠금 파일 상태를 확인해 주세요.");
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("returns storage guidance when preview receipts cannot be checked before restore", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewToken = await previewTokenForEncryptedBackup(encrypted);
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set("previewToken", previewToken);
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await withBlockedReceiptStoreDir(() => backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    })));
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(response.status).toBe(503);
+    expect(payload.error?.code).toBe("BACKUP_RECEIPT_STORE_UNAVAILABLE");
+    expect(payload.error?.message).toBe("미리보기 확인 저장소를 사용할 수 없습니다. 잠시 후 다시 시도하고, 반복되면 운영 데이터 디렉터리 권한과 잠금 파일 상태를 확인해 주세요.");
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("rejects preview for invalid encrypted backup", async () => {
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set(
+      "file",
+      new File([new Uint8Array(Buffer.from("not-a-zip", "utf-8"))], "broken.enc.json", { type: "application/json" }),
+    );
+
+    const response = await backupPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/preview`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    }));
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
     expect(response.status).toBe(400);
     expect(payload.error?.code).toBe("BACKUP_INVALID");
+    expectNoRawBackupErrorMessage(payload.error?.message);
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("requires preview before inspecting a restore archive", async () => {
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set(
+      "file",
+      new File([new Uint8Array(Buffer.from("not-a-zip", "utf-8"))], "broken.enc.json", { type: "application/json" }),
+    );
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    }));
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(response.status).toBe(428);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.message).toBe("복원 전 미리보기 확인을 먼저 완료해 주세요.");
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("requires a successful preview token before restoring a valid backup", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    }));
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(response.status).toBe(428);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.message).toBe("복원 전 미리보기 확인을 먼저 완료해 주세요.");
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("keeps the preview token usable after a different backup file mismatch", async () => {
+    const firstEncrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const secondEncrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewToken = await previewTokenForEncryptedBackup(firstEncrypted, "first.enc.json");
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set("previewToken", previewToken);
+    form.set("file", new File([new Uint8Array(secondEncrypted)], "second.enc.json", { type: "application/json" }));
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    }));
+    const payload = await response.json() as {
+      error?: { code?: string; details?: { retryPreviewToken?: boolean }; message?: string; fixHref?: string };
+    };
+    expect(response.status).toBe(428);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.message).toBe("미리보기 확인과 현재 파일 또는 암호가 일치하지 않습니다. 선택한 파일과 암호를 확인한 뒤 다시 복원해 주세요.");
+    expect(payload.error?.details?.retryPreviewToken).toBe(true);
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+
+    const retryForm = new FormData();
+    retryForm.set("csrf", "csrf-token");
+    retryForm.set("passphrase", "backup-passphrase");
+    retryForm.set("mode", "merge");
+    retryForm.set("previewToken", previewToken);
+    retryForm.set("file", new File([new Uint8Array(firstEncrypted)], "first.enc.json", { type: "application/json" }));
+
+    const retryResponse = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: retryForm,
+    }));
+    const retryPayload = await retryResponse.json() as { ok?: boolean };
+    expect(retryResponse.status).toBe(200);
+    expect(retryPayload.ok).toBe(true);
+  });
+
+  it("restores after the csrf token changes when the preview session is unchanged", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewToken = await previewTokenForEncryptedBackup(encrypted, "restore.enc.json", { csrf: "preview-csrf" });
+    expect(backupPreviewSessionCookie).toContain(`${BACKUP_PREVIEW_SESSION_COOKIE}=`);
+
+    const form = new FormData();
+    form.set("csrf", "fresh-csrf");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set("previewToken", previewToken);
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders("fresh-csrf"),
+      body: form,
+    }));
+    const payload = await response.json() as { ok?: boolean };
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+  });
+
+  it("keeps the preview token usable for the original browser session after a different session mismatch", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewToken = await previewTokenForEncryptedBackup(encrypted, "restore.enc.json", { csrf: "preview-session" });
+    const originalBackupPreviewSessionCookie = backupPreviewSessionCookie;
+    backupPreviewSessionCookie = `${BACKUP_PREVIEW_SESSION_COOKIE}=other-browser-session`;
+    const form = new FormData();
+    form.set("csrf", "restore-session");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set("previewToken", previewToken);
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders("restore-session"),
+      body: form,
+    }));
+    const payload = await response.json() as {
+      error?: { code?: string; details?: { retryPreviewToken?: boolean }; message?: string; fixHref?: string };
+    };
+    expect(response.status).toBe(428);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.message).toBe("현재 브라우저의 미리보기 확인 정보가 일치하지 않습니다. 다시 미리보기 확인 후 복원해 주세요.");
+    expect(payload.error?.details?.retryPreviewToken).toBeUndefined();
+    expect(payload.error?.fixHref).toBe("/ops/backup");
+
+    backupPreviewSessionCookie = originalBackupPreviewSessionCookie;
+    const retryForm = new FormData();
+    retryForm.set("csrf", "preview-session");
+    retryForm.set("passphrase", "backup-passphrase");
+    retryForm.set("mode", "merge");
+    retryForm.set("previewToken", previewToken);
+    retryForm.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const retryResponse = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders("preview-session"),
+      body: retryForm,
+    }));
+    const retryPayload = await retryResponse.json() as { ok?: boolean };
+    expect(retryResponse.status).toBe(200);
+    expect(retryPayload.ok).toBe(true);
+  });
+
+  it("rejects reusing a consumed preview token", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    const previewToken = await previewTokenForEncryptedBackup(encrypted);
+
+    const firstForm = new FormData();
+    firstForm.set("csrf", "csrf-token");
+    firstForm.set("passphrase", "backup-passphrase");
+    firstForm.set("mode", "merge");
+    firstForm.set("previewToken", previewToken);
+    firstForm.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const firstResponse = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: firstForm,
+    }));
+    const firstPayload = await firstResponse.json() as { ok?: boolean };
+    expect(firstResponse.status).toBe(200);
+    expect(firstPayload.ok).toBe(true);
+
+    const secondForm = new FormData();
+    secondForm.set("csrf", "csrf-token");
+    secondForm.set("passphrase", "backup-passphrase");
+    secondForm.set("mode", "merge");
+    secondForm.set("previewToken", previewToken);
+    secondForm.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const secondResponse = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: secondForm,
+    }));
+    const secondPayload = await secondResponse.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(secondResponse.status).toBe(428);
+    expect(secondPayload.error?.code).toBe("VALIDATION");
+    expect(secondPayload.error?.message).toBe("복원 전 미리보기 확인을 먼저 완료해 주세요.");
+    expect(secondPayload.error?.fixHref).toBe("/ops/backup");
+  });
+
+  it("returns clear guidance when the preview token expired before restore", async () => {
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+    backupPreviewSessionCookie = `${BACKUP_PREVIEW_SESSION_COOKIE}=expired-preview-session`;
+    const previewToken = await createBackupPreviewToken({
+      archiveBytes: encrypted,
+      nowMs: Date.now() - __BACKUP_PREVIEW_TOKEN_TTL_MS_FOR_TESTS,
+      passphrase: "backup-passphrase",
+      sessionToken: "expired-preview-session",
+    });
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "merge");
+    form.set("previewToken", previewToken);
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    }));
+    const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
+    expect(response.status).toBe(428);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.message).toBe("미리보기 확인이 만료되었습니다. 다시 미리보기 확인 후 복원해 주세요.");
     expect(payload.error?.fixHref).toBe("/ops/backup");
   });
 
@@ -530,6 +1097,7 @@ describe.sequential("ops backup API", () => {
     const payload = await response.json() as { error?: { code?: string; message?: string; fixHref?: string } };
     expect(response.status).toBe(423);
     expect(payload.error?.code).toBe("LOCKED");
+    expect(payload.error?.message).toBe("운영 보안 잠금을 해제한 뒤 다시 시도해 주세요.");
     expect(payload.error?.fixHref).toBe("/ops/security");
   });
 
@@ -545,6 +1113,7 @@ describe.sequential("ops backup API", () => {
     form.set("csrf", "csrf-token");
     form.set("passphrase", "backup-passphrase");
     form.set("mode", "merge");
+    form.set("previewToken", await previewTokenForEncryptedBackup(encrypted));
     form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
 
     const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
@@ -556,14 +1125,17 @@ describe.sequential("ops backup API", () => {
       ok?: boolean;
       data?: {
         imported?: { profiles?: number };
-        issues?: Array<{ entity?: string; path?: string }>;
+        issues?: Array<{ entity?: string; message?: string; path?: string }>;
       };
     };
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect((payload.data?.imported?.profiles ?? 0)).toBeGreaterThanOrEqual(1);
     expect((payload.data?.issues ?? []).length).toBeGreaterThanOrEqual(1);
-    expect((payload.data?.issues ?? []).some((issue) => issue.entity === "profile" && issue.path?.includes("broken-profile.json"))).toBe(true);
+    const brokenProfileIssue = (payload.data?.issues ?? [])
+      .find((issue) => issue.entity === "profile" && issue.path?.includes("broken-profile.json"));
+    expect(brokenProfileIssue?.message).toBe("상담 정보 파일을 복원하지 못했습니다. 백업 파일이 손상되었거나 지원하지 않는 형식입니다.");
+    expect(brokenProfileIssue?.message).not.toMatch(/Unexpected|INVALID_|restore failed|JSON/u);
 
     const profiles = await listProfiles();
     expect(profiles.some((profile) => profile.id === "imported-profile")).toBe(true);
@@ -578,6 +1150,7 @@ describe.sequential("ops backup API", () => {
     form.set("csrf", "csrf-token");
     form.set("passphrase", "backup-passphrase");
     form.set("mode", "merge");
+    form.set("previewToken", await previewTokenForEncryptedBackup(encrypted));
     form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
 
     const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
@@ -622,11 +1195,33 @@ describe.sequential("ops backup API", () => {
 
     const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
     const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
-    const firstState = JSON.parse(firstStateRaw) as { lastExportAt?: string; lastJournalOffset?: number };
+    const firstState = JSON.parse(firstStateRaw) as {
+      lastExportAt?: string;
+      lastJournalOffset?: number;
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+    };
     expect(typeof firstState.lastExportAt).toBe("string");
     expect(typeof firstState.lastJournalOffset).toBe("number");
+    expect(firstState.lastJournalBoundary?.offset).toBe(firstState.lastJournalOffset);
+    expect(firstState.lastJournalBoundary?.tailHash).toMatch(/^[a-f0-9]{64}$/u);
+    const firstExportAt = firstState.lastExportAt;
+    if (typeof firstExportAt !== "string") {
+      throw new Error("first delta export timestamp missing");
+    }
 
-    await createRunFixture("backup-run-2", "delta run");
+    await createRunFixture("backup-run-2", "delta run", {
+      createdAt: firstExportAt,
+    });
+    const cutoffDate = new Date(firstExportAt);
+    expect(Number.isFinite(cutoffDate.getTime())).toBe(true);
+    await fs.promises.utimes(
+      path.join(resolveProfileRunDir("backup_profile", "backup-run-2"), "run.json"),
+      cutoffDate,
+      cutoffDate,
+    );
 
     const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
@@ -651,15 +1246,601 @@ describe.sequential("ops backup API", () => {
     const manifest = JSON.parse((entries.get("manifest.json") ?? Buffer.from("{}")).toString("utf-8")) as {
       mode?: string;
       counts?: { runs?: number };
+      syncState?: {
+        previousJournalOffset?: number;
+        previousJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        currentJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        journalScan?: {
+          mode?: string;
+          startOffset?: number;
+          fallbackReason?: string;
+        };
+      };
     };
     expect(manifest.mode).toBe("delta");
     expect(manifest.counts?.runs).toBe(1);
+    expect(manifest.syncState?.previousJournalOffset).toBe(firstState.lastJournalOffset);
+    expect(manifest.syncState?.previousJournalBoundary).toEqual(firstState.lastJournalBoundary);
+    expect(manifest.syncState?.currentJournalBoundary?.offset).toBeGreaterThan(firstState.lastJournalOffset ?? 0);
+    expect(manifest.syncState?.currentJournalBoundary?.tailHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(manifest.syncState?.journalScan).toEqual({
+      mode: "offset",
+      startOffset: firstState.lastJournalOffset,
+    });
 
     const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
-    const secondState = JSON.parse(secondStateRaw) as { lastExportAt?: string; lastJournalOffset?: number };
+    const secondState = JSON.parse(secondStateRaw) as {
+      lastExportAt?: string;
+      lastJournalOffset?: number;
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+      lastJournalScan?: {
+        mode?: string;
+        startOffset?: number;
+        fallbackReason?: string;
+      };
+    };
     expect(typeof secondState.lastExportAt).toBe("string");
     expect((secondState.lastJournalOffset ?? 0)).toBeGreaterThanOrEqual(firstState.lastJournalOffset ?? 0);
+    expect(secondState.lastJournalBoundary?.offset).toBe(secondState.lastJournalOffset);
+    expect(secondState.lastJournalBoundary?.tailHash).toMatch(/^[a-f0-9]{64}$/u);
     expect(Date.parse(secondState.lastExportAt ?? "") >= Date.parse(firstState.lastExportAt ?? "")).toBe(true);
+    expect(secondState.lastJournalScan).toEqual({
+      mode: "offset",
+      startOffset: firstState.lastJournalOffset,
+    });
+  });
+
+  it("does not export unchanged run from rolled back run-create journal transaction", async () => {
+    const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(fullResponse.status).toBe(200);
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const firstState = JSON.parse(firstStateRaw) as {
+      lastExportAt?: string;
+      lastJournalOffset?: number;
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+    };
+    const firstExportAt = firstState.lastExportAt;
+    if (typeof firstExportAt !== "string") {
+      throw new Error("first delta export timestamp missing");
+    }
+    const cutoffDate = new Date(firstExportAt);
+    expect(Number.isFinite(cutoffDate.getTime())).toBe(true);
+    await fs.promises.utimes(
+      path.join(resolveProfileRunDir("backup_profile", "backup-run-1"), "run.json"),
+      cutoffDate,
+      cutoffDate,
+    );
+    await fs.promises.utimes(
+      path.join(resolveRunDir("backup-run-1"), "action-plan.json"),
+      cutoffDate,
+      cutoffDate,
+    );
+    await fs.promises.utimes(
+      path.join(resolveRunDir("backup-run-1"), "action-progress.json"),
+      cutoffDate,
+      cutoffDate,
+    );
+    await appendRunCreateJournalTransaction(
+      "backup-run-1",
+      "ROLLBACK",
+      new Date(cutoffDate.getTime() + 1_000).toISOString(),
+    );
+
+    const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "delta",
+      }),
+    }));
+    expect(deltaResponse.status).toBe(200);
+
+    const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
+    const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
+    const entries = await decodeZip(zipBytes, {
+      maxEntries: 5000,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    const runPaths = [...entries.keys()].filter((entry) => /^runs\/[^/]+\/run\.json$/u.test(entry));
+    expect(runPaths).not.toContain("runs/backup-run-1/run.json");
+
+    const manifest = JSON.parse((entries.get("manifest.json") ?? Buffer.from("{}")).toString("utf-8")) as {
+      counts?: { runs?: number };
+      syncState?: {
+        previousJournalOffset?: number;
+        previousJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        currentJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        journalScan?: {
+          mode?: string;
+          startOffset?: number;
+          fallbackReason?: string;
+        };
+      };
+    };
+    expect(manifest.counts?.runs).toBe(0);
+    expect(manifest.syncState?.previousJournalOffset).toBe(firstState.lastJournalOffset);
+    expect(manifest.syncState?.previousJournalBoundary).toEqual(firstState.lastJournalBoundary);
+    expect(manifest.syncState?.currentJournalBoundary?.offset).toBe((firstState.lastJournalOffset ?? 0) + 3);
+    expect(manifest.syncState?.journalScan).toEqual({
+      mode: "offset",
+      startOffset: firstState.lastJournalOffset,
+    });
+  });
+
+  it("exports delta run when previous journal offset is stale after compaction", async () => {
+    const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(fullResponse.status).toBe(200);
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const firstState = JSON.parse(firstStateRaw) as {
+      lastExportAt?: string;
+      lastJournalOffset?: number;
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+    };
+    const firstExportAt = firstState.lastExportAt;
+    if (typeof firstExportAt !== "string") {
+      throw new Error("first delta export timestamp missing");
+    }
+
+    await createRunFixture("backup-run-compact", "delta run after compacted journal", {
+      createdAt: firstExportAt,
+    });
+    const cutoffDate = new Date(firstExportAt);
+    expect(Number.isFinite(cutoffDate.getTime())).toBe(true);
+    await fs.promises.utimes(
+      path.join(resolveProfileRunDir("backup_profile", "backup-run-compact"), "run.json"),
+      cutoffDate,
+      cutoffDate,
+    );
+    await keepOnlyJournalTransactionsForRun("backup-run-compact");
+    await fs.promises.writeFile(
+      syncStatePath,
+      `${JSON.stringify({
+        ...firstState,
+        lastJournalOffset: 999_999,
+      }, null, 2)}\n`,
+      "utf-8",
+    );
+
+    const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "delta",
+      }),
+    }));
+    expect(deltaResponse.status).toBe(200);
+
+    const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
+    const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
+    const entries = await decodeZip(zipBytes, {
+      maxEntries: 5000,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    const runPaths = [...entries.keys()].filter((entry) => /^runs\/[^/]+\/run\.json$/u.test(entry));
+    expect(runPaths).toContain("runs/backup-run-compact/run.json");
+
+    const manifest = JSON.parse((entries.get("manifest.json") ?? Buffer.from("{}")).toString("utf-8")) as {
+      syncState?: {
+        previousJournalOffset?: number;
+        previousJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        currentJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        journalScan?: {
+          mode?: string;
+          startOffset?: number;
+          fallbackReason?: string;
+        };
+      };
+    };
+    expect(manifest.syncState?.previousJournalOffset).toBe(999_999);
+    expect(manifest.syncState?.previousJournalBoundary).toEqual(firstState.lastJournalBoundary);
+    expect(manifest.syncState?.currentJournalBoundary?.offset).toBeGreaterThan(0);
+    expect(manifest.syncState?.currentJournalBoundary?.tailHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(manifest.syncState?.journalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-offset-out-of-range",
+    });
+
+    const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const secondState = JSON.parse(secondStateRaw) as {
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+      lastJournalScan?: {
+        mode?: string;
+        startOffset?: number;
+        fallbackReason?: string;
+      };
+    };
+    expect(secondState.lastJournalBoundary).toEqual(manifest.syncState?.currentJournalBoundary);
+    expect(secondState.lastJournalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-offset-out-of-range",
+    });
+  });
+
+  it("exports delta run when previous sync state lacks a journal boundary", async () => {
+    const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(fullResponse.status).toBe(200);
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const firstState = JSON.parse(firstStateRaw) as {
+      lastExportAt?: string;
+    };
+    const firstExportAt = firstState.lastExportAt;
+    if (typeof firstExportAt !== "string") {
+      throw new Error("first delta export timestamp missing");
+    }
+
+    await createRunFixture("backup-run-legacy-boundary", "delta run after legacy sync state", {
+      createdAt: firstExportAt,
+    });
+    const cutoffDate = new Date(firstExportAt);
+    expect(Number.isFinite(cutoffDate.getTime())).toBe(true);
+    await fs.promises.utimes(
+      path.join(resolveProfileRunDir("backup_profile", "backup-run-legacy-boundary"), "run.json"),
+      cutoffDate,
+      cutoffDate,
+    );
+    const retainedEventCount = await keepOnlyJournalTransactionsForRun("backup-run-legacy-boundary");
+    const legacyState = JSON.parse(firstStateRaw) as Record<string, unknown>;
+    delete legacyState.lastJournalBoundary;
+    delete legacyState.lastJournalScan;
+    legacyState.lastJournalOffset = retainedEventCount;
+    await fs.promises.writeFile(
+      syncStatePath,
+      `${JSON.stringify(legacyState, null, 2)}\n`,
+      "utf-8",
+    );
+
+    const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "delta",
+      }),
+    }));
+    expect(deltaResponse.status).toBe(200);
+
+    const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
+    const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
+    const entries = await decodeZip(zipBytes, {
+      maxEntries: 5000,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    const runPaths = [...entries.keys()].filter((entry) => /^runs\/[^/]+\/run\.json$/u.test(entry));
+    expect(runPaths).toContain("runs/backup-run-legacy-boundary/run.json");
+
+    const manifest = JSON.parse((entries.get("manifest.json") ?? Buffer.from("{}")).toString("utf-8")) as {
+      syncState?: {
+        previousJournalOffset?: number;
+        previousJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        journalScan?: {
+          mode?: string;
+          startOffset?: number;
+          fallbackReason?: string;
+        };
+      };
+    };
+    expect(manifest.syncState?.previousJournalOffset).toBe(retainedEventCount);
+    expect(manifest.syncState?.previousJournalBoundary).toBeUndefined();
+    expect(manifest.syncState?.journalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-boundary-missing",
+    });
+
+    const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const secondState = JSON.parse(secondStateRaw) as {
+      lastJournalScan?: {
+        mode?: string;
+        startOffset?: number;
+        fallbackReason?: string;
+      };
+    };
+    expect(secondState.lastJournalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-boundary-missing",
+    });
+  });
+
+  it("exports delta run when previous journal boundary offset no longer matches sync offset", async () => {
+    const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(fullResponse.status).toBe(200);
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const firstState = JSON.parse(firstStateRaw) as {
+      lastExportAt?: string;
+      lastJournalOffset?: number;
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+    };
+    const firstExportAt = firstState.lastExportAt;
+    if (typeof firstExportAt !== "string") {
+      throw new Error("first delta export timestamp missing");
+    }
+
+    await createRunFixture("backup-run-boundary-mismatch", "delta run after boundary offset mismatch", {
+      createdAt: firstExportAt,
+    });
+    const cutoffDate = new Date(firstExportAt);
+    expect(Number.isFinite(cutoffDate.getTime())).toBe(true);
+    await fs.promises.utimes(
+      path.join(resolveProfileRunDir("backup_profile", "backup-run-boundary-mismatch"), "run.json"),
+      cutoffDate,
+      cutoffDate,
+    );
+    const retainedEventCount = await keepOnlyJournalTransactionsForRun("backup-run-boundary-mismatch");
+    const staleBoundary = {
+      offset: retainedEventCount + 1,
+      tailHash: "1".repeat(64),
+    };
+    await fs.promises.writeFile(
+      syncStatePath,
+      `${JSON.stringify({
+        ...firstState,
+        lastJournalOffset: retainedEventCount,
+        lastJournalBoundary: staleBoundary,
+      }, null, 2)}\n`,
+      "utf-8",
+    );
+
+    const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "delta",
+      }),
+    }));
+    expect(deltaResponse.status).toBe(200);
+
+    const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
+    const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
+    const entries = await decodeZip(zipBytes, {
+      maxEntries: 5000,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    const runPaths = [...entries.keys()].filter((entry) => /^runs\/[^/]+\/run\.json$/u.test(entry));
+    expect(runPaths).toContain("runs/backup-run-boundary-mismatch/run.json");
+
+    const manifest = JSON.parse((entries.get("manifest.json") ?? Buffer.from("{}")).toString("utf-8")) as {
+      syncState?: {
+        previousJournalOffset?: number;
+        previousJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        journalScan?: {
+          mode?: string;
+          startOffset?: number;
+          fallbackReason?: string;
+        };
+      };
+    };
+    expect(manifest.syncState?.previousJournalOffset).toBe(retainedEventCount);
+    expect(manifest.syncState?.previousJournalBoundary).toEqual(staleBoundary);
+    expect(manifest.syncState?.journalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-boundary-mismatch",
+    });
+
+    const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const secondState = JSON.parse(secondStateRaw) as {
+      lastJournalScan?: {
+        mode?: string;
+        startOffset?: number;
+        fallbackReason?: string;
+      };
+    };
+    expect(secondState.lastJournalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-boundary-mismatch",
+    });
+  });
+
+  it("exports delta run when retained journal tail no longer matches previous boundary", async () => {
+    const fullResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "full",
+      }),
+    }));
+    expect(fullResponse.status).toBe(200);
+
+    const syncStatePath = env.PLANNING_BACKUP_SYNC_STATE_PATH as string;
+    const firstStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const firstState = JSON.parse(firstStateRaw) as {
+      lastExportAt?: string;
+      lastJournalOffset?: number;
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+    };
+    const firstExportAt = firstState.lastExportAt;
+    if (typeof firstExportAt !== "string") {
+      throw new Error("first delta export timestamp missing");
+    }
+
+    await createRunFixture("backup-run-tail-mismatch", "delta run after retained journal rewrite", {
+      createdAt: firstExportAt,
+    });
+    const cutoffDate = new Date(firstExportAt);
+    expect(Number.isFinite(cutoffDate.getTime())).toBe(true);
+    await fs.promises.utimes(
+      path.join(resolveProfileRunDir("backup_profile", "backup-run-tail-mismatch"), "run.json"),
+      cutoffDate,
+      cutoffDate,
+    );
+    const retainedEventCount = await keepOnlyJournalTransactionsForRun("backup-run-tail-mismatch");
+    const staleTailHash = "0".repeat(64);
+    await fs.promises.writeFile(
+      syncStatePath,
+      `${JSON.stringify({
+        ...firstState,
+        lastJournalOffset: retainedEventCount,
+        lastJournalBoundary: {
+          offset: retainedEventCount,
+          tailHash: staleTailHash,
+        },
+      }, null, 2)}\n`,
+      "utf-8",
+    );
+
+    const deltaResponse = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        passphrase: "backup-passphrase",
+        mode: "delta",
+      }),
+    }));
+    expect(deltaResponse.status).toBe(200);
+
+    const encryptedBytes = Buffer.from(await deltaResponse.arrayBuffer());
+    const zipBytes = await decryptPlanningDataVaultArchive(encryptedBytes, "backup-passphrase");
+    const entries = await decodeZip(zipBytes, {
+      maxEntries: 5000,
+      maxTotalBytes: 25 * 1024 * 1024,
+    });
+    const runPaths = [...entries.keys()].filter((entry) => /^runs\/[^/]+\/run\.json$/u.test(entry));
+    expect(runPaths).toContain("runs/backup-run-tail-mismatch/run.json");
+
+    const manifest = JSON.parse((entries.get("manifest.json") ?? Buffer.from("{}")).toString("utf-8")) as {
+      syncState?: {
+        previousJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        currentJournalBoundary?: {
+          offset?: number;
+          tailHash?: string;
+        };
+        journalScan?: {
+          mode?: string;
+          startOffset?: number;
+          fallbackReason?: string;
+        };
+      };
+    };
+    expect(manifest.syncState?.previousJournalBoundary).toEqual({
+      offset: retainedEventCount,
+      tailHash: staleTailHash,
+    });
+    expect(manifest.syncState?.journalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-tail-mismatch",
+    });
+    expect(manifest.syncState?.currentJournalBoundary?.offset).toBe(retainedEventCount);
+    expect(manifest.syncState?.currentJournalBoundary?.tailHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(manifest.syncState?.currentJournalBoundary?.tailHash).not.toBe(staleTailHash);
+
+    const secondStateRaw = await fs.promises.readFile(syncStatePath, "utf-8");
+    const secondState = JSON.parse(secondStateRaw) as {
+      lastJournalBoundary?: {
+        offset?: number;
+        tailHash?: string;
+      };
+      lastJournalScan?: {
+        mode?: string;
+        startOffset?: number;
+        fallbackReason?: string;
+      };
+    };
+    expect(secondState.lastJournalBoundary).toEqual(manifest.syncState?.currentJournalBoundary);
+    expect(secondState.lastJournalScan).toEqual({
+      mode: "full-scan",
+      startOffset: 0,
+      fallbackReason: "previous-tail-mismatch",
+    });
   });
 
   it("restores delta with deterministic conflict policy(skip) and keeps unrelated data", async () => {
@@ -694,6 +1875,7 @@ describe.sequential("ops backup API", () => {
     form.set("csrf", "csrf-token");
     form.set("passphrase", "backup-passphrase");
     form.set("mode", "merge");
+    form.set("previewToken", await previewTokenForEncryptedBackup(encrypted, "delta.enc.json"));
     form.set("file", new File([new Uint8Array(encrypted)], "delta.enc.json", { type: "application/json" }));
 
     const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
@@ -711,9 +1893,9 @@ describe.sequential("ops backup API", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.data?.imported?.runs).toBe(1);
-    expect((payload.data?.warnings ?? []).some((row) => row.includes("delta conflict skipped: run conflict-run"))).toBe(true);
+    expect((payload.data?.warnings ?? []).some((row) => row.includes("이미 같은 상담 기록이 있어 변경분 복원에서 건너뛰었습니다: conflict-run"))).toBe(true);
     if (conflictSnapshotId) {
-      expect((payload.data?.warnings ?? []).some((row) => row.includes(`delta conflict skipped: snapshot ${conflictSnapshotId}`))).toBe(true);
+      expect((payload.data?.warnings ?? []).some((row) => row.includes(`이미 같은 가정 스냅샷이 있어 변경분 복원에서 건너뛰었습니다: ${conflictSnapshotId}`))).toBe(true);
     }
 
     const conflictRun = await getRun("conflict-run");
@@ -766,6 +1948,7 @@ describe.sequential("ops backup API", () => {
     form.set("csrf", "csrf-token");
     form.set("passphrase", "backup-passphrase");
     form.set("mode", "merge");
+    form.set("previewToken", await previewTokenForEncryptedBackup(encrypted, "partitioned.enc.json"));
     form.set("file", new File([new Uint8Array(encrypted)], "partitioned.enc.json", { type: "application/json" }));
 
     const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {

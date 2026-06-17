@@ -6,15 +6,14 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
-import { type StoredTransaction } from "@/lib/planning/v3/domain/transactions";
 import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAccountMappingOverrides";
 import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
-import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
-import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
+import { loadBatchVisiblePipeline } from "@/lib/planning/v3/service/loadBatchVisiblePipeline";
 import {
-  getStoredFirstBatchSummaryProjectionRows,
-  loadStoredFirstBatchTransactions,
-} from "@/lib/planning/v3/transactions/store";
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -56,32 +55,27 @@ export async function GET(request: Request, context: RouteContext) {
 
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
   try {
-    const [loaded, accountOverrides, transferOverrides] = await Promise.all([
-      loadStoredFirstBatchTransactions(id),
-      getAccountMappingOverrides(id).catch(() => ({})),
-      getTransferOverrides(id).catch(() => ({})),
-    ]);
+    const pipeline = await loadBatchVisiblePipeline(id, { includeRules: false });
 
-    // Transfers is a support surface, but visible detection stats still need to
-    // follow the stored-first binding projection when same-id coexistence exists.
-    const transactions: StoredTransaction[] = loaded
-      ? getStoredFirstBatchSummaryProjectionRows(loaded)
-      : [];
+    const transactions = pipeline?.transactions ?? [];
     if (transactions.length < 1) {
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." } },
+        { ok: false, error: { code: "NO_DATA", message: "배치 거래를 찾을 수 없습니다." }, meta: userMeta },
         { status: 404 },
       );
     }
 
-    const mapped = applyAccountMappingOverrides(transactions, accountOverrides);
+    const mapped = applyAccountMappingOverrides(transactions, pipeline?.accountOverrides ?? {});
     const detected = detectTransfers({
       batchId: id,
       transactions: mapped,
-      overridesByTxnId: transferOverrides,
+      overridesByTxnId: pipeline?.transferOverrides ?? {},
     });
 
     return NextResponse.json({
@@ -95,16 +89,17 @@ export async function GET(request: Request, context: RouteContext) {
         },
         unassignedCount: detected.unassignedCount,
       },
+      meta: userMeta,
     });
   } catch (error) {
     if (isInvalidIdError(error)) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." } },
+        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "이체 탐지 조회에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "이체 탐지 조회에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

@@ -3,9 +3,10 @@ import { toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { consumeVaultCsrfOrThrow } from "../../../../../lib/planning/security/vaultCsrf";
 import { updateVaultAutoLockMinutes } from "../../../../../lib/planning/security/vaultState";
-import { asString, guardLocalRequest, withVaultCsrf } from "../_lib";
+import { asString, guardLocalRequest, securityUserMeta, withVaultCsrf } from "../_lib";
 
 function toClientError(error: unknown): { status: number; code: string; message: string } {
   const message = error instanceof Error ? error.message : "vault auto lock update failed";
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
   } | null;
   try {
     consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const status = await updateVaultAutoLockMinutes(Number(body?.minutes));
     await appendOpsAuditEvent({
       eventType: "VAULT_AUTOLOCK_UPDATE_SUCCESS",
@@ -35,7 +38,11 @@ export async function POST(request: Request) {
         autoLockMinutes: status.autoLockMinutes,
       },
     }).catch(() => undefined);
-    return withVaultCsrf(request, NextResponse.json({ ok: true, data: status }));
+    return withVaultCsrf(request, NextResponse.json({
+      ok: true,
+      data: status,
+      meta: securityUserMeta(currentUser),
+    }));
   } catch (error) {
     const guardError = toGuardErrorResponse(error);
     if (guardError) {

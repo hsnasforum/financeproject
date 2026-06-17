@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type CategoryId, type TxnOverride } from "../domain/types";
 import { isTxnId } from "../service/txnId";
@@ -72,12 +73,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveLegacyOverridesPath(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) return path.join(resolvePlanningV3LegacyDataDir(cwd), "txn-overrides.json");
+
   const override = asString(process.env.PLANNING_V3_TXN_OVERRIDES_PATH);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningV3LegacyDataDir(cwd), "txn-overrides.json");
 }
 
 function resolveOverridesDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) return path.join(resolvePlanningV3DataDir(cwd), "txn-overrides");
+
   const override = asString(process.env.PLANNING_V3_TXN_OVERRIDES_DIR);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningV3DataDir(cwd), "txn-overrides");

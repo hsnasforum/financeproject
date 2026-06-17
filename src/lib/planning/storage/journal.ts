@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteFile } from "./atomicWrite";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../store/namespace";
 
 export type StorageTxKind = "RUN_CREATE" | "RUN_INDEX_UPDATE" | "SNAPSHOT_WRITE" | "MIGRATION_APPLY" | "OPS_ACTION_RUN";
 export type StorageTxOutcome = "COMMIT" | "ROLLBACK" | "RECOVERED_COMMIT" | "RECOVERED_ROLLBACK";
@@ -50,6 +51,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveJournalPath(): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId()), "storage", "journal.ndjson");
+  }
   const override = asString(process.env.PLANNING_STORAGE_JOURNAL_PATH);
   if (override) return path.resolve(process.cwd(), override);
   return path.join(resolvePlanningDataDir(), "storage", "journal.ndjson");

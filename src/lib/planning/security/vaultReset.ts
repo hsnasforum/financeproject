@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ASSUMPTIONS_HISTORY_DIR, ASSUMPTIONS_PATH } from "../assumptions/storage";
 import { resolveOpsDataDir, resolvePlanningDataDir } from "../storage/dataDir";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../store/namespace";
 import { resolveProfilesDir, resolveRunsDir } from "../store/paths";
 import { resetVaultRuntime } from "./vaultState";
 
@@ -20,12 +21,14 @@ function asString(value: unknown): string {
 
 function resolveAssumptionsPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_ASSUMPTIONS_PATH);
-  return path.resolve(cwd, override || ASSUMPTIONS_PATH);
+  if (override) return path.resolve(cwd, override);
+  return path.join(resolvePlanningDataDir({ cwd }), path.basename(ASSUMPTIONS_PATH));
 }
 
 function resolveAssumptionsHistoryDir(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_ASSUMPTIONS_HISTORY_DIR);
-  return path.resolve(cwd, override || ASSUMPTIONS_HISTORY_DIR);
+  if (override) return path.resolve(cwd, override);
+  return path.join(resolvePlanningDataDir({ cwd }), "assumptions", path.basename(ASSUMPTIONS_HISTORY_DIR));
 }
 
 function resolveVaultConfigPath(cwd = process.cwd()): string {
@@ -44,6 +47,32 @@ function resolveAuditPath(cwd = process.cwd()): string {
   const override = asString(process.env.PLANNING_OPS_AUDIT_PATH);
   if (override) return path.resolve(cwd, override);
   return path.join(resolveOpsDataDir({ cwd }), "audit", "events.ndjson");
+}
+
+function resolvePlanningResetRoot(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return getPlanningUserDir(resolvePlanningUserId(), cwd);
+  }
+  return resolvePlanningDataDir({ cwd });
+}
+
+function resolveResetTargets(cwd: string, keepAudit: boolean): string[] {
+  const planningRoot = resolvePlanningResetRoot(cwd);
+  if (isPlanningNamespaceEnabled()) {
+    return [planningRoot];
+  }
+
+  const auditPath = resolveAuditPath(cwd);
+  return [
+    planningRoot,
+    resolveProfilesDir(cwd),
+    resolveRunsDir(cwd),
+    resolveAssumptionsPath(cwd),
+    resolveAssumptionsHistoryDir(cwd),
+    resolveVaultConfigPath(cwd),
+    resolveLegacyVaultConfigPath(cwd),
+    ...(!keepAudit ? [auditPath, path.dirname(auditPath)] : []),
+  ];
 }
 
 function isUnsafePath(target: string, cwd = process.cwd()): boolean {
@@ -73,19 +102,7 @@ export async function resetVaultAndPlanningData(options: VaultResetOptions = {})
   const cwd = process.cwd();
   const keepAudit = options.keepAudit !== false;
 
-  const planningRoot = resolvePlanningDataDir({ cwd });
-  const auditPath = resolveAuditPath(cwd);
-
-  const targets = dedupeSorted([
-    planningRoot,
-    resolveProfilesDir(cwd),
-    resolveRunsDir(cwd),
-    resolveAssumptionsPath(cwd),
-    resolveAssumptionsHistoryDir(cwd),
-    resolveVaultConfigPath(cwd),
-    resolveLegacyVaultConfigPath(cwd),
-    ...(!keepAudit ? [auditPath, path.dirname(auditPath)] : []),
-  ]);
+  const targets = dedupeSorted(resolveResetTargets(cwd, keepAudit));
 
   const unsafe = targets.find((entry) => isUnsafePath(entry, cwd));
   if (unsafe) {

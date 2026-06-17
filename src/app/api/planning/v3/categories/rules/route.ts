@@ -6,12 +6,13 @@ import {
 } from "@/lib/dev/devGuards";
 import {
   CategoryRulesStoreInputError,
-  listRules,
-  upsertRule,
-} from "@/lib/planning/v3/categories/store";
+  listCurrentUserCategoryRules,
+  upsertCurrentUserCategoryRule,
+} from "@/lib/planning/v3/service/categoryRulesRepository";
 import {
+  isPlanningRouteUser,
   planningUserMeta,
-  withPlanningRouteUser,
+  requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type RuleBody = {
@@ -72,20 +73,19 @@ function withWriteGuard(request: Request, csrf: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
-
-    try {
-      const items = await listRules();
-      return NextResponse.json({ ok: true, items });
-    } catch {
-      return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 목록 조회에 실패했습니다." }, meta: userMeta },
-        { status: 500 },
-      );
-    }
-  });
+  try {
+    const items = await listCurrentUserCategoryRules();
+    return NextResponse.json({ ok: true, items, meta: userMeta });
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 목록 조회에 실패했습니다." }, meta: userMeta },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -98,43 +98,42 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
+  if (!body) {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "룰 입력값이 필요합니다." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
 
-    if (!body) {
+  try {
+    const rule = await upsertCurrentUserCategoryRule({
+      ...(body.id !== undefined ? { id: body.id } : {}),
+      categoryId: body.categoryId,
+      match: body.match,
+      priority: body.priority,
+      enabled: body.enabled,
+      note: body.note,
+    });
+    return NextResponse.json({ ok: true, rule, meta: userMeta });
+  } catch (error) {
+    if (error instanceof CategoryRulesStoreInputError) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "룰 입력값이 필요합니다." }, meta: userMeta },
+        {
+          ok: false,
+          error: { code: "INPUT", message: "룰 입력값이 올바르지 않습니다." },
+          details: error.details,
+          meta: userMeta,
+        },
         { status: 400 },
       );
     }
-
-    try {
-      const rule = await upsertRule({
-        ...(body.id !== undefined ? { id: body.id } : {}),
-        categoryId: body.categoryId,
-        match: body.match,
-        priority: body.priority,
-        enabled: body.enabled,
-        note: body.note,
-      });
-      return NextResponse.json({ ok: true, rule });
-    } catch (error) {
-      if (error instanceof CategoryRulesStoreInputError) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: { code: "INPUT", message: "룰 입력값이 올바르지 않습니다." },
-            details: error.details,
-            meta: userMeta,
-          },
-          { status: 400 },
-        );
-      }
-      return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 저장에 실패했습니다." }, meta: userMeta },
-        { status: 500 },
-      );
-    }
-  });
+    return NextResponse.json(
+      { ok: false, error: { code: "INTERNAL", message: "카테고리 룰 저장에 실패했습니다." }, meta: userMeta },
+      { status: 500 },
+    );
+  }
 }

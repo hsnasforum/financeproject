@@ -8,15 +8,16 @@ import {
 import { onlyDev } from "../../../../lib/dev/onlyDev";
 import { jsonError, jsonOk } from "../../../../lib/http/apiResponse";
 import {
+  planningUserMeta,
   planningAuthErrorResponse as toAuthErrorResponse,
   withPlanningRouteUser,
 } from "../../../../lib/planning/api/routeAuth";
 import {
-  createProfile,
-  getDefaultProfileId,
-  listProfileMetas,
-  setDefaultProfile,
-} from "../../../../lib/planning/server/store/profileStore";
+  createCurrentUserProfile,
+  getCurrentUserDefaultProfileId,
+  listCurrentUserProfileMetas,
+  setCurrentUserDefaultProfile,
+} from "../../../../lib/planning/server/profiles/repository";
 import { loadCanonicalProfile } from "../../../../lib/planning/v2/loadCanonicalProfile";
 
 type CreateProfileBody = {
@@ -100,15 +101,14 @@ export async function GET(request: Request) {
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
       const [items, defaultProfileId] = await Promise.all([
-        listProfileMetas(),
-        getDefaultProfileId(),
+        listCurrentUserProfileMetas(),
+        getCurrentUserDefaultProfileId(),
       ]);
       return jsonOk({
         data: items.map((item) => toProfileMetaRow(item)),
         meta: {
           ...(defaultProfileId ? { defaultProfileId } : {}),
-          userId: currentUser.id,
-          authSource: currentUser.source,
+          ...planningUserMeta(currentUser),
         },
       });
     });
@@ -139,15 +139,15 @@ export async function POST(request: Request) {
       const canonicalProfile = body?.profile !== undefined
         ? loadCanonicalProfile(body.profile).profile
         : defaultCanonicalProfile();
-      const created = await createProfile({
+      const created = await createCurrentUserProfile({
         name: asString(body?.name) || "기본 프로필",
         profile: canonicalProfile,
       });
       const setAsDefault = asBoolean(body?.isDefault) === true;
       if (setAsDefault) {
-        await setDefaultProfile(created.id);
+        await setCurrentUserDefaultProfile(created.id);
       }
-      const metas = await listProfileMetas();
+      const metas = await listCurrentUserProfileMetas();
       const meta = metas.find((item) => item.profileId === created.id);
       return jsonOk({
         data: meta
@@ -159,10 +159,7 @@ export async function POST(request: Request) {
             updatedAt: created.updatedAt,
             isDefault: setAsDefault,
           }),
-        meta: {
-          userId: currentUser.id,
-          authSource: currentUser.source,
-        },
+        meta: planningUserMeta(currentUser),
       }, { status: 201 });
     });
   } catch (error) {

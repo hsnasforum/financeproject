@@ -3,8 +3,13 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { getRun } from "../../../../../../../lib/planning/server/store/runStore";
+import { getCurrentUserRun } from "../../../../../../../lib/planning/server/runs/repository";
 import { buildStandaloneReportArtifactsFromRun } from "../../../../../../planning/reports/_lib/standaloneReportArtifacts";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../../lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -24,14 +29,17 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
 
   try {
     const url = new URL(request.url);
-    const run = await getRun(id);
+    const run = await getCurrentUserRun(id);
     if (!run) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.");
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
     const viewMode = (url.searchParams.get("view") ?? "").trim().toLowerCase();
@@ -52,6 +60,6 @@ export async function GET(request: Request, context: RouteContext) {
       },
     });
   } catch {
-    return jsonError("INTERNAL", "리포트 생성에 실패했습니다.", { status: 500 });
+    return jsonError("INTERNAL", "리포트 생성에 실패했습니다.", { status: 500, meta: userMeta });
   }
 }

@@ -5,9 +5,10 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import { runNewsRefresh } from "@/lib/planning/v3/news/cli/newsRefresh";
-import { readState } from "@/lib/planning/v3/news/store";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import { readCurrentUserNewsState } from "@/lib/planning/v3/service/newsRepository";
 
 export const runtime = "nodejs";
 
@@ -48,9 +49,12 @@ export async function POST(request: Request) {
     );
   }
 
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+
   try {
     const result = await runNewsRefresh();
-    const lastRefreshedAt = readState().lastRunAt ?? null;
+    const lastRefreshedAt = readCurrentUserNewsState().lastRunAt ?? null;
     const payload = parseWithV3Whitelist(RefreshResponseSchema, {
       ok: true,
       data: {
@@ -71,6 +75,7 @@ export async function POST(request: Request) {
           code: "INTERNAL",
           message: "뉴스 갱신 실행 중 오류가 발생했습니다.",
         },
+        meta: planningUserMeta(currentUser),
       },
       { status: 500 },
     );

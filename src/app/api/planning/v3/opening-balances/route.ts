@@ -4,10 +4,14 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { getOpeningBalances, upsertOpeningBalance } from "@/lib/planning/v3/openingBalances/store";
 import {
+  getCurrentUserOpeningBalances,
+  upsertCurrentUserOpeningBalance,
+} from "@/lib/planning/v3/service/openingBalancesRepository";
+import {
+  isPlanningRouteUser,
   planningUserMeta,
-  withPlanningRouteUser,
+  requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type PatchBody = {
@@ -75,19 +79,19 @@ function isSafeDate(value: string): boolean {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
-    try {
-      const data = await getOpeningBalances();
-      return NextResponse.json({ ok: true, data });
-    } catch {
-      return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "초기잔액 목록 조회에 실패했습니다." }, meta: userMeta },
-        { status: 500 },
-      );
-    }
-  });
+  try {
+    const data = await getCurrentUserOpeningBalances();
+    return NextResponse.json({ ok: true, data, meta: userMeta });
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: { code: "INTERNAL", message: "초기잔액 목록 조회에 실패했습니다." }, meta: userMeta },
+      { status: 500 },
+    );
+  }
 }
 
 export async function PATCH(request: Request) {
@@ -100,44 +104,43 @@ export async function PATCH(request: Request) {
 
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
+  const accountId = asString(body?.accountId);
+  if (!accountId) {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "accountId를 입력해 주세요." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
+  const asOfDate = asString(body?.asOfDate);
+  if (!isSafeDate(asOfDate)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INPUT", message: "기준일 형식이 올바르지 않습니다. (YYYY-MM-DD)" },
+        meta: userMeta,
+      },
+      { status: 400 },
+    );
+  }
+  const amountKrw = Number(body?.amountKrw);
+  if (!Number.isFinite(amountKrw) || !Number.isInteger(amountKrw)) {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "금액은 정수(원 단위)여야 합니다." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
 
-    const accountId = asString(body?.accountId);
-    if (!accountId) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "accountId를 입력해 주세요." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-    const asOfDate = asString(body?.asOfDate);
-    if (!isSafeDate(asOfDate)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: { code: "INPUT", message: "기준일 형식이 올바르지 않습니다. (YYYY-MM-DD)" },
-          meta: userMeta,
-        },
-        { status: 400 },
-      );
-    }
-    const amountKrw = Number(body?.amountKrw);
-    if (!Number.isFinite(amountKrw) || !Number.isInteger(amountKrw)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "금액은 정수(원 단위)여야 합니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-
-    try {
-      const openingBalance = await upsertOpeningBalance(accountId, asOfDate, amountKrw);
-      return NextResponse.json({ ok: true, openingBalance });
-    } catch {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "초기잔액 저장에 실패했습니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-  });
+  try {
+    const openingBalance = await upsertCurrentUserOpeningBalance(accountId, asOfDate, amountKrw);
+    return NextResponse.json({ ok: true, openingBalance, meta: userMeta });
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "초기잔액 저장에 실패했습니다." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
 }

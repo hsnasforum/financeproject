@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   PlanningAuthError,
+  isPlanningAuthRequired,
   requireCurrentPlanningUser,
   withCurrentPlanningUser,
 } from "../../../src/lib/planning/auth/currentUser";
+import { withCurrentPlanningPageUser } from "../../../src/lib/planning/server/pageAuth";
 import { resolvePlanningUserId } from "../../../src/lib/planning/store/namespace";
+import { getScopedPlanningAuthSource } from "../../../src/lib/planning/store/userScope";
 
 const env = process.env as Record<string, string | undefined>;
 const originalAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
@@ -12,6 +15,7 @@ const originalTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
 const originalPlanningUserId = process.env.PLANNING_USER_ID;
 const originalAuthSecret = process.env.AUTH_SECRET;
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
+const originalNodeEnv = process.env.NODE_ENV;
 
 function requestWithUser(userId: string, host = "localhost:3000"): Request {
   const origin = `http://${host}`;
@@ -37,9 +41,51 @@ describe("planning current user", () => {
     else delete env.AUTH_SECRET;
     if (typeof originalNextAuthSecret === "string") env.NEXTAUTH_SECRET = originalNextAuthSecret;
     else delete env.NEXTAUTH_SECRET;
+    if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
+    else delete env.NODE_ENV;
+  });
+
+  it("requires planning auth by default until fallback is explicitly enabled", async () => {
+    env.NODE_ENV = "test";
+    delete env.PLANNING_AUTH_REQUIRED;
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+
+    expect(isPlanningAuthRequired()).toBe(true);
+    await expect(requireCurrentPlanningUser(new Request("http://localhost:3000/api/planning/profiles")))
+      .rejects
+      .toMatchObject({ code: "UNAUTHENTICATED", status: 401 } satisfies Partial<PlanningAuthError>);
+  });
+
+  it("keeps local namespace fallback explicit in local/dev when auth is disabled", async () => {
+    env.NODE_ENV = "development";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+
+    const user = await requireCurrentPlanningUser(new Request("http://localhost:3000/api/planning/profiles"));
+
+    expect(user).toMatchObject({
+      id: "default",
+      source: "local-namespace",
+      authRequired: false,
+    });
+  });
+
+  it("keeps planning auth required in production even when fallback env is disabled", async () => {
+    env.NODE_ENV = "production";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+
+    expect(isPlanningAuthRequired()).toBe(true);
+    await expect(requireCurrentPlanningUser(new Request("https://example.com/api/planning/profiles")))
+      .rejects
+      .toMatchObject({ code: "UNAUTHENTICATED", status: 401 } satisfies Partial<PlanningAuthError>);
   });
 
   it("uses the local namespace without touching Auth.js when auth is optional and no secret is configured", async () => {
+    env.NODE_ENV = "test";
     env.PLANNING_AUTH_REQUIRED = "0";
     delete env.AUTH_SECRET;
     delete env.NEXTAUTH_SECRET;
@@ -71,6 +117,15 @@ describe("planning current user", () => {
       .toMatchObject({ code: "FORBIDDEN", status: 403 } satisfies Partial<PlanningAuthError>);
   });
 
+  it("rejects trusted user headers from remote requests even when the bridge is enabled", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+
+    await expect(requireCurrentPlanningUser(requestWithUser("alice", "example.com")))
+      .rejects
+      .toMatchObject({ code: "FORBIDDEN", status: 403 } satisfies Partial<PlanningAuthError>);
+  });
+
   it("exposes the current user id through request scope for internal trusted requests", async () => {
     env.PLANNING_AUTH_REQUIRED = "1";
     env.PLANNING_TRUST_AUTH_HEADERS = "1";
@@ -86,5 +141,23 @@ describe("planning current user", () => {
     const scopedUserId = await withCurrentPlanningUser(requestWithUser("alice"), () => resolvePlanningUserId());
     expect(scopedUserId).toBe("alice");
     expect(resolvePlanningUserId()).toBe("default");
+  });
+
+  it("preserves auth source in server page user scope", async () => {
+    env.NODE_ENV = "test";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    env.PLANNING_USER_ID = "default";
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+
+    const scoped = await withCurrentPlanningPageUser(() => ({
+      userId: resolvePlanningUserId(),
+      authSource: getScopedPlanningAuthSource(),
+    }));
+
+    expect(scoped).toEqual({
+      userId: "default",
+      authSource: "local-namespace",
+    });
   });
 });

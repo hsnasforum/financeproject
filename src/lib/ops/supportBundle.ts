@@ -10,6 +10,7 @@ import { redactText } from "../planning/privacy/redact";
 import { DEFAULT_PLANNING_POLICY } from "../planning/catalog/planningPolicy";
 import { DEFAULT_INTEREST_TAX_POLICY } from "../planning/calc/taxPolicy";
 import { ROUNDING_POLICY } from "../planning/calc/roundingPolicy";
+import type { PlanningRouteUser } from "../planning/api/routeAuth";
 import { getPlanningMigrationStatePath, inspectPlanningMigrations } from "../planning/migrations/manager";
 import type { PlanningAppInfo } from "../planning/server/runtime/appInfo";
 
@@ -23,6 +24,8 @@ type DoctorPayloadLike = {
 type SupportBundleBuildInput = {
   doctorPayload: unknown;
   appInfo: PlanningAppInfo;
+  planningUser?: PlanningRouteUser;
+  planningNamespaceEnabled?: boolean;
   now?: Date;
 };
 
@@ -37,6 +40,13 @@ type SupportBundleOutput = {
     engineVersion: string;
     includes: string[];
     excludes: string[];
+    scope: {
+      kind: "shared-ops" | "planning-user";
+      auditEvents: "shared-ops" | "current-user";
+      metricEvents: "shared-ops-sanitized";
+      authSource?: string;
+      userId?: string;
+    };
     counts: {
       doctorChecks: number;
       migrationItems: number;
@@ -80,12 +90,6 @@ function toIso(value: unknown, fallback = new Date().toISOString()): string {
   const parsed = Date.parse(raw);
   if (!raw || !Number.isFinite(parsed)) return fallback;
   return new Date(parsed).toISOString();
-}
-
-function truncateIdentifier(value: unknown, length = 8): string | undefined {
-  const raw = asString(value);
-  if (!raw) return undefined;
-  return raw.slice(0, Math.max(1, length));
 }
 
 function sanitizeForBundle(value: unknown, keyHint = "", depth = 0): unknown {
@@ -349,8 +353,6 @@ function buildMetricsRecent(events: Array<{ type: string; at: string; meta?: Rec
   stage?: string;
   durationMs?: number;
   errorCode?: string;
-  runIdPrefix?: string;
-  profileIdPrefix?: string;
 }> {
   return events.slice(0, 200).map((event) => {
     const meta = asRecord(event.meta);
@@ -358,8 +360,6 @@ function buildMetricsRecent(events: Array<{ type: string; at: string; meta?: Rec
     const durationMs = asNumber(meta.durationMs);
     const status = asString(meta.status);
     const errorCode = asString(meta.code || meta.errorCode);
-    const runIdPrefix = truncateIdentifier(meta.runId);
-    const profileIdPrefix = truncateIdentifier(meta.profileId);
 
     return {
       type: asString(event.type) || "UNKNOWN",
@@ -368,10 +368,41 @@ function buildMetricsRecent(events: Array<{ type: string; at: string; meta?: Rec
       ...(stage ? { stage } : {}),
       ...(typeof durationMs === "number" ? { durationMs: Math.max(0, Math.trunc(durationMs)) } : {}),
       ...(errorCode ? { errorCode } : {}),
-      ...(runIdPrefix ? { runIdPrefix } : {}),
-      ...(profileIdPrefix ? { profileIdPrefix } : {}),
     };
   });
+}
+
+function filterAuditEventsForScope(
+  events: Array<{ eventType: string; at: string; meta?: Record<string, unknown> }>,
+  input: SupportBundleBuildInput,
+): Array<{ eventType: string; at: string; meta?: Record<string, unknown> }> {
+  if (!input.planningNamespaceEnabled || !input.planningUser?.id) return events;
+  return events.filter((event) => {
+    const meta = asRecord(event.meta);
+    return asString(meta.planningUserId) === input.planningUser?.id
+      || asString(meta.userId) === input.planningUser?.id;
+  });
+}
+
+function buildBundleScope(input: SupportBundleBuildInput): SupportBundleOutput["manifest"]["scope"] {
+  if (input.planningNamespaceEnabled && input.planningUser) {
+    return {
+      kind: "planning-user",
+      userId: input.planningUser.id,
+      authSource: input.planningUser.source,
+      auditEvents: "current-user",
+      metricEvents: "shared-ops-sanitized",
+    };
+  }
+  return {
+    kind: "shared-ops",
+    auditEvents: "shared-ops",
+    metricEvents: "shared-ops-sanitized",
+    ...(input.planningUser ? {
+      userId: input.planningUser.id,
+      authSource: input.planningUser.source,
+    } : {}),
+  };
 }
 
 async function buildDataSourceImpactSummary() {
@@ -401,7 +432,8 @@ export async function buildSupportBundle(input: SupportBundleBuildInput): Promis
 
   const migrationState = await readMigrationStateCompact(getPlanningMigrationStatePath());
   const doctor = compactDoctorPayload(input.doctorPayload);
-  const audit = summarizeAuditEvents(auditEvents);
+  const scopedAuditEvents = filterAuditEventsForScope(auditEvents, input);
+  const audit = summarizeAuditEvents(scopedAuditEvents);
   const metrics = {
     summary: summarizeOpsMetricEvents(metricEvents),
     ...summarizeMetricEvents(metricEvents),
@@ -441,7 +473,10 @@ export async function buildSupportBundle(input: SupportBundleBuildInput): Promis
       "run blobs",
       "vault secrets / passphrases / env values",
       "raw upstream payloads",
+      "run/profile id prefixes in metrics",
+      ...(input.planningNamespaceEnabled ? ["other-user audit events"] : []),
     ],
+    scope: buildBundleScope(input),
     counts: {
       doctorChecks: doctor.checks.length,
       migrationItems: migrationInspect.items.length,

@@ -1,20 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageShell } from "@/components/ui/PageShell";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { ReportHeroCard, ReportHeroStatCard, ReportHeroStatGrid } from "@/components/ui/ReportTone";
 import { readDevCsrfToken } from "@/lib/dev/clientCsrf";
 
-type Account = {
+export type Account = {
   id: string;
   name: string;
   kind: "checking" | "saving" | "card" | "cash" | "other" | "bank" | "broker";
   currency: "KRW";
 };
 
-type BatchMeta = {
+export type BatchMeta = {
   id: string;
   createdAt: string;
   rowCount: number;
@@ -22,13 +22,24 @@ type BatchMeta = {
   ymMax?: string;
 };
 
-type MonthlyAccountBalance = {
+export type MonthlyAccountBalance = {
   ym: string;
   accountId: string;
   openingKrw: number;
   netChangeKrw: number;
   closingKrw: number;
   transferKrw?: number;
+};
+
+type BalancesClientProps = {
+  disableAutoLoad?: boolean;
+  initialAccounts?: Account[];
+  initialBatches?: BatchMeta[];
+  initialIncludeTransfers?: boolean;
+  initialMessage?: string;
+  initialRows?: MonthlyAccountBalance[];
+  initialSelectedBatchId?: string;
+  initialWarnings?: string[];
 };
 
 function asString(value: unknown): string {
@@ -57,15 +68,26 @@ function buildCsrfQuery(): string {
 const balancesActionLinkClassName =
   "inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-600 shadow-sm transition-colors hover:border-slate-300 hover:bg-surface-muted hover:text-navy";
 
-export function BalancesClient() {
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [batches, setBatches] = useState<BatchMeta[]>([]);
-  const [selectedBatchId, setSelectedBatchId] = useState("");
-  const [includeTransfers, setIncludeTransfers] = useState(false);
-  const [rows, setRows] = useState<MonthlyAccountBalance[]>([]);
-  const [warnings, setWarnings] = useState<string[]>([]);
+export function BalancesClient({
+  disableAutoLoad = false,
+  initialAccounts = [],
+  initialBatches = [],
+  initialIncludeTransfers = false,
+  initialMessage = "",
+  initialRows = [],
+  initialSelectedBatchId = "",
+  initialWarnings = [],
+}: BalancesClientProps = {}) {
+  const [loading, setLoading] = useState(!disableAutoLoad);
+  const [message, setMessage] = useState(initialMessage);
+  const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
+  const [batches, setBatches] = useState<BatchMeta[]>(initialBatches);
+  const [selectedBatchId, setSelectedBatchId] = useState(initialSelectedBatchId || initialBatches[0]?.id || "");
+  const [includeTransfers, setIncludeTransfers] = useState(initialIncludeTransfers);
+  const [rows, setRows] = useState<MonthlyAccountBalance[]>(initialRows);
+  const [warnings, setWarnings] = useState<string[]>(initialWarnings);
+  const skipInitialMetadataLoadRef = useRef(disableAutoLoad);
+  const skipInitialBalancesLoadRef = useRef(disableAutoLoad);
 
   const accountNameById = useMemo(
     () => new Map(accounts.map((row) => [row.id, row.name])),
@@ -184,6 +206,10 @@ export function BalancesClient() {
   }, [includeTransfers, selectedBatchId]);
 
   useEffect(() => {
+    if (skipInitialMetadataLoadRef.current) {
+      skipInitialMetadataLoadRef.current = false;
+      return;
+    }
     const timeoutId = window.setTimeout(() => {
       void loadBatchesAndAccounts();
     }, 0);
@@ -191,6 +217,10 @@ export function BalancesClient() {
   }, [loadBatchesAndAccounts]);
 
   useEffect(() => {
+    if (skipInitialBalancesLoadRef.current) {
+      skipInitialBalancesLoadRef.current = false;
+      return;
+    }
     const timeoutId = window.setTimeout(() => {
       void loadBalances();
     }, 0);

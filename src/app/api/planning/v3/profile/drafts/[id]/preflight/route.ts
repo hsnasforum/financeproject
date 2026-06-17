@@ -4,9 +4,9 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { getProfile } from "@/lib/planning/v3/profiles/store";
+import { getCurrentUserProfile } from "@/lib/planning/v3/service/profileRepository";
 import { preflightDraftPatch } from "@/lib/planning/v3/draft/service";
-import { getProfileDraft } from "@/lib/planning/v3/store/draftStore";
+import { getCurrentUserProfileDraft } from "@/lib/planning/v3/service/profileDraftRepository";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
   isPlanningRouteUser,
@@ -63,7 +63,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const draft = await getProfileDraft(id);
+    const draft = await getCurrentUserProfileDraft(id);
     if (!draft) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "상담 정보 초안을 찾을 수 없습니다." }, meta: userMeta },
@@ -74,7 +74,7 @@ export async function POST(request: Request, context: RouteContext) {
     const profileId = asString(body?.profileId);
     let baseProfile = undefined;
     if (profileId) {
-      const base = await getProfile(profileId);
+      const base = await getCurrentUserProfile(profileId);
       if (!base) {
         return NextResponse.json(
           { ok: false, error: { code: "NO_DATA", message: "기준 상담 정보를 찾을 수 없습니다." }, meta: userMeta },
@@ -91,6 +91,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
     const payload = {
       ok: true,
+      meta: userMeta,
       data,
     };
     assertNoForbiddenDraftKeys(payload);

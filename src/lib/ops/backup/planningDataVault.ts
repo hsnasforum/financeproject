@@ -15,7 +15,7 @@ import {
 } from "../../planning/crypto/vaultCrypto";
 import { migrateAssumptionsSnapshot } from "../../planning/migrations/snapshotMigrate";
 import { atomicWriteJson } from "../../planning/storage/atomicWrite";
-import { readStorageJournalEvents } from "../../planning/storage/journal";
+import { readStorageJournalEvents, type StorageJournalEvent } from "../../planning/storage/journal";
 import { createRun, getRun, getRunBlob, hardDeleteRun, listRunIndexEntries } from "../../planning/server/store/runStore";
 import { hardDeleteProfile, listProfiles, upsertProfileRecord } from "../../planning/store/profileStore";
 import {
@@ -34,6 +34,7 @@ import { loadCanonicalProfile } from "../../planning/v2/loadCanonicalProfile";
 import { PROFILE_SCHEMA_VERSION, RUN_SCHEMA_VERSION, ASSUMPTIONS_SCHEMA_VERSION } from "../../planning/v2/schemaVersion";
 import { type ProfileNormalizationDisclosure } from "../../planning/v2/normalizationDisclosure";
 import { resolveOpsDataDir, resolvePlanningDataDir } from "../../planning/storage/dataDir";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../../planning/store/namespace";
 import { decodeZip, encodeZip, type ZipFileEntry } from "./zipCodec";
 
 const VAULT_KIND = "planning-data-vault";
@@ -55,6 +56,15 @@ const BACKUP_SYNC_STATE_VERSION = 1 as const;
 type RestoreMode = "merge" | "replace";
 type BackupExportMode = "full" | "delta";
 type BackupConflictPolicy = "skip";
+type BackupJournalBoundaryMarker = {
+  offset: number;
+  tailHash: string;
+};
+type BackupJournalScanState = {
+  mode: "offset" | "full-scan";
+  startOffset: number;
+  fallbackReason?: "previous-offset-out-of-range" | "previous-boundary-missing" | "previous-boundary-mismatch" | "previous-tail-mismatch";
+};
 
 type BackupSyncState = {
   version: typeof BACKUP_SYNC_STATE_VERSION;
@@ -62,6 +72,8 @@ type BackupSyncState = {
   lastExportAt?: string;
   lastJournalOffset: number;
   runsIndexHash?: string;
+  lastJournalBoundary?: BackupJournalBoundaryMarker;
+  lastJournalScan?: BackupJournalScanState;
 };
 
 type VaultManifest = {
@@ -81,6 +93,9 @@ type VaultManifest = {
     currentJournalOffset: number;
     previousRunsIndexHash?: string;
     currentRunsIndexHash?: string;
+    previousJournalBoundary?: BackupJournalBoundaryMarker;
+    currentJournalBoundary?: BackupJournalBoundaryMarker;
+    journalScan?: BackupJournalScanState;
   };
   schemaVersions: {
     profile: number;
@@ -156,6 +171,34 @@ type ParsedVault = {
   warnings: string[];
 };
 
+type RestoreIssueMessageKind =
+  | "profile"
+  | "profileOverrides"
+  | "run"
+  | "runBlob"
+  | "actionPlan"
+  | "actionProgress"
+  | "assumptionsHistory"
+  | "latestSnapshot"
+  | "autoMergePolicy"
+  | "schedulerPolicy";
+
+type BackupWarningMessageKind =
+  | "manifestFileMissing"
+  | "manifestHashMismatch"
+  | "manifestSizeMismatch"
+  | "profileSkipped"
+  | "runMissingMeta"
+  | "manifestProfilesCountMismatch"
+  | "manifestRunsCountMismatch"
+  | "manifestAssumptionsCountMismatch"
+  | "previewInvalidEntry"
+  | "unknownRunBlobSkipped"
+  | "deltaRunConflictSkipped"
+  | "deltaSnapshotConflictSkipped"
+  | "namespaceSharedAssumptionsSkipped"
+  | "namespaceSharedPoliciesSkipped";
+
 type EncryptedBackupPackage = {
   kind: typeof ENCRYPTED_BACKUP_KIND;
   version: typeof ENCRYPTED_BACKUP_VERSION;
@@ -167,6 +210,81 @@ type EncryptedBackupPackage = {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function restoreIssueMessage(kind: RestoreIssueMessageKind): string {
+  if (kind === "profile") {
+    return "상담 정보 파일을 복원하지 못했습니다. 백업 파일이 손상되었거나 지원하지 않는 형식입니다.";
+  }
+  if (kind === "profileOverrides") {
+    return "상담 정보의 가정 조정 파일을 복원하지 못했습니다.";
+  }
+  if (kind === "run") {
+    return "상담 기록을 복원하지 못했습니다. 백업 파일의 상담 기록 형식을 확인해 주세요.";
+  }
+  if (kind === "runBlob") {
+    return "상담 기록 첨부 데이터를 복원하지 못했습니다.";
+  }
+  if (kind === "actionPlan") {
+    return "후속 행동 계획을 복원하지 못했습니다.";
+  }
+  if (kind === "actionProgress") {
+    return "후속 행동 진행 상태를 복원하지 못했습니다.";
+  }
+  if (kind === "assumptionsHistory") {
+    return "가정 스냅샷 이력을 복원하지 못했습니다.";
+  }
+  if (kind === "latestSnapshot") {
+    return "최신 가정 스냅샷을 복원하지 못했습니다.";
+  }
+  if (kind === "autoMergePolicy") {
+    return "자동 병합 운영 정책을 복원하지 못했습니다.";
+  }
+  return "스케줄러 운영 정책을 복원하지 못했습니다.";
+}
+
+function backupWarningMessage(kind: BackupWarningMessageKind, target?: string): string {
+  const suffix = target ? `: ${target}` : "";
+  if (kind === "manifestFileMissing") {
+    return `백업 목록에는 있지만 실제 파일을 찾지 못했습니다${suffix}`;
+  }
+  if (kind === "manifestHashMismatch") {
+    return `백업 파일의 무결성 확인값이 맞지 않습니다${suffix}`;
+  }
+  if (kind === "manifestSizeMismatch") {
+    return `백업 파일 크기 정보가 실제와 다릅니다${suffix}`;
+  }
+  if (kind === "profileSkipped") {
+    return `일부 상담 정보를 백업에 포함하지 못했습니다${suffix}`;
+  }
+  if (kind === "runMissingMeta") {
+    return `상담 기록 메타데이터를 찾지 못해 백업에서 제외했습니다${suffix}`;
+  }
+  if (kind === "manifestProfilesCountMismatch") {
+    return "백업 목록의 상담 정보 개수와 실제 파일 개수가 다릅니다.";
+  }
+  if (kind === "manifestRunsCountMismatch") {
+    return "백업 목록의 상담 기록 개수와 실제 파일 개수가 다릅니다.";
+  }
+  if (kind === "manifestAssumptionsCountMismatch") {
+    return "백업 목록의 가정 스냅샷 이력 개수와 실제 파일 개수가 다릅니다.";
+  }
+  if (kind === "previewInvalidEntry") {
+    return `미리보기에서 복원 파일 형식을 확인하지 못했습니다${suffix}`;
+  }
+  if (kind === "unknownRunBlobSkipped") {
+    return `지원하지 않는 상담 기록 첨부를 건너뛰었습니다${suffix}`;
+  }
+  if (kind === "deltaRunConflictSkipped") {
+    return `이미 같은 상담 기록이 있어 변경분 복원에서 건너뛰었습니다${suffix}`;
+  }
+  if (kind === "namespaceSharedAssumptionsSkipped") {
+    return "사용자 저장 범위 복원에서는 공용 가정 스냅샷을 덮어쓰지 않고 현재 운영 값을 유지했습니다.";
+  }
+  if (kind === "namespaceSharedPoliciesSkipped") {
+    return "사용자 저장 범위 복원에서는 공용 운영 정책을 덮어쓰지 않고 현재 운영 값을 유지했습니다.";
+  }
+  return `이미 같은 가정 스냅샷이 있어 변경분 복원에서 건너뛰었습니다${suffix}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -202,6 +320,15 @@ function toDateOnly(value: unknown): string {
   return new Date(parsed).toISOString().slice(0, 10);
 }
 
+function resolveMonotonicBackupExportAt(previousExportAt?: string): string {
+  const nowMs = Date.now();
+  const previousMs = previousExportAt ? Date.parse(previousExportAt) : Number.NaN;
+  if (Number.isFinite(previousMs)) {
+    return new Date(Math.max(nowMs, previousMs)).toISOString();
+  }
+  return new Date(nowMs).toISOString();
+}
+
 function hashSha256(input: Buffer): string {
   return crypto.createHash("sha256").update(input).digest("hex");
 }
@@ -227,6 +354,9 @@ function normalizeSnapshotId(input: string): string {
 }
 
 function resolveBackupSyncStatePath(): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId()), "ops", BACKUP_SYNC_STATE_PATH);
+  }
   const override = asString(process.env.PLANNING_BACKUP_SYNC_STATE_PATH);
   if (override) return path.resolve(process.cwd(), override);
   return path.join(resolveOpsDataDir(), BACKUP_SYNC_STATE_PATH);
@@ -235,6 +365,34 @@ function resolveBackupSyncStatePath(): string {
 function asIsoOrUndefined(value: unknown): string | undefined {
   const normalized = toIso(value, "");
   return normalized || undefined;
+}
+
+function parseBackupJournalBoundaryMarker(raw: unknown): BackupJournalBoundaryMarker | undefined {
+  if (!isRecord(raw)) return undefined;
+  const offset = Math.max(0, Math.trunc(Number(raw.offset) || 0));
+  const tailHash = asString(raw.tailHash).toLowerCase();
+  if (offset < 1 || !/^[a-f0-9]{64}$/.test(tailHash)) return undefined;
+  return {
+    offset,
+    tailHash,
+  };
+}
+
+function parseBackupJournalScanState(raw: unknown): BackupJournalScanState | undefined {
+  if (!isRecord(raw)) return undefined;
+  const modeRaw = asString(raw.mode);
+  if (modeRaw !== "offset" && modeRaw !== "full-scan") return undefined;
+  const startOffset = Math.max(0, Math.trunc(Number(raw.startOffset) || 0));
+  const fallbackReason = asString(raw.fallbackReason);
+  const isKnownFallbackReason = fallbackReason === "previous-offset-out-of-range"
+    || fallbackReason === "previous-boundary-missing"
+    || fallbackReason === "previous-boundary-mismatch"
+    || fallbackReason === "previous-tail-mismatch";
+  return {
+    mode: modeRaw,
+    startOffset,
+    ...(isKnownFallbackReason ? { fallbackReason } : {}),
+  };
 }
 
 function parseBackupSyncState(raw: unknown): BackupSyncState | null {
@@ -246,12 +404,16 @@ function parseBackupSyncState(raw: unknown): BackupSyncState | null {
   const lastJournalOffset = Math.max(0, Math.trunc(Number(raw.lastJournalOffset) || 0));
   const lastExportAt = asIsoOrUndefined(raw.lastExportAt);
   const runsIndexHash = asString(raw.runsIndexHash).toLowerCase();
+  const lastJournalBoundary = parseBackupJournalBoundaryMarker(raw.lastJournalBoundary);
+  const lastJournalScan = parseBackupJournalScanState(raw.lastJournalScan);
   return {
     version: BACKUP_SYNC_STATE_VERSION,
     updatedAt,
     ...(lastExportAt ? { lastExportAt } : {}),
     lastJournalOffset,
     ...(runsIndexHash && /^[a-f0-9]{64}$/.test(runsIndexHash) ? { runsIndexHash } : {}),
+    ...(lastJournalBoundary ? { lastJournalBoundary } : {}),
+    ...(lastJournalScan ? { lastJournalScan } : {}),
   };
 }
 
@@ -262,6 +424,19 @@ async function loadBackupSyncState(): Promise<BackupSyncState | null> {
 
 async function saveBackupSyncState(state: BackupSyncState): Promise<void> {
   await writeJsonAtomic(resolveBackupSyncStatePath(), state);
+}
+
+function hashJournalEvent(event: StorageJournalEvent): string {
+  return hashSha256(Buffer.from(JSON.stringify(event), "utf-8"));
+}
+
+function resolveJournalBoundary(events: StorageJournalEvent[]): BackupJournalBoundaryMarker | undefined {
+  const tail = events.at(-1);
+  if (!tail) return undefined;
+  return {
+    offset: events.length,
+    tailHash: hashJournalEvent(tail),
+  };
 }
 
 async function readFileMtimeMs(filePath: string): Promise<number> {
@@ -275,13 +450,97 @@ async function readFileMtimeMs(filePath: string): Promise<number> {
   }
 }
 
-async function countJournalOffset(): Promise<number> {
+async function readJournalSnapshot(): Promise<{
+  events: StorageJournalEvent[];
+  offset: number;
+  boundary?: BackupJournalBoundaryMarker;
+}> {
   try {
     const events = await readStorageJournalEvents();
-    return events.length;
+    const boundary = resolveJournalBoundary(events);
+    return {
+      events,
+      offset: events.length,
+      ...(boundary ? { boundary } : {}),
+    };
   } catch {
-    return 0;
+    return {
+      events: [],
+      offset: 0,
+    };
   }
+}
+
+function readJournalRunId(event: StorageJournalEvent): string {
+  if (!("payload" in event) || !isRecord(event.payload)) return "";
+  const rawRunId = asString(event.payload.runId);
+  if (!rawRunId) return "";
+  try {
+    return sanitizeRecordId(rawRunId);
+  } catch {
+    return "";
+  }
+}
+
+function collectJournalRunCreateIdsSince(
+  events: StorageJournalEvent[],
+  offset: number,
+  previousBoundary?: BackupJournalBoundaryMarker,
+): {
+  runIds: Set<string>;
+  scan: BackupJournalScanState;
+} {
+  const changedRunIds = new Set<string>();
+  const normalizedOffset = Math.max(0, Math.trunc(offset));
+  let fallbackReason: BackupJournalScanState["fallbackReason"];
+  if (normalizedOffset > events.length) {
+    fallbackReason = "previous-offset-out-of-range";
+  } else if (normalizedOffset > 0 && !previousBoundary) {
+    fallbackReason = "previous-boundary-missing";
+  } else if (previousBoundary && previousBoundary.offset !== normalizedOffset) {
+    fallbackReason = "previous-boundary-mismatch";
+  } else if (previousBoundary && normalizedOffset > 0) {
+    const previousTail = events[normalizedOffset - 1];
+    if (!previousTail || hashJournalEvent(previousTail) !== previousBoundary.tailHash) {
+      fallbackReason = "previous-tail-mismatch";
+    }
+  }
+  const start = fallbackReason ? 0 : normalizedOffset;
+  const scan: BackupJournalScanState = {
+    mode: fallbackReason ? "full-scan" : "offset",
+    startOffset: start,
+    ...(fallbackReason ? { fallbackReason } : {}),
+  };
+  const transactions = new Map<string, {
+    committed: boolean;
+    rolledBack: boolean;
+    runId: string;
+  }>();
+
+  for (const event of events.slice(start)) {
+    if (event.kind !== "RUN_CREATE") continue;
+    const current = transactions.get(event.txId) ?? {
+      committed: false,
+      rolledBack: false,
+      runId: "",
+    };
+    const eventRunId = readJournalRunId(event);
+    if (eventRunId) current.runId = eventRunId;
+    if (event.event === "COMMIT" || event.event === "RECOVERED_COMMIT") current.committed = true;
+    if (event.event === "ROLLBACK" || event.event === "RECOVERED_ROLLBACK") current.rolledBack = true;
+    transactions.set(event.txId, current);
+  }
+
+  for (const tx of transactions.values()) {
+    if (tx.runId && tx.committed && !tx.rolledBack) {
+      changedRunIds.add(tx.runId);
+    }
+  }
+
+  return {
+    runIds: changedRunIds,
+    scan,
+  };
 }
 
 async function readRunsIndexHash(): Promise<string | undefined> {
@@ -434,6 +693,9 @@ function parseVaultManifest(raw: unknown): VaultManifest {
   const filesRaw = isRecord(raw.files) ? raw.files : {};
   const conflictRaw = isRecord(raw.conflictPolicy) ? raw.conflictPolicy : {};
   const syncStateRaw = isRecord(raw.syncState) ? raw.syncState : null;
+  const syncJournalScan = syncStateRaw ? parseBackupJournalScanState(syncStateRaw.journalScan) : undefined;
+  const previousJournalBoundary = syncStateRaw ? parseBackupJournalBoundaryMarker(syncStateRaw.previousJournalBoundary) : undefined;
+  const currentJournalBoundary = syncStateRaw ? parseBackupJournalBoundaryMarker(syncStateRaw.currentJournalBoundary) : undefined;
 
   const fileMap: Record<string, { sizeBytes: number; sha256: string }> = {};
   for (const [rawPath, row] of Object.entries(filesRaw)) {
@@ -470,6 +732,9 @@ function parseVaultManifest(raw: unknown): VaultManifest {
           ...(asString(syncStateRaw.currentRunsIndexHash)
             ? { currentRunsIndexHash: asString(syncStateRaw.currentRunsIndexHash).toLowerCase() }
             : {}),
+          ...(previousJournalBoundary ? { previousJournalBoundary } : {}),
+          ...(currentJournalBoundary ? { currentJournalBoundary } : {}),
+          ...(syncJournalScan ? { journalScan: syncJournalScan } : {}),
         },
       }
       : {}),
@@ -602,15 +867,15 @@ async function parseVault(
   for (const [entryPath, meta] of Object.entries(manifest.files)) {
     const loaded = entries.get(entryPath);
     if (!loaded) {
-      warnings.push(`manifest file missing: ${entryPath}`);
+      warnings.push(backupWarningMessage("manifestFileMissing", entryPath));
       continue;
     }
     const digest = hashSha256(loaded);
     if (digest !== meta.sha256) {
-      warnings.push(`manifest hash mismatch: ${entryPath}`);
+      warnings.push(backupWarningMessage("manifestHashMismatch", entryPath));
     }
     if (loaded.length !== meta.sizeBytes) {
-      warnings.push(`manifest size mismatch: ${entryPath}`);
+      warnings.push(backupWarningMessage("manifestSizeMismatch", entryPath));
     }
   }
 
@@ -762,6 +1027,79 @@ function parseActionProgress(raw: unknown, runId: string): PlanningRunActionProg
   };
 }
 
+function parsePreviewJson(parsed: ParsedVault, entryPath: string): unknown {
+  const bytesRow = parsed.entries.get(entryPath);
+  if (!bytesRow) throw new Error("PREVIEW_ENTRY_MISSING");
+  return JSON.parse(bytesRow.toString("utf-8")) as unknown;
+}
+
+function collectPreviewSemanticWarnings(parsed: ParsedVault): string[] {
+  const warnings = new Set<string>();
+  const addInvalidEntry = (entryPath: string) => {
+    warnings.add(backupWarningMessage("previewInvalidEntry", entryPath));
+  };
+
+  const entryPaths = [...parsed.entries.keys()].sort((a, b) => a.localeCompare(b));
+  for (const entryPath of entryPaths) {
+    try {
+      if (parseProfileEntryPath(entryPath)) {
+        const raw = parsePreviewJson(parsed, entryPath);
+        const row = isRecord(raw) ? raw : {};
+        const profilePayload = isRecord(row.profile) ? row.profile : row;
+        loadCanonicalProfile(profilePayload);
+        continue;
+      }
+
+      if (parseProfileOverridesEntryPath(entryPath)) {
+        parsePreviewJson(parsed, entryPath);
+        continue;
+      }
+
+      if (parseRunMetaEntryPath(entryPath)) {
+        loadCanonicalRun(parsePreviewJson(parsed, entryPath));
+        continue;
+      }
+
+      const actionPlanMeta = parseRunActionPlanEntryPath(entryPath);
+      if (actionPlanMeta) {
+        const actionPlan = parseActionPlan(parsePreviewJson(parsed, entryPath), actionPlanMeta.runId);
+        if (!actionPlan) throw new Error("PREVIEW_ACTION_PLAN_INVALID");
+        continue;
+      }
+
+      const actionProgressMeta = parseRunActionProgressEntryPath(entryPath);
+      if (actionProgressMeta) {
+        const actionProgress = parseActionProgress(parsePreviewJson(parsed, entryPath), actionProgressMeta.runId);
+        if (!actionProgress) throw new Error("PREVIEW_ACTION_PROGRESS_INVALID");
+        continue;
+      }
+
+      const isAssumptionsHistoryEntry = entryPath.startsWith(`${ASSUMPTIONS_DIR}/history/`) && entryPath.endsWith(".json");
+      if (isAssumptionsHistoryEntry) {
+        const historyMeta = parseAssumptionsHistoryPath(entryPath);
+        if (!historyMeta) throw new Error("PREVIEW_ASSUMPTIONS_PATH_INVALID");
+        const migrated = migrateAssumptionsSnapshot(parsePreviewJson(parsed, entryPath));
+        if (!migrated.ok || !migrated.data) throw new Error("PREVIEW_ASSUMPTIONS_INVALID");
+        continue;
+      }
+
+      if (entryPath === `${ASSUMPTIONS_DIR}/latest.json`) {
+        const migrated = migrateAssumptionsSnapshot(parsePreviewJson(parsed, entryPath));
+        if (!migrated.ok || !migrated.data) throw new Error("PREVIEW_LATEST_ASSUMPTIONS_INVALID");
+        continue;
+      }
+
+      if (entryPath.startsWith(`${POLICIES_DIR}/`) && entryPath.endsWith(".json")) {
+        parsePreviewJson(parsed, entryPath);
+      }
+    } catch {
+      addInvalidEntry(entryPath);
+    }
+  }
+
+  return [...warnings];
+}
+
 async function clearProfiles(): Promise<void> {
   const profiles = await listProfiles();
   for (const row of profiles) {
@@ -820,9 +1158,20 @@ export async function buildPlanningDataVaultZip(options?: {
   const fileEntries = new Map<string, Buffer>();
   const warnings: string[] = [];
   const appVersion = await readAppVersion();
-  const nowIso = new Date().toISOString();
-  const currentJournalOffset = await countJournalOffset();
+  const nowIso = resolveMonotonicBackupExportAt(previousState?.lastExportAt);
+  const journalSnapshot = await readJournalSnapshot();
+  const currentJournalOffset = journalSnapshot.offset;
+  const currentJournalBoundary = journalSnapshot.boundary;
   const currentRunsIndexHash = await readRunsIndexHash();
+  const journalRunCreateResult = mode === "delta"
+    ? collectJournalRunCreateIdsSince(
+      journalSnapshot.events,
+      previousState?.lastJournalOffset ?? 0,
+      previousState?.lastJournalBoundary,
+    )
+    : null;
+  const journalRunCreateIds = journalRunCreateResult?.runIds ?? new Set<string>();
+  const journalScan = journalRunCreateResult?.scan;
 
   const profiles = await listProfiles();
   for (const profile of profiles) {
@@ -846,8 +1195,8 @@ export async function buildPlanningDataVaultZip(options?: {
       ) {
         fileEntries.set(profileOverridesPathFromId(safeId), overridesBytes);
       }
-    } catch (error) {
-      warnings.push(`profile skipped: ${profile.id} (${error instanceof Error ? error.message : "invalid id"})`);
+    } catch {
+      warnings.push(backupWarningMessage("profileSkipped", profile.id));
     }
   }
 
@@ -855,14 +1204,16 @@ export async function buildPlanningDataVaultZip(options?: {
   for (const runId of runIds) {
     const run = await getRun(runId);
     if (!run) {
-      warnings.push(`run missing meta: ${runId}`);
+      warnings.push(backupWarningMessage("runMissingMeta", runId));
       continue;
     }
     const createdAtMs = Math.max(0, Date.parse(run.createdAt) || 0);
     const runAssetMtimeMs = await readRunAssetMtimeMs(runId);
+    const runCreatedAfterPreviousExport = journalRunCreateIds.has(runId);
     if (
       mode === "delta"
       && deltaCutoffMs > 0
+      && !runCreatedAfterPreviousExport
       && createdAtMs <= deltaCutoffMs
       && runAssetMtimeMs <= deltaCutoffMs
     ) {
@@ -982,6 +1333,9 @@ export async function buildPlanningDataVaultZip(options?: {
       currentJournalOffset,
       ...(previousState?.runsIndexHash ? { previousRunsIndexHash: previousState.runsIndexHash } : {}),
       ...(currentRunsIndexHash ? { currentRunsIndexHash } : {}),
+      ...(previousState?.lastJournalBoundary ? { previousJournalBoundary: previousState.lastJournalBoundary } : {}),
+      ...(currentJournalBoundary ? { currentJournalBoundary } : {}),
+      ...(journalScan ? { journalScan } : {}),
     },
     schemaVersions: {
       profile: PROFILE_SCHEMA_VERSION,
@@ -1010,6 +1364,8 @@ export async function buildPlanningDataVaultZip(options?: {
     lastExportAt: nowIso,
     lastJournalOffset: currentJournalOffset,
     ...(currentRunsIndexHash ? { runsIndexHash: currentRunsIndexHash } : {}),
+    ...(currentJournalBoundary ? { lastJournalBoundary: currentJournalBoundary } : {}),
+    ...(journalScan ? { lastJournalScan: journalScan } : {}),
   });
   return {
     fileName: mode === "delta"
@@ -1058,9 +1414,10 @@ export async function previewPlanningDataVaultZip(
   };
 
   const warnings = [...parsed.warnings];
-  if (parsed.manifest.counts.profiles !== actual.profiles) warnings.push("manifest counts mismatch: profiles");
-  if (parsed.manifest.counts.runs !== actual.runs) warnings.push("manifest counts mismatch: runs");
-  if (parsed.manifest.counts.assumptionsHistory !== actual.assumptionsHistory) warnings.push("manifest counts mismatch: assumptionsHistory");
+  if (parsed.manifest.counts.profiles !== actual.profiles) warnings.push(backupWarningMessage("manifestProfilesCountMismatch"));
+  if (parsed.manifest.counts.runs !== actual.runs) warnings.push(backupWarningMessage("manifestRunsCountMismatch"));
+  if (parsed.manifest.counts.assumptionsHistory !== actual.assumptionsHistory) warnings.push(backupWarningMessage("manifestAssumptionsCountMismatch"));
+  warnings.push(...collectPreviewSemanticWarnings(parsed));
 
   return {
     manifest: toManifestWithoutFiles(parsed.manifest),
@@ -1070,7 +1427,7 @@ export async function previewPlanningDataVaultZip(
       runIds: runIds.slice(0, options.maxPreviewIds),
       snapshotIds: snapshotIds.slice(0, options.maxPreviewIds),
     },
-    warnings,
+    warnings: [...new Set(warnings)],
   };
 }
 
@@ -1095,14 +1452,19 @@ export async function restorePlanningDataVaultZip(
     latestSnapshot: false,
     policies: 0,
   };
+  const restoreSharedState = !isPlanningNamespaceEnabled();
 
   if (options.mode === "replace") {
     await clearProfiles();
     await clearRuns();
-    await clearAssumptions();
-    await clearPolicies();
+    if (restoreSharedState) {
+      await clearAssumptions();
+      await clearPolicies();
+    }
   }
   const deltaMergeMode = options.mode !== "replace" && parsed.manifest.mode === "delta";
+  const restoreSharedAssumptions = restoreSharedState;
+  const restoreSharedPolicies = restoreSharedState;
 
   // profiles
   const profilePaths = [...parsed.entries.keys()]
@@ -1134,12 +1496,12 @@ export async function restorePlanningDataVaultZip(
         });
       }
       imported.profiles += 1;
-    } catch (error) {
+    } catch {
       issues.push({
         entity: "profile",
         id: idFromPath || undefined,
         path: entryPath,
-        message: error instanceof Error ? error.message : "profile restore failed",
+        message: restoreIssueMessage("profile"),
       });
     }
   }
@@ -1156,12 +1518,12 @@ export async function restorePlanningDataVaultZip(
       const safeProfileId = sanitizeRecordId(parsedProfileId);
       const payload = isRecord(raw) && Array.isArray(raw.items) ? raw.items : raw;
       await saveAssumptionsOverrides(payload, safeProfileId);
-    } catch (error) {
+    } catch {
       issues.push({
         entity: "profile",
         id: parsedProfileId || undefined,
         path: entryPath,
-        message: error instanceof Error ? error.message : "profile overrides restore failed",
+        message: restoreIssueMessage("profileOverrides"),
       });
     }
   }
@@ -1203,23 +1565,23 @@ export async function restorePlanningDataVaultZip(
           } else if (blobMeta.blobName === "debtStrategy") {
             outputs.debtStrategy = blobRaw as PlanningRunRecord["outputs"]["debtStrategy"];
           } else {
-            warnings.push(`unknown run blob skipped: ${blobPath}`);
+            warnings.push(backupWarningMessage("unknownRunBlobSkipped", blobPath));
             continue;
           }
           imported.runBlobs += 1;
-        } catch (error) {
+        } catch {
           issues.push({
             entity: "runBlob",
             id: safeRunId,
             path: blobPath,
-            message: error instanceof Error ? error.message : "run blob restore failed",
+            message: restoreIssueMessage("runBlob"),
           });
         }
       }
 
       if (await getRun(safeRunId)) {
         if (deltaMergeMode) {
-          warnings.push(`delta conflict skipped: run ${safeRunId} already exists`);
+          warnings.push(backupWarningMessage("deltaRunConflictSkipped", safeRunId));
           continue;
         }
         await hardDeleteRun(safeRunId);
@@ -1245,12 +1607,12 @@ export async function restorePlanningDataVaultZip(
           if (!plan) throw new Error("INVALID_ACTION_PLAN");
           await writeStoreJsonAtomic(path.join(resolveProfileRunDir(canonical.run.profileId, safeRunId), "action-plan.json"), plan);
           imported.actionPlans += 1;
-        } catch (error) {
+        } catch {
           issues.push({
             entity: "actionPlan",
             id: safeRunId,
             path: planPath,
-            message: error instanceof Error ? error.message : "action plan restore failed",
+            message: restoreIssueMessage("actionPlan"),
           });
         }
       }
@@ -1264,21 +1626,21 @@ export async function restorePlanningDataVaultZip(
           if (!progress) throw new Error("INVALID_ACTION_PROGRESS");
           await writeStoreJsonAtomic(path.join(resolveProfileRunDir(canonical.run.profileId, safeRunId), "action-progress.json"), progress);
           imported.actionProgress += 1;
-        } catch (error) {
+        } catch {
           issues.push({
             entity: "actionProgress",
             id: safeRunId,
             path: progressPath,
-            message: error instanceof Error ? error.message : "action progress restore failed",
+            message: restoreIssueMessage("actionProgress"),
           });
         }
       }
-    } catch (error) {
+    } catch {
       issues.push({
         entity: "run",
         id: runId || undefined,
         path: entryPath,
-        message: error instanceof Error ? error.message : "run restore failed",
+        message: restoreIssueMessage("run"),
       });
     }
   }
@@ -1287,49 +1649,54 @@ export async function restorePlanningDataVaultZip(
   const assumptionsPaths = [...parsed.entries.keys()]
     .filter((entryPath) => parseAssumptionsHistoryPath(entryPath))
     .sort((a, b) => a.localeCompare(b));
-  for (const entryPath of assumptionsPaths) {
-    const snapshotId = parseAssumptionsHistoryPath(entryPath)?.id ?? "";
-    const bytesRow = parsed.entries.get(entryPath);
-    if (!bytesRow) continue;
-    try {
-      const raw = JSON.parse(bytesRow.toString("utf-8")) as unknown;
-      const migrated = migrateAssumptionsSnapshot(raw);
-      if (!migrated.ok) {
-        throw new Error(migrated.errors.join(", ") || "snapshot migration failed");
-      }
-      const snapshotData = migrated.data;
-      if (!snapshotData) {
-        throw new Error("snapshot migration returned empty payload");
-      }
-      const safeId = normalizeSnapshotId(snapshotId);
-      if (!safeId) throw new Error("INVALID_SNAPSHOT_ID");
-      if (deltaMergeMode) {
-        const existingSnapshot = await loadAssumptionsSnapshotById(safeId);
-        if (existingSnapshot) {
-          warnings.push(`delta conflict skipped: snapshot ${safeId} already exists`);
-          continue;
+  const latestPath = `${ASSUMPTIONS_DIR}/latest.json`;
+  const latestBytes = parsed.entries.get(latestPath);
+  if (!restoreSharedAssumptions && (assumptionsPaths.length > 0 || latestBytes)) {
+    warnings.push(backupWarningMessage("namespaceSharedAssumptionsSkipped"));
+  }
+  if (restoreSharedAssumptions) {
+    for (const entryPath of assumptionsPaths) {
+      const snapshotId = parseAssumptionsHistoryPath(entryPath)?.id ?? "";
+      const bytesRow = parsed.entries.get(entryPath);
+      if (!bytesRow) continue;
+      try {
+        const raw = JSON.parse(bytesRow.toString("utf-8")) as unknown;
+        const migrated = migrateAssumptionsSnapshot(raw);
+        if (!migrated.ok) {
+          throw new Error(migrated.errors.join(", ") || "snapshot migration failed");
         }
+        const snapshotData = migrated.data;
+        if (!snapshotData) {
+          throw new Error("snapshot migration returned empty payload");
+        }
+        const safeId = normalizeSnapshotId(snapshotId);
+        if (!safeId) throw new Error("INVALID_SNAPSHOT_ID");
+        if (deltaMergeMode) {
+          const existingSnapshot = await loadAssumptionsSnapshotById(safeId);
+          if (existingSnapshot) {
+            warnings.push(backupWarningMessage("deltaSnapshotConflictSkipped", safeId));
+            continue;
+          }
+        }
+        await writeStoreJsonAtomic(path.join(resolveAssumptionsHistoryDir(), `${safeId}.json`), {
+          ...snapshotData,
+          asOf: toDateOnly(snapshotData.asOf),
+          fetchedAt: toIso(snapshotData.fetchedAt),
+        });
+        imported.assumptionsHistory += 1;
+      } catch {
+        issues.push({
+          entity: "assumptions",
+          id: snapshotId || undefined,
+          path: entryPath,
+          message: restoreIssueMessage("assumptionsHistory"),
+        });
       }
-      await writeStoreJsonAtomic(path.join(resolveAssumptionsHistoryDir(), `${safeId}.json`), {
-        ...snapshotData,
-        asOf: toDateOnly(snapshotData.asOf),
-        fetchedAt: toIso(snapshotData.fetchedAt),
-      });
-      imported.assumptionsHistory += 1;
-    } catch (error) {
-      issues.push({
-        entity: "assumptions",
-        id: snapshotId || undefined,
-        path: entryPath,
-        message: error instanceof Error ? error.message : "assumptions restore failed",
-      });
     }
   }
 
   // latest snapshot
-  const latestPath = `${ASSUMPTIONS_DIR}/latest.json`;
-  const latestBytes = parsed.entries.get(latestPath);
-  if (latestBytes) {
+  if (restoreSharedAssumptions && latestBytes) {
     try {
       const raw = JSON.parse(latestBytes.toString("utf-8")) as unknown;
       const migrated = migrateAssumptionsSnapshot(raw);
@@ -1347,11 +1714,11 @@ export async function restorePlanningDataVaultZip(
         fetchedAt: toIso(snapshotData.fetchedAt),
       });
       imported.latestSnapshot = true;
-    } catch (error) {
+    } catch {
       issues.push({
         entity: "assumptions",
         path: latestPath,
-        message: error instanceof Error ? error.message : "latest snapshot restore failed",
+        message: restoreIssueMessage("latestSnapshot"),
       });
     }
   }
@@ -1359,31 +1726,34 @@ export async function restorePlanningDataVaultZip(
   // policies
   const autoMergePolicyEntry = `${POLICIES_DIR}/ops-auto-merge-policy.json`;
   const policyBytes = parsed.entries.get(autoMergePolicyEntry);
-  if (policyBytes) {
+  const schedulerPolicyEntry = `${POLICIES_DIR}/ops-scheduler-threshold-policy.json`;
+  const schedulerPolicyBytes = parsed.entries.get(schedulerPolicyEntry);
+  if (!restoreSharedPolicies && (policyBytes || schedulerPolicyBytes)) {
+    warnings.push(backupWarningMessage("namespaceSharedPoliciesSkipped"));
+  }
+  if (restoreSharedPolicies && policyBytes) {
     try {
       const payload = JSON.parse(policyBytes.toString("utf-8")) as unknown;
       await writeJsonAtomic(path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE), payload);
       imported.policies += 1;
-    } catch (error) {
+    } catch {
       issues.push({
         entity: "policy",
         path: autoMergePolicyEntry,
-        message: error instanceof Error ? error.message : "policy restore failed",
+        message: restoreIssueMessage("autoMergePolicy"),
       });
     }
   }
-  const schedulerPolicyEntry = `${POLICIES_DIR}/ops-scheduler-threshold-policy.json`;
-  const schedulerPolicyBytes = parsed.entries.get(schedulerPolicyEntry);
-  if (schedulerPolicyBytes) {
+  if (restoreSharedPolicies && schedulerPolicyBytes) {
     try {
       const payload = JSON.parse(schedulerPolicyBytes.toString("utf-8")) as unknown;
       await writeJsonAtomic(path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE), payload);
       imported.policies += 1;
-    } catch (error) {
+    } catch {
       issues.push({
         entity: "policy",
         path: schedulerPolicyEntry,
-        message: error instanceof Error ? error.message : "scheduler policy restore failed",
+        message: restoreIssueMessage("schedulerPolicy"),
       });
     }
   }

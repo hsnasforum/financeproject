@@ -4,15 +4,20 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { sanitizeRecordId } from "@/lib/planning/store/paths";
 import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
 import {
   buildDraftPatchFromCashflow,
+  normalizePlanningRecordId,
   type BuildDraftPatchFromCashflowOptions,
 } from "@/lib/planning/v3/draft/service";
-import { getProfile } from "@/lib/planning/v3/profiles/store";
+import { getCurrentUserProfile } from "@/lib/planning/v3/service/profileRepository";
 import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type ApplyMode = "preview" | "apply";
 
@@ -85,8 +90,8 @@ function sanitizeIds(profileIdInput: unknown, batchIdInput: unknown): {
 
   try {
     return {
-      profileId: sanitizeRecordId(profileIdText),
-      batchId: sanitizeRecordId(batchIdText),
+      profileId: normalizePlanningRecordId(profileIdText),
+      batchId: normalizePlanningRecordId(batchIdText),
     };
   } catch {
     return null;
@@ -175,32 +180,35 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const mode = parseMode(body?.mode);
   const ids = sanitizeIds(body?.profileId, body?.batchId);
   const splitOptions = parseSplitOptions(body);
   if (!mode || !ids || !splitOptions) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "요청 형식이 올바르지 않습니다." } },
+      { ok: false, error: { code: "INPUT", message: "요청 형식이 올바르지 않습니다." }, meta: userMeta },
       { status: 400 },
     );
   }
 
   try {
     const [baseRecord, batchLoaded] = await Promise.all([
-      getProfile(ids.profileId),
+      getCurrentUserProfile(ids.profileId),
       readBatchTransactions(ids.batchId),
     ]);
 
     if (!baseRecord || !batchLoaded) {
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "프로필 또는 배치를 찾을 수 없습니다." } },
+        { ok: false, error: { code: "NO_DATA", message: "프로필 또는 배치를 찾을 수 없습니다." }, meta: userMeta },
         { status: 404 },
       );
     }
     if (!asString(batchLoaded.batch.accountId)) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." } },
+        { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." }, meta: userMeta },
         { status: 400 },
       );
     }
@@ -217,6 +225,7 @@ export async function POST(request: Request) {
         diffRows: buildDiffRows(baseRecord.profile, mergedProfile),
         profilePatch: built.profilePatch,
         evidence: built.draftPatch.evidence,
+        meta: userMeta,
       });
     }
 
@@ -227,18 +236,19 @@ export async function POST(request: Request) {
           code: "EXPORT_ONLY",
           message: "v3는 미리보기/내보내기만 지원합니다. 저장은 허용되지 않습니다.",
         },
+        meta: userMeta,
       },
       { status: 409 },
     );
   } catch (error) {
     if (error instanceof Error && error.message.includes("split")) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." } },
+        { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "드래프트 적용 처리에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "드래프트 적용 처리에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

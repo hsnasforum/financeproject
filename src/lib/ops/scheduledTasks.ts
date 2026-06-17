@@ -4,12 +4,15 @@ import { getVaultStatus, type VaultStatus } from "../planning/security/vaultStat
 import { redactText } from "../planning/privacy/redact";
 
 export type ScheduledTaskName =
+  | "DAILY_REFRESH"
+  | "DART_WATCH"
   | "OPS_REFRESH_ASSUMPTIONS"
   | "PLANNING_RUN_MONTHLY"
   | "OPS_SCHEDULER_HEALTH";
 
 export type ScheduledTaskCode =
   | "OK"
+  | "SKIPPED"
   | "LOCKED"
   | "STALE_ASSUMPTIONS"
   | "VALIDATION"

@@ -6,15 +6,16 @@ import {
 } from "../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
 import {
+  planningUserMeta,
   planningAuthErrorResponse as toAuthErrorResponse,
   withPlanningRouteUser,
 } from "../../../../../../lib/planning/api/routeAuth";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import {
-  deleteProfile,
-  getProfile,
-  updateProfile,
-} from "../../../../../../lib/planning/server/store/profileStore";
+  deleteCurrentUserProfile,
+  getCurrentUserProfile,
+  updateCurrentUserProfile,
+} from "../../../../../../lib/planning/server/profiles/repository";
 import { PlanningV2ValidationError } from "../../../../../../lib/planning/server/v2/types";
 import { loadCanonicalProfile } from "../../../../../../lib/planning/v2/loadCanonicalProfile";
 
@@ -121,16 +122,13 @@ export async function GET(request: Request, context: RouteContext) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const record = await getProfile(id);
+      const record = await getCurrentUserProfile(id);
       if (!record) {
         return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
       }
       return jsonOk({
         data: record,
-        meta: {
-          userId: currentUser.id,
-          authSource: currentUser.source,
-        },
+        meta: planningUserMeta(currentUser),
       });
     });
   } catch (error) {
@@ -178,7 +176,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return jsonError("INPUT", "No update fields provided");
       }
 
-      const updated = await updateProfile(id, patch);
+      const updated = await updateCurrentUserProfile(id, patch);
       if (!updated) {
         appendProfileAudit({
           event: "PLANNING_PROFILE_UPDATE",
@@ -202,8 +200,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         data: updated,
         meta: {
           ...(normalizationMeta ? { normalization: normalizationMeta } : {}),
-          userId: currentUser.id,
-          authSource: currentUser.source,
+          ...planningUserMeta(currentUser),
         },
       });
     });
@@ -266,7 +263,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const deleted = await deleteProfile(id);
+      const deleted = await deleteCurrentUserProfile(id);
       if (!deleted) {
         appendProfileAudit({
           event: "PLANNING_PROFILE_DELETE",
@@ -294,10 +291,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
       return jsonOk({
         data: { id, deleted: true, softDeleted: true },
-        meta: {
-          userId: currentUser.id,
-          authSource: currentUser.source,
-        },
+        meta: planningUserMeta(currentUser),
       });
     });
   } catch (error) {

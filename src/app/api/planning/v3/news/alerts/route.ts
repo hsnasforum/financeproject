@@ -7,6 +7,11 @@ import {
   updateAlertEventState,
 } from "@/lib/planning/v3/news/alerts";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function asNumber(value: unknown, fallback = 0): number {
   const parsed = Number(value);
@@ -162,6 +167,8 @@ function buildAlertsData(days: number) {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const url = new URL(request.url);
   const days = Math.max(1, Math.min(90, Math.round(asNumber(url.searchParams.get("days"), 14))));
@@ -184,11 +191,17 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const parsed = AlertsPostBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "알림 상태 입력 형식이 올바르지 않습니다." } },
+      {
+        ok: false,
+        error: { code: "INPUT", message: "알림 상태 입력 형식이 올바르지 않습니다." },
+        meta: planningUserMeta(currentUser),
+      },
       { status: 400 },
     );
   }

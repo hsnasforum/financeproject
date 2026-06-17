@@ -33,6 +33,7 @@ function normalizeParams(params: OpsActionParams): Record<string, unknown> {
     ...(typeof params.keepDays === "number" ? { keepDays: Math.trunc(params.keepDays) } : {}),
     ...(typeof params.keepCount === "number" ? { keepCount: Math.trunc(params.keepCount) } : {}),
     ...(asString(params.profileId) ? { profileId: asString(params.profileId) } : {}),
+    ...(asString(params.runId) ? { runId: asString(params.runId) } : {}),
   };
 }
 

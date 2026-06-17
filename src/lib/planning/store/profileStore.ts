@@ -19,6 +19,7 @@ import {
   moveFileToTrash,
   restoreFileFromTrash,
 } from "./trash";
+import { isPlanningNamespaceEnabled } from "./namespace";
 import { type PlanningProfileMeta, type PlanningProfileRecord } from "./types";
 
 type ProfilePatch = {
@@ -124,6 +125,10 @@ function sortByUpdatedAtDesc(records: PlanningProfileRecord[]): PlanningProfileR
 }
 
 function resolveProfileMetaPath(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(path.dirname(resolveProfilePartitionsDir(cwd)), "profiles.meta.json");
+  }
+
   const override = asString(process.env.PLANNING_PROFILE_META_PATH);
   if (override) return path.resolve(cwd, override);
 
@@ -136,6 +141,10 @@ function resolveProfileMetaPath(cwd = process.cwd()): string {
 }
 
 function resolveProfileRegistryPath(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(resolveProfilePartitionsDir(cwd), "index.json");
+  }
+
   const override = asString(process.env.PLANNING_PROFILE_REGISTRY_PATH);
   if (override) return path.resolve(cwd, override);
 

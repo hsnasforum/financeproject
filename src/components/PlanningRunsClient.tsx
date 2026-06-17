@@ -37,9 +37,15 @@ import { cn } from "@/lib/utils";
 type PlanningRunsClientProps = {
   initialSelectedRunId?: string;
   initialFilterProfileId?: string;
+  initialProfiles?: PlanningProfileRecord[];
+  initialProfilesReady?: boolean;
+  initialRuns?: PlanningRunRecord[];
+  initialRunsReady?: boolean;
+  initialActionProgressSummaryByRunId?: Record<string, ActionProgressSummary>;
+  initialLoadNotice?: string;
 };
 
-type ActionProgressSummary = {
+export type ActionProgressSummary = {
   total: number;
   done: number;
   doing: number;
@@ -96,24 +102,35 @@ function runFlags(run: PlanningRunRecord): {
 export function PlanningRunsClient({
   initialSelectedRunId = "",
   initialFilterProfileId = "",
+  initialProfiles = [],
+  initialProfilesReady = false,
+  initialRuns = [],
+  initialRunsReady = false,
+  initialActionProgressSummaryByRunId = {},
+  initialLoadNotice = "",
 }: PlanningRunsClientProps) {
   const isMountedRef = useRef(true);
   const profilesRequestIdRef = useRef(0);
   const runsRequestIdRef = useRef(0);
   const actionCenterRequestIdRef = useRef(0);
-  const [profiles, setProfiles] = useState<PlanningProfileRecord[]>([]);
-  const [runs, setRuns] = useState<PlanningRunRecord[]>([]);
+  const skipInitialProfilesLoadRef = useRef(initialProfilesReady);
+  const skipInitialRunsLoadRef = useRef(initialRunsReady);
+  const initialEffectiveSelectedRunId = initialSelectedRunId && initialRuns.some((run) => run.id === initialSelectedRunId)
+    ? initialSelectedRunId
+    : initialRuns[0]?.id ?? initialSelectedRunId;
+  const [profiles, setProfiles] = useState<PlanningProfileRecord[]>(initialProfiles);
+  const [runs, setRuns] = useState<PlanningRunRecord[]>(initialRuns);
   const [filterProfileId, setFilterProfileId] = useState(normalizeProfileId(initialFilterProfileId));
-  const [selectedRunId, setSelectedRunId] = useState(initialSelectedRunId);
+  const [selectedRunId, setSelectedRunId] = useState(initialEffectiveSelectedRunId);
   const [compareIds, setCompareIds] = useState<string[]>([]);
-  const [actionProgressSummaryByRun, setActionProgressSummaryByRun] = useState<Record<string, ActionProgressSummary>>({});
+  const [actionProgressSummaryByRun, setActionProgressSummaryByRun] = useState<Record<string, ActionProgressSummary>>(initialActionProgressSummaryByRunId);
   const [selectedActionPlan, setSelectedActionPlan] = useState<PlanningRunActionPlan | null>(null);
   const [selectedActionProgress, setSelectedActionProgress] = useState<PlanningRunActionProgress | null>(null);
   const [actionNoteDrafts, setActionNoteDrafts] = useState<Record<string, string>>({});
   const [actionCenterLoading, setActionCenterLoading] = useState(false);
   const [actionCenterError, setActionCenterError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(!initialRunsReady);
+  const [notice, setNotice] = useState(initialLoadNotice);
   const [error, setError] = useState("");
   const [shareMaskLevel, setShareMaskLevel] = useState<ShareMaskLevel>("standard");
   const [deleteTargetRunId, setDeleteTargetRunId] = useState("");
@@ -122,8 +139,8 @@ export function PlanningRunsClient({
   const [restoreTargetRunId, setRestoreTargetRunId] = useState("");
   const [restoreConfirmText, setRestoreConfirmText] = useState("");
   const [restoreWorking, setRestoreWorking] = useState(false);
-  const runsRef = useRef<PlanningRunRecord[]>([]);
-  const selectedRunIdRef = useRef(initialSelectedRunId);
+  const runsRef = useRef<PlanningRunRecord[]>(initialRuns);
+  const selectedRunIdRef = useRef(initialEffectiveSelectedRunId);
   const selectedActionCenterRunIdRef = useRef("");
 
   function pushNotice(message: string): void {
@@ -506,6 +523,10 @@ export function PlanningRunsClient({
   }, [filterProfileId]);
 
   useEffect(() => {
+    if (skipInitialProfilesLoadRef.current) {
+      skipInitialProfilesLoadRef.current = false;
+      return;
+    }
     const timeoutId = window.setTimeout(() => {
       loadProfilesEvent();
     }, 0);
@@ -515,6 +536,10 @@ export function PlanningRunsClient({
   }, []);
 
   useEffect(() => {
+    if (skipInitialRunsLoadRef.current) {
+      skipInitialRunsLoadRef.current = false;
+      return;
+    }
     const timeoutId = window.setTimeout(() => {
       loadRunsEvent(filterProfileId);
     }, 0);

@@ -2,6 +2,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type Account } from "../domain/types";
 import { resolvePlanningV3DataDir, resolvePlanningV3LegacyDataDir } from "./dataDir";
@@ -132,6 +133,8 @@ function normalizeAccountId(value: unknown): string {
 }
 
 function resolveAccountsPath(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) return path.join(resolvePlanningV3DataDir(cwd), "accounts.json");
+
   const override = asString(process.env.PLANNING_V3_ACCOUNTS_PATH);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningV3DataDir(cwd), "accounts.json");

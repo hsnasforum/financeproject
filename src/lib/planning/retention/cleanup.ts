@@ -3,6 +3,7 @@ import { type Dirent } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { resolveRunsDir } from "../store/paths";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../store/namespace";
 import {
   listPlanningTrash,
 } from "../store/trash";
@@ -118,6 +119,10 @@ function relativePath(baseDir: string, absPath: string): string {
 }
 
 function resolveCacheDir(baseDir: string): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), baseDir), "cache");
+  }
+
   const override = asString(process.env.PLANNING_CACHE_DIR);
   if (override) return path.resolve(baseDir, override);
   return path.join(resolvePlanningDataDir({ cwd: baseDir }), "cache");
@@ -394,12 +399,15 @@ export async function planPlanningCleanup(args: PlanCleanupArgs = {}): Promise<C
         path: item.pathRelative,
         reason: "trash.keep_days",
         sizeBytes: item.sizeBytes,
+        absPath: path.resolve(baseDir, item.pathRelative),
       });
       if (item.kind === "reports") {
+        const metaPath = item.pathRelative.replace(/\.md$/i, ".meta.json");
         actions.push({
           kind: "DELETE_FILE",
-          path: item.pathRelative.replace(/\.md$/i, ".meta.json"),
+          path: metaPath,
           reason: "trash.keep_days",
+          absPath: path.resolve(baseDir, metaPath),
         });
       }
     }

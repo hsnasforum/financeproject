@@ -4,11 +4,15 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { getJournalEntry, updateJournalEntry } from "@/lib/planning/v3/journal/store";
 import {
+  isPlanningRouteUser,
   planningUserMeta,
-  withPlanningRouteUser,
+  requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import {
+  getCurrentUserJournalEntry,
+  updateCurrentUserJournalEntry,
+} from "@/lib/planning/v3/service/journalRepository";
 
 function withReadGuard(request: Request): Response | null {
   try {
@@ -56,22 +60,21 @@ function asString(value: unknown): string {
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const params = await context.params;
   const id = asString(params.id);
+  const entry = getCurrentUserJournalEntry(id);
+  if (!entry) {
+    return NextResponse.json(
+      { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." }, meta: userMeta },
+      { status: 404 },
+    );
+  }
 
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
-    const entry = getJournalEntry(id);
-    if (!entry) {
-      return NextResponse.json(
-        { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." }, meta: userMeta },
-        { status: 404 },
-      );
-    }
-
-    return NextResponse.json({ ok: true, entry });
-  });
+  return NextResponse.json({ ok: true, entry, meta: userMeta });
 }
 
 export async function PUT(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -84,27 +87,26 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const params = await context.params;
   const id = asString(params.id);
-  return withPlanningRouteUser(request, async (currentUser) => {
-    const userMeta = planningUserMeta(currentUser);
-
-    try {
-      const payload = body as { entry?: unknown } | null;
-      const entry = updateJournalEntry(id, payload?.entry ?? {});
-      return NextResponse.json({ ok: true, entry });
-    } catch (error) {
-      if (error instanceof Error && error.message === "NOT_FOUND") {
-        return NextResponse.json(
-          { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." }, meta: userMeta },
-          { status: 404 },
-        );
-      }
+  try {
+    const payload = body as { entry?: unknown } | null;
+    const entry = updateCurrentUserJournalEntry(id, payload?.entry ?? {});
+    return NextResponse.json({ ok: true, entry, meta: userMeta });
+  } catch (error) {
+    if (error instanceof Error && error.message === "NOT_FOUND") {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." }, meta: userMeta },
-        { status: 400 },
+        { ok: false, error: { code: "NOT_FOUND", message: "저널 엔트리를 찾을 수 없습니다." }, meta: userMeta },
+        { status: 404 },
       );
     }
-  });
+    return NextResponse.json(
+      { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." }, meta: userMeta },
+      { status: 400 },
+    );
+  }
 }

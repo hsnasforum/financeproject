@@ -4,6 +4,11 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -49,6 +54,10 @@ export async function POST(request: Request, context: RouteContext) {
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
 
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
+
   await context.params;
   return NextResponse.json(
     {
@@ -57,6 +66,7 @@ export async function POST(request: Request, context: RouteContext) {
         code: "EXPORT_ONLY",
         message: "v3는 미리보기/내보내기만 지원합니다. 새 프로필 저장은 허용되지 않습니다.",
       },
+      meta: userMeta,
     },
     { status: 409 },
   );

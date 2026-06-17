@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { readDailyStatsLastNDays, readTrendsCache } from "@/lib/planning/v3/news/store";
 import { shiftKstDay } from "@/lib/planning/v3/news/trend";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  readCurrentUserNewsDailyStatsLastNDays,
+  readCurrentUserNewsTrendsCache,
+} from "@/lib/planning/v3/service/newsRepository";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 export const runtime = "nodejs";
 
@@ -74,57 +82,70 @@ function dayRange(toDateKst: string, days: number): string[] {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-  const url = new URL(request.url);
-  const windowDays = asWindow(url.searchParams.get("window"));
-  const cached = readTrendsCache(windowDays);
-  if (!cached) {
+  try {
+    const url = new URL(request.url);
+    const windowDays = asWindow(url.searchParams.get("window"));
+    const cached = readCurrentUserNewsTrendsCache(windowDays);
+    if (!cached) {
+      const payload = parseWithV3Whitelist(TrendsApiSchema, {
+        ok: true,
+        windowDays,
+        data: null,
+        hint: "캐시가 없습니다. 수동 갱신을 실행해 주세요.",
+      }, { scope: "response", context: "api.v3.news.trends" });
+      return NextResponse.json(payload);
+    }
+
+    const dailyRows = readCurrentUserNewsDailyStatsLastNDays({
+      toDateKst: cached.date,
+      days: windowDays,
+    });
+    const dayKeys = dayRange(cached.date, windowDays);
+    const rowsByTopicAndDay = new Map<string, { count: number; burstGrade: string }>();
+    for (const row of dailyRows) {
+      rowsByTopicAndDay.set(`${row.topicId}::${row.dateKst}`, {
+        count: row.count,
+        burstGrade: row.burstGrade,
+      });
+    }
+
+    const topics = cached.topics.map((topic) => ({
+      topicId: topic.topicId,
+      topicLabel: topic.topicLabel,
+      count: topic.count,
+      burstGrade: topic.burstGrade,
+      sourceDiversity: topic.sourceDiversity,
+      series: dayKeys.map((date) => {
+        const point = rowsByTopicAndDay.get(`${topic.topicId}::${date}`);
+        return {
+          date,
+          count: point?.count ?? 0,
+          burstGrade: point?.burstGrade ?? "Unknown",
+          hasBurstMarker: burstMarker(point?.burstGrade ?? ""),
+        };
+      }),
+    }));
+
     const payload = parseWithV3Whitelist(TrendsApiSchema, {
       ok: true,
       windowDays,
-      data: null,
-      hint: "캐시가 없습니다. 수동 갱신을 실행해 주세요.",
+      data: {
+        date: cached.date,
+        topics,
+      },
     }, { scope: "response", context: "api.v3.news.trends" });
     return NextResponse.json(payload);
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INTERNAL", message: "뉴스 트렌드를 불러오는 중 오류가 발생했습니다." },
+        meta: planningUserMeta(currentUser),
+      },
+      { status: 500 },
+    );
   }
-
-  const dailyRows = readDailyStatsLastNDays({
-    toDateKst: cached.date,
-    days: windowDays,
-  });
-  const dayKeys = dayRange(cached.date, windowDays);
-  const rowsByTopicAndDay = new Map<string, { count: number; burstGrade: string }>();
-  for (const row of dailyRows) {
-    rowsByTopicAndDay.set(`${row.topicId}::${row.dateKst}`, {
-      count: row.count,
-      burstGrade: row.burstGrade,
-    });
-  }
-
-  const topics = cached.topics.map((topic) => ({
-    topicId: topic.topicId,
-    topicLabel: topic.topicLabel,
-    count: topic.count,
-    burstGrade: topic.burstGrade,
-    sourceDiversity: topic.sourceDiversity,
-    series: dayKeys.map((date) => {
-      const point = rowsByTopicAndDay.get(`${topic.topicId}::${date}`);
-      return {
-        date,
-        count: point?.count ?? 0,
-        burstGrade: point?.burstGrade ?? "Unknown",
-        hasBurstMarker: burstMarker(point?.burstGrade ?? ""),
-      };
-    }),
-  }));
-
-  const payload = parseWithV3Whitelist(TrendsApiSchema, {
-    ok: true,
-    windowDays,
-    data: {
-      date: cached.date,
-      topics,
-    },
-  }, { scope: "response", context: "api.v3.news.trends" });
-  return NextResponse.json(payload);
 }

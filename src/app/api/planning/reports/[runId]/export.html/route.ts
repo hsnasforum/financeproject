@@ -2,8 +2,13 @@ import {
   assertLocalHost,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
-import { getRun } from "../../../../../../lib/planning/server/store/runStore";
+import { getCurrentUserRun } from "../../../../../../lib/planning/server/runs/repository";
 import { buildStandaloneReportArtifactsFromRun } from "../../../../../planning/reports/_lib/standaloneReportArtifacts";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ runId: string }>;
@@ -45,6 +50,9 @@ function withLocalReadGuard(request: Request): Response | null {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withLocalReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { runId } = await context.params;
   const url = new URL(request.url);
@@ -52,9 +60,13 @@ export async function GET(request: Request, context: RouteContext) {
   const printView = viewMode === "print" || viewMode === "view";
   const styleNonce = createStyleNonce();
   try {
-    const run = await getRun(runId);
+    const run = await getCurrentUserRun(runId);
     if (!run) {
-      return Response.json({ ok: false, message: "실행 기록을 찾을 수 없습니다." }, { status: 404 });
+      return Response.json({
+        ok: false,
+        message: "실행 기록을 찾을 수 없습니다.",
+        meta: userMeta,
+      }, { status: 404 });
     }
 
     const { html } = buildStandaloneReportArtifactsFromRun(run, {
@@ -75,6 +87,10 @@ export async function GET(request: Request, context: RouteContext) {
       },
     });
   } catch {
-    return Response.json({ ok: false, message: "HTML export 생성에 실패했습니다." }, { status: 500 });
+    return Response.json({
+      ok: false,
+      message: "HTML export 생성에 실패했습니다.",
+      meta: userMeta,
+    }, { status: 500 });
   }
 }

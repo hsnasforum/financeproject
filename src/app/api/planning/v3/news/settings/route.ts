@@ -13,6 +13,11 @@ import {
 } from "@/lib/planning/v3/news/settings";
 import { NEWS_TOPICS } from "@/lib/planning/v3/news/taxonomy";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 const SourceOverrideInputSchema = z.object({
   id: z.string().trim().min(1),
@@ -121,6 +126,8 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const settings = readNewsSettings();
   const effective = loadEffectiveNewsConfig();
@@ -177,11 +184,17 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const parsed = SaveBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "설정 입력 형식이 올바르지 않습니다." } },
+      {
+        ok: false,
+        error: { code: "INPUT", message: "설정 입력 형식이 올바르지 않습니다." },
+        meta: planningUserMeta(currentUser),
+      },
       { status: 400 },
     );
   }

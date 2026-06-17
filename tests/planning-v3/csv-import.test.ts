@@ -90,7 +90,7 @@ describe("POST /api/planning/v3/import/csv", () => {
       ok?: boolean;
       cashflow?: unknown[];
       draftPatch?: Record<string, number>;
-      meta?: { rows?: number; months?: number };
+      meta?: { rows?: number; months?: number; userId?: string; authSource?: string };
       draftSummary?: { rows?: number; columns?: number };
       data?: {
         monthlyCashflow?: unknown[];
@@ -108,7 +108,12 @@ describe("POST /api/planning/v3/import/csv", () => {
     expect(payloadA.ok).toBe(true);
     expect(payloadA.cashflow).toEqual(expected.cashflow);
     expect(payloadA.draftPatch).toEqual(expected.draftPatch);
-    expect(payloadA.meta).toEqual({ rows: expected.meta.rows, months: expected.meta.months });
+    expect(payloadA.meta).toEqual({
+      rows: expected.meta.rows,
+      months: expected.meta.months,
+      userId: "default",
+      authSource: "local-namespace",
+    });
     expect(payloadA.data?.monthlyCashflow).toEqual(expected.cashflow);
     expect(payloadA.data?.draftPatch).toEqual(expected.draftPatch);
     expect(payloadA.data?.meta).toEqual({ rows: expected.meta.rows, months: expected.meta.months });

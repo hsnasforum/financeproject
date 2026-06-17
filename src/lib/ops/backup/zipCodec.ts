@@ -114,6 +114,13 @@ export function encodeZip(entriesInput: ZipFileEntry[]): Buffer {
       };
     })
     .sort((a, b) => a.path.localeCompare(b.path));
+  const seenPaths = new Set<string>();
+  for (const entry of entries) {
+    if (seenPaths.has(entry.path)) {
+      throw new Error(`DUPLICATE_ZIP_ENTRY:${entry.path}`);
+    }
+    seenPaths.add(entry.path);
+  }
 
   const now = toDosDateTime(new Date());
   const localParts: Buffer[] = [];
@@ -257,12 +264,14 @@ export async function decodeZip(
           let entryBytes = 0;
 
           stream.on("data", (chunk: Buffer | Uint8Array | string) => {
+            if (finished) return;
             const bytes = Buffer.isBuffer(chunk)
               ? chunk
               : (typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk));
             entryBytes += bytes.length;
             totalBytes += bytes.length;
             if (entryBytes > maxEntryBytes || totalBytes > maxTotalBytes) {
+              fail(new Error("ZIP_SIZE_LIMIT_EXCEEDED"));
               stream.destroy(new Error("ZIP_SIZE_LIMIT_EXCEEDED"));
               return;
             }
@@ -273,6 +282,7 @@ export async function decodeZip(
             fail(new Error(`INVALID_ZIP_ENTRY:${message}`));
           });
           stream.on("end", () => {
+            if (finished) return;
             out.set(fileName, Buffer.concat(chunks));
             zipfile.readEntry();
           });

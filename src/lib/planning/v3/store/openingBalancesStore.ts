@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type OpeningBalance } from "../domain/types";
 import { resolvePlanningV3DataDir } from "./dataDir";
@@ -59,6 +60,8 @@ function normalizeAmount(value: unknown): number {
 }
 
 function resolveOpeningBalancesPath(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) return path.join(resolvePlanningV3DataDir(cwd), "opening-balances.json");
+
   const override = asString(process.env.PLANNING_V3_OPENING_BALANCES_PATH);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningV3DataDir(cwd), "opening-balances.json");

@@ -4,6 +4,8 @@ export const OPS_ACTION_IDS = [
   "REPAIR_INDEX",
   "RUN_MIGRATIONS",
   "DELETE_RUN",
+  "DART_WATCH",
+  "DAILY_REFRESH",
 ] as const;
 
 export type OpsActionId = (typeof OPS_ACTION_IDS)[number];

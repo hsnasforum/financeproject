@@ -5,10 +5,15 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import {
-  createShareReportFromRun,
-  listShareReports,
-} from "../../../../../lib/planning/server/share/storage";
+  createCurrentUserShareReportFromRun,
+  listCurrentUserShareReports,
+} from "../../../../../lib/planning/server/share/repository";
 import { type MaskLevel } from "../../../../../lib/planning/server/share/mask";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type ShareCreateBody = {
   runId?: unknown;
@@ -59,22 +64,28 @@ function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const url = new URL(request.url);
     const limit = Math.max(1, Math.min(100, Math.trunc(Number(url.searchParams.get("limit"))) || 50));
-    const rows = await listShareReports(limit);
-    return jsonOk({
-      data: rows.map((row) => ({
-        id: row.id,
-        runId: row.runId,
-        level: row.level,
-        createdAt: row.createdAt,
-      })),
-    });
+    const rows = await listCurrentUserShareReports(limit);
+    return jsonOk(
+      {
+        data: rows.map((row) => ({
+          id: row.id,
+          runId: row.runId,
+          level: row.level,
+          createdAt: row.createdAt,
+        })),
+      },
+      { meta: userMeta },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "공유 리포트 목록 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }
 
@@ -88,27 +99,36 @@ export async function POST(request: Request) {
 
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const runId = asString(body?.runId);
     if (!runId) {
-      return jsonError("INPUT", "runId는 필수입니다.", { status: 400 });
+      return jsonError("INPUT", "runId는 필수입니다.", { status: 400, meta: userMeta });
     }
 
-    const created = await createShareReportFromRun(runId, parseMaskLevel(body?.level));
-    return jsonOk({
-      data: {
-        id: created.id,
-        runId: created.runId,
-        level: created.level,
-        createdAt: created.createdAt,
+    const created = await createCurrentUserShareReportFromRun(runId, parseMaskLevel(body?.level));
+    return jsonOk(
+      {
+        data: {
+          id: created.id,
+          runId: created.runId,
+          level: created.level,
+          createdAt: created.createdAt,
+        },
       },
-    }, { status: 201 });
+      { status: 201, meta: userMeta },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "공유 리포트 생성에 실패했습니다.";
     if (message.includes("not found")) {
-      return jsonError("NO_DATA", "run 또는 profile을 찾을 수 없습니다.", { status: 404 });
+      return jsonError("NO_DATA", "run 또는 profile을 찾을 수 없습니다.", {
+        status: 404,
+        meta: userMeta,
+      });
     }
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }

@@ -11,14 +11,13 @@ import {
   type BuildDraftPatchFromCashflowOptions,
 } from "@/lib/planning/v3/service/buildDraftPatchFromCashflow";
 import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
-import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
-import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
+import { loadBatchVisiblePipeline } from "@/lib/planning/v3/service/loadBatchVisiblePipeline";
+import { getStoredFirstBatchBindingAccountId } from "@/lib/planning/v3/service/storedFirstVisibleRows";
 import {
-  applyStoredFirstBatchAccountBinding,
-  getBatchTxnOverrides,
-  getStoredFirstBatchBindingAccountId,
-  loadStoredFirstBatchTransactions,
-} from "@/lib/planning/v3/transactions/store";
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -96,50 +95,48 @@ function isInvalidIdError(error: unknown): boolean {
 export async function GET(request: Request, context: RouteContext) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
   const splitOptions = parseSplitOptions(request);
   const includeTransfers = parseIncludeTransfersOption(request);
   if (!splitOptions) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." } },
+      { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." }, meta: userMeta },
       { status: 400 },
     );
   }
 
   try {
-    const loaded = await loadStoredFirstBatchTransactions(id);
-    if (!loaded) {
+    const pipeline = await loadBatchVisiblePipeline(id, { includeRules: false });
+    if (!pipeline) {
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." } },
+        { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." }, meta: userMeta },
         { status: 404 },
       );
     }
     // Cashflow keeps the same reader-visible stored-first binding as detail/summary,
     // even while same-id coexistence keeps POST /account explicitly guarded.
-    const accountId = getStoredFirstBatchBindingAccountId(loaded);
+    const accountId = getStoredFirstBatchBindingAccountId(pipeline.loaded);
     if (!accountId) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." } },
+        { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." }, meta: userMeta },
         { status: 400 },
       );
     }
 
-    const [overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
-      getBatchTxnOverrides(id).catch(() => ({})),
-      getAccountMappingOverrides(id).catch(() => ({})),
-      getTransferOverrides(id).catch(() => ({})),
-    ]);
-    const mapped = applyAccountMappingOverrides(applyStoredFirstBatchAccountBinding(loaded), accountOverrides);
+    const mapped = applyAccountMappingOverrides(pipeline.transactions, pipeline.accountOverrides);
     const transferDetected = detectTransfers({
       batchId: id,
       transactions: mapped,
-      overridesByTxnId: transferOverrides,
+      overridesByTxnId: pipeline.transferOverrides,
     });
 
     const monthly = aggregateMonthlyCashflow(transferDetected.transactions, {
       includeTransfers,
-      overridesByTxnId,
+      overridesByTxnId: pipeline.overridesByTxnId,
     });
     const built = buildDraftPatchFromCashflow(monthly, splitOptions);
 
@@ -148,22 +145,23 @@ export async function GET(request: Request, context: RouteContext) {
       monthly,
       draftPatch: built.draftPatch,
       profilePatch: built.profilePatch,
+      meta: userMeta,
     });
   } catch (error) {
     if (error instanceof Error && error.message.includes("split")) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." } },
+        { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     if (isInvalidIdError(error)) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." } },
+        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "캐시플로우 집계에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "캐시플로우 집계에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

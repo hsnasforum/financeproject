@@ -11,12 +11,24 @@ import {
 } from "@/lib/planning/assumptions/storage";
 import { cacheStats, getCacheUsageStats } from "@/lib/planning/cache/storage";
 import { readLatestEvalReport } from "@/lib/planning/regression/readLatestEval";
+import {
+  toPlanningPageLoadMessage,
+  withCurrentPlanningPageUser,
+} from "@/lib/planning/server/pageAuth";
 import { resolveProfilesDir, resolveRunsDir } from "@/lib/planning/store/paths";
 import { checkPlanningIntegrity } from "@/lib/ops/planningDoctor";
 
 type DirStats = {
   count: number;
   bytes: number;
+};
+
+type UserScopedOpsPlanningState = {
+  entryStats: Awaited<ReturnType<typeof cacheStats>>;
+  usageStats: Awaited<ReturnType<typeof getCacheUsageStats>>;
+  profilesStats: DirStats;
+  runsStats: DirStats;
+  doctorReport: Awaited<ReturnType<typeof checkPlanningIntegrity>>;
 };
 
 function toNumber(value: unknown): number {
@@ -94,6 +106,84 @@ async function countAssumptionsHistory(): Promise<number> {
   return entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".json")).length;
 }
 
+function emptyUsageStats(): Awaited<ReturnType<typeof getCacheUsageStats>> {
+  return {
+    version: 1,
+    updatedAt: "",
+    totals: {
+      hits: 0,
+      misses: 0,
+    },
+    byKind: {
+      simulate: { hits: 0, misses: 0 },
+      scenarios: { hits: 0, misses: 0 },
+      monteCarlo: { hits: 0, misses: 0 },
+      actions: { hits: 0, misses: 0 },
+    },
+  };
+}
+
+function emptyDoctorReport(message: string): Awaited<ReturnType<typeof checkPlanningIntegrity>> {
+  return {
+    ok: false,
+    missing: [],
+    invalidJson: [],
+    counts: {
+      profiles: 0,
+      runs: 0,
+      assumptionsHistory: 0,
+    },
+    optionalMissing: [],
+    notes: [message],
+  };
+}
+
+async function loadUserScopedOpsPlanningState(): Promise<UserScopedOpsPlanningState> {
+  try {
+    return await withCurrentPlanningPageUser(async () => {
+      const [
+        entryStats,
+        usageStats,
+        profilesStats,
+        runsStats,
+        doctorReport,
+      ] = await Promise.all([
+        cacheStats(),
+        getCacheUsageStats(),
+        countJsonFiles(resolveProfilesDir()),
+        countJsonFiles(resolveRunsDir()),
+        checkPlanningIntegrity({ strict: false }),
+      ]);
+
+      return {
+        entryStats,
+        usageStats,
+        profilesStats,
+        runsStats,
+        doctorReport,
+      };
+    });
+  } catch (error) {
+    const message = toPlanningPageLoadMessage(error, "현재 사용자 기준 플래닝 운영 상태를 불러오지 못했습니다.");
+    console.error("[ops/planning] failed to load current-user planning state", error);
+    return {
+      entryStats: {
+        total: 0,
+        byKind: {
+          simulate: 0,
+          scenarios: 0,
+          monteCarlo: 0,
+          actions: 0,
+        },
+      },
+      usageStats: emptyUsageStats(),
+      profilesStats: { count: 0, bytes: 0 },
+      runsStats: { count: 0, bytes: 0 },
+      doctorReport: emptyDoctorReport(message),
+    };
+  }
+}
+
 export default async function OpsPlanningPage() {
   if (process.env.NODE_ENV === "production") {
     notFound();
@@ -106,21 +196,18 @@ export default async function OpsPlanningPage() {
     snapshot,
     historyCount,
     report,
+  ] = await Promise.all([
+    loadLatestAssumptionsSnapshot(),
+    countAssumptionsHistory(),
+    readLatestEvalReport(),
+  ]);
+  const {
     entryStats,
     usageStats,
     profilesStats,
     runsStats,
     doctorReport,
-  ] = await Promise.all([
-    loadLatestAssumptionsSnapshot(),
-    countAssumptionsHistory(),
-    readLatestEvalReport(),
-    cacheStats(),
-    getCacheUsageStats(),
-    countJsonFiles(resolveProfilesDir()),
-    countJsonFiles(resolveRunsDir()),
-    checkPlanningIntegrity({ strict: false }),
-  ]);
+  } = await loadUserScopedOpsPlanningState();
 
   const snapshotId = snapshot ? await findAssumptionsSnapshotId(snapshot) : undefined;
   const totalLookups = usageStats.totals.hits + usageStats.totals.misses;

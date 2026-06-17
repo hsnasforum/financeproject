@@ -7,8 +7,9 @@ import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
+import { toBackupExportClientError } from "../../../../../lib/ops/backup/clientErrors";
 import { buildPlanningDataVaultZip, encryptPlanningDataVaultArchive } from "../../../../../lib/ops/backup/planningDataVault";
-import { redactText } from "../../../../../lib/planning/privacy/redact";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { consumeVaultCsrfOrThrow, ensureVaultCsrfCookie } from "../../../../../lib/planning/security/vaultCsrf";
 
 function asString(value: unknown): string {
@@ -41,17 +42,6 @@ function appendBackupAudit(result: "SUCCESS" | "ERROR", detail: Record<string, u
   }
 }
 
-function toClientError(error: unknown): { status: number; code: string; message: string } {
-  const message = redactText(error instanceof Error ? error.message : "backup export failed");
-  if (message.startsWith("VAULT_PASSPHRASE_REQUIRED")) {
-    return { status: 400, code: "VALIDATION", message: "백업 암호를 입력해 주세요." };
-  }
-  if (message.startsWith("VAULT_LOCKED")) {
-    return { status: 423, code: "LOCKED", message: "Vault 잠금 해제 후 다시 시도해 주세요." };
-  }
-  return { status: 500, code: "EXPORT_FAILED", message };
-}
-
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -63,6 +53,11 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null) as { csrf?: unknown; passphrase?: unknown; mode?: unknown; gzip?: unknown } | null;
     consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) {
+      ensureVaultCsrfCookie(request, currentUser);
+      return currentUser;
+    }
     const passphrase = asString(body?.passphrase);
     const mode = asString(body?.mode).toLowerCase() === "delta" ? "delta" : "full";
     const gzipRequested = asBool(body?.gzip) || supportsGzip(request);
@@ -125,7 +120,7 @@ export async function POST(request: Request) {
       ensureVaultCsrfCookie(request, response);
       return response;
     }
-    const clientError = toClientError(error);
+    const clientError = toBackupExportClientError(error);
     const contractError = toOpsContractError({
       code: clientError.code,
       message: clientError.message,

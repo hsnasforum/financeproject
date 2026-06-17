@@ -3,21 +3,21 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockedBatchesStore = vi.hoisted(() => ({
-  importCsvToBatch: vi.fn(),
-  getBatchSummary: vi.fn(),
+const mockedBatchImportRepository = vi.hoisted(() => ({
+  importCurrentUserCsvToBatch: vi.fn(),
+  getCurrentUserBatchImportSummary: vi.fn(),
 }));
 
-vi.mock("../src/lib/planning/v3/batches/store", async () => {
-  const actual = await vi.importActual<typeof import("../src/lib/planning/v3/batches/store")>(
-    "../src/lib/planning/v3/batches/store",
+vi.mock("../src/lib/planning/v3/service/batchImportRepository", async () => {
+  const actual = await vi.importActual<typeof import("../src/lib/planning/v3/service/batchImportRepository")>(
+    "../src/lib/planning/v3/service/batchImportRepository",
   );
-  mockedBatchesStore.importCsvToBatch.mockImplementation(actual.importCsvToBatch);
-  mockedBatchesStore.getBatchSummary.mockImplementation(actual.getBatchSummary);
+  mockedBatchImportRepository.importCurrentUserCsvToBatch.mockImplementation(actual.importCurrentUserCsvToBatch);
+  mockedBatchImportRepository.getCurrentUserBatchImportSummary.mockImplementation(actual.getCurrentUserBatchImportSummary);
   return {
     ...actual,
-    importCsvToBatch: mockedBatchesStore.importCsvToBatch,
-    getBatchSummary: mockedBatchesStore.getBatchSummary,
+    importCurrentUserCsvToBatch: mockedBatchImportRepository.importCurrentUserCsvToBatch,
+    getCurrentUserBatchImportSummary: mockedBatchImportRepository.getCurrentUserBatchImportSummary,
   };
 });
 
@@ -143,8 +143,8 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-batches-import-csv-api-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = root;
-    mockedBatchesStore.importCsvToBatch.mockClear();
-    mockedBatchesStore.getBatchSummary.mockClear();
+    mockedBatchImportRepository.importCurrentUserCsvToBatch.mockClear();
+    mockedBatchImportRepository.getCurrentUserBatchImportSummary.mockClear();
   });
 
   afterEach(() => {
@@ -153,6 +153,16 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
     else delete env.PLANNING_DATA_DIR;
     fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("keeps import route behind the batch import repository boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v3/batches/import/csv/route.ts"),
+      "utf-8",
+    );
+
+    expect(routeSource).not.toContain("@/lib/planning/v3/batches/store");
+    expect(routeSource).toContain("@/lib/planning/v3/service/batchImportRepository");
   });
 
   it("returns 400 when file is missing", async () => {
@@ -171,7 +181,7 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
 
     const response = await importCsvPOST(requestMultipart(csvText, "trusted-import.csv"));
     expect(response.status).toBe(201);
-    expect(mockedBatchesStore.importCsvToBatch).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockedBatchImportRepository.importCurrentUserCsvToBatch).toHaveBeenCalledWith(expect.objectContaining({
       csvText,
       sanitizeTextFields: true,
       provenance: { fileName: "trusted-import.csv" },
@@ -207,21 +217,21 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
       csrf: "test",
     }));
     expect(jsonResponse.status).toBe(201);
-    expect(mockedBatchesStore.importCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockedBatchImportRepository.importCurrentUserCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
       csvText,
       sanitizeTextFields: true,
       provenance: { fileName: "json-import.csv" },
     }));
 
-    mockedBatchesStore.importCsvToBatch.mockClear();
+    mockedBatchImportRepository.importCurrentUserCsvToBatch.mockClear();
 
     const textResponse = await importCsvPOST(requestText(csvText));
     expect(textResponse.status).toBe(201);
-    expect(mockedBatchesStore.importCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockedBatchImportRepository.importCurrentUserCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
       csvText,
       sanitizeTextFields: true,
     }));
-    const lastCall = mockedBatchesStore.importCsvToBatch.mock.calls.at(-1)?.[0] as
+    const lastCall = mockedBatchImportRepository.importCurrentUserCsvToBatch.mock.calls.at(-1)?.[0] as
       | { provenance?: { fileName?: string } }
       | undefined;
     expect(lastCall?.provenance).toBeUndefined();
@@ -240,11 +250,11 @@ describe("POST /api/planning/v3/batches/import/csv", () => {
     }));
 
     expect(response.status).toBe(201);
-    expect(mockedBatchesStore.importCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockedBatchImportRepository.importCurrentUserCsvToBatch).toHaveBeenLastCalledWith(expect.objectContaining({
       csvText,
       sanitizeTextFields: true,
     }));
-    const lastCall = mockedBatchesStore.importCsvToBatch.mock.calls.at(-1)?.[0] as
+    const lastCall = mockedBatchImportRepository.importCurrentUserCsvToBatch.mock.calls.at(-1)?.[0] as
       | { provenance?: { fileName?: string } }
       | undefined;
     expect(lastCall?.provenance).toBeUndefined();

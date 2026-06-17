@@ -6,12 +6,38 @@ import { DELETE, GET } from "../../src/app/api/planning/v3/drafts/[id]/route";
 import { createDraft } from "../../src/lib/planning/v3/drafts/draftStore";
 
 const env = process.env as Record<string, string | undefined>;
-const originalNodeEnv = process.env.NODE_ENV;
-const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+const ENV_KEYS = [
+  "NODE_ENV",
+  "PLANNING_DATA_DIR",
+  "PLANNING_NAMESPACE_ENABLED",
+  "PLANNING_AUTH_REQUIRED",
+  "PLANNING_TRUST_AUTH_HEADERS",
+  "PLANNING_USER_ID",
+  "PLANNING_V3_DRAFTS_DIR",
+  "AUTH_SECRET",
+  "NEXTAUTH_SECRET",
+] as const;
+
+const originalEnv = Object.fromEntries(
+  ENV_KEYS.map((key) => [key, process.env[key]]),
+) as Record<typeof ENV_KEYS[number], string | undefined>;
 
 const LOCAL_HOST = "localhost:3902";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const CSRF = "test-csrf";
+const LOCAL_META = { userId: "default", authSource: "local-namespace" };
+
+type UserMeta = {
+  userId?: string;
+  authSource?: string;
+};
+
+function restoreEnv() {
+  for (const key of ENV_KEYS) {
+    if (typeof originalEnv[key] === "string") env[key] = originalEnv[key];
+    else delete env[key];
+  }
+}
 
 function requestGet(pathname: string): Request {
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {
@@ -44,15 +70,20 @@ describe("planning v3 drafts [id] route", () => {
 
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-api-drafts-id-route-"));
+    restoreEnv();
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = path.join(root, ".data", "planning");
+    env.PLANNING_NAMESPACE_ENABLED = "0";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    env.PLANNING_USER_ID = "default";
+    delete env.PLANNING_TRUST_AUTH_HEADERS;
+    delete env.PLANNING_V3_DRAFTS_DIR;
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
   });
 
   afterEach(() => {
-    if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
-    else delete env.NODE_ENV;
-    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
-    else delete env.PLANNING_DATA_DIR;
+    restoreEnv();
     fs.rmSync(root, { recursive: true, force: true });
   });
 
@@ -81,12 +112,14 @@ describe("planning v3 drafts [id] route", () => {
       ok?: boolean;
       draft?: { id?: string; source?: { rows?: number } };
       data?: { id?: string; createdAt?: string };
+      meta?: UserMeta;
     };
     expect(detailPayload.ok).toBe(true);
+    expect(detailPayload.meta).toEqual(LOCAL_META);
     expect(detailPayload.draft?.id).toBe(created.id);
     expect(detailPayload.draft?.source?.rows).toBe(2);
     expect(detailPayload.data).toBeUndefined();
-    expect(Object.keys(detailPayload).sort()).toEqual(["draft", "ok"]);
+    expect(Object.keys(detailPayload).sort()).toEqual(["draft", "meta", "ok"]);
     expect(Object.keys(detailPayload.draft ?? {}).sort()).toEqual([
       "cashflow",
       "createdAt",
@@ -101,8 +134,14 @@ describe("planning v3 drafts [id] route", () => {
       { params: Promise.resolve({ id: created.id }) },
     );
     expect(deleted.status).toBe(200);
-    const deletedPayload = await deleted.json() as { ok?: boolean; deleted?: boolean; data?: { deleted?: boolean } };
+    const deletedPayload = await deleted.json() as {
+      ok?: boolean;
+      deleted?: boolean;
+      data?: { deleted?: boolean };
+      meta?: UserMeta;
+    };
     expect(deletedPayload.ok).toBe(true);
+    expect(deletedPayload.meta).toEqual(LOCAL_META);
     expect(deletedPayload.deleted ?? deletedPayload.data?.deleted).toBe(true);
 
     const missing = await GET(

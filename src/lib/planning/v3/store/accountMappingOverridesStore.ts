@@ -1,10 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
-import { resolvePlanningDataDir } from "../../storage/dataDir";
+import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type AccountMappingOverride } from "../domain/types";
 import { isTxnId } from "../service/txnId";
+import { resolvePlanningV3DataDir } from "./dataDir";
 
 type AccountMappingOverridesState = {
   version: 1;
@@ -36,9 +37,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveOverridesDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) return path.join(resolvePlanningV3DataDir(cwd), "txn-account-overrides");
+
   const override = asString(process.env.PLANNING_V3_TXN_ACCOUNT_OVERRIDES_DIR);
   if (override) return path.resolve(cwd, override);
-  return path.join(resolvePlanningDataDir({ cwd }), "planning-v3", "txn-account-overrides");
+  return path.join(resolvePlanningV3DataDir(cwd), "txn-account-overrides");
 }
 
 function resolveOverridesPath(batchId: string, cwd = process.cwd()): string {

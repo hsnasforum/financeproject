@@ -37,6 +37,8 @@ import {
   runPlanningMigrations,
   runPlanningMigrationsOnStartup,
 } from "../../../../lib/planning/migrations/manager";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser, type PlanningRouteUser } from "../../../../lib/planning/api/routeAuth";
+import { isPlanningNamespaceEnabled } from "../../../../lib/planning/store/namespace";
 import { loadCanonicalProfile } from "../../../../lib/planning/v2/loadCanonicalProfile";
 
 function asString(value: unknown): string {
@@ -65,6 +67,22 @@ function guardRequest(request: Request, csrf: string): NextResponse | null {
       status: guard.status,
     });
   }
+}
+
+function doctorRouteMeta(currentUser: PlanningRouteUser): Record<string, unknown> {
+  return {
+    ...planningUserMeta(currentUser),
+    ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
+  };
+}
+
+function doctorMetricMeta(currentUser: PlanningRouteUser): Record<string, unknown> {
+  const userMeta = planningUserMeta(currentUser);
+  return {
+    planningUserId: userMeta.userId,
+    authSource: userMeta.authSource,
+    ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
+  };
 }
 
 async function checkAssumptions(): Promise<DoctorCheck> {
@@ -343,6 +361,8 @@ export async function GET(request: Request) {
   const csrf = asString(searchParams.get("csrf"));
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   try {
     const startupMigration = await runPlanningMigrationsOnStartup();
@@ -385,6 +405,7 @@ export async function GET(request: Request) {
       meta: {
         migration: startupMigration,
         recovery,
+        ...doctorRouteMeta(currentUser),
       },
     });
   } catch (error) {
@@ -409,6 +430,8 @@ export async function POST(request: Request) {
   const csrf = asString(body?.csrf);
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const action = asString(body?.action).toUpperCase();
   if (action === "REPAIR_INDEX") {
@@ -422,6 +445,7 @@ export async function POST(request: Request) {
           status: "SUCCESS",
           durationMs: Math.max(0, Date.now() - startedAt),
           updated: result.entries,
+          ...doctorMetricMeta(currentUser),
         },
       }).catch(() => undefined);
       return NextResponse.json({
@@ -430,6 +454,7 @@ export async function POST(request: Request) {
           action: "REPAIR_INDEX",
           ...result,
         },
+        meta: doctorRouteMeta(currentUser),
       });
     } catch (error) {
       await appendOpsMetricEvent({
@@ -439,6 +464,7 @@ export async function POST(request: Request) {
           status: "FAILED",
           durationMs: Math.max(0, Date.now() - startedAt),
           code: "INTERNAL",
+          ...doctorMetricMeta(currentUser),
         },
       }).catch(() => undefined);
       return opsErrorResponse({
@@ -459,6 +485,7 @@ export async function POST(request: Request) {
           status: "SUCCESS",
           durationMs: Math.max(0, Date.now() - startedAt),
           updated: result.removed,
+          ...doctorMetricMeta(currentUser),
         },
       }).catch(() => undefined);
       return NextResponse.json({
@@ -467,6 +494,7 @@ export async function POST(request: Request) {
           action: "CLEANUP_ORPHAN_BLOBS",
           ...result,
         },
+        meta: doctorRouteMeta(currentUser),
       });
     } catch (error) {
       await appendOpsMetricEvent({
@@ -476,6 +504,7 @@ export async function POST(request: Request) {
           status: "FAILED",
           durationMs: Math.max(0, Date.now() - startedAt),
           code: "INTERNAL",
+          ...doctorMetricMeta(currentUser),
         },
       }).catch(() => undefined);
       return opsErrorResponse({
@@ -499,6 +528,7 @@ export async function POST(request: Request) {
           pending: result.summary.pending,
           deferred: result.summary.deferred,
           failed: result.summary.failed,
+          ...doctorMetricMeta(currentUser),
         },
       }).catch(() => undefined);
       return NextResponse.json({
@@ -507,6 +537,7 @@ export async function POST(request: Request) {
           action: "RUN_MIGRATIONS",
           ...result,
         },
+        meta: doctorRouteMeta(currentUser),
       });
     } catch (error) {
       await appendOpsMetricEvent({
@@ -516,6 +547,7 @@ export async function POST(request: Request) {
           status: "FAILED",
           durationMs: Math.max(0, Date.now() - startedAt),
           code: "INTERNAL",
+          ...doctorMetricMeta(currentUser),
         },
       }).catch(() => undefined);
       return opsErrorResponse({

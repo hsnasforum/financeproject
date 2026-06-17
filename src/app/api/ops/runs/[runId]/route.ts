@@ -11,6 +11,8 @@ import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { deleteRun } from "../../../../../lib/planning/server/store/runStore";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { isPlanningNamespaceEnabled } from "../../../../../lib/planning/store/namespace";
 
 type RouteParams = {
   runId: string;
@@ -76,6 +78,8 @@ export async function DELETE(request: Request, context: { params: Promise<RouteP
       status: guard.status,
     });
   }
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const { runId } = await context.params;
   const id = asString(runId);
@@ -90,11 +94,11 @@ export async function DELETE(request: Request, context: { params: Promise<RouteP
   try {
     const deleted = await deleteRun(id);
     if (!deleted) {
-    appendDeleteAudit({
-      result: "ERROR",
-      runId: id,
-      message: "run not found",
-    });
+      appendDeleteAudit({
+        result: "ERROR",
+        runId: id,
+        message: "run not found",
+      });
       await appendOpsAuditEvent({
         eventType: "OPS_RUN_DELETE_ERROR",
         meta: {
@@ -121,7 +125,14 @@ export async function DELETE(request: Request, context: { params: Promise<RouteP
       },
     }).catch(() => undefined);
 
-    return NextResponse.json({ ok: true, data: { id, deleted: true } });
+    return NextResponse.json({
+      ok: true,
+      data: { id, deleted: true },
+      meta: {
+        ...planningUserMeta(currentUser),
+        ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 삭제에 실패했습니다.";
     appendDeleteAudit({

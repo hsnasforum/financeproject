@@ -12,6 +12,11 @@ import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2
 import { validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
 import { validateProfile } from "../../../../../lib/planning/v2/profileValidation";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type DebtStrategyRequestBody = {
   profile?: unknown;
@@ -196,6 +201,10 @@ export async function POST(request: Request) {
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
 
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
+
   try {
     const profile = validateProfileV2(body.profile);
     const offers = parseOffers(body.offers);
@@ -216,6 +225,7 @@ export async function POST(request: Request) {
 
     return ok(data, {
       generatedAt: new Date().toISOString(),
+      ...userMeta,
       snapshot: {
         missing: true,
       },

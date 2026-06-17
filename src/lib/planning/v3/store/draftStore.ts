@@ -16,6 +16,7 @@ import {
   generateDraftPatchFromBatch,
 } from "../service/generateDraftPatchFromBatch";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "../service/forbiddenDraftKeys";
+import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { resolvePlanningV3DataDir, resolvePlanningV3LegacyDataDir } from "./dataDir";
 
 type CreateDraftInput = Omit<V3DraftRecord, "id" | "createdAt" | "summary"> & {
@@ -49,6 +50,7 @@ function normalizeCreatedAt(value: unknown): string {
 }
 
 function resolveDraftsDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) return path.join(resolvePlanningV3DataDir(cwd), "drafts");
   const override = asString(process.env.PLANNING_V3_DRAFTS_DIR);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningV3DataDir(cwd), "drafts");

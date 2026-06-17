@@ -5,6 +5,7 @@ import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteFile, atomicWriteJson } from "../storage/atomicWrite";
 import { getProfile } from "../store/profileStore";
 import { getRun } from "../store/runStore";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../store/namespace";
 import { type AssumptionsV2 } from "../v2/scenarios";
 import { toShareMarkdown, type ShareReportAction, type ShareReportWarning } from "./report";
 import { type MaskLevel } from "./mask";
@@ -62,6 +63,9 @@ function sanitizeShareId(id: unknown): string {
 }
 
 function resolveShareDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), cwd), "share");
+  }
   const override = asString(process.env.PLANNING_SHARE_DIR);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningDataDir({ cwd }), "share");

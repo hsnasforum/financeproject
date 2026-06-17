@@ -7,6 +7,7 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { summarize } from "@/lib/ops/metrics/metricsStore";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import { getPlanningFallbackUsageSnapshot } from "@/lib/planning/engine";
 import { summarizeLegacyRunBackfill } from "@/lib/planning/store/runStore";
 
@@ -48,6 +49,8 @@ export async function GET(request: Request) {
 
   const guard = guardReadRequest(request);
   if (guard) return guard;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const { searchParams } = new URL(request.url);
   const rangeHours = parseRange(searchParams.get("range"));
@@ -80,6 +83,7 @@ export async function GET(request: Request) {
       },
       meta: {
         range: rangeHours === 168 ? "7d" : "24h",
+        ...planningUserMeta(currentUser),
       },
     });
   } catch (error) {

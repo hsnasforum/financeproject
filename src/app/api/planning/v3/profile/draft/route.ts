@@ -59,6 +59,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       ok: true,
       meta: {
+        ...userMeta,
         batchId,
       },
       data: {

@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
   getDefaultProfileId: vi.fn(),
+  getReport: vi.fn(),
   getRun: vi.fn(),
+  getRunActionProgress: vi.fn(),
+  listProfiles: vi.fn(),
   listRuns: vi.fn(),
   redirect: vi.fn((href: string) => {
     throw new Error(`REDIRECT:${href}`);
@@ -11,6 +14,8 @@ const mocked = vi.hoisted(() => ({
   resolveRequestedReportRunContext: vi.fn(),
   resolveRequestedReportRunScope: vi.fn(),
   resolveFallbackReportRunScope: vi.fn(),
+  pageScopeCallCount: 0,
+  pageScopeDepth: 0,
 }));
 
 vi.mock("next/link", () => ({
@@ -55,13 +60,83 @@ vi.mock("@/components/PlanningReportsPrototypeClient", () => ({
   ),
 }));
 
-vi.mock("@/lib/planning/server/store/profileStore", () => ({
-  getDefaultProfileId: mocked.getDefaultProfileId,
+vi.mock("@/components/PlanningReportDetailClient", () => ({
+  default: (props: {
+    id: string;
+    initialError?: string;
+    initialReport?: { id?: string; runId?: string } | null;
+    initialRun?: { id?: string } | null;
+  }) => (
+    <div
+      data-initial-error={props.initialError ?? ""}
+      data-initial-report-id={props.initialReport?.id ?? ""}
+      data-initial-report-run-id={props.initialReport?.runId ?? ""}
+      data-initial-run-id={props.initialRun?.id ?? ""}
+      data-report-id={props.id}
+      data-testid="report-detail"
+    />
+  ),
 }));
 
-vi.mock("@/lib/planning/server/store/runStore", () => ({
-  getRun: mocked.getRun,
-  listRuns: mocked.listRuns,
+vi.mock("@/components/PlanningRunsClient", () => ({
+  default: (props: {
+    initialActionProgressSummaryByRunId?: Record<string, unknown>;
+    initialFilterProfileId?: string;
+    initialLoadNotice?: string;
+    initialProfiles?: unknown[];
+    initialProfilesReady?: boolean;
+    initialRuns?: unknown[];
+    initialRunsReady?: boolean;
+    initialSelectedRunId?: string;
+  }) => (
+    <div
+      data-action-progress-count={String(Object.keys(props.initialActionProgressSummaryByRunId ?? {}).length)}
+      data-filter-profile-id={props.initialFilterProfileId ?? ""}
+      data-initial-load-notice={props.initialLoadNotice ?? ""}
+      data-profiles-count={String(props.initialProfiles?.length ?? 0)}
+      data-profiles-ready={String(Boolean(props.initialProfilesReady))}
+      data-runs-count={String(props.initialRuns?.length ?? 0)}
+      data-runs-ready={String(Boolean(props.initialRunsReady))}
+      data-selected-run-id={props.initialSelectedRunId ?? ""}
+      data-testid="planning-runs"
+    />
+  ),
+}));
+
+vi.mock("@/lib/planning/server/pageAuth", () => ({
+  withCurrentPlanningPageUser: async (callback: (user: { id: string; source: string }) => unknown) => {
+    mocked.pageScopeCallCount += 1;
+    mocked.pageScopeDepth += 1;
+    try {
+      return await callback({ id: "test-user", source: "test" });
+    } finally {
+      mocked.pageScopeDepth -= 1;
+    }
+  },
+  toPlanningPageLoadMessage: (_error: unknown, fallback: string) => fallback,
+}));
+
+vi.mock("@/lib/planning/server/profiles/repository", () => ({
+  getCurrentUserDefaultProfileId: mocked.getDefaultProfileId,
+  listCurrentUserProfiles: mocked.listProfiles,
+}));
+
+vi.mock("@/lib/planning/server/reports/repository", () => ({
+  getCurrentUserReport: mocked.getReport,
+}));
+
+vi.mock("@/lib/planning/server/runs/repository", () => ({
+  getCurrentUserRun: mocked.getRun,
+  getCurrentUserRunActionProgress: mocked.getRunActionProgress,
+  listCurrentUserRuns: mocked.listRuns,
+  summarizeCurrentUserRunActionProgress: vi.fn(() => ({
+    total: 1,
+    done: 1,
+    doing: 0,
+    todo: 0,
+    snoozed: 0,
+    completionPct: 100,
+  })),
 }));
 
 vi.mock("@/lib/planning/reports/runSelection", () => ({
@@ -72,7 +147,9 @@ vi.mock("@/lib/planning/reports/runSelection", () => ({
 }));
 
 import PlanningReportsPage from "../src/app/planning/reports/page";
+import PlanningReportDetailPage from "../src/app/planning/reports/[id]/page";
 import PlanningReportsPrototypePage from "../src/app/planning/reports/prototype/page";
+import PlanningRunsPage from "../src/app/planning/runs/page";
 
 describe("planning reports page fallback", () => {
   const run = {
@@ -80,17 +157,61 @@ describe("planning reports page fallback", () => {
     profileId: "profile-1",
     createdAt: "2026-03-12T08:00:00.000Z",
   };
+  const profile = {
+    id: "profile-1",
+    name: "기본 프로필",
+    profile: {},
+    createdAt: "2026-03-01T00:00:00.000Z",
+    updatedAt: "2026-03-01T00:00:00.000Z",
+  };
+  const report = {
+    meta: {
+      id: "report-123",
+      createdAt: "2026-03-12T09:00:00.000Z",
+      kind: "run",
+      runId: run.id,
+    },
+    markdown: "# Report",
+  };
 
   beforeEach(() => {
     mocked.getDefaultProfileId.mockReset();
+    mocked.getReport.mockReset();
     mocked.getRun.mockReset();
+    mocked.getRunActionProgress.mockReset();
+    mocked.listProfiles.mockReset();
     mocked.listRuns.mockReset();
     mocked.redirect.mockClear();
     mocked.resolveRequestedReportRunContext.mockReset();
     mocked.resolveRequestedReportRunScope.mockReset();
     mocked.resolveFallbackReportRunScope.mockReset();
+    mocked.pageScopeCallCount = 0;
+    mocked.pageScopeDepth = 0;
 
-    mocked.getDefaultProfileId.mockResolvedValue("default-profile");
+    mocked.getDefaultProfileId.mockImplementation(async () => {
+      expect(mocked.pageScopeDepth).toBeGreaterThan(0);
+      return "default-profile";
+    });
+    mocked.getReport.mockImplementation(async (id: string) => {
+      expect(mocked.pageScopeDepth).toBeGreaterThan(0);
+      return id === report.meta.id ? report : null;
+    });
+    mocked.getRun.mockImplementation(async (id: string) => {
+      expect(mocked.pageScopeDepth).toBeGreaterThan(0);
+      return id === run.id ? run : null;
+    });
+    mocked.getRunActionProgress.mockImplementation(async (id: string) => {
+      expect(mocked.pageScopeDepth).toBeGreaterThan(0);
+      return id === run.id ? { runId: id, items: [] } : null;
+    });
+    mocked.listProfiles.mockImplementation(async () => {
+      expect(mocked.pageScopeDepth).toBeGreaterThan(0);
+      return [profile];
+    });
+    mocked.listRuns.mockImplementation(async () => {
+      expect(mocked.pageScopeDepth).toBeGreaterThan(0);
+      return [run];
+    });
     mocked.resolveRequestedReportRunContext.mockRejectedValue(new SyntaxError("Unexpected end of JSON input"));
     mocked.resolveRequestedReportRunScope.mockResolvedValue({
       effectiveProfileId: "profile-1",
@@ -117,7 +238,7 @@ describe("planning reports page fallback", () => {
     expect(html).toContain("data-testid=\"report-boundary\"");
     expect(html).toContain("data-runs-count=\"1\"");
     expect(html).toContain("data-initial-run-id=\"run-123\"");
-    expect(html).toContain("data-initial-load-notice=\"처음 리포트를 준비하는 중 일시적인 문제가 있어 실행 기록을 다시 불러오는 중입니다.\"");
+    expect(html).toContain("data-initial-load-notice=\"처음 리포트를 준비하는 중 일시적인 문제가 있어 상담 기록을 다시 불러오는 중입니다.\"");
     expect(mocked.resolveRequestedReportRunScope).toHaveBeenCalledWith(expect.objectContaining({
       requestedRun: null,
       requestedRunId: "run-123",
@@ -137,9 +258,113 @@ describe("planning reports page fallback", () => {
     expect(html).toContain("data-testid=\"report-prototype\"");
     expect(html).toContain("data-runs-count=\"1\"");
     expect(html).toContain("data-initial-run-id=\"run-123\"");
-    expect(html).toContain("data-initial-load-notice=\"처음 상담형 리포트를 준비하는 중 일시적인 문제가 있어 실행 기록을 다시 불러오는 중입니다.\"");
+    expect(html).toContain("data-initial-load-notice=\"처음 상담형 리포트를 준비하는 중 일시적인 문제가 있어 상담 기록을 다시 불러오는 중입니다.\"");
     expect(mocked.redirect).not.toHaveBeenCalled();
     expect(mocked.resolveFallbackReportRunScope).not.toHaveBeenCalled();
+  });
+
+  it("runs injected report selection readers inside one pageAuth scope", async () => {
+    const observedScopeDepths: number[] = [];
+    mocked.getRun.mockImplementation(async (id: string) => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return id === run.id ? run : null;
+    });
+    mocked.listRuns.mockImplementation(async () => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return [run];
+    });
+    mocked.resolveRequestedReportRunContext.mockImplementation(async (options: {
+      getRun: (id: string) => Promise<typeof run | null>;
+    }) => {
+      const requestedRun = await options.getRun("run-123");
+      return {
+        requestedRun,
+        effectiveProfileId: requestedRun?.profileId ?? "",
+      };
+    });
+    mocked.resolveRequestedReportRunScope.mockImplementation(async (options: {
+      requestedRun?: typeof run | null;
+      requestedRunId?: string;
+      listRuns: (input?: { profileId?: string; limit?: number }) => Promise<typeof run[]>;
+    }) => {
+      const runs = await options.listRuns({ profileId: "profile-1", limit: 20 });
+      return {
+        effectiveProfileId: "profile-1",
+        requestedRun: options.requestedRun ?? null,
+        runs,
+        initialRunId: options.requestedRunId ?? runs[0]?.id ?? "",
+      };
+    });
+
+    const html = renderToStaticMarkup(await PlanningReportsPage({
+      searchParams: Promise.resolve({
+        profileId: "profile-1",
+        runId: "run-123",
+      }),
+    }));
+
+    expect(html).toContain("data-testid=\"report-boundary\"");
+    expect(mocked.pageScopeCallCount).toBe(1);
+    expect(observedScopeDepths).toEqual([1, 1]);
+  });
+
+  it("loads report detail and linked run inside one pageAuth scope", async () => {
+    const observedScopeDepths: number[] = [];
+    mocked.getReport.mockImplementation(async (id: string) => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return id === report.meta.id ? report : null;
+    });
+    mocked.getRun.mockImplementation(async (id: string) => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return id === run.id ? run : null;
+    });
+
+    const html = renderToStaticMarkup(await PlanningReportDetailPage({
+      params: Promise.resolve({ id: report.meta.id }),
+    }));
+
+    expect(html).toContain("data-testid=\"report-detail\"");
+    expect(html).toContain("data-initial-report-id=\"report-123\"");
+    expect(html).toContain("data-initial-report-run-id=\"run-123\"");
+    expect(html).toContain("data-initial-run-id=\"run-123\"");
+    expect(mocked.pageScopeCallCount).toBe(1);
+    expect(observedScopeDepths).toEqual([1, 1]);
+  });
+
+  it("loads planning runs initial data inside one pageAuth scope", async () => {
+    const observedScopeDepths: number[] = [];
+    mocked.getDefaultProfileId.mockImplementation(async () => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return profile.id;
+    });
+    mocked.listProfiles.mockImplementation(async () => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return [profile];
+    });
+    mocked.listRuns.mockImplementation(async () => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return [run];
+    });
+    mocked.getRunActionProgress.mockImplementation(async (id: string) => {
+      observedScopeDepths.push(mocked.pageScopeDepth);
+      return id === run.id ? { runId: id, items: [] } : null;
+    });
+
+    const html = renderToStaticMarkup(await PlanningRunsPage({
+      searchParams: Promise.resolve({
+        selected: run.id,
+      }),
+    }));
+
+    expect(html).toContain("data-testid=\"planning-runs\"");
+    expect(html).toContain("data-selected-run-id=\"run-123\"");
+    expect(html).toContain("data-filter-profile-id=\"profile-1\"");
+    expect(html).toContain("data-profiles-ready=\"true\"");
+    expect(html).toContain("data-runs-ready=\"true\"");
+    expect(html).toContain("data-action-progress-count=\"1\"");
+    expect(mocked.pageScopeCallCount).toBe(1);
+    expect(observedScopeDepths).toEqual([1, 1, 1, 1]);
+    expect(mocked.listRuns).toHaveBeenCalledWith({ profileId: "profile-1", limit: 200 });
   });
 
   it("renders stable destination empty state when no saved runs exist yet", async () => {
@@ -160,12 +385,12 @@ describe("planning reports page fallback", () => {
       }),
     }));
 
-    expect(html).toContain("플래닝 리포트");
-    expect(html).toContain("저장된 실행 결과를 다시 읽는 도착 화면이지만");
-    expect(html).toContain("아직 저장된 실행이 없습니다");
-    expect(html).toContain("먼저 /planning에서 실행을 저장해 두면");
-    expect(html).toContain("실행 기록 화면과 비교할 수 있습니다.");
-    expect(html).toContain("플래닝으로 돌아가 실행 저장하기");
+    expect(html).toContain("재무설계 리포트");
+    expect(html).toContain("저장된 상담 결과를 다시 읽는 도착 화면이지만");
+    expect(html).toContain("아직 저장된 상담 기록이 없습니다");
+    expect(html).toContain("먼저 /planning에서 상담 결과를 저장해 두면");
+    expect(html).toContain("상담 기록 화면과 비교할 수 있습니다.");
+    expect(html).toContain("상담 계산으로 돌아가 결과 저장하기");
     expect(html).toContain("href=\"/planning?profileId=profile-1\"");
   });
 });

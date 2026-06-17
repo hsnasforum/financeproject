@@ -4,6 +4,7 @@ import { BackupReminderBannerServer } from "@/app/_components/BackupReminderBann
 import { VaultLockScreenClient } from "@/components/VaultLockScreenClient";
 import { OpsDashboardClient } from "@/components/OpsDashboardClient";
 import { shouldBlockOpsPageInCurrentRuntime } from "@/lib/ops/pageAccess";
+import { withCurrentPlanningPageUser } from "@/lib/planning/server/pageAuth";
 import { getVaultStatus } from "@/lib/planning/security/vaultState";
 
 export default async function OpsPage() {
@@ -11,7 +12,14 @@ export default async function OpsPage() {
     notFound();
   }
 
-  const status = await getVaultStatus();
+  const status = await withCurrentPlanningPageUser(() => getVaultStatus()).catch((error) => {
+    console.error("[ops] failed to load current-user vault status", error);
+    return null;
+  });
+  if (!status) {
+    return <VaultLockScreenClient scope="ops" />;
+  }
+
   if (status.configured && !status.unlocked) {
     return <VaultLockScreenClient scope="ops" />;
   }

@@ -3,6 +3,11 @@ import { z } from "zod";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { closeNewsDatabase, openNewsDatabase, readNewsTopicTrends, type BurstLevel } from "@/lib/planning/v3/news/items";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type ItemRow = {
   id: string;
@@ -208,14 +213,17 @@ function buildWhere(input: {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const url = new URL(request.url);
   const filters = normalizeFilters(url);
   const burstByTopic = topicBurstMap();
   const where = buildWhere({ filters, burstMap: burstByTopic });
 
-  const db = openNewsDatabase();
+  let db: ReturnType<typeof openNewsDatabase> | null = null;
   try {
+    db = openNewsDatabase();
     const itemsRows = db.prepare(`
       SELECT
         id,
@@ -315,7 +323,16 @@ export async function GET(request: Request) {
       },
     }, { scope: "response", context: "api.v3.news.items" });
     return NextResponse.json(payload);
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INTERNAL", message: "뉴스 항목을 불러오는 중 오류가 발생했습니다." },
+        meta: planningUserMeta(currentUser),
+      },
+      { status: 500 },
+    );
   } finally {
-    closeNewsDatabase(db);
+    if (db) closeNewsDatabase(db);
   }
 }

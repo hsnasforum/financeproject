@@ -9,14 +9,12 @@ import { applyAccountMappingOverrides } from "@/lib/planning/v3/service/applyAcc
 import { categorizeTransactions } from "@/lib/planning/v3/service/categorizeTransactions";
 import { computeCashflowBreakdown } from "@/lib/planning/v3/service/computeCashflowBreakdown";
 import { detectTransfers } from "@/lib/planning/v3/service/detectTransfers";
-import { getAccountMappingOverrides } from "@/lib/planning/v3/store/accountMappingOverridesStore";
-import { listRules } from "@/lib/planning/v3/store/categoryRulesStore";
-import { getTransferOverrides } from "@/lib/planning/v3/store/txnTransferOverridesStore";
+import { loadBatchVisiblePipeline } from "@/lib/planning/v3/service/loadBatchVisiblePipeline";
 import {
-  getBatchTxnOverrides,
-  getStoredFirstBatchSummaryProjectionRows,
-  loadStoredFirstBatchTransactions,
-} from "@/lib/planning/v3/transactions/store";
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -60,27 +58,22 @@ function toDescription(value: unknown): string | undefined {
 export async function GET(request: Request, context: RouteContext) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { id } = await context.params;
   try {
-    const [loaded, rules, overridesByTxnId, accountOverrides, transferOverrides] = await Promise.all([
-      loadStoredFirstBatchTransactions(id),
-      listRules(),
-      getBatchTxnOverrides(id).catch(() => ({})),
-      getAccountMappingOverrides(id).catch(() => ({})),
-      getTransferOverrides(id).catch(() => ({})),
-    ]);
+    const pipeline = await loadBatchVisiblePipeline(id);
 
-    if (!loaded) {
+    if (!pipeline) {
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." } },
+        { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." }, meta: userMeta },
         { status: 404 },
       );
     }
 
-    // Categorized has no raw row payload, so it follows the same stored-first
-    // visible binding projection as summary when same-id coexistence is present.
-    const transactions: StoredTransaction[] = getStoredFirstBatchSummaryProjectionRows(loaded);
+    const { loaded, transactions, rules, overridesByTxnId, accountOverrides, transferOverrides } = pipeline;
 
     const mappedTransactions = applyAccountMappingOverrides(transactions, accountOverrides);
     const transferDetected = detectTransfers({
@@ -109,7 +102,10 @@ export async function GET(request: Request, context: RouteContext) {
 
     return NextResponse.json({
       ok: true,
-      meta: loaded.meta,
+      meta: {
+        ...loaded.meta,
+        ...userMeta,
+      },
       data: categorized.map((row) => ({
         batchId: row.batchId,
         txnId: row.txnId,
@@ -128,12 +124,12 @@ export async function GET(request: Request, context: RouteContext) {
   } catch (error) {
     if (isInvalidIdError(error)) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." } },
+        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
         { status: 400 },
       );
     }
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "카테고리 집계 조회에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "카테고리 집계 조회에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

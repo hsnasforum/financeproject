@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../planning/storage/dataDir";
+import { resolveProfilesDir, resolveRunsDir } from "../planning/store/paths";
 
 export type PlanningIntegrityReport = {
   ok: boolean;
@@ -120,16 +121,16 @@ export async function checkPlanningIntegrity(options: CheckPlanningIntegrityOpti
   }
   invalidJson.push(...assumptionsHistory.invalidJson);
 
-  const profiles = await scanJsonDir(baseDir, toRelative(baseDir, path.join(planningRoot, "profiles")));
+  const profiles = await scanJsonDir(baseDir, toRelative(baseDir, resolveProfilesDir(baseDir)));
   if (!profiles.exists) {
-    missing.push(toRelative(baseDir, path.join(planningRoot, "profiles")));
+    missing.push(toRelative(baseDir, resolveProfilesDir(baseDir)));
     notes.push("profiles 디렉토리가 없습니다. (신규 사용자일 수 있음)");
   }
   invalidJson.push(...profiles.invalidJson);
 
-  const runs = await scanJsonDir(baseDir, toRelative(baseDir, path.join(planningRoot, "runs")));
+  const runs = await scanJsonDir(baseDir, toRelative(baseDir, resolveRunsDir(baseDir)));
   if (!runs.exists) {
-    missing.push(toRelative(baseDir, path.join(planningRoot, "runs")));
+    missing.push(toRelative(baseDir, resolveRunsDir(baseDir)));
     notes.push("runs 디렉토리가 없습니다. (아직 실행 기록이 없을 수 있음)");
   }
   invalidJson.push(...runs.invalidJson);

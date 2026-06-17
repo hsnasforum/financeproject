@@ -34,8 +34,17 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   return fallback;
 }
 
+function defaultPlanningAuthRequired(): boolean {
+  return true;
+}
+
+function isProductionEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.NODE_ENV ?? "").trim().toLowerCase() === "production";
+}
+
 export function isPlanningAuthRequired(env: NodeJS.ProcessEnv = process.env): boolean {
-  return parseBoolean(env.PLANNING_AUTH_REQUIRED, false);
+  if (isProductionEnv(env)) return true;
+  return parseBoolean(env.PLANNING_AUTH_REQUIRED, defaultPlanningAuthRequired());
 }
 
 function isTrustedAuthHeaderEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -123,7 +132,7 @@ export async function withCurrentPlanningUser<T>(
   callback: (user: PlanningCurrentUser) => T | Promise<T>,
 ): Promise<T> {
   const user = await requireCurrentPlanningUser(request);
-  return runWithPlanningUserScope({ userId: user.id }, () => callback(user));
+  return runWithPlanningUserScope({ userId: user.id, authSource: user.source }, () => callback(user));
 }
 
 export function isPlanningAuthError(error: unknown): error is PlanningAuthError {

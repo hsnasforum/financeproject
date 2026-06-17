@@ -81,13 +81,15 @@ function formatKrw(value: unknown): string {
 type Props = {
   id: string;
   initialSummary?: BatchSummary | null;
+  initialMessage?: string;
 };
 
-export function BatchSummaryClient({ id, initialSummary = null }: Props) {
-  const [loading, setLoading] = useState(initialSummary === null);
-  const [message, setMessage] = useState("");
+export function BatchSummaryClient({ id, initialSummary = null, initialMessage = "" }: Props) {
+  const [loading, setLoading] = useState(initialSummary === null && !initialMessage);
+  const [message, setMessage] = useState(initialMessage);
   const [summary, setSummary] = useState<BatchSummary | null>(initialSummary);
   const [createLoading, setCreateLoading] = useState(false);
+  const hasInitialSummary = initialSummary !== null;
 
   const fetchSummary = useCallback(async (signal?: AbortSignal): Promise<BatchSummary> => {
     const response = await fetch(`/api/planning/v3/batches/${encodeURIComponent(id)}/summary${buildCsrfQuery()}`, {
@@ -116,6 +118,9 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
   }, [fetchSummary]);
 
   useEffect(() => {
+    if (initialMessage) return;
+    if (hasInitialSummary) return;
+
     const controller = new AbortController();
     let active = true;
 
@@ -139,7 +144,7 @@ export function BatchSummaryClient({ id, initialSummary = null }: Props) {
       active = false;
       controller.abort();
     };
-  }, [fetchSummary]);
+  }, [fetchSummary, hasInitialSummary, initialMessage]);
 
   async function handleCreateDraft(): Promise<void> {
     if (!summary || createLoading) return;

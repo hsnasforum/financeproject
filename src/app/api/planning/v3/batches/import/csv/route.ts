@@ -4,7 +4,11 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { getBatchSummary, ImportCsvToBatchInputError, importCsvToBatch } from "@/lib/planning/v3/batches/store";
+import {
+  getCurrentUserBatchImportSummary,
+  ImportCsvToBatchInputError,
+  importCurrentUserCsvToBatch,
+} from "@/lib/planning/v3/service/batchImportRepository";
 import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
   isPlanningRouteUser,
@@ -80,12 +84,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const imported = await importCsvToBatch({
+    const imported = await importCurrentUserCsvToBatch({
       csvText: payload.csvText,
       sanitizeTextFields: true,
       ...(payload.fileName ? { provenance: { fileName: payload.fileName } } : {}),
     });
-    const summary = await getBatchSummary(imported.batchMeta.id);
+    const summary = await getCurrentUserBatchImportSummary(imported.batchMeta.id);
 
     const responsePayload = {
       ok: true,

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type CategoryId, type CategoryRule } from "../domain/types";
 import { resolvePlanningV3DataDir } from "./dataDir";
@@ -85,6 +86,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolveRulesPath(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) return path.join(resolvePlanningV3DataDir(cwd), "category-rules.json");
+
   const override = asString(process.env.PLANNING_V3_CATEGORY_RULES_PATH);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningV3DataDir(cwd), "category-rules.json");

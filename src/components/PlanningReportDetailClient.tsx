@@ -23,7 +23,7 @@ import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { type PlanningRunRecord } from "@/lib/planning/store/types";
 import { Badge } from "@/components/ui/Badge";
 
-type ReportDetail = {
+export type PlanningReportDetail = {
   id: string;
   createdAt: string;
   kind: "run" | "manual";
@@ -43,6 +43,9 @@ type ApiResponse<T> = {
 
 type PlanningReportDetailClientProps = {
   id: string;
+  initialReport?: PlanningReportDetail | null;
+  initialRun?: PlanningRunRecord | null;
+  initialError?: string;
 };
 
 function formatDateTime(value: string): string {
@@ -56,17 +59,31 @@ function buildRecommendHistoryHref(recommendRunId?: string): string {
   return normalized ? `/recommend/history?open=${encodeURIComponent(normalized)}` : "";
 }
 
-export default function PlanningReportDetailClient({ id }: PlanningReportDetailClientProps) {
-  const [report, setReport] = useState<ReportDetail | null>(null);
-  const [run, setRun] = useState<PlanningRunRecord | null>(null);
+export default function PlanningReportDetailClient({
+  id,
+  initialReport = null,
+  initialRun = null,
+  initialError = "",
+}: PlanningReportDetailClientProps) {
+  const hasInitialReport = initialReport?.id === id;
+  const [report, setReport] = useState<PlanningReportDetail | null>(hasInitialReport ? initialReport : null);
+  const [run, setRun] = useState<PlanningRunRecord | null>(hasInitialReport ? initialRun : null);
   const [recommendations, setRecommendations] = useState<CandidateRecommendationsPayload | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hasInitialReport && !initialError);
   const [recsLoading, setRecommendationsLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError);
   const [recsError, setRecommendationsError] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
+    if (hasInitialReport || initialError) {
+      setReport(hasInitialReport ? initialReport : null);
+      setRun(hasInitialReport ? initialRun : null);
+      setError(initialError);
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     async function loadAll(): Promise<void> {
@@ -74,7 +91,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
       setError("");
       try {
         const reportRes = await fetch(`/api/planning/v2/reports/${encodeURIComponent(id)}`, { cache: "no-store" });
-        const reportPayload = (await reportRes.json().catch(() => null)) as ApiResponse<ReportDetail> | null;
+        const reportPayload = (await reportRes.json().catch(() => null)) as ApiResponse<PlanningReportDetail> | null;
         if (!reportPayload?.ok || !reportPayload.data) {
           throw new Error(reportPayload?.error?.message ?? "리포트를 불러오지 못했습니다.");
         }
@@ -101,7 +118,7 @@ export default function PlanningReportDetailClient({ id }: PlanningReportDetailC
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [hasInitialReport, id, initialError, initialReport, initialRun]);
 
   const handleLoadMoreAdvancedRaw = async (): Promise<void> => {
     if (!report?.runId || recommendations || recsLoading) return;

@@ -5,21 +5,33 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import {
-  readExposureProfile,
-  saveExposureProfile,
-} from "@/lib/planning/v3/exposure/store";
 import { ExposureProfileSchema } from "@/lib/planning/v3/exposure/contracts";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
+import {
+  readCurrentUserExposureProfile,
+  saveCurrentUserExposureProfile,
+} from "@/lib/planning/v3/service/exposureRepository";
+
+const UserMetaSchema = z.object({
+  userId: z.string().min(1),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+});
 
 const ExposureGetResponseSchema = z.object({
   ok: z.literal(true),
   profile: ExposureProfileSchema.nullable(),
+  meta: UserMetaSchema,
 });
 
 const ExposurePostResponseSchema = z.object({
   ok: z.literal(true),
   profile: ExposureProfileSchema,
+  meta: UserMetaSchema,
 });
 
 function withReadGuard(request: Request): Response | null {
@@ -64,10 +76,14 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const payload = parseWithV3Whitelist(ExposureGetResponseSchema, {
     ok: true,
-    profile: readExposureProfile(),
+    profile: readCurrentUserExposureProfile(),
+    meta: userMeta,
   }, { scope: "response", context: "api.v3.exposure.get" });
   return NextResponse.json(payload);
 }
@@ -82,18 +98,22 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const payload = body as { profile?: unknown } | null;
-    const saved = saveExposureProfile(payload?.profile ?? {});
+    const saved = saveCurrentUserExposureProfile(payload?.profile ?? {});
     const responsePayload = parseWithV3Whitelist(ExposurePostResponseSchema, {
       ok: true,
       profile: saved,
+      meta: userMeta,
     }, { scope: "response", context: "api.v3.exposure.post" });
     return NextResponse.json(responsePayload);
   } catch {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "노출 프로필 입력 형식이 올바르지 않습니다." } },
+      { ok: false, error: { code: "INPUT", message: "노출 프로필 입력 형식이 올바르지 않습니다." }, meta: userMeta },
       { status: 400 },
     );
   }

@@ -16,7 +16,7 @@ import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
 import { readDevCsrfToken, withDevCsrf } from "@/lib/dev/clientCsrf";
 
-type DraftListItem = {
+export type DraftListItem = {
   draftId: string;
   id: string;
   batchId: string;

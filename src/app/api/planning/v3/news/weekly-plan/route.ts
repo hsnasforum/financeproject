@@ -11,6 +11,11 @@ import {
   writeWeeklyPlan,
 } from "@/lib/planning/v3/news/weeklyPlan";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 export const runtime = "nodejs";
 
@@ -73,6 +78,8 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const payload = parseWithV3Whitelist(GetResponseSchema, {
     ok: true,
@@ -95,27 +102,44 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const parsed = SaveBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "주간 계획 입력 형식이 올바르지 않습니다." } },
+      {
+        ok: false,
+        error: { code: "INPUT", message: "주간 계획 입력 형식이 올바르지 않습니다." },
+        meta: planningUserMeta(currentUser),
+      },
       { status: 400 },
     );
   }
 
-  const saved = writeWeeklyPlan({
-    weekOf: parsed.data.weekOf,
-    topics: parsed.data.topics,
-    seriesIds: parsed.data.seriesIds,
-  });
-  const payload = parseWithV3Whitelist(PostResponseSchema, {
-    ok: true,
-    data: saved,
-  }, {
-    scope: "response",
-    context: "api.v3.news.weeklyPlan.post",
-  });
+  try {
+    const saved = writeWeeklyPlan({
+      weekOf: parsed.data.weekOf,
+      topics: parsed.data.topics,
+      seriesIds: parsed.data.seriesIds,
+    });
+    const payload = parseWithV3Whitelist(PostResponseSchema, {
+      ok: true,
+      data: saved,
+    }, {
+      scope: "response",
+      context: "api.v3.news.weeklyPlan.post",
+    });
 
-  return NextResponse.json(payload);
+    return NextResponse.json(payload);
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INTERNAL", message: "주간 계획 저장 중 오류가 발생했습니다." },
+        meta: planningUserMeta(currentUser),
+      },
+      { status: 500 },
+    );
+  }
 }

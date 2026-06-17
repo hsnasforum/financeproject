@@ -9,6 +9,7 @@ import {
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import {
   AssumptionsOverrideEntrySchema,
   normalizeAssumptionsOverrides,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/planning/assumptions/overridesStorage";
 import { getDefaultProfileId } from "@/lib/planning/server/store/profileStore";
 import { sanitizeRecordId } from "@/lib/planning/store/paths";
+import { assumptionsUserMeta } from "../_lib";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -85,6 +87,8 @@ export async function GET(request: Request) {
   }
 
   try {
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const profileId = await resolveTargetProfileId(requestedProfileId);
     const items = profileId
       ? await loadAssumptionsOverridesByProfile(profileId)
@@ -93,6 +97,7 @@ export async function GET(request: Request) {
       ok: true,
       ...(profileId ? { profileId } : {}),
       items,
+      meta: assumptionsUserMeta(currentUser),
     });
   } catch (error) {
     return opsErrorResponse({
@@ -141,12 +146,15 @@ export async function PUT(request: Request) {
   }
 
   try {
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const profileId = await resolveTargetProfileId(body?.profileId);
     const items = await saveAssumptionsOverrides(body?.items, profileId);
     return NextResponse.json({
       ok: true,
       ...(profileId ? { profileId } : {}),
       items,
+      meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 저장했습니다.",
     });
   } catch (error) {
@@ -209,6 +217,8 @@ export async function PATCH(request: Request) {
   }
 
   try {
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const profileId = await resolveTargetProfileId(body?.profileId);
     const patchItem = parsePatchItem(body);
     if (!patchItem) {
@@ -227,6 +237,7 @@ export async function PATCH(request: Request) {
       ok: true,
       ...(profileId ? { profileId } : {}),
       items,
+      meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 업데이트했습니다.",
     });
   } catch (error) {
@@ -271,12 +282,15 @@ export async function DELETE(request: Request) {
   }
 
   try {
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const profileId = await resolveTargetProfileId(body?.profileId);
     await resetAssumptionsOverrides(profileId);
     return NextResponse.json({
       ok: true,
       ...(profileId ? { profileId } : {}),
       items: [],
+      meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 초기화했습니다.",
     });
   } catch (error) {

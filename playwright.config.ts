@@ -24,6 +24,10 @@ function parsePortFromBaseUrl(value: string): number | null {
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : parsePortFromBaseUrl(configuredBaseUrl) ?? 3126;
 const baseURL = explicitBaseUrl || `http://127.0.0.1:${PORT}`;
+const planningE2EUserId = (
+  process.env.PLANNING_E2E_USER_ID
+  || (externalBaseUrl ? "" : "playwright-local")
+).trim();
 const webServerMode = (process.env.E2E_WEB_SERVER_MODE || "development").trim().toLowerCase();
 const resolvedWebServerMode = webServerMode === "production" ? "production" : "development";
 const headlessFlag = (process.env.PW_HEADLESS || "").trim().toLowerCase();
@@ -70,6 +74,7 @@ function buildWebServerEnv(): Record<string, string> {
     PLANNING_VAULT_CONFIG_PATH: process.env.PLANNING_VAULT_CONFIG_PATH || path.join(e2ePlanningRoot, "security", "vault.json"),
     PLANNING_MIGRATION_STATE_PATH: process.env.PLANNING_MIGRATION_STATE_PATH || path.join(e2ePlanningRoot, "migrations", "migrationState.json"),
     PLANNING_MIGRATION_SNAPSHOT_DIR: process.env.PLANNING_MIGRATION_SNAPSHOT_DIR || path.join(e2ePlanningRoot, "migrations", "snapshots"),
+    ...(planningE2EUserId ? { PLANNING_TRUST_AUTH_HEADERS: process.env.PLANNING_TRUST_AUTH_HEADERS || "1" } : {}),
     HOSTNAME: process.env.HOSTNAME || "127.0.0.1",
     PORT: String(PORT),
   });
@@ -86,6 +91,7 @@ export default defineConfig({
   use: {
     baseURL,
     ...(typeof resolvedHeadless === "boolean" ? { headless: resolvedHeadless } : {}),
+    ...(planningE2EUserId ? { extraHTTPHeaders: { "x-planning-user-id": planningE2EUserId } } : {}),
     trace: "retain-on-failure",
   },
   ...(externalBaseUrl

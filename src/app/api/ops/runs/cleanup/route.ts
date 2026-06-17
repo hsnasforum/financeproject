@@ -13,6 +13,8 @@ import { loadOpsPolicy } from "../../../../../lib/ops/opsPolicy";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { planRunsRetention } from "../../../../../lib/ops/runsRetention";
 import { deleteRun, listRunIndexEntries } from "../../../../../lib/planning/server/store/runStore";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { isPlanningNamespaceEnabled } from "../../../../../lib/planning/store/namespace";
 
 type CleanupBody = {
   csrf?: unknown;
@@ -94,6 +96,8 @@ export async function POST(request: Request) {
       status: guard.status,
     });
   }
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const policy = loadOpsPolicy();
   const keepDays = Math.min(toOptionalInt(body?.keepDays) ?? policy.runs.defaultKeepDays, policy.runs.maxKeepDays);
@@ -155,6 +159,10 @@ export async function POST(request: Request) {
           toDelete: plan.remove.length,
           sample: plan.remove.slice(0, 20),
         },
+        meta: {
+          ...planningUserMeta(currentUser),
+          ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
+        },
       });
     }
 
@@ -212,6 +220,10 @@ export async function POST(request: Request) {
         plannedDelete: plan.remove.length,
         deleted: deletedIds.length,
         failed,
+      },
+      meta: {
+        ...planningUserMeta(currentUser),
+        ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
       },
     });
   } catch (error) {

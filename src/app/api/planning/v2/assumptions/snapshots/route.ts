@@ -9,6 +9,11 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../../lib/planning/api/routeAuth";
 
 type SnapshotItem = {
   id: string;
@@ -77,6 +82,9 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const { searchParams } = new URL(request.url);
   const limit = toSafeLimit(asString(searchParams.get("limit")));
@@ -126,7 +134,7 @@ export async function GET(request: Request) {
     return jsonOk({
       ...(latest ? { latest } : {}),
       items,
-    });
+    }, { meta: userMeta });
   } catch (error) {
     return jsonError(
       "INTERNAL",

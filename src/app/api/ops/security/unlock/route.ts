@@ -4,9 +4,10 @@ import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
 import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
 import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
+import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { consumeVaultCsrfOrThrow } from "../../../../../lib/planning/security/vaultCsrf";
 import { unlockVault } from "../../../../../lib/planning/security/vaultState";
-import { asString, guardLocalRequest, withVaultCsrf } from "../_lib";
+import { asString, guardLocalRequest, securityUserMeta, withVaultCsrf } from "../_lib";
 
 function toClientError(error: unknown): { status: number; code: string; message: string } {
   const message = error instanceof Error ? error.message : "vault unlock failed";
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
 
   try {
     consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
     const status = await unlockVault(asString(body?.passphrase));
     await appendOpsAuditEvent({
       eventType: "VAULT_UNLOCK_SUCCESS",
@@ -54,7 +57,11 @@ export async function POST(request: Request) {
         durationMs: Math.max(0, Date.now() - startedAt),
       },
     }).catch(() => undefined);
-    return withVaultCsrf(request, NextResponse.json({ ok: true, data: status }));
+    return withVaultCsrf(request, NextResponse.json({
+      ok: true,
+      data: status,
+      meta: securityUserMeta(currentUser),
+    }));
   } catch (error) {
     const guardError = toGuardErrorResponse(error);
     if (guardError) {

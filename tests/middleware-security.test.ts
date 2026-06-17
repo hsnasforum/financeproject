@@ -100,6 +100,37 @@ describe("security middleware", () => {
     expect(body.error?.code).toBe("UNAUTHENTICATED");
   });
 
+  it("blocks planning API requests by default until local fallback is explicitly enabled", async () => {
+    delete mutableEnv.PLANNING_AUTH_REQUIRED;
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles"));
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("allows planning API requests without an auth signal only when auth is explicitly disabled", () => {
+    mutableEnv.NODE_ENV = "development";
+    mutableEnv.PLANNING_AUTH_REQUIRED = "0";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles"));
+
+    expect(response.status).toBe(200);
+  });
+
+  it("requires planning auth in production even when fallback env is disabled", async () => {
+    mutableEnv.NODE_ENV = "production";
+    mutableEnv.PLANNING_AUTH_REQUIRED = "0";
+    const response = middleware(makeRequest("https://example.com/api/planning/profiles", {
+      headers: {
+        host: "example.com",
+      },
+    }));
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHENTICATED");
+  });
+
   it("allows planning API requests with an Auth.js session cookie when planning auth is required", () => {
     mutableEnv.PLANNING_AUTH_REQUIRED = "1";
     const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles", {
@@ -109,6 +140,56 @@ describe("security middleware", () => {
     }));
 
     expect(response.status).toBe(200);
+  });
+
+  it("blocks trusted planning auth headers when the internal bridge is disabled", async () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    mutableEnv.PLANNING_TRUST_AUTH_HEADERS = "0";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles", {
+      headers: {
+        "x-planning-user-id": "alice",
+      },
+    }));
+    const body = await response.json() as { error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toEqual({
+      code: "FORBIDDEN",
+      message: "신뢰된 인증 헤더가 비활성화되어 있습니다.",
+    });
+  });
+
+  it("blocks untrusted planning auth headers before session cookie fallback", async () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    mutableEnv.PLANNING_TRUST_AUTH_HEADERS = "0";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles", {
+      headers: {
+        cookie: "authjs.session-token=session",
+        "x-planning-user-id": "alice",
+      },
+    }));
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(403);
+    expect(body.error?.code).toBe("FORBIDDEN");
+  });
+
+  it("blocks remote trusted planning auth headers even when the internal bridge is enabled", async () => {
+    mutableEnv.PLANNING_AUTH_REQUIRED = "1";
+    mutableEnv.PLANNING_TRUST_AUTH_HEADERS = "1";
+    const response = middleware(makeRequest("https://example.com/api/planning/profiles", {
+      headers: {
+        host: "example.com",
+        "x-planning-user-id": "alice",
+      },
+    }));
+    const body = await response.json() as { error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(403);
+    expect(body.error).toEqual({
+      code: "FORBIDDEN",
+      message: "신뢰된 인증 헤더는 로컬 또는 내부 프록시 요청에서만 사용할 수 있습니다.",
+    });
   });
 
   it("allows trusted planning auth headers only when the internal bridge is enabled", () => {

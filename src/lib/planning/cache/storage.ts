@@ -3,6 +3,11 @@ import { type Dirent } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteJson } from "../storage/atomicWrite";
+import {
+  getPlanningUserDir,
+  isPlanningNamespaceEnabled,
+  resolvePlanningUserId,
+} from "../store/namespace";
 import { type PlanningCacheEntry, type PlanningCacheKind, type PlanningCacheUsageStats } from "./types";
 
 export const CACHE_DIR = ".data/planning/cache";
@@ -10,6 +15,11 @@ const CACHE_USAGE_STATS_FILE = "_usage.stats.json";
 const CACHE_ENTRY_VERSION = 1 as const;
 
 function resolveCacheDir(): string {
+  if (isPlanningNamespaceEnabled()) {
+    const userId = resolvePlanningUserId();
+    return path.join(getPlanningUserDir(userId), "cache");
+  }
+
   const envPath = (process.env.PLANNING_CACHE_DIR ?? "").trim();
   if (envPath) return path.resolve(process.cwd(), envPath);
   return path.join(resolvePlanningDataDir(), "cache");

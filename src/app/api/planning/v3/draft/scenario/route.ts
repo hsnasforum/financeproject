@@ -8,6 +8,11 @@ import {
   type DraftScenarioSimulationInput,
   simulateDraftScenario,
 } from "@/lib/planning/v3/draft/service";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type ScenarioBody = DraftScenarioSimulationInput & {
   csrf?: unknown;
@@ -51,10 +56,13 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   if (!isRecord(body?.draftPatch)) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "draftPatch가 필요합니다." } },
+      { ok: false, error: { code: "INPUT", message: "draftPatch가 필요합니다." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -71,11 +79,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      meta: userMeta,
       data: simulated,
     });
   } catch {
     return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "시나리오 시뮬레이션에 실패했습니다." } },
+      { ok: false, error: { code: "INTERNAL", message: "시나리오 시뮬레이션에 실패했습니다." }, meta: userMeta },
       { status: 500 },
     );
   }

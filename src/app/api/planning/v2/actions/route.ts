@@ -19,6 +19,11 @@ import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/p
 import { PlanningV2ValidationError, type ProfileV2, type SimulationResultV2 } from "../../../../../lib/planning/server/v2/types";
 import { validateHorizonMonths, validateProfileV2 } from "../../../../../lib/planning/server/v2/validate";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type ActionsRequestBody = {
   profile?: unknown;
@@ -160,6 +165,9 @@ export async function POST(request: Request) {
   }
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   let profile: ProfileV2;
   let horizonMonths: number;
@@ -250,6 +258,7 @@ export async function POST(request: Request) {
         data,
         {
           ...cached.data.meta,
+          ...userMeta,
           cache: {
             hit: true,
             keyPrefix,
@@ -311,6 +320,7 @@ export async function POST(request: Request) {
 
     return ok(payload.data, {
       ...payload.meta,
+      ...userMeta,
       cache: {
         hit: false,
         keyPrefix,

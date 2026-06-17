@@ -10,6 +10,11 @@ import {
   readExposureProfile,
   writeExposureProfile,
 } from "@/lib/planning/v3/news/exposure";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 const SaveBodySchema = z.object({
   csrf: z.string().optional(),
@@ -58,11 +63,26 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
-  return NextResponse.json({
-    ok: true,
-    data: readExposureProfile(),
-  });
+  try {
+    return NextResponse.json({
+      ok: true,
+      data: readExposureProfile(),
+      meta: userMeta,
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INTERNAL", message: "노출 프로필을 불러오는 중 오류가 발생했습니다." },
+        meta: userMeta,
+      },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: Request) {
@@ -75,11 +95,18 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const parsed = SaveBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "입력 형식이 올바르지 않습니다." } },
+      {
+        ok: false,
+        error: { code: "INPUT", message: "입력 형식이 올바르지 않습니다." },
+        meta: userMeta,
+      },
       { status: 400 },
     );
   }
@@ -90,10 +117,15 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       data: saved,
+      meta: userMeta,
     });
   } catch {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "노출 프로필 입력 형식이 올바르지 않습니다." } },
+      {
+        ok: false,
+        error: { code: "INPUT", message: "노출 프로필 입력 형식이 올바르지 않습니다." },
+        meta: userMeta,
+      },
       { status: 400 },
     );
   }

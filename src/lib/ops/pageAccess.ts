@@ -13,4 +13,3 @@ export function shouldBlockOpsPageInCurrentRuntime(env: NodeJS.ProcessEnv = proc
   if (env.NODE_ENV !== "production") return false;
   return !isPackagedRuntime(env);
 }
-

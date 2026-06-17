@@ -5,6 +5,7 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import {
   RecoveryActionSchema,
   RecoveryExecutionSchema,
@@ -56,35 +57,53 @@ export async function POST(request: Request) {
     );
   }
 
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+
   const parsed = RecoveryBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "복구 요청 형식이 올바르지 않습니다." } },
+      {
+        ok: false,
+        error: { code: "INPUT", message: "복구 요청 형식이 올바르지 않습니다." },
+        meta: planningUserMeta(currentUser),
+      },
       { status: 400 },
     );
   }
 
-  const summary = previewRecoveryAction(parsed.data.action);
-  if (parsed.data.confirm !== true) {
+  try {
+    const summary = previewRecoveryAction(parsed.data.action);
+    if (parsed.data.confirm !== true) {
+      const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
+        ok: true,
+        data: {
+          requiresConfirmation: true,
+          summary,
+          execution: null,
+        },
+      }, { scope: "response", context: "api.v3.news.recovery.preview" });
+      return NextResponse.json(payload);
+    }
+
+    const execution = runRecoveryAction(parsed.data.action);
     const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
       ok: true,
       data: {
-        requiresConfirmation: true,
+        requiresConfirmation: false,
         summary,
-        execution: null,
+        execution,
       },
-    }, { scope: "response", context: "api.v3.news.recovery.preview" });
+    }, { scope: "response", context: "api.v3.news.recovery.run" });
     return NextResponse.json(payload);
+  } catch {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: { code: "INTERNAL", message: "뉴스 복구 작업 중 오류가 발생했습니다." },
+        meta: planningUserMeta(currentUser),
+      },
+      { status: 500 },
+    );
   }
-
-  const execution = runRecoveryAction(parsed.data.action);
-  const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
-    ok: true,
-    data: {
-      requiresConfirmation: false,
-      summary,
-      execution,
-    },
-  }, { scope: "response", context: "api.v3.news.recovery.run" });
-  return NextResponse.json(payload);
 }

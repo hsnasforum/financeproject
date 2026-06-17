@@ -6,14 +6,28 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
-import { readDailyRoutineChecklist, saveDailyRoutineChecklist } from "@/lib/planning/v3/routines/store";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
+import {
+  readCurrentUserDailyRoutineChecklist,
+  saveCurrentUserDailyRoutineChecklist,
+} from "@/lib/planning/v3/service/routinesRepository";
 
 export const runtime = "nodejs";
 
 const DateParamSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+const UserMetaSchema = z.object({
+  userId: z.string().min(1),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+});
+
 const DailyRoutineResponseSchema = z.object({
   ok: z.literal(true),
+  meta: UserMetaSchema,
   checklist: z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     savedAt: z.string().datetime().nullable(),
@@ -71,13 +85,17 @@ function asString(value: unknown): string {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const dateParam = asString(new URL(request.url).searchParams.get("date"));
   try {
     const date = DateParamSchema.parse(dateParam);
-    const checklist = readDailyRoutineChecklist(date);
+    const checklist = readCurrentUserDailyRoutineChecklist(date);
     const payload = parseWithV3Whitelist(DailyRoutineResponseSchema, {
       ok: true,
+      meta: userMeta,
       checklist: {
         date: checklist.date,
         savedAt: checklist.savedAt ?? null,
@@ -90,7 +108,7 @@ export async function GET(request: Request) {
     return NextResponse.json(payload);
   } catch {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "date 파라미터 형식이 올바르지 않습니다." } },
+      { ok: false, error: { code: "INPUT", message: "date 파라미터 형식이 올바르지 않습니다." }, meta: userMeta },
       { status: 400 },
     );
   }
@@ -106,12 +124,16 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const payload = body as { checklist?: unknown } | null;
-    const checklist = saveDailyRoutineChecklist(payload?.checklist ?? {});
+    const checklist = saveCurrentUserDailyRoutineChecklist(payload?.checklist ?? {});
     const response = parseWithV3Whitelist(DailyRoutineResponseSchema, {
       ok: true,
+      meta: userMeta,
       checklist: {
         date: checklist.date,
         savedAt: checklist.savedAt ?? null,
@@ -124,7 +146,7 @@ export async function POST(request: Request) {
     return NextResponse.json(response);
   } catch {
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "체크리스트 입력 형식이 올바르지 않습니다." } },
+      { ok: false, error: { code: "INPUT", message: "체크리스트 입력 형식이 올바르지 않습니다." }, meta: userMeta },
       { status: 400 },
     );
   }

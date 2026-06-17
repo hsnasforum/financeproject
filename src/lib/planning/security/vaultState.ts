@@ -11,6 +11,7 @@ import {
   type VaultKdfParams,
 } from "../crypto/vaultCrypto";
 import { resolvePlanningDataDir } from "../storage/dataDir";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../store/namespace";
 
 type VaultLockPolicy = {
   autoLockMinutes: number;
@@ -55,6 +56,11 @@ type VaultRuntime = {
   blockedUntil: number | null;
 };
 
+type VaultRuntimeGlobal = {
+  __planningVaultRuntime?: VaultRuntime;
+  __planningVaultRuntimeRegistry?: Record<string, VaultRuntime>;
+};
+
 export type VaultStatus = {
   configured: boolean;
   unlocked: boolean;
@@ -74,23 +80,42 @@ const DEFAULT_LOCK_POLICY: VaultLockPolicy = {
   maxBackoffSeconds: 900,
 };
 
-function getRuntime(): VaultRuntime {
-  const globalObject = globalThis as unknown as { __planningVaultRuntime?: VaultRuntime };
-  if (!globalObject.__planningVaultRuntime) {
-    globalObject.__planningVaultRuntime = {
-      loaded: false,
-      config: null,
-      configSourcePath: null,
-      unlockedMasterKey: null,
-      unlockStartedAt: null,
-      lastActivityAt: null,
-      autoLockTimer: null,
-      failedAttempts: 0,
-      failureWindowStartedAt: null,
-      blockedUntil: null,
-    };
+function createRuntime(): VaultRuntime {
+  return {
+    loaded: false,
+    config: null,
+    configSourcePath: null,
+    unlockedMasterKey: null,
+    unlockStartedAt: null,
+    lastActivityAt: null,
+    autoLockTimer: null,
+    failedAttempts: 0,
+    failureWindowStartedAt: null,
+    blockedUntil: null,
+  };
+}
+
+function resolveRuntimeKey(): string {
+  if (!isPlanningNamespaceEnabled()) return "default";
+  return `user:${resolvePlanningUserId()}`;
+}
+
+function getRuntimeRegistry(): Record<string, VaultRuntime> {
+  const globalObject = globalThis as unknown as VaultRuntimeGlobal;
+  if (!globalObject.__planningVaultRuntimeRegistry) {
+    globalObject.__planningVaultRuntimeRegistry = {};
+    if (globalObject.__planningVaultRuntime) {
+      globalObject.__planningVaultRuntimeRegistry.default = globalObject.__planningVaultRuntime;
+    }
   }
-  return globalObject.__planningVaultRuntime;
+  return globalObject.__planningVaultRuntimeRegistry;
+}
+
+function getRuntime(): VaultRuntime {
+  const registry = getRuntimeRegistry();
+  const key = resolveRuntimeKey();
+  registry[key] ??= createRuntime();
+  return registry[key];
 }
 
 function asString(value: unknown): string {
@@ -125,12 +150,18 @@ function normalizeLockPolicy(value: unknown, fallback: VaultLockPolicy = DEFAULT
 }
 
 function resolveConfigPath(): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId()), "security", "vault.json");
+  }
   const override = asString(process.env.PLANNING_VAULT_CONFIG_PATH);
   if (override) return path.resolve(process.cwd(), override);
   return path.join(resolvePlanningDataDir(), "security", "vault.json");
 }
 
 function resolveLegacyConfigPath(): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId()), "security", "vault.config.json");
+  }
   const override = asString(process.env.PLANNING_VAULT_CONFIG_PATH);
   if (override) return path.resolve(process.cwd(), override);
   return path.join(resolvePlanningDataDir(), "security", "vault.config.json");
@@ -569,8 +600,7 @@ export async function isVaultConfigured(): Promise<boolean> {
   return Boolean(runtime.config);
 }
 
-export async function resetVaultRuntime(): Promise<void> {
-  const runtime = getRuntime();
+function clearRuntime(runtime: VaultRuntime): void {
   clearAutoLockTimer(runtime);
   runtime.loaded = false;
   runtime.config = null;
@@ -583,6 +613,18 @@ export async function resetVaultRuntime(): Promise<void> {
   runtime.blockedUntil = null;
 }
 
+export async function resetVaultRuntime(): Promise<void> {
+  clearRuntime(getRuntime());
+}
+
 export async function resetVaultRuntimeForTests(): Promise<void> {
-  await resetVaultRuntime();
+  const globalObject = globalThis as unknown as VaultRuntimeGlobal;
+  for (const runtime of Object.values(globalObject.__planningVaultRuntimeRegistry ?? {})) {
+    clearRuntime(runtime);
+  }
+  if (globalObject.__planningVaultRuntime) {
+    clearRuntime(globalObject.__planningVaultRuntime);
+  }
+  globalObject.__planningVaultRuntimeRegistry = {};
+  delete globalObject.__planningVaultRuntime;
 }

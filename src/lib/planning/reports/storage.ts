@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
-import { type Dirent } from "node:fs";
+import { type Dirent, type Stats } from "node:fs";
 import path from "node:path";
 import { resolvePlanningDataDir } from "../server/runtime/dataDir";
 import { atomicWriteFile, atomicWriteJson } from "../storage/atomicWrite";
 import { getRun } from "../store/runStore";
+import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../store/namespace";
 import {
   deleteFileFromTrash,
   moveFileToTrash,
@@ -71,6 +72,9 @@ function sanitizeReportId(id: unknown): string {
 }
 
 function resolveReportsDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), cwd), "reports");
+  }
   const override = asString(process.env.PLANNING_REPORTS_DIR);
   if (override) return path.resolve(cwd, override);
   return path.join(resolvePlanningDataDir({ cwd }), "reports");
@@ -130,6 +134,16 @@ async function readMetaById(id: string): Promise<PlanningReportMeta | null> {
   }
 }
 
+async function statExistingReportFile(filePath: string): Promise<Stats | null> {
+  try {
+    return await fs.stat(filePath);
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
 async function ensureUniqueReportId(baseId: string): Promise<string> {
   let candidate = sanitizeReportId(baseId);
   let suffix = 2;
@@ -177,7 +191,8 @@ export async function listReports(limit = 50): Promise<PlanningReportListItem[]>
     const id = entry.name.slice(0, -3);
     if (!SAFE_REPORT_ID.test(id)) continue;
     const filePath = path.join(resolveReportsDir(), entry.name);
-    const stats = await fs.stat(filePath);
+    const stats = await statExistingReportFile(filePath);
+    if (!stats) continue;
     const fallbackMeta: PlanningReportMeta = {
       version: 1,
       id,
@@ -243,7 +258,7 @@ export async function createReportFromRun(
 
   const resultDto = resolveReportResultDtoFromRun(run);
   const markdown = toMarkdownFromResultDto(resultDto, {
-    title: run.title || `Planning Report (${run.id})`,
+    title: run.title || `재무설계 리포트 (${run.id})`,
     reportId,
     runId: run.id,
   });
