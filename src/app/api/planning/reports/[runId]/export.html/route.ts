@@ -2,13 +2,12 @@ import {
   assertLocalHost,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
-import { getCurrentUserRun } from "../../../../../../lib/planning/server/runs/repository";
-import { buildStandaloneReportArtifactsFromRun } from "../../../../../planning/reports/_lib/standaloneReportArtifacts";
 import {
   isPlanningRouteUser,
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../../lib/planning/api/routeAuth";
+import { getCurrentUserRunStandaloneReportHtml } from "../../../../../../lib/planning/server/reports/exportHtmlRouteService";
 
 type RouteContext = {
   params: Promise<{ runId: string }>;
@@ -60,8 +59,12 @@ export async function GET(request: Request, context: RouteContext) {
   const printView = viewMode === "print" || viewMode === "view";
   const styleNonce = createStyleNonce();
   try {
-    const run = await getCurrentUserRun(runId);
-    if (!run) {
+    const reportHtml = await getCurrentUserRunStandaloneReportHtml({
+      runId,
+      printView,
+      styleNonce,
+    });
+    if (!reportHtml) {
       return Response.json({
         ok: false,
         message: "실행 기록을 찾을 수 없습니다.",
@@ -69,21 +72,15 @@ export async function GET(request: Request, context: RouteContext) {
       }, { status: 404 });
     }
 
-    const { html } = buildStandaloneReportArtifactsFromRun(run, {
-      printView,
-      styleNonce,
-    });
-
-    const fileName = `planning-run-${run.id}-report.html`;
-    return new Response(html, {
+    return new Response(reportHtml.html, {
       status: 200,
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
         "content-security-policy": buildStandaloneHtmlContentSecurityPolicy(printView, styleNonce),
         "content-disposition": printView
-          ? `inline; filename=\"${fileName}\"`
-          : `attachment; filename=\"${fileName}\"`,
+          ? `inline; filename=\"${reportHtml.filename}\"`
+          : `attachment; filename=\"${reportHtml.filename}\"`,
       },
     });
   } catch {

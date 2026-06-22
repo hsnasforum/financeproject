@@ -62,6 +62,23 @@ function buildGetRequest(urlPath: string, headers?: Record<string, string>): Req
 describe("GET /api/planning/reports/[runId]/export.html", () => {
   let root = "";
 
+  it("keeps run read and html rendering behind the report export service", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/reports/[runId]/export.html/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/reports/exportHtmlRouteService.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).not.toContain("server/runs/repository");
+    expect(routeSource).not.toContain("buildStandaloneReportArtifactsFromRun");
+    expect(routeSource).toContain("getCurrentUserRunStandaloneReportHtml");
+    expect(serviceSource).toContain("getCurrentUserRun");
+    expect(serviceSource).toContain("buildStandaloneReportArtifactsFromRun");
+  });
+
   async function createRunForExport(): Promise<string> {
     const createProfileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
       name: "export profile",
