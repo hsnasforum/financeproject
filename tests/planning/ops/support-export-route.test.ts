@@ -14,6 +14,10 @@ const originalMetricsPath = process.env.PLANNING_OPS_METRICS_PATH;
 const originalMigrationStatePath = process.env.PLANNING_MIGRATION_STATE_PATH;
 const originalDartCorpCodesIndexPath = process.env.DART_CORPCODES_INDEX_PATH;
 const originalPlanningAssumptionsPath = process.env.PLANNING_ASSUMPTIONS_PATH;
+const originalAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
+const originalNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalAuthSecret = process.env.AUTH_SECRET;
+const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -36,6 +40,10 @@ describe.sequential("ops support export route", () => {
   beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-ops-support-export-"));
     env.NODE_ENV = "test";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+    delete env.PLANNING_NAMESPACE_ENABLED;
     env.PLANNING_OPS_AUDIT_PATH = path.join(root, "ops", "audit", "events.ndjson");
     env.PLANNING_OPS_METRICS_PATH = path.join(root, "ops", "metrics", "events.ndjson");
     env.PLANNING_MIGRATION_STATE_PATH = path.join(root, "planning", "migrations", "migrationState.json");
@@ -130,6 +138,18 @@ describe.sequential("ops support export route", () => {
     if (typeof originalPlanningAssumptionsPath === "string") env.PLANNING_ASSUMPTIONS_PATH = originalPlanningAssumptionsPath;
     else delete env.PLANNING_ASSUMPTIONS_PATH;
 
+    if (typeof originalAuthRequired === "string") env.PLANNING_AUTH_REQUIRED = originalAuthRequired;
+    else delete env.PLANNING_AUTH_REQUIRED;
+
+    if (typeof originalNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+
+    if (typeof originalAuthSecret === "string") env.AUTH_SECRET = originalAuthSecret;
+    else delete env.AUTH_SECRET;
+
+    if (typeof originalNextAuthSecret === "string") env.NEXTAUTH_SECRET = originalNextAuthSecret;
+    else delete env.NEXTAUTH_SECRET;
+
     fs.rmSync(root, { recursive: true, force: true });
   });
 
@@ -222,5 +242,74 @@ describe.sequential("ops support export route", () => {
     const payload = await response.json() as { error?: { code?: string } };
     expect(response.status).toBe(403);
     expect(payload.error?.code).toBe("LOCAL_ONLY");
+  });
+
+  it("blocks without a planning auth signal when fallback is not explicit", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+
+    const response = await supportExportGET(new Request(`${LOCAL_ORIGIN}/api/ops/support/export.zip?csrf=csrf-token`, {
+      method: "GET",
+      headers: localHeaders(),
+    }));
+
+    const payload = await response.json() as { error?: { code?: string } };
+    expect(response.status).toBe(401);
+    expect(payload.error?.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("scopes audit summary to the current planning user when namespace is enabled", async () => {
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    await appendOpsAuditEvent({
+      eventType: "CURRENT_USER_EVENT",
+      meta: {
+        planningUserId: "default",
+      },
+    });
+    env.PLANNING_NAMESPACE_ENABLED = "0";
+    await appendOpsAuditEvent({
+      eventType: "OTHER_USER_EVENT",
+      meta: {
+        planningUserId: "other-user",
+      },
+    });
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+
+    const response = await supportExportGET(new Request(`${LOCAL_ORIGIN}/api/ops/support/export.zip?csrf=csrf-token`, {
+      method: "GET",
+      headers: localHeaders(),
+    }));
+
+    expect(response.status).toBe(200);
+    const entries = await decodeZip(Buffer.from(await response.arrayBuffer()), {
+      maxEntries: 200,
+      maxTotalBytes: 8 * 1024 * 1024,
+    });
+    const manifest = JSON.parse(entries.get("manifest.json")?.toString("utf-8") ?? "{}") as {
+      scope?: {
+        kind?: string;
+        userId?: string;
+        authSource?: string;
+        auditEvents?: string;
+      };
+      counts?: {
+        auditEvents?: number;
+      };
+    };
+    const auditSummary = JSON.parse(entries.get("audit_summary.json")?.toString("utf-8") ?? "{}") as {
+      total?: number;
+      byType?: Record<string, number>;
+    };
+
+    expect(manifest.scope).toMatchObject({
+      kind: "planning-user",
+      userId: "default",
+      authSource: "local-namespace",
+      auditEvents: "current-user",
+    });
+    expect(manifest.counts?.auditEvents).toBe(1);
+    expect(auditSummary.total).toBe(1);
+    expect(auditSummary.byType).toEqual({
+      CURRENT_USER_EVENT: 1,
+    });
   });
 });
