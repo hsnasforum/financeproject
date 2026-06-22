@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type NewsItem, type RuntimeState } from "../contracts";
 import {
   hasItem,
+  readDigest,
   readDailyStatsLastNDays,
   readScenariosCache,
   readState,
@@ -14,6 +15,7 @@ import {
   resolveStatePath,
   upsertItems,
   writeDailyStats,
+  writeDigest,
   writeScenariosCache,
   writeState,
   writeTodayCache,
@@ -115,6 +117,37 @@ describe("planning v3 news store", () => {
       rootDir: root,
     });
     expect(recent).toHaveLength(2);
+  });
+
+  it("writes and reads digest artifact", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-news-v3-digest-store-"));
+    roots.push(root);
+
+    writeDigest({
+      generatedAt: "2026-03-04T10:00:00.000Z",
+      dateRange: {
+        fromKst: "2026-03-02",
+        toKst: "2026-03-04",
+      },
+      topItems: [],
+      topTopics: [],
+      burstTopics: [],
+      watchlist: [{
+        label: "기준금리",
+        seriesId: "kr_base_rate",
+        view: "last",
+        window: 1,
+        status: "unknown",
+        grade: "unknown",
+        compactSummary: "데이터 부족",
+        asOf: null,
+      }],
+      observationLines: ["관찰"],
+    }, root);
+
+    const digest = readDigest(root);
+    expect(digest?.dateRange.toKst).toBe("2026-03-04");
+    expect(digest?.watchlist[0]?.seriesId).toBe("kr_base_rate");
   });
 
   it("writes and reads today/trends/scenarios caches", () => {

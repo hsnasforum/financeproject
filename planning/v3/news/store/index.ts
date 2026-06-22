@@ -210,6 +210,17 @@ export function writeDigest(digest: DailyDigest, rootDir = defaultRootDir()): vo
   fs.writeFileSync(resolveDigestPath(rootDir), `${JSON.stringify(validated, null, 2)}\n`, "utf-8");
 }
 
+export function readDigest(rootDir = defaultRootDir()): DailyDigest | null {
+  const filePath = resolveDigestPath(rootDir);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+    return DailyDigestSchema.parse(parsed);
+  } catch {
+    return null;
+  }
+}
+
 const TrendCacheTopicSchema = z.object({
   topicId: z.string().trim().min(1),
   topicLabel: z.string().trim().min(1),

@@ -4,21 +4,29 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as alertRulesGET, POST as alertRulesPOST } from "../src/app/api/planning/v3/news/alerts/rules/route";
 import { GET as alertsGET, POST as alertsPOST } from "../src/app/api/planning/v3/news/alerts/route";
+import { GET as digestGET } from "../src/app/api/planning/v3/news/digest/route";
 import { GET as newsExposureGET, POST as newsExposurePOST } from "../src/app/api/planning/v3/news/exposure/route";
 import { DELETE as noteDELETE, PATCH as notePATCH } from "../src/app/api/planning/v3/news/notes/[noteId]/route";
 import { GET as notesGET, POST as notesPOST } from "../src/app/api/planning/v3/news/notes/route";
 import { GET as scenariosGET } from "../src/app/api/planning/v3/news/scenarios/route";
 import { GET as settingsGET, POST as settingsPOST } from "../src/app/api/planning/v3/news/settings/route";
 import { GET as weeklyPlanGET, POST as weeklyPlanPOST } from "../src/app/api/planning/v3/news/weekly-plan/route";
+import { runWithPlanningUserScope } from "../src/lib/planning/store/userScope";
 import {
   resolveAlertEventsPath,
   resolveAlertEventStatePath,
   resolveAlertRulesOverridePath,
 } from "../src/lib/news/alerts";
-import { resolveNewsScenarioJsonPath } from "../src/lib/news/storageSqlite";
+import { resolveNewsDigestDayJsonPath, resolveNewsScenarioJsonPath } from "../src/lib/news/storageSqlite";
 import { resolveExposureProfilePath } from "../planning/v3/exposure/store";
 import { resolveNewsNotesDir } from "../planning/v3/news/notes";
 import { resolveNewsSettingsPath } from "../planning/v3/news/settings";
+import {
+  resolveDigestPath,
+  resolveScenariosCachePath,
+  writeDigest,
+  writeScenariosCache,
+} from "../planning/v3/news/store";
 import { resolveWeeklyPlanPath } from "../planning/v3/news/weeklyPlan";
 
 const env = process.env as Record<string, string | undefined>;
@@ -109,7 +117,35 @@ function writeAlertEventFixture(): void {
   })}\n`, "utf-8");
 }
 
-function writeRatesScenarioFixture(): void {
+function writeGlobalLegacyDigestFixture(): void {
+  const digestPath = resolveNewsDigestDayJsonPath();
+  fs.mkdirSync(path.dirname(digestPath), { recursive: true });
+  fs.writeFileSync(digestPath, `${JSON.stringify({
+    date: "2026-03-04",
+    generatedAt: "2026-03-04T00:00:00.000Z",
+    topItems: [],
+    topTopics: [],
+    burstTopics: [],
+    watchlist: [{
+      label: "legacy global",
+      seriesId: "kr_base_rate",
+      view: "last",
+      window: 1,
+      status: "unknown",
+      valueSummary: "데이터 부족",
+      asOf: null,
+    }],
+    scenarioCards: [],
+    summary: {
+      observation: "legacy global digest",
+      evidenceLinks: [],
+      watchVariables: ["legacy global"],
+      counterSignals: [],
+    },
+  }, null, 2)}\n`, "utf-8");
+}
+
+function writeGlobalLegacyRatesScenarioFixture(): void {
   const scenariosPath = resolveNewsScenarioJsonPath();
   fs.mkdirSync(path.dirname(scenariosPath), { recursive: true });
   fs.writeFileSync(scenariosPath, `${JSON.stringify({
@@ -148,6 +184,69 @@ function writeRatesScenarioFixture(): void {
       linkedTopics: ["rates"],
     }],
   }, null, 2)}\n`, "utf-8");
+}
+
+function writeScopedDigestFixture(userId: string): void {
+  runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
+    writeDigest({
+      generatedAt: "2026-03-04T00:00:00.000Z",
+      dateRange: {
+        fromKst: "2026-03-02",
+        toKst: "2026-03-04",
+      },
+      topItems: [],
+      topTopics: [],
+      burstTopics: [],
+      watchlist: [{
+        label: `${userId} 기준금리`,
+        seriesId: "kr_base_rate",
+        view: "last",
+        window: 1,
+        status: "unknown",
+        grade: "unknown",
+        compactSummary: "데이터 부족",
+        asOf: null,
+      }],
+      observationLines: [`${userId} 관찰`],
+    });
+  });
+}
+
+function writeScopedRatesScenarioCache(userId: string): void {
+  runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
+    writeScenariosCache({
+      generatedAt: "2026-03-04T00:00:00.000Z",
+      lastRefreshedAt: "2026-03-04T00:00:00.000Z",
+      scenarios: {
+        generatedAt: "2026-03-04T00:00:00.000Z",
+        cards: [{
+          name: "Base",
+          observation: "금리 상승 압력 관찰",
+          triggers: [{ kind: "topicBurst", topicId: "rates", condition: "med", note: "rates" }],
+          invalidation: ["금리 압력이 완화되면 해석을 낮춥니다."],
+          indicators: ["kr_base_rate"],
+          options: ["모니터링"],
+          linkedTopics: ["rates"],
+        }, {
+          name: "Bull",
+          observation: "금리 압력이 낮아지는 대안 시나리오",
+          triggers: [{ kind: "topicBurst", topicId: "rates", condition: "low", note: "rates" }],
+          invalidation: ["금리 압력이 커지면 해석을 낮춥니다."],
+          indicators: ["kr_base_rate"],
+          options: ["모니터링"],
+          linkedTopics: ["rates"],
+        }, {
+          name: "Bear",
+          observation: "금리 압력이 커지는 대안 시나리오",
+          triggers: [{ kind: "topicBurst", topicId: "rates", condition: "high", note: "rates" }],
+          invalidation: ["금리 압력이 낮아지면 해석을 낮춥니다."],
+          indicators: ["kr_base_rate"],
+          options: ["모니터링"],
+          linkedTopics: ["rates"],
+        }],
+      },
+    });
+  });
 }
 
 describe("planning v3 news user scope", () => {
@@ -480,8 +579,49 @@ describe("planning v3 news user scope", () => {
     expect(alicePayload.data?.seriesIds).toEqual(["kr_base_rate"]);
   });
 
+  it("keeps digest route on user-scoped v3 artifacts when namespace is enabled", async () => {
+    writeGlobalLegacyDigestFixture();
+    writeGlobalLegacyRatesScenarioFixture();
+    writeScopedDigestFixture("alice");
+
+    const bobResponse = await digestGET(requestGet(
+      "/api/planning/v3/news/digest",
+      "bob",
+      "/planning/v3/news",
+    ));
+    const bobPayload = await bobResponse.json() as { data?: { watchlist?: Array<{ label?: string }> } | null };
+    expect(bobResponse.status).toBe(200);
+    expectTrustedMeta(bobPayload, "bob");
+    expect(bobPayload.data).toBeNull();
+
+    const aliceResponse = await digestGET(requestGet(
+      "/api/planning/v3/news/digest",
+      "alice",
+      "/planning/v3/news",
+    ));
+    const alicePayload = await aliceResponse.json() as { data?: { watchlist?: Array<{ label?: string; seriesId?: string }> } | null };
+    expect(aliceResponse.status).toBe(200);
+    expectTrustedMeta(alicePayload, "alice");
+    expect(alicePayload.data?.watchlist?.[0]?.label).toBe("alice 기준금리");
+    expect(alicePayload.data?.watchlist?.[0]?.seriesId).toBe("kr_base_rate");
+    expect(resolveDigestPath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/digest.latest.json");
+  });
+
   it("keeps news exposure profile and scenario personal impact scoped by planning user", async () => {
-    writeRatesScenarioFixture();
+    writeGlobalLegacyRatesScenarioFixture();
+
+    const charlieScenarioResponse = await scenariosGET(requestGet(
+      "/api/planning/v3/news/scenarios",
+      "charlie",
+      "/planning/v3/news",
+    ));
+    const charlieScenarioPayload = await charlieScenarioResponse.json() as { data?: unknown };
+    expect(charlieScenarioResponse.status).toBe(200);
+    expectTrustedMeta(charlieScenarioPayload, "charlie");
+    expect(charlieScenarioPayload.data).toBeNull();
+
+    writeScopedRatesScenarioCache("alice");
+    writeScopedRatesScenarioCache("bob");
 
     const aliceProfileResponse = await newsExposurePOST(requestWrite(
       "POST",
@@ -569,5 +709,8 @@ describe("planning v3 news user scope", () => {
     expectTrustedMeta(bobScenarioPayload, "bob");
     expect(bobScenarioPayload.data?.scenarios?.[0]?.personalImpact?.debtServiceRisk).toBe("Low");
     expect(bobScenarioPayload.data?.scenarios?.[0]?.personalImpact?.bufferAdequacy).toBe("High");
+    runWithPlanningUserScope({ userId: "bob", authSource: "trusted-header" }, () => {
+      expect(resolveScenariosCachePath().replaceAll("\\", "/")).toContain("/users/bob/planning-v3/news/cache/scenarios.latest.json");
+    });
   });
 });
