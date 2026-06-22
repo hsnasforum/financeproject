@@ -3,6 +3,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { resolveDataDir } from "../../../src/lib/planning/storage/dataDir";
 import {
+  getPlanningUserDir,
+  isPlanningNamespaceEnabled,
+  resolvePlanningUserId,
+} from "../../../src/lib/planning/store/namespace";
+import {
   ExposureProfileSchema,
   normalizeExposureProfile,
   parseExposureProfileInput,
@@ -18,6 +23,9 @@ function assertServerOnly(): void {
 }
 
 export function resolveExposureDir(cwd = process.cwd()): string {
+  if (isPlanningNamespaceEnabled()) {
+    return path.join(getPlanningUserDir(resolvePlanningUserId(), cwd), "planning-v3", "exposure");
+  }
   return path.join(resolveDataDir({ cwd }), "exposure");
 }
 
