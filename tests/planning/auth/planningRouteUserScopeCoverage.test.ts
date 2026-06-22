@@ -489,11 +489,31 @@ const FORBIDDEN_ROUTE_AUTH_BYPASS_PATTERNS = [
 ] as const;
 
 const ROUTE_AUTH_FAILURE_RETURN_PATTERN = /if\s*\(authError\)\s+return\s+(?:\w+\()?authError\)?;/u;
+const ROUTE_AUTH_FAILURE_WRAPPED_RETURN_PATTERN = /if\s*\(authError\)\s+return\s+(\w+)\(authError\);/gu;
 
 function hasRouteAuthFailureBridge(source: string): boolean {
   return source.includes("planningAuthErrorResponse")
     && source.includes("toAuthErrorResponse(error)")
     && ROUTE_AUTH_FAILURE_RETURN_PATTERN.test(source);
+}
+
+function isHeaderOnlyAuthErrorResponseWrapper(source: string, wrapperName: string): boolean {
+  return source.includes(
+    `const ${wrapperName} = <T extends Response>(response: T) => setTraceHeader(response, traceId);`,
+  );
+}
+
+function findNonHeaderOnlyAuthErrorResponseWrappers(filePath: string): string[] {
+  const source = fs.readFileSync(filePath, "utf8");
+  const invalid: string[] = [];
+
+  for (const match of source.matchAll(ROUTE_AUTH_FAILURE_WRAPPED_RETURN_PATTERN)) {
+    const wrapperName = match[1];
+    if (!wrapperName || isHeaderOnlyAuthErrorResponseWrapper(source, wrapperName)) continue;
+    invalid.push(`${filePath}:${wrapperName}`);
+  }
+
+  return invalid;
 }
 
 const FORBIDDEN_ROUTE_STORE_IMPORT_PATTERNS = [
@@ -671,6 +691,13 @@ describe("planning route current-user scope coverage", () => {
     });
 
     expect(missingAuthErrorBridge).toEqual([]);
+  });
+
+  it("keeps wrapped auth error responses header-only", () => {
+    const invalidWrappers = findPlanningAuthBoundaryRouteFiles()
+      .flatMap(findNonHeaderOnlyAuthErrorResponseWrappers);
+
+    expect(invalidWrappers).toEqual([]);
   });
 
   it("keeps planning and ops API routes off direct current-user scope helpers", () => {
