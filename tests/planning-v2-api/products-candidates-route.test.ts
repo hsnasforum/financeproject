@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => ({
-  getRun: vi.fn(),
-  getProfile: vi.fn(),
+  getCurrentUserRun: vi.fn(),
+  getCurrentUserProfile: vi.fn(),
   getUnifiedProducts: vi.fn(),
   UnifiedInputError: class UnifiedInputError extends Error {},
 }));
 
-vi.mock("../../src/lib/planning/server/store/runStore", () => ({
-  getRun: mocked.getRun,
+vi.mock("../../src/lib/planning/server/runs/repository", () => ({
+  getCurrentUserRun: mocked.getCurrentUserRun,
 }));
 
-vi.mock("../../src/lib/planning/server/store/profileStore", () => ({
-  getProfile: mocked.getProfile,
+vi.mock("../../src/lib/planning/server/profiles/repository", () => ({
+  getCurrentUserProfile: mocked.getCurrentUserProfile,
 }));
 
 vi.mock("../../src/lib/sources/unified", () => ({
@@ -24,6 +24,9 @@ import { GET } from "../../src/app/api/products/candidates/route";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
+const originalAuthSecret = process.env.AUTH_SECRET;
+const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
 
 function buildRequest(path: string): Request {
   return new Request(`http://localhost:3000${path}`, {
@@ -32,6 +35,7 @@ function buildRequest(path: string): Request {
       host: "localhost:3000",
       origin: "http://localhost:3000",
       referer: "http://localhost:3000/planning/reports",
+      "x-planning-user-id": "alice",
     },
   });
 }
@@ -39,14 +43,17 @@ function buildRequest(path: string): Request {
 describe("GET /api/products/candidates", () => {
   beforeEach(() => {
     env.NODE_ENV = "test";
-    mocked.getRun.mockReset();
-    mocked.getProfile.mockReset();
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    env.AUTH_SECRET = undefined;
+    env.NEXTAUTH_SECRET = undefined;
+    mocked.getCurrentUserRun.mockReset();
+    mocked.getCurrentUserProfile.mockReset();
     mocked.getUnifiedProducts.mockReset();
-    mocked.getRun.mockResolvedValue({
+    mocked.getCurrentUserRun.mockResolvedValue({
       id: "run-1",
       profileId: "profile-1",
     });
-    mocked.getProfile.mockResolvedValue({
+    mocked.getCurrentUserProfile.mockResolvedValue({
       id: "profile-1",
       profile: {
         monthlyIncomeNet: 4_500_000,
@@ -91,6 +98,12 @@ describe("GET /api/products/candidates", () => {
   afterEach(() => {
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
+    if (typeof originalPlanningTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
+    else delete env.PLANNING_TRUST_AUTH_HEADERS;
+    if (typeof originalAuthSecret === "string") env.AUTH_SECRET = originalAuthSecret;
+    else delete env.AUTH_SECRET;
+    if (typeof originalNextAuthSecret === "string") env.NEXTAUTH_SECRET = originalNextAuthSecret;
+    else delete env.NEXTAUTH_SECRET;
   });
 
   it("returns normalized candidate vm fields without raw payload dumps", async () => {
@@ -101,10 +114,18 @@ describe("GET /api/products/candidates", () => {
         kind?: string;
         candidates?: Array<Record<string, unknown>>;
       };
+      meta?: {
+        userId?: string;
+        authSource?: string;
+      };
     };
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
+    expect(payload.meta).toMatchObject({
+      userId: "alice",
+      authSource: "trusted-header",
+    });
     expect(payload.data?.kind).toBe("deposit");
     expect((payload.data?.candidates ?? []).length).toBeGreaterThan(0);
 
@@ -142,6 +163,8 @@ describe("GET /api/products/candidates", () => {
         candidates?: unknown[];
       };
       meta?: {
+        userId?: string;
+        authSource?: string;
         degradedReason?: string;
       };
     };
@@ -149,7 +172,31 @@ describe("GET /api/products/candidates", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.data?.candidates).toEqual([]);
+    expect(payload.meta).toMatchObject({
+      userId: "alice",
+      authSource: "trusted-header",
+    });
     expect(payload.meta?.degradedReason).toBe("PRODUCT_CATALOG_UNAVAILABLE");
+  });
+
+  it("rejects requests that cannot establish the current planning user", async () => {
+    env.PLANNING_TRUST_AUTH_HEADERS = "0";
+
+    const response = await GET(buildRequest("/api/products/candidates?runId=run-1&kind=deposit&limit=10"));
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: {
+        code?: string;
+      };
+      meta?: unknown;
+    };
+
+    expect(response.status).toBe(403);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("FORBIDDEN");
+    expect(payload).not.toHaveProperty("meta");
+    expect(mocked.getCurrentUserRun).not.toHaveBeenCalled();
+    expect(mocked.getCurrentUserProfile).not.toHaveBeenCalled();
   });
 
   it("keeps returning 500 for unexpected candidate loading failures", async () => {

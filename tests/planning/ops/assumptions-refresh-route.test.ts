@@ -210,13 +210,14 @@ describe.sequential("ops assumptions refresh route", () => {
       }),
     }));
     const payload = await response.json() as {
-      meta?: { userId?: string; authSource?: string };
+      meta?: { userId?: string; authSource?: string; planningNamespaceEnabled?: boolean };
     };
 
     expect(response.status).toBe(200);
-    expect(payload.meta).toEqual({
+    expect(payload.meta).toMatchObject({
       userId: "alice",
       authSource: "trusted-header",
+      planningNamespaceEnabled: true,
     });
     expect(appendOpsAuditEventMock).toHaveBeenCalledWith({
       eventType: "OPS_ASSUMPTIONS_REFRESH_SUCCESS",

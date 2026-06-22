@@ -414,6 +414,7 @@ const ROUTE_AUTH_IMPORT_PATH = "/planning/api/routeAuth";
 
 const PLANNING_ADJACENT_AUTH_ROUTE_FILES = [
   "src/app/api/planner/compute/route.ts",
+  "src/app/api/products/candidates/route.ts",
   "src/app/api/recommend/route.ts",
 ] as const;
 
@@ -550,8 +551,19 @@ const OPS_USER_SCOPED_ROUTE_IMPORT_PATTERNS = [
   "/planning/server/runs/opsRouteService",
   "@/lib/planning/server/ops/doctorRouteService",
   "/planning/server/ops/doctorRouteService",
+  "@/lib/planning/server/security/",
+  "/planning/server/security/",
+  "@/lib/ops/actions/action",
+  "/lib/ops/actions/action",
   "@/lib/ops/actions/registry",
   "/ops/actions/registry",
+  "@/lib/ops/assumptions/",
+  "/lib/ops/assumptions/",
+  "@/lib/ops/backup/",
+  "/lib/ops/backup/",
+  "readOpsMetricsSummaryPage",
+  "@/lib/ops/support/",
+  "/lib/ops/support/",
   "@/lib/planning/server/store/",
   "/planning/server/store/",
   "@/lib/planning/store/",

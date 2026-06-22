@@ -1,6 +1,11 @@
 import { assertSameOrigin, toGuardErrorResponse } from "../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../lib/http/apiResponse";
 import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../lib/planning/api/routeAuth";
+import {
   DEFAULT_INTEREST_TAX_POLICY,
   deriveDefaultComparisonAmountKrw,
   deriveDefaultComparisonTermMonths,
@@ -9,8 +14,8 @@ import {
   type CandidateProfileContext,
   type CandidateVM,
 } from "../../../../lib/planning/candidates/comparison";
-import { getProfile } from "../../../../lib/planning/server/store/profileStore";
-import { getRun } from "../../../../lib/planning/server/store/runStore";
+import { getCurrentUserProfile } from "../../../../lib/planning/server/profiles/repository";
+import { getCurrentUserRun } from "../../../../lib/planning/server/runs/repository";
 import { getUnifiedProducts, UnifiedInputError, type UnifiedProductView } from "../../../../lib/sources/unified";
 
 function asString(value: unknown): string {
@@ -139,6 +144,9 @@ export async function GET(request: Request) {
   if (guardFailure) return guardFailure;
 
   try {
+    const currentUser = await requirePlanningRouteUser(request);
+    if (!isPlanningRouteUser(currentUser)) return currentUser;
+
     const url = new URL(request.url);
     const runId = asString(url.searchParams.get("runId"));
     if (!runId) {
@@ -148,12 +156,12 @@ export async function GET(request: Request) {
       });
     }
 
-    const run = await getRun(runId);
+    const run = await getCurrentUserRun(runId);
     if (!run) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
     }
 
-    const profileRecord = await getProfile(run.profileId);
+    const profileRecord = await getCurrentUserProfile(run.profileId);
     if (!profileRecord) {
       return jsonError("NO_DATA", "실행 기록에 연결된 프로필을 찾을 수 없습니다.", { status: 404 });
     }
@@ -219,10 +227,13 @@ export async function GET(request: Request) {
     }, degradedReason
       ? {
           meta: {
+            ...planningUserMeta(currentUser),
             degradedReason,
           },
         }
-      : undefined);
+      : {
+          meta: planningUserMeta(currentUser),
+        });
   } catch (error) {
     if (error instanceof UnifiedInputError) {
       return jsonError("INPUT", error.message, { status: 400 });

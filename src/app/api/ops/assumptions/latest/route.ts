@@ -13,6 +13,7 @@ import {
   isPlanningRouteUser,
   requirePlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
+import { assumptionsUserMeta } from "../_lib";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -69,6 +70,6 @@ export async function GET(request: Request) {
     ok: true,
     snapshot: result.snapshot,
     snapshotId: result.snapshotId,
-    meta: result.meta,
+    meta: assumptionsUserMeta(currentUser, result.meta),
   });
 }

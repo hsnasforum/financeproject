@@ -13,6 +13,7 @@ import {
   isPlanningRouteUser,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { assumptionsUserMeta } from "../_lib";
 
 type SetLatestBody = {
   csrf?: unknown;
@@ -106,6 +107,6 @@ export async function POST(request: Request) {
     ok: true,
     message: result.message,
     snapshotRef: result.snapshotRef,
-    meta: result.meta,
+    meta: assumptionsUserMeta(currentUser, result.meta),
   });
 }

@@ -13,6 +13,7 @@ import {
   isPlanningRouteUser,
   requirePlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
+import { assumptionsUserMeta } from "../_lib";
 
 type SyncBody = {
   csrf?: unknown;
@@ -76,6 +77,6 @@ export async function POST(request: Request) {
     ok: true,
     snapshotSummary: result.snapshotSummary,
     message: result.message,
-    meta: result.meta,
+    meta: assumptionsUserMeta(currentUser, result.meta),
   });
 }

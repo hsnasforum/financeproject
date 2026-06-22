@@ -13,6 +13,7 @@ import {
   isPlanningRouteUser,
   requirePlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
+import { assumptionsUserMeta } from "../_lib";
 
 type RefreshBody = {
   csrf?: unknown;
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
     ok: true,
     latestId: result.latestId,
     message: result.message,
-    meta: result.meta,
+    meta: assumptionsUserMeta(currentUser, result.meta),
     snapshot: result.snapshot,
   });
 }
