@@ -193,6 +193,33 @@ describe.sequential("ops security reset API", () => {
     await expect(fs.promises.access(opsAuditPath)).rejects.toBeDefined();
   });
 
+  it("keeps audit logs and records success when keepAudit is true", async () => {
+    const response = await securityResetPOST(new Request(`${LOCAL_ORIGIN}/api/ops/security/reset`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        confirmText: RESET_CONFIRM_PHRASE,
+      }),
+    }));
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: { configured?: boolean; unlocked?: boolean };
+      meta?: { reset?: { keepAudit?: boolean; removed?: string[] } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.data?.configured).toBe(false);
+    expect(payload.data?.unlocked).toBe(false);
+    expect(payload.meta?.reset?.keepAudit).toBe(true);
+    expect(payload.meta?.reset?.removed?.some((entry) => entry.includes("ops/audit"))).toBe(false);
+
+    const rawAudit = await fs.promises.readFile(opsAuditPath, "utf-8");
+    expect(rawAudit).toContain("VAULT_TEST_EVENT");
+    expect(rawAudit).toContain("VAULT_RESET_SUCCESS");
+  });
+
   it("blocks reset without csrf", async () => {
     const response = await securityResetPOST(new Request(`${LOCAL_ORIGIN}/api/ops/security/reset`, {
       method: "POST",
