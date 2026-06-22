@@ -59,10 +59,13 @@ afterEach(() => {
 });
 
 describe("daily refresh ops contract", () => {
-  it("runs indicators refresh as a required daily refresh step after news", () => {
+  it("runs public source refresh steps before news and indicators", () => {
     const root = createTempRoot();
     writePackage(root, {
       "warm:if-stale": okScript("warm"),
+      "finlife:sync:if-stale": okScript("finlife"),
+      "datago:sync": okScript("datago"),
+      "gov24:sync:if-stale": okScript("gov24"),
       "news:refresh": okScript("news"),
       "indicators:refresh": okScript("indicators"),
       "dart:watch": okScript("dart"),
@@ -76,12 +79,27 @@ describe("daily refresh ops contract", () => {
     expect(payload.ok).toBe(true);
     expect(payload.steps?.map((step) => step.name)).toEqual([
       "warm:if-stale",
+      "finlife:sync:if-stale",
+      "datago:sync",
+      "gov24:sync:if-stale",
       "news:refresh",
       "indicators:refresh",
       "dart:watch",
       "data:doctor",
       "cleanup",
     ]);
+    expect(payload.steps?.find((step) => step.name === "finlife:sync:if-stale")).toMatchObject({
+      status: "ok",
+      stdoutTail: expect.stringContaining("finlife:ok"),
+    });
+    expect(payload.steps?.find((step) => step.name === "datago:sync")).toMatchObject({
+      status: "ok",
+      stdoutTail: expect.stringContaining("datago:ok"),
+    });
+    expect(payload.steps?.find((step) => step.name === "gov24:sync:if-stale")).toMatchObject({
+      status: "ok",
+      stdoutTail: expect.stringContaining("gov24:ok"),
+    });
     expect(payload.steps?.find((step) => step.name === "indicators:refresh")).toMatchObject({
       status: "ok",
       stdoutTail: expect.stringContaining("indicators:ok"),
@@ -92,11 +110,12 @@ describe("daily refresh ops contract", () => {
     });
   }, 20_000);
 
-  it("marks missing indicators refresh as a required failure in strict mode", () => {
+  it("marks missing public source refresh scripts as required failures in strict mode", () => {
     const root = createTempRoot();
     writePackage(root, {
       "warm:if-stale": okScript("warm"),
       "news:refresh": okScript("news"),
+      "indicators:refresh": okScript("indicators"),
       "dart:watch": okScript("dart"),
       cleanup: okScript("cleanup"),
     });
@@ -106,7 +125,15 @@ describe("daily refresh ops contract", () => {
     expect(result.status).toBe(1);
     const payload = readResult(root);
     expect(payload.ok).toBe(false);
-    expect(payload.steps?.find((step) => step.name === "indicators:refresh")).toMatchObject({
+    expect(payload.steps?.find((step) => step.name === "finlife:sync:if-stale")).toMatchObject({
+      status: "failed",
+      stderrTail: "script_not_found",
+    });
+    expect(payload.steps?.find((step) => step.name === "datago:sync")).toMatchObject({
+      status: "failed",
+      stderrTail: "script_not_found",
+    });
+    expect(payload.steps?.find((step) => step.name === "gov24:sync:if-stale")).toMatchObject({
       status: "failed",
       stderrTail: "script_not_found",
     });

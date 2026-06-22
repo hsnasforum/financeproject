@@ -113,6 +113,24 @@ async function main() {
     plan.push({ name: "warm:if-stale", required: false, runnable: false, reason: "script_not_found" });
   }
 
+  if (typeof scripts["finlife:sync:if-stale"] === "string" && scripts["finlife:sync:if-stale"].trim()) {
+    plan.push({ name: "finlife:sync:if-stale", required: true, runnable: true });
+  } else {
+    plan.push({ name: "finlife:sync:if-stale", required: true, runnable: false, reason: "script_not_found" });
+  }
+
+  if (typeof scripts["datago:sync"] === "string" && scripts["datago:sync"].trim()) {
+    plan.push({ name: "datago:sync", required: true, runnable: true });
+  } else {
+    plan.push({ name: "datago:sync", required: true, runnable: false, reason: "script_not_found" });
+  }
+
+  if (typeof scripts["gov24:sync:if-stale"] === "string" && scripts["gov24:sync:if-stale"].trim()) {
+    plan.push({ name: "gov24:sync:if-stale", required: true, runnable: true });
+  } else {
+    plan.push({ name: "gov24:sync:if-stale", required: true, runnable: false, reason: "script_not_found" });
+  }
+
   if (typeof scripts["news:refresh"] === "string" && scripts["news:refresh"].trim()) {
     plan.push({ name: "news:refresh", required: true, runnable: true });
   } else {
