@@ -142,6 +142,22 @@ function collectImportedHelperNames(
   return names;
 }
 
+function sourceFileCallsIdentifier(sourceFile: ts.SourceFile, names: ReadonlySet<string>): boolean {
+  let found = false;
+
+  function visit(node: ts.Node) {
+    if (found) return;
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && names.has(node.expression.text)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return found;
+}
+
 const CURRENT_USER_REPOSITORY_IMPORT_PATH_FRAGMENTS = [
   "/planning/server/profiles/repository",
   "/planning/server/runs/repository",
@@ -406,11 +422,55 @@ const ROUTE_AUTH_HELPERS = [
   "requirePlanningRouteUser(",
 ] as const;
 
+const ROUTE_AUTH_BOUNDARY_HELPER_NAMES = [
+  "withPlanningRouteUser",
+  "requirePlanningRouteUser",
+] as const;
+
 const ROUTE_AUTH_RESPONSE_GUARD_PATTERN = "if (!isPlanningRouteUser(currentUser)) return currentUser";
 
 const EXPECTED_PLANNING_ROUTE_COUNT = 95;
 
 const ROUTE_AUTH_IMPORT_PATH = "/planning/api/routeAuth";
+
+function createSourceFileFromSource(filePath: string, source: string): ts.SourceFile {
+  return ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+}
+
+function collectRouteAuthImportedHelperNames(
+  sourceFile: ts.SourceFile,
+  importedName: string,
+): Set<string> {
+  return collectImportedHelperNames(sourceFile, importedName, [ROUTE_AUTH_IMPORT_PATH]);
+}
+
+function sourceFileCallsRouteAuthHelper(sourceFile: ts.SourceFile, importedName: string): boolean {
+  return sourceFileCallsIdentifier(sourceFile, collectRouteAuthImportedHelperNames(sourceFile, importedName));
+}
+
+function sourceFileImportsAnyRouteAuthBoundaryHelper(sourceFile: ts.SourceFile): boolean {
+  return ROUTE_AUTH_BOUNDARY_HELPER_NAMES.some((helperName) =>
+    collectRouteAuthImportedHelperNames(sourceFile, helperName).size > 0,
+  );
+}
+
+function sourceFileCallsAnyRouteAuthBoundaryHelper(sourceFile: ts.SourceFile): boolean {
+  return ROUTE_AUTH_BOUNDARY_HELPER_NAMES.some((helperName) =>
+    sourceFileCallsRouteAuthHelper(sourceFile, helperName),
+  );
+}
+
+function routeSourceFile(filePath: string): ts.SourceFile {
+  return createSourceFileFromSource(filePath, fs.readFileSync(filePath, "utf8"));
+}
+
+function routeCallsImportedRouteAuthBoundaryHelperInSource(filePath: string, source: string): boolean {
+  return sourceFileCallsAnyRouteAuthBoundaryHelper(createSourceFileFromSource(filePath, source));
+}
+
+function routeCallsImportedRouteAuthBoundaryHelper(filePath: string): boolean {
+  return sourceFileCallsAnyRouteAuthBoundaryHelper(routeSourceFile(filePath));
+}
 
 const PLANNING_ADJACENT_AUTH_ROUTE_FILES = [
   "src/app/api/planner/compute/route.ts",
@@ -662,8 +722,7 @@ describe("planning route current-user scope coverage", () => {
 
   it("keeps every planning auth boundary route behind current-user scope", () => {
     const missing = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
-      const source = fs.readFileSync(filePath, "utf8");
-      return !ROUTE_AUTH_HELPERS.some((helper) => source.includes(helper));
+      return !routeCallsImportedRouteAuthBoundaryHelper(filePath);
     });
 
     expect(missing).toEqual([]);
@@ -671,8 +730,7 @@ describe("planning route current-user scope coverage", () => {
 
   it("keeps every planning auth boundary route on the standard routeAuth import boundary", () => {
     const missingRouteAuthImport = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
-      const source = fs.readFileSync(filePath, "utf8");
-      return !source.includes(ROUTE_AUTH_IMPORT_PATH);
+      return !sourceFileImportsAnyRouteAuthBoundaryHelper(routeSourceFile(filePath));
     });
 
     expect(missingRouteAuthImport).toEqual([]);
@@ -681,7 +739,12 @@ describe("planning route current-user scope coverage", () => {
   it("keeps requirePlanningRouteUser callers on the Response guard contract", () => {
     const missingResponseGuard = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
-      return source.includes("requirePlanningRouteUser(") && !source.includes(ROUTE_AUTH_RESPONSE_GUARD_PATTERN);
+      const sourceFile = createSourceFileFromSource(filePath, source);
+      return sourceFileCallsRouteAuthHelper(sourceFile, "requirePlanningRouteUser")
+        && (
+          !sourceFileCallsRouteAuthHelper(sourceFile, "isPlanningRouteUser")
+          || !source.includes(ROUTE_AUTH_RESPONSE_GUARD_PATTERN)
+        );
     });
 
     expect(missingResponseGuard).toEqual([]);
@@ -699,7 +762,8 @@ describe("planning route current-user scope coverage", () => {
   it("keeps callback route auth helpers translating auth failures through routeAuth", () => {
     const missingAuthErrorBridge = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
-      return source.includes("withPlanningRouteUser(") && !hasRouteAuthFailureBridge(source);
+      const sourceFile = createSourceFileFromSource(filePath, source);
+      return sourceFileCallsRouteAuthHelper(sourceFile, "withPlanningRouteUser") && !hasRouteAuthFailureBridge(source);
     });
 
     expect(missingAuthErrorBridge).toEqual([]);
@@ -745,7 +809,7 @@ describe("planning route current-user scope coverage", () => {
   it("keeps ops API routes with user-owned planning storage behind routeAuth", () => {
     const missing = findOpsRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
-      return routeReadsUserScopedPlanningStorage(source) && !ROUTE_AUTH_HELPERS.some((helper) => source.includes(helper));
+      return routeReadsUserScopedPlanningStorage(source) && !routeCallsImportedRouteAuthBoundaryHelper(filePath);
     });
 
     expect(missing).toEqual([]);
@@ -839,6 +903,39 @@ describe("planning route current-user scope coverage", () => {
     expect(findResponseHelperSuccessJsonWithNonUserMetaInSource("fixture/helper-route.ts", helperInvalidSource)).toEqual([
       "fixture/helper-route.ts:3",
     ]);
+  });
+
+  it("detects only actual imported routeAuth boundary helper calls", () => {
+    const validSource = [
+      "import { withPlanningRouteUser } from \"@/lib/planning/api/routeAuth\";",
+      "export function GET(request: Request) {",
+      "  return withPlanningRouteUser(request, async () => Response.json({ ok: true }));",
+      "}",
+    ].join("\n");
+    const importOnlySource = [
+      "import { requirePlanningRouteUser } from \"@/lib/planning/api/routeAuth\";",
+      "export function GET() {",
+      "  return Response.json({ ok: true });",
+      "}",
+    ].join("\n");
+    const commentOnlySource = [
+      "export function GET() {",
+      "  // withPlanningRouteUser(request, async () => Response.json({ ok: true }))",
+      "  return Response.json({ ok: true });",
+      "}",
+    ].join("\n");
+    const localHelperSource = [
+      "function requirePlanningRouteUser() { return { id: \"local\" }; }",
+      "export function GET() {",
+      "  requirePlanningRouteUser();",
+      "  return Response.json({ ok: true });",
+      "}",
+    ].join("\n");
+
+    expect(routeCallsImportedRouteAuthBoundaryHelperInSource("fixture/valid-route.ts", validSource)).toBe(true);
+    expect(routeCallsImportedRouteAuthBoundaryHelperInSource("fixture/import-only-route.ts", importOnlySource)).toBe(false);
+    expect(routeCallsImportedRouteAuthBoundaryHelperInSource("fixture/comment-only-route.ts", commentOnlySource)).toBe(false);
+    expect(routeCallsImportedRouteAuthBoundaryHelperInSource("fixture/local-helper-route.ts", localHelperSource)).toBe(false);
   });
 
   it("allows success meta objects extended from planningUserMeta", () => {
