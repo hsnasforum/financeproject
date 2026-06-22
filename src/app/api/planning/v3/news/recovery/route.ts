@@ -13,6 +13,7 @@ import {
   previewRecoveryAction,
   runRecoveryAction,
 } from "@/lib/planning/v3/news/recovery";
+import { resolveNewsRootDir } from "@/lib/planning/v3/news/rootDir";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 
 export const runtime = "nodejs";
@@ -78,7 +79,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const summary = previewRecoveryAction(parsed.data.action);
+    const rootDir = resolveNewsRootDir();
+    const summary = previewRecoveryAction(parsed.data.action, { rootDir });
     if (parsed.data.confirm !== true) {
       const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
         ok: true,
@@ -92,7 +94,7 @@ export async function POST(request: Request) {
       return NextResponse.json(payload);
     }
 
-    const execution = runRecoveryAction(parsed.data.action);
+    const execution = runRecoveryAction(parsed.data.action, { rootDir });
     const payload = parseWithV3Whitelist(RecoveryResponseSchema, {
       ok: true,
       data: {

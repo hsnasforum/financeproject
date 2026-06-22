@@ -7,6 +7,7 @@ import {
 } from "@/lib/dev/devGuards";
 import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import { runNewsRefresh } from "@/lib/planning/v3/news/cli/newsRefresh";
+import { resolveNewsRootDir } from "@/lib/planning/v3/news/rootDir";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import { readCurrentUserNewsState } from "@/lib/planning/v3/service/newsRepository";
 
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
   const userMeta = planningUserMeta(currentUser);
 
   try {
-    const result = await runNewsRefresh();
+    const rootDir = resolveNewsRootDir();
+    const result = await runNewsRefresh({ rootDir });
     const lastRefreshedAt = readCurrentUserNewsState().lastRunAt ?? null;
     const payload = parseWithV3Whitelist(RefreshResponseSchema, {
       ok: true,

@@ -27,6 +27,7 @@ pnpm news:refresh
 
 - legacy `pnpm news:refresh` 산출물은 계속 `.data/news` 아래에 둡니다.
 - `PLANNING_NAMESPACE_ENABLED=1`인 Planning v3 API 경로는 현재 route user 기준의 `.data/planning/users/{userId}/planning-v3/news`를 읽고 씁니다.
+- `/api/planning/v3/news/refresh`와 `/api/planning/v3/news/recovery`는 현재 사용자의 v3 news root에 item state, daily stats, today/scenario/trend cache를 생성하거나 재계산합니다.
 - `/api/planning/v3/news/items`는 현재 사용자의 v3 item store를 읽고, `/api/planning/v3/news/search`는 현재 사용자의 `cache/search-index.latest.json`과 trend cache를 읽거나 재생성합니다.
 - `/api/planning/v3/news/alerts`는 현재 사용자의 `.data/planning/users/{userId}/news/alerts/events.jsonl`과 상태/규칙 override를 읽고 씁니다.
 - namespace가 켜진 상태에서 items/search는 legacy `.data/news/news.sqlite` 또는 `.data/news/index.json`을 fallback으로 사용하지 않습니다.

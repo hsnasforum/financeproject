@@ -129,9 +129,18 @@ function normalizeBurstGradeForScenario(value: string): "High" | "Med" | "Low" |
   return "Unknown";
 }
 
+function toRootLabel(rootDir: string): string {
+  const normalized = rootDir.replaceAll(path.sep, "/");
+  const match = normalized.match(/(?:^|\/)planning\/users\/([^/]+)\/planning-v3\/news$/);
+  if (match?.[1]) {
+    return `.data/planning/users/${match[1]}/planning-v3/news`;
+  }
+  return ".data/news";
+}
+
 function toWritePath(absPath: string, rootDir: string): string {
   const relative = path.relative(rootDir, absPath);
-  return `.data/news/${relative.replaceAll(path.sep, "/")}`;
+  return `${toRootLabel(rootDir)}/${relative.replaceAll(path.sep, "/")}`;
 }
 
 function kstNoonUtc(dayKst: string): Date {
