@@ -93,13 +93,15 @@ describe("planning route auth boundary", () => {
 
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(401);
-    await expect(readJson(result as Response)).resolves.toEqual({
+    const body = await readJson(result as Response);
+    expect(body).toEqual({
       ok: false,
       error: {
         code: "UNAUTHENTICATED",
         message: "로그인이 필요합니다.",
       },
     });
+    expect(body).not.toHaveProperty("meta");
   });
 
   it("does not attach route user metadata to unauthenticated 401 responses", async () => {
@@ -110,6 +112,28 @@ describe("planning route auth boundary", () => {
 
     expect(result).toBeInstanceOf(Response);
     const body = await readJson(result as Response);
+    expect(body).not.toHaveProperty("meta");
+  });
+
+  it("keeps production route auth closed even when local fallback env is disabled", async () => {
+    const result = await requirePlanningRouteUser(
+      new Request("https://example.com/api/planning/profiles"),
+      testEnv({
+        NODE_ENV: "production",
+        PLANNING_AUTH_REQUIRED: "0",
+      }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(401);
+    const body = await readJson(result as Response);
+    expect(body).toEqual({
+      ok: false,
+      error: {
+        code: "UNAUTHENTICATED",
+        message: "로그인이 필요합니다.",
+      },
+    });
     expect(body).not.toHaveProperty("meta");
   });
 
