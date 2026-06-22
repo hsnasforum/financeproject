@@ -1,7 +1,7 @@
 # Data Freshness Report
 
-- Generated at: 2026-05-25T20:59:49.915Z
-- Mode: warn
+- Generated at: 2026-06-22T04:39:42.159Z
+- Mode: strict
 
 ## Source Thresholds
 
@@ -16,14 +16,14 @@
 
 | File | Source | generatedAt | ageDays | maxAgeDays | Status |
 | --- | --- | --- | ---: | ---: | --- |
-| benefits_snapshot.json | benefits | 2026-05-25T09:48:14.126Z | 0.47 | 7 | fresh |
-| exchange_snapshot.json | exchange | 2026-05-25T09:49:27.350Z | 0.47 | 1 | fresh |
-| finlife_credit-loan_snapshot.json | finlife | 2026-05-25T09:47:49.981Z | 0.47 | 3 | fresh |
-| finlife_deposit_snapshot.json | finlife | 2026-05-25T09:47:51.182Z | 0.47 | 3 | fresh |
-| finlife_mortgage-loan_snapshot.json | finlife | 2026-05-25T09:47:48.306Z | 0.47 | 3 | fresh |
-| finlife_pension_snapshot.json | finlife | 2026-05-25T10:43:58.791Z | 0.43 | 3 | fresh |
-| finlife_rent-house-loan_snapshot.json | finlife | 2026-05-25T09:47:49.131Z | 0.47 | 3 | fresh |
-| finlife_saving_snapshot.json | finlife | 2026-05-25T09:47:46.417Z | 0.47 | 3 | fresh |
+| benefits_snapshot.json | benefits | 2026-05-25T09:48:14.126Z | 27.79 | 7 | stale |
+| exchange_snapshot.json | exchange | 2026-05-25T09:49:27.350Z | 27.78 | 1 | stale |
+| finlife_credit-loan_snapshot.json | finlife | 2026-05-25T09:47:49.981Z | 27.79 | 3 | stale |
+| finlife_deposit_snapshot.json | finlife | 2026-05-25T09:47:51.182Z | 27.79 | 3 | stale |
+| finlife_mortgage-loan_snapshot.json | finlife | 2026-05-25T09:47:48.306Z | 27.79 | 3 | stale |
+| finlife_pension_snapshot.json | finlife | 2026-05-25T10:43:58.791Z | 27.75 | 3 | stale |
+| finlife_rent-house-loan_snapshot.json | finlife | 2026-05-25T09:47:49.131Z | 27.79 | 3 | stale |
+| finlife_saving_snapshot.json | finlife | 2026-05-25T09:47:46.417Z | 27.79 | 3 | stale |
 
 ## Ignored Auxiliary Files
 
@@ -35,8 +35,8 @@
 ## Summary
 
 - total: 8
-- fresh: 8
-- stale: 0
+- fresh: 0
+- stale: 8
 - missingTimestamp: 0
 - invalidTimestamp: 0
 - ignoredAuxiliary: 2

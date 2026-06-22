@@ -38,4 +38,44 @@ describe("data_freshness_report", () => {
     expect(report).toContain("| exchange | 1 |");
     expect(report).toContain("| exchange_snapshot.json | exchange |");
   });
+
+  it("fails strict mode when a tracked snapshot has no generated timestamp", () => {
+    const root = makeRoot();
+    fs.writeFileSync(
+      path.join(root, ".data", "exchange_snapshot.json"),
+      JSON.stringify({ rates: [] }),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "data_freshness_report.mjs"), "--strict"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("snapshot freshness issues found in strict mode");
+    const report = fs.readFileSync(path.join(root, "docs", "data-freshness-report.md"), "utf8");
+    expect(report).toContain("| exchange_snapshot.json | exchange | - | - | 1 | missing_generated_at |");
+    expect(report).toContain("- missingTimestamp: 1");
+  });
+
+  it("fails strict mode when a tracked snapshot timestamp is invalid", () => {
+    const root = makeRoot();
+    fs.writeFileSync(
+      path.join(root, ".data", "benefits_snapshot.json"),
+      JSON.stringify({ generatedAt: "not-a-date" }),
+      "utf8",
+    );
+
+    const result = spawnSync(process.execPath, [path.join(process.cwd(), "scripts", "data_freshness_report.mjs"), "--strict"], {
+      cwd: root,
+      encoding: "utf8",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("some snapshots have invalid generatedAt timestamp");
+    const report = fs.readFileSync(path.join(root, "docs", "data-freshness-report.md"), "utf8");
+    expect(report).toContain("| benefits_snapshot.json | benefits | not-a-date | - | 7 | invalid_generated_at |");
+    expect(report).toContain("- invalidTimestamp: 1");
+  });
 });

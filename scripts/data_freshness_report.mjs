@@ -180,14 +180,16 @@ function main() {
     `[freshness:report] total=${rows.length} fresh=${summary.fresh} stale=${summary.stale} missing=${summary.missingTimestamp} invalid=${summary.invalidTimestamp}`,
   );
 
+  const blockingIssueCount = summary.stale + summary.missingTimestamp + summary.invalidTimestamp;
+
   if (summary.missingTimestamp > 0) {
     console.warn("[freshness:report] some snapshots do not expose meta.generatedAt or generatedAt");
   }
   if (summary.invalidTimestamp > 0) {
     console.warn("[freshness:report] some snapshots have invalid generatedAt timestamp");
   }
-  if (strict && summary.stale > 0) {
-    console.error("[freshness:report] stale snapshots exceed maxAgeDays in strict mode");
+  if (strict && blockingIssueCount > 0) {
+    console.error("[freshness:report] snapshot freshness issues found in strict mode");
     process.exit(1);
   }
 }
