@@ -3,12 +3,12 @@ import path from "node:path";
 import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-function findPlanningRouteFiles(dir = "src/app/api/planning"): string[] {
+function findRouteFiles(dir: string): string[] {
   const files: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      files.push(...findPlanningRouteFiles(fullPath));
+      files.push(...findRouteFiles(fullPath));
       continue;
     }
     if (entry.name === "route.ts") {
@@ -18,19 +18,16 @@ function findPlanningRouteFiles(dir = "src/app/api/planning"): string[] {
   return files.sort();
 }
 
+function findAppApiRouteFiles(): string[] {
+  return findRouteFiles("src/app/api");
+}
+
+function findPlanningRouteFiles(dir = "src/app/api/planning"): string[] {
+  return findRouteFiles(dir);
+}
+
 function findOpsRouteFiles(dir = "src/app/api/ops"): string[] {
-  const files: string[] = [];
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...findOpsRouteFiles(fullPath));
-      continue;
-    }
-    if (entry.name === "route.ts") {
-      files.push(fullPath);
-    }
-  }
-  return files.sort();
+  return findRouteFiles(dir);
 }
 
 function escapeRegExp(value: string) {
@@ -569,6 +566,13 @@ const FORBIDDEN_DIRECT_CURRENT_USER_SCOPE_ROUTE_PATTERNS = [
   "../store/userScope",
 ] as const;
 
+function findDirectCurrentUserScopeRouteFiles(routeFiles: string[]): string[] {
+  return routeFiles.filter((filePath) => {
+    const source = fs.readFileSync(filePath, "utf8");
+    return FORBIDDEN_DIRECT_CURRENT_USER_SCOPE_ROUTE_PATTERNS.some((pattern) => source.includes(pattern));
+  });
+}
+
 const SHARED_OPS_ROUTE_FILES = [
   "src/app/api/ops/audit/route.ts",
   "src/app/api/ops/auto-merge/eligibility/route.ts",
@@ -670,13 +674,16 @@ describe("planning route current-user scope coverage", () => {
   });
 
   it("keeps planning and ops API routes off direct current-user scope helpers", () => {
-    const directCurrentUserRoutes = [
+    const directCurrentUserRoutes = findDirectCurrentUserScopeRouteFiles([
       ...findPlanningAuthBoundaryRouteFiles(),
       ...findOpsRouteFiles(),
-    ].filter((filePath) => {
-      const source = fs.readFileSync(filePath, "utf8");
-      return FORBIDDEN_DIRECT_CURRENT_USER_SCOPE_ROUTE_PATTERNS.some((pattern) => source.includes(pattern));
-    });
+    ]);
+
+    expect(directCurrentUserRoutes).toEqual([]);
+  });
+
+  it("keeps every App API route handler off direct current-user scope helpers", () => {
+    const directCurrentUserRoutes = findDirectCurrentUserScopeRouteFiles(findAppApiRouteFiles());
 
     expect(directCurrentUserRoutes).toEqual([]);
   });
