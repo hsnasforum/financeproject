@@ -5,6 +5,7 @@ const {
   findAssumptionsSnapshotIdMock,
   listAssumptionsHistoryMock,
   loadAssumptionsSnapshotByIdMock,
+  setLatestSnapshotFromHistoryMock,
   buildAssumptionsSnapshotMock,
   appendAuditMock,
 } = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const {
   findAssumptionsSnapshotIdMock: vi.fn(),
   listAssumptionsHistoryMock: vi.fn(),
   loadAssumptionsSnapshotByIdMock: vi.fn(),
+  setLatestSnapshotFromHistoryMock: vi.fn(),
   buildAssumptionsSnapshotMock: vi.fn(),
   appendAuditMock: vi.fn(),
 }));
@@ -21,6 +23,7 @@ vi.mock("../src/lib/planning/assumptions/storage", () => ({
   findAssumptionsSnapshotId: (...args: unknown[]) => findAssumptionsSnapshotIdMock(...args),
   listAssumptionsHistory: (...args: unknown[]) => listAssumptionsHistoryMock(...args),
   loadAssumptionsSnapshotById: (...args: unknown[]) => loadAssumptionsSnapshotByIdMock(...args),
+  setLatestSnapshotFromHistory: (...args: unknown[]) => setLatestSnapshotFromHistoryMock(...args),
 }));
 
 vi.mock("../src/lib/planning/assumptions/sync", () => ({
@@ -34,6 +37,7 @@ vi.mock("../src/lib/audit/auditLogStore", () => ({
 import { GET as latestGET } from "../src/app/api/ops/assumptions/latest/route";
 import { GET as historyGET } from "../src/app/api/ops/assumptions/history/route";
 import { GET as historyDetailGET } from "../src/app/api/ops/assumptions/history/[id]/route";
+import { POST as setLatestPOST } from "../src/app/api/ops/assumptions/set-latest/route";
 import { POST as syncPOST } from "../src/app/api/ops/assumptions/sync/route";
 
 const env = process.env as Record<string, string | undefined>;
@@ -108,6 +112,33 @@ function buildPostRequest(csrf = "csrf-token"): Request {
   });
 }
 
+function buildSetLatestRequest(input: {
+  confirm?: string;
+  csrf?: string;
+  snapshotId?: string;
+} = {}): Request {
+  const host = "localhost:3000";
+  const origin = `http://${host}`;
+  const csrf = input.csrf ?? "csrf-token";
+  const snapshotId = input.snapshotId ?? "snapshot-2";
+  const confirm = input.confirm ?? `SET_LATEST ${snapshotId}`;
+  return new Request(`${origin}/api/ops/assumptions/set-latest`, {
+    method: "POST",
+    headers: {
+      host,
+      origin,
+      referer: `${origin}/ops/assumptions/history`,
+      cookie: `dev_action=1; dev_csrf=${encodeURIComponent(csrf)}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      csrf,
+      snapshotId,
+      confirm,
+    }),
+  });
+}
+
 describe("ops assumptions routes", () => {
   beforeEach(() => {
     env.NODE_ENV = "test";
@@ -122,6 +153,7 @@ describe("ops assumptions routes", () => {
     findAssumptionsSnapshotIdMock.mockResolvedValue(undefined);
     listAssumptionsHistoryMock.mockReset();
     loadAssumptionsSnapshotByIdMock.mockReset();
+    setLatestSnapshotFromHistoryMock.mockReset();
     buildAssumptionsSnapshotMock.mockReset();
     appendAuditMock.mockReset();
   });
@@ -365,6 +397,234 @@ describe("ops assumptions routes", () => {
     expect(payload.error?.message).not.toContain("process.env");
     expect(payload.error?.message).not.toContain("SECRET_TOKEN");
     expect(payload.error?.message).not.toContain("bad");
+  });
+
+  it("sets latest snapshot with current planning user meta and SUCCESS audit", async () => {
+    const currentSnapshot = {
+      version: 1,
+      asOf: "2026-02-27",
+      fetchedAt: "2026-02-27T00:00:00.000Z",
+      korea: {
+        baseRatePct: 2.5,
+      },
+      sources: [],
+      warnings: [],
+    };
+    const targetSnapshot = {
+      version: 1,
+      asOf: "2026-02-28",
+      fetchedAt: "2026-02-28T00:00:00.000Z",
+      korea: {
+        baseRatePct: 2.75,
+      },
+      sources: [],
+      warnings: [],
+    };
+    loadLatestAssumptionsSnapshotMock.mockResolvedValue(currentSnapshot);
+    findAssumptionsSnapshotIdMock.mockResolvedValue("snapshot-1");
+    loadAssumptionsSnapshotByIdMock.mockResolvedValue(targetSnapshot);
+    setLatestSnapshotFromHistoryMock.mockResolvedValue(undefined);
+
+    const response = await setLatestPOST(buildSetLatestRequest({ snapshotId: "snapshot-2" }));
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      message?: string;
+      snapshotRef?: {
+        id?: string;
+        asOf?: string;
+        fetchedAt?: string;
+      };
+      meta?: {
+        userId?: string;
+        authSource?: string;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.message).toContain("변경했습니다");
+    expect(payload.snapshotRef).toEqual({
+      id: "snapshot-2",
+      asOf: "2026-02-28",
+      fetchedAt: "2026-02-28T00:00:00.000Z",
+    });
+    expect(payload.meta).toEqual({
+      userId: "default",
+      authSource: "local-namespace",
+    });
+    expect(setLatestSnapshotFromHistoryMock).toHaveBeenCalledWith("snapshot-2");
+
+    expect(appendAuditMock).toHaveBeenCalledTimes(1);
+    const [auditInput] = appendAuditMock.mock.calls[0] as [
+      {
+        event?: string;
+        details?: {
+          result?: string;
+          fromId?: string | null;
+          toId?: string | null;
+          planningUserId?: string;
+          authSource?: string;
+        };
+      },
+    ];
+    expect(auditInput.event).toBe("ASSUMPTIONS_SET_LATEST");
+    expect(auditInput.details?.result).toBe("SUCCESS");
+    expect(auditInput.details?.fromId).toBe("snapshot-1");
+    expect(auditInput.details?.toId).toBe("snapshot-2");
+    expect(auditInput.details?.planningUserId).toBe("default");
+    expect(auditInput.details?.authSource).toBe("local-namespace");
+  });
+
+  it("blocks set-latest without a planning auth signal when fallback is not explicit", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+
+    const response = await setLatestPOST(buildSetLatestRequest());
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("UNAUTHENTICATED");
+    expect(loadLatestAssumptionsSnapshotMock).not.toHaveBeenCalled();
+    expect(loadAssumptionsSnapshotByIdMock).not.toHaveBeenCalled();
+    expect(setLatestSnapshotFromHistoryMock).not.toHaveBeenCalled();
+    expect(appendAuditMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects set-latest without snapshotId before calling storage or audit", async () => {
+    const response = await setLatestPOST(buildSetLatestRequest({
+      confirm: "SET_LATEST ",
+      snapshotId: " ",
+    }));
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string; message?: string; fixHref?: string } };
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.message).toContain("snapshotId");
+    expect(payload.error?.fixHref).toBe("/ops/assumptions");
+    expect(loadLatestAssumptionsSnapshotMock).not.toHaveBeenCalled();
+    expect(loadAssumptionsSnapshotByIdMock).not.toHaveBeenCalled();
+    expect(setLatestSnapshotFromHistoryMock).not.toHaveBeenCalled();
+    expect(appendAuditMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects set-latest with invalid confirm and appends REJECTED audit", async () => {
+    const currentSnapshot = {
+      version: 1,
+      asOf: "2026-02-27",
+      fetchedAt: "2026-02-27T00:00:00.000Z",
+      korea: {
+        baseRatePct: 2.5,
+      },
+      sources: [],
+      warnings: [],
+    };
+    loadLatestAssumptionsSnapshotMock.mockResolvedValue(currentSnapshot);
+    findAssumptionsSnapshotIdMock.mockResolvedValue("snapshot-1");
+
+    const response = await setLatestPOST(buildSetLatestRequest({
+      confirm: "wrong",
+      snapshotId: "snapshot-2",
+    }));
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      error?: {
+        code?: string;
+        details?: {
+          expectedConfirm?: string;
+        };
+      };
+    };
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("VALIDATION");
+    expect(payload.error?.details?.expectedConfirm).toBe("SET_LATEST snapshot-2");
+    expect(loadAssumptionsSnapshotByIdMock).not.toHaveBeenCalled();
+    expect(setLatestSnapshotFromHistoryMock).not.toHaveBeenCalled();
+
+    const [auditInput] = appendAuditMock.mock.calls[0] as [
+      {
+        details?: {
+          result?: string;
+          fromId?: string | null;
+          toId?: string | null;
+          planningUserId?: string;
+          authSource?: string;
+        };
+      },
+    ];
+    expect(auditInput.details?.result).toBe("REJECTED");
+    expect(auditInput.details?.fromId).toBe("snapshot-1");
+    expect(auditInput.details?.toId).toBe("snapshot-2");
+    expect(auditInput.details?.planningUserId).toBe("default");
+    expect(auditInput.details?.authSource).toBe("local-namespace");
+  });
+
+  it("returns not found when set-latest target snapshot is missing and appends ERROR audit", async () => {
+    loadLatestAssumptionsSnapshotMock.mockResolvedValue(null);
+    loadAssumptionsSnapshotByIdMock.mockResolvedValue(null);
+
+    const response = await setLatestPOST(buildSetLatestRequest({ snapshotId: "missing" }));
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(404);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("STALE_ASSUMPTIONS");
+    expect(payload.error?.message).toContain("찾을 수 없습니다");
+    expect(setLatestSnapshotFromHistoryMock).not.toHaveBeenCalled();
+
+    const [auditInput] = appendAuditMock.mock.calls[0] as [
+      {
+        details?: {
+          result?: string;
+          fromId?: string | null;
+          toId?: string | null;
+          message?: string;
+        };
+      },
+    ];
+    expect(auditInput.details?.result).toBe("ERROR");
+    expect(auditInput.details?.fromId).toBeNull();
+    expect(auditInput.details?.toId).toBe("missing");
+    expect(auditInput.details?.message).toBe("snapshot not found");
+  });
+
+  it("redacts secret-like set-latest storage errors before returning and auditing them", async () => {
+    const targetSnapshot = {
+      version: 1,
+      asOf: "2026-02-28",
+      fetchedAt: "2026-02-28T00:00:00.000Z",
+      korea: {
+        baseRatePct: 2.75,
+      },
+      sources: [],
+      warnings: [],
+    };
+    loadLatestAssumptionsSnapshotMock.mockResolvedValue(null);
+    loadAssumptionsSnapshotByIdMock.mockResolvedValue(targetSnapshot);
+    setLatestSnapshotFromHistoryMock.mockRejectedValue(new Error("process.env.SECRET_TOKEN=bad"));
+
+    const response = await setLatestPOST(buildSetLatestRequest({ snapshotId: "snapshot-2" }));
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(500);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("STORAGE_CORRUPT");
+    expect(payload.error?.message).not.toContain("process.env");
+    expect(payload.error?.message).not.toContain("SECRET_TOKEN");
+    expect(payload.error?.message).not.toContain("bad");
+
+    const [auditInput] = appendAuditMock.mock.calls[0] as [
+      {
+        details?: {
+          message?: string;
+        };
+      },
+    ];
+    expect(auditInput.details?.message).not.toContain("process.env");
+    expect(auditInput.details?.message).not.toContain("SECRET_TOKEN");
+    expect(auditInput.details?.message).not.toContain("bad");
   });
 
   it("syncs snapshot successfully and appends SUCCESS audit", async () => {

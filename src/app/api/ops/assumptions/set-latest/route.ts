@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { append as appendAuditLog } from "@/lib/audit/auditLogStore";
 import {
   assertCsrf,
   assertDevUnlocked,
@@ -8,13 +7,12 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
+import { setOpsLatestAssumptionsFromHistory } from "@/lib/ops/assumptions/assumptionsSetLatestRouteService";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import {
-  findAssumptionsSnapshotId,
-  loadAssumptionsSnapshotById,
-  loadLatestAssumptionsSnapshot,
-  setLatestSnapshotFromHistory,
-} from "@/lib/planning/assumptions/storage";
+  isPlanningRouteUser,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 type SetLatestBody = {
   csrf?: unknown;
@@ -24,29 +22,6 @@ type SetLatestBody = {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function appendSetLatestAudit(input: {
-  result: "SUCCESS" | "REJECTED" | "ERROR";
-  message: string;
-  fromId?: string | null;
-  toId?: string | null;
-}) {
-  try {
-    appendAuditLog({
-      event: "ASSUMPTIONS_SET_LATEST",
-      route: "/api/ops/assumptions/set-latest",
-      summary: `ASSUMPTIONS_SET_LATEST ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        message: input.message,
-        fromId: input.fromId ?? null,
-        toId: input.toId ?? null,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append assumptions set latest log", error);
-  }
 }
 
 export async function POST(request: Request) {
@@ -91,85 +66,46 @@ export async function POST(request: Request) {
     });
   }
 
-  const currentLatest = await loadLatestAssumptionsSnapshot().catch(() => null);
-  const fromId = currentLatest ? await findAssumptionsSnapshotId(currentLatest) : undefined;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-  const expectedConfirm = `SET_LATEST ${snapshotId}`;
   const confirm = asString(body?.confirm);
-  if (confirm !== expectedConfirm) {
-    appendSetLatestAudit({
-      result: "REJECTED",
-      fromId: fromId ?? null,
-      toId: snapshotId,
-      message: "invalid confirm text",
-    });
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "VALIDATION",
-          message: `confirm 값이 올바르지 않습니다. (${expectedConfirm})`,
-          fixHref: "/ops/assumptions/history",
-          details: {
-            expectedConfirm,
-          },
-        },
+  const result = await setOpsLatestAssumptionsFromHistory({
+    confirm,
+    currentUser,
+    snapshotId,
+  });
+  if (result.kind === "validation-error") {
+    return opsErrorResponse({
+      code: "VALIDATION",
+      message: result.message,
+      status: 400,
+      fixHref: "/ops/assumptions/history",
+      details: {
+        expectedConfirm: result.expectedConfirm,
       },
-      { status: 400 },
-    );
+    });
   }
-
-  const target = await loadAssumptionsSnapshotById(snapshotId);
-  if (!target) {
-    appendSetLatestAudit({
-      result: "ERROR",
-      fromId: fromId ?? null,
-      toId: snapshotId,
-      message: "snapshot not found",
+  if (result.kind === "missing") {
+    return opsErrorResponse({
+      code: "STALE_ASSUMPTIONS",
+      message: result.message,
+      status: 404,
+      fixHref: "/ops/assumptions/history",
     });
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "STALE_ASSUMPTIONS",
-          message: "요청한 스냅샷을 찾을 수 없습니다.",
-          fixHref: "/ops/assumptions/history",
-        },
-      },
-      { status: 404 },
-    );
   }
-
-  try {
-    await setLatestSnapshotFromHistory(snapshotId);
-    appendSetLatestAudit({
-      result: "SUCCESS",
-      fromId: fromId ?? null,
-      toId: snapshotId,
-      message: "latest snapshot pointer updated",
-    });
-
-    return NextResponse.json({
-      ok: true,
-      message: "latest 스냅샷 포인터를 변경했습니다.",
-      snapshotRef: {
-        id: snapshotId,
-        asOf: target.asOf,
-        fetchedAt: target.fetchedAt,
-      },
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "latest 변경에 실패했습니다.";
-    appendSetLatestAudit({
-      result: "ERROR",
-      fromId: fromId ?? null,
-      toId: snapshotId,
-      message,
-    });
+  if (result.kind === "storage-corrupt") {
     return opsErrorResponse({
       code: "STORAGE_CORRUPT",
-      message,
+      message: result.message,
       status: 500,
     });
   }
+
+  return NextResponse.json({
+    ok: true,
+    message: result.message,
+    snapshotRef: result.snapshotRef,
+    meta: result.meta,
+  });
 }
