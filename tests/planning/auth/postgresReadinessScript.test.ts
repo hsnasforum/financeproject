@@ -428,6 +428,27 @@ describe("planning postgres readiness script", () => {
     expect(fs.existsSync(outDir)).toBe(false);
   });
 
+  it("rejects export paths that contain the source data directory before writing files", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "planning-postgres-readiness-"));
+    temp.push({ dir });
+    const dataDir = path.join(dir, "planning");
+    const outDir = dir;
+    const profilePath = path.join(dataDir, "users", "alice", "profiles", "profile-1.json");
+    writeJson(profilePath, { id: "profile-1" });
+
+    const result = runReadiness([
+      "--dry-run",
+      `--data-dir=${dataDir}`,
+      `--out-dir=${outDir}`,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("--out-dir must be outside --data-dir");
+    expect(fs.readFileSync(profilePath, "utf-8")).toContain("profile-1");
+    expect(fs.existsSync(path.join(outDir, "files"))).toBe(false);
+    expect(fs.existsSync(path.join(outDir, "manifest.json"))).toBe(false);
+  });
+
   it("fails the dry-run gate when the PostgreSQL target schema is not Prisma-valid", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "planning-postgres-readiness-"));
     temp.push({ dir });
