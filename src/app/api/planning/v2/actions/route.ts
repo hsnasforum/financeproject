@@ -6,7 +6,10 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
-import { getCache, recordCacheUsage, setCache } from "../../../../../lib/planning/server/cache/storage";
+import {
+  readPlanningRouteCache,
+  writePlanningRouteCache,
+} from "../../../../../lib/planning/server/cache/routeService";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
 import {
   buildEnginePayloadFromProfile,
@@ -243,21 +246,13 @@ export async function POST(request: Request) {
   const keyPrefix = keyBundle.key.slice(0, 8);
 
   try {
-    const cached = await getCache<{
-      meta: {
-        generatedAt: string;
-        snapshot: Record<string, unknown>;
-        health: Record<string, unknown>;
-      };
-      data: Record<string, unknown>;
-    }>("actions", keyBundle.key);
+    const cached = await readPlanningRouteCache<Record<string, unknown>>("actions", keyBundle.key);
     if (cached) {
-      await recordCacheUsage("actions", true).catch(() => undefined);
-      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
+      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
       return ok(
         data,
         {
-          ...cached.data.meta,
+          ...cached.meta,
           ...userMeta,
           cache: {
             hit: true,
@@ -266,7 +261,6 @@ export async function POST(request: Request) {
         },
       );
     }
-    await recordCacheUsage("actions", false).catch(() => undefined);
 
     const plan = planningService.simulate(profile, finalSimulationAssumptions, horizonMonths, { policyId });
     const actions = planningService.buildActions({
@@ -299,24 +293,14 @@ export async function POST(request: Request) {
     payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
 
     const ttlMs = includeProducts ? ACTIONS_PRODUCTS_CACHE_TTL_MS : ACTIONS_CACHE_TTL_MS;
-    await setCache({
-      version: 1,
+    await writePlanningRouteCache({
       kind: "actions",
-      key: keyBundle.key,
-      createdAt: payload.meta.generatedAt,
-      expiresAt: new Date(Date.now() + ttlMs).toISOString(),
-      meta: {
-        horizonMonths,
-        assumptionsHash: keyBundle.assumptionsHash,
-        optionsHash: keyBundle.optionsHash,
-        snapshot: {
-          asOf: snapshotMeta.asOf,
-          fetchedAt: snapshotMeta.fetchedAt,
-          missing: snapshotMeta.missing,
-        },
-      },
-      data: payload,
-    }).catch(() => undefined);
+      keyBundle,
+      horizonMonths,
+      ttlMs,
+      snapshotMeta,
+      payload,
+    });
 
     return ok(payload.data, {
       ...payload.meta,

@@ -585,6 +585,8 @@ const FORBIDDEN_ROUTE_STORE_IMPORT_PATTERNS = [
   "/planning/store/types",
   "@/lib/planning/storage/",
   "/planning/storage/",
+  "@/lib/planning/server/cache/storage",
+  "/planning/server/cache/storage",
   "@/lib/planning/v3/drafts/draftStore",
   "@/lib/planning/v3/store/",
   "node:fs",

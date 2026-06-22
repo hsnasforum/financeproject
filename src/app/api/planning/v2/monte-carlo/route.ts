@@ -9,7 +9,10 @@ import {
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
-import { getCache, recordCacheUsage, setCache } from "../../../../../lib/planning/server/cache/storage";
+import {
+  readPlanningRouteCache,
+  writePlanningRouteCache,
+} from "../../../../../lib/planning/server/cache/routeService";
 import { checkMonteCarloBudget } from "../../../../../lib/planning/server/v2/budget";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
@@ -270,19 +273,11 @@ export async function POST(request: Request) {
   const keyPrefix = keyBundle.key.slice(0, 8);
 
   try {
-    const cached = await getCache<{
-      meta: {
-        generatedAt: string;
-        snapshot: Record<string, unknown>;
-        health: Record<string, unknown>;
-      };
-      data: Record<string, unknown>;
-    }>("monteCarlo", keyBundle.key);
+    const cached = await readPlanningRouteCache<Record<string, unknown>>("monteCarlo", keyBundle.key);
     if (cached) {
-      await recordCacheUsage("monteCarlo", true).catch(() => undefined);
-      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
+      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
       return ok(data, {
-        ...cached.data.meta,
+        ...cached.meta,
         ...userMeta,
         cache: {
           hit: true,
@@ -290,7 +285,6 @@ export async function POST(request: Request) {
         },
       });
     }
-    await recordCacheUsage("monteCarlo", false).catch(() => undefined);
 
     const { data } = buildEnginePayloadFromProfile(
       profile,
@@ -321,24 +315,14 @@ export async function POST(request: Request) {
       data,
     };
 
-    await setCache({
-      version: 1,
+    await writePlanningRouteCache({
       kind: "monteCarlo",
-      key: keyBundle.key,
-      createdAt: payload.meta.generatedAt,
-      expiresAt: new Date(Date.now() + MONTE_CARLO_CACHE_TTL_MS).toISOString(),
-      meta: {
-        horizonMonths,
-        assumptionsHash: keyBundle.assumptionsHash,
-        optionsHash: keyBundle.optionsHash,
-        snapshot: {
-          asOf: snapshotMeta.asOf,
-          fetchedAt: snapshotMeta.fetchedAt,
-          missing: snapshotMeta.missing,
-        },
-      },
-      data: payload,
-    }).catch(() => undefined);
+      keyBundle,
+      horizonMonths,
+      ttlMs: MONTE_CARLO_CACHE_TTL_MS,
+      snapshotMeta,
+      payload,
+    });
 
     return ok(payload.data, {
       ...payload.meta,

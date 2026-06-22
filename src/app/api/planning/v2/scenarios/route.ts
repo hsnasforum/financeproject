@@ -5,7 +5,10 @@ import {
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
-import { getCache, recordCacheUsage, setCache } from "../../../../../lib/planning/server/cache/storage";
+import {
+  readPlanningRouteCache,
+  writePlanningRouteCache,
+} from "../../../../../lib/planning/server/cache/routeService";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
@@ -266,21 +269,13 @@ export async function POST(request: Request) {
   const keyPrefix = keyBundle.key.slice(0, 8);
 
   try {
-    const cached = await getCache<{
-      meta: {
-        generatedAt: string;
-        snapshot: Record<string, unknown>;
-        health: Record<string, unknown>;
-      };
-      data: Record<string, unknown>;
-    }>("scenarios", keyBundle.key);
+    const cached = await readPlanningRouteCache<Record<string, unknown>>("scenarios", keyBundle.key);
     if (cached) {
-      await recordCacheUsage("scenarios", true).catch(() => undefined);
-      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data.data);
+      const { data } = buildEnginePayloadFromProfile(profile, () => cached.data);
       return ok(
         data,
         {
-          ...cached.data.meta,
+          ...cached.meta,
           ...userMeta,
           cache: {
             hit: true,
@@ -289,7 +284,6 @@ export async function POST(request: Request) {
         },
       );
     }
-    await recordCacheUsage("scenarios", false).catch(() => undefined);
 
     const { base, scenarios, specs } = planningService.scenarios({
       profile,
@@ -328,24 +322,14 @@ export async function POST(request: Request) {
     };
     payload.data = buildEnginePayloadFromProfile(profile, () => payload.data).data;
 
-    await setCache({
-      version: 1,
+    await writePlanningRouteCache({
       kind: "scenarios",
-      key: keyBundle.key,
-      createdAt: payload.meta.generatedAt,
-      expiresAt: new Date(Date.now() + SCENARIOS_CACHE_TTL_MS).toISOString(),
-      meta: {
-        horizonMonths,
-        assumptionsHash: keyBundle.assumptionsHash,
-        optionsHash: keyBundle.optionsHash,
-        snapshot: {
-          asOf: snapshotMeta.asOf,
-          fetchedAt: snapshotMeta.fetchedAt,
-          missing: snapshotMeta.missing,
-        },
-      },
-      data: payload,
-    }).catch(() => undefined);
+      keyBundle,
+      horizonMonths,
+      ttlMs: SCENARIOS_CACHE_TTL_MS,
+      snapshotMeta,
+      payload,
+    });
 
     return ok(payload.data, {
       ...payload.meta,
