@@ -113,23 +113,25 @@ function expectTrustedMeta(payload: unknown, userId: string): void {
   });
 }
 
-function writeAlertEventFixture(): void {
-  const eventsPath = resolveAlertEventsPath();
-  fs.mkdirSync(path.dirname(eventsPath), { recursive: true });
-  fs.writeFileSync(eventsPath, `${JSON.stringify({
-    id: "news-alert-a1",
-    createdAt: "2026-03-04T01:00:00.000Z",
-    dayKst: "2026-03-04",
-    source: "news:refresh",
-    ruleId: "topic_burst_high",
-    ruleKind: "topic_burst",
-    level: "high",
-    title: "토픽 급증",
-    summary: "today=5",
-    targetType: "topic",
-    targetId: "fx",
-    link: "/planning/v3/news/trends?topic=fx",
-  })}\n`, "utf-8");
+function writeAlertEventFixture(userId = "default"): void {
+  runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
+    const eventsPath = resolveAlertEventsPath();
+    fs.mkdirSync(path.dirname(eventsPath), { recursive: true });
+    fs.writeFileSync(eventsPath, `${JSON.stringify({
+      id: `${userId}-news-alert-a1`,
+      createdAt: "2026-03-04T01:00:00.000Z",
+      dayKst: "2026-03-04",
+      source: "news:refresh",
+      ruleId: "topic_burst_high",
+      ruleKind: "topic_burst",
+      level: "high",
+      title: `${userId} 토픽 급증`,
+      summary: "today=5",
+      targetType: "topic",
+      targetId: "fx",
+      link: "/planning/v3/news/trends?topic=fx",
+    })}\n`, "utf-8");
+  });
 }
 
 function writeGlobalLegacyDigestFixture(): void {
@@ -532,15 +534,15 @@ describe("planning v3 news user scope", () => {
     expect(resolveAlertRulesOverridePath().replaceAll("\\", "/")).toContain("/users/alice/news/alerts/rules.override.json");
   });
 
-  it("shares alert event feed but isolates alert event state by planning user", async () => {
-    writeAlertEventFixture();
+  it("isolates alert event feed and state by planning user", async () => {
+    writeAlertEventFixture("alice");
 
     const postResponse = await alertsPOST(requestWrite(
       "POST",
       "/api/planning/v3/news/alerts",
       "alice",
       "/planning/v3/news/alerts",
-      { id: "news-alert-a1", action: "ack", days: 30 },
+      { id: "alice-news-alert-a1", action: "ack", days: 30 },
     ));
     expect(postResponse.status).toBe(200);
     expectTrustedMeta(await postResponse.json(), "alice");
@@ -551,12 +553,13 @@ describe("planning v3 news user scope", () => {
       "/planning/v3/news/alerts",
     ));
     const bobPayload = await bobResponse.json() as {
-      data?: { groups?: Array<{ events?: Array<{ id?: string; state?: { acknowledgedAt?: string | null } }> }> };
+      data?: { total?: number; groups?: Array<{ events?: Array<{ id?: string; state?: { acknowledgedAt?: string | null } }> }> };
     };
     expect(bobResponse.status).toBe(200);
     expectTrustedMeta(bobPayload, "bob");
-    const bobEvent = bobPayload.data?.groups?.flatMap((group) => group.events ?? []).find((event) => event.id === "news-alert-a1");
-    expect(bobEvent?.state?.acknowledgedAt).toBeNull();
+    expect(bobPayload.data?.total).toBe(0);
+    const bobEvent = bobPayload.data?.groups?.flatMap((group) => group.events ?? []).find((event) => event.id === "alice-news-alert-a1");
+    expect(bobEvent).toBeUndefined();
 
     const aliceResponse = await alertsGET(requestGet(
       "/api/planning/v3/news/alerts?days=30",
@@ -568,8 +571,9 @@ describe("planning v3 news user scope", () => {
     };
     expect(aliceResponse.status).toBe(200);
     expectTrustedMeta(alicePayload, "alice");
-    const aliceEvent = alicePayload.data?.groups?.flatMap((group) => group.events ?? []).find((event) => event.id === "news-alert-a1");
+    const aliceEvent = alicePayload.data?.groups?.flatMap((group) => group.events ?? []).find((event) => event.id === "alice-news-alert-a1");
     expect(typeof aliceEvent?.state?.acknowledgedAt).toBe("string");
+    expect(resolveAlertEventsPath().replaceAll("\\", "/")).toContain("/users/alice/news/alerts/events.jsonl");
     expect(resolveAlertEventStatePath().replaceAll("\\", "/")).toContain("/users/alice/news/alerts/event-state.json");
   });
 

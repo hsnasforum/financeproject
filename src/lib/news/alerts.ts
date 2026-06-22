@@ -20,6 +20,8 @@ import {
 import { resolveDataDir } from "../planning/storage/dataDir.ts";
 import { readIndicatorSeriesSnapshots } from "../indicators/query.ts";
 import { type Observation, type SeriesSnapshot } from "../indicators/types.ts";
+import { resolveNewsRootDir } from "../../../planning/v3/news/rootDir.ts";
+import { readTrendsCache } from "../../../planning/v3/news/store/index.ts";
 import { resolveNewsTrendsJsonPath } from "./storageSqlite.ts";
 import { readNewsTopicTrends } from "./trendReader.ts";
 import { type BurstLevel, type TopicTrend } from "./types.ts";
@@ -185,6 +187,13 @@ function burstRank(level: BurstLevel): number {
   return 0;
 }
 
+function toBurstLevel(value: unknown): BurstLevel {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === "high" || normalized === "상") return "상";
+  if (normalized === "med" || normalized === "중") return "중";
+  return "하";
+}
+
 function topicLink(topicId: string): string {
   return `/planning/v3/news/trends?topic=${encodeURIComponent(topicId)}`;
 }
@@ -246,8 +255,14 @@ function defaultAlertEventStateStore(): AlertEventStateStore {
   };
 }
 
-export function resolveAlertsDataDir(cwd = process.cwd()): string {
+function resolveLegacyAlertsDataDir(cwd = process.cwd()): string {
   return path.join(resolveDataDir({ cwd }), "alerts");
+}
+
+export function resolveAlertsDataDir(cwd = process.cwd()): string {
+  if (!isPlanningNamespaceEnabled()) return resolveLegacyAlertsDataDir(cwd);
+  const userId = resolvePlanningUserId();
+  return path.join(getPlanningUserDir(userId, cwd), "news", "alerts");
 }
 
 export function resolveAlertEventsPath(cwd = process.cwd()): string {
@@ -255,7 +270,7 @@ export function resolveAlertEventsPath(cwd = process.cwd()): string {
 }
 
 function resolveLegacyAlertEventStatePath(cwd = process.cwd()): string {
-  return path.join(resolveAlertsDataDir(cwd), "event-state.json");
+  return path.join(resolveLegacyAlertsDataDir(cwd), "event-state.json");
 }
 
 function resolveScopedAlertEventStatePath(cwd = process.cwd()): string {
@@ -269,7 +284,7 @@ export function resolveAlertEventStatePath(cwd = process.cwd()): string {
 }
 
 function resolveLegacyAlertRulesOverridePath(cwd = process.cwd()): string {
-  return path.join(resolveAlertsDataDir(cwd), "rules.override.json");
+  return path.join(resolveLegacyAlertsDataDir(cwd), "rules.override.json");
 }
 
 export function resolveAlertRulesOverridePath(cwd = process.cwd()): string {
@@ -639,6 +654,33 @@ function evaluateIndicatorRule(input: {
 void evaluateTopicBurstRule;
 void evaluateIndicatorRule;
 
+function readAlertTopicTrends(cwd: string): Array<{
+  topicId: string;
+  topicLabel: string;
+  todayCount: number;
+  burstLevel: BurstLevel;
+}> {
+  if (!isPlanningNamespaceEnabled()) {
+    return (readNewsTopicTrends(resolveNewsTrendsJsonPath(cwd))?.topics ?? []).map((row) => ({
+      topicId: row.topicId,
+      topicLabel: row.topicLabel,
+      todayCount: row.todayCount,
+      burstLevel: row.burstLevel,
+    }));
+  }
+
+  const rootDir = resolveNewsRootDir(cwd);
+  const cache = readTrendsCache(30, rootDir) ?? readTrendsCache(7, rootDir);
+  return (cache?.topics ?? [])
+    .map((row) => ({
+      topicId: asString(row.topicId),
+      topicLabel: asString(row.topicLabel) || asString(row.topicId),
+      todayCount: asNumber(row.count, 0),
+      burstLevel: toBurstLevel(row.burstGrade),
+    }))
+    .filter((row) => row.topicId && row.topicLabel);
+}
+
 export function evaluateAlertEvents(input: {
   cwd?: string;
   generatedAt?: string;
@@ -647,18 +689,13 @@ export function evaluateAlertEvents(input: {
   const cwd = input.cwd ?? process.cwd();
   const generatedAt = asString(input.generatedAt) || new Date().toISOString();
   const rules = loadEffectiveAlertRules(cwd).filter((row) => row.enabled !== false);
-  const trends = readNewsTopicTrends(resolveNewsTrendsJsonPath(cwd))?.topics ?? [];
+  const trends = readAlertTopicTrends(cwd);
   const snapshotsBySeriesId = readSnapshotsBySeriesId(cwd, rules);
   const events = evaluateAlertsV3({
     generatedAt,
     source: input.source,
     rules,
-    topicTrends: trends.map((row) => ({
-      topicId: row.topicId,
-      topicLabel: row.topicLabel,
-      todayCount: row.todayCount,
-      burstLevel: row.burstLevel,
-    })),
+    topicTrends: trends,
     seriesSnapshots: [...snapshotsBySeriesId.values()].map((row) => ({
       seriesId: row.seriesId,
       observations: row.observations,

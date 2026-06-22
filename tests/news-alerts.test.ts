@@ -7,10 +7,13 @@ import {
   evaluateAndAppendAlertEvents,
   readAlertEventState,
   readAlertEvents,
+  resolveAlertEventsPath,
   resolveAlertEventStatePath,
   writeAlertEventState,
   writeAlertRuleOverrides,
 } from "../src/lib/news/alerts";
+import { resolveNewsRootDir } from "../planning/v3/news/rootDir";
+import { writeTrendsCache } from "../planning/v3/news/store";
 
 function writeJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -164,6 +167,48 @@ describe("news alerts", () => {
 
     expect(evaluated.events).toHaveLength(1);
     expect(evaluated.events[0]?.ruleId).toBe("fx_zscore_high");
+  });
+
+  it("uses planning user trend cache and scoped alert events when namespace is enabled", () => {
+    const cwd = createFixtureCwd();
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    env.PLANNING_USER_ID = "familyA";
+
+    const withoutScopedTrends = evaluateAlertEvents({
+      cwd,
+      generatedAt: "2026-03-04T00:00:00.000Z",
+      source: "news:refresh",
+    });
+    expect(withoutScopedTrends.events.some((row) => row.ruleId === "topic_fx_high")).toBe(false);
+
+    writeTrendsCache({
+      generatedAt: "2026-03-04T00:00:00.000Z",
+      date: "2026-03-04",
+      windowDays: 30,
+      topics: [{
+        topicId: "fx",
+        topicLabel: "환율/대외",
+        count: 5,
+        burstGrade: "High",
+        sourceDiversity: 0.6,
+      }],
+    }, resolveNewsRootDir(cwd));
+
+    const first = evaluateAndAppendAlertEvents({
+      cwd,
+      generatedAt: "2026-03-04T00:00:00.000Z",
+      source: "news:refresh",
+    });
+    const scopedEventsPath = resolveAlertEventsPath(cwd);
+
+    expect(first.evaluated).toBe(2);
+    expect(first.appended).toBe(2);
+    expect(scopedEventsPath).toContain(path.join(".data", "planning", "users", "familyA", "news", "alerts", "events.jsonl"));
+    expect(fs.existsSync(scopedEventsPath)).toBe(true);
+    expect(readAlertEvents(cwd).some((row) => row.ruleId === "topic_fx_high")).toBe(true);
+
+    env.PLANNING_USER_ID = "familyB";
+    expect(readAlertEvents(cwd)).toEqual([]);
   });
 
   it("migrates alert event state into planning user namespace when enabled", () => {
