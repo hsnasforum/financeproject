@@ -17,6 +17,19 @@ function providerIds(providers: unknown): string[] {
     .filter((id): id is string => typeof id === "string");
 }
 
+function providerOptionsById(providers: unknown): Record<string, { clientId?: unknown; clientSecret?: unknown }> {
+  const optionsById: Record<string, { clientId?: unknown; clientSecret?: unknown }> = {};
+  for (const provider of providers as Array<{ id?: unknown; options?: unknown }>) {
+    if (typeof provider.id !== "string") continue;
+    optionsById[provider.id] = (
+      provider.options && typeof provider.options === "object"
+        ? provider.options
+        : {}
+    ) as { clientId?: unknown; clientSecret?: unknown };
+  }
+  return optionsById;
+}
+
 function testEnv(values: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
   return {
     NODE_ENV: "test",
@@ -74,6 +87,30 @@ describe("Auth.js planning integration contract", () => {
       AUTH_GITHUB_ID: "github-id",
       AUTH_GOOGLE_SECRET: "google-secret",
     })))).toEqual([]);
+  });
+
+  it("prefers AUTH-prefixed OAuth env over legacy provider aliases", async () => {
+    const { buildOAuthProviders } = await import("../../../src/lib/auth/config");
+
+    const optionsById = providerOptionsById(buildOAuthProviders(testEnv({
+      AUTH_GITHUB_ID: "auth-github-id",
+      AUTH_GITHUB_SECRET: "auth-github-secret",
+      GITHUB_CLIENT_ID: "legacy-github-id",
+      GITHUB_CLIENT_SECRET: "legacy-github-secret",
+      AUTH_GOOGLE_ID: "auth-google-id",
+      AUTH_GOOGLE_SECRET: "auth-google-secret",
+      GOOGLE_CLIENT_ID: "legacy-google-id",
+      GOOGLE_CLIENT_SECRET: "legacy-google-secret",
+    })));
+
+    expect(optionsById.github).toMatchObject({
+      clientId: "auth-github-id",
+      clientSecret: "auth-github-secret",
+    });
+    expect(optionsById.google).toMatchObject({
+      clientId: "auth-google-id",
+      clientSecret: "auth-google-secret",
+    });
   });
 
   it("keeps Prisma adapter opt-in until the Auth.js tables are migrated", () => {
