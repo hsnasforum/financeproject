@@ -6,9 +6,11 @@ import { GET as alertRulesGET, POST as alertRulesPOST } from "../src/app/api/pla
 import { GET as alertsGET, POST as alertsPOST } from "../src/app/api/planning/v3/news/alerts/route";
 import { GET as digestGET } from "../src/app/api/planning/v3/news/digest/route";
 import { GET as newsExposureGET, POST as newsExposurePOST } from "../src/app/api/planning/v3/news/exposure/route";
+import { GET as itemsGET } from "../src/app/api/planning/v3/news/items/route";
 import { DELETE as noteDELETE, PATCH as notePATCH } from "../src/app/api/planning/v3/news/notes/[noteId]/route";
 import { GET as notesGET, POST as notesPOST } from "../src/app/api/planning/v3/news/notes/route";
 import { GET as scenariosGET } from "../src/app/api/planning/v3/news/scenarios/route";
+import { GET as searchGET } from "../src/app/api/planning/v3/news/search/route";
 import { GET as settingsGET, POST as settingsPOST } from "../src/app/api/planning/v3/news/settings/route";
 import { GET as weeklyPlanGET, POST as weeklyPlanPOST } from "../src/app/api/planning/v3/news/weekly-plan/route";
 import { runWithPlanningUserScope } from "../src/lib/planning/store/userScope";
@@ -17,13 +19,23 @@ import {
   resolveAlertEventStatePath,
   resolveAlertRulesOverridePath,
 } from "../src/lib/news/alerts";
-import { resolveNewsDigestDayJsonPath, resolveNewsScenarioJsonPath } from "../src/lib/news/storageSqlite";
+import {
+  closeNewsDatabase,
+  openNewsDatabase,
+  resolveNewsDbPath,
+  resolveNewsDigestDayJsonPath,
+  resolveNewsScenarioJsonPath,
+  resolveNewsSearchIndexPath,
+} from "../src/lib/news/storageSqlite";
+import { resolveCurrentUserNewsSearchIndexPath } from "../src/lib/planning/v3/news/search";
 import { resolveExposureProfilePath } from "../planning/v3/exposure/store";
 import { resolveNewsNotesDir } from "../planning/v3/news/notes";
 import { resolveNewsSettingsPath } from "../planning/v3/news/settings";
 import {
   resolveDigestPath,
   resolveScenariosCachePath,
+  upsertItems,
+  writeState,
   writeDigest,
   writeScenariosCache,
 } from "../planning/v3/news/store";
@@ -186,6 +198,63 @@ function writeGlobalLegacyRatesScenarioFixture(): void {
   }, null, 2)}\n`, "utf-8");
 }
 
+function writeGlobalLegacyNewsDbFixture(): void {
+  const db = openNewsDatabase(resolveNewsDbPath());
+  try {
+    db.prepare(`
+      INSERT INTO news_items (
+        id, sourceId, sourceName, feedItemId, url, canonicalUrl, title, snippet, description,
+        publishedAt, fetchedAt, contentHash, dedupeKey,
+        sourceWeight, sourceScore, keywordScore, recencyScore, focusScore, totalScore,
+        relativeScore, scorePartsJson, primaryTopicId, primaryTopicLabel, createdAt
+      ) VALUES (
+        'legacy-global-item', 'bok_press_all', '한국은행', 'legacy-feed',
+        'https://example.com/legacy-global', 'https://example.com/legacy-global',
+        'legacy global 기준금리', '', '',
+        '2026-03-04T00:00:00.000Z', '2026-03-04T00:00:00.000Z',
+        'legacy-hash', 'legacy-dedupe',
+        1, 0.4, 0.3, 0.2, 0.1, 2.0,
+        2.0, '{"source":0.4,"recency":0.2,"keyword":0.3,"burst":0.1,"diversityPenalty":0,"duplicatePenalty":0}',
+        'rates', '금리/통화정책', '2026-03-04T00:00:00.000Z'
+      )
+    `).run();
+  } finally {
+    closeNewsDatabase(db);
+  }
+}
+
+function writeGlobalLegacySearchIndexFixture(): void {
+  const indexPath = resolveNewsSearchIndexPath();
+  fs.mkdirSync(path.dirname(indexPath), { recursive: true });
+  fs.writeFileSync(indexPath, `${JSON.stringify({
+    generatedAt: "2026-03-04T09:00:00.000Z",
+    timezone: "Asia/Seoul",
+    itemCount: 1,
+    items: [{
+      id: "legacy-global-item",
+      title: "legacy global 기준금리",
+      url: "https://example.com/legacy-global",
+      publishedAt: "2026-03-04T00:00:00.000Z",
+      sourceId: "bok_press_all",
+      sourceName: "한국은행",
+      topicId: "rates",
+      topicLabel: "금리/통화정책",
+      topics: ["rates"],
+      entities: ["bok"],
+      score: 2,
+      rationale: "legacy global",
+      scoreParts: {
+        source: 0.4,
+        recency: 0.2,
+        keyword: 0.3,
+        burst: 0.1,
+        diversityPenalty: 0,
+        duplicatePenalty: 0,
+      },
+    }],
+  }, null, 2)}\n`, "utf-8");
+}
+
 function writeScopedDigestFixture(userId: string): void {
   runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
     writeDigest({
@@ -208,6 +277,25 @@ function writeScopedDigestFixture(userId: string): void {
         asOf: null,
       }],
       observationLines: [`${userId} 관찰`],
+    });
+  });
+}
+
+function writeScopedNewsStoreFixture(userId: string): void {
+  runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
+    upsertItems([{
+      id: `${userId}-news-item`,
+      sourceId: "bok_press_all",
+      title: `${userId} 기준금리 점검`,
+      url: `https://example.com/${userId}/rates`,
+      publishedAt: "2026-03-04T10:05:00.000Z",
+      snippet: `${userId} 전용 뉴스 항목`,
+      fetchedAt: "2026-03-04T10:30:00.000Z",
+    }]);
+    writeState({
+      schemaVersion: 1,
+      lastRunAt: "2026-03-04T10:30:00.000Z",
+      sources: {},
     });
   });
 }
@@ -605,6 +693,73 @@ describe("planning v3 news user scope", () => {
     expect(alicePayload.data?.watchlist?.[0]?.label).toBe("alice 기준금리");
     expect(alicePayload.data?.watchlist?.[0]?.seriesId).toBe("kr_base_rate");
     expect(resolveDigestPath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/digest.latest.json");
+  });
+
+  it("keeps news items and search on user-scoped v3 read models when namespace is enabled", async () => {
+    writeGlobalLegacyNewsDbFixture();
+    writeGlobalLegacySearchIndexFixture();
+    writeScopedNewsStoreFixture("alice");
+
+    const bobItemsResponse = await itemsGET(requestGet(
+      "/api/planning/v3/news/items?q=legacy&days=30",
+      "bob",
+      "/planning/v3/news/explore",
+    ));
+    const bobItemsPayload = await bobItemsResponse.json() as {
+      data?: { total?: number; items?: Array<{ id?: string }> };
+    };
+    expect(bobItemsResponse.status).toBe(200);
+    expectTrustedMeta(bobItemsPayload, "bob");
+    expect(bobItemsPayload.data?.total).toBe(0);
+    expect(bobItemsPayload.data?.items).toEqual([]);
+
+    const bobSearchResponse = await searchGET(requestGet(
+      "/api/planning/v3/news/search?q=legacy&days=30",
+      "bob",
+      "/planning/v3/news/explore",
+    ));
+    const bobSearchPayload = await bobSearchResponse.json() as {
+      data?: { total?: number; items?: Array<{ id?: string }> };
+    };
+    expect(bobSearchResponse.status).toBe(200);
+    expectTrustedMeta(bobSearchPayload, "bob");
+    expect(bobSearchPayload.data?.total).toBe(0);
+    expect(bobSearchPayload.data?.items).toEqual([]);
+
+    const aliceItemsResponse = await itemsGET(requestGet(
+      "/api/planning/v3/news/items?q=alice&days=30",
+      "alice",
+      "/planning/v3/news/explore",
+    ));
+    const aliceItemsPayload = await aliceItemsResponse.json() as {
+      data?: { total?: number; items?: Array<{ id?: string; title?: string }> };
+    };
+    expect(aliceItemsResponse.status).toBe(200);
+    expectTrustedMeta(aliceItemsPayload, "alice");
+    expect(aliceItemsPayload.data?.total).toBe(1);
+    expect(aliceItemsPayload.data?.items?.[0]?.id).toBe("alice-news-item");
+    expect(aliceItemsPayload.data?.items?.[0]?.title).toBe("alice 기준금리 점검");
+
+    const aliceSearchResponse = await searchGET(requestGet(
+      "/api/planning/v3/news/search?q=alice&days=30",
+      "alice",
+      "/planning/v3/news/explore",
+    ));
+    const aliceSearchPayload = await aliceSearchResponse.json() as {
+      data?: { total?: number; items?: Array<{ id?: string; title?: string }> };
+    };
+    expect(aliceSearchResponse.status).toBe(200);
+    expectTrustedMeta(aliceSearchPayload, "alice");
+    expect(aliceSearchPayload.data?.total).toBe(1);
+    expect(aliceSearchPayload.data?.items?.[0]?.id).toBe("alice-news-item");
+    expect(aliceSearchPayload.data?.items?.[0]?.title).toBe("alice 기준금리 점검");
+
+    runWithPlanningUserScope({ userId: "alice", authSource: "trusted-header" }, () => {
+      const scopedIndexPath = resolveCurrentUserNewsSearchIndexPath().replaceAll("\\", "/");
+      expect(scopedIndexPath).toContain("/users/alice/planning-v3/news/cache/search-index.latest.json");
+      expect(fs.existsSync(scopedIndexPath)).toBe(true);
+    });
+    expect(fs.existsSync(resolveNewsSearchIndexPath())).toBe(true);
   });
 
   it("keeps news exposure profile and scenario personal impact scoped by planning user", async () => {

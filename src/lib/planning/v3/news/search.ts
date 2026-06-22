@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveNewsSearchIndexPath } from "@/lib/news/storageSqlite";
 import {
-  readNewsSearchIndex,
+  readNewsSearchIndex as readLegacyNewsSearchIndex,
   searchNewsIndex,
-  writeNewsSearchIndex,
+  writeNewsSearchIndex as writeLegacyNewsSearchIndex,
   type NewsSearchFilters,
 } from "@/lib/news/searchIndex";
 import { buildScoreRationale } from "@/lib/news/scoreRationale";
@@ -14,9 +14,10 @@ import {
   type NewsSearchIndexItem,
 } from "@/lib/news/types";
 import { readNewsTopicTrends } from "@/lib/news/trendReader";
-import { resolveDataDir } from "@/lib/planning/storage/dataDir";
+import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
 import { loadEffectiveNewsConfig } from "@/lib/planning/v3/news/settings";
 import { readAllItems } from "@/lib/planning/v3/news/store";
+import { resolveNewsRootDir } from "../../../../../planning/v3/news/rootDir";
 import { scoreItems } from "../../../../../planning/v3/news/select/score";
 
 type StoreSearchIndexBuildInput = {
@@ -28,8 +29,11 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function resolveNewsStoreRoot(cwd = process.cwd()): string {
-  return path.join(resolveDataDir({ cwd }), "news");
+export function resolveCurrentUserNewsSearchIndexPath(cwd = process.cwd()): string {
+  if (!isPlanningNamespaceEnabled()) {
+    return resolveNewsSearchIndexPath(cwd);
+  }
+  return path.join(resolveNewsRootDir(cwd), "cache", "search-index.latest.json");
 }
 
 function normalizeScoreParts(value: {
@@ -48,9 +52,41 @@ function normalizeScoreParts(value: {
   };
 }
 
+function readSearchIndexFromPath(filePath: string): NewsSearchIndex | null {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf-8")) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const row = parsed as Record<string, unknown>;
+    if (!Array.isArray(row.items)) return null;
+    return parsed as NewsSearchIndex;
+  } catch {
+    return null;
+  }
+}
+
+function writeSearchIndexToPath(index: NewsSearchIndex, filePath: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(index, null, 2)}\n`, "utf-8");
+}
+
+export function readCurrentUserNewsSearchIndex(cwd = process.cwd()): NewsSearchIndex | null {
+  if (!isPlanningNamespaceEnabled()) {
+    return readLegacyNewsSearchIndex(cwd);
+  }
+  return readSearchIndexFromPath(resolveCurrentUserNewsSearchIndexPath(cwd));
+}
+
+export function writeCurrentUserNewsSearchIndex(input: StoreSearchIndexBuildInput): NewsSearchIndex {
+  if (!isPlanningNamespaceEnabled()) {
+    return writeLegacyNewsSearchIndex(input);
+  }
+  return writeNewsSearchIndexFromStore(input);
+}
+
 export function writeNewsSearchIndexFromStore(input: StoreSearchIndexBuildInput): NewsSearchIndex {
   const cwd = input.cwd ?? process.cwd();
-  const rootDir = resolveNewsStoreRoot(cwd);
+  const rootDir = resolveNewsRootDir(cwd);
   const { sources, topics } = loadEffectiveNewsConfig(rootDir);
   const sourceNameById = new Map(sources.map((source) => [source.id, source.name]));
   const sourceWeights = Object.fromEntries(sources.map((source) => [source.id, source.weight]));
@@ -103,16 +139,12 @@ export function writeNewsSearchIndexFromStore(input: StoreSearchIndexBuildInput)
     items,
   };
 
-  const filePath = resolveNewsSearchIndexPath(cwd);
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(index, null, 2)}\n`, "utf-8");
+  writeSearchIndexToPath(index, resolveCurrentUserNewsSearchIndexPath(cwd));
   return index;
 }
 
 export {
-  readNewsSearchIndex,
   readNewsTopicTrends,
   searchNewsIndex,
-  writeNewsSearchIndex,
   type NewsSearchFilters,
 };

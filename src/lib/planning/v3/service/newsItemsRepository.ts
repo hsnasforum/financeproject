@@ -1,4 +1,9 @@
+import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
+import { loadEffectiveNewsConfig } from "@/lib/planning/v3/news/settings";
+import { readAllItems, readTrendsCache } from "@/lib/planning/v3/news/store";
 import { closeNewsDatabase, openNewsDatabase, readNewsTopicTrends, type BurstLevel } from "../news/items";
+import { resolveNewsRootDir } from "../../../../../planning/v3/news/rootDir";
+import { scoreItems } from "../../../../../planning/v3/news/select/score";
 
 export type { BurstLevel };
 
@@ -65,10 +70,29 @@ function keywordLikePattern(input: string): string {
 }
 
 function topicBurstMap(): Map<string, BurstLevel> {
+  if (isPlanningNamespaceEnabled()) {
+    return currentUserTopicBurstMap();
+  }
   const artifact = readNewsTopicTrends();
   const out = new Map<string, BurstLevel>();
   for (const row of artifact?.topics ?? []) {
     out.set(asString(row.topicId), row.burstLevel);
+  }
+  return out;
+}
+
+function toBurstLevel(value: unknown): BurstLevel {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === "high" || normalized === "상") return "상";
+  if (normalized === "med" || normalized === "중") return "중";
+  return "하";
+}
+
+function currentUserTopicBurstMap(): Map<string, BurstLevel> {
+  const cache = readTrendsCache(30) ?? readTrendsCache(7);
+  const out = new Map<string, BurstLevel>();
+  for (const row of cache?.topics ?? []) {
+    out.set(asString(row.topicId), toBurstLevel(row.burstGrade));
   }
   return out;
 }
@@ -127,6 +151,10 @@ function buildWhere(input: {
 }
 
 export function readCurrentUserNewsItems(filters: NewsItemsFilters): NewsItemsResult {
+  if (isPlanningNamespaceEnabled()) {
+    return readCurrentUserNewsItemsFromStore(filters);
+  }
+
   const burstByTopic = topicBurstMap();
   const where = buildWhere({ filters, burstMap: burstByTopic });
   const db = openNewsDatabase();
@@ -219,4 +247,92 @@ export function readCurrentUserNewsItems(filters: NewsItemsFilters): NewsItemsRe
   } finally {
     closeNewsDatabase(db);
   }
+}
+
+function readCurrentUserNewsItemsFromStore(filters: NewsItemsFilters): NewsItemsResult {
+  const rootDir = resolveNewsRootDir();
+  const burstByTopic = topicBurstMap();
+  const { sources, topics } = loadEffectiveNewsConfig(rootDir);
+  const sourceNameById = new Map(sources.map((source) => [source.id, source.name]));
+  const sourceWeights = Object.fromEntries(sources.map((source) => [source.id, source.weight]));
+  const scored = scoreItems(readAllItems(rootDir), {
+    sourceWeights,
+    topics,
+  });
+  const query = filters.q.trim().toLowerCase();
+  const startMs = Date.now() - (filters.days * 24 * 60 * 60 * 1000);
+
+  const filtered = scored.filter((item) => {
+    const publishedAt = asString(item.publishedAt) || item.fetchedAt;
+    const publishedMs = Date.parse(publishedAt);
+    if (!Number.isFinite(publishedMs) || publishedMs < startMs) return false;
+
+    const sourceName = sourceNameById.get(item.sourceId) ?? item.sourceId;
+    if (query) {
+      const haystack = `${item.title} ${sourceName} ${item.primaryTopicLabel}`.toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+
+    if (filters.topicId && item.primaryTopicId !== filters.topicId) return false;
+    if (filters.sourceId && item.sourceId !== filters.sourceId) return false;
+    if (filters.burst !== "all" && (burstByTopic.get(item.primaryTopicId) ?? "하") !== filters.burst) return false;
+    return true;
+  }).sort((a, b) => {
+    if (a.totalScore !== b.totalScore) return b.totalScore - a.totalScore;
+    const aPublished = asString(a.publishedAt) || a.fetchedAt;
+    const bPublished = asString(b.publishedAt) || b.fetchedAt;
+    if (aPublished !== bPublished) return bPublished.localeCompare(aPublished);
+    return a.url.localeCompare(b.url);
+  });
+
+  const items = filtered.slice(filters.offset, filters.offset + filters.limit).map((item) => {
+    const topicId = item.primaryTopicId;
+    return {
+      id: item.id,
+      title: item.title,
+      url: item.url,
+      publishedAt: asString(item.publishedAt) || item.fetchedAt,
+      sourceId: item.sourceId,
+      sourceName: sourceNameById.get(item.sourceId) ?? item.sourceId,
+      topicId,
+      topicLabel: item.primaryTopicLabel,
+      score: item.totalScore,
+      burstLevel: burstByTopic.get(topicId) ?? "하",
+    };
+  });
+
+  const topicMap = new Map<string, NewsTopicFacet>();
+  const sourceMap = new Map<string, NewsSourceFacet>();
+  for (const item of filtered) {
+    const topicId = item.primaryTopicId;
+    const topic = topicMap.get(topicId) ?? {
+      topicId,
+      topicLabel: item.primaryTopicLabel,
+      count: 0,
+      burstLevel: burstByTopic.get(topicId) ?? "하",
+    };
+    topic.count += 1;
+    topicMap.set(topicId, topic);
+
+    const source = sourceMap.get(item.sourceId) ?? {
+      sourceId: item.sourceId,
+      sourceName: sourceNameById.get(item.sourceId) ?? item.sourceId,
+      count: 0,
+    };
+    source.count += 1;
+    sourceMap.set(item.sourceId, source);
+  }
+
+  return {
+    total: filtered.length,
+    items,
+    topics: [...topicMap.values()].sort((a, b) => {
+      if (a.count !== b.count) return b.count - a.count;
+      return a.topicLabel.localeCompare(b.topicLabel);
+    }),
+    sources: [...sourceMap.values()].sort((a, b) => {
+      if (a.count !== b.count) return b.count - a.count;
+      return a.sourceName.localeCompare(b.sourceName);
+    }),
+  };
 }

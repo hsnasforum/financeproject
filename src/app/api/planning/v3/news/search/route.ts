@@ -3,10 +3,10 @@ import { z } from "zod";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  readNewsSearchIndex,
+  readCurrentUserNewsSearchIndex,
   readNewsTopicTrends,
   searchNewsIndex,
-  writeNewsSearchIndex,
+  writeCurrentUserNewsSearchIndex,
   writeNewsSearchIndexFromStore,
   type NewsSearchFilters,
 } from "@/lib/planning/v3/news/search";
@@ -161,16 +161,16 @@ export async function GET(request: Request) {
 
     const lastRefreshedAt = readCurrentUserNewsState().lastRunAt ?? null;
     const hasRefreshTimestamp = Number.isFinite(toDateMs(lastRefreshedAt));
-    let index = readNewsSearchIndex();
+    let index = readCurrentUserNewsSearchIndex();
 
     if (!index) {
       index = hasRefreshTimestamp
         ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
-        : writeNewsSearchIndex({ generatedAt: new Date().toISOString() });
+        : writeCurrentUserNewsSearchIndex({ generatedAt: new Date().toISOString() });
     } else if (isSearchIndexStale(index.generatedAt, lastRefreshedAt)) {
       index = hasRefreshTimestamp
         ? writeNewsSearchIndexFromStore({ generatedAt: lastRefreshedAt as string })
-        : writeNewsSearchIndex({ generatedAt: new Date().toISOString() });
+        : writeCurrentUserNewsSearchIndex({ generatedAt: new Date().toISOString() });
     }
 
     const trends = readNewsTopicTrends();
