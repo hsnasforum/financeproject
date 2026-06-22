@@ -1,7 +1,7 @@
 import { loadOpsPolicy } from "../opsPolicy";
 import { planRunsRetention } from "../runsRetention";
 import { buildAssumptionsSnapshot } from "../../planning/assumptions/sync";
-import { runAllowedFix } from "../../dev/runScript";
+import { runAllowedFix, type AllowedFixId } from "../../dev/runScript";
 import { deleteRun, listRunIndexEntries } from "../../planning/server/store/runStore";
 import {
   previewPlanningMigrationsAction,
@@ -179,11 +179,70 @@ async function previewDartWatchAction(): Promise<OpsActionPreviewResult> {
   };
 }
 
+const SOURCE_REFRESH_ACTIONS = {
+  FINLIFE_SYNC_IF_STALE: {
+    fixId: "FINLIFE_SYNC_IF_STALE",
+    title: "FinLife 상품 갱신",
+    description: "금융상품통합비교공시 스냅샷이 오래됐으면 다시 동기화합니다.",
+    previewText: "FinLife 예금/적금 스냅샷이 오래됐으면 다시 동기화합니다.",
+    runLabel: "FinLife 상품 갱신",
+  },
+  DATAGO_SYNC: {
+    fixId: "DATAGO_SYNC",
+    title: "DataGo 상품 갱신",
+    description: "공공데이터 포털 기반 상품 스냅샷을 동기화합니다.",
+    previewText: "DataGo 기반 상품 스냅샷을 동기화합니다.",
+    runLabel: "DataGo 상품 갱신",
+  },
+  GOV24_SYNC_IF_STALE: {
+    fixId: "GOV24_SYNC_IF_STALE",
+    title: "Gov24 혜택 갱신",
+    description: "정부24 혜택 스냅샷이 오래됐으면 다시 동기화합니다.",
+    previewText: "Gov24 혜택 스냅샷이 오래됐으면 다시 동기화합니다.",
+    runLabel: "Gov24 혜택 갱신",
+  },
+  NEWS_REFRESH: {
+    fixId: "NEWS_REFRESH",
+    title: "뉴스 갱신",
+    description: "뉴스 피드, 검색 인덱스, 알림 평가 산출물을 갱신합니다.",
+    previewText: "뉴스 피드, 검색 인덱스, 알림 평가 산출물을 갱신합니다.",
+    runLabel: "뉴스 갱신",
+  },
+  INDICATORS_REFRESH: {
+    fixId: "INDICATORS_REFRESH",
+    title: "지표 갱신",
+    description: "경제지표 스냅샷과 지표 기반 알림 평가 산출물을 갱신합니다.",
+    previewText: "경제지표 스냅샷과 지표 기반 알림 평가 산출물을 갱신합니다.",
+    runLabel: "지표 갱신",
+  },
+} as const satisfies Record<string, {
+  fixId: AllowedFixId;
+  title: string;
+  description: string;
+  previewText: string;
+  runLabel: string;
+}>;
+
+type SourceRefreshActionId = keyof typeof SOURCE_REFRESH_ACTIONS;
+
+function isSourceRefreshActionId(actionId: OpsActionId): actionId is SourceRefreshActionId {
+  return Object.prototype.hasOwnProperty.call(SOURCE_REFRESH_ACTIONS, actionId);
+}
+
+async function previewSourceRefreshAction(actionId: SourceRefreshActionId): Promise<OpsActionPreviewResult> {
+  return {
+    ok: true,
+    summary: {
+      text: SOURCE_REFRESH_ACTIONS[actionId].previewText,
+    },
+  };
+}
+
 async function previewDailyRefreshAction(): Promise<OpsActionPreviewResult> {
   return {
     ok: true,
     summary: {
-      text: "일일 갱신을 실행해 DART 모니터링, 뉴스, 규칙 평가 산출물을 갱신합니다.",
+      text: "일일 갱신을 실행해 FinLife, DataGo, Gov24, 뉴스, 지표, DART 산출물을 갱신합니다.",
     },
   };
 }
@@ -310,9 +369,9 @@ async function runDeleteRunAction(params: OpsActionParams): Promise<OpsActionRun
   };
 }
 
-async function runAllowedFixAction(fixId: "DART_WATCH" | "DAILY_REFRESH"): Promise<OpsActionRunResult> {
+async function runAllowedFixAction(fixId: AllowedFixId, label?: string): Promise<OpsActionRunResult> {
   const result = await runAllowedFix(fixId);
-  const message = fixId === "DART_WATCH" ? "DART 모니터링 실행" : "일일 갱신 실행";
+  const message = label ?? (fixId === "DART_WATCH" ? "DART 모니터링 실행" : "일일 갱신 실행");
   return {
     ok: result.ok,
     message: result.ok
@@ -327,6 +386,11 @@ async function runAllowedFixAction(fixId: "DART_WATCH" | "DAILY_REFRESH"): Promi
     },
     ...(result.ok ? {} : { errorCode: result.error?.code ?? "INTERNAL" }),
   };
+}
+
+async function runSourceRefreshAction(actionId: SourceRefreshActionId): Promise<OpsActionRunResult> {
+  const action = SOURCE_REFRESH_ACTIONS[actionId];
+  return runAllowedFixAction(action.fixId, action.runLabel);
 }
 
 const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
@@ -372,10 +436,35 @@ const ACTION_DEFINITIONS: Record<OpsActionId, OpsActionDefinition> = {
     title: "DART 모니터링 실행",
     description: "공시 모니터링과 관련 DART 산출물을 다시 생성합니다.",
   },
+  FINLIFE_SYNC_IF_STALE: {
+    id: "FINLIFE_SYNC_IF_STALE",
+    title: SOURCE_REFRESH_ACTIONS.FINLIFE_SYNC_IF_STALE.title,
+    description: SOURCE_REFRESH_ACTIONS.FINLIFE_SYNC_IF_STALE.description,
+  },
+  DATAGO_SYNC: {
+    id: "DATAGO_SYNC",
+    title: SOURCE_REFRESH_ACTIONS.DATAGO_SYNC.title,
+    description: SOURCE_REFRESH_ACTIONS.DATAGO_SYNC.description,
+  },
+  GOV24_SYNC_IF_STALE: {
+    id: "GOV24_SYNC_IF_STALE",
+    title: SOURCE_REFRESH_ACTIONS.GOV24_SYNC_IF_STALE.title,
+    description: SOURCE_REFRESH_ACTIONS.GOV24_SYNC_IF_STALE.description,
+  },
+  NEWS_REFRESH: {
+    id: "NEWS_REFRESH",
+    title: SOURCE_REFRESH_ACTIONS.NEWS_REFRESH.title,
+    description: SOURCE_REFRESH_ACTIONS.NEWS_REFRESH.description,
+  },
+  INDICATORS_REFRESH: {
+    id: "INDICATORS_REFRESH",
+    title: SOURCE_REFRESH_ACTIONS.INDICATORS_REFRESH.title,
+    description: SOURCE_REFRESH_ACTIONS.INDICATORS_REFRESH.description,
+  },
   DAILY_REFRESH: {
     id: "DAILY_REFRESH",
     title: "일일 갱신 실행",
-    description: "일일 갱신 workflow를 실행해 주요 운영 산출물을 다시 생성합니다.",
+    description: "일일 갱신 workflow를 실행해 주요 외부 데이터와 운영 산출물을 다시 생성합니다.",
   },
 };
 
@@ -421,6 +510,7 @@ export async function previewOpsAction(actionId: OpsActionId, params: OpsActionP
   if (actionId === "RUN_MIGRATIONS") return previewRunMigrationsAction();
   if (actionId === "DELETE_RUN") return previewDeleteRunAction(params);
   if (actionId === "DART_WATCH") return previewDartWatchAction();
+  if (isSourceRefreshActionId(actionId)) return previewSourceRefreshAction(actionId);
   if (actionId === "DAILY_REFRESH") return previewDailyRefreshAction();
 
   return {
@@ -438,6 +528,7 @@ export async function runOpsAction(actionId: OpsActionId, params: OpsActionParam
   if (actionId === "RUN_MIGRATIONS") return runMigrationsAction();
   if (actionId === "DELETE_RUN") return runDeleteRunAction(params);
   if (actionId === "DART_WATCH") return runAllowedFixAction("DART_WATCH");
+  if (isSourceRefreshActionId(actionId)) return runSourceRefreshAction(actionId);
   if (actionId === "DAILY_REFRESH") return runAllowedFixAction("DAILY_REFRESH");
 
   return {

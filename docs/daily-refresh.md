@@ -8,7 +8,11 @@ pnpm daily:refresh
 
 - 기본 순서:
   - `pnpm warm:if-stale` (스크립트가 있으면 실행)
+  - `pnpm finlife:sync:if-stale`
+  - `pnpm datago:sync`
+  - `pnpm gov24:sync:if-stale`
   - `pnpm news:refresh`
+  - `pnpm indicators:refresh`
   - `pnpm dart:watch`
   - `pnpm data:doctor` (기본 실행, `--skip-doctor`로 생략 가능)
   - `pnpm cleanup` (스크립트가 있으면 실행, non-strict에서 비차단)
@@ -16,6 +20,7 @@ pnpm daily:refresh
   - `pnpm daily:refresh -- --strict`: 단계 실패 시 즉시 실패(exit 1)
   - `pnpm daily:refresh -- --skip-doctor`: `data:doctor` 생략
 - `OPENDART_API_KEY`가 없어도 `dart:watch`는 내부 skip 처리되며 non-strict 모드에서는 전체 exit 0을 유지합니다.
+- FinLife, DataGo, Gov24, news, indicators 단계는 필수 단계입니다. 누락 또는 실패하면 결과 JSON의 해당 step이 `failed`로 남고 strict 모드에서는 전체 실행도 실패합니다.
 
 ## Windows 작업 스케줄러 예시
 
@@ -39,6 +44,9 @@ pnpm daily:refresh
 - 스케줄: `5 0 * * *` (UTC 00:05, KST 09:05)
 - 저장소 Secrets에 아래 키를 추가하세요.
   - `OPENDART_API_KEY`
+  - `FINLIFE_API_KEY`
+  - `FINLIFE_TOPFIN_GRP_LIST` 또는 `FINLIFE_<KIND>_TOPFIN_GRP_LIST`
+  - `DATAGO_SERVICE_KEY` 또는 `KDB_DATAGO_SERVICE_KEY`
 - 실행 결과는 `tmp/daily_refresh_result.json`, `tmp/daily_refresh.log`로 남고, Actions Summary/Artifacts에서도 확인할 수 있습니다.
 - 워크플로는 실행 후 변경 파일이 있으면 `docs/**`, `tmp/**` 기준으로 자동 PR을 생성/업데이트합니다.
 
@@ -50,3 +58,4 @@ pnpm daily:refresh
   - `tmp/daily_refresh.log` (간단 텍스트 로그)
   - `docs/dart-*.md`, `tmp/dart/*.json` (산출물)
 - `OPENDART_API_KEY`가 없고 `dart:watch`가 내부 skip되면 `status=skipped`로 기록되며 기본(non-strict) 모드에서는 workflow 실패로 처리되지 않습니다.
+- FinLife/DataGo/Gov24/news/indicators가 env 누락, upstream 실패, stale 판단 실패 등으로 실패하면 `status=failed`로 기록됩니다. 이 상태는 성공으로 취급하지 말고 source별 stderrTail과 문서화된 env를 먼저 확인합니다.

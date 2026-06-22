@@ -22,7 +22,7 @@
 
 ## daily refresh 실패
 증상: `daily_refresh_result.json` 마지막 단계가 failed다.
-원인: 파이프라인 단계(`data:doctor`/`dart:watch`) 실행 실패.
+원인: 파이프라인 단계(`finlife:sync:if-stale`/`datago:sync`/`gov24:sync:if-stale`/`news:refresh`/`indicators:refresh`/`data:doctor`/`dart:watch`) 실행 실패.
 해결 명령: `pnpm daily:refresh`
 
 ## E2E 실패

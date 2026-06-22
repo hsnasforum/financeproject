@@ -26,9 +26,25 @@ describe("runScript whitelist", () => {
       command: "pnpm",
       args: ["dart:watch"],
     });
+    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["finlife:sync:if-stale"] })).toEqual({
+      command: "pnpm",
+      args: ["finlife:sync:if-stale"],
+    });
+    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["datago:sync"] })).toEqual({
+      command: "pnpm",
+      args: ["datago:sync"],
+    });
+    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["gov24:sync:if-stale"] })).toEqual({
+      command: "pnpm",
+      args: ["gov24:sync:if-stale"],
+    });
     expect(sanitizeRunScriptInput({ command: "pnpm", args: ["news:refresh"] })).toEqual({
       command: "pnpm",
       args: ["news:refresh"],
+    });
+    expect(sanitizeRunScriptInput({ command: "pnpm", args: ["indicators:refresh"] })).toEqual({
+      command: "pnpm",
+      args: ["indicators:refresh"],
     });
     expect(sanitizeRunScriptInput({ command: "pnpm", args: ["data:doctor"] })).toEqual({
       command: "pnpm",
@@ -100,6 +116,11 @@ describe("runScript whitelist", () => {
 
   it("validates allowed fix ids and blocks unknown fix ids", async () => {
     expect(isAllowedFixId("SEED_DEBUG")).toBe(true);
+    expect(isAllowedFixId("FINLIFE_SYNC_IF_STALE")).toBe(true);
+    expect(isAllowedFixId("DATAGO_SYNC")).toBe(true);
+    expect(isAllowedFixId("GOV24_SYNC_IF_STALE")).toBe(true);
+    expect(isAllowedFixId("NEWS_REFRESH")).toBe(true);
+    expect(isAllowedFixId("INDICATORS_REFRESH")).toBe(true);
     expect(isAllowedFixId("UNKNOWN_FIX")).toBe(false);
 
     const result = await runAllowedFix("UNKNOWN_FIX");

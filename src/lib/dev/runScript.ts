@@ -69,7 +69,11 @@ export function sanitizeRunScriptInput(input: RunScriptInput): AllowedCommand | 
       if (
         script === "seed:debug"
         || script === "dart:watch"
+        || script === "finlife:sync:if-stale"
+        || script === "datago:sync"
+        || script === "gov24:sync:if-stale"
         || script === "news:refresh"
+        || script === "indicators:refresh"
         || script === "data:doctor"
         || script === "daily:refresh"
         || script === "dart:rules:eval:all"
