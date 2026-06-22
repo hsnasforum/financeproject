@@ -287,6 +287,20 @@ describe("planning v3 news api", () => {
     expect(routeSource).not.toContain("resolveNewsTrendsJsonPath");
   });
 
+  it("keeps news alert rules route behind the current-user service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v3/news/alerts/rules/route.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("@/lib/planning/v3/service/newsAlertRulesRepository");
+    expect(routeSource).not.toContain("@/lib/planning/v3/news/alerts");
+    expect(routeSource).not.toContain("readAlertRulesConfig");
+    expect(routeSource).not.toContain("readAlertRuleOverrides");
+    expect(routeSource).not.toContain("writeAlertRuleOverrides");
+    expect(routeSource).not.toContain("loadEffectiveAlertRules");
+  });
+
   it("GET digest response only exposes whitelisted metadata fields", async () => {
     const digestBackup = backupAndRemove(digestPath());
     try {

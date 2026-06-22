@@ -6,11 +6,9 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import {
-  loadEffectiveAlertRules,
-  readAlertRuleOverrides,
-  readAlertRulesConfig,
-  writeAlertRuleOverrides,
-} from "@/lib/planning/v3/news/alerts";
+  readCurrentUserAlertRules,
+  writeCurrentUserAlertRuleOverrides,
+} from "@/lib/planning/v3/service/newsAlertRulesRepository";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
   isPlanningRouteUser,
@@ -111,9 +109,7 @@ export async function GET(request: Request) {
   if (!isPlanningRouteUser(currentUser)) return currentUser;
   const userMeta = planningUserMeta(currentUser);
 
-  const defaults = readAlertRulesConfig();
-  const overrides = readAlertRuleOverrides();
-  const effective = loadEffectiveAlertRules();
+  const { defaults, overrides, effective } = readCurrentUserAlertRules();
 
   const payload = parseWithV3Whitelist(RulesGetResponseSchema, {
     ok: true,
@@ -154,8 +150,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const written = writeAlertRuleOverrides({ rules: parsed.data.rules });
-  const effective = loadEffectiveAlertRules();
+  const { written, effective } = writeCurrentUserAlertRuleOverrides({ rules: parsed.data.rules });
 
   const payload = parseWithV3Whitelist(RulesPostResponseSchema, {
     ok: true,
