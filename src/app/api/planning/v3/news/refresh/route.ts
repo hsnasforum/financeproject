@@ -22,6 +22,10 @@ const RefreshResponseSchema = z.object({
     errorCount: z.number().int().nonnegative(),
     lastRefreshedAt: z.string().datetime().nullable(),
   }),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 export async function POST(request: Request) {
@@ -51,6 +55,7 @@ export async function POST(request: Request) {
 
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const result = await runNewsRefresh();
@@ -65,6 +70,7 @@ export async function POST(request: Request) {
         errorCount: result.errors.length,
         lastRefreshedAt,
       },
+      meta: userMeta,
     }, { scope: "response", context: "api.v3.news.refresh" });
     return NextResponse.json(payload);
   } catch {
@@ -75,7 +81,7 @@ export async function POST(request: Request) {
           code: "INTERNAL",
           message: "뉴스 갱신 실행 중 오류가 발생했습니다.",
         },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );

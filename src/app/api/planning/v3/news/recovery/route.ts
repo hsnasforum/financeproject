@@ -30,6 +30,10 @@ const RecoveryResponseSchema = z.object({
     summary: RecoverySummarySchema,
     execution: RecoveryExecutionSchema.nullable(),
   }),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 export async function POST(request: Request) {
@@ -59,6 +63,7 @@ export async function POST(request: Request) {
 
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const parsed = RecoveryBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
@@ -66,7 +71,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: { code: "INPUT", message: "복구 요청 형식이 올바르지 않습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 400 },
     );
@@ -82,6 +87,7 @@ export async function POST(request: Request) {
           summary,
           execution: null,
         },
+        meta: userMeta,
       }, { scope: "response", context: "api.v3.news.recovery.preview" });
       return NextResponse.json(payload);
     }
@@ -94,6 +100,7 @@ export async function POST(request: Request) {
         summary,
         execution,
       },
+      meta: userMeta,
     }, { scope: "response", context: "api.v3.news.recovery.run" });
     return NextResponse.json(payload);
   } catch {
@@ -101,7 +108,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "뉴스 복구 작업 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );

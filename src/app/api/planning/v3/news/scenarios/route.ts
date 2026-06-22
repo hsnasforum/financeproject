@@ -16,6 +16,10 @@ import { readCurrentUserExposureProfile } from "@/lib/planning/v3/service/exposu
 const ScenariosResponseSchema = z.object({
   ok: z.literal(true),
   data: z.unknown().nullable(),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 function withReadGuard(request: Request): Response | null {
@@ -139,10 +143,11 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const data = await enrichScenarioPack(readNewsScenarioPack());
-    const payload = parseWithV3Whitelist(ScenariosResponseSchema, { ok: true, data }, {
+    const payload = parseWithV3Whitelist(ScenariosResponseSchema, { ok: true, data, meta: userMeta }, {
       scope: "response",
       context: "api.v3.news.scenarios",
     });
@@ -152,7 +157,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "뉴스 시나리오를 불러오는 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );

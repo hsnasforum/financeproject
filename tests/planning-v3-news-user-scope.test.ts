@@ -4,16 +4,22 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as alertRulesGET, POST as alertRulesPOST } from "../src/app/api/planning/v3/news/alerts/rules/route";
 import { GET as alertsGET, POST as alertsPOST } from "../src/app/api/planning/v3/news/alerts/route";
+import { GET as newsExposureGET, POST as newsExposurePOST } from "../src/app/api/planning/v3/news/exposure/route";
 import { DELETE as noteDELETE, PATCH as notePATCH } from "../src/app/api/planning/v3/news/notes/[noteId]/route";
 import { GET as notesGET, POST as notesPOST } from "../src/app/api/planning/v3/news/notes/route";
+import { GET as scenariosGET } from "../src/app/api/planning/v3/news/scenarios/route";
 import { GET as settingsGET, POST as settingsPOST } from "../src/app/api/planning/v3/news/settings/route";
+import { GET as weeklyPlanGET, POST as weeklyPlanPOST } from "../src/app/api/planning/v3/news/weekly-plan/route";
 import {
   resolveAlertEventsPath,
   resolveAlertEventStatePath,
   resolveAlertRulesOverridePath,
 } from "../src/lib/news/alerts";
+import { resolveNewsScenarioJsonPath } from "../src/lib/news/storageSqlite";
+import { resolveExposureProfilePath } from "../planning/v3/exposure/store";
 import { resolveNewsNotesDir } from "../planning/v3/news/notes";
 import { resolveNewsSettingsPath } from "../planning/v3/news/settings";
+import { resolveWeeklyPlanPath } from "../planning/v3/news/weeklyPlan";
 
 const env = process.env as Record<string, string | undefined>;
 
@@ -101,6 +107,47 @@ function writeAlertEventFixture(): void {
     targetId: "fx",
     link: "/planning/v3/news/trends?topic=fx",
   })}\n`, "utf-8");
+}
+
+function writeRatesScenarioFixture(): void {
+  const scenariosPath = resolveNewsScenarioJsonPath();
+  fs.mkdirSync(path.dirname(scenariosPath), { recursive: true });
+  fs.writeFileSync(scenariosPath, `${JSON.stringify({
+    generatedAt: "2026-03-04T00:00:00.000Z",
+    input: {
+      topTopicIds: ["rates"],
+      risingTopicIds: [],
+      macroSnapshot: {
+        asOf: "2026-03-04T00:00:00.000Z",
+        source: "test",
+        values: {},
+      },
+    },
+    scenarios: [{
+      name: "Base",
+      confidence: "중",
+      triggerStatus: "met",
+      triggerSummary: "pctChange(kr_base_rate,5) > 0",
+      observation: "금리 상승 압력 관찰",
+      interpretations: ["조건부 해석"],
+      confirmIndicators: ["kr_base_rate"],
+      options: ["옵션 점검"],
+      assumptions: ["가정"],
+      trigger: ["pctChange(kr_base_rate,5) > 0"],
+      triggerDetails: [{
+        label: "금리",
+        expression: "pctChange(kr_base_rate,5) > 0",
+        status: "met",
+        summary: "충족",
+      }],
+      leadingIndicators: ["kr_base_rate"],
+      invalidation: ["무효화"],
+      impact: "영향",
+      monitoringOptions: ["모니터링"],
+      rationale: ["근거"],
+      linkedTopics: ["rates"],
+    }],
+  }, null, 2)}\n`, "utf-8");
 }
 
 describe("planning v3 news user scope", () => {
@@ -390,5 +437,137 @@ describe("planning v3 news user scope", () => {
     expect(aliceListResponse.status).toBe(200);
     expect(aliceListPayload.data?.total).toBe(0);
     expect(resolveNewsNotesDir().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/notes");
+  });
+
+  it("keeps weekly plan scoped by planning user", async () => {
+    const postResponse = await weeklyPlanPOST(requestWrite(
+      "POST",
+      "/api/planning/v3/news/weekly-plan",
+      "alice",
+      "/planning/v3/news",
+      {
+        weekOf: "2026-03-02",
+        topics: ["rates"],
+        seriesIds: ["KR_BOK_BASE_RATE"],
+      },
+    ));
+    const postPayload = await postResponse.json() as { data?: { topics?: string[]; seriesIds?: string[] } };
+    expect(postResponse.status).toBe(200);
+    expectTrustedMeta(postPayload, "alice");
+    expect(postPayload.data?.topics).toEqual(["rates"]);
+    expect(postPayload.data?.seriesIds).toEqual(["kr_base_rate"]);
+    expect(resolveWeeklyPlanPath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/news/weekly_plan.json");
+
+    const bobResponse = await weeklyPlanGET(requestGet(
+      "/api/planning/v3/news/weekly-plan",
+      "bob",
+      "/planning/v3/news",
+    ));
+    const bobPayload = await bobResponse.json() as { data?: unknown };
+    expect(bobResponse.status).toBe(200);
+    expectTrustedMeta(bobPayload, "bob");
+    expect(bobPayload.data).toBeNull();
+
+    const aliceResponse = await weeklyPlanGET(requestGet(
+      "/api/planning/v3/news/weekly-plan",
+      "alice",
+      "/planning/v3/news",
+    ));
+    const alicePayload = await aliceResponse.json() as { data?: { topics?: string[]; seriesIds?: string[] } | null };
+    expect(aliceResponse.status).toBe(200);
+    expectTrustedMeta(alicePayload, "alice");
+    expect(alicePayload.data?.topics).toEqual(["rates"]);
+    expect(alicePayload.data?.seriesIds).toEqual(["kr_base_rate"]);
+  });
+
+  it("keeps news exposure profile and scenario personal impact scoped by planning user", async () => {
+    writeRatesScenarioFixture();
+
+    const aliceProfileResponse = await newsExposurePOST(requestWrite(
+      "POST",
+      "/api/planning/v3/news/exposure",
+      "alice",
+      "/planning/v3/news/settings",
+      {
+        profile: {
+          debt: {
+            hasDebt: "yes",
+            rateType: "variable",
+            repricingHorizon: "short",
+          },
+          liquidity: {
+            monthsOfCashBuffer: "low",
+          },
+        },
+      },
+    ));
+    const aliceProfilePayload = await aliceProfileResponse.json() as { data?: { debt?: { hasDebt?: string } } };
+    expect(aliceProfileResponse.status).toBe(200);
+    expectTrustedMeta(aliceProfilePayload, "alice");
+    expect(aliceProfilePayload.data?.debt?.hasDebt).toBe("yes");
+    expect(resolveExposureProfilePath().replaceAll("\\", "/")).toContain("/users/alice/planning-v3/exposure/profile.json");
+
+    const bobProfileResponse = await newsExposurePOST(requestWrite(
+      "POST",
+      "/api/planning/v3/news/exposure",
+      "bob",
+      "/planning/v3/news/settings",
+      {
+        profile: {
+          debt: {
+            hasDebt: "no",
+            rateType: "none",
+            repricingHorizon: "none",
+          },
+          liquidity: {
+            monthsOfCashBuffer: "high",
+          },
+        },
+      },
+    ));
+    const bobProfilePayload = await bobProfileResponse.json() as { data?: { debt?: { hasDebt?: string } } };
+    expect(bobProfileResponse.status).toBe(200);
+    expectTrustedMeta(bobProfilePayload, "bob");
+    expect(bobProfilePayload.data?.debt?.hasDebt).toBe("no");
+
+    const bobReadResponse = await newsExposureGET(requestGet(
+      "/api/planning/v3/news/exposure",
+      "bob",
+      "/planning/v3/news/settings",
+    ));
+    const bobReadPayload = await bobReadResponse.json() as { data?: { debt?: { hasDebt?: string } } | null };
+    expect(bobReadResponse.status).toBe(200);
+    expectTrustedMeta(bobReadPayload, "bob");
+    expect(bobReadPayload.data?.debt?.hasDebt).toBe("no");
+
+    const aliceScenarioResponse = await scenariosGET(requestGet(
+      "/api/planning/v3/news/scenarios",
+      "alice",
+      "/planning/v3/news",
+    ));
+    const aliceScenarioPayload = await aliceScenarioResponse.json() as {
+      data?: {
+        scenarios?: Array<{ personalImpact?: { debtServiceRisk?: string; bufferAdequacy?: string } }>;
+      } | null;
+    };
+    expect(aliceScenarioResponse.status).toBe(200);
+    expectTrustedMeta(aliceScenarioPayload, "alice");
+    expect(aliceScenarioPayload.data?.scenarios?.[0]?.personalImpact?.debtServiceRisk).toBe("High");
+    expect(aliceScenarioPayload.data?.scenarios?.[0]?.personalImpact?.bufferAdequacy).toBe("Low");
+
+    const bobScenarioResponse = await scenariosGET(requestGet(
+      "/api/planning/v3/news/scenarios",
+      "bob",
+      "/planning/v3/news",
+    ));
+    const bobScenarioPayload = await bobScenarioResponse.json() as {
+      data?: {
+        scenarios?: Array<{ personalImpact?: { debtServiceRisk?: string; bufferAdequacy?: string } }>;
+      } | null;
+    };
+    expect(bobScenarioResponse.status).toBe(200);
+    expectTrustedMeta(bobScenarioPayload, "bob");
+    expect(bobScenarioPayload.data?.scenarios?.[0]?.personalImpact?.debtServiceRisk).toBe("Low");
+    expect(bobScenarioPayload.data?.scenarios?.[0]?.personalImpact?.bufferAdequacy).toBe("High");
   });
 });

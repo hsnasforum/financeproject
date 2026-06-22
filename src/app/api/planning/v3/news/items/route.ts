@@ -57,6 +57,10 @@ const ItemsResponseSchema = z.object({
     topics: z.array(TopicFacetSchema),
     sources: z.array(SourceFacetSchema),
   }),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 function asString(value: unknown): string {
@@ -116,6 +120,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const url = new URL(request.url);
   const filters = normalizeFilters(url);
@@ -141,6 +146,7 @@ export async function GET(request: Request) {
         topics: newsItems.topics,
         sources: newsItems.sources,
       },
+      meta: userMeta,
     }, { scope: "response", context: "api.v3.news.items" });
     return NextResponse.json(payload);
   } catch {
@@ -148,7 +154,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "뉴스 항목을 불러오는 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );

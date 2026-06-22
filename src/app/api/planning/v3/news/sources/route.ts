@@ -21,6 +21,10 @@ const SourcesGetResponseSchema = z.object({
   data: z.object({
     items: z.array(NewsSourceTransferItemSchema),
   }),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 const SourcesPostBodySchema = z.object({
@@ -35,6 +39,10 @@ const SourcesPostResponseSchema = z.object({
     mode: z.enum(["dry_run", "apply"]),
     preview: NewsSourceImportPreviewSchema,
     applied: NewsSourceImportApplyResultSchema.nullable(),
+  }),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
   }),
 });
 
@@ -61,11 +69,13 @@ export async function GET(request: Request) {
 
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const items = exportNewsSourceList();
   const payload = parseWithV3Whitelist(SourcesGetResponseSchema, {
     ok: true,
     data: { items },
+    meta: userMeta,
   }, { scope: "response", context: "api.v3.news.sources.get" });
   return NextResponse.json(payload);
 }
@@ -87,6 +97,7 @@ export async function POST(request: Request) {
 
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const parsed = SourcesPostBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
@@ -94,7 +105,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: { code: "INPUT", message: "소스 import 요청 형식이 올바르지 않습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 400 },
     );
@@ -112,7 +123,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "뉴스 소스 import 처리 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );
@@ -125,6 +136,7 @@ export async function POST(request: Request) {
       preview,
       applied,
     },
+    meta: userMeta,
   }, { scope: "response", context: "api.v3.news.sources.post" });
   return NextResponse.json(payload);
 }

@@ -142,6 +142,10 @@ const SearchResponseSchema = z.object({
       count: z.number().int().nonnegative(),
     })),
   }),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 export async function GET(request: Request) {
@@ -149,6 +153,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const url = new URL(request.url);
@@ -251,6 +256,7 @@ export async function GET(request: Request) {
         topics,
         sources,
       },
+      meta: userMeta,
     }, { scope: "response", context: "api.v3.news.search" });
     return NextResponse.json(payload);
   } catch {
@@ -258,7 +264,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "뉴스 검색 인덱스를 불러오는 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );

@@ -35,7 +35,7 @@
 - `pnpm test` PASS, 721 files, 2326 tests.
 - `pnpm build` PASS.
 
-## 남은 리스크와 엣지케이스
+## 남은 리스크
 - [정책] alert event 원천 feed는 이번 라운드에서 사용자별 파일로 분리하지 않았습니다. 현재 계약은 전역 feed + 사용자별 event state입니다.
 - [후속] legacy `.data/news/settings.json`, `.data/news/notes`, `.data/alerts/rules.override.json`의 namespace 승격은 별도 migration/export 라운드에서 다루는 편이 안전합니다.
 - [후속] news digest, scenarios, exposure처럼 결과성 데이터가 user-specific 입력을 참조하는 경로는 다음 user-scope 라운드에서 별도 확인이 필요합니다.

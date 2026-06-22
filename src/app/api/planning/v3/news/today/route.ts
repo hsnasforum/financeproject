@@ -19,6 +19,10 @@ const TodayApiSchema = z.object({
     scenarios: z.unknown(),
   }).nullable(),
   hint: z.string().optional(),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 function withReadGuard(request: Request): Response | null {
@@ -45,6 +49,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const cached = readCurrentUserTodayNewsCache();
@@ -53,6 +58,7 @@ export async function GET(request: Request) {
         ok: true,
         data: null,
         hint: "캐시가 없습니다. 수동 갱신을 실행해 주세요.",
+        meta: userMeta,
       }, { scope: "response", context: "api.v3.news.today" });
       return NextResponse.json(payload);
     }
@@ -64,6 +70,7 @@ export async function GET(request: Request) {
         digest: cached.digest,
         scenarios: cached.scenarios,
       },
+      meta: userMeta,
     }, { scope: "response", context: "api.v3.news.today" });
     return NextResponse.json(payload);
   } catch {
@@ -71,7 +78,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "오늘의 뉴스 캐시를 불러오는 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );

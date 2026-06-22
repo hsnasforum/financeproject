@@ -383,6 +383,10 @@ const DigestRouteSchema = z.object({
     summary: z.unknown(),
   }).nullable(),
   topicContradictions: z.array(z.unknown()),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 export async function GET(request: Request) {
@@ -390,6 +394,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const data = sanitizeDigest(readNewsDigestDay());
@@ -401,7 +406,7 @@ export async function GET(request: Request) {
         snippet: asString(row.snippet),
       })),
     );
-    const payload = parseWithV3Whitelist(DigestRouteSchema, { ok: true, data, topicContradictions }, {
+    const payload = parseWithV3Whitelist(DigestRouteSchema, { ok: true, data, topicContradictions, meta: userMeta }, {
       scope: "response",
       context: "api.v3.news.digest",
     });
@@ -411,7 +416,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "뉴스 요약을 불러오는 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );

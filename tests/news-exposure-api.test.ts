@@ -84,7 +84,7 @@ describe("news exposure api", () => {
       csrf: "csrf-token",
       profile: {
         debt: {
-          hasDebt: true,
+          hasDebt: "yes",
           rateType: "variable",
           repricingHorizon: "short",
         },
@@ -99,9 +99,9 @@ describe("news exposure api", () => {
     expect(saveJson.data?.debt?.rateType).toBe("variable");
 
     const get = await GET(requestGet("/api/planning/v3/news/exposure", LOCAL_HOST, true));
-    const getJson = await get.json() as { ok?: boolean; data?: { debt?: { hasDebt?: boolean } } | null };
+    const getJson = await get.json() as { ok?: boolean; data?: { debt?: { hasDebt?: string } } | null };
     expect(get.status).toBe(200);
     expect(getJson.ok).toBe(true);
-    expect(getJson.data?.debt?.hasDebt).toBe(true);
+    expect(getJson.data?.debt?.hasDebt).toBe("yes");
   });
 });

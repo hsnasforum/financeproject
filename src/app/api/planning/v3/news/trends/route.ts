@@ -39,6 +39,10 @@ const TrendsApiSchema = z.object({
     topics: z.array(TrendTopicSchema),
   }).nullable(),
   hint: z.string().optional(),
+  meta: z.object({
+    userId: z.string().min(1),
+    authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+  }),
 });
 
 function withReadGuard(request: Request): Response | null {
@@ -84,6 +88,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   try {
     const url = new URL(request.url);
@@ -95,6 +100,7 @@ export async function GET(request: Request) {
         windowDays,
         data: null,
         hint: "캐시가 없습니다. 수동 갱신을 실행해 주세요.",
+        meta: userMeta,
       }, { scope: "response", context: "api.v3.news.trends" });
       return NextResponse.json(payload);
     }
@@ -136,6 +142,7 @@ export async function GET(request: Request) {
         date: cached.date,
         topics,
       },
+      meta: userMeta,
     }, { scope: "response", context: "api.v3.news.trends" });
     return NextResponse.json(payload);
   } catch {
@@ -143,7 +150,7 @@ export async function GET(request: Request) {
       {
         ok: false,
         error: { code: "INTERNAL", message: "뉴스 트렌드를 불러오는 중 오류가 발생했습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 500 },
     );
