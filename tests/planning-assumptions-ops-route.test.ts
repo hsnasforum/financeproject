@@ -30,6 +30,12 @@ import { POST as syncPOST } from "../src/app/api/ops/assumptions/sync/route";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
+const originalTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
+const originalAuthSecret = process.env.AUTH_SECRET;
+const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
+const originalNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalPlanningUserId = process.env.PLANNING_USER_ID;
 
 function buildGetRequest(csrf = "csrf-token"): Request {
   const host = "localhost:3000";
@@ -64,6 +70,12 @@ function buildPostRequest(csrf = "csrf-token"): Request {
 describe("ops assumptions routes", () => {
   beforeEach(() => {
     env.NODE_ENV = "test";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    delete env.PLANNING_TRUST_AUTH_HEADERS;
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+    delete env.PLANNING_NAMESPACE_ENABLED;
+    delete env.PLANNING_USER_ID;
     loadLatestAssumptionsSnapshotMock.mockReset();
     findAssumptionsSnapshotIdMock.mockReset();
     findAssumptionsSnapshotIdMock.mockResolvedValue(undefined);
@@ -116,6 +128,10 @@ describe("ops assumptions routes", () => {
         warningsCount?: number;
         sourcesCount?: number;
       };
+      meta?: {
+        userId?: string;
+        authSource?: string;
+      };
     };
 
     expect(response.status).toBe(200);
@@ -124,6 +140,10 @@ describe("ops assumptions routes", () => {
     expect(payload.snapshotSummary?.asOf).toBe("2026-02-28");
     expect(payload.snapshotSummary?.warningsCount).toBe(1);
     expect(payload.snapshotSummary?.sourcesCount).toBe(2);
+    expect(payload.meta).toEqual({
+      userId: "default",
+      authSource: "local-namespace",
+    });
 
     expect(appendAuditMock).toHaveBeenCalledTimes(1);
     const [auditInput] = appendAuditMock.mock.calls[0] as [
@@ -135,6 +155,8 @@ describe("ops assumptions routes", () => {
           asOf?: string;
           warningsCount?: number;
           sourcesCount?: number;
+          planningUserId?: string;
+          authSource?: string;
         };
       },
     ];
@@ -144,6 +166,21 @@ describe("ops assumptions routes", () => {
     expect(auditInput.details?.asOf).toBe("2026-02-28");
     expect(auditInput.details?.warningsCount).toBe(1);
     expect(auditInput.details?.sourcesCount).toBe(2);
+    expect(auditInput.details?.planningUserId).toBe("default");
+    expect(auditInput.details?.authSource).toBe("local-namespace");
+  });
+
+  it("blocks sync without a planning auth signal when fallback is not explicit", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+
+    const response = await syncPOST(buildPostRequest());
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("UNAUTHENTICATED");
+    expect(buildAssumptionsSnapshotMock).not.toHaveBeenCalled();
+    expect(appendAuditMock).not.toHaveBeenCalled();
   });
 
   it("returns ok:false on sync error and appends ERROR audit", async () => {
@@ -175,9 +212,44 @@ describe("ops assumptions routes", () => {
     expect(auditInput.details?.warningsCount).toBeNull();
     expect(auditInput.details?.sourcesCount).toBeNull();
   });
+
+  it("redacts secret-like sync errors before returning and auditing them", async () => {
+    buildAssumptionsSnapshotMock.mockRejectedValue(new Error("process.env.SECRET_TOKEN=bad"));
+
+    const response = await syncPOST(buildPostRequest());
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(500);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("INTERNAL");
+    expect(payload.error?.message).not.toContain("process.env");
+    expect(payload.error?.message).not.toContain("SECRET_TOKEN");
+    expect(payload.error?.message).not.toContain("bad");
+    const [auditInput] = appendAuditMock.mock.calls[0] as [
+      {
+        details?: {
+          message?: string;
+        };
+      },
+    ];
+    expect(auditInput.details?.message).not.toContain("process.env");
+    expect(auditInput.details?.message).not.toContain("SECRET_TOKEN");
+  });
 });
 
 afterAll(() => {
   if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
   else delete env.NODE_ENV;
+  if (typeof originalAuthRequired === "string") env.PLANNING_AUTH_REQUIRED = originalAuthRequired;
+  else delete env.PLANNING_AUTH_REQUIRED;
+  if (typeof originalTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalTrustAuthHeaders;
+  else delete env.PLANNING_TRUST_AUTH_HEADERS;
+  if (typeof originalAuthSecret === "string") env.AUTH_SECRET = originalAuthSecret;
+  else delete env.AUTH_SECRET;
+  if (typeof originalNextAuthSecret === "string") env.NEXTAUTH_SECRET = originalNextAuthSecret;
+  else delete env.NEXTAUTH_SECRET;
+  if (typeof originalNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalNamespaceEnabled;
+  else delete env.PLANNING_NAMESPACE_ENABLED;
+  if (typeof originalPlanningUserId === "string") env.PLANNING_USER_ID = originalPlanningUserId;
+  else delete env.PLANNING_USER_ID;
 });

@@ -1,86 +1,34 @@
 import { NextResponse } from "next/server";
-import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
-  assertCsrf,
+  requireCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
+import { syncOpsAssumptions } from "../../../../../lib/ops/assumptions/assumptionsSyncRouteService";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import { buildAssumptionsSnapshot } from "../../../../../lib/planning/assumptions/sync";
-import { type AssumptionsSnapshot } from "../../../../../lib/planning/assumptions/types";
+import {
+  isPlanningRouteUser,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type SyncBody = {
   csrf?: unknown;
 } | null;
 
-type SyncSummary = {
-  snapshotId: string;
-  asOf: string;
-  fetchedAt: string;
-  korea: AssumptionsSnapshot["korea"];
-  warningsCount: number;
-  sourcesCount: number;
-};
-
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function toSummary(input: { snapshotId: string; snapshot: AssumptionsSnapshot }): SyncSummary {
-  return {
-    snapshotId: input.snapshotId,
-    asOf: input.snapshot.asOf,
-    fetchedAt: input.snapshot.fetchedAt,
-    korea: input.snapshot.korea,
-    warningsCount: input.snapshot.warnings.length,
-    sourcesCount: input.snapshot.sources.length,
-  };
-}
-
-function appendSyncAudit(input: {
-  result: "SUCCESS" | "ERROR";
-  message: string;
-  summary?: SyncSummary;
-}) {
-  try {
-    appendAuditLog({
-      event: "ASSUMPTIONS_SYNC",
-      route: "/api/ops/assumptions/sync",
-      summary: `ASSUMPTIONS_SYNC ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        message: input.message,
-        snapshotId: input.summary?.snapshotId ?? null,
-        asOf: input.summary?.asOf ?? null,
-        fetchedAt: input.summary?.fetchedAt ?? null,
-        warningsCount: input.summary?.warningsCount ?? null,
-        sourcesCount: input.summary?.sourcesCount ?? null,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append assumptions sync log", error);
-  }
-}
-
-export async function POST(request: Request) {
-  const blocked = onlyDev();
-  if (blocked) return blocked;
-
-  let body: SyncBody = null;
-  try {
-    body = (await request.json()) as SyncBody;
-  } catch {
-    body = null;
-  }
-
+function guardRequest(request: Request, csrf: string): NextResponse | null {
   try {
     assertLocalHost(request);
     assertSameOrigin(request);
     assertDevUnlocked(request);
-    assertCsrf(request, body);
+    requireCsrf(request, { csrf });
+    return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (!guard) {
@@ -96,36 +44,38 @@ export async function POST(request: Request) {
       status: guard.status,
     });
   }
+}
 
+export async function POST(request: Request) {
+  const blocked = onlyDev();
+  if (blocked) return blocked;
+
+  let body: SyncBody = null;
   try {
-    const built = await buildAssumptionsSnapshot();
-    const snapshotSummary = toSummary(built);
-    const message = snapshotSummary.warningsCount > 0
-      ? "가정 스냅샷을 저장했지만 일부 경고가 있습니다."
-      : "가정 스냅샷을 저장했습니다.";
+    body = (await request.json()) as SyncBody;
+  } catch {
+    body = null;
+  }
 
-    appendSyncAudit({
-      result: "SUCCESS",
-      message,
-      summary: snapshotSummary,
-    });
+  const guard = guardRequest(request, asString(body?.csrf));
+  if (guard) return guard;
 
-    return NextResponse.json({
-      ok: true,
-      snapshotSummary,
-      message,
-    });
-  } catch (error) {
-    const message = asString(error instanceof Error ? error.message : "") || "가정 스냅샷 동기화에 실패했습니다.";
-    appendSyncAudit({
-      result: "ERROR",
-      message,
-    });
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
+  const result = await syncOpsAssumptions({ currentUser });
+  if (result.kind === "internal-error") {
     return opsErrorResponse({
       code: "INTERNAL",
-      message,
+      message: result.message,
       status: 500,
     });
   }
+
+  return NextResponse.json({
+    ok: true,
+    snapshotSummary: result.snapshotSummary,
+    message: result.message,
+    meta: result.meta,
+  });
 }
