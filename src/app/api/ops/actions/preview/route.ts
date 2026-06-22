@@ -8,9 +8,7 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import { getOpsActionDefinition, previewOpsAction, validateOpsActionParams } from "../../../../../lib/ops/actions/registry";
-import { issueOpsActionPreviewToken } from "../../../../../lib/ops/actions/previewToken";
-import { type OpsActionId } from "../../../../../lib/ops/actions/types";
+import { previewOpsActionRoute } from "../../../../../lib/ops/actions/actionPreviewRouteService";
 import {
   isPlanningRouteUser,
   planningUserMeta,
@@ -68,46 +66,32 @@ export async function POST(request: Request) {
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-  const actionIdRaw = asString(body?.actionId);
-  const definition = getOpsActionDefinition(actionIdRaw);
-  if (!definition) {
+  const result = await previewOpsActionRoute({
+    actionId: body?.actionId,
+    params: body?.params,
+  });
+  if (result.kind === "validation-error") {
     return opsErrorResponse({
       code: "VALIDATION",
-      message: "지원하지 않는 actionId 입니다.",
+      message: result.message,
       status: 400,
       fixHref: "/ops",
     });
   }
 
-  const actionId = definition.id as OpsActionId;
-  const params = validateOpsActionParams(actionId, body?.params);
-
-  try {
-    const preview = await previewOpsAction(actionId, params);
-    const previewToken = definition.requirePreview
-      ? issueOpsActionPreviewToken(actionId, params)
-      : "";
-
-    return NextResponse.json({
-      ok: true,
-      message: `${definition.title} 미리보기 준비 완료`,
-      meta: planningUserMeta(currentUser),
-      data: {
-        actionId,
-        title: definition.title,
-        requirePreview: Boolean(definition.requirePreview),
-        dangerous: Boolean(definition.dangerous),
-        ...(definition.confirmText ? { confirmText: definition.confirmText } : {}),
-        summary: preview.summary,
-        ...(previewToken ? { previewToken } : {}),
-      },
-    });
-  } catch (error) {
+  if (result.kind === "internal-error") {
     return opsErrorResponse({
       code: "INTERNAL",
-      message: error instanceof Error ? error.message : "preview 실행 실패",
+      message: result.message,
       status: 500,
       fixHref: "/ops",
     });
   }
+
+  return NextResponse.json({
+    ok: true,
+    message: result.message,
+    meta: planningUserMeta(currentUser),
+    data: result.data,
+  });
 }
