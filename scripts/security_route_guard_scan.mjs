@@ -113,6 +113,7 @@ function hasLocalGuard(content) {
 function hasMutationGuard(content) {
   return /guardDevMutationRequest\s*\(/.test(content)
     || /consumeVaultCsrfOrThrow\s*\(/.test(content)
+    || /assertOpsSecurityVaultCsrf\s*\(/.test(content)
     || /assertCsrf\s*\(/.test(content)
     || /requireCsrf\s*\(/.test(content)
     || /assertSameOrigin\s*\(/.test(content)

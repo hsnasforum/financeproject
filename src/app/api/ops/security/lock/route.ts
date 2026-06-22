@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { toOpsContractError } from "../../../../../lib/ops/errorContract";
-import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
-import { consumeVaultCsrfOrThrow } from "../../../../../lib/planning/security/vaultCsrf";
-import { lockVault } from "../../../../../lib/planning/security/vaultState";
+import {
+  assertOpsSecurityVaultCsrf,
+  lockOpsSecurityVault,
+  recordOpsSecurityLockError,
+} from "../../../../../lib/planning/server/security/opsSecurityLockRouteService";
 import { asString, guardLocalRequest, securityUserMeta, withVaultCsrf } from "../_lib";
 
 export async function POST(request: Request) {
@@ -17,16 +19,10 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null) as { csrf?: unknown } | null;
   try {
-    consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    assertOpsSecurityVaultCsrf(request, asString(body?.csrf));
     const currentUser = await requirePlanningRouteUser(request);
     if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const status = await lockVault();
-    await appendOpsAuditEvent({
-      eventType: "VAULT_LOCK_SUCCESS",
-      meta: {
-        unlocked: status.unlocked,
-      },
-    }).catch(() => undefined);
+    const status = await lockOpsSecurityVault();
     return withVaultCsrf(request, NextResponse.json({
       ok: true,
       data: status,
@@ -40,12 +36,9 @@ export async function POST(request: Request) {
         message: guardError.message,
         status: guardError.status,
       });
-      await appendOpsAuditEvent({
-        eventType: "VAULT_LOCK_ERROR",
-        meta: {
-          code: contractGuard.body.error.code,
-          status: contractGuard.status,
-        },
+      await recordOpsSecurityLockError({
+        code: contractGuard.body.error.code,
+        status: contractGuard.status,
       }).catch(() => undefined);
       return withVaultCsrf(request, NextResponse.json(contractGuard.body, { status: contractGuard.status }));
     }
@@ -54,12 +47,9 @@ export async function POST(request: Request) {
       message: "Vault 잠금 처리에 실패했습니다.",
       status: 500,
     });
-    await appendOpsAuditEvent({
-      eventType: "VAULT_LOCK_ERROR",
-      meta: {
-        code: contractError.body.error.code,
-        status: contractError.status,
-      },
+    await recordOpsSecurityLockError({
+      code: contractError.body.error.code,
+      status: contractError.status,
     }).catch(() => undefined);
     return withVaultCsrf(request, NextResponse.json(contractError.body, { status: contractError.status }));
   }
