@@ -95,6 +95,7 @@ describe("Auth.js planning integration contract", () => {
 
   it("builds JWT sessions by default and keeps database sessions opt-in", async () => {
     const { buildAuthConfig } = await import("../../../src/lib/auth/config");
+    const adapter = {} as NonNullable<ReturnType<typeof buildAuthConfig>["adapter"]>;
 
     const defaultConfig = buildAuthConfig(testEnv({
       NODE_ENV: "production",
@@ -115,6 +116,17 @@ describe("Auth.js planning integration contract", () => {
       AUTH_TRUST_HOST: "true",
     }));
     expect(trustedHostConfig.trustHost).toBe(true);
+
+    expect(() => buildAuthConfig(testEnv({
+      AUTH_PRISMA_ADAPTER_ENABLED: "true",
+    }))).toThrow("AUTH_PRISMA_ADAPTER_ENABLED requires a configured Auth.js Prisma adapter.");
+
+    const databaseConfig = buildAuthConfig(testEnv({
+      AUTH_PRISMA_ADAPTER_ENABLED: "true",
+      AUTH_SECRET: "auth-secret",
+    }), { adapter });
+    expect(databaseConfig.adapter).toBe(adapter);
+    expect(databaseConfig.session?.strategy).toBe("database");
   });
 
   it("keeps session.user.id available for planning ownership scope", () => {
