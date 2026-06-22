@@ -72,6 +72,18 @@ describe("planning current user", () => {
     });
   });
 
+  it("keeps local namespace fallback closed when the auth env value is invalid", async () => {
+    env.NODE_ENV = "development";
+    env.PLANNING_AUTH_REQUIRED = "sometimes";
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+
+    expect(isPlanningAuthRequired()).toBe(true);
+    await expect(requireCurrentPlanningUser(new Request("http://localhost:3000/api/planning/profiles")))
+      .rejects
+      .toMatchObject({ code: "UNAUTHENTICATED", status: 401 } satisfies Partial<PlanningAuthError>);
+  });
+
   it("keeps planning auth required in production even when fallback env is disabled", async () => {
     env.NODE_ENV = "production";
     env.PLANNING_AUTH_REQUIRED = "0";

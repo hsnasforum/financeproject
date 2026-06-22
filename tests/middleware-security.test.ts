@@ -117,6 +117,16 @@ describe("security middleware", () => {
     expect(response.status).toBe(200);
   });
 
+  it("blocks planning API fallback when the auth env value is invalid", async () => {
+    mutableEnv.NODE_ENV = "development";
+    mutableEnv.PLANNING_AUTH_REQUIRED = "sometimes";
+    const response = middleware(makeRequest("http://localhost:3000/api/planning/profiles"));
+    const body = await response.json() as { error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(body.error?.code).toBe("UNAUTHENTICATED");
+  });
+
   it("requires planning auth in production even when fallback env is disabled", async () => {
     mutableEnv.NODE_ENV = "production";
     mutableEnv.PLANNING_AUTH_REQUIRED = "0";

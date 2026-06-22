@@ -415,6 +415,15 @@ const EXPECTED_PLANNING_ROUTE_COUNT = 95;
 
 const ROUTE_AUTH_IMPORT_PATH = "/planning/api/routeAuth";
 
+const PLANNING_ADJACENT_AUTH_ROUTE_FILES = [
+  "src/app/api/planner/compute/route.ts",
+  "src/app/api/recommend/route.ts",
+] as const;
+
+function findPlanningAuthBoundaryRouteFiles(): string[] {
+  return [...findPlanningRouteFiles(), ...PLANNING_ADJACENT_AUTH_ROUTE_FILES].sort();
+}
+
 const USER_META_HELPER = "planningUserMeta(";
 
 const SUCCESS_RESPONSE_PATTERNS = [
@@ -482,11 +491,13 @@ const FORBIDDEN_ROUTE_AUTH_BYPASS_PATTERNS = [
   "authSource: currentUser.source",
 ] as const;
 
-const WITH_ROUTE_USER_AUTH_ERROR_BRIDGE_PATTERNS = [
-  "planningAuthErrorResponse",
-  "toAuthErrorResponse(error)",
-  "if (authError) return authError",
-] as const;
+const ROUTE_AUTH_FAILURE_RETURN_PATTERN = /if\s*\(authError\)\s+return\s+(?:\w+\()?authError\)?;/u;
+
+function hasRouteAuthFailureBridge(source: string): boolean {
+  return source.includes("planningAuthErrorResponse")
+    && source.includes("toAuthErrorResponse(error)")
+    && ROUTE_AUTH_FAILURE_RETURN_PATTERN.test(source);
+}
 
 const FORBIDDEN_ROUTE_STORE_IMPORT_PATTERNS = [
   "@/lib/planning/server/store/",
@@ -607,8 +618,14 @@ describe("planning route current-user scope coverage", () => {
     expect(new Set(routeFiles).size).toBe(routeFiles.length);
   });
 
-  it("keeps every planning API route behind current-user scope", () => {
-    const missing = findPlanningRouteFiles().filter((filePath) => {
+  it("covers planning-adjacent auth boundary route inventory", () => {
+    const missing = PLANNING_ADJACENT_AUTH_ROUTE_FILES.filter((filePath) => !fs.existsSync(filePath));
+
+    expect(missing).toEqual([]);
+  });
+
+  it("keeps every planning auth boundary route behind current-user scope", () => {
+    const missing = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
       return !ROUTE_AUTH_HELPERS.some((helper) => source.includes(helper));
     });
@@ -616,8 +633,8 @@ describe("planning route current-user scope coverage", () => {
     expect(missing).toEqual([]);
   });
 
-  it("keeps every planning API route on the standard routeAuth import boundary", () => {
-    const missingRouteAuthImport = findPlanningRouteFiles().filter((filePath) => {
+  it("keeps every planning auth boundary route on the standard routeAuth import boundary", () => {
+    const missingRouteAuthImport = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
       return !source.includes(ROUTE_AUTH_IMPORT_PATH);
     });
@@ -626,7 +643,7 @@ describe("planning route current-user scope coverage", () => {
   });
 
   it("keeps requirePlanningRouteUser callers on the Response guard contract", () => {
-    const missingResponseGuard = findPlanningRouteFiles().filter((filePath) => {
+    const missingResponseGuard = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
       return source.includes("requirePlanningRouteUser(") && !source.includes(ROUTE_AUTH_RESPONSE_GUARD_PATTERN);
     });
@@ -634,8 +651,8 @@ describe("planning route current-user scope coverage", () => {
     expect(missingResponseGuard).toEqual([]);
   });
 
-  it("keeps planning API routes on the routeAuth boundary", () => {
-    const directCurrentUserRoutes = findPlanningRouteFiles().filter((filePath) => {
+  it("keeps planning auth boundary routes on the routeAuth boundary", () => {
+    const directCurrentUserRoutes = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
       return FORBIDDEN_ROUTE_AUTH_BYPASS_PATTERNS.some((pattern) => source.includes(pattern));
     });
@@ -644,10 +661,9 @@ describe("planning route current-user scope coverage", () => {
   });
 
   it("keeps callback route auth helpers translating auth failures through routeAuth", () => {
-    const missingAuthErrorBridge = findPlanningRouteFiles().filter((filePath) => {
+    const missingAuthErrorBridge = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
-      return source.includes("withPlanningRouteUser(")
-        && !WITH_ROUTE_USER_AUTH_ERROR_BRIDGE_PATTERNS.every((pattern) => source.includes(pattern));
+      return source.includes("withPlanningRouteUser(") && !hasRouteAuthFailureBridge(source);
     });
 
     expect(missingAuthErrorBridge).toEqual([]);
@@ -655,7 +671,7 @@ describe("planning route current-user scope coverage", () => {
 
   it("keeps planning and ops API routes off direct current-user scope helpers", () => {
     const directCurrentUserRoutes = [
-      ...findPlanningRouteFiles(),
+      ...findPlanningAuthBoundaryRouteFiles(),
       ...findOpsRouteFiles(),
     ].filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
