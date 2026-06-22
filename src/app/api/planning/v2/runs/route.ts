@@ -11,29 +11,16 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
-import {
-  findAssumptionsSnapshotId,
-  loadAssumptionsSnapshotById,
-  loadLatestAssumptionsSnapshot,
-} from "../../../../../lib/planning/server/assumptions/storage";
-import {
-  mergeAssumptionsWithProvenance,
-  toAssumptionsOverridesFromRecord,
-} from "../../../../../lib/planning/server/assumptions/overrides";
-import { loadAssumptionsOverridesByProfile } from "../../../../../lib/planning/server/assumptions/overridesStorage";
 import { appendEvent as appendOpsMetricEvent } from "../../../../../lib/ops/metrics/metricsStore";
-import { mapSnapshotToAssumptionsV2, mapSnapshotToScenarioExtrasV2 } from "../../../../../lib/planning/server/assumptions/mapSnapshotToAssumptionsV2";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
-import { DEFAULT_ASSUMPTIONS_V2 } from "../../../../../lib/planning/server/v2/defaults";
 import {
-  assessAssumptionsHealth,
-  assessRiskAssumptionConsistency,
-  combineAssumptionsHealth,
-} from "../../../../../lib/planning/server/v2/assumptionsHealth";
+  PlanningRunAssumptionsResolveError,
+  resolvePlanningRunAssumptions,
+} from "../../../../../lib/planning/server/v2/runAssumptionsRouteService";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
 import { type AllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/types";
 import { runScenarios } from "../../../../../lib/planning/server/v2/runScenarios";
-import { type AssumptionsV2, type RiskTolerance, toScenarioAssumptionsV2, toSimulationAssumptionsV2 } from "../../../../../lib/planning/server/v2/scenarios";
+import { type AssumptionsV2, type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { simulateMonthly } from "../../../../../lib/planning/server/v2/simulateMonthly";
 import { runMonteCarlo } from "../../../../../lib/planning/server/v2/monteCarlo";
 import { checkMonteCarloBudget } from "../../../../../lib/planning/server/v2/budget";
@@ -85,8 +72,6 @@ type RunsCreateBody = {
 } | null;
 
 type RunInputScenario = NonNullable<CurrentUserPlanningRunRecord["input"]["scenario"]>;
-
-type SnapshotShape = Awaited<ReturnType<typeof loadLatestAssumptionsSnapshot>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -556,34 +541,6 @@ function toLiabilitiesFromProfile(profile: { debts: Array<{
   }));
 }
 
-function toSimulationOverrides(overrides: Record<string, unknown>): Partial<typeof DEFAULT_ASSUMPTIONS_V2> {
-  const output: Partial<typeof DEFAULT_ASSUMPTIONS_V2> = {};
-  if (isFiniteNumber(overrides.inflation)) output.inflation = overrides.inflation;
-  if (isFiniteNumber(overrides.expectedReturn)) output.expectedReturn = overrides.expectedReturn;
-  if (isRecord(overrides.debtRates)) output.debtRates = overrides.debtRates as Record<string, number>;
-
-  if (!isFiniteNumber(output.inflation) && isFiniteNumber(overrides.inflationPct)) {
-    output.inflation = overrides.inflationPct;
-  }
-  if (!isFiniteNumber(output.expectedReturn) && isFiniteNumber(overrides.investReturnPct)) {
-    output.expectedReturn = overrides.investReturnPct;
-  }
-
-  return output;
-}
-
-function buildSnapshotMeta(snapshot: SnapshotShape, snapshotId?: string) {
-  if (!snapshot) return { missing: true as const };
-  return {
-    ...(snapshotId ? { id: snapshotId } : {}),
-    asOf: snapshot.asOf,
-    fetchedAt: snapshot.fetchedAt,
-    missing: false as const,
-    warningsCount: snapshot.warnings.length,
-    sourcesCount: snapshot.sources.length,
-  };
-}
-
 function appendRunAudit(input: {
   event: "PLANNING_RUN_CREATE";
   route: string;
@@ -966,32 +923,41 @@ export async function POST(request: Request) {
     });
   }
 
-  let snapshot: SnapshotShape = null;
-  let snapshotId: string | undefined;
+  const riskTolerance = parseRiskTolerance(canonicalProfile as unknown);
+  let assumptionsContext: Awaited<ReturnType<typeof resolvePlanningRunAssumptions>>;
   try {
-    if (requestedSnapshotId) {
-      snapshot = await loadAssumptionsSnapshotById(requestedSnapshotId);
-      snapshotId = requestedSnapshotId;
-      if (!snapshot) {
-        appendRunAudit({
-          event: "PLANNING_RUN_CREATE",
-          route: "/api/planning/v2/runs",
-          result: "ERROR",
-          recordId: profileId,
-          message: "snapshot not found",
-        });
-        return jsonError("SNAPSHOT_NOT_FOUND", "snapshotId를 찾을 수 없습니다. latest 또는 /ops/assumptions 목록에서 선택하세요.", {
-          status: 400,
-          issues: [`input.snapshotId: '${requestedSnapshotId}' not found`],
+    assumptionsContext = await resolvePlanningRunAssumptions({
+      profileId: profileRecord.id,
+      requestedSnapshotId,
+      assumptionsOverride,
+      riskTolerance,
+    });
+  } catch (error) {
+    if (error instanceof PlanningRunAssumptionsResolveError) {
+      appendRunAudit({
+        event: "PLANNING_RUN_CREATE",
+        route: "/api/planning/v2/runs",
+        result: "ERROR",
+        recordId: profileId,
+        message: error.auditMessage,
+      });
+      if (error.kind === "SNAPSHOT_NOT_FOUND") {
+        return jsonError("SNAPSHOT_NOT_FOUND", error.message, {
+          status: error.status,
+          issues: error.issues,
           meta: userMeta,
         });
       }
-    } else {
-      snapshot = await loadLatestAssumptionsSnapshot();
-      snapshotId = snapshot ? await findAssumptionsSnapshotId(snapshot) : undefined;
+      if (error.kind === "SNAPSHOT") {
+        return jsonError("SNAPSHOT", error.message, { status: error.status, meta: userMeta });
+      }
+      return jsonError("INTERNAL", "저장된 가정 오버라이드 로드에 실패했습니다.", {
+        status: error.status,
+        meta: userMeta,
+      });
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load assumptions snapshot";
+
+    const message = error instanceof Error ? error.message : "Failed to resolve run assumptions";
     appendRunAudit({
       event: "PLANNING_RUN_CREATE",
       route: "/api/planning/v2/runs",
@@ -999,63 +965,18 @@ export async function POST(request: Request) {
       recordId: profileId,
       message,
     });
-    return jsonError("SNAPSHOT", message, { status: 500, meta: userMeta });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 
-  let storedAssumptionsOverrides = [] as Awaited<ReturnType<typeof loadAssumptionsOverridesByProfile>>;
-  try {
-    storedAssumptionsOverrides = await loadAssumptionsOverridesByProfile(profileRecord.id);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load assumptions overrides";
-    appendRunAudit({
-      event: "PLANNING_RUN_CREATE",
-      route: "/api/planning/v2/runs",
-      result: "ERROR",
-      recordId: profileId,
-      message,
-    });
-    return jsonError("INTERNAL", "저장된 가정 오버라이드 로드에 실패했습니다.", {
-      status: 500,
-      meta: userMeta,
-    });
-  }
-
-  const mappedFromSnapshot = mapSnapshotToAssumptionsV2(snapshot);
-  const mappedScenarioExtras = mapSnapshotToScenarioExtrasV2(snapshot);
-  const simulationOverrides = toSimulationOverrides(assumptionsOverride);
-  const snapshotAssumptions = toScenarioAssumptionsV2(
-    {
-      ...DEFAULT_ASSUMPTIONS_V2,
-      ...mappedFromSnapshot,
-    },
-    mappedScenarioExtras.extra,
-  );
-  const requestAssumptionsOverrides = toAssumptionsOverridesFromRecord(assumptionsOverride, {
-    reasonPrefix: "run assumptionsOverride",
-  });
   const {
-    effectiveAssumptions,
-    appliedOverrides,
-  } = mergeAssumptionsWithProvenance(
-    snapshotAssumptions,
-    [...storedAssumptionsOverrides, ...requestAssumptionsOverrides],
-  );
-  const baseAssumptions = {
-    ...effectiveAssumptions,
-    ...(simulationOverrides.debtRates ? { debtRates: simulationOverrides.debtRates } : {}),
-  };
-  const finalSimulationAssumptions = {
-    ...toSimulationAssumptionsV2(baseAssumptions),
-    ...(simulationOverrides.debtRates ? { debtRates: simulationOverrides.debtRates } : {}),
-  };
-  const riskTolerance = parseRiskTolerance(canonicalProfile as unknown);
-  const snapshotMeta = buildSnapshotMeta(snapshot, snapshotId);
-  const baseHealth = assessAssumptionsHealth({
-    assumptions: baseAssumptions,
+    snapshot,
+    snapshotId,
     snapshotMeta,
-  });
-  const riskWarnings = assessRiskAssumptionConsistency(riskTolerance, baseAssumptions);
-  const health = combineAssumptionsHealth(baseHealth, [...riskWarnings, ...mappedScenarioExtras.warnings]);
+    baseAssumptions,
+    finalSimulationAssumptions,
+    health,
+    appliedOverrides,
+  } = assumptionsContext;
 
   const monteCarloBudget = monteCarloConfig
     ? checkMonteCarloBudget({
