@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "scannedAt": "2026-06-23",
+  "sourceGlob": "src/**/*.{ts,tsx}",
+  "scanPattern": "localStorage|sessionStorage",
+  "allowedCategories": [
+    "permanent-user-setting",
+    "temporary-draft",
+    "dev-ops-unlock",
+    "legacy-fallback"
+  ],
+  "notes": [
+    "2026-06-23 current scan finds 35 src files, not the older /work note count of 44.",
+    "Files with mixed storage purposes list multiple categories.",
+    "This inventory documents the current client-storage boundary; it does not approve adding new storage references without classification."
+  ],
+  "files": [
+    {
+      "file": "src/app/recommend/page.tsx",
+      "storage": ["localStorage", "sessionStorage"],
+      "categories": ["permanent-user-setting", "temporary-draft"],
+      "purpose": "추천 입력 프로필과 마지막 결과를 보존하고, 자동 실행 중복 방지 신호를 탭 세션에 저장합니다.",
+      "rscPlan": "프로필과 결과는 서버 저장소 또는 URL 기반 run id로 옮길 후보이고, autorun 신호는 탭 단위 client state로 유지합니다."
+    },
+    {
+      "file": "src/components/AlertRulesClient.tsx",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting", "legacy-fallback"],
+      "purpose": "DART 알림 규칙 프로필과 사용자 선호를 보존하고 legacy preference bootstrap을 유지합니다.",
+      "rscPlan": "장기적으로 alert profile/rules API 초기 데이터로 옮기고 legacy bootstrap은 deprecation 후 제거합니다."
+    },
+    {
+      "file": "src/components/AutoMergeClient.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock", "temporary-draft"],
+      "purpose": "auto-merge 실행 전 armed 상태를 탭 세션에 보존합니다.",
+      "rscPlan": "위험 작업 확인 상태이므로 서버 초기 데이터보다 짧은 세션 state로 유지합니다."
+    },
+    {
+      "file": "src/components/BackupClient.tsx",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "백업/복원 화면에서 localStorage allowlist 항목을 내보내고 복원합니다.",
+      "rscPlan": "클라이언트 저장소 복구 도구 성격이므로 서버 초기 데이터로 옮기지 않습니다."
+    },
+    {
+      "file": "src/components/BackupReminderBanner.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["temporary-draft"],
+      "purpose": "백업 안내 배너의 탭 세션 단위 닫힘 상태를 저장합니다.",
+      "rscPlan": "일시적 UI 상태이므로 client state로 유지합니다."
+    },
+    {
+      "file": "src/components/DartCompanyPageClient.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["temporary-draft"],
+      "purpose": "DART 검색에서 회사 상세로 이동한 pending href handoff를 소비한 뒤 제거합니다.",
+      "rscPlan": "페이지 전환 handoff라 URL 상태로 대체 가능하지만 현재는 탭 세션 state로 유지합니다."
+    },
+    {
+      "file": "src/components/DartSearchClient.tsx",
+      "storage": ["localStorage", "sessionStorage"],
+      "categories": ["permanent-user-setting", "temporary-draft"],
+      "purpose": "DART 즐겨찾기/최근 목록은 localStorage에서 읽고, 검색 draft와 pending navigation snapshot은 sessionStorage에 둡니다.",
+      "rscPlan": "즐겨찾기와 최근 목록은 서버 저장소 후보이고, 검색 draft/handoff는 URL query 또는 client state 후보입니다."
+    },
+    {
+      "file": "src/components/DataSourceImpactCardsClient.tsx",
+      "storage": ["localStorage"],
+      "categories": ["temporary-draft"],
+      "purpose": "데이터 소스 ping snapshot 캐시를 읽어 영향 카드의 최근 상태를 보강합니다.",
+      "rscPlan": "운영 freshness API 초기 데이터로 옮길 후보입니다."
+    },
+    {
+      "file": "src/components/DataSourceStatusCard.tsx",
+      "storage": ["localStorage"],
+      "categories": ["temporary-draft"],
+      "purpose": "데이터 소스별 ping snapshot 캐시를 저장하고 다시 읽습니다.",
+      "rscPlan": "운영 freshness/status API 초기 데이터로 옮길 후보입니다."
+    },
+    {
+      "file": "src/components/DoctorSummaryCard.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock"],
+      "purpose": "doctor fix 실행 시 dev action CSRF 값을 sessionStorage에서 읽습니다.",
+      "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
+    },
+    {
+      "file": "src/components/FeedbackDetailClient.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock"],
+      "purpose": "피드백 상세의 dev action unlock과 CSRF 값을 탭 세션에서 읽습니다.",
+      "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
+    },
+    {
+      "file": "src/components/FeedbackFormClient.tsx",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "피드백 제출 시 allowlist local state snapshot을 진단 정보로 첨부합니다.",
+      "rscPlan": "진단 첨부용 fallback이므로 일반 화면 초기 데이터로 옮기지 않습니다."
+    },
+    {
+      "file": "src/components/LabelingClient.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock"],
+      "purpose": "DART labeling dev 작업의 unlock 상태와 CSRF 값을 탭 세션에 저장합니다.",
+      "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
+    },
+    {
+      "file": "src/components/MaintenanceSettingsClient.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock"],
+      "purpose": "maintenance dev 작업의 unlock 상태와 CSRF 값을 탭 세션에 저장합니다.",
+      "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
+    },
+    {
+      "file": "src/components/PlanningRunsClient.tsx",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "Planning runs 화면의 선택 프로필 id를 유지합니다.",
+      "rscPlan": "URL query 또는 서버 초기 선택 상태로 옮길 후보입니다."
+    },
+    {
+      "file": "src/components/ProductListPage.tsx",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting", "legacy-fallback"],
+      "purpose": "상품 비교함 count bootstrap을 위해 현재 shelf와 legacy compare basket을 읽습니다.",
+      "rscPlan": "비교함은 서버 사용자 설정 후보이고 legacy compare key는 migration 종료 후 제거 후보입니다."
+    },
+    {
+      "file": "src/components/RecoveryClient.tsx",
+      "storage": ["localStorage", "sessionStorage"],
+      "categories": ["dev-ops-unlock", "temporary-draft"],
+      "purpose": "recovery dev unlock/CSRF를 sessionStorage에 두고 localStorage allowlist 초기화를 수행합니다.",
+      "rscPlan": "복구 도구와 위험 작업 토큰이므로 서버 초기 데이터로 옮기지 않습니다."
+    },
+    {
+      "file": "src/components/ReportClient.tsx",
+      "storage": ["localStorage"],
+      "categories": ["legacy-fallback"],
+      "purpose": "마지막 planner snapshot을 fallback report 데이터로 읽습니다.",
+      "rscPlan": "report run id 기반 서버 데이터로 대체하고 fallback은 deprecation 후보입니다."
+    },
+    {
+      "file": "src/components/RulesOpsClient.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock"],
+      "purpose": "rules ops dev 작업의 unlock 상태와 CSRF 값을 탭 세션에 저장합니다.",
+      "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
+    },
+    {
+      "file": "src/components/StickyAgendaBar.tsx",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock"],
+      "purpose": "sticky agenda dev action에서 unlock 상태와 CSRF 값을 탭 세션에서 읽습니다.",
+      "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
+    },
+    {
+      "file": "src/components/data/DataFreshnessBanner.tsx",
+      "storage": ["localStorage", "sessionStorage"],
+      "categories": ["permanent-user-setting", "temporary-draft"],
+      "purpose": "auto-smoke 사용자 설정을 localStorage에, path별 한 번 실행 플래그를 sessionStorage에 저장합니다.",
+      "rscPlan": "auto-smoke 설정은 운영 설정 API 후보이고 run-once 플래그는 client state로 유지합니다."
+    },
+    {
+      "file": "src/components/opsDashboard/useOpsDashboardController.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting", "temporary-draft"],
+      "purpose": "ops dashboard 자동 실행 결과, 선택, 정책과 scheduler failure 알림 중복 방지 상태를 보존합니다.",
+      "rscPlan": "자동 실행 정책은 ops 설정 API 후보이고 알림 중복 방지는 client state 후보입니다."
+    },
+    {
+      "file": "src/components/planning/workspace/useWorkspaceExecutionOptionsBundle.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "Planning workspace beginner mode 선호를 저장합니다.",
+      "rscPlan": "사용자 설정 API 또는 서버 초기 preference로 옮길 후보입니다."
+    },
+    {
+      "file": "src/components/planning/workspace/useWorkspaceProfileBundle.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "Planning workspace의 선택 프로필 id를 유지합니다.",
+      "rscPlan": "URL query 또는 서버 초기 선택 상태로 옮길 후보입니다."
+    },
+    {
+      "file": "src/lib/dart/alertPreferences.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "DART alert preference를 localStorage에서 읽는 user preference helper입니다.",
+      "rscPlan": "alert settings API가 안정화되면 legacy local helper 제거 후보입니다."
+    },
+    {
+      "file": "src/lib/dart/alertRulesStore.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "DART alert rules store의 localStorage adapter입니다.",
+      "rscPlan": "alert rules API로 옮길 후보입니다."
+    },
+    {
+      "file": "src/lib/dart/alertStateStore.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "DART alert state store의 localStorage adapter입니다.",
+      "rscPlan": "alert state API 또는 user-scoped repository 후보입니다."
+    },
+    {
+      "file": "src/lib/dart/dartDisclosureStore.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "DART disclosure local store adapter입니다.",
+      "rscPlan": "DART 사용자별 저장소 또는 API 후보입니다."
+    },
+    {
+      "file": "src/lib/dart/dartStore.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "DART favorites, recent items, recent searches의 localStorage adapter입니다.",
+      "rscPlan": "사용자별 DART repository/API 후보입니다."
+    },
+    {
+      "file": "src/lib/dev/clientCsrf.ts",
+      "storage": ["sessionStorage"],
+      "categories": ["dev-ops-unlock"],
+      "purpose": "dev action CSRF 값을 sessionStorage에서 읽고 씁니다.",
+      "rscPlan": "위험 작업 토큰은 서버 초기 데이터로 노출하지 않고 세션/서버 검증 경계로 유지합니다."
+    },
+    {
+      "file": "src/lib/planner/checklistStorage.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "planner checklist checked 상태를 보존합니다.",
+      "rscPlan": "사용자 preference API 후보입니다."
+    },
+    {
+      "file": "src/lib/planner/storage.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "legacy planner snapshot 목록을 localStorage에 저장합니다.",
+      "rscPlan": "Planning run/report 서버 저장소로 대체하고 legacy snapshot은 deprecation 후보입니다."
+    },
+    {
+      "file": "src/lib/planner/uiPrefs.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting"],
+      "purpose": "planner link open mode preference를 저장합니다.",
+      "rscPlan": "사용자 preference API 후보입니다."
+    },
+    {
+      "file": "src/lib/recommend/savedRunsStore.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting", "legacy-fallback"],
+      "purpose": "recommend saved runs local store adapter입니다.",
+      "rscPlan": "recommend run 서버 저장소로 옮기고 local saved runs는 migration/deprecation 후보입니다."
+    },
+    {
+      "file": "src/lib/state/productShelf.ts",
+      "storage": ["localStorage"],
+      "categories": ["permanent-user-setting", "legacy-fallback"],
+      "purpose": "상품 shelf와 legacy compare basket을 localStorage에 저장하고 migration 형태로 함께 갱신합니다.",
+      "rscPlan": "비교함은 사용자별 서버 저장소 후보이고 legacy compare key는 migration 종료 후 제거 후보입니다."
+    }
+  ]
+}
