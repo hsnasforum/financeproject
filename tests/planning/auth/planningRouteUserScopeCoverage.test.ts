@@ -527,7 +527,7 @@ const RAW_SUCCESS_RESPONSE_PATTERNS = [
 
 const RAW_RESPONSE_GUARD_PATTERNS = [
   "withPlanningRouteUser(request",
-  "getCurrentUserReport(",
+  "getCurrentUserReportMarkdownDownload(",
   "\"content-type\": \"text/markdown; charset=utf-8\"",
   "\"content-disposition\": `attachment;",
   "\"cache-control\": \"no-store\"",

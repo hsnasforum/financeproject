@@ -183,4 +183,17 @@ describe("planning reports api", () => {
     expect(deletePayload.ok).toBe(true);
     expect(deletePayload.data?.deleted).toBe(true);
   });
+
+  it("keeps report markdown download route behind the download service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/reports/[id]/download/route.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("/planning/server/reports/downloadRouteService");
+    expect(routeSource).not.toContain("/planning/server/reports/repository");
+    expect(routeSource).not.toContain("getCurrentUserReport(");
+    expect(routeSource).toContain("\"content-type\": \"text/markdown; charset=utf-8\"");
+    expect(routeSource).toContain("\"cache-control\": \"no-store\"");
+  });
 });

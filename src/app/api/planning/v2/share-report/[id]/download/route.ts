@@ -3,7 +3,7 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { getCurrentUserShareReport } from "../../../../../../../lib/planning/server/share/repository";
+import { getCurrentUserShareReportMarkdownDownload } from "../../../../../../../lib/planning/server/share/downloadRouteService";
 import {
   isPlanningRouteUser,
   planningUserMeta,
@@ -34,15 +34,15 @@ export async function GET(request: Request, context: RouteContext) {
 
   try {
     const { id } = await context.params;
-    const report = await getCurrentUserShareReport(id);
-    if (!report) {
+    const download = await getCurrentUserShareReportMarkdownDownload(id);
+    if (!download) {
       return jsonError("NO_DATA", "공유 리포트를 찾을 수 없습니다.", { meta: userMeta });
     }
-    return new Response(report.markdown, {
+    return new Response(download.markdown, {
       status: 200,
       headers: {
         "content-type": "text/markdown; charset=utf-8",
-        "content-disposition": `attachment; filename="planning-share-${report.meta.id}.md"`,
+        "content-disposition": `attachment; filename="${download.filename}"`,
         "cache-control": "no-store",
       },
     });

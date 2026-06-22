@@ -3,7 +3,7 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { getCurrentUserReport } from "../../../../../../../lib/planning/server/reports/repository";
+import { getCurrentUserReportMarkdownDownload } from "../../../../../../../lib/planning/server/reports/downloadRouteService";
 import {
   planningAuthErrorResponse as toAuthErrorResponse,
   withPlanningRouteUser,
@@ -32,16 +32,16 @@ export async function GET(request: Request, context: RouteContext) {
     return await withPlanningRouteUser(request, async () => {
       try {
         const { id } = await context.params;
-        const report = await getCurrentUserReport(id);
-        if (!report) {
+        const download = await getCurrentUserReportMarkdownDownload(id);
+        if (!download) {
           return jsonError("NO_DATA", "리포트를 찾을 수 없습니다.");
         }
 
-        return new Response(report.markdown, {
+        return new Response(download.markdown, {
           status: 200,
           headers: {
             "content-type": "text/markdown; charset=utf-8",
-            "content-disposition": `attachment; filename="planning-report-${report.meta.id}.md"`,
+            "content-disposition": `attachment; filename="${download.filename}"`,
             "cache-control": "no-store",
           },
         });

@@ -137,4 +137,17 @@ describe("planning share report routes", () => {
     expect(downloadRes.headers.get("content-disposition")).toContain(`planning-share-${shareId}.md`);
     expect(markdown).toContain("가정 기반이며 보장이 아니며, 투자/가입 권유가 아닙니다.");
   });
+
+  it("keeps share markdown download route behind the download service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/share-report/[id]/download/route.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("/planning/server/share/downloadRouteService");
+    expect(routeSource).not.toContain("/planning/server/share/repository");
+    expect(routeSource).not.toContain("getCurrentUserShareReport(");
+    expect(routeSource).toContain("\"content-type\": \"text/markdown; charset=utf-8\"");
+    expect(routeSource).toContain("\"cache-control\": \"no-store\"");
+  });
 });
