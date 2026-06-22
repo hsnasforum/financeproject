@@ -119,6 +119,12 @@ async function main() {
     plan.push({ name: "news:refresh", required: true, runnable: false, reason: "script_not_found" });
   }
 
+  if (typeof scripts["indicators:refresh"] === "string" && scripts["indicators:refresh"].trim()) {
+    plan.push({ name: "indicators:refresh", required: true, runnable: true });
+  } else {
+    plan.push({ name: "indicators:refresh", required: true, runnable: false, reason: "script_not_found" });
+  }
+
   if (typeof scripts["dart:watch"] === "string" && scripts["dart:watch"].trim()) {
     plan.push({ name: "dart:watch", required: true, runnable: true });
   } else {

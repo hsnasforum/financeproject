@@ -147,15 +147,55 @@ function collectTrackedWorkNotes() {
   return collectWorkNotes(WORK_DIR).filter((filePath) => ensureTracked(filePath));
 }
 
+function gitOutput(args) {
+  const result = spawnSync("git", args, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  if (result.status !== 0) return "";
+  return result.stdout ?? "";
+}
+
+function collectChangedWorkNotes() {
+  const changed = new Set();
+  for (const args of [
+    ["diff", "--name-only", "HEAD"],
+    ["diff", "--name-only", "HEAD^", "HEAD"],
+  ]) {
+    for (const filePath of gitOutput(args).split(/\r?\n/)) {
+      if (!WORK_NOTE_PATH_RE.test(filePath)) continue;
+      changed.add(filePath);
+    }
+  }
+  return [...changed].filter((filePath) => fs.existsSync(filePath) && ensureTracked(filePath));
+}
+
+function workNoteSortKey(filePath) {
+  const match = WORK_NOTE_PATH_RE.exec(filePath);
+  if (!match) return "";
+  const [, monthDir, dayDir, year, monthFile, dayFile] = match;
+  return [
+    year,
+    monthFile,
+    dayFile,
+    String(Number(monthDir)).padStart(2, "0"),
+    String(Number(dayDir)).padStart(2, "0"),
+    filePath,
+  ].join("/");
+}
+
 function getLatestWorkNote({ trackedOnly = false } = {}) {
-  const notes = trackedOnly ? collectTrackedWorkNotes() : collectWorkNotes(WORK_DIR);
+  const changedWorkNotes = collectChangedWorkNotes();
+  const notes = changedWorkNotes.length > 0
+    ? changedWorkNotes
+    : (trackedOnly ? collectTrackedWorkNotes() : collectWorkNotes(WORK_DIR));
   if (notes.length < 1) return null;
   return notes
     .map((filePath) => ({
       filePath,
-      mtimeMs: fs.statSync(filePath).mtimeMs,
+      sortKey: workNoteSortKey(filePath),
     }))
-    .sort((left, right) => right.mtimeMs - left.mtimeMs || left.filePath.localeCompare(right.filePath))[0]?.filePath ?? null;
+    .sort((left, right) => right.sortKey.localeCompare(left.sortKey) || left.filePath.localeCompare(right.filePath))[0]?.filePath ?? null;
 }
 
 function validateLatestWorkNote(filePath) {
