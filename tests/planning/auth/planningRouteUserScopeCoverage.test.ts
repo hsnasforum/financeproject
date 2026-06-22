@@ -589,6 +589,8 @@ const FORBIDDEN_ROUTE_STORE_IMPORT_PATTERNS = [
   "/planning/server/cache/storage",
   "@/lib/planning/server/assumptions/storage",
   "/planning/server/assumptions/storage",
+  "@/lib/planning/assumptions/storage",
+  "/planning/assumptions/storage",
   "@/lib/planning/server/assumptions/overridesStorage",
   "/planning/server/assumptions/overridesStorage",
   "@/lib/planning/v3/drafts/draftStore",

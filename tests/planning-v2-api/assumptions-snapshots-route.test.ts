@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
@@ -53,6 +55,24 @@ describe("GET /api/planning/v2/assumptions/snapshots", () => {
     vi.useRealTimers();
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
+  });
+
+  it("keeps snapshot storage behind the route service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/assumptions/snapshots/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/assumptions/snapshotsRouteService.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).not.toContain("planning/assumptions/storage");
+    expect(routeSource).not.toContain("listAssumptionsHistory");
+    expect(routeSource).not.toContain("loadAssumptionsSnapshotById");
+    expect(routeSource).toContain("listRouteAssumptionsSnapshots");
+    expect(serviceSource).toContain("listAssumptionsHistory");
+    expect(serviceSource).toContain("loadAssumptionsSnapshotById");
   });
 
   it("returns latest + history snapshot list with staleDays", async () => {
