@@ -1,26 +1,19 @@
-import { execFile } from "node:child_process";
-import fs from "node:fs/promises";
-import path from "node:path";
-import { promisify } from "node:util";
 import { NextResponse } from "next/server";
 import { assertLocalHost, assertSameOrigin, toGuardErrorResponse } from "../../../../../../lib/dev/devGuards";
-import { getCorpIndexStatus, invalidateCorpIndexCache, resolveCorpCodesIndexPath } from "../../../../../../lib/publicApis/dart/corpIndex";
+import { buildCorpCodesIndex } from "../../../../../../lib/publicApis/dart/corpIndexBuildService";
+import { canBuildCorpIndex } from "../../../../../../lib/publicApis/dart/indexBuildGuard";
 
 export const runtime = "nodejs";
-
-const execFileAsync = promisify(execFile);
-const MAX_TAIL_LENGTH = 2_000;
-
-type BuildResult = { ok: true; stdout: string; stderr: string } | { ok: false; message: string; stdout: string; stderr: string };
-
-type ExecFileFailure = Error & { code?: string; stdout?: string; stderr?: string };
 
 export async function POST(request: Request) {
   const nodeEnv = (process.env.NODE_ENV ?? "development").trim();
   if (nodeEnv === "production") {
-    const expected = (process.env.DART_INDEX_BUILD_TOKEN ?? "").trim();
-    const provided = (request.headers.get("x-build-token") ?? "").trim();
-    if (!expected || expected !== provided) {
+    const guard = canBuildCorpIndex({
+      nodeEnv,
+      configuredToken: process.env.DART_INDEX_BUILD_TOKEN,
+      requestToken: request.headers.get("x-build-token"),
+    });
+    if (!guard.allowed) {
       return NextResponse.json(
         {
           ok: false,
@@ -51,102 +44,6 @@ export async function POST(request: Request) {
     }
   }
 
-  const start = Date.now();
-  const outPath = resolveCorpCodesIndexPath().primary;
-  const useBuildStub = (process.env.DART_E2E_BUILD_STUB ?? "").trim() === "1";
-
-  if (useBuildStub) {
-    try {
-      const stubFixturePath = path.join(process.cwd(), "tests", "fixtures", "dart", "corpCodes.index.sample.json");
-      await runBuildStub(stubFixturePath, outPath);
-      invalidateCorpIndexCache();
-      return NextResponse.json({
-        ok: true,
-        outPath,
-        tookMs: Date.now() - start,
-        status: getCorpIndexStatus(),
-      });
-    } catch (error) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "stub 인덱스 생성에 실패했습니다.",
-          stderrTail: error instanceof Error ? sanitizeTail(error.message) : "unknown",
-        },
-        { status: 500 },
-      );
-    }
-  }
-
-  const scriptPath = path.join(process.cwd(), "scripts", "dart_corpcode_build.py");
-
-  const built = await runBuild(scriptPath, outPath);
-  const tookMs = Date.now() - start;
-
-  if (!built.ok) {
-    return NextResponse.json(
-      {
-        ok: false,
-        message: built.message,
-        stdoutTail: sanitizeTail(built.stdout),
-        stderrTail: sanitizeTail(built.stderr),
-      },
-      { status: 500 },
-    );
-  }
-
-  invalidateCorpIndexCache();
-  return NextResponse.json({
-    ok: true,
-    outPath,
-    tookMs,
-    status: getCorpIndexStatus(),
-  });
-}
-
-async function runBuildStub(fixturePath: string, outPath: string): Promise<void> {
-  await fs.mkdir(path.dirname(outPath), { recursive: true });
-  await fs.copyFile(fixturePath, outPath);
-}
-
-async function runBuild(scriptPath: string, outPath: string): Promise<BuildResult> {
-  try {
-    const result = await execFileAsync("python3", [scriptPath, "--out", outPath], {
-      cwd: process.cwd(),
-      timeout: 120_000,
-      maxBuffer: 1024 * 1024,
-    });
-    return {
-      ok: true,
-      stdout: result.stdout ?? "",
-      stderr: result.stderr ?? "",
-    };
-  } catch (error) {
-    const failure = error as ExecFileFailure;
-    if (failure.code === "ENOENT") {
-      return {
-        ok: false,
-        message: "python3를 찾을 수 없습니다.",
-        stdout: "",
-        stderr: "python3 executable not found",
-      };
-    }
-
-    return {
-      ok: false,
-      message: "corpCodes 인덱스 생성에 실패했습니다.",
-      stdout: failure.stdout ?? "",
-      stderr: failure.stderr ?? failure.message ?? "",
-    };
-  }
-}
-
-function sanitizeTail(input: string): string {
-  const masked = input
-    .replace(/crtfc_key=[^&\s]+/gi, "crtfc_key=***")
-    .replace(/opendart_api_key\s*=\s*[^\s]+/gi, "OPENDART_API_KEY=***")
-    .trim();
-
-  if (masked.length <= MAX_TAIL_LENGTH) return masked;
-  return masked.slice(-MAX_TAIL_LENGTH);
+  const result = await buildCorpCodesIndex();
+  return NextResponse.json(result.payload, { status: result.status });
 }
