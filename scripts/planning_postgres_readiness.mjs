@@ -480,6 +480,10 @@ function manifestChecksum(input) {
   return sha256(Buffer.from(JSON.stringify(input), "utf-8"));
 }
 
+function applyPlanChecksum(input) {
+  return sha256(Buffer.from(JSON.stringify(input), "utf-8"));
+}
+
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -1134,6 +1138,66 @@ function simulateDryRunApply(operations) {
   };
 }
 
+function operationPlanEntry(operation) {
+  const row = isRecord(operation.row) ? operation.row : {};
+  const rawJson = isRecord(row.rawJson) ? row.rawJson : {};
+  return {
+    table: operation.table,
+    key: operation.key,
+    userId: asString(row.userId) || null,
+    source: asString(rawJson.source) || asString(row.source) || null,
+    rowChecksum: applyPlanChecksum({
+      table: operation.table,
+      key: operation.key,
+      row: operation.row,
+    }),
+  };
+}
+
+function buildApplyPlanArtifact(manifest, exported, operations, applySimulation) {
+  const planBody = {
+    kind: "planning-postgres-readiness-apply-plan",
+    version: MANIFEST_VERSION,
+    manifestChecksum: manifest.checksum,
+    exportManifestChecksum: exported.checksum,
+    sourceRoot: manifest.root,
+    filesRoot: exported.filesRoot || null,
+    operationCount: operations.length,
+    targetTables: applySimulation.tableCounts,
+    checks: {
+      idempotentUpsert: applySimulation.idempotentUpsert,
+      rollbackOnFailure: applySimulation.rollbackOnFailure,
+      referentialIntegrity: applySimulation.referentialIntegrity.status,
+    },
+    operations: operations.map(operationPlanEntry),
+  };
+
+  return {
+    ...planBody,
+    checksum: applyPlanChecksum(planBody),
+  };
+}
+
+async function writeApplyPlanArtifact(root, exported, artifact) {
+  if (!exported.written || !exported.manifestPath) {
+    return {
+      written: false,
+      path: "",
+      checksum: artifact.checksum,
+      reason: "out_dir_not_provided",
+    };
+  }
+
+  const manifestPath = path.resolve(root, exported.manifestPath);
+  const planPath = path.join(path.dirname(manifestPath), "apply-plan.json");
+  await writeJsonAtomic(planPath, artifact);
+  return {
+    written: true,
+    path: normalizeRelPath(path.relative(root, planPath)),
+    checksum: artifact.checksum,
+  };
+}
+
 async function buildManifest(root, options) {
   const dataDir = path.resolve(root, options.dataDir);
   const sqlite = await schemaSummary(root, options.sqliteSchema);
@@ -1245,6 +1309,8 @@ async function buildDryRunApplyPlan(root, options, manifest, exported) {
   const sourceFilesMatchExport = JSON.stringify(manifest.files) === JSON.stringify(exported.files);
   const { operations, targetedFiles, skippedRecords } = await buildDryRunApplyOperations(root, options, manifest, exported);
   const applySimulation = simulateDryRunApply(operations);
+  const applyPlanArtifact = buildApplyPlanArtifact(manifest, exported, operations, applySimulation);
+  const applyPlanExport = await writeApplyPlanArtifact(root, exported, applyPlanArtifact);
 
   return {
     sourceMutation: false,
@@ -1298,6 +1364,13 @@ async function buildDryRunApplyPlan(root, options, manifest, exported) {
         referentialIntegrity: applySimulation.referentialIntegrity,
         rollbackOnFailure: applySimulation.rollbackOnFailure,
         rollbackProbe: applySimulation.rollbackProbe,
+        applyPlan: {
+          written: applyPlanExport.written,
+          path: applyPlanExport.path || undefined,
+          reason: applyPlanExport.reason || undefined,
+          checksum: applyPlanExport.checksum,
+          operationCount: operations.length,
+        },
       },
       {
         name: "checksum-compare",

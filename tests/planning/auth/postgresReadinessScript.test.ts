@@ -174,7 +174,8 @@ describe("planning postgres readiness script", () => {
 
     expect(result.status).toBe(0);
     const payload = parseStdout(result.stdout);
-    expect(findStep(payload, "dry-run-apply")).toMatchObject({
+    const dryRunApplyStep = findStep(payload, "dry-run-apply");
+    expect(dryRunApplyStep).toMatchObject({
       status: "PASS",
       targetedFiles: 2,
       skippedRecords: 0,
@@ -191,7 +192,32 @@ describe("planning postgres readiness script", () => {
         appliedBeforeFailure: 1,
         rollbackDigestUnchanged: true,
       },
+      applyPlan: {
+        written: true,
+        operationCount: 2,
+      },
     });
+    const applyPlanPath = path.join(outDir, "apply-plan.json");
+    const applyPlan = JSON.parse(fs.readFileSync(applyPlanPath, "utf-8")) as {
+      kind?: string;
+      checksum?: string;
+      operationCount?: number;
+      operations?: Array<{ table?: string; userId?: string; rowChecksum?: string }>;
+    };
+    expect(applyPlan).toMatchObject({
+      kind: "planning-postgres-readiness-apply-plan",
+      operationCount: 2,
+    });
+    expect(applyPlan.checksum).toMatch(/^[a-f0-9]{64}$/u);
+    expect((dryRunApplyStep.applyPlan as { checksum?: string }).checksum).toBe(applyPlan.checksum);
+    expect(applyPlan.operations).toHaveLength(2);
+    expect(new Set(applyPlan.operations?.map((operation) => operation.table))).toEqual(
+      new Set(["financialAccounts", "openingBalances"]),
+    );
+    expect(applyPlan.operations?.every((operation) => operation.userId === "alice")).toBe(true);
+    expect(applyPlan.operations?.every((operation) => /^[a-f0-9]{64}$/u.test(operation.rowChecksum ?? ""))).toBe(true);
+    expect(JSON.stringify(applyPlan)).not.toContain("월급 통장");
+    expect(JSON.stringify(applyPlan)).not.toContain("1250000");
     expect(fs.readFileSync(accountsPath, "utf-8")).toContain("월급 통장");
     expect(fs.readFileSync(balancesPath, "utf-8")).toContain("1250000");
   });
