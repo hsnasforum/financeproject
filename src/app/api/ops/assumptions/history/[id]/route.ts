@@ -7,8 +7,12 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
+import { getOpsAssumptionsHistorySnapshot } from "@/lib/ops/assumptions/assumptionsHistoryRouteService";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
-import { loadAssumptionsSnapshotById } from "@/lib/planning/assumptions/storage";
+import {
+  isPlanningRouteUser,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -56,26 +60,32 @@ export async function GET(
     });
   }
 
-  try {
-    const snapshot = await loadAssumptionsSnapshotById(id);
-    if (!snapshot) {
-      return opsErrorResponse({
-        code: "STALE_ASSUMPTIONS",
-        message: "요청한 스냅샷을 찾을 수 없습니다.",
-        status: 404,
-      });
-    }
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-    return NextResponse.json({
-      ok: true,
-      snapshotId: id,
-      snapshot,
+  const result = await getOpsAssumptionsHistorySnapshot({
+    currentUser,
+    snapshotId: id,
+  });
+  if (result.kind === "missing") {
+    return opsErrorResponse({
+      code: "STALE_ASSUMPTIONS",
+      message: "요청한 스냅샷을 찾을 수 없습니다.",
+      status: 404,
     });
-  } catch (error) {
+  }
+  if (result.kind === "storage-corrupt") {
     return opsErrorResponse({
       code: "STORAGE_CORRUPT",
-      message: error instanceof Error ? error.message : "스냅샷 상세 조회에 실패했습니다.",
+      message: result.message,
       status: 500,
     });
   }
+
+  return NextResponse.json({
+    ok: true,
+    snapshotId: result.snapshotId,
+    snapshot: result.snapshot,
+    meta: result.meta,
+  });
 }

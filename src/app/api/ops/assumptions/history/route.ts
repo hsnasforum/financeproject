@@ -7,18 +7,12 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
+import { listOpsAssumptionsHistory } from "@/lib/ops/assumptions/assumptionsHistoryRouteService";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
-import { listAssumptionsHistory, loadAssumptionsSnapshotById } from "@/lib/planning/assumptions/storage";
-import { type AssumptionsSnapshot } from "@/lib/planning/assumptions/types";
-
-type SnapshotHistorySummary = {
-  id: string;
-  asOf?: string;
-  fetchedAt: string;
-  warningsCount: number;
-  sourcesCount: number;
-  korea: AssumptionsSnapshot["korea"];
-};
+import {
+  isPlanningRouteUser,
+  requirePlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -59,31 +53,24 @@ export async function GET(request: Request) {
     });
   }
 
-  try {
-    const refs = await listAssumptionsHistory(limit);
-    const summaries = (await Promise.all(refs.map(async (ref) => {
-      const snapshot = await loadAssumptionsSnapshotById(ref.id);
-      if (!snapshot) return null;
-      const row: SnapshotHistorySummary = {
-        id: ref.id,
-        ...(snapshot.asOf ? { asOf: snapshot.asOf } : {}),
-        fetchedAt: snapshot.fetchedAt,
-        warningsCount: snapshot.warnings.length,
-        sourcesCount: snapshot.sources.length,
-        korea: snapshot.korea,
-      };
-      return row;
-    }))).filter((row): row is SnapshotHistorySummary => Boolean(row));
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-    return NextResponse.json({
-      ok: true,
-      items: summaries,
-    });
-  } catch (error) {
+  const result = await listOpsAssumptionsHistory({
+    currentUser,
+    limit,
+  });
+  if (result.kind === "storage-corrupt") {
     return opsErrorResponse({
       code: "STORAGE_CORRUPT",
-      message: error instanceof Error ? error.message : "스냅샷 히스토리 조회에 실패했습니다.",
+      message: result.message,
       status: 500,
     });
   }
+
+  return NextResponse.json({
+    ok: true,
+    items: result.items,
+    meta: result.meta,
+  });
 }
