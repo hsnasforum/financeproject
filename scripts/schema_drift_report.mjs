@@ -109,6 +109,12 @@ function fingerprintMap(fingerprint, matchers) {
   return map;
 }
 
+function isTypeNarrowing(baselineTypes, currentTypes) {
+  if (currentTypes.length >= baselineTypes.length) return false;
+  const baselineTypeSet = new Set(baselineTypes);
+  return currentTypes.every((type) => baselineTypeSet.has(type));
+}
+
 function diffSchemaFingerprint(baseline, current, options = {}) {
   const ignoreMatchers = buildIgnoreMatchers(options.ignorePaths ?? []);
   const baselineMap = fingerprintMap(baseline, ignoreMatchers);
@@ -133,7 +139,8 @@ function diffSchemaFingerprint(baseline, current, options = {}) {
       continue;
     }
     if (inBaseline && inCurrent && baselineTypes.join("|") !== currentTypes.join("|")) {
-      breaking.push({ change: "type_changed", path: pathText, baselineTypes, currentTypes });
+      const target = isTypeNarrowing(baselineTypes, currentTypes) ? nonBreaking : breaking;
+      target.push({ change: "type_changed", path: pathText, baselineTypes, currentTypes });
     }
   }
   return { breaking, nonBreaking };

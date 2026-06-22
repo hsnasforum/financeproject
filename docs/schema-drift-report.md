@@ -1,6 +1,6 @@
 # Schema Drift Report
 
-- Generated at: 2026-05-25T20:59:49.855Z
+- Generated at: 2026-06-22T21:22:55.622Z
 - Mode: check
 - Snapshot dir: `.data`
 - Fingerprint options: maxDepth=8, arraySampleSize=3
@@ -13,7 +13,7 @@
 | benefits_snapshot_partial.json | 0 | 0 |
 | benefits_snapshot.json | 0 | 0 |
 | exchange_snapshot.json | 0 | 0 |
-| finlife_credit-loan_snapshot.json | 0 | 0 |
+| finlife_credit-loan_snapshot.json | 0 | 1 |
 | finlife_deposit_snapshot.json | 0 | 0 |
 | finlife_mortgage-loan_snapshot.json | 0 | 0 |
 | finlife_pension_snapshot.json | 0 | 0 |
@@ -27,4 +27,6 @@
 
 ## Non-breaking Changes
 
-- 없음
+### finlife_credit-loan_snapshot.json
+
+- `type_changed` `$.items[].options[].raw.crdt_grad_5` (null|number -> number)

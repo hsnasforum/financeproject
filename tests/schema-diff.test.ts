@@ -53,4 +53,28 @@ describe("schema diff", () => {
     expect(diff.breaking).toEqual([]);
     expect(diff.nonBreaking).toEqual([]);
   });
+
+  it("classifies type narrowing as non-breaking", () => {
+    const baseline = createSchemaFingerprint({
+      items: [
+        { value: null },
+        { value: 1 },
+      ],
+    });
+    const current = createSchemaFingerprint({
+      items: [
+        { value: 1 },
+      ],
+    });
+
+    const diff = diffSchemaFingerprint(baseline, current);
+
+    expect(diff.breaking).toEqual([]);
+    expect(diff.nonBreaking).toContainEqual({
+      change: "type_changed",
+      path: "$.items[].value",
+      baselineTypes: ["null", "number"],
+      currentTypes: ["number"],
+    });
+  });
 });

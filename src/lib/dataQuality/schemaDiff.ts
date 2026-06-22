@@ -45,6 +45,12 @@ function normalizeTypes(types: readonly SchemaValueType[]): SchemaValueType[] {
   return [...new Set(types)].sort((a, b) => a.localeCompare(b));
 }
 
+function isTypeNarrowing(baselineTypes: readonly SchemaValueType[], currentTypes: readonly SchemaValueType[]): boolean {
+  if (currentTypes.length >= baselineTypes.length) return false;
+  const baselineTypeSet = new Set(baselineTypes);
+  return currentTypes.every((type) => baselineTypeSet.has(type));
+}
+
 function fingerprintMap(
   fingerprint: SchemaFingerprint,
   matchers: RegExp[],
@@ -102,7 +108,8 @@ export function diffSchemaFingerprint(
     if (!inBaseline || !inCurrent) continue;
 
     if (baselineTypes.join("|") !== currentTypes.join("|")) {
-      breaking.push({
+      const target = isTypeNarrowing(baselineTypes, currentTypes) ? nonBreaking : breaking;
+      target.push({
         change: "type_changed",
         path,
         baselineTypes,
