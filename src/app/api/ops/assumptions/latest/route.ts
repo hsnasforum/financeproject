@@ -7,8 +7,12 @@ import {
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
+import { loadOpsLatestAssumptions } from "../../../../../lib/ops/assumptions/assumptionsLatestRouteService";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import { findAssumptionsSnapshotId, loadLatestAssumptionsSnapshot } from "../../../../../lib/planning/assumptions/storage";
+import {
+  isPlanningRouteUser,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -42,26 +46,29 @@ export async function GET(request: Request) {
     });
   }
 
-  try {
-    const snapshot = await loadLatestAssumptionsSnapshot();
-    if (!snapshot) {
-      return opsErrorResponse({
-        code: "STALE_ASSUMPTIONS",
-        message: "저장된 가정 스냅샷이 없습니다.",
-        status: 409,
-      });
-    }
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-    return NextResponse.json({
-      ok: true,
-      snapshot,
-      snapshotId: await findAssumptionsSnapshotId(snapshot),
+  const result = await loadOpsLatestAssumptions({ currentUser });
+  if (result.kind === "missing") {
+    return opsErrorResponse({
+      code: "STALE_ASSUMPTIONS",
+      message: "저장된 가정 스냅샷이 없습니다.",
+      status: 409,
     });
-  } catch (error) {
+  }
+  if (result.kind === "storage-corrupt") {
     return opsErrorResponse({
       code: "STORAGE_CORRUPT",
-      message: error instanceof Error ? error.message : "가정 스냅샷 조회에 실패했습니다.",
+      message: result.message,
       status: 500,
     });
   }
+
+  return NextResponse.json({
+    ok: true,
+    snapshot: result.snapshot,
+    snapshotId: result.snapshotId,
+    meta: result.meta,
+  });
 }

@@ -97,6 +97,88 @@ describe("ops assumptions routes", () => {
     expect(loadLatestAssumptionsSnapshotMock).toHaveBeenCalledTimes(1);
   });
 
+  it("returns latest snapshot with current planning user meta", async () => {
+    const snapshot = {
+      version: 1,
+      asOf: "2026-02-28",
+      fetchedAt: "2026-02-28T00:00:00.000Z",
+      korea: {
+        policyRatePct: 2.5,
+        baseRatePct: 2.5,
+        cpiYoYPct: 2,
+        coreCpiYoYPct: 2,
+        newDepositAvgPct: 2.78,
+        newLoanAvgPct: 4.24,
+      },
+      sources: [
+        { name: "BOK", url: "https://example.com/bok", fetchedAt: "2026-02-28T00:00:00.000Z" },
+      ],
+      warnings: [],
+    };
+    loadLatestAssumptionsSnapshotMock.mockResolvedValue(snapshot);
+    findAssumptionsSnapshotIdMock.mockResolvedValue("2026-02-28_2026-02-28-00-00-00");
+
+    const response = await latestGET(buildGetRequest());
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      snapshot?: unknown;
+      snapshotId?: string;
+      meta?: {
+        userId?: string;
+        authSource?: string;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.snapshot).toEqual(snapshot);
+    expect(payload.snapshotId).toBe("2026-02-28_2026-02-28-00-00-00");
+    expect(payload.meta).toEqual({
+      userId: "default",
+      authSource: "local-namespace",
+    });
+    expect(loadLatestAssumptionsSnapshotMock).toHaveBeenCalledTimes(1);
+    expect(findAssumptionsSnapshotIdMock).toHaveBeenCalledWith(snapshot);
+  });
+
+  it("blocks latest snapshot reads without a planning auth signal when fallback is not explicit", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+
+    const response = await latestGET(buildGetRequest());
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string } };
+
+    expect(response.status).toBe(401);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("UNAUTHENTICATED");
+    expect(loadLatestAssumptionsSnapshotMock).not.toHaveBeenCalled();
+    expect(findAssumptionsSnapshotIdMock).not.toHaveBeenCalled();
+  });
+
+  it("redacts secret-like latest lookup errors before returning them", async () => {
+    const snapshot = {
+      version: 1,
+      asOf: "2026-02-28",
+      fetchedAt: "2026-02-28T00:00:00.000Z",
+      korea: {
+        baseRatePct: 2.5,
+      },
+      sources: [],
+      warnings: [],
+    };
+    loadLatestAssumptionsSnapshotMock.mockResolvedValue(snapshot);
+    findAssumptionsSnapshotIdMock.mockRejectedValue(new Error("process.env.SECRET_TOKEN=bad"));
+
+    const response = await latestGET(buildGetRequest());
+    const payload = (await response.json()) as { ok?: boolean; error?: { code?: string; message?: string } };
+
+    expect(response.status).toBe(500);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("STORAGE_CORRUPT");
+    expect(payload.error?.message).not.toContain("process.env");
+    expect(payload.error?.message).not.toContain("SECRET_TOKEN");
+    expect(payload.error?.message).not.toContain("bad");
+  });
+
   it("syncs snapshot successfully and appends SUCCESS audit", async () => {
     const snapshot = {
       version: 1,
