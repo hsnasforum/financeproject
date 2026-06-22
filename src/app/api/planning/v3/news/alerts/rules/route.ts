@@ -39,6 +39,11 @@ const SaveBodySchema = z.object({
   rules: z.array(RuleOverrideInputSchema).default([]),
 });
 
+const UserMetaSchema = z.object({
+  userId: z.string().min(1),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+});
+
 const RulesGetResponseSchema = z.object({
   ok: z.literal(true),
   data: z.object({
@@ -47,6 +52,7 @@ const RulesGetResponseSchema = z.object({
     overrides: z.unknown(),
     effective: z.unknown(),
   }),
+  meta: UserMetaSchema,
 });
 
 const RulesPostResponseSchema = z.object({
@@ -56,6 +62,7 @@ const RulesPostResponseSchema = z.object({
     overrides: z.unknown(),
     effective: z.unknown(),
   }),
+  meta: UserMetaSchema,
 });
 
 function withReadGuard(request: Request): Response | null {
@@ -102,6 +109,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const defaults = readAlertRulesConfig();
   const overrides = readAlertRuleOverrides();
@@ -115,6 +123,7 @@ export async function GET(request: Request) {
       overrides,
       effective,
     },
+    meta: userMeta,
   }, { scope: "response", context: "api.v3.news.alertRules.get" });
   return NextResponse.json(payload);
 }
@@ -131,6 +140,7 @@ export async function POST(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const parsed = SaveBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
@@ -138,7 +148,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: { code: "INPUT", message: "규칙 오버라이드 입력 형식이 올바르지 않습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 400 },
     );
@@ -154,6 +164,7 @@ export async function POST(request: Request) {
       overrides: written,
       effective,
     },
+    meta: userMeta,
   }, { scope: "response", context: "api.v3.news.alertRules.post" });
   return NextResponse.json(payload);
 }

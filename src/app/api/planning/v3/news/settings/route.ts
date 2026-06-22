@@ -36,6 +36,11 @@ const SaveBodySchema = z.object({
   topics: z.array(TopicOverrideInputSchema).default([]),
 });
 
+const UserMetaSchema = z.object({
+  userId: z.string().min(1),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+});
+
 const SettingsGetResponseSchema = z.object({
   ok: z.literal(true),
   data: z.object({
@@ -61,6 +66,7 @@ const SettingsGetResponseSchema = z.object({
       effectiveKeywords: z.array(z.string()),
     })),
   }),
+  meta: UserMetaSchema,
 });
 
 const SettingsPostResponseSchema = z.object({
@@ -70,6 +76,7 @@ const SettingsPostResponseSchema = z.object({
     sourcesCount: z.number().int().nonnegative(),
     topicsCount: z.number().int().nonnegative(),
   }),
+  meta: UserMetaSchema,
 });
 
 function dedupeKeywords(values: string[]): string[] {
@@ -128,6 +135,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const settings = readNewsSettings();
   const effective = loadEffectiveNewsConfig();
@@ -167,7 +175,7 @@ export async function GET(request: Request) {
     }),
   };
 
-  const payload = parseWithV3Whitelist(SettingsGetResponseSchema, { ok: true, data }, {
+  const payload = parseWithV3Whitelist(SettingsGetResponseSchema, { ok: true, data, meta: userMeta }, {
     scope: "response",
     context: "api.v3.news.settings.get",
   });
@@ -186,6 +194,7 @@ export async function POST(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const parsed = SaveBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
@@ -193,7 +202,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: { code: "INPUT", message: "설정 입력 형식이 올바르지 않습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 400 },
     );
@@ -231,6 +240,7 @@ export async function POST(request: Request) {
       sourcesCount: next.sources.length,
       topicsCount: next.topics.length,
     },
+    meta: userMeta,
   }, {
     scope: "response",
     context: "api.v3.news.settings.post",

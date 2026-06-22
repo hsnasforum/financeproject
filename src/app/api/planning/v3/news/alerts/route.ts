@@ -102,9 +102,15 @@ const AlertsDataSchema = z.object({
   mutation: AlertsMutationSchema.optional(),
 });
 
+const UserMetaSchema = z.object({
+  userId: z.string().min(1),
+  authSource: z.enum(["auth-session", "trusted-header", "local-namespace"]),
+});
+
 const AlertsResponseSchema = z.object({
   ok: z.literal(true),
   data: AlertsDataSchema,
+  meta: UserMetaSchema,
 });
 
 const AlertsPostBodySchema = z.object({
@@ -169,6 +175,7 @@ export async function GET(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const url = new URL(request.url);
   const days = Math.max(1, Math.min(90, Math.round(asNumber(url.searchParams.get("days"), 14))));
@@ -177,6 +184,7 @@ export async function GET(request: Request) {
   const payload = parseWithV3Whitelist(AlertsResponseSchema, {
     ok: true,
     data,
+    meta: userMeta,
   }, { scope: "response", context: "api.v3.news.alerts" });
   return NextResponse.json(payload);
 }
@@ -193,6 +201,7 @@ export async function POST(request: Request) {
   if (guarded) return guarded;
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
+  const userMeta = planningUserMeta(currentUser);
 
   const parsed = AlertsPostBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
@@ -200,7 +209,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: { code: "INPUT", message: "알림 상태 입력 형식이 올바르지 않습니다." },
-        meta: planningUserMeta(currentUser),
+        meta: userMeta,
       },
       { status: 400 },
     );
@@ -222,6 +231,7 @@ export async function POST(request: Request) {
   const payload = parseWithV3Whitelist(AlertsResponseSchema, {
     ok: true,
     data,
+    meta: userMeta,
   }, { scope: "response", context: "api.v3.news.alerts.post" });
   return NextResponse.json(payload);
 }

@@ -268,8 +268,14 @@ export function resolveAlertEventStatePath(cwd = process.cwd()): string {
   return resolveScopedAlertEventStatePath(cwd);
 }
 
-export function resolveAlertRulesOverridePath(cwd = process.cwd()): string {
+function resolveLegacyAlertRulesOverridePath(cwd = process.cwd()): string {
   return path.join(resolveAlertsDataDir(cwd), "rules.override.json");
+}
+
+export function resolveAlertRulesOverridePath(cwd = process.cwd()): string {
+  if (!isPlanningNamespaceEnabled()) return resolveLegacyAlertRulesOverridePath(cwd);
+  const userId = resolvePlanningUserId();
+  return path.join(getPlanningUserDir(userId, cwd), "news", "alerts", "rules.override.json");
 }
 
 export function resolveAlertRulesConfigPath(cwd = process.cwd()): string {
@@ -386,7 +392,7 @@ export function writeAlertRuleOverrides(input: {
     rules: input.rules,
   });
 
-  const dir = resolveAlertsDataDir(cwd);
+  const dir = path.dirname(resolveAlertRulesOverridePath(cwd));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(resolveAlertRulesOverridePath(cwd), `${JSON.stringify(next, null, 2)}\n`, "utf-8");
   return next;
