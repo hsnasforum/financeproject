@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as importCsvPOST } from "../src/app/api/planning/v3/transactions/import/csv/route";
 import { readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

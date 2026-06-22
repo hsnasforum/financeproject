@@ -1,49 +1,17 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
-import { closeNewsDatabase, openNewsDatabase, readNewsTopicTrends, type BurstLevel } from "@/lib/planning/v3/news/items";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
+import {
+  readCurrentUserNewsItems,
+  type BurstLevel,
+  type NewsItemsFilters,
+} from "@/lib/planning/v3/service/newsItemsRepository";
 import {
   isPlanningRouteUser,
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
-
-type ItemRow = {
-  id: string;
-  title: string;
-  url: string;
-  publishedAt: string;
-  sourceId: string;
-  sourceName: string;
-  topicId: string;
-  topicLabel: string;
-  score: number;
-  burstLevel: BurstLevel;
-};
-
-type TopicFacet = {
-  topicId: string;
-  topicLabel: string;
-  count: number;
-  burstLevel: BurstLevel;
-};
-
-type SourceFacet = {
-  sourceId: string;
-  sourceName: string;
-  count: number;
-};
-
-type SearchFilters = {
-  q: string;
-  topicId: string;
-  sourceId: string;
-  burst: "all" | BurstLevel;
-  days: number;
-  limit: number;
-  offset: number;
-};
 
 const ItemRowSchema = z.object({
   id: z.string().trim().min(1),
@@ -124,7 +92,7 @@ function normalizeBurst(value: string): "all" | BurstLevel {
   return "all";
 }
 
-function normalizeFilters(url: URL): SearchFilters {
+function normalizeFilters(url: URL): NewsItemsFilters {
   const q = asString(url.searchParams.get("q"));
   const topicId = asString(url.searchParams.get("topic"));
   const sourceId = asString(url.searchParams.get("source"));
@@ -143,73 +111,6 @@ function normalizeFilters(url: URL): SearchFilters {
   };
 }
 
-function keywordLikePattern(input: string): string {
-  const escaped = input.toLowerCase().replaceAll("%", "\\%").replaceAll("_", "\\_");
-  return `%${escaped.replace(/\s+/g, "%")}%`;
-}
-
-function topicBurstMap(): Map<string, BurstLevel> {
-  const artifact = readNewsTopicTrends();
-  const out = new Map<string, BurstLevel>();
-  for (const row of artifact?.topics ?? []) {
-    out.set(asString(row.topicId), row.burstLevel);
-  }
-  return out;
-}
-
-function buildWhere(input: {
-  filters: SearchFilters;
-  burstMap: Map<string, BurstLevel>;
-}): { whereSql: string; params: Record<string, string | number> } {
-  const where: string[] = [];
-  const params: Record<string, string | number> = {};
-
-  const startMs = Date.now() - (input.filters.days * 24 * 60 * 60 * 1000);
-  params.startIso = new Date(startMs).toISOString();
-  where.push("publishedAt >= @startIso");
-
-  if (input.filters.q) {
-    params.queryLike = keywordLikePattern(input.filters.q);
-    where.push(`(
-      LOWER(title) LIKE @queryLike ESCAPE '\\'
-      OR LOWER(sourceName) LIKE @queryLike ESCAPE '\\'
-      OR LOWER(primaryTopicLabel) LIKE @queryLike ESCAPE '\\'
-    )`);
-  }
-
-  if (input.filters.topicId) {
-    params.topicId = input.filters.topicId;
-    where.push("primaryTopicId = @topicId");
-  }
-
-  if (input.filters.sourceId) {
-    params.sourceId = input.filters.sourceId;
-    where.push("sourceId = @sourceId");
-  }
-
-  if (input.filters.burst !== "all") {
-    const topicIds = [...input.burstMap.entries()]
-      .filter(([, level]) => level === input.filters.burst)
-      .map(([topicId]) => topicId);
-    if (topicIds.length < 1) {
-      where.push("1 = 0");
-    } else {
-      const placeholders: string[] = [];
-      topicIds.forEach((topicId, index) => {
-        const key = `burstTopic${index}`;
-        params[key] = topicId;
-        placeholders.push(`@${key}`);
-      });
-      where.push(`primaryTopicId IN (${placeholders.join(", ")})`);
-    }
-  }
-
-  return {
-    whereSql: where.length > 0 ? `WHERE ${where.join(" AND ")}` : "",
-    params,
-  };
-}
-
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
@@ -218,90 +119,9 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const filters = normalizeFilters(url);
-  const burstByTopic = topicBurstMap();
-  const where = buildWhere({ filters, burstMap: burstByTopic });
 
-  let db: ReturnType<typeof openNewsDatabase> | null = null;
   try {
-    db = openNewsDatabase();
-    const itemsRows = db.prepare(`
-      SELECT
-        id,
-        title,
-        url,
-        publishedAt,
-        sourceId,
-        sourceName,
-        primaryTopicId AS topicId,
-        primaryTopicLabel AS topicLabel,
-        relativeScore
-      FROM news_items
-      ${where.whereSql}
-      ORDER BY relativeScore DESC, publishedAt DESC, canonicalUrl ASC
-      LIMIT @limit OFFSET @offset
-    `).all({ ...where.params, limit: filters.limit, offset: filters.offset }) as Array<Record<string, unknown>>;
-
-    const countRow = db.prepare(`
-      SELECT COUNT(1) AS total
-      FROM news_items
-      ${where.whereSql}
-    `).get(where.params) as Record<string, unknown> | undefined;
-
-    const topicRows = db.prepare(`
-      SELECT
-        primaryTopicId AS topicId,
-        primaryTopicLabel AS topicLabel,
-        COUNT(1) AS itemCount
-      FROM news_items
-      ${where.whereSql}
-      GROUP BY primaryTopicId, primaryTopicLabel
-      ORDER BY itemCount DESC, topicLabel ASC
-      LIMIT 50
-    `).all(where.params) as Array<Record<string, unknown>>;
-
-    const sourceRows = db.prepare(`
-      SELECT
-        sourceId,
-        sourceName,
-        COUNT(1) AS itemCount
-      FROM news_items
-      ${where.whereSql}
-      GROUP BY sourceId, sourceName
-      ORDER BY itemCount DESC, sourceName ASC
-      LIMIT 50
-    `).all(where.params) as Array<Record<string, unknown>>;
-
-    const items: ItemRow[] = itemsRows.map((row) => {
-      const topicId = asString(row.topicId);
-      return {
-        id: asString(row.id),
-        title: asString(row.title),
-        url: asString(row.url),
-        publishedAt: asString(row.publishedAt),
-        sourceId: asString(row.sourceId),
-        sourceName: asString(row.sourceName),
-        topicId,
-        topicLabel: asString(row.topicLabel),
-        score: asNumber(row.relativeScore, 0),
-        burstLevel: burstByTopic.get(topicId) ?? "하",
-      };
-    });
-
-    const topics: TopicFacet[] = topicRows.map((row) => {
-      const topicId = asString(row.topicId);
-      return {
-        topicId,
-        topicLabel: asString(row.topicLabel),
-        count: Math.max(0, Math.round(asNumber(row.itemCount, 0))),
-        burstLevel: burstByTopic.get(topicId) ?? "하",
-      };
-    });
-
-    const sources: SourceFacet[] = sourceRows.map((row) => ({
-      sourceId: asString(row.sourceId),
-      sourceName: asString(row.sourceName),
-      count: Math.max(0, Math.round(asNumber(row.itemCount, 0))),
-    }));
+    const newsItems = readCurrentUserNewsItems(filters);
 
     const payload = parseWithV3Whitelist(ItemsResponseSchema, {
       ok: true,
@@ -316,10 +136,10 @@ export async function GET(request: Request) {
           limit: filters.limit,
           offset: filters.offset,
         },
-        total: Math.max(0, Math.round(asNumber(countRow?.total, 0))),
-        items,
-        topics,
-        sources,
+        total: newsItems.total,
+        items: newsItems.items,
+        topics: newsItems.topics,
+        sources: newsItems.sources,
       },
     }, { scope: "response", context: "api.v3.news.items" });
     return NextResponse.json(payload);
@@ -332,7 +152,5 @@ export async function GET(request: Request) {
       },
       { status: 500 },
     );
-  } finally {
-    if (db) closeNewsDatabase(db);
   }
 }

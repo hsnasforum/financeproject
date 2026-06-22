@@ -8,9 +8,11 @@ import {
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
-import { cacheStats, getCacheUsageStats } from "@/lib/planning/cache/storage";
 import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
-import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
+import {
+  getOpsPlanningCacheStats,
+  planningNamespaceMeta,
+} from "@/lib/planning/server/cache/opsRouteService";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -47,27 +49,14 @@ export async function GET(request: Request) {
   if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   try {
-    const [entryStats, usageStats] = await Promise.all([
-      cacheStats(),
-      getCacheUsageStats(),
-    ]);
-
-    const totalLookups = usageStats.totals.hits + usageStats.totals.misses;
-    const hitRate = totalLookups > 0 ? usageStats.totals.hits / totalLookups : 0;
+    const data = await getOpsPlanningCacheStats();
 
     return NextResponse.json({
       ok: true,
-      data: {
-        entries: entryStats,
-        usage: {
-          ...usageStats,
-          totalLookups,
-          hitRate,
-        },
-      },
+      data,
       meta: {
         ...planningUserMeta(currentUser),
-        ...(isPlanningNamespaceEnabled() ? { planningNamespaceEnabled: true } : {}),
+        ...planningNamespaceMeta(),
       },
     });
   } catch (error) {

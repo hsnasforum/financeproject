@@ -6,6 +6,10 @@ import { DELETE as noteDELETE, PATCH as notePATCH } from "../src/app/api/plannin
 import { GET as notesGET, POST as notesPOST } from "../src/app/api/planning/v3/news/notes/route";
 import { resolveNewsNotesDir } from "../planning/v3/news/notes";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

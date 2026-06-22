@@ -11,6 +11,7 @@ import {
   PATCH as actionProgressPATCH,
 } from "../../src/app/api/planning/runs/[id]/action-progress/route";
 import { resolveProfileRunDir } from "../../src/lib/planning/store/paths";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -20,6 +21,8 @@ const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const LOCAL_HOST = "localhost:3000";
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function profileFixture() {
   return {

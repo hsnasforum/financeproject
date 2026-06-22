@@ -6,6 +6,7 @@ import { GET as transfersGET } from "../src/app/api/planning/v3/transactions/bat
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { upsertAccountMappingOverride } from "../src/lib/planning/v3/store/accountMappingOverridesStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -13,6 +14,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4920";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestGet(pathname: string): Request {
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {

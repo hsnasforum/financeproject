@@ -6,8 +6,12 @@ import { statusFromExternalApiErrorCode } from "@/lib/publicApis/errorContract";
 import { runGov24SyncOnce } from "@/lib/publicApis/gov24SyncState";
 import { runGov24SnapshotSync } from "@/lib/gov24/syncRunner";
 import { singleflight } from "../../../../lib/cache/singleflight";
+import { guardGov24MutationOrigin } from "../_lib/trustedOriginGuard";
 
 export async function POST(request: Request) {
+  const originGuard = guardGov24MutationOrigin(request);
+  if (originGuard) return originGuard;
+
   const { searchParams } = new URL(request.url);
   const debugEnabled = isDebugEnabled(searchParams);
   const traceId = crypto.randomUUID();

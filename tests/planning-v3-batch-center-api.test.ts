@@ -9,6 +9,7 @@ import { toStoredFirstPublicImportBatchMeta } from "../src/lib/planning/v3/trans
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertAccountMappingOverride } from "../src/lib/planning/v3/store/accountMappingOverridesStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -16,6 +17,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:5110";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestGet(pathname: string): Request {
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {

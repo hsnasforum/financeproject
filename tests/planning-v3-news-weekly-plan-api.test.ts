@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET, POST } from "../src/app/api/planning/v3/news/weekly-plan/route";
 import { resolveWeeklyPlanPath } from "../planning/v3/news/weeklyPlan";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = env.NODE_ENV;
@@ -11,6 +12,8 @@ const originalPlanningDataDir = env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3100";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function weeklyPlanPath(): string {
   return resolveWeeklyPlanPath();

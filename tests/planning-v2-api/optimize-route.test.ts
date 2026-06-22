@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
   loadLatestAssumptionsSnapshotMock,
@@ -20,6 +21,8 @@ import { POST } from "../../src/app/api/planning/v2/optimize/route";
 
 const env = process.env as Record<string, string | undefined>;
 const originalOptimizerFlag = process.env.PLANNING_OPTIMIZER_ENABLED;
+
+installPlanningAuthRequiredFalseForTest();
 
 function request(body: unknown): Request {
   return new Request("http://localhost:3000/api/planning/v2/optimize", {

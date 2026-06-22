@@ -23,11 +23,14 @@ export type OpsActionParams = {
   confirmText?: string;
 };
 
+export type OpsActionRunStatus = "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
+
 export type OpsActionRunResult = {
   ok: boolean;
   message: string;
   data?: Record<string, unknown>;
   errorCode?: string;
+  status?: OpsActionRunStatus;
 };
 
 export type OpsActionPreviewResult = {

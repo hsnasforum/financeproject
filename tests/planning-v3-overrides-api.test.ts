@@ -7,6 +7,7 @@ import {
   GET as overridesGET,
   PATCH as overridesPATCH,
 } from "../src/app/api/planning/v3/transactions/overrides/route";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -14,6 +15,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4500";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestGet(pathname: string): Request {
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {

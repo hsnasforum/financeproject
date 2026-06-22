@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
   listAssumptionsHistoryMock,
@@ -23,6 +24,8 @@ import { GET } from "../../src/app/api/planning/v2/assumptions/snapshots/route";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
+
+installPlanningAuthRequiredFalseForTest();
 
 function request(urlPath: string): Request {
   return new Request(`http://localhost:3000${urlPath}`, {

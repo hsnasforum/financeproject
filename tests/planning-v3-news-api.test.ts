@@ -31,6 +31,7 @@ import {
   resolveNewsTrendsJsonPath,
 } from "../src/lib/news/storageSqlite";
 import { resolveNewsSettingsPath } from "../planning/v3/news/settings";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -38,6 +39,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3100";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function digestPath(): string {
   return resolveNewsDigestDayJsonPath();
@@ -257,6 +260,20 @@ describe("planning v3 news api", () => {
     const payload = await response.json() as { ok?: boolean };
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
+  });
+
+  it("keeps news items route behind the repository query boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v3/news/items/route.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("@/lib/planning/v3/service/newsItemsRepository");
+    expect(routeSource).not.toContain("openNewsDatabase");
+    expect(routeSource).not.toContain("closeNewsDatabase");
+    expect(routeSource).not.toContain("readNewsTopicTrends");
+    expect(routeSource).not.toContain("FROM news_items");
+    expect(routeSource).not.toContain("prepare(`");
   });
 
   it("GET digest response only exposes whitelisted metadata fields", async () => {

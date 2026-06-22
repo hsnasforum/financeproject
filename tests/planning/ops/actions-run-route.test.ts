@@ -12,6 +12,12 @@ const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const originalOpsAuditPath = process.env.PLANNING_OPS_AUDIT_PATH;
 const originalOpsMetricsPath = process.env.PLANNING_OPS_METRICS_PATH;
 const originalActionLogPath = process.env.PLANNING_OPS_ACTION_LOG_PATH;
+const originalAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
+const originalTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
+const originalAuthSecret = process.env.AUTH_SECRET;
+const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
+const originalNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalPlanningUserId = process.env.PLANNING_USER_ID;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -35,6 +41,9 @@ describe.sequential("ops actions run route", () => {
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-ops-actions-run-"));
     env.NODE_ENV = "test";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
     env.PLANNING_RUNS_DIR = path.join(root, "runs");
     env.PLANNING_OPS_AUDIT_PATH = path.join(root, "ops", "audit", "events.ndjson");
     env.PLANNING_OPS_METRICS_PATH = path.join(root, "ops", "metrics", "events.ndjson");
@@ -53,6 +62,18 @@ describe.sequential("ops actions run route", () => {
     else delete env.PLANNING_OPS_METRICS_PATH;
     if (typeof originalActionLogPath === "string") env.PLANNING_OPS_ACTION_LOG_PATH = originalActionLogPath;
     else delete env.PLANNING_OPS_ACTION_LOG_PATH;
+    if (typeof originalAuthRequired === "string") env.PLANNING_AUTH_REQUIRED = originalAuthRequired;
+    else delete env.PLANNING_AUTH_REQUIRED;
+    if (typeof originalTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalTrustAuthHeaders;
+    else delete env.PLANNING_TRUST_AUTH_HEADERS;
+    if (typeof originalAuthSecret === "string") env.AUTH_SECRET = originalAuthSecret;
+    else delete env.AUTH_SECRET;
+    if (typeof originalNextAuthSecret === "string") env.NEXTAUTH_SECRET = originalNextAuthSecret;
+    else delete env.NEXTAUTH_SECRET;
+    if (typeof originalNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+    if (typeof originalPlanningUserId === "string") env.PLANNING_USER_ID = originalPlanningUserId;
+    else delete env.PLANNING_USER_ID;
     clearOpsActionPreviewTokensForTests();
 
     fs.rmSync(root, { recursive: true, force: true });
@@ -85,6 +106,23 @@ describe.sequential("ops actions run route", () => {
     const payload = await response.json() as { error?: { code?: string } };
     expect(response.status).toBe(403);
     expect(payload.error?.code).toBe("LOCAL_ONLY");
+  });
+
+  it("blocks action runner without a planning auth signal when fallback is not explicit", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+
+    const response = await actionRunPOST(new Request(`${LOCAL_ORIGIN}/api/ops/actions/run`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        actionId: "RUNS_CLEANUP",
+      }),
+    }));
+
+    const payload = await response.json() as { error?: { code?: string } };
+    expect(response.status).toBe(401);
+    expect(payload.error?.code).toBe("UNAUTHENTICATED");
   });
 
   it("requires preview token for destructive actions", async () => {
@@ -142,9 +180,17 @@ describe.sequential("ops actions run route", () => {
         summary?: { ids?: string[]; text?: string };
         confirmText?: string;
       };
+      meta?: {
+        userId?: string;
+        authSource?: string;
+      };
     };
     expect(previewRes.status).toBe(200);
     expect(previewPayload.ok).toBe(true);
+    expect(previewPayload.meta).toEqual({
+      userId: "default",
+      authSource: "local-namespace",
+    });
     expect(previewPayload.data?.requirePreview).toBe(true);
     expect(typeof previewPayload.data?.previewToken).toBe("string");
     expect((previewPayload.data?.summary?.ids ?? []).join(",")).not.toContain("GITHUB_TOKEN=");
@@ -164,9 +210,20 @@ describe.sequential("ops actions run route", () => {
       }),
     }));
 
-    const runPayload = await runRes.json() as { ok?: boolean; message?: string };
+    const runPayload = await runRes.json() as {
+      ok?: boolean;
+      message?: string;
+      meta?: {
+        userId?: string;
+        authSource?: string;
+      };
+    };
     expect(runRes.status).toBe(200);
     expect(runPayload.ok).toBe(true);
+    expect(runPayload.meta).toEqual({
+      userId: "default",
+      authSource: "local-namespace",
+    });
 
     const auditPath = env.PLANNING_OPS_AUDIT_PATH as string;
     const metricsPath = env.PLANNING_OPS_METRICS_PATH as string;
@@ -185,5 +242,68 @@ describe.sequential("ops actions run route", () => {
     expect(metricsRaw).not.toContain("GITHUB_TOKEN=");
     expect(actionLogRaw).not.toContain("GITHUB_TOKEN=");
     expect(actionLogRaw).not.toContain("Bearer ");
+  });
+
+  it("records current planning user metadata in persisted action metrics", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    env.PLANNING_USER_ID = "default";
+    const headers = {
+      ...localHeaders(),
+      "x-planning-user-id": "alice",
+    };
+
+    const previewRes = await actionPreviewPOST(new Request(`${LOCAL_ORIGIN}/api/ops/actions/preview`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        actionId: "RUNS_CLEANUP",
+        params: {
+          keepCount: 1,
+          keepDays: 3650,
+        },
+      }),
+    }));
+    const previewPayload = await previewRes.json() as {
+      data?: {
+        previewToken?: string;
+        confirmText?: string;
+      };
+    };
+    expect(previewRes.status).toBe(200);
+
+    const runRes = await actionRunPOST(new Request(`${LOCAL_ORIGIN}/api/ops/actions/run`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        csrf: "csrf-token",
+        actionId: "RUNS_CLEANUP",
+        previewToken: previewPayload.data?.previewToken,
+        params: {
+          keepCount: 1,
+          keepDays: 3650,
+          confirmText: previewPayload.data?.confirmText,
+        },
+      }),
+    }));
+    expect(runRes.status).toBe(200);
+
+    const metricsRaw = fs.readFileSync(env.PLANNING_OPS_METRICS_PATH as string, "utf-8");
+    const rows = metricsRaw
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as { type?: string; meta?: Record<string, unknown> });
+    const actionMetric = rows.find((row) => row.type === "MIGRATION_ACTION" && row.meta?.action === "RUNS_CLEANUP");
+
+    expect(actionMetric?.meta).toMatchObject({
+      action: "RUNS_CLEANUP",
+      status: "SUCCESS",
+      planningNamespaceEnabled: true,
+      planningUserId: "alice",
+      authSource: "trusted-header",
+    });
   });
 });

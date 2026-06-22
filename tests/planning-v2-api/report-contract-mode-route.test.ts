@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildResultDtoV1 } from "../../src/lib/planning/v2/resultDto";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 const { getRunMock } = vi.hoisted(() => ({
   getRunMock: vi.fn<() => Promise<PlanningRunRecord | null>>(),

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
   loadLatestAssumptionsSnapshotMock,
@@ -18,6 +19,8 @@ vi.mock("../../src/lib/planning/assumptions/storage", () => ({
 
 import { POST as simulatePOST } from "../../src/app/api/planning/v2/simulate/route";
 import { POST as scenariosPOST } from "../../src/app/api/planning/v2/scenarios/route";
+
+installPlanningAuthRequiredFalseForTest();
 
 function request(url: string, body: unknown): Request {
   return new Request(url, {
@@ -96,4 +99,3 @@ describe("planning v2 precision note snapshot", () => {
     expect(snapshot).toMatchSnapshot();
   });
 });
-

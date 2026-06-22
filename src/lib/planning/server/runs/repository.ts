@@ -3,10 +3,13 @@ import {
   deleteRun,
   getRun,
   getRunBlob,
+  hardDeleteRun,
   hardDeleteRunFromTrash,
+  listRunIndexEntries,
   listRuns,
   restoreRunFromTrash,
   updateRun,
+  type RunIndexEntry,
   type UpdateRunPatch,
 } from "../store/runStore";
 import {
@@ -26,6 +29,7 @@ import {
 import { getCurrentUserProfile, type CurrentUserPlanningProfileRecord } from "../profiles/repository";
 
 export type CurrentUserPlanningRunRecord = PlanningRunRecord;
+export type CurrentUserPlanningRunIndexEntry = RunIndexEntry;
 export type CurrentUserPlanningRunStageResult = PlanningRunStageResult;
 export type CurrentUserPlanningRunActionPlan = PlanningRunActionPlan;
 export type CurrentUserPlanningRunActionProgress = PlanningRunActionProgress;
@@ -45,6 +49,12 @@ export async function listCurrentUserRuns(
   options?: ListCurrentUserRunsOptions,
 ): Promise<CurrentUserPlanningRunRecord[]> {
   return listRuns(options);
+}
+
+export async function listCurrentUserRunIndexEntries(
+  options?: ListCurrentUserRunsOptions,
+): Promise<CurrentUserPlanningRunIndexEntry[]> {
+  return listRunIndexEntries(options);
 }
 
 export async function getCurrentUserRun(id: string): Promise<CurrentUserPlanningRunRecord | null> {
@@ -73,6 +83,10 @@ export async function updateCurrentUserRun(
 
 export async function deleteCurrentUserRun(id: string): Promise<boolean> {
   return deleteRun(id);
+}
+
+export async function hardDeleteCurrentUserRun(id: string): Promise<boolean> {
+  return hardDeleteRun(id);
 }
 
 export async function getCurrentUserRunBlob(id: string, name: string): Promise<unknown | null> {

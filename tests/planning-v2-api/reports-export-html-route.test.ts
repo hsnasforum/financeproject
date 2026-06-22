@@ -6,6 +6,7 @@ import { POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/rou
 import { POST as runsPOST } from "../../src/app/api/planning/v2/runs/route";
 import { GET as exportHtmlGET } from "../../src/app/api/planning/reports/[runId]/export.html/route";
 import { saveAssumptionsOverrides } from "../../src/lib/planning/assumptions/overridesStorage";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -17,6 +18,8 @@ const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function profileFixture() {
   return {

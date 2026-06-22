@@ -8,6 +8,10 @@ import {
   POST as postBatchOverride,
 } from "../src/app/api/planning/v3/batches/[id]/txn-overrides/route";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

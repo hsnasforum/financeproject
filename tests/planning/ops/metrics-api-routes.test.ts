@@ -16,6 +16,7 @@ const originalProfilesDir = process.env.PLANNING_PROFILES_DIR;
 const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const originalTrashDir = process.env.PLANNING_TRASH_DIR;
 const originalProfileRegistryPath = process.env.PLANNING_PROFILE_REGISTRY_PATH;
+const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
 
 function buildRequest(urlPath: string, host = "localhost:3000"): Request {
   const origin = `http://${host}`;
@@ -25,6 +26,7 @@ function buildRequest(urlPath: string, host = "localhost:3000"): Request {
       host,
       origin,
       referer: `${origin}/ops/metrics`,
+      "x-planning-user-id": "ops-metrics-test-user",
     },
   });
 }
@@ -40,6 +42,7 @@ describe("ops metrics routes", () => {
     env.PLANNING_RUNS_DIR = path.join(root, "runs");
     env.PLANNING_TRASH_DIR = path.join(root, "trash");
     env.PLANNING_PROFILE_REGISTRY_PATH = path.join(root, "vault", "profiles", "index.json");
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
     resetPlanningFallbackUsageSnapshot();
 
     await appendEvent({
@@ -117,6 +120,8 @@ describe("ops metrics routes", () => {
     else delete env.PLANNING_TRASH_DIR;
     if (typeof originalProfileRegistryPath === "string") env.PLANNING_PROFILE_REGISTRY_PATH = originalProfileRegistryPath;
     else delete env.PLANNING_PROFILE_REGISTRY_PATH;
+    if (typeof originalPlanningTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
+    else delete env.PLANNING_TRUST_AUTH_HEADERS;
 
     await fs.rm(root, { recursive: true, force: true });
   });

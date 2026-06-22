@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as draftPreviewPOST } from "../src/app/api/planning/v3/draft/preview/route";
 import { createProfile } from "../src/lib/planning/store/profileStore";
 import { createDraft } from "../src/lib/planning/v3/drafts/draftStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -12,6 +13,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:3950";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestJson(pathName: string, body: unknown): Request {
   return new Request(`${LOCAL_ORIGIN}${pathName}`, {

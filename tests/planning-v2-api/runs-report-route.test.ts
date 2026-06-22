@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/route";
 import { POST as runsPOST } from "../../src/app/api/planning/v2/runs/route";
 import { GET as runReportGET } from "../../src/app/api/planning/v2/runs/[id]/report/route";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -14,6 +15,8 @@ const originalAuditPath = process.env.AUDIT_LOG_PATH;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function profileFixture() {
   return {

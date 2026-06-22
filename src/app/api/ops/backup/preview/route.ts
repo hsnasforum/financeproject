@@ -17,7 +17,7 @@ import {
 import { createBackupPreviewToken } from "../../../../../lib/ops/backup/previewToken";
 import { readUploadBufferViaTemp } from "../../../../../lib/ops/backup/uploadTemp";
 import { loadOpsPolicy } from "../../../../../lib/ops/opsPolicy";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import {
   consumeVaultCsrfOrThrow,
   ensureVaultCsrfCookie,
@@ -162,6 +162,7 @@ export async function POST(request: Request) {
         passphrase,
         sessionToken: previewSessionToken,
       }),
+      meta: planningUserMeta(currentUser),
     });
     ensureVaultCsrfCookie(request, response);
     setBackupPreviewSessionCookie(response, previewSessionToken);

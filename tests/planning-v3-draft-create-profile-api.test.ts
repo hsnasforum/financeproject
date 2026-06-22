@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as createProfilePOST } from "../src/app/api/planning/v3/drafts/[id]/create-profile/route";
 import { createProfile, listProfileMetas } from "../src/lib/planning/store/profileStore";
 import { createDraft } from "../src/lib/planning/v3/drafts/draftStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -15,6 +16,8 @@ const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
 const EVIL_ORIGIN = "http://evil.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestJson(
   pathName: string,

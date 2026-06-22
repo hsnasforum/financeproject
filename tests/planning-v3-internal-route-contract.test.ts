@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as transfersGET } from "../src/app/api/planning/v3/transactions/batches/[id]/transfers/route";
 import { GET as transactionOverridesGET } from "../src/app/api/planning/v3/transactions/overrides/route";
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -12,6 +13,9 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const PROJECT_ROOT = process.cwd();
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
+
 const INTERNAL_ONLY_ROUTE_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
   {
     label: "/api/planning/v3/transactions/overrides",

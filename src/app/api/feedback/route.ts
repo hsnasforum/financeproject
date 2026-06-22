@@ -5,6 +5,7 @@ import {
   normalizeDiagnosticsSnapshot,
   parseDiagnosticsPageInfoFromRequest,
 } from "@/lib/diagnostics/snapshot";
+import { guardFeedbackMutationOrigin } from "./_lib/trustedOriginGuard";
 
 type FeedbackRequestBody = {
   category?: unknown;
@@ -26,6 +27,9 @@ function isValidCategory(value: string): value is FeedbackCategory {
 }
 
 export async function POST(request: Request) {
+  const originGuard = guardFeedbackMutationOrigin(request);
+  if (originGuard) return originGuard;
+
   let body: FeedbackRequestBody;
   try {
     body = (await request.json()) as FeedbackRequestBody;

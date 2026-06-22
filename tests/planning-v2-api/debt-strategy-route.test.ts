@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { POST } from "../../src/app/api/planning/v2/debt-strategy/route";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
 
 function request(body: unknown): Request {
   return new Request("http://localhost:3000/api/planning/v2/debt-strategy", {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST } from "../../src/app/api/planning/v3/import/csv/route";
 import { importCsvToDraft } from "../../src/lib/planning/v3/service/importCsvToDraft";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -11,6 +12,8 @@ const CSRF_TOKEN = "v3-import-csrf";
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
+
+installPlanningAuthRequiredFalseForTest();
 
 function fixturePath(name: string): string {
   return path.join(process.cwd(), "tests", "fixtures", "planning-v3", "csv", name);

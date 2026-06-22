@@ -146,6 +146,9 @@
 - 예외: packaged desktop runtime의 로컬 요청에서는 `/api/dev/unlock`만 vault/ops action CSRF 발급을 위해 허용한다. 다른 `/api/dev/*` action은 계속 production 차단을 유지한다.
 - `/api/auth/*`는 Auth.js 로그인/콜백/session route로 취급한다. 이 phase의 provider는 GitHub/Google OAuth만 활성화하며, Credentials/Email provider는 후속 phase로 둔다. `AUTH_GITHUB_ID`/`AUTH_GITHUB_SECRET` 또는 `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` 묶음이 없으면 해당 provider는 비활성화된다. Prisma adapter는 Auth.js 테이블 마이그레이션 후 `AUTH_PRISMA_ADAPTER_ENABLED=true`에서만 활성화한다.
 - `/api/planning/*`는 production에서 항상 인증을 요구한다. production에서는 `PLANNING_AUTH_REQUIRED=false`를 설정해도 middleware와 routeAuth가 Auth.js session cookie 또는 내부 신뢰 auth header가 없는 요청을 401로 차단한다. 신뢰 auth header가 비활성화됐거나 원격 요청에서 쓰이면 403으로 차단한다. local/dev에서 임시 fallback을 쓰려면 `PLANNING_AUTH_REQUIRED=false`를 명시해야 한다. route handler에서는 routeAuth 계층의 current-user scope를 사용해 저장소 접근을 현재 사용자 경계 안에서 수행하고, public meta는 `meta.userId`와 `meta.authSource` 키를 유지한다.
+- `/api/planner/compute`는 legacy planner 계산 API지만 개인 재무 입력을 받으므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다. `/api/planner/assumptions`는 저장소를 쓰지 않는 외부 가정값 조회 보조 API로 유지한다.
+- `/api/recommend`는 추천 입력과 planning context를 받는 계산 API이므로 same-origin 요청과 routeAuth current-user scope를 모두 요구한다. 성공 응답 meta는 기존 추천 trace/source meta에 `meta.userId`와 `meta.authSource`를 함께 유지한다.
+- `/api/ops/actions/preview`와 `/api/ops/actions/run`처럼 planning 저장소 작업을 registry로 실행하는 ops action route도 local/dev unlock과 CSRF 외에 routeAuth current-user scope를 요구한다. 성공 응답 meta는 `meta.userId`와 `meta.authSource`를 유지한다.
 
 ## 정합성 체크 규칙
 - 헤더/홈/문서의 내부 링크(`href`)는 반드시 위 실존 경로만 가리킨다.

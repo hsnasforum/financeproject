@@ -8,9 +8,6 @@ export default defineConfig({
     },
   },
   test: {
-    env: {
-      PLANNING_AUTH_REQUIRED: process.env.PLANNING_AUTH_REQUIRED ?? "false",
-    },
     exclude: [
       ...configDefaults.exclude,
       "tests/e2e/**",

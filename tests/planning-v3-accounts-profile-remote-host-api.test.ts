@@ -12,6 +12,7 @@ import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionSt
 import { createDraftFromBatch } from "../src/lib/planning/v3/store/draftStore";
 import { upsertOpeningBalance } from "../src/lib/planning/v3/openingBalances/store";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -19,6 +20,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
 const EVIL_ORIGIN = "http://evil.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestGet(pathname: string, refererPath: string): Request {
   return new Request(`${REMOTE_ORIGIN}${pathname}`, {

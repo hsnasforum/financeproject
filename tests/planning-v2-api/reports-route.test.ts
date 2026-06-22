@@ -8,6 +8,7 @@ import { GET as reportsGET, POST as reportsPOST } from "../../src/app/api/planni
 import { DELETE as reportDELETE, GET as reportGET } from "../../src/app/api/planning/v2/reports/[id]/route";
 import { GET as reportDownloadGET } from "../../src/app/api/planning/v2/reports/[id]/download/route";
 import { buildConfirmString } from "../../src/lib/ops/confirm";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -20,6 +21,8 @@ const originalAssumptionsHistoryDir = process.env.PLANNING_ASSUMPTIONS_HISTORY_D
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function profileFixture() {
   return {

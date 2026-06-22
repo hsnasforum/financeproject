@@ -14,6 +14,7 @@ import {
   GET as runByIdGET,
 } from "../../src/app/api/planning/v2/runs/[id]/route";
 import { buildConfirmString } from "../../src/lib/ops/confirm";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -25,6 +26,8 @@ const originalAuditPath = process.env.AUDIT_LOG_PATH;
 
 const LOCAL_HOST = "localhost:3000";
 const REMOTE_HOST = "example.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function sampleProfile() {
   return {

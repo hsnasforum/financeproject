@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GET as alertsGET, POST as alertsPOST } from "../src/app/api/planning/v3/news/alerts/route";
 import { resolveAlertEventStatePath, resolveAlertEventsPath } from "../src/lib/news/alerts";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -12,6 +13,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const LOCAL_HOST = "localhost:3100";
 const REMOTE_HOST = "example.com";
 const EVIL_ORIGIN = "http://evil.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function eventsPath(): string {
   return resolveAlertEventsPath();

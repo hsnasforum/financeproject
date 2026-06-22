@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DELETE as deleteRuleDELETE } from "../src/app/api/planning/v3/categories/rules/[id]/route";
 import { GET as listRulesGET, POST as upsertRulePOST } from "../src/app/api/planning/v3/categories/rules/route";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -11,6 +12,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4700";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestGet(pathname: string): Request {
   return new Request(`${LOCAL_ORIGIN}${pathname}`, {

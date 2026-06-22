@@ -20,6 +20,10 @@ import { POST as refreshPOST } from "../src/app/api/planning/v3/news/refresh/rou
 import { FIXTURE_ITEMS } from "../planning/v3/news/fixtures/sample-items";
 import { upsertItems } from "../planning/v3/news/store";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

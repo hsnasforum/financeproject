@@ -4,6 +4,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET, POST } from "../src/app/api/planning/v3/exposure/profile/route";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = env.NODE_ENV;
 const originalPlanningDataDir = env.PLANNING_DATA_DIR;

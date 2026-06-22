@@ -10,6 +10,7 @@ import { normalizeSido } from "@/lib/regions/kr";
 import { filterByResidence } from "@/lib/gov24/residenceHardFilter";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
 import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
+import { guardGov24MutationOrigin } from "../_lib/trustedOriginGuard";
 
 function parsePageSize(value: string | null, fallback = 50): number {
   const parsed = Number(value);
@@ -56,6 +57,9 @@ function parseBody(raw: unknown): Gov24SimpleFindInput | null {
 }
 
 export async function POST(request: Request) {
+  const originGuard = guardGov24MutationOrigin(request);
+  if (originGuard) return originGuard;
+
   const { searchParams } = new URL(request.url);
   const cursor = parseCursor(searchParams.get("cursor"));
   const pageSize = parsePageSize(searchParams.get("pageSize"), 50);

@@ -1,0 +1,490 @@
+// PostgreSQL/Auth.js migration target.
+// This file is intentionally separate from prisma/schema.prisma until the
+// SQLite data and .data/planning file-store migration is proven by scripts.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client-postgres"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                   String                       @id @default(cuid())
+  name                 String?
+  email                String?                      @unique
+  emailVerified        DateTime?
+  image                String?
+  passwordHash         String?
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  accounts             Account[]
+  sessions             Session[]
+  userProfiles         UserProfile[]
+  favorites            Favorite[]
+  plannerSnapshots     PlannerSnapshot[]
+  planningProfiles     PlanningProfile[]
+  planningRuns         PlanningRun[]
+  financialAccounts    FinancialAccount[]
+  debts                Debt[]
+  financialGoals       FinancialGoal[]
+  recurringCashflows   RecurringCashflow[]
+  assumptionSnapshots  PlanningAssumptionSnapshot[]
+  transactionBatches   TransactionBatch[]
+  transactions         Transaction[]
+  transactionOverrides TransactionOverride[]
+  openingBalances      OpeningBalance[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Provider {
+  id        Int             @id @default(autoincrement())
+  code      String          @unique
+  name      String
+  aliases   ProviderAlias[]
+  products  Product[]
+  createdAt DateTime        @default(now())
+}
+
+model Product {
+  id               Int                    @id @default(autoincrement())
+  finPrdtCd        String                 @unique
+  kind             String
+  name             String?
+  providerNameNorm String?
+  productNameNorm  String?
+  searchTextNorm   String?
+  providerId       Int?
+  provider         Provider?              @relation(fields: [providerId], references: [id])
+  raw              Json?
+  options          ProductOption[]
+  favorites        Favorite[]
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  externalMatches  ExternalProductMatch[]
+
+  @@index([providerNameNorm])
+  @@index([productNameNorm])
+  @@index([searchTextNorm])
+}
+
+model ProductOption {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  saveTrm   String?
+  intrRate  Decimal? @db.Decimal(10, 6)
+  intrRate2 Decimal? @db.Decimal(10, 6)
+  raw       Json?
+}
+
+model UserProfile {
+  id               Int               @id @default(autoincrement())
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  purpose          String?
+  preferredTerms   String?
+  liquidityNeed    String?
+  ratePreference   String?
+  favorites        Favorite[]
+  plannerSnapshots PlannerSnapshot[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([userId])
+}
+
+model Favorite {
+  id            Int         @id @default(autoincrement())
+  userId        String
+  userProfileId Int
+  productId     Int
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userProfile   UserProfile @relation(fields: [userProfileId], references: [id])
+  product       Product     @relation(fields: [productId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, productId])
+  @@index([userProfileId])
+}
+
+model PlannerSnapshot {
+  id              Int         @id @default(autoincrement())
+  userId          String
+  userProfileId   Int
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userProfile     UserProfile @relation(fields: [userProfileId], references: [id])
+  monthlyIncome   BigInt?
+  monthlyExpense  BigInt?
+  monthlySaving   BigInt?
+  emergencyMonths Decimal?    @db.Decimal(10, 4)
+  debtBurdenRatio Decimal?    @db.Decimal(10, 6)
+  goalAmount      BigInt?
+  goalMonths      Int?
+  assumptions     Json?
+  createdAt       DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userProfileId])
+}
+
+model PlanningProfile {
+  id                  String                       @id @default(cuid())
+  userId              String
+  legacyProfileId     String?
+  name                String
+  metaJson            Json?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs                PlanningRun[]
+  financialAccounts   FinancialAccount[]
+  debts               Debt[]
+  financialGoals      FinancialGoal[]
+  recurringCashflows  RecurringCashflow[]
+  assumptionSnapshots PlanningAssumptionSnapshot[]
+  transactionBatches  TransactionBatch[]
+  openingBalances     OpeningBalance[]
+
+  @@unique([userId, legacyProfileId])
+  @@index([userId, updatedAt])
+}
+
+model PlanningRun {
+  id                  String                       @id
+  userId              String
+  planningProfileId   String
+  schemaVersion       Int
+  title               String?
+  overallStatus       String?
+  inputJson           Json
+  metaJson            Json?
+  reproducibilityJson Json?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile     PlanningProfile              @relation(fields: [planningProfileId], references: [id], onDelete: Cascade)
+  blobs               PlanningRunBlob[]
+  actionPlans         ActionPlan[]
+  actionProgress      ActionProgress[]
+  assumptionSnapshots PlanningAssumptionSnapshot[]
+
+  @@index([userId, createdAt])
+  @@index([planningProfileId, createdAt])
+}
+
+model PlanningRunBlob {
+  id          String      @id @default(cuid())
+  runId       String
+  name        String
+  kind        String
+  json        Json?
+  storagePath String?
+  byteSize    BigInt?
+  sha256      String?
+  createdAt   DateTime    @default(now())
+  run         PlanningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, name])
+  @@index([sha256])
+}
+
+model ActionPlan {
+  id          String      @id @default(cuid())
+  runId       String
+  actionKey   String
+  title       String
+  category    String?
+  priority    Int?
+  payloadJson Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  run         PlanningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, actionKey])
+}
+
+model ActionProgress {
+  id        String      @id @default(cuid())
+  runId     String
+  actionKey String
+  status    String
+  note      String?
+  doneAt    DateTime?
+  version   Int         @default(1)
+  updatedAt DateTime    @updatedAt
+  run       PlanningRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, actionKey])
+}
+
+model FinancialAccount {
+  id                String           @id @default(cuid())
+  userId            String
+  planningProfileId String?
+  name              String
+  accountType       String
+  institution       String?
+  balanceKrw        BigInt?
+  currency          String           @default("KRW")
+  rawJson           Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile   PlanningProfile? @relation(fields: [planningProfileId], references: [id], onDelete: SetNull)
+  transactions      Transaction[]
+  openingBalances   OpeningBalance[]
+
+  @@index([userId, updatedAt])
+  @@index([planningProfileId])
+}
+
+model Debt {
+  id                String           @id @default(cuid())
+  userId            String
+  planningProfileId String?
+  name              String
+  lender            String?
+  principalKrw      BigInt
+  monthlyPaymentKrw BigInt?
+  annualRate        Decimal?         @db.Decimal(10, 6)
+  maturityDate      DateTime?
+  rawJson           Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile   PlanningProfile? @relation(fields: [planningProfileId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+  @@index([planningProfileId])
+}
+
+model FinancialGoal {
+  id                String           @id @default(cuid())
+  userId            String
+  planningProfileId String?
+  name              String
+  targetAmountKrw   BigInt
+  targetDate        DateTime?
+  priority          Int?
+  status            String?
+  rawJson           Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile   PlanningProfile? @relation(fields: [planningProfileId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+  @@index([planningProfileId])
+}
+
+model RecurringCashflow {
+  id                String           @id @default(cuid())
+  userId            String
+  planningProfileId String?
+  direction         String
+  name              String
+  amountKrw         BigInt
+  cadence           String
+  startsOn          DateTime?
+  endsOn            DateTime?
+  rawJson           Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile   PlanningProfile? @relation(fields: [planningProfileId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+  @@index([planningProfileId])
+}
+
+model PlanningAssumptionSnapshot {
+  id                String           @id @default(cuid())
+  userId            String
+  planningProfileId String?
+  runId             String?
+  source            String
+  assumptionsJson   Json
+  sha256            String
+  createdAt         DateTime         @default(now())
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile   PlanningProfile? @relation(fields: [planningProfileId], references: [id], onDelete: SetNull)
+  run               PlanningRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, sha256])
+  @@index([planningProfileId, createdAt])
+  @@index([runId])
+}
+
+model TransactionBatch {
+  id                String        @id @default(cuid())
+  userId            String
+  planningProfileId String?
+  source            String
+  importKey         String?
+  periodStart       DateTime?
+  periodEnd         DateTime?
+  rowCount          Int           @default(0)
+  checksum          String?
+  createdAt         DateTime      @default(now())
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile   PlanningProfile? @relation(fields: [planningProfileId], references: [id], onDelete: SetNull)
+  transactions      Transaction[]
+
+  @@unique([userId, source, importKey])
+  @@index([planningProfileId, createdAt])
+}
+
+model Transaction {
+  id                 String                @id @default(cuid())
+  userId             String
+  batchId            String?
+  financialAccountId String?
+  occurredAt         DateTime
+  description        String
+  amountKrw          BigInt
+  category           String?
+  rawJson            Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  user               User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  batch              TransactionBatch?     @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  financialAccount   FinancialAccount?     @relation(fields: [financialAccountId], references: [id], onDelete: SetNull)
+  overrides          TransactionOverride[]
+
+  @@index([userId, occurredAt])
+  @@index([batchId])
+  @@index([financialAccountId])
+}
+
+model TransactionOverride {
+  id            String      @id @default(cuid())
+  userId        String
+  transactionId String
+  field         String
+  valueJson     Json
+  reason        String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionId, field])
+  @@index([userId, updatedAt])
+}
+
+model OpeningBalance {
+  id                 String            @id @default(cuid())
+  userId             String
+  planningProfileId  String?
+  financialAccountId String
+  asOfDate           DateTime
+  amountKrw          BigInt
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planningProfile    PlanningProfile?  @relation(fields: [planningProfileId], references: [id], onDelete: SetNull)
+  financialAccount   FinancialAccount  @relation(fields: [financialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([financialAccountId, asOfDate])
+  @@index([userId, asOfDate])
+  @@index([planningProfileId])
+}
+
+model ProviderAlias {
+  id         Int      @id @default(autoincrement())
+  providerId Int
+  provider   Provider @relation(fields: [providerId], references: [id])
+  aliasRaw   String
+  aliasNorm  String
+  createdAt  DateTime @default(now())
+
+  @@index([aliasNorm])
+  @@unique([providerId, aliasNorm])
+}
+
+model ExternalSourceSnapshot {
+  id           Int      @id @default(autoincrement())
+  sourceId     String
+  kind         String
+  lastSyncedAt DateTime
+  ttlMs        Int
+  metaJson     Json?
+
+  @@unique([sourceId, kind])
+  @@index([sourceId, kind])
+}
+
+model ExternalProduct {
+  id               Int                    @id @default(autoincrement())
+  sourceId         String
+  kind             String
+  externalKey      String
+  providerNameRaw  String
+  providerNameNorm String
+  productNameRaw   String
+  productNameNorm  String
+  summary          String?
+  rawJson          Json
+  firstSeenAt      DateTime               @default(now())
+  lastSeenAt       DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  matches          ExternalProductMatch[]
+
+  @@unique([sourceId, kind, externalKey])
+  @@index([sourceId, kind, providerNameNorm])
+  @@index([sourceId, kind, productNameNorm])
+}
+
+model ExternalProductMatch {
+  id                Int             @id @default(autoincrement())
+  externalProductId Int
+  externalProduct   ExternalProduct @relation(fields: [externalProductId], references: [id], onDelete: Cascade)
+  internalProductId Int?
+  internalProduct   Product?        @relation(fields: [internalProductId], references: [id], onDelete: SetNull)
+  method            String
+  confidence        Decimal         @db.Decimal(10, 6)
+  evidenceJson      Json
+  createdAt         DateTime        @default(now())
+
+  @@index([externalProductId, confidence])
+  @@index([internalProductId])
+}

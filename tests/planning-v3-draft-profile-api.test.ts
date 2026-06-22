@@ -9,6 +9,10 @@ import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

@@ -20,6 +20,7 @@ import {
 } from "../src/lib/planning/v3/transactions/store";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -27,6 +28,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4200";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestJson(url: string, method: "GET" | "POST" | "DELETE", body?: unknown): Request {
   return new Request(`${LOCAL_ORIGIN}${url}`, {

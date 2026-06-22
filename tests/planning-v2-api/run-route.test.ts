@@ -8,6 +8,10 @@ import { GET as runGET } from "../../src/app/api/planning/run/[id]/route";
 import { GET as runsGET } from "../../src/app/api/planning/runs/[id]/route";
 import { saveAssumptionsOverrides } from "../../src/lib/planning/assumptions/overridesStorage";
 
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalProfilesDir = process.env.PLANNING_PROFILES_DIR;

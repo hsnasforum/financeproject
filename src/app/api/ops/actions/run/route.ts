@@ -13,6 +13,11 @@ import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
 import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
 import { getOpsActionDefinition, runOpsAction, validateOpsActionParams } from "../../../../../lib/ops/actions/registry";
 import { appendOpsActionLog } from "../../../../../lib/ops/actions/actionLog";
+import {
+  opsActionAuditEventType,
+  opsActionAuditResult,
+  resolveOpsActionRunStatus,
+} from "../../../../../lib/ops/actions/resultStatus";
 import { consumeOpsActionPreviewToken } from "../../../../../lib/ops/actions/previewToken";
 import { type OpsActionId } from "../../../../../lib/ops/actions/types";
 import { redactText } from "../../../../../lib/planning/privacy/redact";
@@ -21,6 +26,11 @@ import {
   beginStorageTransaction,
   endStorageTransaction,
 } from "../../../../../lib/planning/storage/journal";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type ActionRunBody = {
   csrf?: unknown;
@@ -57,7 +67,7 @@ function guardRequest(request: Request, csrf: string): NextResponse | null {
   }
 }
 
-function appendActionAudit(result: "SUCCESS" | "ERROR", detail: Record<string, unknown>): void {
+function appendActionAudit(result: "SUCCESS" | "PARTIAL_SUCCESS" | "ERROR", detail: Record<string, unknown>): void {
   try {
     appendAuditLog({
       event: "OPS_ACTION_RUN",
@@ -87,6 +97,8 @@ export async function POST(request: Request) {
   const csrf = asString(body?.csrf);
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const actionIdRaw = asString(body?.actionId);
   const definition = getOpsActionDefinition(actionIdRaw);
@@ -142,8 +154,10 @@ export async function POST(request: Request) {
       hasPreviewToken: previewToken.length > 0,
     });
     const result = await runOpsAction(actionId, params);
+    const runStatus = resolveOpsActionRunStatus(result);
     await appendStorageTransactionStep(tx, "ACTION_EXECUTED", {
       ok: result.ok,
+      status: runStatus,
     });
     if (!result.ok && result.errorCode === "NOT_IMPLEMENTED") {
       await endStorageTransaction(tx, "ROLLBACK", result.message || "not implemented").catch(() => undefined);
@@ -157,24 +171,25 @@ export async function POST(request: Request) {
     }
     const safeMessage = redactText(result.message || "").slice(0, 500);
 
-    appendActionAudit(result.ok ? "SUCCESS" : "ERROR", {
+    appendActionAudit(opsActionAuditResult(runStatus), {
       actionId,
       dangerous: Boolean(definition.dangerous),
       message: safeMessage,
       durationMs: Math.max(0, Date.now() - startedAt),
     });
     await appendOpsAuditEvent({
-      eventType: result.ok ? "OPS_ACTION_RUN_SUCCESS" : "OPS_ACTION_RUN_ERROR",
+      eventType: opsActionAuditEventType(runStatus),
       meta: {
         actionId,
         dangerous: Boolean(definition.dangerous),
+        status: runStatus,
         durationMs: Math.max(0, Date.now() - startedAt),
       },
     }).catch(() => undefined);
     await appendOpsActionLog({
       actionId,
       at: new Date().toISOString(),
-      status: result.ok ? "SUCCESS" : "FAILED",
+      status: runStatus,
       message: safeMessage || `${actionId} 완료`,
       durationMs: Math.max(0, Date.now() - startedAt),
       meta: {
@@ -185,9 +200,9 @@ export async function POST(request: Request) {
       type: "MIGRATION_ACTION",
       meta: {
         action: actionId,
-        status: result.ok ? "SUCCESS" : "FAILED",
+        status: runStatus,
         durationMs: Math.max(0, Date.now() - startedAt),
-        ...(result.ok ? {} : { code: "INTERNAL" }),
+        ...(runStatus === "FAILED" ? { code: "INTERNAL" } : {}),
       },
     }).catch(() => undefined);
     await endStorageTransaction(tx, "COMMIT");
@@ -195,6 +210,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: result.ok,
       message: safeMessage || `${actionId} 완료`,
+      meta: planningUserMeta(currentUser),
       data: {
         actionId,
         ...(result.data ? result.data : {}),

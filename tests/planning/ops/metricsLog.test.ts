@@ -3,11 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { appendOpsMetricEvent, listOpsMetricEvents } from "../../../src/lib/ops/metricsLog";
+import { runWithPlanningUserScope } from "../../../src/lib/planning/store/userScope";
 
 const env = process.env as Record<string, string | undefined>;
 const originalPath = process.env.PLANNING_OPS_METRICS_PATH;
 const originalMaxBytes = process.env.PLANNING_OPS_METRICS_MAX_BYTES;
 const originalMaxFiles = process.env.PLANNING_OPS_METRICS_MAX_FILES;
+const originalNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalPlanningUserId = process.env.PLANNING_USER_ID;
 
 describe("metricsLog", () => {
   let root = "";
@@ -28,6 +31,10 @@ describe("metricsLog", () => {
     else delete env.PLANNING_OPS_METRICS_MAX_BYTES;
     if (typeof originalMaxFiles === "string") env.PLANNING_OPS_METRICS_MAX_FILES = originalMaxFiles;
     else delete env.PLANNING_OPS_METRICS_MAX_FILES;
+    if (typeof originalNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+    if (typeof originalPlanningUserId === "string") env.PLANNING_USER_ID = originalPlanningUserId;
+    else delete env.PLANNING_USER_ID;
     await fs.rm(root, { recursive: true, force: true });
   });
 
@@ -76,6 +83,34 @@ describe("metricsLog", () => {
     expect(raw).not.toContain("never-log-me");
     expect(raw).not.toContain("passphrase");
     expect(raw).not.toContain("rawBlob");
+  });
+
+  it("preserves current planning user scope in metric events when namespace is enabled", async () => {
+    env.PLANNING_NAMESPACE_ENABLED = "1";
+    env.PLANNING_USER_ID = "default";
+
+    await runWithPlanningUserScope({ userId: "alice", authSource: "trusted-header" }, async () => {
+      await appendOpsMetricEvent({
+        type: "MIGRATION_ACTION",
+        meta: {
+          action: "RUN_MIGRATIONS",
+          status: "SUCCESS",
+          planningNamespaceEnabled: false,
+          planningUserId: "spoofed",
+          authSource: "spoofed",
+        },
+      });
+    });
+
+    const rows = await listOpsMetricEvents({ limit: 10, type: "MIGRATION_ACTION" });
+
+    expect(rows[0]?.meta).toMatchObject({
+      action: "RUN_MIGRATIONS",
+      status: "SUCCESS",
+      planningNamespaceEnabled: true,
+      planningUserId: "alice",
+      authSource: "trusted-header",
+    });
   });
 
   it("reads sparse rotated files without probing missing suffixes", async () => {

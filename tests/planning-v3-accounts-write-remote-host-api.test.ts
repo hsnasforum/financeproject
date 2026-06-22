@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DELETE as accountDELETE, PATCH as accountPATCH } from "../src/app/api/planning/v3/accounts/[id]/route";
 import { POST as accountsPOST } from "../src/app/api/planning/v3/accounts/route";
 import { PATCH as openingBalancesPATCH } from "../src/app/api/planning/v3/opening-balances/route";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -13,6 +14,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
 const EVIL_ORIGIN = "http://evil.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestJson(
   pathname: string,

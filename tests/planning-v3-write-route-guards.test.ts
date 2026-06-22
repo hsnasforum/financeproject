@@ -40,6 +40,7 @@ import {
 } from "../src/app/api/planning/v3/transactions/overrides/route";
 import { PATCH as transferOverridesPATCH } from "../src/app/api/planning/v3/transactions/transfer-overrides/route";
 import { POST as batchTxnOverridesPOST } from "../src/app/api/planning/v3/batches/[id]/txn-overrides/route";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const PROJECT_ROOT = process.cwd();
 const V3_API_ROOT = path.join(PROJECT_ROOT, "src", "app", "api", "planning", "v3");
@@ -47,6 +48,8 @@ const V3_API_ROOT = path.join(PROJECT_ROOT, "src", "app", "api", "planning", "v3
 const LOCAL_HOST = "localhost:3100";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const DEFAULT_CSRF = "csrf-token";
+installPlanningAuthRequiredFalseForTest();
+
 const USER_FACING_SAME_ORIGIN_WRITE_ROUTES = new Set([
   path.join(V3_API_ROOT, "accounts", "route.ts"),
   path.join(V3_API_ROOT, "accounts", "[id]", "route.ts"),

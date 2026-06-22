@@ -29,7 +29,7 @@ describe("Auth.js planning integration contract", () => {
     const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
 
     expect(pkg.scripts?.["planning:auth:check"]).toBe(
-      "vitest run tests/planning/auth/*.test.ts tests/middleware-security.test.ts tests/planning-v2-api/profiles-route.test.ts tests/planning/ops/planning-cache-route-user-scope.test.ts",
+      "vitest run tests/planning/auth/*.test.ts tests/middleware-security.test.ts tests/planner-compute-route-auth.test.ts tests/recommend-api.test.ts tests/planning-v2-api/profiles-route.test.ts tests/planning-v2-api/assumptions-overrides-route.test.ts tests/planning/ops/planning-cache-route-user-scope.test.ts tests/planning/ops/ops-runs-route-service-boundary.test.ts tests/planning/ops/ops-doctor-route-service-boundary.test.ts tests/planning/ops/ops-doctor-route-action-response.test.ts tests/planning/ops/ops-doctor-action-result.test.ts tests/planning/ops/actions-preview-route.test.ts tests/planning/ops/actions-run-route.test.ts",
     );
   });
 
@@ -145,7 +145,7 @@ describe("Auth.js planning integration contract", () => {
     expect(currentUser).toContain("parseBoolean(env.PLANNING_AUTH_REQUIRED, defaultPlanningAuthRequired())");
     expect(middleware).toContain('process.env.NODE_ENV ?? ""');
     expect(middleware).toContain("parseBoolean(process.env.PLANNING_AUTH_REQUIRED, true)");
-    expect(vitestConfig).toContain('PLANNING_AUTH_REQUIRED: process.env.PLANNING_AUTH_REQUIRED ?? "false"');
+    expect(vitestConfig).not.toContain("PLANNING_AUTH_REQUIRED");
     expect(envExample).toContain("AUTH_SECRET=");
     expect(envExample).toContain("NEXTAUTH_SECRET= # optional legacy alias for AUTH_SECRET");
     expect(envExample).toContain("AUTH_GITHUB_ID= # optional");
@@ -159,6 +159,12 @@ describe("Auth.js planning integration contract", () => {
     expect(currentScreens).toContain("Credentials/Email provider");
     expect(currentScreens).toContain("AUTH_PRISMA_ADAPTER_ENABLED=true");
     expect(currentScreens).toContain("/api/planning/*");
+    expect(currentScreens).toContain("/api/planner/compute");
+    expect(currentScreens).toContain("same-origin 요청과 routeAuth current-user scope를 모두 요구");
+    expect(currentScreens).toContain("/api/recommend");
+    expect(currentScreens).toContain("기존 추천 trace/source meta에 `meta.userId`와 `meta.authSource`를 함께 유지");
+    expect(currentScreens).toContain("/api/ops/actions/preview");
+    expect(currentScreens).toContain("/api/ops/actions/run");
     expect(currentScreens).toContain("401");
     expect(currentScreens).toContain("403");
     expect(currentScreens).toContain("meta.userId");

@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as alertRulesGET, POST as alertRulesPOST } from "../src/app/api/planning/v3/news/alerts/rules/route";
 import { resolveAlertRulesOverridePath } from "../src/lib/news/alerts";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -12,6 +13,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
 const EVIL_ORIGIN = "http://evil.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestGet(pathname: string, options?: { origin?: string; refererOrigin?: string }): Request {
   const origin = options?.origin ?? REMOTE_ORIGIN;

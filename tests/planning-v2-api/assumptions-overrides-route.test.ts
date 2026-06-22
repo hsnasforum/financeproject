@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import {
   PATCH as overridesPATCH,
@@ -7,6 +9,25 @@ import { POST as overridesResetPOST } from "../../src/app/api/ops/assumptions/ov
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
+
+const OVERRIDES_ROUTE_BOUNDARY_FILES = [
+  "src/app/api/ops/assumptions/overrides/route.ts",
+  "src/app/api/ops/assumptions/overrides/reset/route.ts",
+] as const;
+
+const FORBIDDEN_OVERRIDES_ROUTE_STORAGE_BOUNDARY_MARKERS = [
+  "@/lib/planning/assumptions/overridesStorage",
+  "@/lib/planning/server/store/profileStore",
+  "@/lib/planning/store/paths",
+  "AssumptionsOverrideEntrySchema",
+  "normalizeAssumptionsOverrides",
+  "loadAssumptionsOverrides",
+  "loadAssumptionsOverridesByProfile",
+  "saveAssumptionsOverrides",
+  "resetAssumptionsOverrides",
+  "getDefaultProfileId",
+  "sanitizeRecordId",
+] as const;
 
 function buildRequest(options: {
   method: "PUT" | "PATCH" | "POST";
@@ -33,6 +54,23 @@ function buildRequest(options: {
 describe("ops assumptions overrides route guards", () => {
   beforeEach(() => {
     env.NODE_ENV = "test";
+  });
+
+  it("keeps assumptions overrides routes behind the route service ownership boundary", () => {
+    const violations = OVERRIDES_ROUTE_BOUNDARY_FILES.flatMap((routePath) => {
+      const routeSource = fs.readFileSync(path.join(process.cwd(), routePath), "utf8");
+      const forbidden = FORBIDDEN_OVERRIDES_ROUTE_STORAGE_BOUNDARY_MARKERS.filter((marker) =>
+        routeSource.includes(marker),
+      );
+      if (forbidden.length < 1) return [];
+      return [`${routePath}: ${forbidden.join(", ")}`];
+    });
+
+    for (const routePath of OVERRIDES_ROUTE_BOUNDARY_FILES) {
+      const routeSource = fs.readFileSync(path.join(process.cwd(), routePath), "utf8");
+      expect(routeSource).toContain("@/lib/planning/server/assumptions/overridesRouteService");
+    }
+    expect(violations).toEqual([]);
   });
 
   it("rejects PUT without csrf", async () => {

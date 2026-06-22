@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET } from "../../src/app/api/planning/v2/snapshots/route";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -10,6 +11,8 @@ const originalAssumptionsPath = process.env.PLANNING_ASSUMPTIONS_PATH;
 const originalAssumptionsHistoryDir = process.env.PLANNING_ASSUMPTIONS_HISTORY_DIR;
 
 const tempDirs: string[] = [];
+
+installPlanningAuthRequiredFalseForTest();
 
 async function writeJson(filePath: string, payload: unknown): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });

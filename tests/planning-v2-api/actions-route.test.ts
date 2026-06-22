@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
   loadLatestAssumptionsSnapshotMock,
@@ -22,6 +23,8 @@ vi.mock("../../src/lib/planning/assumptions/storage", () => ({
 import { POST } from "../../src/app/api/planning/v2/actions/route";
 
 const originalFetch = globalThis.fetch;
+
+installPlanningAuthRequiredFalseForTest();
 
 function request(body: unknown): Request {
   return new Request("http://localhost:3000/api/planning/v2/actions", {

@@ -10,6 +10,7 @@ import {
   upsertBatchTxnOverride,
   upsertLegacyUnscopedTxnOverride,
 } from "../src/lib/planning/v3/store/txnOverridesStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -17,6 +18,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 const LOCAL_HOST = "localhost:4300";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 type RouteContext = {
   params: Promise<{ id: string }>;

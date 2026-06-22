@@ -9,44 +9,19 @@ import {
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { isPlanningRouteUser, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
-import { resetAssumptionsOverrides } from "@/lib/planning/assumptions/overridesStorage";
-import { getDefaultProfileId } from "@/lib/planning/server/store/profileStore";
-import { sanitizeRecordId } from "@/lib/planning/store/paths";
+import {
+  resetRouteAssumptionsOverrides,
+  type AssumptionsOverridesMutationInput,
+} from "@/lib/planning/server/assumptions/overridesRouteService";
 import { assumptionsUserMeta } from "../../_lib";
-
-type ResetBody = {
-  csrf?: unknown;
-  profileId?: unknown;
-} | null;
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeProfileId(value: unknown): string | undefined {
-  const raw = asString(value);
-  if (!raw) return undefined;
-  try {
-    return sanitizeRecordId(raw);
-  } catch {
-    return undefined;
-  }
-}
-
-async function resolveTargetProfileId(input: unknown): Promise<string | undefined> {
-  const candidate = normalizeProfileId(input);
-  if (candidate) return candidate;
-  const defaultProfileId = await getDefaultProfileId();
-  return normalizeProfileId(defaultProfileId);
-}
 
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
 
-  let body: ResetBody = null;
+  let body: AssumptionsOverridesMutationInput = null;
   try {
-    body = (await request.json()) as ResetBody;
+    body = (await request.json()) as AssumptionsOverridesMutationInput;
   } catch {
     body = null;
   }
@@ -75,11 +50,10 @@ export async function POST(request: Request) {
   try {
     const currentUser = await requirePlanningRouteUser(request);
     if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const profileId = await resolveTargetProfileId(body?.profileId);
-    await resetAssumptionsOverrides(profileId);
+    const result = await resetRouteAssumptionsOverrides(body?.profileId);
     return NextResponse.json({
       ok: true,
-      ...(profileId ? { profileId } : {}),
+      ...(result.profileId ? { profileId: result.profileId } : {}),
       items: [],
       meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 초기화했습니다.",

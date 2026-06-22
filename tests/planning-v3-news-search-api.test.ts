@@ -7,6 +7,10 @@ import { GET } from "../src/app/api/planning/v3/news/search/route";
 import { closeNewsDatabase, openNewsDatabase, resolveNewsDbPath } from "../src/lib/news/storageSqlite";
 import { readNewsSearchIndex, writeNewsSearchIndex } from "../src/lib/news/searchIndex";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = env.NODE_ENV;
 const originalPlanningDataDir = env.PLANNING_DATA_DIR;

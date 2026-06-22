@@ -7,6 +7,10 @@ import { DELETE as draftDeleteGET, GET as draftDetailGET } from "../src/app/api/
 import { GET as draftsGET, POST as draftsPOST } from "../src/app/api/planning/v3/drafts/route";
 import { createDraft } from "../src/lib/planning/v3/drafts/draftStore";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

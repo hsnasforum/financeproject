@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
   ensureRunActionPlanMock,
@@ -36,6 +37,8 @@ import { GET as runDetailGET } from "../../src/app/api/planning/v2/runs/[id]/rou
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function buildGetRequest(urlPath: string): Request {
   return new Request(`${LOCAL_ORIGIN}${urlPath}`, {

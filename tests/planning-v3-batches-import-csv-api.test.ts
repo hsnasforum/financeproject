@@ -22,6 +22,7 @@ vi.mock("../src/lib/planning/v3/service/batchImportRepository", async () => {
 });
 
 import { POST as importCsvPOST } from "../src/app/api/planning/v3/batches/import/csv/route";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -32,6 +33,8 @@ const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
 const EVIL_ORIGIN = "http://evil.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestMultipart(
   fileText?: string,

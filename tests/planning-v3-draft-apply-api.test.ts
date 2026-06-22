@@ -6,6 +6,10 @@ import { POST as applyDraftPOST } from "../src/app/api/planning/v3/draft/apply/r
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { createProfile, getProfile } from "../src/lib/planning/store/profileStore";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

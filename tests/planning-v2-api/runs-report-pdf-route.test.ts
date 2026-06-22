@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as runReportPdfGET } from "../../src/app/api/planning/v2/runs/[id]/report.pdf/route";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -8,6 +9,8 @@ const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function buildGetRequest(urlPath: string, host = LOCAL_HOST, cookie = ""): Request {
   const origin = host === REMOTE_HOST ? REMOTE_ORIGIN : LOCAL_ORIGIN;

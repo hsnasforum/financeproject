@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { redactText } from "../planning/privacy/redact";
 import { resolveOpsDataDir } from "../planning/storage/dataDir";
+import { isPlanningNamespaceEnabled, resolvePlanningUserId } from "../planning/store/namespace";
+import { getScopedPlanningAuthSource } from "../planning/store/userScope";
 
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_FILES = 7;
@@ -40,8 +42,14 @@ export type OpsMetricsSummary = {
   last7d: OpsMetricsWindowSummary;
 };
 
+const PLANNING_SCOPE_META_KEYS = [
+  "planningNamespaceEnabled",
+  "planningUserId",
+  "authSource",
+] as const;
+
 const META_ALLOWLIST: Record<OpsMetricEventType, ReadonlySet<string>> = {
-  RUN_STAGE: new Set(["requestId", "runId", "profileId", "stageId", "status", "durationMs", "reason", "overallStatus"]),
+  RUN_STAGE: new Set(["requestId", "runId", "profileId", "stageId", "status", "durationMs", "reason", "overallStatus", ...PLANNING_SCOPE_META_KEYS]),
   SCHEDULED_TASK: new Set([
     "taskName",
     "parentTaskName",
@@ -64,13 +72,14 @@ const META_ALLOWLIST: Record<OpsMetricEventType, ReadonlySet<string>> = {
     "stepNames",
     "resultPath",
     "logPath",
+    ...PLANNING_SCOPE_META_KEYS,
   ]),
-  ASSUMPTIONS_REFRESH: new Set(["status", "latestId", "warningsCount", "durationMs", "code"]),
-  BACKUP_EXPORT: new Set(["status", "mode", "gzip", "durationMs", "sizeBytes", "code"]),
-  BACKUP_PREVIEW: new Set(["status", "durationMs", "sizeBytes", "warningCount", "code"]),
-  BACKUP_RESTORE: new Set(["status", "mode", "durationMs", "sizeBytes", "issues", "warnings", "code"]),
-  VAULT_UNLOCK: new Set(["status", "durationMs", "code"]),
-  MIGRATION_ACTION: new Set(["action", "status", "durationMs", "applied", "pending", "deferred", "failed", "updated", "code"]),
+  ASSUMPTIONS_REFRESH: new Set(["status", "latestId", "warningsCount", "durationMs", "code", ...PLANNING_SCOPE_META_KEYS]),
+  BACKUP_EXPORT: new Set(["status", "mode", "gzip", "durationMs", "sizeBytes", "code", ...PLANNING_SCOPE_META_KEYS]),
+  BACKUP_PREVIEW: new Set(["status", "durationMs", "sizeBytes", "warningCount", "code", ...PLANNING_SCOPE_META_KEYS]),
+  BACKUP_RESTORE: new Set(["status", "mode", "durationMs", "sizeBytes", "issues", "warnings", "code", ...PLANNING_SCOPE_META_KEYS]),
+  VAULT_UNLOCK: new Set(["status", "durationMs", "code", ...PLANNING_SCOPE_META_KEYS]),
+  MIGRATION_ACTION: new Set(["action", "status", "durationMs", "applied", "pending", "deferred", "failed", "updated", "code", ...PLANNING_SCOPE_META_KEYS]),
 };
 
 function asString(value: unknown): string {
@@ -172,6 +181,25 @@ function sanitizeMeta(type: OpsMetricEventType, input: Record<string, unknown> |
     out[key] = sanitized;
   }
   return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function resolvePlanningMetricMeta(): Record<string, unknown> | null {
+  if (!isPlanningNamespaceEnabled()) return null;
+  const authSource = asString(getScopedPlanningAuthSource());
+  return {
+    planningNamespaceEnabled: true,
+    planningUserId: resolvePlanningUserId(),
+    ...(authSource ? { authSource } : {}),
+  };
+}
+
+function withPlanningMetricMeta(meta?: Record<string, unknown>): Record<string, unknown> | undefined {
+  const planningMeta = resolvePlanningMetricMeta();
+  if (!planningMeta) return meta;
+  return {
+    ...(meta ?? {}),
+    ...planningMeta,
+  };
 }
 
 function toLine(input: OpsMetricEvent): string {
@@ -302,10 +330,11 @@ export async function appendOpsMetricEvent(input: {
   meta?: Record<string, unknown>;
 }): Promise<void> {
   const filePath = resolveMetricsPath();
+  const meta = withPlanningMetricMeta(input.meta);
   const event: OpsMetricEvent = {
     type: input.type,
     at: input.at ?? new Date().toISOString(),
-    ...(input.meta ? { meta: input.meta } : {}),
+    ...(meta ? { meta } : {}),
   };
   const line = `${toLine(event)}\n`;
 

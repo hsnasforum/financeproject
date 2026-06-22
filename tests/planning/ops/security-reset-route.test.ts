@@ -18,6 +18,7 @@ const originalAssumptionsHistoryDir = process.env.PLANNING_ASSUMPTIONS_HISTORY_D
 const originalVaultConfigPath = process.env.PLANNING_VAULT_CONFIG_PATH;
 const originalOpsAuditPath = process.env.PLANNING_OPS_AUDIT_PATH;
 const originalProfileMetaPath = process.env.PLANNING_PROFILE_META_PATH;
+const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -51,6 +52,7 @@ function localHeaders(csrf = "csrf-token", host = LOCAL_HOST): HeadersInit {
     referer: `${origin}/ops/security`,
     cookie: buildCookie(csrf),
     "content-type": "application/json",
+    "x-planning-user-id": "ops-security-test-user",
   };
 }
 
@@ -82,6 +84,7 @@ describe.sequential("ops security reset API", () => {
     env.PLANNING_VAULT_CONFIG_PATH = vaultConfigPath;
     env.PLANNING_OPS_AUDIT_PATH = opsAuditPath;
     env.PLANNING_PROFILE_META_PATH = profileMetaPath;
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
 
     await configureVaultPassphrase({
       passphrase: "reset-passphrase",
@@ -156,6 +159,8 @@ describe.sequential("ops security reset API", () => {
     else delete env.PLANNING_OPS_AUDIT_PATH;
     if (typeof originalProfileMetaPath === "string") env.PLANNING_PROFILE_META_PATH = originalProfileMetaPath;
     else delete env.PLANNING_PROFILE_META_PATH;
+    if (typeof originalPlanningTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
+    else delete env.PLANNING_TRUST_AUTH_HEADERS;
     await resetVaultRuntimeForTests();
     fs.rmSync(root, { recursive: true, force: true });
   });

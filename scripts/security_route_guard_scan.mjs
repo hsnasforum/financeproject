@@ -11,36 +11,7 @@ const PROD_HIDDEN_PAGE_ALLOWLIST = new Set([
   "src/app/dashboard/artifacts/page.tsx",
 ]);
 
-const PUBLIC_MUTATION_ALLOWLIST = new Map([
-  [
-    "src/app/api/feedback/route.ts",
-    "public feedback submission endpoint without session auth",
-  ],
-  [
-    "src/app/api/feedback/[id]/route.ts",
-    "public feedback detail workflow remains sessionless; follow-up auth split tracked separately",
-  ],
-  [
-    "src/app/api/gov24/simple-find/route.ts",
-    "public gov24 simple-find request is intentionally browser-callable without auth cookies",
-  ],
-  [
-    "src/app/api/gov24/sync/route.ts",
-    "gov24 sync trigger remains browser-callable to preserve current surface; follow-up auth hardening tracked separately",
-  ],
-  [
-    "src/app/api/planner/compute/route.ts",
-    "planner compute API is intentionally public to support the planner UI without session state",
-  ],
-  [
-    "src/app/api/recommend/route.ts",
-    "recommend API is intentionally public to support the recommendation UI without session state",
-  ],
-  [
-    "src/app/api/sync/smoke/route.ts",
-    "trusted-origin command route explicitly allowlisted to preserve smoke tooling behavior",
-  ],
-]);
+const PUBLIC_MUTATION_ALLOWLIST = new Map([]);
 
 function rel(filePath) {
   return path.relative(ROOT, filePath).split(path.sep).join("/");
@@ -151,7 +122,14 @@ function hasMutationGuard(content) {
 function hasPublicMutationGuard(content) {
   return (/assertSameOrigin\s*\(/.test(content) && (/(assertCsrf|requireCsrf)\s*\(/.test(content)))
     || (/assertLocalHost\s*\(/.test(content) && /assertSameOrigin\s*\(/.test(content))
-    || /decideTrustedOrigin\s*\(/.test(content);
+    || /decideTrustedOrigin\s*\(/.test(content)
+    || /guardFeedbackMutationOrigin\s*\(/.test(content)
+    || /guardGov24MutationOrigin\s*\(/.test(content);
+}
+
+function hasRouteAuthMutationPolicy(content) {
+  return /assertSameOrigin\s*\(/.test(content)
+    && (/(withPlanningRouteUser|requirePlanningRouteUser)\s*\(/.test(content));
 }
 
 function hasOpsActionGuard(content) {
@@ -234,6 +212,7 @@ async function validatePublicMutationRoutes(files) {
     const scanContents = await collectScanContents(filePath);
     const joined = scanContents.map((entry) => entry.content).join("\n");
     if (hasPublicMutationGuard(joined)) continue;
+    if (hasRouteAuthMutationPolicy(joined)) continue;
     if (PUBLIC_MUTATION_ALLOWLIST.has(relPath)) continue;
 
     issues.push(`public-route: missing explicit mutation policy -> ${relPath}`);

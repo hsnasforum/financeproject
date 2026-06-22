@@ -7,6 +7,10 @@ import { GET as draftDetailGET, DELETE as draftDetailDELETE } from "../src/app/a
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

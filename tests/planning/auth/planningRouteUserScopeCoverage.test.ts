@@ -145,6 +145,56 @@ function collectImportedHelperNames(
   return names;
 }
 
+const CURRENT_USER_REPOSITORY_IMPORT_PATH_FRAGMENTS = [
+  "/planning/server/profiles/repository",
+  "/planning/server/runs/repository",
+] as const;
+
+function isCurrentUserRepositoryImportPath(importPath: string): boolean {
+  return CURRENT_USER_REPOSITORY_IMPORT_PATH_FRAGMENTS.some((fragment) => importPath.includes(fragment));
+}
+
+function findNonCurrentUserRepositoryImports(filePath: string): string[] {
+  const source = fs.readFileSync(filePath, "utf8");
+  const sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const violations: string[] = [];
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    if (!isCurrentUserRepositoryImportPath(statement.moduleSpecifier.text)) continue;
+
+    const importClause = statement.importClause;
+    if (!importClause || importClause.isTypeOnly) continue;
+
+    if (importClause.name) {
+      const { line } = sourceFile.getLineAndCharacterOfPosition(importClause.name.getStart(sourceFile));
+      violations.push(`${filePath}:${line + 1}:${importClause.name.text}`);
+    }
+
+    const namedBindings = importClause.namedBindings;
+    if (!namedBindings) continue;
+
+    if (ts.isNamespaceImport(namedBindings)) {
+      const { line } = sourceFile.getLineAndCharacterOfPosition(namedBindings.name.getStart(sourceFile));
+      violations.push(`${filePath}:${line + 1}:${namedBindings.name.text}`);
+      continue;
+    }
+
+    for (const specifier of namedBindings.elements) {
+      if (specifier.isTypeOnly) continue;
+      const importedName = specifier.propertyName
+        ? propertyNameText(specifier.propertyName)
+        : specifier.name.text;
+      if (importedName?.includes("CurrentUser")) continue;
+
+      const { line } = sourceFile.getLineAndCharacterOfPosition(specifier.name.getStart(sourceFile));
+      violations.push(`${filePath}:${line + 1}:${importedName ?? specifier.name.text}`);
+    }
+  }
+
+  return violations;
+}
+
 function isJsonResponseCall(node: ts.CallExpression): boolean {
   const expression = node.expression;
   if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== "json") return false;
@@ -172,10 +222,17 @@ function findDirectSuccessJsonWithoutUserMeta(filePath: string): string[] {
   return missing;
 }
 
+const ROUTE_USER_META_HELPER_NAMES = new Set([
+  "planningUserMeta",
+  "securityUserMeta",
+  "assumptionsUserMeta",
+  "doctorRouteMeta",
+]);
+
 function expressionHasPlanningUserMetaCall(node: ts.Node): boolean {
   if (ts.isCallExpression(node)) {
     const expression = node.expression;
-    if (ts.isIdentifier(expression) && expression.text === "planningUserMeta") return true;
+    if (ts.isIdentifier(expression) && ROUTE_USER_META_HELPER_NAMES.has(expression.text)) return true;
   }
 
   return node.getChildren().some((child) => expressionHasPlanningUserMetaCall(child));
@@ -214,7 +271,7 @@ function isPlanningUserMetaExpression(
     return isPlanningUserMetaExpression(expression.expression, planningUserMetaIdentifiers);
   }
   if (ts.isCallExpression(expression)) {
-    return ts.isIdentifier(expression.expression) && expression.expression.text === "planningUserMeta";
+    return ts.isIdentifier(expression.expression) && ROUTE_USER_META_HELPER_NAMES.has(expression.expression.text);
   }
   if (ts.isObjectLiteralExpression(expression)) {
     return expression.properties.some((property) =>
@@ -425,11 +482,31 @@ const FORBIDDEN_ROUTE_AUTH_BYPASS_PATTERNS = [
   "authSource: currentUser.source",
 ] as const;
 
+const WITH_ROUTE_USER_AUTH_ERROR_BRIDGE_PATTERNS = [
+  "planningAuthErrorResponse",
+  "toAuthErrorResponse(error)",
+  "if (authError) return authError",
+] as const;
+
 const FORBIDDEN_ROUTE_STORE_IMPORT_PATTERNS = [
+  "@/lib/planning/server/store/",
+  "/planning/server/store/",
   "@/lib/planning/store/",
+  "/planning/store/",
   "/planning/store/types",
+  "@/lib/planning/storage/",
+  "/planning/storage/",
   "@/lib/planning/v3/drafts/draftStore",
   "@/lib/planning/v3/store/",
+  "node:fs",
+  "node:fs/promises",
+  "@prisma/client",
+  "PrismaClient(",
+  "better-sqlite3",
+  "openNewsDatabase(",
+  "closeNewsDatabase(",
+  ".prepare(`",
+  "FROM news_items",
 ] as const;
 
 const OPS_USER_SCOPED_ROUTE_IMPORT_PATTERNS = [
@@ -437,6 +514,16 @@ const OPS_USER_SCOPED_ROUTE_IMPORT_PATTERNS = [
   "/planning/cache/",
   "@/lib/planning/security/",
   "/planning/security/",
+  "@/lib/planning/server/assumptions/overridesRouteService",
+  "/planning/server/assumptions/overridesRouteService",
+  "@/lib/planning/server/cache/opsRouteService",
+  "/planning/server/cache/opsRouteService",
+  "@/lib/planning/server/runs/opsRouteService",
+  "/planning/server/runs/opsRouteService",
+  "@/lib/planning/server/ops/doctorRouteService",
+  "/planning/server/ops/doctorRouteService",
+  "@/lib/ops/actions/registry",
+  "/ops/actions/registry",
   "@/lib/planning/server/store/",
   "/planning/server/store/",
   "@/lib/planning/store/",
@@ -489,6 +576,12 @@ const FORBIDDEN_SHARED_OPS_ROUTE_PATTERNS = [
   "/lib/planning/",
 ] as const;
 
+const OPS_ROUTE_USER_META_WRAPPER_SOURCES = [
+  { helper: "securityUserMeta", filePath: "src/app/api/ops/security/_lib.ts" },
+  { helper: "assumptionsUserMeta", filePath: "src/app/api/ops/assumptions/_lib.ts" },
+  { helper: "doctorRouteMeta", filePath: "src/lib/planning/server/ops/doctorRouteService.ts" },
+] as const;
+
 const SHARED_OPS_ROUTE_GUARD_PATTERNS = [
   "onlyDev(",
   "assertLocalHost(request)",
@@ -497,6 +590,13 @@ const SHARED_OPS_ROUTE_GUARD_PATTERNS = [
 
 function routeReadsUserScopedPlanningStorage(source: string): boolean {
   return OPS_USER_SCOPED_ROUTE_IMPORT_PATTERNS.some((pattern) => source.includes(pattern));
+}
+
+function findUserOwnedOpsRouteFiles(): string[] {
+  return findOpsRouteFiles().filter((filePath) => {
+    const source = fs.readFileSync(filePath, "utf8");
+    return routeReadsUserScopedPlanningStorage(source);
+  });
 }
 
 describe("planning route current-user scope coverage", () => {
@@ -543,6 +643,16 @@ describe("planning route current-user scope coverage", () => {
     expect(directCurrentUserRoutes).toEqual([]);
   });
 
+  it("keeps callback route auth helpers translating auth failures through routeAuth", () => {
+    const missingAuthErrorBridge = findPlanningRouteFiles().filter((filePath) => {
+      const source = fs.readFileSync(filePath, "utf8");
+      return source.includes("withPlanningRouteUser(")
+        && !WITH_ROUTE_USER_AUTH_ERROR_BRIDGE_PATTERNS.every((pattern) => source.includes(pattern));
+    });
+
+    expect(missingAuthErrorBridge).toEqual([]);
+  });
+
   it("keeps planning and ops API routes off direct current-user scope helpers", () => {
     const directCurrentUserRoutes = [
       ...findPlanningRouteFiles(),
@@ -555,13 +665,19 @@ describe("planning route current-user scope coverage", () => {
     expect(directCurrentUserRoutes).toEqual([]);
   });
 
-  it("keeps planning API routes off direct v3 store imports", () => {
+  it("keeps planning API routes off direct store, storage, and database imports", () => {
     const directStoreRoutes = findPlanningRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
       return FORBIDDEN_ROUTE_STORE_IMPORT_PATTERNS.some((pattern) => source.includes(pattern));
     });
 
     expect(directStoreRoutes).toEqual([]);
+  });
+
+  it("keeps planning route repository imports on the current-user ownership boundary", () => {
+    const violations = findPlanningRouteFiles().flatMap(findNonCurrentUserRepositoryImports);
+
+    expect(violations).toEqual([]);
   });
 
   it("keeps ops API routes with user-owned planning storage behind routeAuth", () => {
@@ -573,6 +689,17 @@ describe("planning route current-user scope coverage", () => {
     expect(missing).toEqual([]);
   });
 
+  it("treats ops action registry routes as user-owned planning storage routes", () => {
+    const source = [
+      "import { runOpsAction } from \"../../../../../lib/ops/actions/registry\";",
+      "export async function POST() {",
+      "  return runOpsAction(\"RUN_MIGRATIONS\", {});",
+      "}",
+    ].join("\n");
+
+    expect(routeReadsUserScopedPlanningStorage(source)).toBe(true);
+  });
+
   it("keeps user-owned ops API routes on the routeAuth boundary", () => {
     const directCurrentUserRoutes = findOpsRouteFiles().filter((filePath) => {
       const source = fs.readFileSync(filePath, "utf8");
@@ -581,6 +708,33 @@ describe("planning route current-user scope coverage", () => {
     });
 
     expect(directCurrentUserRoutes).toEqual([]);
+  });
+
+  it("keeps user-owned ops JSON success object literals annotated with route user metadata", () => {
+    const missingUserMeta = findUserOwnedOpsRouteFiles().flatMap(findDirectSuccessJsonWithoutUserMeta);
+
+    expect(missingUserMeta).toEqual([]);
+  });
+
+  it("keeps direct user-owned ops JSON success meta shaped by route user metadata", () => {
+    const invalidUserMeta = findUserOwnedOpsRouteFiles().flatMap(findDirectSuccessJsonWithNonUserMeta);
+
+    expect(invalidUserMeta).toEqual([]);
+  });
+
+  it("keeps user-owned ops response helper success meta shaped by route user metadata", () => {
+    const invalidUserMeta = findUserOwnedOpsRouteFiles().flatMap(findResponseHelperSuccessJsonWithNonUserMeta);
+
+    expect(invalidUserMeta).toEqual([]);
+  });
+
+  it("keeps user-owned ops route metadata wrappers backed by planningUserMeta", () => {
+    const invalidWrappers = OPS_ROUTE_USER_META_WRAPPER_SOURCES.filter(({ helper, filePath }) => {
+      const source = fs.readFileSync(filePath, "utf8");
+      return !source.includes(`function ${helper}(`) || !source.includes(USER_META_HELPER);
+    });
+
+    expect(invalidWrappers).toEqual([]);
   });
 
   it("keeps shared ops API routes off planning user-owned storage and auth scope", () => {

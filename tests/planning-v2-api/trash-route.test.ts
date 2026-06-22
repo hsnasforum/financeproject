@@ -7,6 +7,7 @@ import { POST as trashRestorePOST } from "../../src/app/api/planning/v2/trash/re
 import { POST as trashEmptyPOST } from "../../src/app/api/planning/v2/trash/empty/route";
 import { buildConfirmString } from "../../src/lib/ops/confirm";
 import { createProfile, deleteProfile, getProfile } from "../../src/lib/planning/store/profileStore";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -18,6 +19,8 @@ const originalAuditPath = process.env.AUDIT_LOG_PATH;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function profileFixture() {
   return {

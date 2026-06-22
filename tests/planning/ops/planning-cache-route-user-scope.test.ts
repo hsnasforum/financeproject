@@ -28,6 +28,21 @@ const originalEnv = Object.fromEntries(
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+const ROUTE_SERVICE_IMPORT = "@/lib/planning/server/cache/opsRouteService";
+const ROUTE_FILES = [
+  "src/app/api/ops/planning-cache/stats/route.ts",
+  "src/app/api/ops/planning-cache/purge/route.ts",
+] as const;
+const FORBIDDEN_ROUTE_PATTERNS = [
+  "@/lib/audit/auditLogStore",
+  "@/lib/planning/cache/storage",
+  "@/lib/planning/store/namespace",
+  "appendAuditLog(",
+  "cacheStats(",
+  "getCacheUsageStats(",
+  "isPlanningNamespaceEnabled(",
+  "purgeExpired(",
+] as const;
 
 type ApiPayload = {
   ok?: boolean;
@@ -143,6 +158,20 @@ describe("ops planning cache routes user scope", () => {
   afterEach(() => {
     restoreEnv();
     fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("keeps cache storage, namespace, and audit access behind the route service", () => {
+    const invalid = ROUTE_FILES.flatMap((filePath) => {
+      const source = fs.readFileSync(filePath, "utf8");
+      const violations = FORBIDDEN_ROUTE_PATTERNS
+        .filter((pattern) => source.includes(pattern))
+        .map((pattern) => `${filePath}:${pattern}`);
+      return source.includes(ROUTE_SERVICE_IMPORT)
+        ? violations
+        : [...violations, `${filePath}:missing ${ROUTE_SERVICE_IMPORT}`];
+    });
+
+    expect(invalid).toEqual([]);
   });
 
   it("requires a current planning user before exposing cache stats", async () => {

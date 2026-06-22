@@ -2,9 +2,13 @@ import { loadOpsPolicy } from "../opsPolicy";
 import { planRunsRetention } from "../runsRetention";
 import { buildAssumptionsSnapshot } from "../../planning/assumptions/sync";
 import { runAllowedFix } from "../../dev/runScript";
-import { inspectPlanningMigrations, runPlanningMigrations } from "../../planning/migrations/manager";
 import { deleteRun, listRunIndexEntries } from "../../planning/server/store/runStore";
-import { checkPlanningStorageConsistency, repairRunIndexConsistency } from "../../planning/storage/consistency";
+import {
+  previewPlanningMigrationsAction,
+  previewPlanningRepairIndexAction,
+  runPlanningMaintenanceMigrationsAction,
+  runPlanningRepairIndexAction,
+} from "../../planning/server/ops/planningMaintenanceActions";
 import {
   type OpsActionDefinition,
   type OpsActionId,
@@ -93,7 +97,7 @@ async function previewCleanupAction(params: OpsActionParams): Promise<OpsActionP
 }
 
 async function previewRepairIndexAction(): Promise<OpsActionPreviewResult> {
-  const report = await checkPlanningStorageConsistency();
+  const report = await previewPlanningRepairIndexAction();
   const ids = report.issues
     .map((issue) => toSafeId(issue.code))
     .filter((row) => row.length > 0);
@@ -114,7 +118,7 @@ async function previewRepairIndexAction(): Promise<OpsActionPreviewResult> {
 }
 
 async function previewRunMigrationsAction(): Promise<OpsActionPreviewResult> {
-  const report = await inspectPlanningMigrations();
+  const report = await previewPlanningMigrationsAction();
   const ids = report.items
     .map((item) => `${toSafeId(item.id)}:${toSafeId(item.status)}`)
     .filter((row) => row.length > 0);
@@ -256,7 +260,7 @@ async function runCleanupAction(params: OpsActionParams): Promise<OpsActionRunRe
 }
 
 async function runRepairIndexAction(): Promise<OpsActionRunResult> {
-  const result = await repairRunIndexConsistency();
+  const result = await runPlanningRepairIndexAction();
   return {
     ok: true,
     message: `runs index 수리 완료 (entries=${result.entries})`,
@@ -268,9 +272,15 @@ async function runRepairIndexAction(): Promise<OpsActionRunResult> {
 }
 
 async function runMigrationsAction(): Promise<OpsActionRunResult> {
-  const result = await runPlanningMigrations({ trigger: "ops" });
+  const result = await runPlanningMaintenanceMigrationsAction();
+  const status = result.result === "failed"
+    ? "FAILED"
+    : result.result === "partial"
+      ? "PARTIAL_SUCCESS"
+      : "SUCCESS";
   return {
     ok: result.result !== "failed",
+    status,
     message: `migrations 실행 결과: ${result.result} (applied=${result.summary.applied}, pending=${result.summary.pending}, deferred=${result.summary.deferred}, failed=${result.summary.failed})`,
     data: {
       result: result.result,

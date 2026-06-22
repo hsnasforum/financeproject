@@ -4,12 +4,12 @@ import { redactText } from "../../planning/privacy/redact";
 import { resolveOpsDataDir } from "../../planning/storage/dataDir";
 import { isPlanningNamespaceEnabled, resolvePlanningUserId } from "../../planning/store/namespace";
 import { getScopedPlanningAuthSource } from "../../planning/store/userScope";
-import { type OpsActionId } from "./types";
+import { type OpsActionId, type OpsActionRunStatus } from "./types";
 
 const DEFAULT_MAX_BYTES = 1024 * 1024;
 const DEFAULT_MAX_FILES = 3;
 
-type OpsActionLogStatus = "SUCCESS" | "FAILED";
+type OpsActionLogStatus = OpsActionRunStatus;
 
 export type OpsActionLogRow = {
   actionId: OpsActionId;
@@ -112,7 +112,10 @@ function toLine(input: OpsActionLogRow): string {
 }
 
 function parseStatus(value: unknown): OpsActionLogStatus {
-  return asString(value).toUpperCase() === "FAILED" ? "FAILED" : "SUCCESS";
+  const normalized = asString(value).toUpperCase();
+  if (normalized === "FAILED") return "FAILED";
+  if (normalized === "PARTIAL_SUCCESS") return "PARTIAL_SUCCESS";
+  return "SUCCESS";
 }
 
 function parseLine(line: string): OpsActionLogRow | null {

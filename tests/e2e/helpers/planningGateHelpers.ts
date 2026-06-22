@@ -86,10 +86,15 @@ async function ensureMigrationsReady(request: APIRequestContext): Promise<void> 
   const baseUrl = resolveBaseUrl();
   const guard = await readDevGuardState(request);
   if (!guard.unlocked || !guard.csrf) return;
-  await request.get(`/api/ops/doctor?action=RUN_MIGRATIONS&csrf=${encodeURIComponent(guard.csrf)}`, {
+  await request.post("/api/ops/doctor", {
     headers: {
       origin: baseUrl,
       referer: `${baseUrl}/ops/doctor`,
+      "content-type": "application/json",
+    },
+    data: {
+      action: "RUN_MIGRATIONS",
+      csrf: guard.csrf,
     },
   }).catch(() => undefined);
 }

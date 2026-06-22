@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocked = vi.hoisted(() => {
   return {
@@ -86,8 +86,10 @@ import { POST } from "../src/app/api/recommend/route";
 
 type RecommendApiJson = {
   ok?: boolean;
-  error?: { message?: string };
+  error?: { code?: string; message?: string };
   meta?: {
+    userId?: string;
+    authSource?: string;
     kind?: string;
     planning?: {
       runId?: string;
@@ -109,11 +111,42 @@ type RecommendApiJson = {
   message?: string;
 };
 
-async function callRecommend(body: unknown, query = ""): Promise<{ status: number; json: RecommendApiJson }> {
+const env = process.env as Record<string, string | undefined>;
+const originalNodeEnv = process.env.NODE_ENV;
+const originalPlanningAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
+const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
+const originalPlanningUserId = process.env.PLANNING_USER_ID;
+const originalAuthSecret = process.env.AUTH_SECRET;
+const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
+
+function restoreEnv() {
+  if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
+  else delete env.NODE_ENV;
+  if (typeof originalPlanningAuthRequired === "string") env.PLANNING_AUTH_REQUIRED = originalPlanningAuthRequired;
+  else delete env.PLANNING_AUTH_REQUIRED;
+  if (typeof originalPlanningTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
+  else delete env.PLANNING_TRUST_AUTH_HEADERS;
+  if (typeof originalPlanningUserId === "string") env.PLANNING_USER_ID = originalPlanningUserId;
+  else delete env.PLANNING_USER_ID;
+  if (typeof originalAuthSecret === "string") env.AUTH_SECRET = originalAuthSecret;
+  else delete env.AUTH_SECRET;
+  if (typeof originalNextAuthSecret === "string") env.NEXTAUTH_SECRET = originalNextAuthSecret;
+  else delete env.NEXTAUTH_SECRET;
+}
+
+async function callRecommend(
+  body: unknown,
+  query = "",
+  extraHeaders: Record<string, string> = {},
+): Promise<{ status: number; json: RecommendApiJson }> {
   const req = new Request(`http://localhost/api/recommend${query}`, {
     method: "POST",
     headers: {
+      host: "localhost",
+      origin: "http://localhost",
+      referer: "http://localhost/recommend",
       "content-type": "application/json",
+      ...extraHeaders,
     },
     body: JSON.stringify(body),
   });
@@ -127,12 +160,95 @@ async function callRecommend(body: unknown, query = ""): Promise<{ status: numbe
 
 describe("POST /api/recommend", () => {
   beforeEach(() => {
+    restoreEnv();
+    env.NODE_ENV = "test";
+    env.PLANNING_AUTH_REQUIRED = "0";
+    env.PLANNING_TRUST_AUTH_HEADERS = "0";
+    env.PLANNING_USER_ID = "default";
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
     mocked.getUnifiedProducts.mockReset();
     mocked.productFindMany.mockReset();
     mocked.externalProductFindMany.mockReset();
     mocked.externalProductMatchFindMany.mockReset();
     mocked.recommendCandidates.mockReset();
     mocked.applyDepositProtectionPolicy.mockReset();
+  });
+
+  afterEach(() => {
+    restoreEnv();
+  });
+
+  it("returns the standard 401 response when recommend auth is required", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+    });
+
+    expect(status).toBe(401);
+    expect(json).toEqual({
+      ok: false,
+      error: {
+        code: "UNAUTHENTICATED",
+        message: "로그인이 필요합니다.",
+      },
+    });
+    expect(mocked.getUnifiedProducts).not.toHaveBeenCalled();
+  });
+
+  it("rejects spoofed recommend trusted headers when the bridge is disabled", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "0";
+
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+    }, "", { "x-planning-user-id": "attacker" });
+
+    expect(status).toBe(403);
+    expect(json).toEqual({
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "신뢰된 인증 헤더가 비활성화되어 있습니다.",
+      },
+    });
+    expect(JSON.stringify(json)).not.toContain("attacker");
+    expect(mocked.getUnifiedProducts).not.toHaveBeenCalled();
+  });
+
+  it("blocks cross-origin recommend requests before parsing the recommendation profile", async () => {
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+    }, "", {
+      origin: "https://example.com",
+      referer: "https://example.com/recommend",
+    });
+
+    expect(status).toBe(403);
+    expect(json).toMatchObject({
+      ok: false,
+      error: {
+        code: "ORIGIN_MISMATCH",
+        message: "동일 origin 요청만 허용됩니다.",
+      },
+    });
+    expect(mocked.getUnifiedProducts).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid input", async () => {
@@ -295,6 +411,10 @@ describe("POST /api/recommend", () => {
       stageInference: "DEBT",
       inferenceSource: "planning-summary",
     });
+    expect(json.meta).toMatchObject({
+      userId: "default",
+      authSource: "local-namespace",
+    });
     expect(json).not.toHaveProperty("engine");
     expect(json).not.toHaveProperty("stage");
     expect(json).not.toHaveProperty("stageDecision");
@@ -337,6 +457,10 @@ describe("POST /api/recommend", () => {
       metricsCount: 0,
       stageInference: "disabled",
       inferenceSource: "none",
+    });
+    expect(json.meta).toMatchObject({
+      userId: "default",
+      authSource: "local-namespace",
     });
     expect(typeof json.message === "string" || json.debug?.candidateCount === 0).toBe(true);
   });
@@ -383,6 +507,39 @@ describe("POST /api/recommend", () => {
       metricsCount: 4,
       stageInference: "DEBT",
       inferenceSource: "planning-context",
+    });
+  });
+
+  it("returns trusted-header user metadata when the explicit local bridge is enabled", async () => {
+    env.PLANNING_AUTH_REQUIRED = "1";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    mocked.getUnifiedProducts.mockResolvedValue({
+      kind: "deposit",
+      sources: { finlife: { count: 0 } },
+      merged: [],
+      items: [],
+      pageInfo: {
+        hasMore: false,
+        nextCursor: null,
+        limit: 1000,
+        sourceId: "finlife",
+      },
+    });
+    mocked.externalProductFindMany.mockResolvedValue([]);
+
+    const { status, json } = await callRecommend({
+      purpose: "seed-money",
+      kind: "deposit",
+      preferredTerm: 12,
+      liquidityPref: "mid",
+      rateMode: "max",
+      topN: 10,
+    }, "", { "x-planning-user-id": "alice" });
+
+    expect(status).toBe(200);
+    expect(json.meta).toMatchObject({
+      userId: "alice",
+      authSource: "trusted-header",
     });
   });
 });

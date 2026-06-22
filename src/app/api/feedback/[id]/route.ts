@@ -12,6 +12,7 @@ import {
   type FeedbackStatus,
   type FeedbackTask,
 } from "@/lib/feedback/feedbackStore";
+import { guardFeedbackMutationOrigin } from "../_lib/trustedOriginGuard";
 
 type Params = { id: string };
 
@@ -114,6 +115,9 @@ function normalizeTaskList(value: unknown): FeedbackTask[] | null {
 }
 
 export async function PATCH(request: Request, context: { params: Promise<Params> }) {
+  const originGuard = guardFeedbackMutationOrigin(request);
+  if (originGuard) return originGuard;
+
   try {
     const params = await context.params;
     const id = String(params.id ?? "").trim();

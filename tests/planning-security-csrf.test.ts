@@ -3,9 +3,12 @@ import { POST as planningRunPost } from "../src/app/api/planning/run/route";
 import { POST as assumptionsRefreshPost } from "../src/app/api/ops/assumptions/refresh/route";
 import { POST as opsRunsCleanupPost } from "../src/app/api/ops/runs/cleanup/route";
 import { DELETE as opsRunDelete } from "../src/app/api/ops/runs/[runId]/route";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestWithCookies(urlPath: string, method: string, body: unknown, cookie: string): Request {
   return new Request(`${LOCAL_ORIGIN}${urlPath}`, {

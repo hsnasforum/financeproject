@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiResponseSchema, parsePlanningV2Response } from "../../src/lib/planning/api/contracts";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
   loadLatestAssumptionsSnapshotMock,
@@ -18,6 +19,8 @@ vi.mock("../../src/lib/planning/assumptions/storage", () => ({
 }));
 
 import { POST } from "../../src/app/api/planning/v2/simulate/route";
+
+installPlanningAuthRequiredFalseForTest();
 
 function request(body: unknown): Request {
   return new Request("http://localhost:3000/api/planning/v2/simulate", {

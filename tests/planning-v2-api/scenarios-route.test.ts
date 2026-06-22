@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
   loadLatestAssumptionsSnapshotMock,
@@ -17,6 +18,8 @@ vi.mock("../../src/lib/planning/assumptions/storage", () => ({
 }));
 
 import { POST } from "../../src/app/api/planning/v2/scenarios/route";
+
+installPlanningAuthRequiredFalseForTest();
 
 function request(body: unknown, query = ""): Request {
   return new Request(`http://localhost:3000/api/planning/v2/scenarios${query}`, {

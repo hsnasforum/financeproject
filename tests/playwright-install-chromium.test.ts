@@ -15,6 +15,7 @@ describe("playwright chromium installer config", () => {
       parseInstallConfig(
         ["--attempts=3", "--timeout-ms=120000", "--delay-ms=0"],
         {
+          NODE_ENV: "test",
           PLAYWRIGHT_INSTALL_ATTEMPTS: "1",
           PLAYWRIGHT_INSTALL_TIMEOUT_MS: "30000",
           PLAYWRIGHT_INSTALL_RETRY_DELAY_MS: "1000",

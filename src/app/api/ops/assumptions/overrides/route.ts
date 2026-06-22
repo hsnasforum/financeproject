@@ -11,50 +11,16 @@ import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import { isPlanningRouteUser, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import {
-  AssumptionsOverrideEntrySchema,
-  normalizeAssumptionsOverrides,
-  type AssumptionsOverrideEntry,
-} from "@/lib/planning/assumptions/overrides";
-import {
-  loadAssumptionsOverridesByProfile,
-  loadAssumptionsOverrides,
-  resetAssumptionsOverrides,
-  saveAssumptionsOverrides,
-} from "@/lib/planning/assumptions/overridesStorage";
-import { getDefaultProfileId } from "@/lib/planning/server/store/profileStore";
-import { sanitizeRecordId } from "@/lib/planning/store/paths";
+  listRouteAssumptionsOverrides,
+  patchRouteAssumptionsOverrides,
+  replaceRouteAssumptionsOverrides,
+  resetRouteAssumptionsOverrides,
+  type AssumptionsOverridesMutationInput,
+} from "@/lib/planning/server/assumptions/overridesRouteService";
 import { assumptionsUserMeta } from "../_lib";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-type OverridesMutationBody = {
-  csrf?: unknown;
-  items?: unknown;
-  item?: unknown;
-  key?: unknown;
-  value?: unknown;
-  reason?: unknown;
-  updatedAt?: unknown;
-  profileId?: unknown;
-} | null;
-
-function normalizeProfileId(value: unknown): string | undefined {
-  const raw = asString(value);
-  if (!raw) return undefined;
-  try {
-    return sanitizeRecordId(raw);
-  } catch {
-    return undefined;
-  }
-}
-
-async function resolveTargetProfileId(input: unknown): Promise<string | undefined> {
-  const candidate = normalizeProfileId(input);
-  if (candidate) return candidate;
-  const defaultProfileId = await getDefaultProfileId();
-  return normalizeProfileId(defaultProfileId);
 }
 
 export async function GET(request: Request) {
@@ -89,14 +55,11 @@ export async function GET(request: Request) {
   try {
     const currentUser = await requirePlanningRouteUser(request);
     if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const profileId = await resolveTargetProfileId(requestedProfileId);
-    const items = profileId
-      ? await loadAssumptionsOverridesByProfile(profileId)
-      : await loadAssumptionsOverrides();
+    const result = await listRouteAssumptionsOverrides(requestedProfileId);
     return NextResponse.json({
       ok: true,
-      ...(profileId ? { profileId } : {}),
-      items,
+      ...(result.profileId ? { profileId: result.profileId } : {}),
+      items: result.items,
       meta: assumptionsUserMeta(currentUser),
     });
   } catch (error) {
@@ -117,9 +80,9 @@ export async function PUT(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
 
-  let body: OverridesMutationBody = null;
+  let body: AssumptionsOverridesMutationInput = null;
   try {
-    body = (await request.json()) as OverridesMutationBody;
+    body = (await request.json()) as AssumptionsOverridesMutationInput;
   } catch {
     body = null;
   }
@@ -148,12 +111,11 @@ export async function PUT(request: Request) {
   try {
     const currentUser = await requirePlanningRouteUser(request);
     if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const profileId = await resolveTargetProfileId(body?.profileId);
-    const items = await saveAssumptionsOverrides(body?.items, profileId);
+    const result = await replaceRouteAssumptionsOverrides(body);
     return NextResponse.json({
       ok: true,
-      ...(profileId ? { profileId } : {}),
-      items,
+      ...(result.profileId ? { profileId: result.profileId } : {}),
+      items: result.items,
       meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 저장했습니다.",
     });
@@ -166,31 +128,13 @@ export async function PUT(request: Request) {
   }
 }
 
-function parsePatchItem(body: OverridesMutationBody): AssumptionsOverrideEntry | null {
-  if (!body) return null;
-  const fromItem = AssumptionsOverrideEntrySchema.safeParse(body.item);
-  if (fromItem.success) {
-    const [normalized] = normalizeAssumptionsOverrides([fromItem.data]);
-    return normalized ?? null;
-  }
-  const partial = AssumptionsOverrideEntrySchema.safeParse({
-    key: body.key,
-    value: body.value,
-    reason: body.reason,
-    updatedAt: body.updatedAt,
-  });
-  if (!partial.success) return null;
-  const [normalized] = normalizeAssumptionsOverrides([partial.data]);
-  return normalized ?? null;
-}
-
 export async function PATCH(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
 
-  let body: OverridesMutationBody = null;
+  let body: AssumptionsOverridesMutationInput = null;
   try {
-    body = (await request.json()) as OverridesMutationBody;
+    body = (await request.json()) as AssumptionsOverridesMutationInput;
   } catch {
     body = null;
   }
@@ -219,24 +163,11 @@ export async function PATCH(request: Request) {
   try {
     const currentUser = await requirePlanningRouteUser(request);
     if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const profileId = await resolveTargetProfileId(body?.profileId);
-    const patchItem = parsePatchItem(body);
-    if (!patchItem) {
-      return opsErrorResponse({
-        code: "VALIDATION",
-        message: "key/value(%) 기반 오버라이드 항목이 필요합니다.",
-        status: 400,
-      });
-    }
-    const currentItems = profileId
-      ? await loadAssumptionsOverridesByProfile(profileId)
-      : await loadAssumptionsOverrides();
-    const nextItems = normalizeAssumptionsOverrides([...currentItems, patchItem]);
-    const items = await saveAssumptionsOverrides(nextItems, profileId);
+    const result = await patchRouteAssumptionsOverrides(body);
     return NextResponse.json({
       ok: true,
-      ...(profileId ? { profileId } : {}),
-      items,
+      ...(result.profileId ? { profileId: result.profileId } : {}),
+      items: result.items,
       meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 업데이트했습니다.",
     });
@@ -253,9 +184,9 @@ export async function DELETE(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
 
-  let body: OverridesMutationBody = null;
+  let body: AssumptionsOverridesMutationInput = null;
   try {
-    body = (await request.json()) as OverridesMutationBody;
+    body = (await request.json()) as AssumptionsOverridesMutationInput;
   } catch {
     body = null;
   }
@@ -284,11 +215,10 @@ export async function DELETE(request: Request) {
   try {
     const currentUser = await requirePlanningRouteUser(request);
     if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const profileId = await resolveTargetProfileId(body?.profileId);
-    await resetAssumptionsOverrides(profileId);
+    const result = await resetRouteAssumptionsOverrides(body?.profileId);
     return NextResponse.json({
       ok: true,
-      ...(profileId ? { profileId } : {}),
+      ...(result.profileId ? { profileId: result.profileId } : {}),
       items: [],
       meta: assumptionsUserMeta(currentUser),
       message: "가정 오버라이드를 초기화했습니다.",

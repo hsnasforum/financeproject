@@ -751,6 +751,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             ) : null}
             <Button
               data-testid="report-print-button"
+              disabled={!clientReady}
               onClick={handlePrint}
               size="sm"
               variant="outline"
@@ -760,7 +761,7 @@ export default function PlanningReportsDashboardClient(props: PlanningReportsDas
             </Button>
             <Button
               data-testid="report-export-html-button"
-              disabled={!selectedRun?.id}
+              disabled={!clientReady || !selectedRun?.id}
               onClick={handleExportHtml}
               size="sm"
               variant="outline"

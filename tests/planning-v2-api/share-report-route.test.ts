@@ -6,6 +6,7 @@ import { POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/rou
 import { POST as runsPOST } from "../../src/app/api/planning/v2/runs/route";
 import { POST as shareReportPOST } from "../../src/app/api/planning/v2/share-report/route";
 import { GET as shareReportDownloadGET } from "../../src/app/api/planning/v2/share-report/[id]/download/route";
+import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -16,6 +17,8 @@ const originalAuditPath = process.env.AUDIT_LOG_PATH;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
+
+installPlanningAuthRequiredFalseForTest();
 
 function profileFixture() {
   return {

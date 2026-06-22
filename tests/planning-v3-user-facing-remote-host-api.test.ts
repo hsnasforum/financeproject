@@ -23,6 +23,7 @@ import { PATCH as patchTransferOverride } from "../src/app/api/planning/v3/trans
 import { createProfile } from "../src/lib/planning/store/profileStore";
 import { appendBatchFromCsv, readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -31,6 +32,8 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const REMOTE_HOST = "example.com";
 const REMOTE_ORIGIN = `http://${REMOTE_HOST}`;
 const EVIL_ORIGIN = "http://evil.com";
+
+installPlanningAuthRequiredFalseForTest();
 
 function requestGet(pathname: string, refererPath: string): Request {
   return new Request(`${REMOTE_ORIGIN}${pathname}`, {

@@ -11,6 +11,11 @@ import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
 import { getOpsActionDefinition, previewOpsAction, validateOpsActionParams } from "../../../../../lib/ops/actions/registry";
 import { issueOpsActionPreviewToken } from "../../../../../lib/ops/actions/previewToken";
 import { type OpsActionId } from "../../../../../lib/ops/actions/types";
+import {
+  isPlanningRouteUser,
+  planningUserMeta,
+  requirePlanningRouteUser,
+} from "../../../../../lib/planning/api/routeAuth";
 
 type ActionPreviewBody = {
   csrf?: unknown;
@@ -60,6 +65,8 @@ export async function POST(request: Request) {
   const csrf = asString(body?.csrf);
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
+  const currentUser = await requirePlanningRouteUser(request);
+  if (!isPlanningRouteUser(currentUser)) return currentUser;
 
   const actionIdRaw = asString(body?.actionId);
   const definition = getOpsActionDefinition(actionIdRaw);
@@ -84,6 +91,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       message: `${definition.title} 미리보기 준비 완료`,
+      meta: planningUserMeta(currentUser),
       data: {
         actionId,
         title: definition.title,

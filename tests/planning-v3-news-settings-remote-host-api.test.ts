@@ -6,6 +6,10 @@ import { GET as indicatorsSpecsGET } from "../src/app/api/planning/v3/indicators
 import { GET as newsSettingsGET } from "../src/app/api/planning/v3/news/settings/route";
 import { GET as newsSourcesGET } from "../src/app/api/planning/v3/news/sources/route";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;

@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as listGET, POST as listPOST } from "../src/app/api/planning/v3/journal/entries/route";
 import { GET as itemGET, PUT as itemPUT } from "../src/app/api/planning/v3/journal/entries/[id]/route";
 
+import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
+
+installPlanningAuthRequiredFalseForTest();
+
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = env.NODE_ENV;
 const originalPlanningDataDir = env.PLANNING_DATA_DIR;

@@ -14,7 +14,7 @@ import {
 import { readBackupPreviewSessionFromRequest } from "../../../../../lib/ops/backup/previewSession";
 import { consumeBackupPreviewToken } from "../../../../../lib/ops/backup/previewToken";
 import { readUploadBufferViaTemp } from "../../../../../lib/ops/backup/uploadTemp";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import {
   consumeVaultCsrfOrThrow,
   ensureVaultCsrfCookie,
@@ -219,6 +219,7 @@ export async function POST(request: Request) {
       message: restored.issues.length > 0
         ? "복원이 완료되었지만 일부 항목에서 오류가 발생했습니다."
         : "복원이 완료되었습니다.",
+      meta: planningUserMeta(currentUser),
     });
     ensureVaultCsrfCookie(request, response);
     return response;

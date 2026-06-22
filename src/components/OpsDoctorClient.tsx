@@ -74,6 +74,13 @@ type DoctorPayload = {
   };
 };
 
+type DoctorActionPayload = {
+  ok?: boolean;
+  status?: "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
+  message?: string;
+  error?: { message?: string };
+};
+
 type OpsDoctorClientProps = {
   csrf: string;
   state?: string;
@@ -194,6 +201,7 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
     if (!hasCsrf) return;
     setActionRunning(action);
     setError("");
+    setNotice("");
     try {
       const response = await fetch("/api/ops/doctor", {
         method: "POST",
@@ -203,12 +211,16 @@ export function OpsDoctorClient({ csrf, state }: OpsDoctorClientProps) {
           action,
         }),
       });
-      const payload = await response.json().catch(() => null) as { ok?: boolean; error?: { message?: string } } | null;
+      const payload = await response.json().catch(() => null) as DoctorActionPayload | null;
       if (!response.ok || !payload?.ok) {
         const apiError = resolveClientApiError(payload, "doctor action 실행에 실패했습니다.");
         throw new Error(apiError.message);
       }
+      const actionNotice = payload.status === "PARTIAL_SUCCESS"
+        ? payload.message || "doctor action이 부분 완료되었습니다. 남은 항목은 아래 점검 결과를 확인하세요."
+        : payload.message || "doctor action 실행을 완료했습니다.";
       await loadDoctor();
+      setNotice(actionNotice);
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "doctor action 실행에 실패했습니다.");
     } finally {
