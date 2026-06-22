@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
   assertLocalHost,
   assertSameOrigin,
@@ -9,23 +8,7 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
-import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
-import { getOpsActionDefinition, runOpsAction, validateOpsActionParams } from "../../../../../lib/ops/actions/registry";
-import { appendOpsActionLog } from "../../../../../lib/ops/actions/actionLog";
-import {
-  opsActionAuditEventType,
-  opsActionAuditResult,
-  resolveOpsActionRunStatus,
-} from "../../../../../lib/ops/actions/resultStatus";
-import { consumeOpsActionPreviewToken } from "../../../../../lib/ops/actions/previewToken";
-import { type OpsActionId } from "../../../../../lib/ops/actions/types";
-import { redactText } from "../../../../../lib/planning/privacy/redact";
-import {
-  appendStorageTransactionStep,
-  beginStorageTransaction,
-  endStorageTransaction,
-} from "../../../../../lib/planning/storage/journal";
+import { runOpsActionRoute } from "../../../../../lib/ops/actions/actionRunRouteService";
 import {
   isPlanningRouteUser,
   planningUserMeta,
@@ -67,22 +50,6 @@ function guardRequest(request: Request, csrf: string): NextResponse | null {
   }
 }
 
-function appendActionAudit(result: "SUCCESS" | "PARTIAL_SUCCESS" | "ERROR", detail: Record<string, unknown>): void {
-  try {
-    appendAuditLog({
-      event: "OPS_ACTION_RUN",
-      route: "/api/ops/actions/run",
-      summary: `OPS_ACTION_RUN ${result}`,
-      details: {
-        result,
-        ...detail,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append ops action log", error);
-  }
-}
-
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -100,169 +67,58 @@ export async function POST(request: Request) {
   const currentUser = await requirePlanningRouteUser(request);
   if (!isPlanningRouteUser(currentUser)) return currentUser;
 
-  const actionIdRaw = asString(body?.actionId);
-  const definition = getOpsActionDefinition(actionIdRaw);
-  if (!definition) {
+  const startedAt = Date.now();
+  const result = await runOpsActionRoute({
+    actionId: body?.actionId,
+    params: body?.params,
+    previewToken: body?.previewToken,
+    startedAt,
+  });
+  if (result.kind === "not-implemented") {
     return NextResponse.json({
       ok: false,
       error: {
         code: "NOT_IMPLEMENTED",
-        message: "지원하지 않는 actionId 입니다.",
+        message: result.message,
       },
     }, { status: 501 });
   }
 
-  const actionId = definition.id as OpsActionId;
-  const params = validateOpsActionParams(actionId, body?.params);
-  const previewToken = asString(body?.previewToken);
-
-  if (definition.requirePreview) {
-    const ok = consumeOpsActionPreviewToken(previewToken, actionId, params);
-    if (!ok) {
-      return NextResponse.json({
-        ok: false,
-        error: {
-          code: "PREVIEW_REQUIRED",
-          message: "미리보기(preview) 후 발급된 실행 토큰이 필요합니다.",
-        },
-      }, { status: 409 });
-    }
-  }
-
-  if (definition.dangerous) {
-    const required = asString(definition.confirmText);
-    const provided = asString(params.confirmText);
-    if (required && provided !== required) {
-      return opsErrorResponse({
-        code: "VALIDATION",
-        message: `확인 문구가 필요합니다: ${required}`,
-        status: 400,
-        fixHref: "/ops",
-      });
-    }
-  }
-
-  const startedAt = Date.now();
-  const tx = await beginStorageTransaction("OPS_ACTION_RUN", {
-    actionId,
-    dangerous: Boolean(definition.dangerous),
-    requirePreview: Boolean(definition.requirePreview),
-  });
-  try {
-    await appendStorageTransactionStep(tx, "VALIDATED", {
-      hasConfirmText: asString(params.confirmText).length > 0,
-      hasPreviewToken: previewToken.length > 0,
-    });
-    const result = await runOpsAction(actionId, params);
-    const runStatus = resolveOpsActionRunStatus(result);
-    await appendStorageTransactionStep(tx, "ACTION_EXECUTED", {
-      ok: result.ok,
-      status: runStatus,
-    });
-    if (!result.ok && result.errorCode === "NOT_IMPLEMENTED") {
-      await endStorageTransaction(tx, "ROLLBACK", result.message || "not implemented").catch(() => undefined);
-      return NextResponse.json({
-        ok: false,
-        error: {
-          code: "NOT_IMPLEMENTED",
-          message: result.message || "지원하지 않는 actionId 입니다.",
-        },
-      }, { status: 501 });
-    }
-    const safeMessage = redactText(result.message || "").slice(0, 500);
-
-    appendActionAudit(opsActionAuditResult(runStatus), {
-      actionId,
-      dangerous: Boolean(definition.dangerous),
-      message: safeMessage,
-      durationMs: Math.max(0, Date.now() - startedAt),
-    });
-    await appendOpsAuditEvent({
-      eventType: opsActionAuditEventType(runStatus),
-      meta: {
-        actionId,
-        dangerous: Boolean(definition.dangerous),
-        status: runStatus,
-        durationMs: Math.max(0, Date.now() - startedAt),
-      },
-    }).catch(() => undefined);
-    await appendOpsActionLog({
-      actionId,
-      at: new Date().toISOString(),
-      status: runStatus,
-      message: safeMessage || `${actionId} 완료`,
-      durationMs: Math.max(0, Date.now() - startedAt),
-      meta: {
-        dangerous: Boolean(definition.dangerous),
-      },
-    }).catch(() => undefined);
-    await appendOpsMetricEvent({
-      type: "MIGRATION_ACTION",
-      meta: {
-        action: actionId,
-        status: runStatus,
-        durationMs: Math.max(0, Date.now() - startedAt),
-        ...(runStatus === "FAILED" ? { code: "INTERNAL" } : {}),
-      },
-    }).catch(() => undefined);
-    await endStorageTransaction(tx, "COMMIT");
-
+  if (result.kind === "preview-required") {
     return NextResponse.json({
-      ok: result.ok,
-      message: safeMessage || `${actionId} 완료`,
-      meta: planningUserMeta(currentUser),
-      data: {
-        actionId,
-        ...(result.data ? result.data : {}),
+      ok: false,
+      error: {
+        code: "PREVIEW_REQUIRED",
+        message: result.message,
       },
-    });
-  } catch (error) {
-    const safeMessage = redactText(error instanceof Error ? error.message : "ops action 실행 실패")
-      || "ops action 실행 실패";
-    await appendStorageTransactionStep(tx, "ACTION_ERROR", {
-      code: "INTERNAL",
-    }).catch(() => undefined);
-    await endStorageTransaction(tx, "ROLLBACK", safeMessage).catch(() => undefined);
+    }, { status: 409 });
+  }
 
-    appendActionAudit("ERROR", {
-      actionId,
-      dangerous: Boolean(definition.dangerous),
-      message: safeMessage,
-      durationMs: Math.max(0, Date.now() - startedAt),
+  if (result.kind === "validation-error") {
+    return opsErrorResponse({
+      code: "VALIDATION",
+      message: result.message,
+      status: 400,
+      fixHref: "/ops",
     });
-    await appendOpsAuditEvent({
-      eventType: "OPS_ACTION_RUN_ERROR",
-      meta: {
-        actionId,
-        dangerous: Boolean(definition.dangerous),
-        durationMs: Math.max(0, Date.now() - startedAt),
-      },
-    }).catch(() => undefined);
-    await appendOpsActionLog({
-      actionId,
-      at: new Date().toISOString(),
-      status: "FAILED",
-      message: safeMessage,
-      durationMs: Math.max(0, Date.now() - startedAt),
-      meta: {
-        dangerous: Boolean(definition.dangerous),
-      },
-    }).catch(() => undefined);
-    await appendOpsMetricEvent({
-      type: "MIGRATION_ACTION",
-      meta: {
-        action: actionId,
-        status: "FAILED",
-        durationMs: Math.max(0, Date.now() - startedAt),
-        code: "INTERNAL",
-      },
-    }).catch(() => undefined);
+  }
 
+  if (result.kind === "internal-error") {
     return opsErrorResponse({
       code: "INTERNAL",
-      message: safeMessage,
+      message: result.message,
       status: 500,
       fixHref: "/ops",
     });
   }
+
+  return NextResponse.json({
+    ok: result.ok,
+    message: result.message,
+    meta: planningUserMeta(currentUser),
+    data: {
+      actionId: result.actionId,
+      ...(result.data ? result.data : {}),
+    },
+  });
 }
