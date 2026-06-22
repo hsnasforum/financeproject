@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
-import { tsImport } from "tsx/esm/api";
 
 function loadEnvFiles(cwd = process.cwd()) {
   for (const name of [".env.local", "env.local", ".env"]) {
@@ -12,7 +11,7 @@ function loadEnvFiles(cwd = process.cwd()) {
 }
 
 async function loadTsModule(modulePath) {
-  const raw = await tsImport(modulePath, { parentURL: import.meta.url });
+  const raw = await import(new URL(modulePath, import.meta.url).href);
   return raw?.default && typeof raw.default === "object" ? raw.default : raw;
 }
 

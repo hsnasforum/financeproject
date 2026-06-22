@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
-import { tsImport } from "tsx/esm/api";
 
 function loadEnvFiles(cwd = process.cwd()) {
   for (const name of [".env.local", "env.local", ".env"]) {
@@ -19,8 +18,9 @@ function parseArgs(argv) {
 }
 
 async function loadRefreshRunner() {
-  const raw = await tsImport("../src/lib/indicators/refresh.ts", { parentURL: import.meta.url });
-  const runIndicatorsRefresh = raw?.runIndicatorsRefresh;
+  const raw = await import(new URL("../src/lib/indicators/refresh.ts", import.meta.url).href);
+  const loadedModule = raw?.default && typeof raw.default === "object" ? raw.default : raw;
+  const runIndicatorsRefresh = loadedModule?.runIndicatorsRefresh;
   if (typeof runIndicatorsRefresh !== "function") {
     throw new Error("missing export indicators.refresh.runIndicatorsRefresh");
   }
@@ -28,8 +28,9 @@ async function loadRefreshRunner() {
 }
 
 async function loadAlertRunner() {
-  const raw = await tsImport("../src/lib/news/alerts.ts", { parentURL: import.meta.url });
-  const evaluateAndAppendAlertEvents = raw?.evaluateAndAppendAlertEvents;
+  const raw = await import(new URL("../src/lib/news/alerts.ts", import.meta.url).href);
+  const loadedModule = raw?.default && typeof raw.default === "object" ? raw.default : raw;
+  const evaluateAndAppendAlertEvents = loadedModule?.evaluateAndAppendAlertEvents;
   if (typeof evaluateAndAppendAlertEvents !== "function") {
     throw new Error("missing export news.alerts.evaluateAndAppendAlertEvents");
   }

@@ -59,6 +59,27 @@ afterEach(() => {
 });
 
 describe("daily refresh ops contract", () => {
+  it("runs TypeScript-backed mjs refresh wrappers through the Node tsx loader", () => {
+    const parsed = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf-8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(parsed.scripts?.["news:refresh"]).toBe("node --import tsx scripts/news_refresh.mjs");
+    expect(parsed.scripts?.["indicators:refresh"]).toBe("node --import tsx scripts/indicators_refresh.mjs");
+  });
+
+  it("keeps FinLife if-stale refresh covering every tracked snapshot kind", () => {
+    const syncSource = fs.readFileSync(path.join(process.cwd(), "scripts", "finlife_sync.mjs"), "utf-8");
+    const ifStaleSource = fs.readFileSync(path.join(process.cwd(), "scripts", "finlife_sync_if_stale.mjs"), "utf-8");
+
+    for (const kind of ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"]) {
+      expect(syncSource).toContain(`"${kind}"`);
+    }
+    expect(syncSource).toContain("export const SUPPORTED_FINLIFE_KINDS");
+    expect(ifStaleSource).toContain("SUPPORTED_FINLIFE_KINDS");
+    expect(ifStaleSource).not.toContain("[\"deposit\", \"saving\"]");
+  });
+
   it("runs public source refresh steps before news and indicators", () => {
     const root = createTempRoot();
     writePackage(root, {

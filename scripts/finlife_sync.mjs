@@ -22,7 +22,7 @@ import {
 ensureFetchAvailable();
 const require = createRequire(import.meta.url);
 let prismaClient = null;
-const SUPPORTED_KINDS = ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"];
+export const SUPPORTED_FINLIFE_KINDS = ["deposit", "saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan"];
 const PRIORITY_KIND_ORDER = ["saving", "pension", "mortgage-loan", "rent-house-loan", "credit-loan", "deposit"];
 const KIND_PRIORITY = new Map(PRIORITY_KIND_ORDER.map((kind, index) => [kind, index + 1]));
 const DEFAULT_GROUPS_BY_KIND = {
@@ -44,7 +44,7 @@ function parseArgs(argv) {
   for (const token of argv) {
     if (!token.startsWith("--")) continue;
     const [k, v = ""] = token.slice(2).split("=");
-    if (k === "kind" && (v === "all" || SUPPORTED_KINDS.includes(v))) out.kind = v;
+    if (k === "kind" && (v === "all" || SUPPORTED_FINLIFE_KINDS.includes(v))) out.kind = v;
     if (k === "inspect" && (v === "1" || v === "true" || v === "")) out.inspect = true;
     if (k === "fromFile" && v) out.fromFile = v;
     if (k === "gzip" && (v === "1" || v === "true" || v === "")) out.gzip = true;
@@ -221,7 +221,7 @@ function writeInspectDump(kind, products, options = {}, meta = {}) {
 
 function loadReplayDump(filePath) {
   const loaded = readDumpFile(filePath);
-  const kind = typeof loaded.payload?.meta?.kind === "string" && SUPPORTED_KINDS.includes(loaded.payload.meta.kind)
+  const kind = typeof loaded.payload?.meta?.kind === "string" && SUPPORTED_FINLIFE_KINDS.includes(loaded.payload.meta.kind)
     ? loaded.payload.meta.kind
     : null;
   const products = normalizeDumpProducts(loaded.payload?.products);

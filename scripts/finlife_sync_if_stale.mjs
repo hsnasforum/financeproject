@@ -1,10 +1,10 @@
-import { runSyncKinds } from "./finlife_sync.mjs";
+import { SUPPORTED_FINLIFE_KINDS, runSyncKinds } from "./finlife_sync.mjs";
 import { parsePositiveInt, readSnapshot, runShouldSync } from "./finlife_cli_common.mjs";
 
 async function main() {
   const ttlMs = parsePositiveInt(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS, 43_200, 60, 7 * 24 * 60 * 60) * 1000;
 
-  const kinds = ["deposit", "saving"];
+  const kinds = SUPPORTED_FINLIFE_KINDS;
   const needs = [];
   for (const kind of kinds) {
     const snap = readSnapshot(kind);
