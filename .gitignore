@@ -51,6 +51,7 @@ tmp/api-cache/
 tmp/codex-multi-agent/
 tmp/dart/
 tmp/finlife-fixtures/
+tmp/planning-postgres-readiness/
 tmp/*.json
 
 

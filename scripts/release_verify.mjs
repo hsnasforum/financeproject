@@ -16,6 +16,7 @@ const EARLY_REQUIRED_GATES = [
 const OPTIONAL_GATES = [
   "planning:v2:compat",
   "planning:v2:regress",
+  "planning:postgres:readiness",
 ];
 const LATE_REQUIRED_GATES = [
   "test",

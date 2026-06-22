@@ -630,7 +630,13 @@ describe("planning postgres readiness script", () => {
     const pkg = JSON.parse(fs.readFileSync("package.json", "utf-8")) as { scripts?: Record<string, string> };
 
     expect(pkg.scripts?.["planning:postgres:readiness"]).toBe(
-      "node scripts/planning_postgres_readiness.mjs --dry-run",
+      "node scripts/planning_postgres_readiness.mjs --dry-run --out-dir=tmp/planning-postgres-readiness",
     );
+  });
+
+  it("keeps the dry-run readiness gate wired into release verification", () => {
+    const releaseVerify = fs.readFileSync("scripts/release_verify.mjs", "utf-8");
+
+    expect(releaseVerify).toContain('"planning:postgres:readiness"');
   });
 });

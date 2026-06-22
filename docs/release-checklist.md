@@ -4,7 +4,7 @@
 - 기준 체크리스트는 루트 `RELEASE_CHECKLIST.md`
 - stable final single-owner gate의 primary인 `pnpm release:verify` 통과
   - 포함: `pnpm test`, `pnpm planning:v2:complete`, `pnpm multi-agent:guard`
-  - script가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`도 이어서 실행
+  - script가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`, `pnpm planning:postgres:readiness`도 이어서 실행
   - advisory `pnpm planning:ssot:check`는 WARN으로만 기록
 - stable final single-owner gate의 companion인 `pnpm build` 통과
 - 사용자 경로/셀렉터 영향이 있으면 stable final single-owner gate의 companion인 `pnpm e2e:rc` 통과

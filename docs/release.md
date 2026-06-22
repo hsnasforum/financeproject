@@ -20,6 +20,7 @@
 - 추가 게이트가 스크립트에 존재하면 실행:
   - `pnpm planning:v2:compat`
   - `pnpm planning:v2:regress`
+  - `pnpm planning:postgres:readiness`
 - `pnpm test`
 - advisory:
   - `pnpm planning:ssot:check` (실패해도 WARN만 남고 required gate는 유지)
@@ -27,6 +28,7 @@
 - active build/prod/playwright runtime이 있으면 build-preflight용 `standalone/.data` 정리는 안전하게 skip 됩니다.
 - 내부 `planning:v2:e2e:fast`와 `planning:v2:e2e:full`은 기존 dev/e2e webServer를 재사용하지 않도록 전용 포트와 고유 dist dir로 격리 실행합니다.
 - `planning:v2:regress`는 전용 planning e2e data dir를 매번 새로 만들어 shared `.data/planning-e2e` 오염을 피합니다.
+- `planning:postgres:readiness`는 SQLite runtime schema와 PostgreSQL target schema를 검증하고 `tmp/planning-postgres-readiness/`에 manifest, exported files, dry-run apply plan, checksum evidence를 남깁니다.
 
 선택:
 
