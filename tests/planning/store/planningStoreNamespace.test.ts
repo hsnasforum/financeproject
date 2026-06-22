@@ -147,4 +147,30 @@ describe("planning store namespace ownership", () => {
     expect(fs.existsSync(path.join(root, "vault", "profiles.meta.json"))).toBe(false);
     expect(fs.existsSync(path.join(root, "vault", "profiles", "index.json"))).toBe(false);
   });
+
+  it("keeps namespace writes bound to the scope captured at entry", async () => {
+    const scope: { userId: string; authSource: "trusted-header" } = {
+      userId: "alice",
+      authSource: "trusted-header",
+    };
+
+    await runWithPlanningUserScope(scope, async () => {
+      scope.userId = "bob";
+      await upsertProfileRecord({
+        id: "mutable-profile",
+        name: "Stable profile",
+        profile: sampleProfile(),
+        createdAt: "2026-03-01T00:00:00.000Z",
+        updatedAt: "2026-03-01T00:00:00.000Z",
+      });
+    });
+
+    const aliceProfile = await runWithPlanningUserScope({ userId: "alice" }, () => getProfile("mutable-profile"));
+    const bobProfile = await runWithPlanningUserScope({ userId: "bob" }, () => getProfile("mutable-profile"));
+
+    expect(aliceProfile?.name).toBe("Stable profile");
+    expect(bobProfile).toBeNull();
+    expect(fs.existsSync(path.join(root, "users", "alice", "vault", "profiles", "mutable-profile", "profile.json"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "users", "bob", "vault", "profiles", "mutable-profile", "profile.json"))).toBe(false);
+  });
 });
