@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { Readable } from "node:stream";
 import { createGzip } from "node:zlib";
-import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import { assertLocalHost, assertSameOrigin, toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
+import {
+  assertOpsBackupExportVaultCsrf,
+  ensureOpsBackupExportVaultCsrfCookie,
+  exportOpsBackupArchive,
+  recordOpsBackupExportError,
+  toOpsBackupExportClientError,
+  type OpsBackupExportMode,
+} from "../../../../../lib/ops/backup/backupExportRouteService";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
-import { appendOpsAuditEvent } from "../../../../../lib/ops/securityAuditLog";
-import { appendOpsMetricEvent } from "../../../../../lib/ops/metricsLog";
-import { toBackupExportClientError } from "../../../../../lib/ops/backup/clientErrors";
-import { buildPlanningDataVaultZip, encryptPlanningDataVaultArchive } from "../../../../../lib/ops/backup/planningDataVault";
 import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
-import { consumeVaultCsrfOrThrow, ensureVaultCsrfCookie } from "../../../../../lib/planning/security/vaultCsrf";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -26,22 +28,6 @@ function supportsGzip(request: Request): boolean {
   return acceptEncoding.includes("gzip");
 }
 
-function appendBackupAudit(result: "SUCCESS" | "ERROR", detail: Record<string, unknown>): void {
-  try {
-    appendAuditLog({
-      event: "OPS_BACKUP_EXPORT",
-      route: "/api/ops/backup/export",
-      summary: `OPS_BACKUP_EXPORT ${result}`,
-      details: {
-        result,
-        ...detail,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append backup export log", error);
-  }
-}
-
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -52,62 +38,35 @@ export async function POST(request: Request) {
     assertSameOrigin(request);
 
     const body = await request.json().catch(() => null) as { csrf?: unknown; passphrase?: unknown; mode?: unknown; gzip?: unknown } | null;
-    consumeVaultCsrfOrThrow(request, asString(body?.csrf));
+    assertOpsBackupExportVaultCsrf(request, asString(body?.csrf));
     const currentUser = await requirePlanningRouteUser(request);
     if (!isPlanningRouteUser(currentUser)) {
-      ensureVaultCsrfCookie(request, currentUser);
+      ensureOpsBackupExportVaultCsrfCookie(request, currentUser);
       return currentUser;
     }
     const passphrase = asString(body?.passphrase);
-    const mode = asString(body?.mode).toLowerCase() === "delta" ? "delta" : "full";
+    const mode: OpsBackupExportMode = asString(body?.mode).toLowerCase() === "delta" ? "delta" : "full";
     const gzipRequested = asBool(body?.gzip) || supportsGzip(request);
 
-    const exported = await buildPlanningDataVaultZip({ mode });
-    const encrypted = await encryptPlanningDataVaultArchive(exported.bytes, passphrase);
-    const stamp = exported.fileName.replace(/\.zip$/i, "");
-    const fileName = `${stamp}.enc.json`;
-
-    appendBackupAudit("SUCCESS", {
-      fileName,
+    const exported = await exportOpsBackupArchive({
+      passphrase,
       mode,
       gzipRequested,
-      rawSizeBytes: exported.bytes.length,
-      encryptedSizeBytes: encrypted.length,
-      counts: exported.manifest.counts,
+      startedAt,
     });
-    await appendOpsAuditEvent({
-      eventType: "OPS_BACKUP_EXPORT_SUCCESS",
-      meta: {
-        fileName,
-        mode,
-        gzipRequested,
-        rawSizeBytes: exported.bytes.length,
-        encryptedSizeBytes: encrypted.length,
-      },
-    }).catch(() => undefined);
-    await appendOpsMetricEvent({
-      type: "BACKUP_EXPORT",
-      meta: {
-        status: "SUCCESS",
-        mode,
-        gzip: gzipRequested,
-        durationMs: Math.max(0, Date.now() - startedAt),
-        sizeBytes: encrypted.length,
-      },
-    }).catch(() => undefined);
-    const baseStream = Readable.from(encrypted, { highWaterMark: 64 * 1024 });
+    const baseStream = Readable.from(exported.encryptedBytes, { highWaterMark: 64 * 1024 });
     const streamed = gzipRequested ? baseStream.pipe(createGzip()) : baseStream;
     const response = new Response(Readable.toWeb(streamed) as ReadableStream, {
       status: 200,
       headers: {
         "content-type": "application/octet-stream",
-        "content-disposition": `attachment; filename="${fileName}"`,
+        "content-disposition": `attachment; filename="${exported.fileName}"`,
         "cache-control": "no-store",
         "x-transfer-mode": "stream",
         ...(gzipRequested ? { "content-encoding": "gzip", vary: "accept-encoding" } : {}),
       },
     });
-    ensureVaultCsrfCookie(request, response);
+    ensureOpsBackupExportVaultCsrfCookie(request, response);
     return response;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
@@ -117,36 +76,23 @@ export async function POST(request: Request) {
         message: guard.message,
         status: guard.status,
       });
-      ensureVaultCsrfCookie(request, response);
+      ensureOpsBackupExportVaultCsrfCookie(request, response);
       return response;
     }
-    const clientError = toBackupExportClientError(error);
+    const clientError = toOpsBackupExportClientError(error);
     const contractError = toOpsContractError({
       code: clientError.code,
       message: clientError.message,
       status: clientError.status,
     });
-    appendBackupAudit("ERROR", {
+    await recordOpsBackupExportError({
       message: contractError.body.error.message,
       code: contractError.body.error.code,
+      status: contractError.status,
+      startedAt,
     });
-    await appendOpsAuditEvent({
-      eventType: "OPS_BACKUP_EXPORT_ERROR",
-      meta: {
-        code: contractError.body.error.code,
-        status: contractError.status,
-      },
-    }).catch(() => undefined);
-    await appendOpsMetricEvent({
-      type: "BACKUP_EXPORT",
-      meta: {
-        status: "FAILED",
-        durationMs: Math.max(0, Date.now() - startedAt),
-        code: contractError.body.error.code,
-      },
-    }).catch(() => undefined);
     const response = NextResponse.json(contractError.body, { status: contractError.status });
-    ensureVaultCsrfCookie(request, response);
+    ensureOpsBackupExportVaultCsrfCookie(request, response);
     return response;
   }
 }
