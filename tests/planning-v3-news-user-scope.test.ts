@@ -26,6 +26,7 @@ import {
   resolveNewsDigestDayJsonPath,
   resolveNewsScenarioJsonPath,
   resolveNewsSearchIndexPath,
+  resolveNewsTrendsJsonPath,
 } from "../src/lib/news/storageSqlite";
 import { resolveCurrentUserNewsSearchIndexPath } from "../src/lib/planning/v3/news/search";
 import { resolveExposureProfilePath } from "../planning/v3/exposure/store";
@@ -34,10 +35,12 @@ import { resolveNewsSettingsPath } from "../planning/v3/news/settings";
 import {
   resolveDigestPath,
   resolveScenariosCachePath,
+  resolveTrendsCachePath,
   upsertItems,
   writeState,
   writeDigest,
   writeScenariosCache,
+  writeTrendsCache,
 } from "../planning/v3/news/store";
 import { resolveWeeklyPlanPath } from "../planning/v3/news/weeklyPlan";
 
@@ -255,6 +258,36 @@ function writeGlobalLegacySearchIndexFixture(): void {
   }, null, 2)}\n`, "utf-8");
 }
 
+function writeGlobalLegacyTrendsFixture(): void {
+  const trendsPath = resolveNewsTrendsJsonPath();
+  fs.mkdirSync(path.dirname(trendsPath), { recursive: true });
+  fs.writeFileSync(trendsPath, `${JSON.stringify({
+    generatedAt: "2026-03-04T09:00:00.000Z",
+    timezone: "Asia/Seoul",
+    todayKst: "2026-03-04",
+    windowDays: 30,
+    topics: [{
+      topicId: "rates",
+      topicLabel: "금리/통화정책",
+      todayCount: 1,
+      yesterdayCount: 1,
+      delta: 0,
+      ratio: 1,
+      avgLast7d: 1,
+      stddevLast7d: 0,
+      burstZ: 0,
+      burstLevel: "하",
+      lowHistory: false,
+      sourceDiversity: 1,
+      topSourceShare: 1,
+      consensusGrade: "low",
+      scoreSum: 1,
+      series: [],
+    }],
+    burstTopics: [],
+  }, null, 2)}\n`, "utf-8");
+}
+
 function writeScopedDigestFixture(userId: string): void {
   runWithPlanningUserScope({ userId, authSource: "trusted-header" }, () => {
     writeDigest({
@@ -296,6 +329,18 @@ function writeScopedNewsStoreFixture(userId: string): void {
       schemaVersion: 1,
       lastRunAt: "2026-03-04T10:30:00.000Z",
       sources: {},
+    });
+    writeTrendsCache({
+      generatedAt: "2026-03-04T10:30:00.000Z",
+      date: "2026-03-04",
+      windowDays: 30,
+      topics: [{
+        topicId: "rates",
+        topicLabel: "금리/통화정책",
+        count: 1,
+        burstGrade: "High",
+        sourceDiversity: 1,
+      }],
     });
   });
 }
@@ -698,6 +743,7 @@ describe("planning v3 news user scope", () => {
   it("keeps news items and search on user-scoped v3 read models when namespace is enabled", async () => {
     writeGlobalLegacyNewsDbFixture();
     writeGlobalLegacySearchIndexFixture();
+    writeGlobalLegacyTrendsFixture();
     writeScopedNewsStoreFixture("alice");
 
     const bobItemsResponse = await itemsGET(requestGet(
@@ -741,23 +787,27 @@ describe("planning v3 news user scope", () => {
     expect(aliceItemsPayload.data?.items?.[0]?.title).toBe("alice 기준금리 점검");
 
     const aliceSearchResponse = await searchGET(requestGet(
-      "/api/planning/v3/news/search?q=alice&days=30",
+      "/api/planning/v3/news/search?q=alice&days=30&burst=%EC%83%81",
       "alice",
       "/planning/v3/news/explore",
     ));
     const aliceSearchPayload = await aliceSearchResponse.json() as {
-      data?: { total?: number; items?: Array<{ id?: string; title?: string }> };
+      data?: { total?: number; items?: Array<{ id?: string; title?: string; burstLevel?: string }> };
     };
     expect(aliceSearchResponse.status).toBe(200);
     expectTrustedMeta(aliceSearchPayload, "alice");
     expect(aliceSearchPayload.data?.total).toBe(1);
     expect(aliceSearchPayload.data?.items?.[0]?.id).toBe("alice-news-item");
     expect(aliceSearchPayload.data?.items?.[0]?.title).toBe("alice 기준금리 점검");
+    expect(aliceSearchPayload.data?.items?.[0]?.burstLevel).toBe("상");
 
     runWithPlanningUserScope({ userId: "alice", authSource: "trusted-header" }, () => {
       const scopedIndexPath = resolveCurrentUserNewsSearchIndexPath().replaceAll("\\", "/");
       expect(scopedIndexPath).toContain("/users/alice/planning-v3/news/cache/search-index.latest.json");
       expect(fs.existsSync(scopedIndexPath)).toBe(true);
+      const scopedTrendsPath = resolveTrendsCachePath(30).replaceAll("\\", "/");
+      expect(scopedTrendsPath).toContain("/users/alice/planning-v3/news/cache/trends.30d.latest.json");
+      expect(fs.existsSync(scopedTrendsPath)).toBe(true);
     });
     expect(fs.existsSync(resolveNewsSearchIndexPath())).toBe(true);
   });

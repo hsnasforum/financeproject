@@ -276,6 +276,17 @@ describe("planning v3 news api", () => {
     expect(routeSource).not.toContain("prepare(`");
   });
 
+  it("keeps news search route behind the current-user trend boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v3/news/search/route.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("readCurrentUserNewsTopicBurstMap");
+    expect(routeSource).not.toContain("readNewsTopicTrends");
+    expect(routeSource).not.toContain("resolveNewsTrendsJsonPath");
+  });
+
   it("GET digest response only exposes whitelisted metadata fields", async () => {
     const digestBackup = backupAndRemove(digestPath());
     try {

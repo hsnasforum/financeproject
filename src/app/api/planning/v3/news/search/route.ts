@@ -4,7 +4,7 @@ import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
   readCurrentUserNewsSearchIndex,
-  readNewsTopicTrends,
+  readCurrentUserNewsTopicBurstMap,
   searchNewsIndex,
   writeCurrentUserNewsSearchIndex,
   writeNewsSearchIndexFromStore,
@@ -173,9 +173,8 @@ export async function GET(request: Request) {
         : writeCurrentUserNewsSearchIndex({ generatedAt: new Date().toISOString() });
     }
 
-    const trends = readNewsTopicTrends();
     const freshnessStatus = isSearchIndexStale(index.generatedAt, lastRefreshedAt) ? "stale" : "current";
-    const burstByTopic = new Map((trends?.topics ?? []).map((row) => [asString(row.topicId), row.burstLevel]));
+    const burstByTopic = readCurrentUserNewsTopicBurstMap();
 
     const searched = searchNewsIndex(index, filters);
     const withBurst = searched.items.filter((row) => {

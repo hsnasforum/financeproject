@@ -9,6 +9,7 @@ import {
 } from "@/lib/news/searchIndex";
 import { buildScoreRationale } from "@/lib/news/scoreRationale";
 import {
+  type BurstLevel,
   type NewsScoreParts,
   type NewsSearchIndex,
   type NewsSearchIndexItem,
@@ -16,7 +17,7 @@ import {
 import { readNewsTopicTrends } from "@/lib/news/trendReader";
 import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
 import { loadEffectiveNewsConfig } from "@/lib/planning/v3/news/settings";
-import { readAllItems } from "@/lib/planning/v3/news/store";
+import { readAllItems, readTrendsCache } from "@/lib/planning/v3/news/store";
 import { resolveNewsRootDir } from "../../../../../planning/v3/news/rootDir";
 import { scoreItems } from "../../../../../planning/v3/news/select/score";
 
@@ -52,6 +53,13 @@ function normalizeScoreParts(value: {
   };
 }
 
+function toBurstLevel(value: unknown): BurstLevel {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === "high" || normalized === "상") return "상";
+  if (normalized === "med" || normalized === "중") return "중";
+  return "하";
+}
+
 function readSearchIndexFromPath(filePath: string): NewsSearchIndex | null {
   if (!fs.existsSync(filePath)) return null;
   try {
@@ -82,6 +90,16 @@ export function writeCurrentUserNewsSearchIndex(input: StoreSearchIndexBuildInpu
     return writeLegacyNewsSearchIndex(input);
   }
   return writeNewsSearchIndexFromStore(input);
+}
+
+export function readCurrentUserNewsTopicBurstMap(): Map<string, BurstLevel> {
+  if (!isPlanningNamespaceEnabled()) {
+    const trends = readNewsTopicTrends();
+    return new Map((trends?.topics ?? []).map((row) => [asString(row.topicId), row.burstLevel]));
+  }
+
+  const cache = readTrendsCache(30) ?? readTrendsCache(7);
+  return new Map((cache?.topics ?? []).map((row) => [asString(row.topicId), toBurstLevel(row.burstGrade)]));
 }
 
 export function writeNewsSearchIndexFromStore(input: StoreSearchIndexBuildInput): NewsSearchIndex {
@@ -144,7 +162,6 @@ export function writeNewsSearchIndexFromStore(input: StoreSearchIndexBuildInput)
 }
 
 export {
-  readNewsTopicTrends,
   searchNewsIndex,
   type NewsSearchFilters,
 };
