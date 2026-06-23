@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as profilesPOST } from "../../src/app/api/planning/v2/profiles/route";
 import { POST as runsPOST } from "../../src/app/api/planning/v2/runs/route";
-import { POST as shareReportPOST } from "../../src/app/api/planning/v2/share-report/route";
+import { GET as shareReportGET, POST as shareReportPOST } from "../../src/app/api/planning/v2/share-report/route";
 import { GET as shareReportDownloadGET } from "../../src/app/api/planning/v2/share-report/[id]/download/route";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
@@ -120,14 +120,32 @@ describe("planning share report routes", () => {
     }));
     const createPayload = await createRes.json() as {
       ok?: boolean;
-      data?: { id?: string };
+      data?: { id?: string; runId?: string; level?: string; createdAt?: string };
     };
     expect(createRes.status).toBe(201);
     expect(createPayload.ok).toBe(true);
     expect(createPayload.data?.id).toBeTruthy();
+    expect(createPayload.data?.runId).toBe(runId);
+    expect(createPayload.data?.level).toBe("standard");
+    expect(createPayload.data?.createdAt).toBeTruthy();
     expect(JSON.stringify(createPayload)).not.toContain(".data");
 
     const shareId = String(createPayload.data?.id ?? "");
+    const listRes = await shareReportGET(buildGetRequest("/api/planning/v2/share-report?limit=10"));
+    const listPayload = await listRes.json() as {
+      ok?: boolean;
+      data?: Array<{ id?: string; runId?: string; level?: string; createdAt?: string }>;
+    };
+    expect(listRes.status).toBe(200);
+    expect(listPayload.ok).toBe(true);
+    expect(listPayload.data).toContainEqual({
+      id: shareId,
+      runId,
+      level: "standard",
+      createdAt: createPayload.data?.createdAt,
+    });
+    expect(JSON.stringify(listPayload)).not.toContain(".data");
+
     const downloadRes = await shareReportDownloadGET(
       buildGetRequest(`/api/planning/v2/share-report/${shareId}/download`),
       { params: Promise.resolve({ id: shareId }) },
@@ -136,6 +154,25 @@ describe("planning share report routes", () => {
     expect(downloadRes.status).toBe(200);
     expect(downloadRes.headers.get("content-disposition")).toContain(`planning-share-${shareId}.md`);
     expect(markdown).toContain("가정 기반이며 보장이 아니며, 투자/가입 권유가 아닙니다.");
+  });
+
+  it("keeps share report list and create route behind the share route service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/share-report/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/share/routeService.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("/planning/server/share/routeService");
+    expect(routeSource).not.toContain("/planning/server/share/repository");
+    expect(routeSource).not.toContain("listCurrentUserShareReports(");
+    expect(routeSource).not.toContain("createCurrentUserShareReportFromRun(");
+    expect(serviceSource).toContain("from \"./repository\"");
+    expect(serviceSource).toContain("listCurrentUserShareReports(");
+    expect(serviceSource).toContain("createCurrentUserShareReportFromRun(");
   });
 
   it("keeps share markdown download route behind the download service boundary", () => {

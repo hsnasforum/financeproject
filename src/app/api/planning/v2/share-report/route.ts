@@ -5,9 +5,9 @@ import {
 } from "../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
 import {
-  createCurrentUserShareReportFromRun,
-  listCurrentUserShareReports,
-} from "../../../../../lib/planning/server/share/repository";
+  createCurrentUserShareReportResponseData,
+  listCurrentUserShareReportResponseData,
+} from "../../../../../lib/planning/server/share/routeService";
 import { type MaskLevel } from "../../../../../lib/planning/server/share/mask";
 import {
   isPlanningRouteUser,
@@ -71,15 +71,10 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const limit = Math.max(1, Math.min(100, Math.trunc(Number(url.searchParams.get("limit"))) || 50));
-    const rows = await listCurrentUserShareReports(limit);
+    const data = await listCurrentUserShareReportResponseData(limit);
     return jsonOk(
       {
-        data: rows.map((row) => ({
-          id: row.id,
-          runId: row.runId,
-          level: row.level,
-          createdAt: row.createdAt,
-        })),
+        data,
       },
       { meta: userMeta },
     );
@@ -109,15 +104,13 @@ export async function POST(request: Request) {
       return jsonError("INPUT", "runId는 필수입니다.", { status: 400, meta: userMeta });
     }
 
-    const created = await createCurrentUserShareReportFromRun(runId, parseMaskLevel(body?.level));
+    const created = await createCurrentUserShareReportResponseData({
+      runId,
+      level: parseMaskLevel(body?.level),
+    });
     return jsonOk(
       {
-        data: {
-          id: created.id,
-          runId: created.runId,
-          level: created.level,
-          createdAt: created.createdAt,
-        },
+        data: created,
       },
       { status: 201, meta: userMeta },
     );
