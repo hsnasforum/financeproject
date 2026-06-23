@@ -106,21 +106,39 @@ describe("planning profiles route", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("keeps profile routes behind the profiles repository boundary", () => {
-    const routePaths = [
+  it("keeps profile routes behind the profiles route service boundary", () => {
+    const profileRoutePaths = [
       "src/app/api/planning/profiles/route.ts",
       "src/app/api/planning/profiles/[id]/route.ts",
       "src/app/api/planning/v2/profiles/route.ts",
       "src/app/api/planning/v2/profiles/[id]/route.ts",
+    ];
+    const trashRoutePaths = [
       "src/app/api/planning/v2/trash/route.ts",
       "src/app/api/planning/v2/trash/restore/route.ts",
     ];
+    const routeServiceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/profiles/routeService.ts"),
+      "utf-8",
+    );
 
-    for (const routePath of routePaths) {
+    for (const routePath of profileRoutePaths) {
       const routeSource = fs.readFileSync(path.join(process.cwd(), routePath), "utf-8");
       expect(routeSource).not.toContain("planning/server/store/profileStore");
-      expect(routeSource).toContain("planning/server/profiles/repository");
+      expect(routeSource).not.toContain("planning/server/profiles/repository");
+      expect(routeSource).not.toContain("auditLogStore");
+      expect(routeSource).toContain("planning/server/profiles/routeService");
     }
+
+    for (const routePath of trashRoutePaths) {
+      const routeSource = fs.readFileSync(path.join(process.cwd(), routePath), "utf-8");
+      expect(routeSource).not.toContain("planning/server/store/profileStore");
+      expect(routeSource).not.toContain("planning/server/profiles/repository");
+    }
+
+    expect(routeServiceSource).toContain("createCurrentUserProfile");
+    expect(routeServiceSource).toContain("listCurrentUserProfileMetas");
+    expect(routeServiceSource).toContain("appendAuditLog");
   });
 
   it("returns the standard 401 response when profile list auth is required", async () => {

@@ -1,4 +1,3 @@
-import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
   assertSameOrigin,
@@ -12,10 +11,12 @@ import {
 } from "../../../../../../lib/planning/api/routeAuth";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import {
-  deleteCurrentUserProfile,
-  getCurrentUserProfile,
-  updateCurrentUserProfile,
-} from "../../../../../../lib/planning/server/profiles/repository";
+  deleteCurrentUserProfileForRoute,
+  getCurrentUserProfileForRoute,
+  recordCurrentUserProfileAudit,
+  recordCurrentUserProfileTrashAudit,
+  updateCurrentUserProfileForRoute,
+} from "../../../../../../lib/planning/server/profiles/routeService";
 import { PlanningV2ValidationError } from "../../../../../../lib/planning/server/v2/types";
 import { loadCanonicalProfile } from "../../../../../../lib/planning/v2/loadCanonicalProfile";
 
@@ -71,20 +72,7 @@ function appendProfileAudit(input: {
   recordId?: string | null;
   message: string;
 }) {
-  try {
-    appendAuditLog({
-      event: input.event,
-      route: input.route,
-      summary: `${input.event} ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        recordId: input.recordId ?? null,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning profile audit", error);
-  }
+  recordCurrentUserProfileAudit(input);
 }
 
 function appendTrashAudit(input: {
@@ -93,21 +81,11 @@ function appendTrashAudit(input: {
   id: string;
   message: string;
 }) {
-  try {
-    appendAuditLog({
-      event: "PLANNING_TRASH_MOVE",
-      route: "/api/planning/v2/profiles/[id]",
-      summary: `PLANNING_TRASH_MOVE ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        kind: input.kind,
-        id: input.id,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning trash move audit", error);
-  }
+  recordCurrentUserProfileTrashAudit({
+    result: input.result,
+    id: input.id,
+    message: input.message,
+  });
 }
 
 function normalizeCanonicalProfile(input: unknown) {
@@ -122,7 +100,7 @@ export async function GET(request: Request, context: RouteContext) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const record = await getCurrentUserProfile(id);
+      const record = await getCurrentUserProfileForRoute(id);
       if (!record) {
         return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
       }
@@ -176,7 +154,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return jsonError("INPUT", "No update fields provided");
       }
 
-      const updated = await updateCurrentUserProfile(id, patch);
+      const updated = await updateCurrentUserProfileForRoute(id, patch);
       if (!updated) {
         appendProfileAudit({
           event: "PLANNING_PROFILE_UPDATE",
@@ -263,7 +241,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const deleted = await deleteCurrentUserProfile(id);
+      const deleted = await deleteCurrentUserProfileForRoute(id);
       if (!deleted) {
         appendProfileAudit({
           event: "PLANNING_PROFILE_DELETE",

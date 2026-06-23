@@ -13,12 +13,9 @@ import {
   withPlanningRouteUser,
 } from "../../../../lib/planning/api/routeAuth";
 import {
-  createCurrentUserProfile,
-  getCurrentUserDefaultProfileId,
-  listCurrentUserProfileMetas,
-  setCurrentUserDefaultProfile,
-} from "../../../../lib/planning/server/profiles/repository";
-import { loadCanonicalProfile } from "../../../../lib/planning/v2/loadCanonicalProfile";
+  createCurrentUserProfileMetaRowForRoute,
+  listCurrentUserProfileMetaRowsForRoute,
+} from "../../../../lib/planning/server/profiles/routeService";
 
 type CreateProfileBody = {
   name?: unknown;
@@ -63,34 +60,6 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   }
 }
 
-function defaultCanonicalProfile() {
-  return loadCanonicalProfile({
-    monthlyIncomeNet: 0,
-    monthlyEssentialExpenses: 0,
-    monthlyDiscretionaryExpenses: 0,
-    liquidAssets: 0,
-    investmentAssets: 0,
-    debts: [],
-    goals: [],
-  }).profile;
-}
-
-function toProfileMetaRow(input: {
-  profileId: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  isDefault: boolean;
-}) {
-  return {
-    profileId: input.profileId,
-    name: input.name,
-    createdAt: input.createdAt,
-    updatedAt: input.updatedAt,
-    isDefault: input.isDefault,
-  };
-}
-
 export async function GET(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -100,14 +69,11 @@ export async function GET(request: Request) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const [items, defaultProfileId] = await Promise.all([
-        listCurrentUserProfileMetas(),
-        getCurrentUserDefaultProfileId(),
-      ]);
+      const result = await listCurrentUserProfileMetaRowsForRoute();
       return jsonOk({
-        data: items.map((item) => toProfileMetaRow(item)),
+        data: result.rows,
         meta: {
-          ...(defaultProfileId ? { defaultProfileId } : {}),
+          ...(result.defaultProfileId ? { defaultProfileId: result.defaultProfileId } : {}),
           ...planningUserMeta(currentUser),
         },
       });
@@ -136,29 +102,13 @@ export async function POST(request: Request) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const canonicalProfile = body?.profile !== undefined
-        ? loadCanonicalProfile(body.profile).profile
-        : defaultCanonicalProfile();
-      const created = await createCurrentUserProfile({
+      const row = await createCurrentUserProfileMetaRowForRoute({
         name: asString(body?.name) || "기본 프로필",
-        profile: canonicalProfile,
+        profile: body?.profile,
+        isDefault: asBoolean(body?.isDefault) === true,
       });
-      const setAsDefault = asBoolean(body?.isDefault) === true;
-      if (setAsDefault) {
-        await setCurrentUserDefaultProfile(created.id);
-      }
-      const metas = await listCurrentUserProfileMetas();
-      const meta = metas.find((item) => item.profileId === created.id);
       return jsonOk({
-        data: meta
-          ? toProfileMetaRow(meta)
-          : toProfileMetaRow({
-            profileId: created.id,
-            name: created.name,
-            createdAt: created.createdAt,
-            updatedAt: created.updatedAt,
-            isDefault: setAsDefault,
-          }),
+        data: row,
         meta: planningUserMeta(currentUser),
       }, { status: 201 });
     });

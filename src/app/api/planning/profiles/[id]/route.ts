@@ -13,12 +13,9 @@ import {
   withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 import {
-  getCurrentUserDefaultProfileId,
-  getCurrentUserProfile,
-  listCurrentUserProfileMetas,
-  setCurrentUserDefaultProfile,
-  updateCurrentUserProfile,
-} from "../../../../../lib/planning/server/profiles/repository";
+  getCurrentUserProfileMetaRowForRoute,
+  patchCurrentUserProfileMetaRowForRoute,
+} from "../../../../../lib/planning/server/profiles/routeService";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -66,22 +63,6 @@ function withLocalWriteGuard(request: Request, body: { csrf?: unknown } | null) 
   }
 }
 
-async function toMeta(profileId: string) {
-  const [metas, defaultProfileId] = await Promise.all([
-    listCurrentUserProfileMetas(),
-    getCurrentUserDefaultProfileId(),
-  ]);
-  const found = metas.find((item) => item.profileId === profileId);
-  if (!found) return null;
-  return {
-    profileId: found.profileId,
-    name: found.name,
-    createdAt: found.createdAt,
-    updatedAt: found.updatedAt,
-    isDefault: found.profileId === defaultProfileId,
-  };
-}
-
 export async function GET(request: Request, context: RouteContext) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -92,7 +73,7 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const row = await toMeta(id);
+      const row = await getCurrentUserProfileMetaRowForRoute(id);
       if (!row) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
       return jsonOk({
         data: row,
@@ -133,17 +114,11 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      if (nextName) {
-        const updated = await updateCurrentUserProfile(id, { name: nextName });
-        if (!updated) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-      } else {
-        const existing = await getCurrentUserProfile(id);
-        if (!existing) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
-      }
-      if (isDefault === true) {
-        await setCurrentUserDefaultProfile(id);
-      }
-      const row = await toMeta(id);
+      const row = await patchCurrentUserProfileMetaRowForRoute({
+        profileId: id,
+        ...(nextName ? { name: nextName } : {}),
+        ...(isDefault === true ? { isDefault: true } : {}),
+      });
       if (!row) return jsonError("NO_DATA", "프로필을 찾을 수 없습니다.");
       return jsonOk({
         data: row,

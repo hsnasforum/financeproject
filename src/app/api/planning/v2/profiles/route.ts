@@ -1,4 +1,3 @@
-import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
   assertSameOrigin,
@@ -11,9 +10,10 @@ import {
   withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 import {
-  createCurrentUserProfile,
-  listCurrentUserProfiles,
-} from "../../../../../lib/planning/server/profiles/repository";
+  createCurrentUserProfileForRoute,
+  listCurrentUserProfilesForRoute,
+  recordCurrentUserProfileAudit,
+} from "../../../../../lib/planning/server/profiles/routeService";
 import { PlanningV2ValidationError } from "../../../../../lib/planning/server/v2/types";
 import { loadCanonicalProfile } from "../../../../../lib/planning/v2/loadCanonicalProfile";
 
@@ -64,20 +64,7 @@ function appendProfileAudit(input: {
   recordId?: string | null;
   message: string;
 }) {
-  try {
-    appendAuditLog({
-      event: input.event,
-      route: input.route,
-      summary: `${input.event} ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        recordId: input.recordId ?? null,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning profile audit", error);
-  }
+  recordCurrentUserProfileAudit(input);
 }
 
 function normalizeCanonicalProfile(input: unknown) {
@@ -90,7 +77,7 @@ export async function GET(request: Request) {
 
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const records = await listCurrentUserProfiles();
+      const records = await listCurrentUserProfilesForRoute();
       return jsonOk({
         data: records,
         meta: planningUserMeta(currentUser),
@@ -119,7 +106,7 @@ export async function POST(request: Request) {
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
       const canonical = normalizeCanonicalProfile(body?.profile);
-      const created = await createCurrentUserProfile({
+      const created = await createCurrentUserProfileForRoute({
         name: name || "기본 프로필",
         profile: canonical.profile,
       });
