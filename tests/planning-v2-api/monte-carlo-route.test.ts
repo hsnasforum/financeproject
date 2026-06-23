@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
@@ -5,16 +7,22 @@ const {
   loadLatestAssumptionsSnapshotMock,
   loadAssumptionsSnapshotByIdMock,
   findAssumptionsSnapshotIdMock,
+  recordMonteCarloBudgetRejectionMock,
 } = vi.hoisted(() => ({
   loadLatestAssumptionsSnapshotMock: vi.fn(),
   loadAssumptionsSnapshotByIdMock: vi.fn(),
   findAssumptionsSnapshotIdMock: vi.fn(),
+  recordMonteCarloBudgetRejectionMock: vi.fn(),
 }));
 
 vi.mock("../../src/lib/planning/assumptions/storage", () => ({
   loadLatestAssumptionsSnapshot: (...args: unknown[]) => loadLatestAssumptionsSnapshotMock(...args),
   loadAssumptionsSnapshotById: (...args: unknown[]) => loadAssumptionsSnapshotByIdMock(...args),
   findAssumptionsSnapshotId: (...args: unknown[]) => findAssumptionsSnapshotIdMock(...args),
+}));
+
+vi.mock("../../src/lib/planning/server/v2/monteCarloAuditRouteService", () => ({
+  recordMonteCarloBudgetRejection: (...args: unknown[]) => recordMonteCarloBudgetRejectionMock(...args),
 }));
 
 import { POST } from "../../src/app/api/planning/v2/monte-carlo/route";
@@ -55,6 +63,7 @@ describe("POST /api/planning/v2/monte-carlo", () => {
     loadLatestAssumptionsSnapshotMock.mockReset();
     loadAssumptionsSnapshotByIdMock.mockReset();
     findAssumptionsSnapshotIdMock.mockReset();
+    recordMonteCarloBudgetRejectionMock.mockReset();
     findAssumptionsSnapshotIdMock.mockResolvedValue(undefined);
   });
 
@@ -171,5 +180,32 @@ describe("POST /api/planning/v2/monte-carlo", () => {
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("BUDGET_EXCEEDED");
     expect(Number(payload.meta?.budget?.workUnits ?? 0)).toBeGreaterThan(8_000_000);
+    expect(recordMonteCarloBudgetRejectionMock).toHaveBeenCalledTimes(1);
+    expect(recordMonteCarloBudgetRejectionMock.mock.calls[0]?.[0]).toMatchObject({
+      ok: false,
+      code: "BUDGET_EXCEEDED",
+      data: {
+        paths: 15000,
+        horizonMonths: 600,
+      },
+    });
+  });
+
+  it("keeps monte carlo audit writes behind the route service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/monte-carlo/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/v2/monteCarloAuditRouteService.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("/planning/server/v2/monteCarloAuditRouteService");
+    expect(routeSource).not.toContain("auditLogStore");
+    expect(routeSource).not.toContain("appendAuditLog");
+    expect(serviceSource).toContain("auditLogStore");
+    expect(serviceSource).toContain("appendAuditLog");
+    expect(serviceSource).toContain("catch");
   });
 });

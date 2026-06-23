@@ -1,5 +1,4 @@
 import { fail, ok } from "../../../../../lib/planning/server/v2/apiResponse";
-import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
   assertLocalHost,
@@ -14,6 +13,7 @@ import {
   writePlanningRouteCache,
 } from "../../../../../lib/planning/server/cache/routeService";
 import { checkMonteCarloBudget } from "../../../../../lib/planning/server/v2/budget";
+import { recordMonteCarloBudgetRejection } from "../../../../../lib/planning/server/v2/monteCarloAuditRouteService";
 import { toPlanningError } from "../../../../../lib/planning/server/v2/errors";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { isAllocationPolicyId } from "../../../../../lib/planning/server/v2/policy/presets";
@@ -207,20 +207,7 @@ export async function POST(request: Request) {
     horizonMonths,
   });
   if (!budget.ok) {
-    try {
-      appendAuditLog({
-        event: "PLANNING_MONTE_CARLO_BUDGET",
-        route: "/api/planning/v2/monte-carlo",
-        summary: `PLANNING_MONTE_CARLO_BUDGET REJECTED: ${budget.message}`,
-        details: {
-          result: "REJECTED",
-          code: budget.code,
-          ...(budget.data ?? {}),
-        },
-      });
-    } catch {
-      // no-op
-    }
+    recordMonteCarloBudgetRejection(budget);
     return fail("BUDGET_EXCEEDED", budget.message, {
       status: 400,
       meta: {
