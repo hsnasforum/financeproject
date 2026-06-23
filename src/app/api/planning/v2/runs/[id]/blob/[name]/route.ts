@@ -9,8 +9,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../../../../lib/planning/api/routeAuth";
-import { sanitizeRunBlobForResponse } from "../../../../../../../../lib/planning/api/runResponseSanitizer";
-import { getCurrentUserRunBlob } from "../../../../../../../../lib/planning/server/runs/repository";
+import { getCurrentUserRunBlobResponseData } from "../../../../../../../../lib/planning/server/runs/routeService";
 import { gzipSync } from "node:zlib";
 
 type RouteContext = {
@@ -85,11 +84,10 @@ export async function GET(request: Request, context: RouteContext) {
   const isPreview = asString(url.searchParams.get("view")).toLowerCase() === "preview";
 
   try {
-    const blob = await getCurrentUserRunBlob(id, name);
-    if (blob === null) {
-      return jsonError("NO_DATA", "blob을 찾을 수 없습니다.", { status: 404 });
+    const responseBlob = await getCurrentUserRunBlobResponseData(id, name);
+    if (responseBlob === null) {
+      return jsonError("NO_DATA", "blob을 찾을 수 없습니다.", { status: 404, meta: userMeta });
     }
-    const responseBlob = sanitizeRunBlobForResponse(blob);
     if (!isPreview) {
       return jsonResponseWithOptionalGzip(request, {
         ok: true,
@@ -117,6 +115,6 @@ export async function GET(request: Request, context: RouteContext) {
     }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "blob 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }

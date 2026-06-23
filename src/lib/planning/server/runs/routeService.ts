@@ -1,10 +1,14 @@
 import { append as appendAuditLog } from "../../../audit/auditLogStore";
-import { sanitizeRunRecordForResponse } from "../../api/runResponseSanitizer";
+import {
+  sanitizeRunBlobForResponse,
+  sanitizeRunRecordForResponse,
+} from "../../api/runResponseSanitizer";
 import {
   deleteCurrentUserRun,
   ensureCurrentUserRunActionPlan,
   getCurrentUserRun,
   getCurrentUserRunActionProgress,
+  getCurrentUserRunBlob,
   summarizeCurrentUserRunActionProgress,
   updateCurrentUserRun,
   updateCurrentUserRunActionProgress,
@@ -35,6 +39,8 @@ export type CurrentUserRunActionProgressResult = {
   progress: CurrentUserPlanningRunActionProgress;
   summary: CurrentUserPlanningRunActionProgressSummary;
 };
+
+export type CurrentUserRunBlobResponseData = unknown;
 
 type RunAuditResult = "SUCCESS" | "ERROR";
 type TrashMoveAuditResult = RunAuditResult | "REJECTED";
@@ -132,6 +138,15 @@ export async function getCurrentUserRunDetailResponseData(runId: string): Promis
   }
 
   return sanitizeRunRecordForResponse(runWithActionCenter);
+}
+
+export async function getCurrentUserRunBlobResponseData(
+  runId: string,
+  name: string,
+): Promise<CurrentUserRunBlobResponseData | null> {
+  const blob = await getCurrentUserRunBlob(runId, name);
+  if (blob === null) return null;
+  return sanitizeRunBlobForResponse(blob);
 }
 
 export async function patchCurrentUserRunActionCenter(input: {

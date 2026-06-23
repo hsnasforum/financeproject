@@ -58,6 +58,26 @@ function buildGetRequest(urlPath: string): Request {
 describe("run blob endpoint", () => {
   let root = "";
 
+  it("keeps run blob repository and sanitizer access behind the run route service", () => {
+    const routeSources = [
+      "src/app/api/planning/v2/runs/[id]/blob/[name]/route.ts",
+      "src/app/api/planning/runs/[id]/blob/[name]/route.ts",
+    ].map((filePath) => fs.readFileSync(path.join(process.cwd(), filePath), "utf8"));
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/runs/routeService.ts"),
+      "utf8",
+    );
+
+    for (const routeSource of routeSources) {
+      expect(routeSource).not.toContain("server/runs/repository");
+      expect(routeSource).not.toContain("runResponseSanitizer");
+    }
+    expect(routeSources[0]).toContain("getCurrentUserRunBlobResponseData");
+    expect(routeSources[1]).toContain("runBlobGet");
+    expect(serviceSource).toContain("getCurrentUserRunBlob");
+    expect(serviceSource).toContain("sanitizeRunBlobForResponse");
+  });
+
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-run-blob-"));
     env.NODE_ENV = "test";
