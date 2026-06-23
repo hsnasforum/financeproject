@@ -3,13 +3,12 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { getCurrentUserRun } from "../../../../../../../lib/planning/server/runs/repository";
-import { buildStandaloneReportArtifactsFromRun } from "../../../../../../planning/reports/_lib/standaloneReportArtifacts";
 import {
   isPlanningRouteUser,
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../../../lib/planning/api/routeAuth";
+import { getCurrentUserRunReportHtml } from "../../../../../../../lib/planning/server/reports/runReportRouteService";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -37,26 +36,24 @@ export async function GET(request: Request, context: RouteContext) {
 
   try {
     const url = new URL(request.url);
-    const run = await getCurrentUserRun(id);
-    if (!run) {
+    const viewMode = (url.searchParams.get("view") ?? "").trim().toLowerCase();
+    const printView = viewMode === "print" || viewMode === "view";
+    const report = await getCurrentUserRunReportHtml({
+      runId: id,
+      printView,
+    });
+    if (!report) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
-    const viewMode = (url.searchParams.get("view") ?? "").trim().toLowerCase();
-    const printView = viewMode === "print" || viewMode === "view";
-    const { html } = buildStandaloneReportArtifactsFromRun(run, {
-      printView,
-    });
-
     const shouldDownload = url.searchParams.get("download") === "1";
-    const fileName = `planning-run-report-${run.id}.html`;
 
-    return new Response(html, {
+    return new Response(report.html, {
       status: 200,
       headers: {
         "content-type": "text/html; charset=utf-8",
         "cache-control": "no-store",
-        ...(shouldDownload ? { "content-disposition": `attachment; filename=\"${fileName}\"` } : {}),
+        ...(shouldDownload ? { "content-disposition": `attachment; filename=\"${report.htmlFilename}\"` } : {}),
       },
     });
   } catch {

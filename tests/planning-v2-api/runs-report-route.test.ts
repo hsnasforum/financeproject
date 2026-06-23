@@ -57,6 +57,29 @@ function buildGetRequest(urlPath: string): Request {
 describe("GET /api/planning/v2/runs/[id]/report", () => {
   let root = "";
 
+  it("keeps run read and html artifact rendering behind the run report service", () => {
+    const reportRouteSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/runs/[id]/report/route.ts"),
+      "utf8",
+    );
+    const pdfRouteSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/runs/[id]/report.pdf/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/reports/runReportRouteService.ts"),
+      "utf8",
+    );
+
+    for (const routeSource of [reportRouteSource, pdfRouteSource]) {
+      expect(routeSource).not.toContain("server/runs/repository");
+      expect(routeSource).not.toContain("buildStandaloneReportArtifactsFromRun");
+      expect(routeSource).toContain("getCurrentUserRunReportHtml");
+    }
+    expect(serviceSource).toContain("getCurrentUserRun");
+    expect(serviceSource).toContain("buildStandaloneReportArtifactsFromRun");
+  });
+
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-runs-report-"));
     env.NODE_ENV = "test";

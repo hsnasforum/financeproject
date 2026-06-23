@@ -5,12 +5,11 @@ import {
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
 import { getPlanningFeatureFlags } from "../../../../../../../lib/planning/config";
-import { getCurrentUserRun } from "../../../../../../../lib/planning/server/runs/repository";
+import { getCurrentUserRunReportHtml } from "../../../../../../../lib/planning/server/reports/runReportRouteService";
 import {
   PdfReportError,
   renderPdfReportFromHtml,
 } from "../../../../../../../lib/planning/v2/report/pdfReport";
-import { buildStandaloneReportArtifactsFromRun } from "../../../../../../planning/reports/_lib/standaloneReportArtifacts";
 import {
   isPlanningRouteUser,
   planningUserMeta,
@@ -53,21 +52,19 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
 
   try {
-    const run = await getCurrentUserRun(id);
-    if (!run) {
+    const report = await getCurrentUserRunReportHtml({ runId: id });
+    if (!report) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
-    const { html } = buildStandaloneReportArtifactsFromRun(run);
-
-    const pdf = await renderPdfReportFromHtml(html);
+    const pdf = await renderPdfReportFromHtml(report.html);
     const pdfBody = Uint8Array.from(pdf).buffer;
 
     return new Response(pdfBody, {
       status: 200,
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `attachment; filename=\"planning-run-${run.id}.pdf\"`,
+        "content-disposition": `attachment; filename=\"${report.pdfFilename}\"`,
         "cache-control": "no-store",
       },
     });
