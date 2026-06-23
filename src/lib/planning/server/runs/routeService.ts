@@ -10,6 +10,7 @@ import {
   updateCurrentUserRunActionProgress,
   type CurrentUserPlanningRunActionPlan,
   type CurrentUserPlanningRunActionProgress,
+  type CurrentUserPlanningRunActionProgressSummary,
   type CurrentUserPlanningRunActionStatus,
 } from "./repository";
 
@@ -28,6 +29,11 @@ export type CurrentUserRunActionCenterPatchResult = {
     total: number;
     pct: number;
   };
+};
+
+export type CurrentUserRunActionProgressResult = {
+  progress: CurrentUserPlanningRunActionProgress;
+  summary: CurrentUserPlanningRunActionProgressSummary;
 };
 
 type RunAuditResult = "SUCCESS" | "ERROR";
@@ -155,6 +161,32 @@ export async function patchCurrentUserRunActionCenter(input: {
       total: summary.total,
       pct: summary.completionPct,
     },
+  };
+}
+
+export async function getCurrentUserRunActionProgressResult(
+  runId: string,
+): Promise<CurrentUserRunActionProgressResult | null> {
+  const progress = await getCurrentUserRunActionProgress(runId);
+  if (!progress) return null;
+  return {
+    progress,
+    summary: summarizeCurrentUserRunActionProgress(progress),
+  };
+}
+
+export async function patchCurrentUserRunActionProgress(input: {
+  runId: string;
+  patch: CurrentUserRunActionCenterPatchInput;
+}): Promise<CurrentUserRunActionProgressResult> {
+  const progress = await updateCurrentUserRunActionProgress(input.runId, {
+    actionKey: input.patch.actionKey,
+    ...(input.patch.status ? { status: input.patch.status } : {}),
+    ...(input.patch.note !== undefined ? { note: input.patch.note } : {}),
+  });
+  return {
+    progress,
+    summary: summarizeCurrentUserRunActionProgress(progress),
   };
 }
 

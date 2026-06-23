@@ -67,6 +67,25 @@ function getRequest(urlPath: string, host = LOCAL_HOST): Request {
 describe("run action progress route", () => {
   let root = "";
 
+  it("keeps action progress repository and summary projection behind the run route service", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/runs/[id]/action-progress/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/runs/routeService.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).not.toContain("server/runs/repository");
+    expect(routeSource).not.toContain("summarizeCurrentUserRunActionProgress");
+    expect(routeSource).toContain("getCurrentUserRunActionProgressResult");
+    expect(routeSource).toContain("patchCurrentUserRunActionProgress");
+    expect(serviceSource).toContain("getCurrentUserRunActionProgress");
+    expect(serviceSource).toContain("updateCurrentUserRunActionProgress");
+    expect(serviceSource).toContain("summarizeCurrentUserRunActionProgress");
+  });
+
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-run-action-progress-"));
     env.NODE_ENV = "test";

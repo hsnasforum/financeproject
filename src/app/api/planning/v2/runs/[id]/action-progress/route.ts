@@ -10,11 +10,10 @@ import {
   withPlanningRouteUser,
 } from "../../../../../../../lib/planning/api/routeAuth";
 import {
-  getCurrentUserRunActionProgress,
-  summarizeCurrentUserRunActionProgress,
-  updateCurrentUserRunActionProgress,
-  type CurrentUserPlanningRunActionStatus as PlanningRunActionStatus,
-} from "../../../../../../../lib/planning/server/runs/repository";
+  getCurrentUserRunActionProgressResult,
+  patchCurrentUserRunActionProgress,
+  type CurrentUserRunActionStatus as PlanningRunActionStatus,
+} from "../../../../../../../lib/planning/server/runs/routeService";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -71,14 +70,14 @@ export async function GET(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const progress = await getCurrentUserRunActionProgress(id);
-      if (!progress) {
+      const result = await getCurrentUserRunActionProgressResult(id);
+      if (!result) {
         return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
       }
       return jsonOk({
-        data: progress,
+        data: result.progress,
         meta: {
-          summary: summarizeCurrentUserRunActionProgress(progress),
+          summary: result.summary,
           ...planningUserMeta(currentUser),
         },
       });
@@ -116,15 +115,18 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { id } = await context.params;
   try {
     return await withPlanningRouteUser(request, async (currentUser) => {
-      const updated = await updateCurrentUserRunActionProgress(id, {
-        actionKey,
-        ...(status ? { status } : {}),
-        ...(note !== undefined ? { note } : {}),
+      const result = await patchCurrentUserRunActionProgress({
+        runId: id,
+        patch: {
+          actionKey,
+          ...(status ? { status } : {}),
+          ...(note !== undefined ? { note } : {}),
+        },
       });
       return jsonOk({
-        data: updated,
+        data: result.progress,
         meta: {
-          summary: summarizeCurrentUserRunActionProgress(updated),
+          summary: result.summary,
           ...planningUserMeta(currentUser),
         },
       });
