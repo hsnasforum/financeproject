@@ -57,6 +57,23 @@ function buildGetRequest(urlPath: string): Request {
 describe("GET /api/planning/v2/runs/[id]/export", () => {
   let root = "";
 
+  it("keeps run read and result DTO projection behind the run export service", () => {
+    const exportRouteSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/runs/[id]/export/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/reports/runExportRouteService.ts"),
+      "utf8",
+    );
+
+    expect(exportRouteSource).not.toContain("server/runs/repository");
+    expect(exportRouteSource).not.toContain("resolveReportResultDtoFromRun");
+    expect(exportRouteSource).toContain("getCurrentUserRunResultExport");
+    expect(serviceSource).toContain("getCurrentUserRun");
+    expect(serviceSource).toContain("resolveReportResultDtoFromRun");
+  });
+
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-runs-export-"));
     env.NODE_ENV = "test";

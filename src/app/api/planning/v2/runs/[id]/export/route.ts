@@ -3,13 +3,12 @@ import {
   toGuardErrorResponse,
 } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
-import { resolveReportResultDtoFromRun } from "../../../../../../../lib/planning/reports/reportInputContract";
-import { getCurrentUserRun } from "../../../../../../../lib/planning/server/runs/repository";
 import {
   isPlanningRouteUser,
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../../../lib/planning/api/routeAuth";
+import { getCurrentUserRunResultExport } from "../../../../../../../lib/planning/server/reports/runExportRouteService";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -35,18 +34,16 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const run = await getCurrentUserRun(id);
-    if (!run) {
+    const exportPayload = await getCurrentUserRunResultExport(id);
+    if (!exportPayload) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
-    const resultDto = resolveReportResultDtoFromRun(run);
-    const fileName = `planning-run-result-${run.id}.json`;
-    return new Response(`${JSON.stringify(resultDto, null, 2)}\n`, {
+    return new Response(`${JSON.stringify(exportPayload.resultDto, null, 2)}\n`, {
       status: 200,
       headers: {
         "content-type": "application/json; charset=utf-8",
-        "content-disposition": `attachment; filename="${fileName}"`,
+        "content-disposition": `attachment; filename="${exportPayload.filename}"`,
         "cache-control": "no-store",
       },
     });
