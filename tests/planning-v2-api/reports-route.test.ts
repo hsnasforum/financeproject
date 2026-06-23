@@ -197,6 +197,24 @@ describe("planning reports api", () => {
     expect(routeSource).toContain("\"cache-control\": \"no-store\"");
   });
 
+  it("keeps report list and create route behind the reports route service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/reports/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/reports/routeService.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("/planning/server/reports/routeService");
+    expect(routeSource).not.toContain("/planning/server/reports/repository");
+    expect(routeSource).not.toContain("listCurrentUserReports(");
+    expect(routeSource).not.toContain("createCurrentUserReportFromRun(");
+    expect(serviceSource).toContain("listCurrentUserReports(");
+    expect(serviceSource).toContain("createCurrentUserReportFromRun(");
+  });
+
   it("keeps report detail route behind the reports route service boundary", () => {
     const routeSource = fs.readFileSync(
       path.join(process.cwd(), "src/app/api/planning/v2/reports/[id]/route.ts"),

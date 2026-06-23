@@ -10,9 +10,9 @@ import {
   withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 import {
-  createCurrentUserReportFromRun,
-  listCurrentUserReports,
-} from "../../../../../lib/planning/server/reports/repository";
+  createCurrentUserReportResponseData,
+  listCurrentUserReportResponseData,
+} from "../../../../../lib/planning/server/reports/routeService";
 
 type ReportsCreateBody = {
   runId?: unknown;
@@ -63,16 +63,8 @@ export async function GET(request: Request) {
       try {
         const url = new URL(request.url);
         const limit = Math.max(1, Math.min(200, Math.trunc(Number(url.searchParams.get("limit"))) || 50));
-        const rows = await listCurrentUserReports(limit);
-        return jsonOk({
-          data: rows.map((row) => ({
-            id: row.id,
-            createdAt: row.createdAt,
-            kind: row.kind,
-            ...(row.runId ? { runId: row.runId } : {}),
-            ...(row.recommendRunId ? { recommendRunId: row.recommendRunId } : {}),
-          })),
-        }, { meta: planningUserMeta(currentUser) });
+        const data = await listCurrentUserReportResponseData(limit);
+        return jsonOk({ data }, { meta: planningUserMeta(currentUser) });
       } catch (error) {
         const message = error instanceof Error ? error.message : "리포트 목록 조회에 실패했습니다.";
         return jsonError("INTERNAL", message, {
@@ -112,7 +104,8 @@ export async function POST(request: Request) {
           });
         }
 
-        const created = await createCurrentUserReportFromRun(runId, {
+        const created = await createCurrentUserReportResponseData({
+          runId,
           ...(recommendRunId ? { recommendRunId } : {}),
         });
         return jsonOk({ data: created }, {

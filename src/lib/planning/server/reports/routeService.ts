@@ -1,8 +1,18 @@
 import { append as appendAuditLog } from "../../../audit/auditLogStore";
 import {
+  createCurrentUserReportFromRun,
   deleteCurrentUserReport,
   getCurrentUserReport,
+  listCurrentUserReports,
 } from "./repository";
+
+export type CurrentUserReportListResponseItem = {
+  id: string;
+  createdAt: string;
+  kind: "run" | "manual";
+  runId?: string;
+  recommendRunId?: string;
+};
 
 export type CurrentUserReportDetailResponseData = {
   id: string;
@@ -35,6 +45,28 @@ function appendTrashMoveAudit(input: {
   } catch (error) {
     console.error("[audit] failed to append planning trash move audit", error);
   }
+}
+
+export async function listCurrentUserReportResponseData(
+  limit: number,
+): Promise<CurrentUserReportListResponseItem[]> {
+  const rows = await listCurrentUserReports(limit);
+  return rows.map((row) => ({
+    id: row.id,
+    createdAt: row.createdAt,
+    kind: row.kind,
+    ...(row.runId ? { runId: row.runId } : {}),
+    ...(row.recommendRunId ? { recommendRunId: row.recommendRunId } : {}),
+  }));
+}
+
+export async function createCurrentUserReportResponseData(input: {
+  runId: string;
+  recommendRunId?: string;
+}): Promise<{ id: string }> {
+  return createCurrentUserReportFromRun(input.runId, {
+    ...(input.recommendRunId ? { recommendRunId: input.recommendRunId } : {}),
+  });
 }
 
 export async function getCurrentUserReportDetailResponseData(
