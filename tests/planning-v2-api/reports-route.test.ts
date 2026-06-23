@@ -196,4 +196,23 @@ describe("planning reports api", () => {
     expect(routeSource).toContain("\"content-type\": \"text/markdown; charset=utf-8\"");
     expect(routeSource).toContain("\"cache-control\": \"no-store\"");
   });
+
+  it("keeps report detail route behind the reports route service boundary", () => {
+    const routeSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/reports/[id]/route.ts"),
+      "utf8",
+    );
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/reports/routeService.ts"),
+      "utf8",
+    );
+
+    expect(routeSource).toContain("/planning/server/reports/routeService");
+    expect(routeSource).not.toContain("/planning/server/reports/repository");
+    expect(routeSource).not.toContain("auditLogStore");
+    expect(routeSource).not.toContain("getCurrentUserReport(");
+    expect(routeSource).not.toContain("deleteCurrentUserReport(");
+    expect(serviceSource).toContain("/audit/auditLogStore");
+    expect(serviceSource).toContain("/api/planning/v2/reports/[id]");
+  });
 });
