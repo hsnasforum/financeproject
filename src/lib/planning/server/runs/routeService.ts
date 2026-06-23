@@ -1,24 +1,33 @@
 import { append as appendAuditLog } from "../../../audit/auditLogStore";
+import { appendEvent as appendOpsMetricEvent } from "../../../ops/metrics/metricsStore";
 import {
   sanitizeRunBlobForResponse,
   sanitizeRunRecordForResponse,
 } from "../../api/runResponseSanitizer";
 import {
+  createCurrentUserRun,
   deleteCurrentUserRun,
   ensureCurrentUserRunActionPlan,
   getCurrentUserRun,
   getCurrentUserRunActionProgress,
   getCurrentUserRunBlob,
+  getCurrentUserRunProfile,
+  listCurrentUserRuns,
   summarizeCurrentUserRunActionProgress,
   updateCurrentUserRun,
   updateCurrentUserRunActionProgress,
+  type CurrentUserPlanningRunRecord,
   type CurrentUserPlanningRunActionPlan,
   type CurrentUserPlanningRunActionProgress,
   type CurrentUserPlanningRunActionProgressSummary,
   type CurrentUserPlanningRunActionStatus,
+  type CurrentUserPlanningRunStageResult,
 } from "./repository";
+import { type CurrentUserPlanningProfileRecord } from "../profiles/repository";
 
 export type CurrentUserRunActionStatus = CurrentUserPlanningRunActionStatus;
+export type CurrentUserRunRecord = CurrentUserPlanningRunRecord;
+export type CurrentUserRunStageResult = CurrentUserPlanningRunStageResult;
 
 export type CurrentUserRunActionCenterPatchInput = {
   actionKey: string;
@@ -44,9 +53,37 @@ export type CurrentUserRunBlobResponseData = unknown;
 
 type RunAuditResult = "SUCCESS" | "ERROR";
 type TrashMoveAuditResult = RunAuditResult | "REJECTED";
+type CreateCurrentUserRunInput = Parameters<typeof createCurrentUserRun>[0];
+type CreateCurrentUserRunOptions = Parameters<typeof createCurrentUserRun>[1];
+
+export type CurrentUserRunListResponseData = {
+  runs: CurrentUserRunRecord[];
+  actionProgressSummaryByRunId: Record<string, CurrentUserPlanningRunActionProgressSummary>;
+};
 
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
+}
+
+export function recordCurrentUserRunCreateAudit(input: {
+  result: RunAuditResult;
+  recordId?: string | null;
+  message: string;
+}) {
+  try {
+    appendAuditLog({
+      event: "PLANNING_RUN_CREATE",
+      route: "/api/planning/v2/runs",
+      summary: `PLANNING_RUN_CREATE ${input.result}: ${input.message}`,
+      details: {
+        result: input.result,
+        recordId: input.recordId ?? null,
+        message: input.message,
+      },
+    });
+  } catch (error) {
+    console.error("[audit] failed to append planning run audit", error);
+  }
 }
 
 function appendRunDeleteAudit(input: {
@@ -92,6 +129,31 @@ function appendTrashMoveAudit(input: {
   }
 }
 
+export async function recordCurrentUserRunStageMetrics(input: {
+  requestId: string;
+  runId?: string;
+  profileId: string;
+  overallStatus: string;
+  stages: CurrentUserRunStageResult[];
+  totalDurationMs?: number;
+}) {
+  const tasks = input.stages.map((stage) => appendOpsMetricEvent({
+    type: "RUN_STAGE",
+    status: stage.status,
+    ...(input.runId ? { runId: input.runId } : {}),
+    stage: stage.id,
+    ...(typeof stage.durationMs === "number" ? { durationMs: stage.durationMs } : {}),
+    ...(stage.reason ? { errorCode: stage.reason } : {}),
+  }));
+  tasks.push(appendOpsMetricEvent({
+    type: "RUN_PIPELINE",
+    status: input.overallStatus,
+    ...(input.runId ? { runId: input.runId } : {}),
+    ...(typeof input.totalDurationMs === "number" ? { durationMs: input.totalDurationMs } : {}),
+  }));
+  await Promise.allSettled(tasks);
+}
+
 function logActionCenterHydrationFailure(runId: string, error: unknown) {
   console.error("[planning/runs/:id] failed to hydrate action center", {
     runId,
@@ -104,6 +166,54 @@ function logActionCenterPersistFailure(runId: string, error: unknown) {
     runId,
     message: errorMessage(error, "unknown error"),
   });
+}
+
+export async function listCurrentUserRunsForRoute(options?: {
+  profileId?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<CurrentUserRunListResponseData> {
+  const runs = await listCurrentUserRuns(options);
+  const sanitizedRuns = runs.map((run) => sanitizeRunRecordForResponse(run));
+  const actionProgressSummaryByRunId: Record<string, CurrentUserPlanningRunActionProgressSummary> = {};
+
+  for (const run of sanitizedRuns) {
+    try {
+      const progress = await getCurrentUserRunActionProgress(run.id);
+      if (!progress) continue;
+      actionProgressSummaryByRunId[run.id] = summarizeCurrentUserRunActionProgress(progress);
+    } catch {
+      continue;
+    }
+  }
+
+  return {
+    runs: sanitizedRuns,
+    actionProgressSummaryByRunId,
+  };
+}
+
+export async function getCurrentUserRunProfileForRoute(
+  profileId: string,
+): Promise<CurrentUserPlanningProfileRecord | null> {
+  return getCurrentUserRunProfile(profileId);
+}
+
+export async function getCurrentUserRunForRoute(runId: string): Promise<CurrentUserRunRecord | null> {
+  return getCurrentUserRun(runId);
+}
+
+export async function createCurrentUserRunResponseData(
+  input: CreateCurrentUserRunInput,
+  options?: CreateCurrentUserRunOptions,
+): Promise<CurrentUserRunRecord> {
+  const created = await createCurrentUserRun(input, options);
+  try {
+    await ensureCurrentUserRunActionPlan(created);
+  } catch (error) {
+    console.error("[planning] failed to initialize action plan", error);
+  }
+  return sanitizeRunRecordForResponse(created);
 }
 
 export async function getCurrentUserRunDetailResponseData(runId: string): Promise<unknown | null> {

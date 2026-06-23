@@ -1,17 +1,14 @@
-import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
   requireCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../lib/dev/devGuards";
 import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
-import { sanitizeRunRecordForResponse } from "../../../../../lib/planning/api/runResponseSanitizer";
 import {
   isPlanningRouteUser,
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
-import { appendEvent as appendOpsMetricEvent } from "../../../../../lib/ops/metrics/metricsStore";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import {
   PlanningRunAssumptionsResolveError,
@@ -28,16 +25,15 @@ import { buildActionsFromPlan } from "../../../../../lib/planning/server/v2/acti
 import { matchCandidates } from "../../../../../lib/planning/server/v2/actions/matchFinlifeCandidates";
 import { computeDebtStrategy } from "../../../../../lib/planning/server/v2/debt/strategy";
 import {
-  createCurrentUserRun,
-  ensureCurrentUserRunActionPlan,
-  getCurrentUserRun,
-  getCurrentUserRunActionProgress,
-  getCurrentUserRunProfile,
-  listCurrentUserRuns,
-  summarizeCurrentUserRunActionProgress,
-  type CurrentUserPlanningRunRecord,
-  type CurrentUserPlanningRunStageResult,
-} from "../../../../../lib/planning/server/runs/repository";
+  createCurrentUserRunResponseData,
+  getCurrentUserRunForRoute,
+  getCurrentUserRunProfileForRoute,
+  listCurrentUserRunsForRoute,
+  recordCurrentUserRunCreateAudit,
+  recordCurrentUserRunStageMetrics,
+  type CurrentUserRunRecord,
+  type CurrentUserRunStageResult,
+} from "../../../../../lib/planning/server/runs/routeService";
 import { runStagePipeline } from "../../../../../lib/planning/v2/stagePipeline";
 import { preflightRun } from "../../../../../lib/planning/v2/preflight";
 import { decimalToAprPct, toEngineRateBoundary } from "../../../../../lib/planning/v2/aprBoundary";
@@ -71,7 +67,7 @@ type RunsCreateBody = {
   csrf?: unknown;
 } | null;
 
-type RunInputScenario = NonNullable<CurrentUserPlanningRunRecord["input"]["scenario"]>;
+type RunInputScenario = NonNullable<CurrentUserRunRecord["input"]["scenario"]>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -541,29 +537,6 @@ function toLiabilitiesFromProfile(profile: { debts: Array<{
   }));
 }
 
-function appendRunAudit(input: {
-  event: "PLANNING_RUN_CREATE";
-  route: string;
-  result: "SUCCESS" | "ERROR";
-  recordId?: string | null;
-  message: string;
-}) {
-  try {
-    appendAuditLog({
-      event: input.event,
-      route: input.route,
-      summary: `${input.event} ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        recordId: input.recordId ?? null,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning run audit", error);
-  }
-}
-
 function formatPreflightIssueLine(issue: {
   code: string;
   message: string;
@@ -575,30 +548,21 @@ function formatPreflightIssueLine(issue: {
   return `${issue.code}: ${issue.message}`;
 }
 
-async function appendRunStageMetrics(input: {
-  requestId: string;
-  runId?: string;
-  profileId: string;
-  overallStatus: string;
-  stages: CurrentUserPlanningRunStageResult[];
-  totalDurationMs?: number;
+function appendRunAudit(input: {
+  event: "PLANNING_RUN_CREATE";
+  route: string;
+  result: "SUCCESS" | "ERROR";
+  recordId?: string | null;
+  message: string;
 }) {
-  const tasks = input.stages.map((stage) => appendOpsMetricEvent({
-    type: "RUN_STAGE",
-    status: stage.status,
-    ...(input.runId ? { runId: input.runId } : {}),
-    stage: stage.id,
-    ...(typeof stage.durationMs === "number" ? { durationMs: stage.durationMs } : {}),
-    ...(stage.reason ? { errorCode: stage.reason } : {}),
-  }));
-  tasks.push(appendOpsMetricEvent({
-    type: "RUN_PIPELINE",
-    status: input.overallStatus,
-    ...(input.runId ? { runId: input.runId } : {}),
-    ...(typeof input.totalDurationMs === "number" ? { durationMs: input.totalDurationMs } : {}),
-  }));
-  await Promise.allSettled(tasks);
+  recordCurrentUserRunCreateAudit({
+    result: input.result,
+    recordId: input.recordId,
+    message: input.message,
+  });
 }
+
+const appendRunStageMetrics = recordCurrentUserRunStageMetrics;
 
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
@@ -613,24 +577,13 @@ export async function GET(request: Request) {
   const offset = url.searchParams.get("offset");
 
   try {
-    const runs = await listCurrentUserRuns({
+    const runsResult = await listCurrentUserRunsForRoute({
       ...(profileId ? { profileId } : {}),
       ...(limit !== null ? { limit: Number(limit) } : {}),
       ...(offset !== null ? { offset: Number(offset) } : {}),
     });
-    const sanitizedRuns = runs.map((run) => sanitizeRunRecordForResponse(run));
-    const progressSummaryByRunId: Record<string, ReturnType<typeof summarizeCurrentUserRunActionProgress>> = {};
-    for (const run of sanitizedRuns) {
-      try {
-        const progress = await getCurrentUserRunActionProgress(run.id);
-        if (!progress) continue;
-        progressSummaryByRunId[run.id] = summarizeCurrentUserRunActionProgress(progress);
-      } catch {
-        continue;
-      }
-    }
     return jsonOk(
-      { data: sanitizedRuns, meta: { actionProgressSummaryByRunId: progressSummaryByRunId } },
+      { data: runsResult.runs, meta: { actionProgressSummaryByRunId: runsResult.actionProgressSummaryByRunId } },
       { meta: userMeta },
     );
   } catch (error) {
@@ -753,7 +706,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const profileRecord = await getCurrentUserRunProfile(profileId);
+  const profileRecord = await getCurrentUserRunProfileForRoute(profileId);
   if (!profileRecord) {
     appendRunAudit({
       event: "PLANNING_RUN_CREATE",
@@ -767,7 +720,7 @@ export async function POST(request: Request) {
 
   const scenarioBaselineRunId = scenarioInput?.baseRunId || scenarioMeta?.baselineRunId;
   if (scenarioBaselineRunId) {
-    const baselineRun = await getCurrentUserRun(scenarioBaselineRunId);
+    const baselineRun = await getCurrentUserRunForRoute(scenarioBaselineRunId);
     if (!baselineRun) {
       appendRunAudit({
         event: "PLANNING_RUN_CREATE",
@@ -990,7 +943,7 @@ export async function POST(request: Request) {
   let monteCarloResult: ReturnType<typeof runMonteCarlo> | null = null;
   let actionsResult: Awaited<ReturnType<typeof matchCandidates>> | ReturnType<typeof buildActionsFromPlan> | null = null;
   let debtStrategyResult: ReturnType<typeof computeDebtStrategy> | null = null;
-  let stages: CurrentUserPlanningRunStageResult[] = [];
+  let stages: CurrentUserRunStageResult[] = [];
 
   try {
     const pipeline = await runStagePipeline({
@@ -1140,7 +1093,7 @@ export async function POST(request: Request) {
     });
     const scenarioMetaForRecord = scenarioMeta ?? (scenarioInput ? toLegacyScenarioMetaFromInput(scenarioInput) : undefined);
 
-    const created = await createCurrentUserRun({
+    const created = await createCurrentUserRunResponseData({
       profileId: profileRecord.id,
       ...(title ? { title } : {}),
       ...(scenarioMetaForRecord ? { scenario: scenarioMetaForRecord } : {}),
@@ -1176,15 +1129,10 @@ export async function POST(request: Request) {
       outputs: {
         resultDto,
         ...outputs,
-      } as unknown as CurrentUserPlanningRunRecord["outputs"],
+      } as unknown as CurrentUserRunRecord["outputs"],
     }, {
       storeRawOutputs: asString(process.env.PLANNING_RUN_STORE_RAW_OUTPUTS).toLowerCase() === "true",
     });
-    try {
-      await ensureCurrentUserRunActionPlan(created);
-    } catch (error) {
-      console.error("[planning] failed to initialize action plan", error);
-    }
     await appendRunStageMetrics({
       requestId: runRequestId,
       runId: created.id,
@@ -1211,7 +1159,7 @@ export async function POST(request: Request) {
         overallStatus: pipeline.overallStatus,
         stages,
       },
-      data: sanitizeRunRecordForResponse(created),
+      data: created,
     }, { status: 201, meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 저장에 실패했습니다.";

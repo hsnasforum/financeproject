@@ -125,6 +125,41 @@ describe("planning v2 persistence routes", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
+  it("keeps v2 runs list/create storage and response shaping behind the route service", () => {
+    const runsRouteSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/runs/route.ts"),
+      "utf-8",
+    );
+    const routeServiceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/runs/routeService.ts"),
+      "utf-8",
+    );
+    const legacyRunRouteSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/run/route.ts"),
+      "utf-8",
+    );
+    const legacyV2RunRouteSource = fs.readFileSync(
+      path.join(process.cwd(), "src/app/api/planning/v2/run/route.ts"),
+      "utf-8",
+    );
+
+    expect(runsRouteSource).not.toContain("auditLogStore");
+    expect(runsRouteSource).not.toContain("ops/metrics/metricsStore");
+    expect(runsRouteSource).not.toContain("runResponseSanitizer");
+    expect(runsRouteSource).not.toContain("server/runs/repository");
+    expect(runsRouteSource).toContain("listCurrentUserRunsForRoute");
+    expect(runsRouteSource).toContain("createCurrentUserRunResponseData");
+
+    expect(routeServiceSource).toContain("listCurrentUserRuns(options)");
+    expect(routeServiceSource).toContain("createCurrentUserRun(input, options)");
+    expect(routeServiceSource).toContain("sanitizeRunRecordForResponse");
+    expect(routeServiceSource).toContain("appendAuditLog");
+    expect(routeServiceSource).toContain("appendOpsMetricEvent");
+
+    expect(legacyRunRouteSource).toContain("runsPost");
+    expect(legacyV2RunRouteSource).toContain("runsPost");
+  });
+
   it("supports profiles CRUD through routes", async () => {
     const createResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
       name: "테스트 프로필",
