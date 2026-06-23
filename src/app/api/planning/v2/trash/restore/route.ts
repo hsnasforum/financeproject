@@ -1,4 +1,3 @@
-import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
   assertSameOrigin,
@@ -11,10 +10,11 @@ import {
   withPlanningRouteUser,
 } from "../../../../../../lib/planning/api/routeAuth";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
-import { type CurrentUserPlanningTrashKind as PlanningTrashKind } from "../../../../../../lib/planning/server/trash/repository";
-import { restoreCurrentUserProfileFromTrash } from "../../../../../../lib/planning/server/profiles/repository";
-import { restoreCurrentUserRunFromTrash } from "../../../../../../lib/planning/server/runs/repository";
-import { restoreCurrentUserReportFromTrash } from "../../../../../../lib/planning/server/reports/repository";
+import {
+  recordCurrentUserTrashRestoreRejected,
+  restoreCurrentUserTrashItem,
+  type CurrentUserTrashKind as PlanningTrashKind,
+} from "../../../../../../lib/planning/server/trash/routeService";
 
 type RestoreTrashBody = {
   kind?: unknown;
@@ -52,35 +52,6 @@ function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   }
 }
 
-function appendTrashRestoreAudit(input: {
-  result: "SUCCESS" | "ERROR" | "REJECTED";
-  kind?: string;
-  id?: string;
-  message: string;
-}) {
-  try {
-    appendAuditLog({
-      event: "PLANNING_TRASH_RESTORE",
-      route: "/api/planning/v2/trash/restore",
-      summary: `PLANNING_TRASH_RESTORE ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        kind: input.kind ?? null,
-        id: input.id ?? null,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning trash restore audit", error);
-  }
-}
-
-async function restoreTrashByKind(kind: PlanningTrashKind, id: string): Promise<boolean> {
-  if (kind === "profiles") return restoreCurrentUserProfileFromTrash(id);
-  if (kind === "runs") return restoreCurrentUserRunFromTrash(id);
-  return restoreCurrentUserReportFromTrash(id);
-}
-
 export async function POST(request: Request) {
   let body: RestoreTrashBody = null;
   try {
@@ -113,8 +84,7 @@ export async function POST(request: Request) {
       const confirmText = asString(body?.confirmText);
       if (!verifyConfirm(confirmText, expectedConfirm)) {
         const message = `확인 문구가 일치하지 않습니다. (${expectedConfirm})`;
-        appendTrashRestoreAudit({
-          result: "REJECTED",
+        recordCurrentUserTrashRestoreRejected({
           kind,
           id,
           message,
@@ -126,25 +96,13 @@ export async function POST(request: Request) {
       }
 
       try {
-        const restored = await restoreTrashByKind(kind, id);
-        if (!restored) {
-          appendTrashRestoreAudit({
-            result: "ERROR",
-            kind,
-            id,
-            message: "trash item not found",
-          });
+        const result = await restoreCurrentUserTrashItem({ kind, id });
+        if (!result.restored) {
           return jsonError("NO_DATA", "휴지통 항목을 찾을 수 없습니다.", {
             status: 404,
             meta: planningUserMeta(currentUser),
           });
         }
-        appendTrashRestoreAudit({
-          result: "SUCCESS",
-          kind,
-          id,
-          message: "trash item restored",
-        });
         return jsonOk({
           data: {
             kind,
@@ -154,12 +112,6 @@ export async function POST(request: Request) {
         }, { meta: planningUserMeta(currentUser) });
       } catch (error) {
         const message = error instanceof Error ? error.message : "휴지통 복구에 실패했습니다.";
-        appendTrashRestoreAudit({
-          result: "ERROR",
-          kind,
-          id,
-          message,
-        });
         return jsonError("INTERNAL", message, {
           status: 500,
           meta: planningUserMeta(currentUser),

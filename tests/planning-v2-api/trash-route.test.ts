@@ -61,6 +61,31 @@ function buildJsonRequest(method: string, urlPath: string, body: unknown): Reque
 describe("planning trash routes", () => {
   let root = "";
 
+  it("keeps trash repository and audit writes behind the trash route service", () => {
+    const routeSources = [
+      "src/app/api/planning/v2/trash/route.ts",
+      "src/app/api/planning/v2/trash/restore/route.ts",
+      "src/app/api/planning/v2/trash/empty/route.ts",
+    ].map((filePath) => fs.readFileSync(path.join(process.cwd(), filePath), "utf8"));
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/trash/routeService.ts"),
+      "utf8",
+    );
+
+    for (const routeSource of routeSources) {
+      expect(routeSource).not.toContain("auditLogStore");
+      expect(routeSource).not.toContain("server/trash/repository");
+      expect(routeSource).not.toContain("server/profiles/repository");
+      expect(routeSource).not.toContain("server/runs/repository");
+      expect(routeSource).not.toContain("server/reports/repository");
+    }
+    expect(serviceSource).toContain("appendAuditLog");
+    expect(serviceSource).toContain("listCurrentUserPlanningTrash");
+    expect(serviceSource).toContain("emptyCurrentUserPlanningTrash");
+    expect(serviceSource).toContain("hardDeleteCurrentUserProfileFromTrash");
+    expect(serviceSource).toContain("restoreCurrentUserProfileFromTrash");
+  });
+
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-trash-routes-"));
     env.NODE_ENV = "test";

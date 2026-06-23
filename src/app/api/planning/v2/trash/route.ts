@@ -1,4 +1,3 @@
-import { append as appendAuditLog } from "../../../../../lib/audit/auditLogStore";
 import {
   assertCsrf,
   assertSameOrigin,
@@ -12,12 +11,11 @@ import {
 } from "../../../../../lib/planning/api/routeAuth";
 import { buildConfirmString, verifyConfirm } from "../../../../../lib/ops/confirm";
 import {
-  listCurrentUserPlanningTrash,
-  type CurrentUserPlanningTrashKind as PlanningTrashKind,
-} from "../../../../../lib/planning/server/trash/repository";
-import { hardDeleteCurrentUserProfileFromTrash } from "../../../../../lib/planning/server/profiles/repository";
-import { hardDeleteCurrentUserRunFromTrash } from "../../../../../lib/planning/server/runs/repository";
-import { hardDeleteCurrentUserReportFromTrash } from "../../../../../lib/planning/server/reports/repository";
+  deleteCurrentUserTrashItemPermanently,
+  listCurrentUserTrashItems,
+  recordCurrentUserTrashDeleteRejected,
+  type CurrentUserTrashScope,
+} from "../../../../../lib/planning/server/trash/routeService";
 
 type DeleteTrashBody = {
   kind?: unknown;
@@ -34,7 +32,7 @@ function hasCsrfCookie(request: Request): boolean {
   return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
 }
 
-function parseTrashKind(value: unknown): PlanningTrashKind | "all" | null {
+function parseTrashKind(value: unknown): CurrentUserTrashScope | null {
   const raw = asString(value).toLowerCase();
   if (raw === "profiles" || raw === "runs" || raw === "reports" || raw === "all") return raw;
   return null;
@@ -66,35 +64,6 @@ function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   }
 }
 
-function appendTrashPurgeAudit(input: {
-  result: "SUCCESS" | "ERROR" | "REJECTED";
-  kind?: string;
-  id?: string;
-  message: string;
-}) {
-  try {
-    appendAuditLog({
-      event: "PLANNING_TRASH_PURGE",
-      route: "/api/planning/v2/trash",
-      summary: `PLANNING_TRASH_PURGE ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        kind: input.kind ?? null,
-        id: input.id ?? null,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning trash purge audit", error);
-  }
-}
-
-async function hardDeleteTrashByKind(kind: PlanningTrashKind, id: string): Promise<boolean> {
-  if (kind === "profiles") return hardDeleteCurrentUserProfileFromTrash(id);
-  if (kind === "runs") return hardDeleteCurrentUserRunFromTrash(id);
-  return hardDeleteCurrentUserReportFromTrash(id);
-}
-
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
@@ -106,15 +75,8 @@ export async function GET(request: Request) {
         const parsedKind = parseTrashKind(url.searchParams.get("kind"));
         const kind = parsedKind ?? "all";
         const limit = Math.max(1, Math.min(200, Math.trunc(Number(url.searchParams.get("limit"))) || 100));
-        const rows = await listCurrentUserPlanningTrash(kind, limit);
-        return jsonOk({
-          data: rows.map((row) => ({
-            kind: row.kind,
-            id: row.id,
-            deletedAt: row.deletedAt,
-            sizeBytes: row.sizeBytes,
-          })),
-        }, { meta: planningUserMeta(currentUser) });
+        const rows = await listCurrentUserTrashItems({ kind, limit });
+        return jsonOk({ data: rows }, { meta: planningUserMeta(currentUser) });
       } catch (error) {
         const message = error instanceof Error ? error.message : "휴지통 조회에 실패했습니다.";
         return jsonError("INTERNAL", message, {
@@ -163,8 +125,7 @@ export async function DELETE(request: Request) {
       const confirmText = asString(body?.confirmText);
       if (!verifyConfirm(confirmText, expectedConfirm)) {
         const message = `확인 문구가 일치하지 않습니다. (${expectedConfirm})`;
-        appendTrashPurgeAudit({
-          result: "REJECTED",
+        recordCurrentUserTrashDeleteRejected({
           kind: parsedKind,
           id,
           message,
@@ -176,25 +137,13 @@ export async function DELETE(request: Request) {
       }
 
       try {
-        const deleted = await hardDeleteTrashByKind(parsedKind, id);
-        if (!deleted) {
-          appendTrashPurgeAudit({
-            result: "ERROR",
-            kind: parsedKind,
-            id,
-            message: "trash item not found",
-          });
+        const result = await deleteCurrentUserTrashItemPermanently({ kind: parsedKind, id });
+        if (!result.deleted) {
           return jsonError("NO_DATA", "휴지통 항목을 찾을 수 없습니다.", {
             status: 404,
             meta: planningUserMeta(currentUser),
           });
         }
-        appendTrashPurgeAudit({
-          result: "SUCCESS",
-          kind: parsedKind,
-          id,
-          message: "trash item deleted permanently",
-        });
         return jsonOk({
           data: {
             kind: parsedKind,
@@ -204,12 +153,6 @@ export async function DELETE(request: Request) {
         }, { meta: planningUserMeta(currentUser) });
       } catch (error) {
         const message = error instanceof Error ? error.message : "휴지통 영구 삭제에 실패했습니다.";
-        appendTrashPurgeAudit({
-          result: "ERROR",
-          kind: parsedKind,
-          id,
-          message,
-        });
         return jsonError("INTERNAL", message, {
           status: 500,
           meta: planningUserMeta(currentUser),
