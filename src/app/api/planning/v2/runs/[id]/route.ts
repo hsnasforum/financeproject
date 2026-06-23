@@ -1,4 +1,3 @@
-import { append as appendAuditLog } from "../../../../../../lib/audit/auditLogStore";
 import {
   requireCsrf,
   assertSameOrigin,
@@ -10,18 +9,14 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../../lib/planning/api/routeAuth";
-import { sanitizeRunRecordForResponse } from "../../../../../../lib/planning/api/runResponseSanitizer";
 import { buildConfirmString, verifyConfirm } from "../../../../../../lib/ops/confirm";
 import {
-  deleteCurrentUserRun,
-  ensureCurrentUserRunActionPlan,
-  getCurrentUserRun,
-  getCurrentUserRunActionProgress,
-  summarizeCurrentUserRunActionProgress,
-  updateCurrentUserRun,
-  updateCurrentUserRunActionProgress,
-  type CurrentUserPlanningRunActionStatus as PlanningRunActionStatus,
-} from "../../../../../../lib/planning/server/runs/repository";
+  deleteCurrentUserRunToTrash,
+  getCurrentUserRunDetailResponseData,
+  patchCurrentUserRunActionCenter,
+  recordCurrentUserRunDeleteRejected,
+  type CurrentUserRunActionStatus as PlanningRunActionStatus,
+} from "../../../../../../lib/planning/server/runs/routeService";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -58,52 +53,6 @@ function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   }
 }
 
-function appendRunAudit(input: {
-  event: "PLANNING_RUN_DELETE";
-  route: string;
-  result: "SUCCESS" | "ERROR";
-  recordId?: string | null;
-  message: string;
-}) {
-  try {
-    appendAuditLog({
-      event: input.event,
-      route: input.route,
-      summary: `${input.event} ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        recordId: input.recordId ?? null,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning run audit", error);
-  }
-}
-
-function appendTrashAudit(input: {
-  result: "SUCCESS" | "ERROR" | "REJECTED";
-  kind: "run";
-  id: string;
-  message: string;
-}) {
-  try {
-    appendAuditLog({
-      event: "PLANNING_TRASH_MOVE",
-      route: "/api/planning/v2/runs/[id]",
-      summary: `PLANNING_TRASH_MOVE ${input.result}: ${input.message}`,
-      details: {
-        result: input.result,
-        kind: input.kind,
-        id: input.id,
-        message: input.message,
-      },
-    });
-  } catch (error) {
-    console.error("[audit] failed to append planning trash move audit", error);
-  }
-}
-
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -117,20 +66,6 @@ function parseActionStatus(value: unknown): PlanningRunActionStatus | undefined 
   return undefined;
 }
 
-function logActionCenterHydrationFailure(runId: string, error: unknown) {
-  console.error("[planning/runs/:id] failed to hydrate action center", {
-    runId,
-    message: error instanceof Error ? error.message : String(error),
-  });
-}
-
-function logActionCenterPersistFailure(runId: string, error: unknown) {
-  console.error("[planning/runs/:id] failed to persist hydrated action center", {
-    runId,
-    message: error instanceof Error ? error.message : String(error),
-  });
-}
-
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
@@ -140,37 +75,11 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const run = await getCurrentUserRun(id);
-    if (!run) {
+    const data = await getCurrentUserRunDetailResponseData(id);
+    if (!data) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
-    let runWithActionCenter = run;
-    try {
-      const plan = run.actionCenter?.plan ?? await ensureCurrentUserRunActionPlan(run);
-      const progress = run.actionCenter?.progress ?? await getCurrentUserRunActionProgress(run.id);
-      if (progress) {
-        runWithActionCenter = {
-          ...run,
-          actionCenter: {
-            plan,
-            progress,
-          },
-        };
-        if (!run.actionCenter?.plan || !run.actionCenter?.progress) {
-          await updateCurrentUserRun(run.id, {
-            actionCenter: {
-              plan,
-              progress,
-            },
-          }).catch((error) => {
-            logActionCenterPersistFailure(run.id, error);
-          });
-        }
-      }
-    } catch (error) {
-      logActionCenterHydrationFailure(run.id, error);
-    }
-    return jsonOk({ data: sanitizeRunRecordForResponse(runWithActionCenter) }, { meta: userMeta });
+    return jsonOk({ data }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
     return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
@@ -206,34 +115,23 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   const { id } = await context.params;
-  const run = await getCurrentUserRun(id);
-  if (!run) {
-    return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404, meta: userMeta });
-  }
-
   try {
-    const plan = run.actionCenter?.plan ?? await ensureCurrentUserRunActionPlan(run);
-    const updatedProgress = await updateCurrentUserRunActionProgress(run.id, {
-      actionKey,
-      ...(status ? { status } : {}),
-      ...(note !== undefined ? { note } : {}),
-    });
-    await updateCurrentUserRun(run.id, {
-      actionCenter: {
-        plan,
-        progress: updatedProgress,
+    const result = await patchCurrentUserRunActionCenter({
+      runId: id,
+      patch: {
+        actionKey,
+        ...(status ? { status } : {}),
+        ...(note !== undefined ? { note } : {}),
       },
     });
-    const summary = summarizeCurrentUserRunActionProgress(updatedProgress);
+    if (!result) {
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404, meta: userMeta });
+    }
     return jsonOk(
       {
         data: {
-          progress: updatedProgress,
-          completion: {
-            done: summary.done,
-            total: summary.total,
-            pct: summary.completionPct,
-          },
+          progress: result.progress,
+          completion: result.completion,
         },
       },
       { meta: userMeta },
@@ -266,12 +164,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   const confirmText = typeof body?.confirmText === "string" ? body.confirmText.trim() : "";
   if (!verifyConfirm(confirmText, expectedConfirm)) {
     const message = `확인 문구가 일치하지 않습니다. (${expectedConfirm})`;
-    appendTrashAudit({
-      result: "REJECTED",
-      kind: "run",
-      id,
-      message,
-    });
+    recordCurrentUserRunDeleteRejected({ runId: id, message });
     return jsonError("CONFIRM_MISMATCH", message, {
       status: 400,
       meta: { expectedConfirm, ...userMeta },
@@ -279,47 +172,14 @@ export async function DELETE(request: Request, context: RouteContext) {
   }
 
   try {
-    const deleted = await deleteCurrentUserRun(id);
-    if (!deleted) {
-      appendRunAudit({
-        event: "PLANNING_RUN_DELETE",
-        route: "/api/planning/v2/runs/[id]",
-        result: "ERROR",
-        recordId: id,
-        message: "run not found",
-      });
+    const result = await deleteCurrentUserRunToTrash(id);
+    if (!result.deleted) {
       return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
     }
 
-    appendRunAudit({
-      event: "PLANNING_RUN_DELETE",
-      route: "/api/planning/v2/runs/[id]",
-      result: "SUCCESS",
-      recordId: id,
-      message: "planning run deleted",
-    });
-    appendTrashAudit({
-      result: "SUCCESS",
-      kind: "run",
-      id,
-      message: "planning run moved to trash",
-    });
     return jsonOk({ data: { id, deleted: true, softDeleted: true } }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "실행 기록 삭제에 실패했습니다.";
-    appendRunAudit({
-      event: "PLANNING_RUN_DELETE",
-      route: "/api/planning/v2/runs/[id]",
-      result: "ERROR",
-      recordId: id,
-      message,
-    });
-    appendTrashAudit({
-      result: "ERROR",
-      kind: "run",
-      id,
-      message,
-    });
     return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }

@@ -8,10 +8,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "../../../../../../../lib/planning/api/routeAuth";
-import {
-  ensureCurrentUserRunActionPlan,
-  getCurrentUserRun,
-} from "../../../../../../../lib/planning/server/runs/repository";
+import { getCurrentUserRunActionPlan } from "../../../../../../../lib/planning/server/runs/routeService";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -37,14 +34,13 @@ export async function GET(request: Request, context: RouteContext) {
 
   const { id } = await context.params;
   try {
-    const run = await getCurrentUserRun(id);
-    if (!run) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404 });
+    const plan = await getCurrentUserRunActionPlan(id);
+    if (!plan) {
+      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { status: 404, meta: userMeta });
     }
-    const plan = await ensureCurrentUserRunActionPlan(run);
     return jsonOk({ data: plan }, { meta: userMeta });
   } catch (error) {
     const message = error instanceof Error ? error.message : "action-plan 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500 });
+    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
   }
 }

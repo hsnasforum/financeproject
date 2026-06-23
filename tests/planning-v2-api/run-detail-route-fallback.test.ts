@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
@@ -75,6 +77,28 @@ describe("GET /api/planning/v2/runs/[id] fallback", () => {
     getRunMock.mockReset();
     sanitizeRunRecordForResponseMock.mockClear();
     updateRunMock.mockReset();
+  });
+
+  it("keeps run repository, sanitizer, and audit writes behind the run route service", () => {
+    const routeSources = [
+      "src/app/api/planning/v2/runs/[id]/route.ts",
+      "src/app/api/planning/v2/runs/[id]/action-plan/route.ts",
+    ].map((filePath) => fs.readFileSync(path.join(process.cwd(), filePath), "utf8"));
+    const serviceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/runs/routeService.ts"),
+      "utf8",
+    );
+
+    for (const routeSource of routeSources) {
+      expect(routeSource).not.toContain("auditLogStore");
+      expect(routeSource).not.toContain("server/runs/repository");
+      expect(routeSource).not.toContain("runResponseSanitizer");
+    }
+    expect(serviceSource).toContain("appendAuditLog");
+    expect(serviceSource).toContain("sanitizeRunRecordForResponse");
+    expect(serviceSource).toContain("getCurrentUserRun");
+    expect(serviceSource).toContain("ensureCurrentUserRunActionPlan");
+    expect(serviceSource).toContain("updateCurrentUserRunActionProgress");
   });
 
   it("returns 200 even when persisting hydrated action center fails", async () => {
