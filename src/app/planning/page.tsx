@@ -4,11 +4,7 @@ import { loadSnapshotListForPlanning } from "@/app/planning/_lib/snapshotList";
 import { getPlanningFeatureFlags } from "@/lib/planning/config";
 import { resolvePlanningLocale } from "@/lib/planning/i18n";
 import { normalizeProfileId } from "@/lib/planning/profileScope";
-import { withCurrentPlanningPageUser } from "@/lib/planning/server/pageAuth";
-import {
-  getCurrentUserDefaultProfileId,
-  getCurrentUserProfile,
-} from "@/lib/planning/server/profiles/repository";
+import { loadPlanningWorkspaceInitialProfile } from "@/lib/planning/server/pages/planningRscLoaders";
 
 type PlanningPageProps = {
   searchParams?: Promise<{
@@ -38,17 +34,7 @@ export default async function PlanningPage({ searchParams }: PlanningPageProps) 
   let initialSelectedProfile = null;
 
   try {
-    initialSelectedProfile = await withCurrentPlanningPageUser(async () => {
-      const requestedProfile = initialSelectedProfileId
-        ? await getCurrentUserProfile(initialSelectedProfileId).catch(() => null)
-        : null;
-      if (requestedProfile) return requestedProfile;
-
-      const defaultProfileId = await getCurrentUserDefaultProfileId().catch(() => "");
-      return defaultProfileId
-        ? await getCurrentUserProfile(defaultProfileId).catch(() => null)
-        : null;
-    });
+    initialSelectedProfile = await loadPlanningWorkspaceInitialProfile(initialSelectedProfileId);
   } catch (error) {
     console.error("[planning] failed to load initial profile in user scope", error);
   }

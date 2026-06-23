@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const PLANNING_PAGE_DIR = "src/app/planning";
 const OPS_PAGE_DIR = "src/app/ops";
 const PLANNING_WORKSPACE_PAGE_FILE = "src/app/planning/page.tsx";
+const PLANNING_RSC_LOADER_FILE = "src/lib/planning/server/pages/planningRscLoaders.ts";
 const PLANNING_SNAPSHOT_LIST_FILE = "src/app/planning/_lib/snapshotList.ts";
 const USER_SCOPED_IMPORT_MARKERS = [
   "@/lib/planning/server/profiles",
@@ -341,13 +342,17 @@ describe("planning page current-user scope coverage", () => {
 
   it("keeps /planning snapshot list as a shared assumptions read outside pageAuth", () => {
     const pageSource = fs.readFileSync(PLANNING_WORKSPACE_PAGE_FILE, "utf8");
+    const loaderSource = fs.readFileSync(PLANNING_RSC_LOADER_FILE, "utf8");
     const snapshotSource = fs.readFileSync(PLANNING_SNAPSHOT_LIST_FILE, "utf8");
     const snapshotCallIndex = pageSource.indexOf("loadSnapshotListForPlanning(20)");
-    const pageAuthIndex = pageSource.indexOf("withCurrentPlanningPageUser(");
+    const profileLoaderCallIndex = pageSource.indexOf("loadPlanningWorkspaceInitialProfile(");
 
     expect(snapshotCallIndex).toBeGreaterThanOrEqual(0);
-    expect(pageAuthIndex).toBeGreaterThanOrEqual(0);
-    expect(snapshotCallIndex).toBeLessThan(pageAuthIndex);
+    expect(profileLoaderCallIndex).toBeGreaterThanOrEqual(0);
+    expect(snapshotCallIndex).toBeLessThan(profileLoaderCallIndex);
+    expect(loaderSource).toContain("withCurrentPlanningPageUser(");
+    expect(loaderSource).toContain("getCurrentUserDefaultProfileId(");
+    expect(loaderSource).toContain("getCurrentUserProfile(");
     expect(collectImportPaths(PLANNING_SNAPSHOT_LIST_FILE)).toEqual([...SNAPSHOT_LIST_SHARED_IMPORTS].sort());
     expect(snapshotSource).not.toContain("withCurrentPlanningPageUser(");
     expect(snapshotSource).not.toContain("getCurrentUser");
@@ -370,6 +375,13 @@ describe("planning page current-user scope coverage", () => {
     });
 
     expect(directReaderPages).toEqual([]);
+  });
+
+  it("keeps planning RSC initial data loaders inside pageAuth", () => {
+    const source = fs.readFileSync(PLANNING_RSC_LOADER_FILE, "utf8");
+
+    expect(source).toContain("withCurrentPlanningPageUser(");
+    expect(findCurrentUserRepositoryReadsOutsidePageAuth(PLANNING_RSC_LOADER_FILE)).toEqual([]);
   });
 
   it("keeps planning pages off direct store layer imports", () => {
