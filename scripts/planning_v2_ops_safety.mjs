@@ -1,6 +1,5 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { tsImport } from "tsx/esm/api";
 import { runOpsPipeline } from "./planning_v2_ops_run.mjs";
 import {
   OPS_LOGS_RELATIVE,
@@ -15,6 +14,10 @@ const DEFAULT_STALE_DAYS = 45;
 const DEFAULT_LEGACY_LIMIT = 100;
 const DEFAULT_LEGACY_FAIL_THRESHOLD = 0;
 const LEGACY_BACKFILL_CONFIRM = "BACKFILL LEGACY RUNS";
+
+async function importTsModule(specifier) {
+  return import(new URL(specifier, import.meta.url).href);
+}
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -89,7 +92,7 @@ export function parseOpsSafetyArgs(argv = []) {
 }
 
 async function loadLegacyBackfillHelpers() {
-  const modRaw = await tsImport("../src/lib/planning/store/runStore.ts", { parentURL: import.meta.url });
+  const modRaw = await importTsModule("../src/lib/planning/store/runStore.ts");
   const mod = modRaw?.default && typeof modRaw.default === "object" ? modRaw.default : modRaw;
   return {
     summarizeLegacyRunBackfill: typeof mod?.summarizeLegacyRunBackfill === "function"

@@ -8,7 +8,11 @@ import { POST as backupExportPOST } from "../../../src/app/api/ops/backup/export
 import { POST as backupPreviewPOST } from "../../../src/app/api/ops/backup/preview/route";
 import { POST as backupRestorePOST } from "../../../src/app/api/ops/backup/restore/route";
 import { decodeZip, encodeZip } from "../../../src/lib/ops/backup/zipCodec";
-import { decryptPlanningDataVaultArchive, encryptPlanningDataVaultArchive } from "../../../src/lib/ops/backup/planningDataVault";
+import {
+  decryptPlanningDataVaultArchive,
+  encryptPlanningDataVaultArchive,
+  restorePlanningDataVaultZip,
+} from "../../../src/lib/ops/backup/planningDataVault";
 import { createProfile, listProfiles } from "../../../src/lib/planning/store/profileStore";
 import { createRun, getRun, listRuns } from "../../../src/lib/planning/store/runStore";
 import { resolveProfileRunDir, resolveRunDir } from "../../../src/lib/planning/store/paths";
@@ -1140,6 +1144,75 @@ describe.sequential("ops backup API", () => {
     const profiles = await listProfiles();
     expect(profiles.some((profile) => profile.id === "imported-profile")).toBe(true);
     expect(profiles.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps existing data and reports an error when replace restore has invalid entries", async () => {
+    const beforeProfileIds = (await listProfiles())
+      .map((profile) => profile.id)
+      .sort((a, b) => a.localeCompare(b));
+    const encrypted = await encryptPlanningDataVaultArchive(makeRestoreZip(), "backup-passphrase");
+
+    const form = new FormData();
+    form.set("csrf", "csrf-token");
+    form.set("passphrase", "backup-passphrase");
+    form.set("mode", "replace");
+    form.set("previewToken", await previewTokenForEncryptedBackup(encrypted));
+    form.set("file", new File([new Uint8Array(encrypted)], "restore.enc.json", { type: "application/json" }));
+
+    const response = await backupRestorePOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/restore`, {
+      method: "POST",
+      headers: localHeaders(),
+      body: form,
+    }));
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: { code?: string; message?: string };
+    };
+
+    expect(response.status).toBe(409);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("RESTORE_NOT_COMMITTED");
+    expect(payload.error?.message).toBe("복원을 완료하지 못했습니다. 기존 데이터는 변경되지 않았습니다.");
+
+    const afterProfiles = await listProfiles();
+    expect(afterProfiles.map((profile) => profile.id).sort((a, b) => a.localeCompare(b))).toEqual(beforeProfileIds);
+    expect(afterProfiles.some((profile) => profile.id === "imported-profile")).toBe(false);
+
+    const successRows = await listOpsAuditEvents({ eventType: "OPS_BACKUP_RESTORE_SUCCESS", limit: 20 });
+    const errorRows = await listOpsAuditEvents({ eventType: "OPS_BACKUP_RESTORE_ERROR", limit: 20 });
+    expect(successRows).toHaveLength(0);
+    expect(errorRows.some((row) => row.meta?.code === "RESTORE_NOT_COMMITTED")).toBe(true);
+  });
+
+  it("rolls back replace restore when a commit write fails", async () => {
+    const beforeProfileIds = (await listProfiles())
+      .map((profile) => profile.id)
+      .sort((a, b) => a.localeCompare(b));
+    const zip = makeRestoreZipWithAprDecimalProfile();
+
+    const result = await restorePlanningDataVaultZip(zip, {
+      mode: "replace",
+      maxEntries: 50,
+      maxBytes: 1024 * 1024,
+      faultInjection: {
+        beforeWrite(operation: { entity?: string }) {
+          if (operation.entity === "profile") {
+            throw new Error("fault: profile write failed");
+          }
+        },
+      },
+    } as Parameters<typeof restorePlanningDataVaultZip>[1] & {
+      faultInjection: {
+        beforeWrite(operation: { entity?: string }): void;
+      };
+    }) as Awaited<ReturnType<typeof restorePlanningDataVaultZip>> & { committed?: boolean };
+
+    expect(result.committed).toBe(false);
+    expect(result.issues.some((issue) => issue.message === "복원을 완료하지 못했습니다. 기존 데이터는 변경되지 않았습니다.")).toBe(true);
+
+    const afterProfiles = await listProfiles();
+    expect(afterProfiles.map((profile) => profile.id).sort((a, b) => a.localeCompare(b))).toEqual(beforeProfileIds);
+    expect(afterProfiles.some((profile) => profile.id === "normalize-profile")).toBe(false);
   });
 
   it("returns normalization disclosures for restored profiles", async () => {

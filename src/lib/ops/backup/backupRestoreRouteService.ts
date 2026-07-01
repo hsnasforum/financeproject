@@ -9,6 +9,7 @@ import {
   type BackupClientError,
 } from "./clientErrors";
 import {
+  RESTORE_NOT_COMMITTED_MESSAGE,
   decryptPlanningDataVaultArchive,
   restorePlanningDataVaultZip,
   type VaultRestoreSummary,
@@ -32,6 +33,16 @@ export type OpsBackupRestorePreviewRequired = {
   status: 428;
 };
 
+export type OpsBackupRestoreNotCommitted = {
+  code: "RESTORE_NOT_COMMITTED";
+  details: {
+    issues: VaultRestoreSummary["issues"];
+    warnings: VaultRestoreSummary["warnings"];
+  };
+  message: string;
+  status: 409;
+};
+
 export type OpsBackupRestoreResult =
   | {
     ok: true;
@@ -39,7 +50,7 @@ export type OpsBackupRestoreResult =
   }
   | {
     ok: false;
-    error: OpsBackupRestorePreviewRequired;
+    error: OpsBackupRestorePreviewRequired | OpsBackupRestoreNotCommitted;
   };
 
 function appendBackupRestoreAudit(result: "SUCCESS" | "ERROR", detail: Record<string, unknown>): void {
@@ -187,6 +198,55 @@ export async function restoreOpsBackupArchive(input: {
     maxEntries: policy.backup.maxEntries,
     maxBytes: policy.backup.maxUploadBytes,
   });
+
+  if (input.mode === "replace" && !restored.committed) {
+    const error: OpsBackupRestoreNotCommitted = {
+      code: "RESTORE_NOT_COMMITTED",
+      message: RESTORE_NOT_COMMITTED_MESSAGE,
+      status: 409,
+      details: {
+        issues: restored.issues,
+        warnings: restored.warnings,
+      },
+    };
+    appendBackupRestoreAudit("ERROR", {
+      fileName: input.file.name,
+      fileSize: input.file.size,
+      mode: input.mode,
+      code: error.code,
+      issues: restored.issues.length,
+      warnings: restored.warnings.length,
+    });
+    await appendOpsAuditEvent({
+      eventType: "OPS_BACKUP_RESTORE_ERROR",
+      meta: {
+        fileName: input.file.name,
+        fileSize: input.file.size,
+        mode: input.mode,
+        code: error.code,
+        status: error.status,
+        issues: restored.issues.length,
+        warnings: restored.warnings.length,
+      },
+    }).catch(() => undefined);
+    await appendOpsMetricEvent({
+      type: "BACKUP_RESTORE",
+      meta: {
+        status: "FAILED",
+        mode: input.mode,
+        durationMs: Math.max(0, Date.now() - input.startedAt),
+        sizeBytes: input.file.size,
+        code: error.code,
+        issues: restored.issues.length,
+        warnings: restored.warnings.length,
+      },
+    }).catch(() => undefined);
+
+    return {
+      ok: false,
+      error,
+    };
+  }
 
   appendBackupRestoreAudit("SUCCESS", {
     fileName: input.file.name,

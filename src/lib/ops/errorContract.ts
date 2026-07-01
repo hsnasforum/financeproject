@@ -12,6 +12,7 @@ export type OpsContractErrorCode =
   | "STORAGE_CORRUPT"
   | "BACKUP_INVALID"
   | "BACKUP_RECEIPT_STORE_UNAVAILABLE"
+  | "RESTORE_NOT_COMMITTED"
   | "INTERNAL";
 
 type OpsErrorShape = {
@@ -39,6 +40,7 @@ const DEFAULT_MESSAGE: Record<OpsContractErrorCode, string> = {
   STORAGE_CORRUPT: "저장 데이터가 손상되었을 수 있습니다. /ops/doctor에서 점검해 주세요.",
   BACKUP_INVALID: "백업 파일 형식이 올바르지 않습니다.",
   BACKUP_RECEIPT_STORE_UNAVAILABLE: "미리보기 확인 저장소를 사용할 수 없습니다.",
+  RESTORE_NOT_COMMITTED: "복원을 완료하지 못했습니다. 기존 데이터는 변경되지 않았습니다.",
   INTERNAL: "처리 중 오류가 발생했습니다.",
 };
 
@@ -52,6 +54,7 @@ const DEFAULT_STATUS: Record<OpsContractErrorCode, number> = {
   STORAGE_CORRUPT: 500,
   BACKUP_INVALID: 400,
   BACKUP_RECEIPT_STORE_UNAVAILABLE: 503,
+  RESTORE_NOT_COMMITTED: 409,
   INTERNAL: 500,
 };
 
@@ -82,6 +85,11 @@ export function normalizeOpsErrorCode(raw: unknown): OpsContractErrorCode {
     code === "BACKUP_RECEIPT_STORE_UNAVAILABLE"
   ) {
     return "BACKUP_RECEIPT_STORE_UNAVAILABLE";
+  }
+  if (
+    code === "RESTORE_NOT_COMMITTED"
+  ) {
+    return "RESTORE_NOT_COMMITTED";
   }
   if (
     code === "BACKUP_INVALID"

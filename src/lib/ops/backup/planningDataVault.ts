@@ -19,11 +19,14 @@ import { readStorageJournalEvents, type StorageJournalEvent } from "../../planni
 import { createRun, getRun, getRunBlob, hardDeleteRun, listRunIndexEntries } from "../../planning/server/store/runStore";
 import { hardDeleteProfile, listProfiles, upsertProfileRecord } from "../../planning/store/profileStore";
 import {
+  resolveProfilePartitionsDir,
   resolveProfilePartitionDir,
+  resolveProfilesDir,
   resolveProfileRunBlobsDir,
   resolveProfileRunDir,
   resolveRunBlobsDir,
   resolveRunDir,
+  resolveRunsDir,
   resolveRunsIndexPath,
   sanitizeRecordId,
 } from "../../planning/store/paths";
@@ -137,14 +140,35 @@ export type VaultPreviewSummary = {
 };
 
 export type VaultRestoreIssue = {
-  entity: "profile" | "run" | "runBlob" | "actionPlan" | "actionProgress" | "assumptions" | "policy";
+  entity: "profile" | "run" | "runBlob" | "actionPlan" | "actionProgress" | "assumptions" | "policy" | "restore";
   id?: string;
   path: string;
   message: string;
 };
 
+export type VaultRestoreFaultOperation = {
+  phase: "preflight" | "commit" | "rollback" | "cleanup";
+  kind: "snapshot" | "clear" | "write" | "rollback" | "cleanup";
+  entity?: VaultRestoreIssue["entity"];
+  id?: string;
+  path?: string;
+};
+
+export type VaultRestoreFaultInjection = {
+  beforeOperation?: (operation: VaultRestoreFaultOperation) => void | Promise<void>;
+  beforeWrite?: (operation: VaultRestoreFaultOperation) => void | Promise<void>;
+};
+
+export type VaultRestoreOptions = {
+  maxEntries: number;
+  maxBytes: number;
+  mode: RestoreMode;
+  faultInjection?: VaultRestoreFaultInjection;
+};
+
 export type VaultRestoreSummary = {
   mode: RestoreMode;
+  committed: boolean;
   imported: {
     profiles: number;
     runs: number;
@@ -211,6 +235,8 @@ type EncryptedBackupPackage = {
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
+
+export const RESTORE_NOT_COMMITTED_MESSAGE = "복원을 완료하지 못했습니다. 기존 데이터는 변경되지 않았습니다.";
 
 function restoreIssueMessage(kind: RestoreIssueMessageKind): string {
   if (kind === "profile") {
@@ -1100,6 +1126,187 @@ function collectPreviewSemanticWarnings(parsed: ParsedVault): string[] {
   return [...warnings];
 }
 
+function parseRestoreJson(parsed: ParsedVault, entryPath: string): unknown {
+  const bytesRow = parsed.entries.get(entryPath);
+  if (!bytesRow) throw new Error("RESTORE_ENTRY_MISSING");
+  return JSON.parse(bytesRow.toString("utf-8")) as unknown;
+}
+
+function collectReplacePreflightIssues(parsed: ParsedVault, restoreSharedState: boolean): VaultRestoreIssue[] {
+  const issues: VaultRestoreIssue[] = [];
+  const profilePaths = [...parsed.entries.keys()]
+    .filter((entryPath) => parseProfileEntryPath(entryPath))
+    .sort((a, b) => a.localeCompare(b));
+  for (const entryPath of profilePaths) {
+    const idFromPath = parseProfileEntryPath(entryPath)?.id ?? "";
+    try {
+      const raw = parseRestoreJson(parsed, entryPath);
+      const row = isRecord(raw) ? raw : {};
+      const fallbackId = sanitizeRecordId(idFromPath || crypto.randomUUID());
+      sanitizeRecordId(asString(row.id) || fallbackId);
+      const profilePayload = isRecord(row.profile) ? row.profile : row;
+      loadCanonicalProfile(profilePayload);
+    } catch {
+      issues.push({
+        entity: "profile",
+        id: idFromPath || undefined,
+        path: entryPath,
+        message: restoreIssueMessage("profile"),
+      });
+    }
+  }
+
+  const profileOverridesPaths = [...parsed.entries.keys()]
+    .filter((entryPath) => parseProfileOverridesEntryPath(entryPath))
+    .sort((a, b) => a.localeCompare(b));
+  for (const entryPath of profileOverridesPaths) {
+    const parsedProfileId = parseProfileOverridesEntryPath(entryPath)?.profileId ?? "";
+    try {
+      sanitizeRecordId(parsedProfileId);
+      parseRestoreJson(parsed, entryPath);
+    } catch {
+      issues.push({
+        entity: "profile",
+        id: parsedProfileId || undefined,
+        path: entryPath,
+        message: restoreIssueMessage("profileOverrides"),
+      });
+    }
+  }
+
+  const runPaths = [...parsed.entries.keys()]
+    .filter((entryPath) => parseRunMetaEntryPath(entryPath))
+    .sort((a, b) => a.localeCompare(b));
+  for (const entryPath of runPaths) {
+    const runId = parseRunMetaEntryPath(entryPath)?.runId ?? "";
+    let safeRunId = "";
+    try {
+      const canonical = loadCanonicalRun(parseRestoreJson(parsed, entryPath));
+      safeRunId = sanitizeRecordId(canonical.run.id || runId);
+      const runBlobPaths = [...parsed.entries.keys()]
+        .filter((candidate) => parseRunBlobEntryPath(candidate)?.runId === safeRunId);
+      for (const blobPath of runBlobPaths) {
+        const blobMeta = parseRunBlobEntryPath(blobPath);
+        if (!blobMeta) continue;
+        try {
+          parseRestoreJson(parsed, blobPath);
+          if (!KNOWN_BLOB_NAMES.includes(blobMeta.blobName as typeof KNOWN_BLOB_NAMES[number])) {
+            continue;
+          }
+        } catch {
+          issues.push({
+            entity: "runBlob",
+            id: safeRunId,
+            path: blobPath,
+            message: restoreIssueMessage("runBlob"),
+          });
+        }
+      }
+
+      const planPath = runActionPlanPath(safeRunId);
+      if (parsed.entries.has(planPath)) {
+        try {
+          const plan = parseActionPlan(parseRestoreJson(parsed, planPath), safeRunId);
+          if (!plan) throw new Error("INVALID_ACTION_PLAN");
+        } catch {
+          issues.push({
+            entity: "actionPlan",
+            id: safeRunId,
+            path: planPath,
+            message: restoreIssueMessage("actionPlan"),
+          });
+        }
+      }
+
+      const progressPath = runActionProgressPath(safeRunId);
+      if (parsed.entries.has(progressPath)) {
+        try {
+          const progress = parseActionProgress(parseRestoreJson(parsed, progressPath), safeRunId);
+          if (!progress) throw new Error("INVALID_ACTION_PROGRESS");
+        } catch {
+          issues.push({
+            entity: "actionProgress",
+            id: safeRunId,
+            path: progressPath,
+            message: restoreIssueMessage("actionProgress"),
+          });
+        }
+      }
+    } catch {
+      issues.push({
+        entity: "run",
+        id: runId || undefined,
+        path: entryPath,
+        message: restoreIssueMessage("run"),
+      });
+    }
+  }
+
+  if (!restoreSharedState) return issues;
+
+  const assumptionsPaths = [...parsed.entries.keys()]
+    .filter((entryPath) => parseAssumptionsHistoryPath(entryPath))
+    .sort((a, b) => a.localeCompare(b));
+  for (const entryPath of assumptionsPaths) {
+    const snapshotId = parseAssumptionsHistoryPath(entryPath)?.id ?? "";
+    try {
+      const migrated = migrateAssumptionsSnapshot(parseRestoreJson(parsed, entryPath));
+      if (!migrated.ok || !migrated.data) throw new Error("INVALID_ASSUMPTIONS_HISTORY");
+      const safeId = normalizeSnapshotId(snapshotId);
+      if (!safeId) throw new Error("INVALID_SNAPSHOT_ID");
+    } catch {
+      issues.push({
+        entity: "assumptions",
+        id: snapshotId || undefined,
+        path: entryPath,
+        message: restoreIssueMessage("assumptionsHistory"),
+      });
+    }
+  }
+
+  const latestPath = `${ASSUMPTIONS_DIR}/latest.json`;
+  if (parsed.entries.has(latestPath)) {
+    try {
+      const migrated = migrateAssumptionsSnapshot(parseRestoreJson(parsed, latestPath));
+      if (!migrated.ok || !migrated.data) throw new Error("INVALID_LATEST_ASSUMPTIONS");
+    } catch {
+      issues.push({
+        entity: "assumptions",
+        path: latestPath,
+        message: restoreIssueMessage("latestSnapshot"),
+      });
+    }
+  }
+
+  const autoMergePolicyEntry = `${POLICIES_DIR}/ops-auto-merge-policy.json`;
+  if (parsed.entries.has(autoMergePolicyEntry)) {
+    try {
+      parseRestoreJson(parsed, autoMergePolicyEntry);
+    } catch {
+      issues.push({
+        entity: "policy",
+        path: autoMergePolicyEntry,
+        message: restoreIssueMessage("autoMergePolicy"),
+      });
+    }
+  }
+
+  const schedulerPolicyEntry = `${POLICIES_DIR}/ops-scheduler-threshold-policy.json`;
+  if (parsed.entries.has(schedulerPolicyEntry)) {
+    try {
+      parseRestoreJson(parsed, schedulerPolicyEntry);
+    } catch {
+      issues.push({
+        entity: "policy",
+        path: schedulerPolicyEntry,
+        message: restoreIssueMessage("schedulerPolicy"),
+      });
+    }
+  }
+
+  return issues;
+}
+
 async function clearProfiles(): Promise<void> {
   const profiles = await listProfiles();
   for (const row of profiles) {
@@ -1124,6 +1331,212 @@ async function clearAssumptions(): Promise<void> {
 async function clearPolicies(): Promise<void> {
   await fs.unlink(path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE)).catch(() => undefined);
   await fs.unlink(path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE)).catch(() => undefined);
+}
+
+function resolveProfileMetaPath(): string {
+  const override = asString(process.env.PLANNING_PROFILE_META_PATH);
+  if (override) return path.resolve(process.cwd(), override);
+  return path.join(path.dirname(resolveProfilePartitionsDir()), "profiles.meta.json");
+}
+
+function resolveReplaceRestoreJournalPath(): string {
+  return path.join(resolveOpsDataDir(), "backup", "restore-replace-journal.json");
+}
+
+function restoreNotCommittedIssue(pathValue = "restore"): VaultRestoreIssue {
+  return {
+    entity: "restore",
+    path: pathValue,
+    message: RESTORE_NOT_COMMITTED_MESSAGE,
+  };
+}
+
+function appendRestoreNotCommittedIssue(issues: VaultRestoreIssue[]): VaultRestoreIssue[] {
+  if (issues.some((issue) => issue.entity === "restore" && issue.message === RESTORE_NOT_COMMITTED_MESSAGE)) {
+    return issues;
+  }
+  return [...issues, restoreNotCommittedIssue()];
+}
+
+async function callRestoreFaultInjection(
+  faultInjection: VaultRestoreFaultInjection | undefined,
+  operation: VaultRestoreFaultOperation,
+): Promise<void> {
+  await faultInjection?.beforeOperation?.(operation);
+  if (operation.kind === "write") {
+    await faultInjection?.beforeWrite?.(operation);
+  }
+}
+
+async function beforeRestoreWrite(
+  options: VaultRestoreOptions,
+  operation: Omit<VaultRestoreFaultOperation, "phase" | "kind">,
+): Promise<void> {
+  await callRestoreFaultInjection(options.faultInjection, {
+    phase: "commit",
+    kind: "write",
+    ...operation,
+  });
+}
+
+type ReplaceRestoreSnapshotEntry = {
+  targetPath: string;
+  backupPath: string;
+  existed: boolean;
+};
+
+type ReplaceRestoreSnapshot = {
+  root: string;
+  journalPath: string;
+  entries: ReplaceRestoreSnapshotEntry[];
+};
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.lstat(targetPath);
+    return true;
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function uniqueRestoreTargets(targets: string[]): string[] {
+  return [...new Set(targets.map((targetPath) => path.resolve(targetPath)))];
+}
+
+function replaceRestoreTargets(restoreSharedState: boolean): string[] {
+  const targets = [
+    resolveProfilesDir(),
+    resolveRunsDir(),
+    resolveProfilePartitionsDir(),
+    resolveProfileMetaPath(),
+  ];
+  if (restoreSharedState) {
+    targets.push(
+      resolveAssumptionsPath(),
+      resolveAssumptionsHistoryDir(),
+      path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE),
+      path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE),
+    );
+  }
+  return uniqueRestoreTargets(targets);
+}
+
+async function writeReplaceRestoreJournal(snapshot: ReplaceRestoreSnapshot): Promise<void> {
+  await writeJsonAtomic(snapshot.journalPath, {
+    version: 1,
+    kind: "planning-data-vault-replace-restore-journal",
+    createdAt: new Date().toISOString(),
+    snapshotRoot: snapshot.root,
+    entries: snapshot.entries,
+  });
+}
+
+async function createReplaceRestoreSnapshot(
+  restoreSharedState: boolean,
+  options: VaultRestoreOptions,
+): Promise<ReplaceRestoreSnapshot> {
+  const snapshotRoot = path.join(resolveOpsDataDir(), "backup", "restore-snapshots", crypto.randomUUID());
+  const journalPath = resolveReplaceRestoreJournalPath();
+  const entries: ReplaceRestoreSnapshotEntry[] = [];
+  await fs.mkdir(snapshotRoot, { recursive: true });
+
+  for (const [index, targetPath] of replaceRestoreTargets(restoreSharedState).entries()) {
+    await callRestoreFaultInjection(options.faultInjection, {
+      phase: "preflight",
+      kind: "snapshot",
+      path: targetPath,
+    });
+    const backupPath = path.join(snapshotRoot, `${index}`);
+    const existed = await pathExists(targetPath);
+    entries.push({ targetPath, backupPath, existed });
+    if (!existed) continue;
+    await fs.mkdir(path.dirname(backupPath), { recursive: true });
+    await fs.cp(targetPath, backupPath, {
+      recursive: true,
+      force: true,
+      verbatimSymlinks: true,
+    });
+  }
+
+  const snapshot = { root: snapshotRoot, journalPath, entries };
+  await writeReplaceRestoreJournal(snapshot);
+  return snapshot;
+}
+
+async function rollbackReplaceRestoreSnapshot(
+  snapshot: ReplaceRestoreSnapshot,
+  options: VaultRestoreOptions,
+): Promise<void> {
+  for (const entry of [...snapshot.entries].reverse()) {
+    await callRestoreFaultInjection(options.faultInjection, {
+      phase: "rollback",
+      kind: "rollback",
+      path: entry.targetPath,
+    });
+    await fs.rm(entry.targetPath, { recursive: true, force: true });
+    if (!entry.existed) continue;
+    await fs.mkdir(path.dirname(entry.targetPath), { recursive: true });
+    await fs.cp(entry.backupPath, entry.targetPath, {
+      recursive: true,
+      force: true,
+      verbatimSymlinks: true,
+    });
+  }
+}
+
+async function cleanupReplaceRestoreSnapshot(snapshot: ReplaceRestoreSnapshot, options: VaultRestoreOptions): Promise<void> {
+  await callRestoreFaultInjection(options.faultInjection, {
+    phase: "cleanup",
+    kind: "cleanup",
+    path: snapshot.root,
+  });
+  await fs.rm(snapshot.root, { recursive: true, force: true }).catch(() => undefined);
+  await fs.rm(snapshot.journalPath, { force: true }).catch(() => undefined);
+}
+
+async function readPendingReplaceRestoreSnapshot(): Promise<ReplaceRestoreSnapshot | null> {
+  const journalPath = resolveReplaceRestoreJournalPath();
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await fs.readFile(journalPath, "utf-8")) as unknown;
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code === "ENOENT") return null;
+    throw error;
+  }
+  if (!isRecord(raw) || raw.kind !== "planning-data-vault-replace-restore-journal") return null;
+  const root = asString(raw.snapshotRoot);
+  const rows = Array.isArray(raw.entries) ? raw.entries : [];
+  if (!root) return null;
+  const entries = rows
+    .map((entry) => {
+      if (!isRecord(entry)) return null;
+      const targetPath = asString(entry.targetPath);
+      const backupPath = asString(entry.backupPath);
+      if (!targetPath || !backupPath) return null;
+      return {
+        targetPath,
+        backupPath,
+        existed: entry.existed === true,
+      };
+    })
+    .filter((entry): entry is ReplaceRestoreSnapshotEntry => entry !== null);
+  if (entries.length < 1) return null;
+  return {
+    root,
+    journalPath,
+    entries,
+  };
+}
+
+async function recoverPendingReplaceRestoreSnapshot(options: VaultRestoreOptions): Promise<void> {
+  const snapshot = await readPendingReplaceRestoreSnapshot();
+  if (!snapshot) return;
+  await rollbackReplaceRestoreSnapshot(snapshot, options);
+  await cleanupReplaceRestoreSnapshot(snapshot, options);
 }
 
 function toManifestWithoutFiles(
@@ -1433,8 +1846,9 @@ export async function previewPlanningDataVaultZip(
 
 export async function restorePlanningDataVaultZip(
   bytes: Uint8Array | Buffer,
-  options: { maxEntries: number; maxBytes: number; mode: RestoreMode },
+  options: VaultRestoreOptions,
 ): Promise<VaultRestoreSummary> {
+  await recoverPendingReplaceRestoreSnapshot(options);
   const parsed = await parseVault(bytes, {
     maxEntries: options.maxEntries,
     maxBytes: options.maxBytes,
@@ -1454,11 +1868,47 @@ export async function restorePlanningDataVaultZip(
   };
   const restoreSharedState = !isPlanningNamespaceEnabled();
 
+  let replaceSnapshot: ReplaceRestoreSnapshot | null = null;
   if (options.mode === "replace") {
+    const preflightIssues = collectReplacePreflightIssues(parsed, restoreSharedState);
+    if (preflightIssues.length > 0) {
+      return {
+        mode: options.mode,
+        committed: false,
+        imported,
+        issues: appendRestoreNotCommittedIssue(preflightIssues),
+        warnings,
+      };
+    }
+    replaceSnapshot = await createReplaceRestoreSnapshot(restoreSharedState, options);
+  }
+
+  try {
+  if (options.mode === "replace") {
+    await callRestoreFaultInjection(options.faultInjection, {
+      phase: "commit",
+      kind: "clear",
+      entity: "profile",
+    });
     await clearProfiles();
+    await callRestoreFaultInjection(options.faultInjection, {
+      phase: "commit",
+      kind: "clear",
+      entity: "run",
+    });
     await clearRuns();
     if (restoreSharedState) {
+      await callRestoreFaultInjection(options.faultInjection, {
+        phase: "commit",
+        kind: "clear",
+        entity: "assumptions",
+      });
       await clearAssumptions();
+      await callRestoreFaultInjection(options.faultInjection, {
+        phase: "commit",
+        kind: "clear",
+        entity: "policy",
+      });
       await clearPolicies();
     }
   }
@@ -1482,6 +1932,11 @@ export async function restorePlanningDataVaultZip(
       const name = asString(row.name) || id;
       const profilePayload = isRecord(row.profile) ? row.profile : row;
       const canonical = loadCanonicalProfile(profilePayload);
+      await beforeRestoreWrite(options, {
+        entity: "profile",
+        id,
+        path: entryPath,
+      });
       await upsertProfileRecord({
         id,
         name,
@@ -1517,6 +1972,11 @@ export async function restorePlanningDataVaultZip(
       const raw = JSON.parse(bytesRow.toString("utf-8")) as unknown;
       const safeProfileId = sanitizeRecordId(parsedProfileId);
       const payload = isRecord(raw) && Array.isArray(raw.items) ? raw.items : raw;
+      await beforeRestoreWrite(options, {
+        entity: "profile",
+        id: safeProfileId,
+        path: entryPath,
+      });
       await saveAssumptionsOverrides(payload, safeProfileId);
     } catch {
       issues.push({
@@ -1587,6 +2047,11 @@ export async function restorePlanningDataVaultZip(
         await hardDeleteRun(safeRunId);
       }
 
+      await beforeRestoreWrite(options, {
+        entity: "run",
+        id: safeRunId,
+        path: entryPath,
+      });
       await createRun({
         ...canonical.run,
         id: safeRunId,
@@ -1605,6 +2070,11 @@ export async function restorePlanningDataVaultZip(
           const planRaw = JSON.parse(planBytes.toString("utf-8")) as unknown;
           const plan = parseActionPlan(planRaw, safeRunId);
           if (!plan) throw new Error("INVALID_ACTION_PLAN");
+          await beforeRestoreWrite(options, {
+            entity: "actionPlan",
+            id: safeRunId,
+            path: planPath,
+          });
           await writeStoreJsonAtomic(path.join(resolveProfileRunDir(canonical.run.profileId, safeRunId), "action-plan.json"), plan);
           imported.actionPlans += 1;
         } catch {
@@ -1624,6 +2094,11 @@ export async function restorePlanningDataVaultZip(
           const progressRaw = JSON.parse(progressBytes.toString("utf-8")) as unknown;
           const progress = parseActionProgress(progressRaw, safeRunId);
           if (!progress) throw new Error("INVALID_ACTION_PROGRESS");
+          await beforeRestoreWrite(options, {
+            entity: "actionProgress",
+            id: safeRunId,
+            path: progressPath,
+          });
           await writeStoreJsonAtomic(path.join(resolveProfileRunDir(canonical.run.profileId, safeRunId), "action-progress.json"), progress);
           imported.actionProgress += 1;
         } catch {
@@ -1678,6 +2153,11 @@ export async function restorePlanningDataVaultZip(
             continue;
           }
         }
+        await beforeRestoreWrite(options, {
+          entity: "assumptions",
+          id: safeId,
+          path: entryPath,
+        });
         await writeStoreJsonAtomic(path.join(resolveAssumptionsHistoryDir(), `${safeId}.json`), {
           ...snapshotData,
           asOf: toDateOnly(snapshotData.asOf),
@@ -1707,6 +2187,10 @@ export async function restorePlanningDataVaultZip(
       if (!snapshotData) {
         throw new Error("latest snapshot migration returned empty payload");
       }
+      await beforeRestoreWrite(options, {
+        entity: "assumptions",
+        path: latestPath,
+      });
       await saveLatestAssumptionsSnapshot({
         ...snapshotData,
         version: 1,
@@ -1734,6 +2218,10 @@ export async function restorePlanningDataVaultZip(
   if (restoreSharedPolicies && policyBytes) {
     try {
       const payload = JSON.parse(policyBytes.toString("utf-8")) as unknown;
+      await beforeRestoreWrite(options, {
+        entity: "policy",
+        path: autoMergePolicyEntry,
+      });
       await writeJsonAtomic(path.join(resolveOpsDataDir(), OPS_AUTO_MERGE_POLICY_FILE), payload);
       imported.policies += 1;
     } catch {
@@ -1747,6 +2235,10 @@ export async function restorePlanningDataVaultZip(
   if (restoreSharedPolicies && schedulerPolicyBytes) {
     try {
       const payload = JSON.parse(schedulerPolicyBytes.toString("utf-8")) as unknown;
+      await beforeRestoreWrite(options, {
+        entity: "policy",
+        path: schedulerPolicyEntry,
+      });
       await writeJsonAtomic(path.join(resolveOpsDataDir(), OPS_SCHEDULER_POLICY_FILE), payload);
       imported.policies += 1;
     } catch {
@@ -1758,11 +2250,45 @@ export async function restorePlanningDataVaultZip(
     }
   }
 
-  return {
+  const summary: VaultRestoreSummary = {
     mode: options.mode,
+    committed: true,
     imported,
     issues,
     warnings,
     ...(normalizationProfiles.length > 0 ? { normalization: { profiles: normalizationProfiles } } : {}),
   };
+
+  if (options.mode === "replace" && summary.issues.length > 0 && replaceSnapshot) {
+    await rollbackReplaceRestoreSnapshot(replaceSnapshot, options);
+    return {
+      ...summary,
+      committed: false,
+      issues: appendRestoreNotCommittedIssue(summary.issues),
+    };
+  }
+
+  return summary;
+  } catch (error) {
+    if (!replaceSnapshot) throw error;
+    await rollbackReplaceRestoreSnapshot(replaceSnapshot, options);
+    return {
+      mode: options.mode,
+      committed: false,
+      imported,
+      issues: appendRestoreNotCommittedIssue([
+        {
+          entity: "restore",
+          path: "restore",
+          message: RESTORE_NOT_COMMITTED_MESSAGE,
+        },
+      ]),
+      warnings,
+      ...(normalizationProfiles.length > 0 ? { normalization: { profiles: normalizationProfiles } } : {}),
+    };
+  } finally {
+    if (replaceSnapshot) {
+      await cleanupReplaceRestoreSnapshot(replaceSnapshot, options);
+    }
+  }
 }

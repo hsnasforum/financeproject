@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { tsImport } from "tsx/esm/api";
 import { runPnpmBuffered } from "./pnpm_runner.mjs";
 import {
   OPS_LOGS_RELATIVE,
@@ -19,6 +18,10 @@ const DEFAULT_KEEP = 50;
 const LOG_TAIL_LINES = 50;
 let redactTextImpl = fallbackRedactText;
 let redactTextLoaded = false;
+
+async function importTsModule(specifier) {
+  return import(new URL(specifier, import.meta.url).href);
+}
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -56,7 +59,7 @@ async function ensureRedactTextLoaded() {
   if (redactTextLoaded) return;
   redactTextLoaded = true;
   try {
-    const moduleRaw = await tsImport("../src/lib/planning/privacy/redact.ts", { parentURL: import.meta.url });
+    const moduleRaw = await importTsModule("../src/lib/planning/privacy/redact.ts");
     const resolved = moduleRaw?.default && typeof moduleRaw.default === "object" ? moduleRaw.default : moduleRaw;
     if (typeof resolved?.redactText === "function") {
       redactTextImpl = (value) => resolved.redactText(asString(value));
@@ -150,8 +153,8 @@ function parseArgs(argv) {
 }
 
 async function loadOpsHelpers() {
-  const storageRaw = await tsImport("../src/lib/planning/assumptions/storage.ts", { parentURL: import.meta.url });
-  const syncRaw = await tsImport("../src/lib/planning/ops/shouldSyncSnapshot.ts", { parentURL: import.meta.url });
+  const storageRaw = await importTsModule("../src/lib/planning/assumptions/storage.ts");
+  const syncRaw = await importTsModule("../src/lib/planning/ops/shouldSyncSnapshot.ts");
   const storage = storageRaw?.default && typeof storageRaw.default === "object" ? storageRaw.default : storageRaw;
   const syncModule = syncRaw?.default && typeof syncRaw.default === "object" ? syncRaw.default : syncRaw;
   return {
