@@ -121,6 +121,7 @@ describe("planning route auth boundary", () => {
       testEnv({
         NODE_ENV: "production",
         PLANNING_AUTH_REQUIRED: "0",
+        PLANNING_SINGLE_USER_MODE: "1",
       }),
     );
 

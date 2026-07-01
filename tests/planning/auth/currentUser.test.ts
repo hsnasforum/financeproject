@@ -12,6 +12,8 @@ import { getScopedPlanningAuthSource } from "../../../src/lib/planning/store/use
 const env = process.env as Record<string, string | undefined>;
 const originalAuthRequired = process.env.PLANNING_AUTH_REQUIRED;
 const originalTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
+const originalNamespaceEnabled = process.env.PLANNING_NAMESPACE_ENABLED;
+const originalSingleUserMode = process.env.PLANNING_SINGLE_USER_MODE;
 const originalPlanningUserId = process.env.PLANNING_USER_ID;
 const originalAuthSecret = process.env.AUTH_SECRET;
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
@@ -35,6 +37,10 @@ describe("planning current user", () => {
     else delete env.PLANNING_AUTH_REQUIRED;
     if (typeof originalTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalTrustAuthHeaders;
     else delete env.PLANNING_TRUST_AUTH_HEADERS;
+    if (typeof originalNamespaceEnabled === "string") env.PLANNING_NAMESPACE_ENABLED = originalNamespaceEnabled;
+    else delete env.PLANNING_NAMESPACE_ENABLED;
+    if (typeof originalSingleUserMode === "string") env.PLANNING_SINGLE_USER_MODE = originalSingleUserMode;
+    else delete env.PLANNING_SINGLE_USER_MODE;
     if (typeof originalPlanningUserId === "string") env.PLANNING_USER_ID = originalPlanningUserId;
     else delete env.PLANNING_USER_ID;
     if (typeof originalAuthSecret === "string") env.AUTH_SECRET = originalAuthSecret;
@@ -87,6 +93,7 @@ describe("planning current user", () => {
   it("keeps planning auth required in production even when fallback env is disabled", async () => {
     env.NODE_ENV = "production";
     env.PLANNING_AUTH_REQUIRED = "0";
+    env.PLANNING_SINGLE_USER_MODE = "1";
     delete env.AUTH_SECRET;
     delete env.NEXTAUTH_SECRET;
 
@@ -94,6 +101,22 @@ describe("planning current user", () => {
     await expect(requireCurrentPlanningUser(new Request("https://example.com/api/planning/profiles")))
       .rejects
       .toMatchObject({ code: "UNAUTHENTICATED", status: 401 } satisfies Partial<PlanningAuthError>);
+  });
+
+  it("rejects production planning users when storage ownership is not explicit", async () => {
+    env.NODE_ENV = "production";
+    env.PLANNING_TRUST_AUTH_HEADERS = "1";
+    env.PLANNING_NAMESPACE_ENABLED = "0";
+    delete env.PLANNING_SINGLE_USER_MODE;
+    delete env.AUTH_SECRET;
+    delete env.NEXTAUTH_SECRET;
+
+    await expect(requireCurrentPlanningUser(requestWithUser("alice")))
+      .rejects
+      .toMatchObject({
+        code: "INVALID_STORAGE_MODE",
+        status: 500,
+      });
   });
 
   it("uses the local namespace without touching Auth.js when auth is optional and no secret is configured", async () => {

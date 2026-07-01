@@ -25,6 +25,25 @@ function parsePort(value, fallback = DEFAULT_PORT) {
   return intPort;
 }
 
+function parseBoolean(value, fallback = false) {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
+function assertPlanningStorageMode(env) {
+  const nodeEnv = typeof env.NODE_ENV === "string" ? env.NODE_ENV.trim().toLowerCase() : "";
+  if (nodeEnv !== "production") return;
+  if (parseBoolean(env.PLANNING_NAMESPACE_ENABLED, false)) return;
+  if (parseBoolean(env.PLANNING_SINGLE_USER_MODE, false)) return;
+  throw new Error(
+    "invalid planning storage mode: set PLANNING_NAMESPACE_ENABLED=true for multi-user storage or PLANNING_SINGLE_USER_MODE=true for explicit single-user storage",
+  );
+}
+
 function parseCliArgs(argv) {
   let overridePort;
   let scanRange = DEFAULT_SCAN_RANGE;
@@ -230,12 +249,14 @@ async function main() {
   const env = sanitizeInheritedColorEnv(process.env);
   delete env.HOSTNAME;
   delete env.PORT;
+  env.NODE_ENV = "production";
   env.HOSTNAME = FORCED_HOST;
   env.PORT = String(port);
 
   if (!env.PLANNING_RUNTIME_MODE) {
     env.PLANNING_RUNTIME_MODE = "production";
   }
+  assertPlanningStorageMode(env);
 
   console.log(`Bind: host=${FORCED_HOST} port=${port}`);
   console.log(`Open (same env): http://${FORCED_HOST}:${port}`);

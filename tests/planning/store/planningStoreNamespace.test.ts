@@ -20,6 +20,7 @@ const ENV_KEYS = [
   "NODE_ENV",
   "PLANNING_DATA_DIR",
   "PLANNING_NAMESPACE_ENABLED",
+  "PLANNING_SINGLE_USER_MODE",
   "PLANNING_USER_ID",
   "PLANNING_PROFILES_DIR",
   "PLANNING_RUNS_DIR",
@@ -172,5 +173,19 @@ describe("planning store namespace ownership", () => {
     expect(bobProfile).toBeNull();
     expect(fs.existsSync(path.join(root, "users", "alice", "vault", "profiles", "mutable-profile", "profile.json"))).toBe(true);
     expect(fs.existsSync(path.join(root, "users", "bob", "vault", "profiles", "mutable-profile", "profile.json"))).toBe(false);
+  });
+
+  it("stores explicit single-user mode data under users/default instead of shared roots", async () => {
+    env.NODE_ENV = "production";
+    env.PLANNING_NAMESPACE_ENABLED = "0";
+    env.PLANNING_SINGLE_USER_MODE = "1";
+    env.PLANNING_USER_ID = "default";
+
+    await writeUserFixture("alice", "Single");
+
+    expect(fs.existsSync(path.join(root, "users", "default", "vault", "profiles", "shared-profile", "profile.json"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "users", "default", "runs", "index.json"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "vault", "profiles", "shared-profile", "profile.json"))).toBe(false);
+    expect(fs.existsSync(path.join(root, "runs", "index.json"))).toBe(false);
   });
 });

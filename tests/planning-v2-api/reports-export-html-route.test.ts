@@ -10,11 +10,13 @@ import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPl
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 const originalProfilesDir = process.env.PLANNING_PROFILES_DIR;
 const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const originalAuditPath = process.env.AUDIT_LOG_PATH;
 const originalAssumptionsOverridesPath = process.env.PLANNING_ASSUMPTIONS_OVERRIDES_PATH;
 const originalPlanningTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
+const originalPlanningSingleUserMode = process.env.PLANNING_SINGLE_USER_MODE;
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -111,6 +113,8 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-reports-export-html-"));
     env.NODE_ENV = "test";
+    env.PLANNING_DATA_DIR = root;
+    env.PLANNING_SINGLE_USER_MODE = "1";
     env.PLANNING_PROFILES_DIR = path.join(root, "profiles");
     env.PLANNING_RUNS_DIR = path.join(root, "runs");
     env.AUDIT_LOG_PATH = path.join(root, "audit.json");
@@ -120,6 +124,9 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
   afterEach(() => {
     if (typeof originalNodeEnv === "string") env.NODE_ENV = originalNodeEnv;
     else delete env.NODE_ENV;
+
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
 
     if (typeof originalProfilesDir === "string") env.PLANNING_PROFILES_DIR = originalProfilesDir;
     else delete env.PLANNING_PROFILES_DIR;
@@ -133,6 +140,8 @@ describe("GET /api/planning/reports/[runId]/export.html", () => {
     else delete env.PLANNING_ASSUMPTIONS_OVERRIDES_PATH;
     if (typeof originalPlanningTrustAuthHeaders === "string") env.PLANNING_TRUST_AUTH_HEADERS = originalPlanningTrustAuthHeaders;
     else delete env.PLANNING_TRUST_AUTH_HEADERS;
+    if (typeof originalPlanningSingleUserMode === "string") env.PLANNING_SINGLE_USER_MODE = originalPlanningSingleUserMode;
+    else delete env.PLANNING_SINGLE_USER_MODE;
 
     fs.rmSync(root, { recursive: true, force: true });
   });

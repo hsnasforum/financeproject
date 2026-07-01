@@ -8,6 +8,11 @@
   - `PLANNING_NAMESPACE_ENABLED=true`
   - `PLANNING_USER_ID={userId}`
   - profiles/runs 저장 경로가 `.data/planning/users/{userId}/...`로 분리됩니다.
+- 명시적 단일 사용자 모드:
+  - `PLANNING_SINGLE_USER_MODE=true`
+  - 개인용/desktop topology에서만 사용합니다.
+  - 저장 경로는 `.data/planning/users/default/...`입니다.
+- production에서는 네임스페이스 분리 또는 명시적 단일 사용자 모드 중 하나가 없으면 시작하지 않습니다.
 - 공통 데이터:
   - assumptions snapshot/latest/history는 기존 공용 경로를 그대로 사용합니다.
 

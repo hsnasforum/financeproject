@@ -236,6 +236,8 @@
   - `PLANNING_NAMESPACE_ENABLED=true`
   - `PLANNING_USER_ID=family-a` (예시)
   - 저장 경로: `.data/planning/users/{userId}/profiles|runs`
+- production에서는 `PLANNING_NAMESPACE_ENABLED=true` 또는 `PLANNING_SINGLE_USER_MODE=true` 중 하나를 명시해야 합니다.
+- `PLANNING_SINGLE_USER_MODE=true`는 개인용/desktop topology 전용이며 저장 경로는 `.data/planning/users/default/...`입니다.
 - namespace 이동 마이그레이션:
   - dry-run: `pnpm planning:v2:migrate:dry -- --namespace-user=family-a`
   - apply: `pnpm planning:v2:migrate:apply -- --namespace-user=family-a`

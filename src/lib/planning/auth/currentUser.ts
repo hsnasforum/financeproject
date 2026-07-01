@@ -1,6 +1,8 @@
 import { isLocalRequest } from "../../dev/localRequest";
 import {
   DEFAULT_PLANNING_USER_ID,
+  PlanningStorageModeError,
+  assertPlanningStorageMode,
   resolvePlanningUserId,
 } from "../store/namespace";
 import { runWithPlanningUserScope } from "../store/userScope";
@@ -14,10 +16,10 @@ export type PlanningCurrentUser = {
 };
 
 export class PlanningAuthError extends Error {
-  readonly code: "UNAUTHENTICATED" | "FORBIDDEN";
+  readonly code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVALID_STORAGE_MODE";
   readonly status: number;
 
-  constructor(code: "UNAUTHENTICATED" | "FORBIDDEN", message: string, status: number) {
+  constructor(code: "UNAUTHENTICATED" | "FORBIDDEN" | "INVALID_STORAGE_MODE", message: string, status: number) {
     super(message);
     this.name = "PlanningAuthError";
     this.code = code;
@@ -79,6 +81,14 @@ export async function requireCurrentPlanningUser(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<PlanningCurrentUser> {
   const authRequired = isPlanningAuthRequired(env);
+  try {
+    assertPlanningStorageMode(env, { authRequired });
+  } catch (error) {
+    if (error instanceof PlanningStorageModeError) {
+      throw new PlanningAuthError(error.code, error.message, error.status);
+    }
+    throw error;
+  }
   const trustedHeaderUserId = readTrustedHeaderUserId(request);
 
   if (trustedHeaderUserId) {

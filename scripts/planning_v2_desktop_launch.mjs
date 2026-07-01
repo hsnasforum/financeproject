@@ -312,9 +312,13 @@ async function main() {
   const launchArgs = args.runtime === "prod"
     ? [serverScript, "--port", String(args.port)]
     : [serverScript, "--host", args.host, "--port", String(args.port)];
+  const env = {
+    ...process.env,
+    PLANNING_SINGLE_USER_MODE: asString(process.env.PLANNING_SINGLE_USER_MODE) || "1",
+  };
 
   const server = spawn(process.execPath, launchArgs, {
-    env: process.env,
+    env,
     stdio: "inherit",
     detached: process.platform !== "win32",
   });
