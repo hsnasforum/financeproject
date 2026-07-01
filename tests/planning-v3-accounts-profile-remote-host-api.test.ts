@@ -8,7 +8,7 @@ import { GET as openingBalancesGET } from "../src/app/api/planning/v3/opening-ba
 import { GET as profileDraftGET } from "../src/app/api/planning/v3/profile/draft/route";
 import { GET as profileDraftDetailGET } from "../src/app/api/planning/v3/profile/drafts/[id]/route";
 import { GET as profileDraftsGET } from "../src/app/api/planning/v3/profile/drafts/route";
-import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
+import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
 import { createDraftFromBatch } from "../src/lib/planning/v3/store/draftStore";
 import { upsertOpeningBalance } from "../src/lib/planning/v3/openingBalances/store";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
@@ -71,8 +71,7 @@ describe("planning v3 accounts/profile remote host contract", () => {
     accountId = account.id;
     await upsertOpeningBalance(accountId, "2026-03-01", 150000);
 
-    const created = await appendBatchFromCsv({
-      accountId,
+    const created = await importCsvToBatch({
       csvText: [
         "date,amount,description",
         "2026-01-01,3000000,salary",
@@ -83,9 +82,10 @@ describe("planning v3 accounts/profile remote host contract", () => {
         "2026-03-02,-1150000,rent",
       ].join("\n"),
       mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "remote-host-profile.csv",
+      provenance: { fileName: "remote-host-profile.csv" },
+      options: { accountId },
     });
-    batchId = created.batch.id;
+    batchId = created.batchMeta.id;
 
     const draft = await createDraftFromBatch(batchId);
     draftId = draft.id;

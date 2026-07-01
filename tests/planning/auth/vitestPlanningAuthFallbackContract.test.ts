@@ -12,6 +12,7 @@ const PLANNING_ROUTE_IMPORT_PATTERN = /from\s+["'](?:@\/app\/api\/planning|(?:\.
 const LEGACY_RUNTIME_ROUTE_IMPORTS_WITH_IMPLICIT_LOCAL_AUTH_FALLBACK: string[] = [];
 
 const STATIC_ROUTE_SOURCE_REFERENCES_WITHOUT_TEST_AUTH_FALLBACK = [
+  "tests/planning-v2-static-guard.test.ts",
   "tests/planning/auth/planningRouteUserScopeCoverage.test.ts",
 ].sort();
 

@@ -4,7 +4,6 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as draftProfilePOST } from "../src/app/api/planning/v3/draft/profile/route";
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
-import { buildTxnId } from "../src/lib/planning/v3/service/txnId";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
@@ -107,7 +106,7 @@ describe("POST /api/planning/v3/draft/profile", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("uses latest batch when batchId is omitted", async () => {
+  it("returns NO_DATA when batchId is omitted and only pure legacy batches exist", async () => {
     await appendBatchFromCsv({
       accountId,
       csvText: [
@@ -126,62 +125,39 @@ describe("POST /api/planning/v3/draft/profile", () => {
       },
       fileName: "a.csv",
     });
-    const second = await appendBatchFromCsv({
-      accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-02-01,3000000,급여",
-        "2026-02-02,-600000,월세",
-        "2026-03-01,3100000,급여",
-        "2026-03-02,-610000,월세",
-        "2026-04-01,3200000,급여",
-        "2026-04-02,-620000,월세",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
-      fileName: "b.csv",
-    });
 
     const response = await draftProfilePOST(requestJson({
       csrf: "test",
       source: "csv",
     }));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
       ok?: boolean;
-      batchId?: string;
-      patch?: { monthlyIncomeNet?: number };
+      error?: { code?: string; message?: string };
     };
-    expect(payload.ok).toBe(true);
-    expect(payload.batchId).toBe(second.batch.id);
-    expect(typeof payload.patch?.monthlyIncomeNet).toBe("number");
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("NO_DATA");
+    expect(payload.error?.message).toBe("배치 데이터가 없습니다.");
   });
 
   it("returns 400 when data has fewer than 3 months", async () => {
-    const batch = await appendBatchFromCsv({
+    const batchId = "draftshort001";
+    await saveStoredShadowBatch({
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-01-01,2000000,급여",
-        "2026-01-02,-500000,월세",
-        "2026-02-01,2100000,급여",
-        "2026-02-02,-510000,월세",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
-      fileName: "short.csv",
+      createdAt: "2026-02-02T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-01-01", amountKrw: 2000000, description: "급여" },
+        { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-01-02", amountKrw: -500000, description: "월세" },
+        { txnId: "cccccccccccccccccccccccc", date: "2026-02-01", amountKrw: 2100000, description: "급여" },
+        { txnId: "dddddddddddddddddddddddd", date: "2026-02-02", amountKrw: -510000, description: "월세" },
+      ],
     });
 
     const response = await draftProfilePOST(requestJson({
       csrf: "test",
       source: "csv",
-      batchId: batch.batch.id,
+      batchId,
     }));
     expect(response.status).toBe(400);
     const payload = await response.json() as {
@@ -194,31 +170,32 @@ describe("POST /api/planning/v3/draft/profile", () => {
   });
 
   it("ignores legacy unscoped overrides and only applies batch-scoped overrides", async () => {
-    const batch = await appendBatchFromCsv({
+    const batchId = "draftoverride001";
+    const txnIds = [
+      "bbbbbbbbbbbbbbbbbbbbbbbb",
+      "dddddddddddddddddddddddd",
+      "ffffffffffffffffffffffff",
+    ];
+    await saveStoredShadowBatch({
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-01-01,2000000,급여",
-        "2026-01-02,-100000,마트",
-        "2026-02-01,2000000,급여",
-        "2026-02-02,-100000,마트",
-        "2026-03-01,2000000,급여",
-        "2026-03-02,-100000,마트",
-        "2026-03-10,-300000,이체",
-        "2026-03-10,300000,이체",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
-      fileName: "override.csv",
+      createdAt: "2026-03-10T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-01-01", amountKrw: 2000000, description: "급여" },
+        { txnId: txnIds[0]!, date: "2026-01-02", amountKrw: -100000, description: "마트" },
+        { txnId: "cccccccccccccccccccccccc", date: "2026-02-01", amountKrw: 2000000, description: "급여" },
+        { txnId: txnIds[1]!, date: "2026-02-02", amountKrw: -100000, description: "마트" },
+        { txnId: "eeeeeeeeeeeeeeeeeeeeeeee", date: "2026-03-01", amountKrw: 2000000, description: "급여" },
+        { txnId: txnIds[2]!, date: "2026-03-02", amountKrw: -100000, description: "마트" },
+        { txnId: "111111111111111111111111", date: "2026-03-10", amountKrw: -300000, description: "이체" },
+        { txnId: "222222222222222222222222", date: "2026-03-10", amountKrw: 300000, description: "이체" },
+      ],
     });
 
     const baseline = await draftProfilePOST(requestJson({
       csrf: "test",
       source: "csv",
-      batchId: batch.batch.id,
+      batchId,
       includeTransfers: 0,
     }));
     expect(baseline.status).toBe(200);
@@ -227,22 +204,14 @@ describe("POST /api/planning/v3/draft/profile", () => {
     };
     expect(baselinePayload.patch?.monthlyEssentialExpenses).toBe(0);
 
-    const txnIds: string[] = [];
-    for (const dateIso of ["2026-01-02", "2026-02-02", "2026-03-02"]) {
-      const txnId = buildTxnId({
-        dateIso,
-        amountKrw: -100_000,
-        descNorm: "마트",
-        accountId,
-      });
-      txnIds.push(txnId);
+    for (const txnId of txnIds) {
       await upsertOverride(txnId, { category: "fixed" });
     }
 
     const legacyIgnored = await draftProfilePOST(requestJson({
       csrf: "test",
       source: "csv",
-      batchId: batch.batch.id,
+      batchId,
       includeTransfers: 0,
     }));
     expect(legacyIgnored.status).toBe(200);
@@ -253,7 +222,7 @@ describe("POST /api/planning/v3/draft/profile", () => {
 
     for (const txnId of txnIds) {
       await upsertOverride({
-        batchId: batch.batch.id,
+        batchId,
         txnId,
         categoryId: "housing",
       });
@@ -262,7 +231,7 @@ describe("POST /api/planning/v3/draft/profile", () => {
     const overridden = await draftProfilePOST(requestJson({
       csrf: "test",
       source: "csv",
-      batchId: batch.batch.id,
+      batchId,
       includeTransfers: 0,
     }));
     expect(overridden.status).toBe(200);
@@ -274,7 +243,7 @@ describe("POST /api/planning/v3/draft/profile", () => {
     const included = await draftProfilePOST(requestJson({
       csrf: "test",
       source: "csv",
-      batchId: batch.batch.id,
+      batchId,
       includeTransfers: 1,
     }));
     expect(included.status).toBe(200);
@@ -287,30 +256,26 @@ describe("POST /api/planning/v3/draft/profile", () => {
   });
 
   it("allows same-origin remote host and still blocks cross-origin", async () => {
-    const batch = await appendBatchFromCsv({
+    const batchId = "draftremote001";
+    await saveStoredShadowBatch({
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-01-01,2100000,급여",
-        "2026-01-02,-500000,월세",
-        "2026-02-01,2200000,급여",
-        "2026-02-02,-510000,월세",
-        "2026-03-01,2300000,급여",
-        "2026-03-02,-520000,월세",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
-      fileName: "remote-host.csv",
+      createdAt: "2026-03-02T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-01-01", amountKrw: 2100000, description: "급여" },
+        { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-01-02", amountKrw: -500000, description: "월세" },
+        { txnId: "cccccccccccccccccccccccc", date: "2026-02-01", amountKrw: 2200000, description: "급여" },
+        { txnId: "dddddddddddddddddddddddd", date: "2026-02-02", amountKrw: -510000, description: "월세" },
+        { txnId: "eeeeeeeeeeeeeeeeeeeeeeee", date: "2026-03-01", amountKrw: 2300000, description: "급여" },
+        { txnId: "ffffffffffffffffffffffff", date: "2026-03-02", amountKrw: -520000, description: "월세" },
+      ],
     });
 
     const sameOrigin = await draftProfilePOST(requestJson(
       {
         csrf: "test",
         source: "csv",
-        batchId: batch.batch.id,
+        batchId,
       },
       { requestOrigin: REMOTE_ORIGIN, host: REMOTE_HOST },
     ));
@@ -320,13 +285,13 @@ describe("POST /api/planning/v3/draft/profile", () => {
       batchId?: string;
     };
     expect(sameOriginPayload.ok).toBe(true);
-    expect(sameOriginPayload.batchId).toBe(batch.batch.id);
+    expect(sameOriginPayload.batchId).toBe(batchId);
 
     await expectOriginMismatch(draftProfilePOST(requestJson(
       {
         csrf: "test",
         source: "csv",
-        batchId: batch.batch.id,
+        batchId,
       },
       {
         requestOrigin: REMOTE_ORIGIN,

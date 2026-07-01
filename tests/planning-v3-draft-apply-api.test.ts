@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as applyDraftPOST } from "../src/app/api/planning/v3/draft/apply/route";
+import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { createProfile, getProfile } from "../src/lib/planning/store/profileStore";
 
@@ -63,7 +64,7 @@ describe("POST /api/planning/v3/draft/apply", () => {
       },
     });
 
-    const batch = await appendBatchFromCsv({
+    const batch = await importCsvToBatch({
       csvText: [
         "date,amount,description",
         "2026-01-10,3000000,salary",
@@ -78,13 +79,13 @@ describe("POST /api/planning/v3/draft/apply", () => {
         amountKey: "amount",
         descKey: "description",
       },
-      accountId: "acc-main",
-      fileName: "apply.csv",
+      options: { accountId: "acc-main" },
+      provenance: { fileName: "apply.csv" },
     });
 
     const response = await applyDraftPOST(requestJson("/api/planning/v3/draft/apply", {
       profileId: profile.id,
-      batchId: batch.batch.id,
+      batchId: batch.batchMeta.id,
       mode: "preview",
       profilePatch: {
         monthlyIncomeNet: 999_999_999,
@@ -119,7 +120,7 @@ describe("POST /api/planning/v3/draft/apply", () => {
       },
     });
 
-    const batch = await appendBatchFromCsv({
+    const batch = await importCsvToBatch({
       csvText: [
         "date,amount,description",
         "2026-01-10,3000000,salary",
@@ -134,13 +135,13 @@ describe("POST /api/planning/v3/draft/apply", () => {
         amountKey: "amount",
         descKey: "description",
       },
-      accountId: "acc-main",
-      fileName: "apply-save.csv",
+      options: { accountId: "acc-main" },
+      provenance: { fileName: "apply-save.csv" },
     });
 
     const response = await applyDraftPOST(requestJson("/api/planning/v3/draft/apply", {
       profileId: profile.id,
-      batchId: batch.batch.id,
+      batchId: batch.batchMeta.id,
       mode: "apply",
     }));
 
@@ -160,6 +161,52 @@ describe("POST /api/planning/v3/draft/apply", () => {
     expect(saved?.profile.monthlyIncomeNet).toBe(1_500_000);
     expect(saved?.profile.monthlyEssentialExpenses).toBe(600_000);
     expect(saved?.profile.monthlyDiscretionaryExpenses).toBe(300_000);
+  });
+
+  it("does not preview from a legacy-only transaction batch", async () => {
+    const profile = await createProfile({
+      name: "Legacy Batch Target",
+      profile: {
+        monthlyIncomeNet: 1_500_000,
+        monthlyEssentialExpenses: 600_000,
+        monthlyDiscretionaryExpenses: 300_000,
+        liquidAssets: 8_000_000,
+        investmentAssets: 2_000_000,
+        debts: [],
+        goals: [],
+      },
+    });
+
+    const legacyBatch = await appendBatchFromCsv({
+      csvText: [
+        "date,amount,description",
+        "2026-01-10,3000000,salary",
+        "2026-01-12,-1000000,rent",
+      ].join("\n"),
+      mapping: {
+        dateKey: "date",
+        amountKey: "amount",
+        descKey: "description",
+      },
+      accountId: "legacy-account",
+      fileName: "legacy-apply.csv",
+    });
+
+    const response = await applyDraftPOST(requestJson("/api/planning/v3/draft/apply", {
+      profileId: profile.id,
+      batchId: legacyBatch.batch.id,
+      mode: "preview",
+    }));
+
+    expect(response.status).toBe(404);
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: {
+        code?: string;
+      };
+    };
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("NO_DATA");
   });
 
   it("allows same-origin remote host and still blocks cross-origin", async () => {

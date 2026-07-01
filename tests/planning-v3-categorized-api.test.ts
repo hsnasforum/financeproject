@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as categorizedGET } from "../src/app/api/planning/v3/transactions/batches/[id]/categorized/route";
-import { readBatchTransactions, appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
+import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
@@ -74,32 +74,21 @@ describe("planning v3 categorized batch API", () => {
   });
 
   it("returns categorized rows + monthly breakdown and keeps detailed category ids", async () => {
-    const created = await appendBatchFromCsv({
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,3200000,salary",
-        "2026-03-02,-1200000,rent fee",
-        "2026-03-03,-7000,coffee",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
-      fileName: "categorized.csv",
+    const batchId = "categorized001";
+    const targetTxnId = "cccccccccccccccccccccccc";
+    await saveStoredShadowBatch({
+      batchId,
       accountId: "acc-main",
+      createdAt: "2026-03-03T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: 3200000, description: "salary" },
+        { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-03-02", amountKrw: -1200000, description: "rent fee" },
+        { txnId: targetTxnId, date: "2026-03-03", amountKrw: -7000, description: "coffee" },
+      ],
     });
-
-    const batchId = created.batch.id;
-    const batchRows = await readBatchTransactions(batchId);
-    expect(batchRows).not.toBeNull();
-    const targetTxn = (batchRows?.transactions ?? []).find((row) => (
-      row.date === "2026-03-03" && Math.round(row.amountKrw) === -7000
-    ));
-    expect(targetTxn?.txnId).toBeTruthy();
     await upsertOverride({
       batchId,
-      txnId: String(targetTxn?.txnId),
+      txnId: targetTxnId,
       categoryId: "housing",
     });
 
@@ -124,7 +113,7 @@ describe("planning v3 categorized batch API", () => {
     expect((payload.breakdown ?? []).length).toBeGreaterThanOrEqual(1);
     expect((payload.breakdown ?? [])[0]?.ym).toBe("2026-03");
 
-    const overridden = (payload.data ?? []).find((row) => row.txnId === targetTxn?.txnId);
+    const overridden = (payload.data ?? []).find((row) => row.txnId === targetTxnId);
     expect(overridden?.categoryId).toBe("housing");
     expect(overridden?.categorySource).toBe("override");
     expect(((payload.breakdown ?? [])[0]?.byCategory ?? {}).housing).toBeGreaterThanOrEqual(7000);
@@ -132,29 +121,19 @@ describe("planning v3 categorized batch API", () => {
   });
 
   it("ignores legacy unscoped override and only applies batch-scoped override", async () => {
-    const created = await appendBatchFromCsv({
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,3200000,salary",
-        "2026-03-03,-7000,coffee",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
-      fileName: "categorized-legacy-ignore.csv",
+    const batchId = "categorizedoverride001";
+    const targetTxnId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    await saveStoredShadowBatch({
+      batchId,
       accountId: "acc-main",
+      createdAt: "2026-03-03T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: 3200000, description: "salary" },
+        { txnId: targetTxnId, date: "2026-03-03", amountKrw: -7000, description: "coffee" },
+      ],
     });
 
-    const batchId = created.batch.id;
-    const batchRows = await readBatchTransactions(batchId);
-    const targetTxn = (batchRows?.transactions ?? []).find((row) => (
-      row.date === "2026-03-03" && Math.round(row.amountKrw) === -7000
-    ));
-    expect(targetTxn?.txnId).toBeTruthy();
-
-    await upsertOverride(String(targetTxn?.txnId), { category: "health" });
+    await upsertOverride(targetTxnId, { category: "health" });
     const legacyIgnored = await categorizedGET(
       requestGet(`/api/planning/v3/transactions/batches/${encodeURIComponent(batchId)}/categorized?csrf=test`),
       { params: Promise.resolve({ id: batchId }) },
@@ -163,13 +142,13 @@ describe("planning v3 categorized batch API", () => {
     const legacyPayload = await legacyIgnored.json() as {
       data?: Array<{ txnId?: string; categoryId?: string; categorySource?: string }>;
     };
-    const legacyRow = (legacyPayload.data ?? []).find((row) => row.txnId === targetTxn?.txnId);
+    const legacyRow = (legacyPayload.data ?? []).find((row) => row.txnId === targetTxnId);
     expect(legacyRow?.categoryId).not.toBe("health");
     expect(legacyRow?.categorySource).not.toBe("override");
 
     await upsertOverride({
       batchId,
-      txnId: String(targetTxn?.txnId),
+      txnId: targetTxnId,
       categoryId: "health",
     });
     const scopedApplied = await categorizedGET(
@@ -180,7 +159,7 @@ describe("planning v3 categorized batch API", () => {
     const scopedPayload = await scopedApplied.json() as {
       data?: Array<{ txnId?: string; categoryId?: string; categorySource?: string }>;
     };
-    const scopedRow = (scopedPayload.data ?? []).find((row) => row.txnId === targetTxn?.txnId);
+    const scopedRow = (scopedPayload.data ?? []).find((row) => row.txnId === targetTxnId);
     expect(scopedRow?.categoryId).toBe("health");
     expect(scopedRow?.categorySource).toBe("override");
   });

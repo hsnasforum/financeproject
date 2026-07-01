@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DELETE as batchDELETE, GET as batchGET } from "../src/app/api/planning/v3/transactions/batches/[id]/route";
+import { POST as legacyImportCsvPOST } from "../src/app/api/planning/v3/transactions/import/csv/route";
 import { POST as importCsvPOST } from "../src/app/api/planning/v3/transactions/batches/import-csv/route";
 import { GET as batchesGET } from "../src/app/api/planning/v3/transactions/batches/route";
 
@@ -92,6 +93,24 @@ async function createBatchFixture(userId: string): Promise<string> {
   return batchId;
 }
 
+async function createLegacyUrlBatchFixture(userId: string): Promise<string> {
+  const response = await legacyImportCsvPOST(buildJsonRequest("/api/planning/v3/transactions/import/csv", {
+    csrf: "test",
+    fileName: `${userId}-legacy-url.csv`,
+    accountId: `${userId}-account`,
+    csvText: [
+      "date,amount,description",
+      "2026-09-03,100000,bonus",
+      "2026-09-04,-12000,meal",
+    ].join("\n"),
+  }, userId));
+  expect(response.status).toBe(201);
+  const payload = await response.json() as ApiPayload;
+  const batchId = String(payload.batchId ?? payload.batch?.id ?? "");
+  expect(batchId).toBeTruthy();
+  return batchId;
+}
+
 function hasBatchId(rows: Array<{ id?: string; batchId?: string }> | undefined, batchId: string): boolean {
   return (rows ?? []).some((row) => row.id === batchId || row.batchId === batchId);
 }
@@ -168,6 +187,31 @@ describe("planning v3 transaction batches API user scope", () => {
     expect(aliceDetail.status).toBe(200);
     const aliceDetailPayload = await aliceDetail.json() as ApiPayload;
     expect(aliceDetailPayload.batch?.id).toBe(aliceBatchId);
+  });
+
+  it("keeps the legacy import URL on the user-scoped canonical store", async () => {
+    const aliceBatchId = await createLegacyUrlBatchFixture("alice");
+
+    const globalLegacyPath = path.join(root, "v3", "transactions", "batches.ndjson");
+    expect(fs.existsSync(globalLegacyPath)).toBe(false);
+
+    const aliceList = await batchesGET(buildGetRequest("/api/planning/v3/transactions/batches?limit=20&csrf=test", "alice"));
+    expect(aliceList.status).toBe(200);
+    const aliceListPayload = await aliceList.json() as ApiPayload;
+    expect(hasBatchId(aliceListPayload.items, aliceBatchId)).toBe(true);
+    expect(hasBatchId(aliceListPayload.data, aliceBatchId)).toBe(true);
+
+    const bobList = await batchesGET(buildGetRequest("/api/planning/v3/transactions/batches?limit=20&csrf=test", "bob"));
+    expect(bobList.status).toBe(200);
+    const bobListPayload = await bobList.json() as ApiPayload;
+    expect(hasBatchId(bobListPayload.items, aliceBatchId)).toBe(false);
+    expect(hasBatchId(bobListPayload.data, aliceBatchId)).toBe(false);
+
+    const bobDetailAlice = await batchGET(
+      buildGetRequest(`/api/planning/v3/transactions/batches/${encodeURIComponent(aliceBatchId)}?csrf=test`, "bob"),
+      { params: Promise.resolve({ id: aliceBatchId }) },
+    );
+    expect(bobDetailAlice.status).toBe(404);
   });
 
   it("returns authenticated meta for invalid transaction batch ids", async () => {

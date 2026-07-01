@@ -1,6 +1,5 @@
 import { type ImportBatchMeta } from "../domain/transactions";
 import { listBatches as listStoredBatches } from "../store/batchesStore";
-import { listBatches as listLegacyBatches } from "./transactionStore";
 
 function sortBatchMetasByCreatedAtDesc(items: ImportBatchMeta[]): ImportBatchMeta[] {
   return [...items].sort((left, right) => {
@@ -16,7 +15,5 @@ function sortBatchMetasByCreatedAtDesc(items: ImportBatchMeta[]): ImportBatchMet
 export async function getLatestStoredFirstBatchId(): Promise<string | null> {
   const stored = sortBatchMetasByCreatedAtDesc(await listStoredBatches());
   if (stored[0]?.id) return stored[0].id;
-
-  const legacy = await listLegacyBatches({ limit: 1 });
-  return legacy.items[0]?.id ?? null;
+  return null;
 }

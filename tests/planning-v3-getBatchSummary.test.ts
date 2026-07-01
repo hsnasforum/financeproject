@@ -3,9 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getBatchSummary } from "../src/lib/planning/v3/service/getBatchSummary";
-import { appendBatchFromCsv, readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
+import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
-import { upsertAccountMappingOverride } from "../src/lib/planning/v3/store/accountMappingOverridesStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 
@@ -16,38 +15,36 @@ const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 async function createFixtureBatch(): Promise<string> {
   const accountA = await createAccount({ name: "Main", kind: "checking" });
   const accountB = await createAccount({ name: "Sub", kind: "saving" });
-  const imported = await appendBatchFromCsv({
-    accountId: accountA.id,
-    fileName: "summary.csv",
-    csvText: [
-      "date,amount,description",
-      "2026-01-01,3000000,salary",
-      "2026-01-02,-1000000,rent",
-      "2026-01-03,-500000,transfer out",
-      "2026-01-03,500000,transfer in",
-      "2026-01-04,-200000,food market",
-      "2026-01-05,-100000,misc payment",
-      "2026-02-01,3100000,salary",
-      "2026-02-02,-1100000,rent",
-      "2026-02-03,-300000,food market",
-    ].join("\n"),
-    mapping: {
-      dateKey: "date",
-      amountKey: "amount",
-      descKey: "description",
+  const batchId = "summaryfixture0001";
+  await saveBatch({
+    id: batchId,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    source: "csv",
+    rowCount: 9,
+    accounts: [{ id: accountA.id }, { id: accountB.id }],
+    importMetadata: {
+      diagnostics: {
+        rows: 9,
+        parsed: 9,
+        skipped: 0,
+      },
+      provenance: {
+        fileNameProvided: true,
+        fileName: "summary.csv",
+      },
     },
-  });
-
-  const loaded = await readBatchTransactions(imported.batch.id);
-  const creditTxn = (loaded?.transactions ?? []).find((tx) => tx.date === "2026-01-03" && tx.amountKrw > 0);
-  if (creditTxn?.txnId) {
-    await upsertAccountMappingOverride({
-      batchId: imported.batch.id,
-      txnId: creditTxn.txnId,
-      accountId: accountB.id,
-    });
-  }
-  return imported.batch.id;
+  }, [
+    { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", batchId, accountId: accountA.id, date: "2026-01-01", amountKrw: 3000000, description: "salary", source: "csv" },
+    { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", batchId, accountId: accountA.id, date: "2026-01-02", amountKrw: -1000000, description: "rent", source: "csv" },
+    { txnId: "cccccccccccccccccccccccc", batchId, accountId: accountA.id, date: "2026-01-03", amountKrw: -500000, description: "transfer out", source: "csv" },
+    { txnId: "dddddddddddddddddddddddd", batchId, accountId: accountB.id, date: "2026-01-03", amountKrw: 500000, description: "transfer in", source: "csv" },
+    { txnId: "eeeeeeeeeeeeeeeeeeeeeeee", batchId, accountId: accountA.id, date: "2026-01-04", amountKrw: -200000, description: "food market", source: "csv" },
+    { txnId: "ffffffffffffffffffffffff", batchId, accountId: accountA.id, date: "2026-01-05", amountKrw: -100000, description: "misc payment", source: "csv" },
+    { txnId: "111111111111111111111111", batchId, accountId: accountA.id, date: "2026-02-01", amountKrw: 3100000, description: "salary", source: "csv" },
+    { txnId: "222222222222222222222222", batchId, accountId: accountA.id, date: "2026-02-02", amountKrw: -1100000, description: "rent", source: "csv" },
+    { txnId: "333333333333333333333333", batchId, accountId: accountA.id, date: "2026-02-03", amountKrw: -300000, description: "food market", source: "csv" },
+  ]);
+  return batchId;
 }
 
 async function saveStoredShadowBatch(input: {
@@ -169,18 +166,16 @@ describe("getBatchSummary", () => {
 
   it("ignores legacy unscoped override and only applies batch-scoped override", async () => {
     const batchId = await createFixtureBatch();
-    const loaded = await readBatchTransactions(batchId);
-    const targetTxn = (loaded?.transactions ?? []).find((tx) => tx.date === "2026-01-05" && Math.round(tx.amountKrw) === -100000);
-    expect(targetTxn?.txnId).toBeTruthy();
+    const targetTxnId = "ffffffffffffffffffffffff";
 
-    await upsertOverride(String(targetTxn?.txnId), { category: "health" });
+    await upsertOverride(targetTxnId, { category: "health" });
     const legacyIgnored = await getBatchSummary(batchId);
     expect(legacyIgnored.counts.unassignedCategory).toBe(1);
     expect(legacyIgnored.topExpenseCategories.some((row) => row.categoryId === "health")).toBe(false);
 
     await upsertOverride({
       batchId,
-      txnId: String(targetTxn?.txnId),
+      txnId: targetTxnId,
       categoryId: "housing",
     });
     const scoped = await getBatchSummary(batchId);
@@ -233,7 +228,7 @@ describe("getBatchSummary", () => {
     expect(summary.totals.expenseKrw).toBe(2000000);
   });
 
-  it("keeps stored metadata but recovers legacy rows for hybrid snapshot fallback", async () => {
+  it("rejects same-id hybrid legacy fallback instead of summarizing global legacy rows", async () => {
     const account = await createAccount({ name: "Hybrid", kind: "checking" });
     const legacy = await appendBatchFromCsv({
       accountId: account.id,
@@ -258,19 +253,9 @@ describe("getBatchSummary", () => {
       ],
     });
 
-    const summary = await getBatchSummary(legacy.batch.id);
-    expect(summary.createdAt).toBe("2026-03-10T00:00:00.000Z");
-    expect(summary.range).toEqual({
-      fromYm: "2026-01",
-      toYm: "2026-02",
-      months: 2,
+    await expect(getBatchSummary(legacy.batch.id)).rejects.toMatchObject({
+      code: "NOT_FOUND",
     });
-    expect(summary.monthly).toEqual([
-      { ym: "2026-01", incomeKrw: 2000000, expenseKrw: 500000, transferKrw: 0 },
-      { ym: "2026-02", incomeKrw: 2100000, expenseKrw: 500000, transferKrw: 0 },
-    ]);
-    expect(summary.totals.incomeKrw).toBe(4100000);
-    expect(summary.totals.expenseKrw).toBe(1000000);
   });
 
   it("omits createdAt under the shared public createdAt boundary when only stored rows exist without stored meta", async () => {

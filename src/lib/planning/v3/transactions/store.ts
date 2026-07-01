@@ -786,6 +786,28 @@ export async function loadStoredFirstBatchTransactions(batchId: string): Promise
     };
   }
 
+  if (!storedMeta && storedTransactions.length > 0) {
+    return {
+      source: "stored",
+      batchId,
+      meta: buildImportBatchMeta({
+        batchId,
+        createdAt: await deriveSyntheticBatchOrderingCreatedAt({ batchId, transactions: storedTransactions }),
+        rowCount: storedTransactions.length,
+        transactions: storedTransactions,
+      }),
+      transactions: storedTransactions,
+      policy: {
+        mode: "stored-partial",
+        transactionSource: "stored",
+        metadataSource: "synthetic",
+        usesLegacyTransactions: false,
+        usesLegacyMetadata: false,
+        needsLegacyDetailFallback: false,
+      },
+    };
+  }
+
   const legacy = await readBatchTransactions(batchId);
   if (legacy) {
     const normalizedLegacyTransactions = normalizeLegacyTransactions(legacy.batch.id, legacy.transactions);
@@ -833,22 +855,17 @@ export async function loadStoredFirstBatchTransactions(batchId: string): Promise
     };
   }
 
-  if (storedMeta || storedTransactions.length > 0) {
+  if (storedMeta) {
     return {
       source: "stored",
-      batchId: storedMeta?.id ?? batchId,
-      ...(storedMeta ? { createdAt: storedMeta.createdAt } : {}),
-      meta: storedMeta ?? buildImportBatchMeta({
-        batchId,
-        createdAt: await deriveSyntheticBatchOrderingCreatedAt({ batchId, transactions: storedTransactions }),
-        rowCount: storedTransactions.length,
-        transactions: storedTransactions,
-      }),
+      batchId: storedMeta.id,
+      createdAt: storedMeta.createdAt,
+      meta: storedMeta,
       transactions: storedTransactions,
       policy: {
         mode: "stored-partial",
         transactionSource: "stored",
-        metadataSource: storedMeta ? "stored" : "synthetic",
+        metadataSource: "stored",
         usesLegacyTransactions: false,
         usesLegacyMetadata: false,
         needsLegacyDetailFallback: false,
@@ -862,9 +879,7 @@ export async function loadStoredFirstBatchTransactions(batchId: string): Promise
 export async function getLatestStoredFirstBatchId(): Promise<string | null> {
   const stored = sortBatchMetasByCreatedAtDesc(await listStoredBatches());
   if (stored[0]?.id) return stored[0].id;
-
-  const legacy = await listLegacyBatches({ limit: 1 });
-  return legacy.items[0]?.id ?? null;
+  return null;
 }
 
 export type { ImportBatchMeta, StoredTransaction };

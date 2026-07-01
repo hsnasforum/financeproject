@@ -21,8 +21,8 @@ import { GET as listBatchesGET } from "../src/app/api/planning/v3/transactions/b
 import { POST as importTransactionsCsvPOST } from "../src/app/api/planning/v3/transactions/import/csv/route";
 import { PATCH as patchTransferOverride } from "../src/app/api/planning/v3/transactions/transfer-overrides/route";
 import { createProfile } from "../src/lib/planning/store/profileStore";
-import { appendBatchFromCsv, readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
+import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
@@ -121,29 +121,27 @@ describe("planning v3 user-facing remote host API contract", () => {
       },
     });
 
-    const created = await appendBatchFromCsv({
+    batchId = "remotehostbatch001";
+    txnId = "aaaaaaaaaaaaaaaaaaaaaaaa";
+    await saveBatch({
+      id: batchId,
+      createdAt: "2026-03-03T00:00:00.000Z",
+      source: "csv",
+      rowCount: 6,
+      accounts: [{ id: accountId }],
+    }, [
+      { txnId, date: "2026-01-01", amountKrw: 3000000, description: "salary" },
+      { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-01-02", amountKrw: -1200000, description: "rent" },
+      { txnId: "cccccccccccccccccccccccc", date: "2026-02-01", amountKrw: 3100000, description: "salary" },
+      { txnId: "dddddddddddddddddddddddd", date: "2026-02-02", amountKrw: -60000, description: "coffee" },
+      { txnId: "eeeeeeeeeeeeeeeeeeeeeeee", date: "2026-03-01", amountKrw: 3200000, description: "salary" },
+      { txnId: "ffffffffffffffffffffffff", date: "2026-03-02", amountKrw: -70000, description: "groceries" },
+    ].map((row) => ({
+      ...row,
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-01-01,3000000,salary",
-        "2026-01-02,-1200000,rent",
-        "2026-02-01,3100000,salary",
-        "2026-02-02,-60000,coffee",
-        "2026-03-01,3200000,salary",
-        "2026-03-02,-70000,groceries",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
-      fileName: "remote-host.csv",
-    });
-    batchId = created.batch.id;
-
-    const stored = await readBatchTransactions(batchId);
-    txnId = String(stored?.transactions?.[0]?.txnId ?? "");
-    expect(txnId).toBeTruthy();
+      source: "csv" as const,
+    })));
   });
 
   afterEach(() => {

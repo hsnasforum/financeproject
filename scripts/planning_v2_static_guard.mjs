@@ -11,6 +11,7 @@ const SCRIPTS_DIR = path.join(ROOT, "scripts");
 const ROUTES_INVENTORY_PATH = path.join(DOCS_DIR, "routes-inventory.md");
 const CURRENT_SCREENS_PATH = path.join(DOCS_DIR, "current-screens.md");
 const PLANNING_API_DIR = path.join(APP_DIR, "api", "planning", "v2");
+const PLANNING_V3_API_DIR = path.join(APP_DIR, "api", "planning", "v3");
 const PLANNING_CORE_DIR = path.join(SRC_DIR, "lib", "planning", "core");
 const README_PATH = path.join(ROOT, "README.md");
 
@@ -89,6 +90,11 @@ async function collectClientFiles() {
 
 async function collectPlanningApiFiles() {
   const files = await walkFiles(PLANNING_API_DIR);
+  return files.filter((filePath) => path.basename(filePath) === "route.ts");
+}
+
+async function collectV3UserFacingTransactionRouteFiles() {
+  const files = await walkFiles(PLANNING_V3_API_DIR);
   return files.filter((filePath) => path.basename(filePath) === "route.ts");
 }
 
@@ -232,6 +238,22 @@ function checkPlanningApiFile(filePath, content) {
   return issues;
 }
 
+function checkV3UserFacingTransactionRouteFile(filePath, content) {
+  const issues = [];
+  const lines = content.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    if (!line.includes("/planning/v3/service/transactionStore")) return;
+    issues.push({
+      filePath,
+      line: index + 1,
+      code: "V3_USER_FACING_LEGACY_TRANSACTION_STORE",
+      message: "user-facing planning v3 route에서 legacy transactionStore 직접 import 감지",
+      snippet: maskSnippet(line.trim()),
+    });
+  });
+  return issues;
+}
+
 function checkBundleScriptFile(filePath, content) {
   const issues = [];
   const lines = content.split(/\r?\n/);
@@ -364,6 +386,7 @@ function parseDocumentedRouteRoots(content) {
 async function run() {
   const clientFiles = await collectClientFiles();
   const planningApiFiles = await collectPlanningApiFiles();
+  const v3UserFacingTransactionRouteFiles = await collectV3UserFacingTransactionRouteFiles();
   const planningCoreFiles = await collectPlanningCoreFiles();
   const legacyRouteScanFiles = await collectLegacyRouteScanFiles();
   const bundleScriptFiles = await collectBundleScriptFiles();
@@ -381,6 +404,11 @@ async function run() {
   for (const filePath of planningApiFiles) {
     const content = await fs.readFile(filePath, "utf8");
     issues.push(...checkPlanningApiFile(filePath, content));
+  }
+
+  for (const filePath of v3UserFacingTransactionRouteFiles) {
+    const content = await fs.readFile(filePath, "utf8");
+    issues.push(...checkV3UserFacingTransactionRouteFile(filePath, content));
   }
 
   for (const filePath of planningCoreFiles) {
@@ -441,7 +469,7 @@ async function run() {
   }
 
   console.log(
-    `[planning:v2:guard] PASS clientFiles=${clientFiles.length} planningApiFiles=${planningApiFiles.length} planningCoreFiles=${planningCoreFiles.length} bundleScriptFiles=${bundleScriptFiles.length} releaseDocFiles=${releaseDocFiles.length} legacyRouteScanFiles=${legacyRouteScanFiles.length}`,
+    `[planning:v2:guard] PASS clientFiles=${clientFiles.length} planningApiFiles=${planningApiFiles.length} v3UserFacingTransactionRouteFiles=${v3UserFacingTransactionRouteFiles.length} planningCoreFiles=${planningCoreFiles.length} bundleScriptFiles=${bundleScriptFiles.length} releaseDocFiles=${releaseDocFiles.length} legacyRouteScanFiles=${legacyRouteScanFiles.length}`,
   );
 }
 

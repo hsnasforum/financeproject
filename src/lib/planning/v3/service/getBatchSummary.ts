@@ -17,6 +17,7 @@ import {
   toStoredFirstPublicMeta,
   type StoredFirstBatchReadResult,
 } from "../transactions/store";
+import { isUserFacingStoredBatchRead } from "./userFacingBatchReadPolicy";
 
 const TOP_EXPENSE_CATEGORY_LIMIT = 5;
 
@@ -98,7 +99,7 @@ function toStoredTransactions(batchId: string, rows: Array<{
 
 async function loadBatchTransactions(batchId: string): Promise<StoredFirstBatchReadResult> {
   const loaded = await loadStoredFirstBatchTransactions(batchId);
-  if (!loaded) {
+  if (!isUserFacingStoredBatchRead(loaded)) {
     throw new GetBatchSummaryError("NOT_FOUND", "batch not found");
   }
   return loaded;

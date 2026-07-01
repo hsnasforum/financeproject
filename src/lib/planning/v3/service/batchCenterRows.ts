@@ -1,18 +1,10 @@
 import {
-  mergeBatchListMetadata,
   sortBatchListMetadataByCreatedAtDesc,
   toBatchListPublicImportBatchMeta,
+  type BatchListMergedMeta,
 } from "@/lib/planning/v3/service/batchListMetadata";
 import { getBatchSummary } from "@/lib/planning/v3/service/getBatchSummary";
 import { listStoredBatchListCandidates } from "@/lib/planning/v3/service/storedBatchListCandidates";
-import { listBatches as listLegacyBatches } from "@/lib/planning/v3/service/transactionStore";
-
-type LegacyBatchRow = {
-  id: string;
-  createdAt: string;
-  kind: "csv";
-  total: number;
-};
 
 export type BatchCenterRow = {
   batchId: string;
@@ -36,16 +28,10 @@ export async function listBatchCenterRows({
   limit?: number;
 } = {}): Promise<BatchCenterRow[]> {
   const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 50;
-  const [legacyListed, storedListed] = await Promise.all([
-    listLegacyBatches({ limit: Math.max(safeLimit, 200) }),
-    listStoredBatchListCandidates(),
-  ]);
+  const storedListed = await listStoredBatchListCandidates();
 
   const mergedMeta = sortBatchListMetadataByCreatedAtDesc(
-    mergeBatchListMetadata({
-      legacyItems: legacyListed.items as LegacyBatchRow[],
-      storedItems: storedListed,
-    }),
+    storedListed.map((item): BatchListMergedMeta => item),
     { tieBreak: "id-asc" },
   ).slice(0, safeLimit);
 

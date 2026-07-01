@@ -44,9 +44,9 @@ exports[`planning v3 profile draft store > createDraftFromBatch stores generated
       "2026-03",
     ],
     "ruleCoverage": {
-      "default": 3,
+      "default": 0,
       "override": 0,
-      "rule": 3,
+      "rule": 6,
       "total": 6,
       "transfer": 0,
     },

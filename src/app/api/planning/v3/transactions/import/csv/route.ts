@@ -4,7 +4,8 @@ import {
   requireCsrf,
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
-import { appendBatchFromCsv, TransactionStoreInputError } from "@/lib/planning/v3/service/transactionStore";
+import { ImportCsvToBatchInputError, importCurrentUserCsvToBatch } from "@/lib/planning/v3/service/batchImportRepository";
+import { type CsvColumnMapping } from "@/lib/planning/v3/providers/csv/types";
 import {
   isPlanningRouteUser,
   planningUserMeta,
@@ -47,7 +48,7 @@ function withWriteGuard(request: Request, body: ImportBody): Response | null {
   }
 }
 
-function normalizeMapping(input: unknown): Record<string, string> | undefined {
+function normalizeMapping(input: unknown): Partial<CsvColumnMapping> | undefined {
   if (input === undefined || input === null) return undefined;
   if (!isRecord(input)) return undefined;
 
@@ -99,23 +100,43 @@ export async function POST(request: Request) {
   }
 
   try {
-    const imported = await appendBatchFromCsv({
+    const imported = await importCurrentUserCsvToBatch({
       csvText,
       ...(mapping ? { mapping } : {}),
+      ...(asString(body?.fileName) ? { provenance: { fileName: asString(body?.fileName) } } : {}),
+      options: { accountId },
+    });
+    const rows = imported.metadataHandoff.diagnostics.rows;
+    const parsed = imported.metadataHandoff.diagnostics.parsed;
+    const skipped = imported.metadataHandoff.diagnostics.skipped;
+    const batch = {
+      id: imported.batchMeta.id,
+      createdAt: imported.batchMeta.createdAt,
+      kind: "csv" as const,
       ...(asString(body?.fileName) ? { fileName: asString(body?.fileName) } : {}),
       accountId,
-    });
+      accountHint: accountId,
+      total: rows,
+      ok: parsed,
+      failed: skipped,
+    };
 
     return NextResponse.json({
       ok: true,
-      batchId: imported.batch.id,
-      batch: imported.batch,
-      stats: imported.stats,
-      sample: imported.sampleRedactedRows.slice(0, 10),
+      batchId: imported.batchMeta.id,
+      batch,
+      stats: {
+        total: rows,
+        ok: parsed,
+        failed: skipped,
+        stored: imported.transactions.length,
+        deduped: Math.max(0, parsed - imported.transactions.length),
+      },
+      sample: [],
       meta: userMeta,
     }, { status: 201 });
   } catch (error) {
-    if (error instanceof TransactionStoreInputError) {
+    if (error instanceof ImportCsvToBatchInputError) {
       const isEncodingIssue = error.details.some((detail) => asString(detail.field) === "csvEncoding");
       return NextResponse.json(
         {

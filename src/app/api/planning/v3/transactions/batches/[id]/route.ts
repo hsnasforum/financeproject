@@ -292,13 +292,10 @@ export async function DELETE(request: Request, context: RouteContext) {
       );
     }
     if (
-      deleteSurface === "legacy-only"
-      || deleteSurface === "synthetic-stored-only-legacy-collision"
+      deleteSurface === "synthetic-stored-only-legacy-collision"
       || deleteSurface === "stored-meta-legacy-coexistence"
     ) {
-      const message = deleteSurface === "legacy-only"
-        ? "기존 배치만 남아 있는 경우 이 삭제 경로는 지원하지 않습니다."
-        : deleteSurface === "stored-meta-legacy-coexistence"
+      const message = deleteSurface === "stored-meta-legacy-coexistence"
           ? "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장된 배치 정보와 파일만 제거됩니다."
           : "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장 파일만 제거됩니다.";
       return NextResponse.json(

@@ -1,4 +1,4 @@
-import { readBatchTransactions } from "./transactionStore";
+import { hasLegacyBatch } from "./transactionStore";
 import {
   getBatchMeta,
   getBatchTransactions,
@@ -37,8 +37,8 @@ export async function getStoredBatchAccountCommandSurfaceState(
   const commandSurface = await getStoredBatchCommandSurfaceState(batchId);
   if (commandSurface === "synthetic-stored-only") return commandSurface;
 
-  const legacyBatch = await readBatchTransactions(batchId).catch(() => null);
-  if (!legacyBatch) {
+  const legacyBatchExists = await hasLegacyBatch(batchId).catch(() => false);
+  if (!legacyBatchExists) {
     if (commandSurface === "stored-meta") return "stored-meta-only";
     return commandSurface;
   }
@@ -53,8 +53,8 @@ export async function getStoredBatchAccountCommandSurfaceState(
 
 export async function getStoredBatchDeleteSurfaceState(batchId: string): Promise<StoredBatchDeleteSurfaceState> {
   const commandSurface = await getStoredBatchCommandSurfaceState(batchId);
-  const legacyBatch = await readBatchTransactions(batchId).catch(() => null);
-  if (!legacyBatch) return commandSurface;
+  const legacyBatchExists = await hasLegacyBatch(batchId).catch(() => false);
+  if (!legacyBatchExists) return commandSurface;
 
   // User-facing DELETE should not overstate removal when the legacy bridge still
   // resolves the same id after stored-side deletion.

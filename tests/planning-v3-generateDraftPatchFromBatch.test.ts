@@ -6,7 +6,8 @@ import {
   GenerateDraftPatchFromBatchError,
   generateDraftPatchFromBatch,
 } from "../src/lib/planning/v3/service/generateDraftPatchFromBatch";
-import { appendBatchFromCsv, readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
+import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
+import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import { upsertAccountMappingOverride } from "../src/lib/planning/v3/store/accountMappingOverridesStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
@@ -15,16 +16,6 @@ import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
-
-function findTxnIdByDateAndAmount(
-  rows: Array<{ txnId?: string; date: string; amountKrw: number }>,
-  date: string,
-  amountKrw: number,
-): string {
-  const found = rows.find((row) => row.date === date && Math.round(row.amountKrw) === amountKrw);
-  expect(found?.txnId).toBeTruthy();
-  return String(found?.txnId);
-}
 
 async function saveStoredShadowBatch(input: {
   batchId: string;
@@ -52,6 +43,23 @@ async function saveStoredShadowBatch(input: {
   })));
 }
 
+async function importStoredCsvFixture(input: {
+  accountId: string;
+  csvText: string;
+  fileName?: string;
+}) {
+  const imported = await importCsvToBatch({
+    csvText: input.csvText,
+    mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
+    ...(input.fileName ? { provenance: { fileName: input.fileName } } : {}),
+    options: { accountId: input.accountId },
+  });
+  return {
+    batch: { id: imported.batchMeta.id },
+    transactions: imported.transactions,
+  };
+}
+
 describe("generateDraftPatchFromBatch", () => {
   let root = "";
   let accountId = "";
@@ -76,7 +84,7 @@ describe("generateDraftPatchFromBatch", () => {
   });
 
   it("returns deterministic draft patch/evidence for the same batch", async () => {
-    const created = await appendBatchFromCsv({
+    const created = await importStoredCsvFixture({
       accountId,
       csvText: [
         "date,amount,description",
@@ -87,7 +95,6 @@ describe("generateDraftPatchFromBatch", () => {
         "2026-03-01,3100000,salary",
         "2026-03-02,-1000000,rent",
       ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
       fileName: "deterministic.csv",
     });
 
@@ -100,30 +107,27 @@ describe("generateDraftPatchFromBatch", () => {
   });
 
   it("excludes detected transfers from expense/fixed/variable stats", async () => {
-    const created = await appendBatchFromCsv({
+    const batchId = "drafttransfer001";
+    const debitTxnId = "cccccccccccccccccccccccc";
+    await saveStoredShadowBatch({
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,2000000,salary",
-        "2026-03-02,-100000,groceries",
-        "2026-03-05,-300000,transfer out",
-        "2026-03-05,300000,transfer in",
-      ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "transfer-safe.csv",
+      createdAt: "2026-03-05T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: 2000000, description: "salary" },
+        { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-03-02", amountKrw: -100000, description: "groceries" },
+        { txnId: debitTxnId, date: "2026-03-05", amountKrw: -300000, description: "transfer out" },
+        { txnId: "dddddddddddddddddddddddd", date: "2026-03-05", amountKrw: 300000, description: "transfer in" },
+      ],
     });
 
-    const loaded = await readBatchTransactions(created.batch.id);
-    expect(loaded).not.toBeNull();
-    const rows = loaded?.transactions ?? [];
-    const debitTxnId = findTxnIdByDateAndAmount(rows, "2026-03-05", -300000);
     await upsertAccountMappingOverride({
-      batchId: created.batch.id,
+      batchId,
       txnId: debitTxnId,
       accountId: secondAccountId,
     });
 
-    const result = await generateDraftPatchFromBatch({ batchId: created.batch.id });
+    const result = await generateDraftPatchFromBatch({ batchId });
     expect(result.evidence.ymStats).toHaveLength(1);
     expect(result.evidence.ymStats[0]?.expenseKrw).toBe(100_000);
     expect(result.evidence.ymStats[0]?.transferKrw).toBe(600_000);
@@ -131,76 +135,72 @@ describe("generateDraftPatchFromBatch", () => {
   });
 
   it("applies category override to fixed/variable split", async () => {
-    const created = await appendBatchFromCsv({
+    const batchId = "draftcategory001";
+    const txnId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    await saveStoredShadowBatch({
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,2000000,salary",
-        "2026-03-03,-200000,unknown spend",
-      ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "override.csv",
+      createdAt: "2026-03-03T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: 2000000, description: "salary" },
+        { txnId, date: "2026-03-03", amountKrw: -200000, description: "unknown spend" },
+      ],
     });
 
-    const loaded = await readBatchTransactions(created.batch.id);
-    const txnId = findTxnIdByDateAndAmount(loaded?.transactions ?? [], "2026-03-03", -200000);
     await upsertOverride({
-      batchId: created.batch.id,
+      batchId,
       txnId,
       categoryId: "housing",
     });
 
-    const result = await generateDraftPatchFromBatch({ batchId: created.batch.id });
+    const result = await generateDraftPatchFromBatch({ batchId });
     expect(result.draftPatch.monthlyEssentialExpenses).toBe(200_000);
     expect(result.draftPatch.monthlyDiscretionaryExpenses).toBe(0);
   });
 
   it("ignores legacy unscoped override in user-facing draft generation", async () => {
-    const created = await appendBatchFromCsv({
+    const batchId = "draftlegacyignore001";
+    const txnId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    await saveStoredShadowBatch({
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,2000000,salary",
-        "2026-03-03,-200000,unknown spend",
-      ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "legacy-ignore.csv",
+      createdAt: "2026-03-03T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: 2000000, description: "salary" },
+        { txnId, date: "2026-03-03", amountKrw: -200000, description: "unknown spend" },
+      ],
     });
 
-    const loaded = await readBatchTransactions(created.batch.id);
-    const txnId = findTxnIdByDateAndAmount(loaded?.transactions ?? [], "2026-03-03", -200000);
-
     await upsertOverride(txnId, { category: "fixed" });
-    const legacyIgnored = await generateDraftPatchFromBatch({ batchId: created.batch.id });
+    const legacyIgnored = await generateDraftPatchFromBatch({ batchId });
     expect(legacyIgnored.draftPatch.monthlyEssentialExpenses).toBe(0);
     expect(legacyIgnored.draftPatch.monthlyDiscretionaryExpenses).toBe(200_000);
 
     await upsertOverride({
-      batchId: created.batch.id,
+      batchId,
       txnId,
       categoryId: "housing",
     });
-    const scoped = await generateDraftPatchFromBatch({ batchId: created.batch.id });
+    const scoped = await generateDraftPatchFromBatch({ batchId });
     expect(scoped.draftPatch.monthlyEssentialExpenses).toBe(200_000);
     expect(scoped.draftPatch.monthlyDiscretionaryExpenses).toBe(0);
   });
 
   it("keeps median stable for one-month and multi-month input", async () => {
-    const oneMonth = await appendBatchFromCsv({
+    const oneMonth = await importStoredCsvFixture({
       accountId,
       csvText: [
         "date,amount,description",
         "2025-12-01,2000000,salary",
         "2025-12-02,-500000,rent",
       ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
       fileName: "one-month.csv",
     });
     const oneResult = await generateDraftPatchFromBatch({ batchId: oneMonth.batch.id });
     expect(oneResult.draftPatch.monthsConsidered).toBe(1);
     expect(oneResult.draftPatch.monthlyIncomeNet).toBe(2_000_000);
 
-    const multiMonth = await appendBatchFromCsv({
+    const multiMonth = await importStoredCsvFixture({
       accountId,
       csvText: [
         "date,amount,description",
@@ -211,7 +211,6 @@ describe("generateDraftPatchFromBatch", () => {
         "2026-03-01,5000000,salary",
         "2026-03-02,-500000,rent",
       ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
       fileName: "multi-month.csv",
     });
     const multiResult = await generateDraftPatchFromBatch({ batchId: multiMonth.batch.id });
@@ -220,27 +219,26 @@ describe("generateDraftPatchFromBatch", () => {
   });
 
   it("keeps expense-flow policy independent from draft recentMonths policy", async () => {
-    const created = await appendBatchFromCsv({
+    const batchId = "draftpolicy001";
+    const txnId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    await saveStoredShadowBatch({
+      batchId,
       accountId,
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,2000000,salary",
-        "2026-03-03,-200000,unknown spend",
-      ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "draft-policy-only.csv",
+      createdAt: "2026-03-03T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: 2000000, description: "salary" },
+        { txnId, date: "2026-03-03", amountKrw: -200000, description: "unknown spend" },
+      ],
     });
 
-    const loaded = await readBatchTransactions(created.batch.id);
-    const txnId = findTxnIdByDateAndAmount(loaded?.transactions ?? [], "2026-03-03", -200000);
     await upsertOverride({
-      batchId: created.batch.id,
+      batchId,
       txnId,
       categoryId: "housing",
     });
 
     const result = await generateDraftPatchFromBatch({
-      batchId: created.batch.id,
+      batchId,
       policy: { recentMonths: 1 },
     });
 
@@ -250,14 +248,13 @@ describe("generateDraftPatchFromBatch", () => {
 
   it("does not include raw description markers in evidence", async () => {
     const marker = "PII_SHOULD_NOT_LEAK";
-    const created = await appendBatchFromCsv({
+    const created = await importStoredCsvFixture({
       accountId,
       csvText: [
         "date,amount,description",
         `2026-03-01,2000000,${marker}`,
         `2026-03-02,-500000,${marker}`,
       ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
       fileName: "pii.csv",
     });
 

@@ -10,8 +10,9 @@ import {
   normalizePlanningRecordId,
   type BuildDraftPatchFromCashflowOptions,
 } from "@/lib/planning/v3/draft/service";
+import { loadCurrentUserBatchDetail } from "@/lib/planning/v3/service/batchReadRepository";
 import { getCurrentUserProfile } from "@/lib/planning/v3/service/profileRepository";
-import { readBatchTransactions } from "@/lib/planning/v3/service/transactionStore";
+import { getStoredFirstBatchBindingAccountId } from "@/lib/planning/v3/service/storedFirstVisibleRows";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
 import {
   isPlanningRouteUser,
@@ -197,23 +198,24 @@ export async function POST(request: Request) {
   try {
     const [baseRecord, batchLoaded] = await Promise.all([
       getCurrentUserProfile(ids.profileId),
-      readBatchTransactions(ids.batchId),
+      loadCurrentUserBatchDetail(ids.batchId),
     ]);
 
-    if (!baseRecord || !batchLoaded) {
+    const loaded = batchLoaded?.loaded ?? null;
+    if (!baseRecord || !loaded || loaded.policy.usesLegacyTransactions) {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "프로필 또는 배치를 찾을 수 없습니다." }, meta: userMeta },
         { status: 404 },
       );
     }
-    if (!asString(batchLoaded.batch.accountId)) {
+    if (!getStoredFirstBatchBindingAccountId(loaded)) {
       return NextResponse.json(
         { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." }, meta: userMeta },
         { status: 400 },
       );
     }
 
-    const monthly = aggregateMonthlyCashflow(batchLoaded.transactions);
+    const monthly = aggregateMonthlyCashflow(loaded.transactions);
     const built = buildDraftPatchFromCashflow(monthly, splitOptions);
     const mergedProfile = applyProfilePatch(baseRecord.profile, built.profilePatch);
 

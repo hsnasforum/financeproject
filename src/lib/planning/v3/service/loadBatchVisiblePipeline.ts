@@ -14,6 +14,7 @@ import {
   type StoredFirstBatchReadResult,
 } from "../transactions/store";
 import { getStoredFirstBatchSummaryProjectionRows } from "./storedFirstVisibleRows";
+import { isUserFacingStoredBatchRead } from "./userFacingBatchReadPolicy";
 
 export type BatchVisiblePipeline = {
   loaded: StoredFirstBatchReadResult;
@@ -33,7 +34,7 @@ export async function loadBatchVisiblePipeline(
   options: LoadBatchVisiblePipelineOptions = {},
 ): Promise<BatchVisiblePipeline | null> {
   const loaded = await loadStoredFirstBatchTransactions(batchId);
-  if (!loaded) return null;
+  if (!isUserFacingStoredBatchRead(loaded)) return null;
 
   const rulesPromise = options.includeRules === false
     ? Promise.resolve([] satisfies CategoryRule[])

@@ -279,7 +279,7 @@ export function TransactionsBatchListClient({
       }
 
       setUploadStatus("배치를 생성하는 중입니다...");
-      const response = await fetch("/api/planning/v3/transactions/import/csv", {
+      const response = await fetch("/api/planning/v3/transactions/batches/import-csv", {
         method: "POST",
         credentials: "same-origin",
         headers: {
@@ -288,7 +288,7 @@ export function TransactionsBatchListClient({
         body: JSON.stringify(withDevCsrf({
           csvText,
           fileName: selectedFile.name,
-          accountId: selectedAccountId,
+          options: { accountId: selectedAccountId },
         })),
       });
 

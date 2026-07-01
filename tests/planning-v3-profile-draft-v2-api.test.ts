@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as profileDraftGET } from "../src/app/api/planning/v3/profile/draft/route";
-import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
+import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 
 import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
@@ -89,8 +89,7 @@ describe("GET /api/planning/v3/profile/draft", () => {
 
   it("returns whitelisted summary payload without raw fields", async () => {
     const marker = "PII_SHOULD_NOT_LEAK";
-    const created = await appendBatchFromCsv({
-      accountId,
+    const created = await importCsvToBatch({
       csvText: [
         "date,amount,description",
         `2026-01-01,3000000,${marker}`,
@@ -99,11 +98,12 @@ describe("GET /api/planning/v3/profile/draft", () => {
         `2026-02-02,-1100000,${marker}`,
       ].join("\n"),
       mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "draft-v2.csv",
+      provenance: { fileName: "draft-v2.csv" },
+      options: { accountId },
     });
 
     const response = await profileDraftGET(
-      requestGet(`?batchId=${encodeURIComponent(created.batch.id)}&csrf=test`),
+      requestGet(`?batchId=${encodeURIComponent(created.batchMeta.id)}&csrf=test`),
     );
     expect(response.status).toBe(200);
     const text = await response.text();

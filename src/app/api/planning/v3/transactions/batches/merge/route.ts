@@ -6,7 +6,6 @@ import {
   toGuardErrorResponse,
 } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
-import { mergeBatches, TransactionStoreInputError } from "@/lib/planning/v3/service/transactionStore";
 import {
   isPlanningRouteUser,
   planningUserMeta,
@@ -44,10 +43,6 @@ function withWriteGuard(request: Request, body: MergeBody): Response | null {
   }
 }
 
-function isInvalidIdError(error: unknown): boolean {
-  return error instanceof Error && error.message === "Invalid record id";
-}
-
 export async function POST(request: Request) {
   const blocked = onlyDev();
   if (blocked) return blocked;
@@ -74,24 +69,15 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
-    const merged = await mergeBatches(fromBatchId, intoBatchId);
-    return NextResponse.json({
-      ok: true,
-      mergedCount: merged.mergedCount,
-      dedupedCount: merged.dedupedCount,
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: "UNSUPPORTED",
+        message: "기존 거래 저장소 병합은 canonical 저장소 전환 후 사용자 요청에서 지원하지 않습니다.",
+      },
       meta: userMeta,
-    });
-  } catch (error) {
-    if (error instanceof TransactionStoreInputError || isInvalidIdError(error)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "배치 병합 입력이 올바르지 않습니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 병합에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+    },
+    { status: 410 },
+  );
 }

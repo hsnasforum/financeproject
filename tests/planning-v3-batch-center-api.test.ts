@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as batchesGET } from "../src/app/api/planning/v3/batches/route";
 import { GET as batchSummaryGET } from "../src/app/api/planning/v3/batches/[id]/summary/route";
-import { appendBatchFromCsv, readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
+import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
 import { toStoredFirstPublicImportBatchMeta } from "../src/lib/planning/v3/transactions/store";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
@@ -49,34 +49,35 @@ function collectKeys(value: unknown, parent = ""): string[] {
 async function createFixtureBatch(): Promise<string> {
   const accountA = await createAccount({ name: "Main", kind: "checking" });
   const accountB = await createAccount({ name: "Sub", kind: "saving" });
-  const imported = await appendBatchFromCsv({
+  const batchId = "fixturebatch001";
+  const creditTxnId = "dddddddddddddddddddddddd";
+  const rows = [
+    { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-01-01", amountKrw: 3000000, description: "salary" },
+    { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-01-02", amountKrw: -1000000, description: "rent" },
+    { txnId: "cccccccccccccccccccccccc", date: "2026-01-03", amountKrw: -500000, description: "transfer out" },
+    { txnId: creditTxnId, date: "2026-01-03", amountKrw: 500000, description: "transfer in" },
+    { txnId: "eeeeeeeeeeeeeeeeeeeeeeee", date: "2026-01-04", amountKrw: -200000, description: "food market" },
+    { txnId: "ffffffffffffffffffffffff", date: "2026-02-01", amountKrw: 3100000, description: "salary" },
+    { txnId: "111111111111111111111111", date: "2026-02-02", amountKrw: -1100000, description: "rent" },
+  ];
+  await saveBatch({
+    id: batchId,
+    createdAt: "2026-02-03T00:00:00.000Z",
+    source: "csv",
+    rowCount: rows.length,
+    accounts: [{ id: accountA.id }],
+  }, rows.map((row) => ({
+    ...row,
+    batchId,
     accountId: accountA.id,
-    csvText: [
-      "date,amount,description",
-      "2026-01-01,3000000,salary",
-      "2026-01-02,-1000000,rent",
-      "2026-01-03,-500000,transfer out",
-      "2026-01-03,500000,transfer in",
-      "2026-01-04,-200000,food market",
-      "2026-02-01,3100000,salary",
-      "2026-02-02,-1100000,rent",
-    ].join("\n"),
-    mapping: {
-      dateKey: "date",
-      amountKey: "amount",
-      descKey: "description",
-    },
+    source: "csv" as const,
+  })));
+  await upsertAccountMappingOverride({
+    batchId,
+    txnId: creditTxnId,
+    accountId: accountB.id,
   });
-  const loaded = await readBatchTransactions(imported.batch.id);
-  const creditTxn = (loaded?.transactions ?? []).find((tx) => tx.date === "2026-01-03" && tx.amountKrw > 0);
-  if (creditTxn?.txnId) {
-    await upsertAccountMappingOverride({
-      batchId: imported.batch.id,
-      txnId: creditTxn.txnId,
-      accountId: accountB.id,
-    });
-  }
-  return imported.batch.id;
+  return batchId;
 }
 
 async function saveStoredShadowBatch(input: {
@@ -169,6 +170,58 @@ describe("planning v3 batch center API", () => {
     expect(typeof payload.data?.[0]?.stats?.months).toBe("number");
     expect(typeof payload.data?.[0]?.stats?.txns).toBe("number");
     expect(typeof payload.data?.[0]?.stats?.transfers).toBe("number");
+  });
+
+  it("GET /api/planning/v3/batches hides pure legacy batches from user-facing list", async () => {
+    const legacy = await appendBatchFromCsv({
+      accountId: "acc-legacy",
+      csvText: [
+        "date,amount,description",
+        "2026-03-01,1200000,legacy salary",
+      ].join("\n"),
+      mapping: {
+        dateKey: "date",
+        amountKey: "amount",
+        descKey: "description",
+      },
+    });
+
+    const response = await batchesGET(requestGet("/api/planning/v3/batches?csrf=test&limit=20"));
+    expect(response.status).toBe(200);
+    const payload = await response.json() as {
+      ok?: boolean;
+      data?: Array<{ batchId?: string }>;
+    };
+    expect(payload.ok).toBe(true);
+    expect((payload.data ?? []).some((row) => row.batchId === legacy.batch.id)).toBe(false);
+  });
+
+  it("GET /api/planning/v3/batches/[id]/summary hides pure legacy batches", async () => {
+    const legacy = await appendBatchFromCsv({
+      accountId: "acc-legacy",
+      csvText: [
+        "date,amount,description",
+        "2026-03-01,1200000,legacy salary",
+      ].join("\n"),
+      mapping: {
+        dateKey: "date",
+        amountKey: "amount",
+        descKey: "description",
+      },
+    });
+
+    const response = await batchSummaryGET(
+      requestGet(`/api/planning/v3/batches/${encodeURIComponent(legacy.batch.id)}/summary?csrf=test`),
+      { params: Promise.resolve({ id: legacy.batch.id }) },
+    );
+    expect(response.status).toBe(404);
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: { code?: string; message?: string };
+    };
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("NO_DATA");
+    expect(payload.error?.message).toBe("배치를 찾을 수 없습니다.");
   });
 
   it("GET /api/planning/v3/batches keeps list createdAt aligned with stored-first summary rows", async () => {

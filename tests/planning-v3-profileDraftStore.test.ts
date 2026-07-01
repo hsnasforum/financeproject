@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
+import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import {
   createDraftFromBatch,
@@ -41,8 +41,7 @@ describe("planning v3 profile draft store", () => {
     env.PLANNING_DATA_DIR = root;
     const account = await createAccount({ name: "Main", kind: "checking" });
     accountId = account.id;
-    const created = await appendBatchFromCsv({
-      accountId,
+    const created = await importCsvToBatch({
       csvText: [
         "date,amount,description",
         "2026-01-01,3000000,salary",
@@ -53,9 +52,10 @@ describe("planning v3 profile draft store", () => {
         "2026-03-02,-1000000,rent",
       ].join("\n"),
       mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "profile-draft-store.csv",
+      provenance: { fileName: "profile-draft-store.csv" },
+      options: { accountId },
     });
-    batchId = created.batch.id;
+    batchId = created.batchMeta.id;
   });
 
   afterEach(() => {
@@ -103,4 +103,3 @@ describe("planning v3 profile draft store", () => {
     expect(toStablePayload(left)).toEqual(toStablePayload(right));
   });
 });
-

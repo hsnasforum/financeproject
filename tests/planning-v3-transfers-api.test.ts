@@ -72,18 +72,17 @@ describe("planning v3 transfers API", () => {
   });
 
   it("returns detections and unassignedCount decreases after account override", async () => {
-    const created = await appendBatchFromCsv({
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,-50000,transfer out",
-        "2026-03-01,50000,transfer in",
-      ].join("\n"),
-      mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
+    const batchId = "transfersdetect001";
+    await saveStoredShadowBatch({
+      batchId,
       accountId: "unassigned",
-      fileName: "tx.csv",
+      createdAt: "2026-03-01T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: -50000, description: "transfer out" },
+        { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-03-01", amountKrw: 50000, description: "transfer in" },
+      ],
     });
 
-    const batchId = created.batch.id;
     const before = await transfersGET(
       requestGet(`/api/planning/v3/transactions/batches/${batchId}/transfers?csrf=test`),
       { params: Promise.resolve({ id: batchId }) },

@@ -1,12 +1,11 @@
 import { type ImportBatchMeta } from "@/lib/planning/v3/domain/transactions";
 import {
   getBatchListPublicCreatedAtString,
-  mergeBatchListMetadata,
   sortBatchListMetadataByCreatedAtDesc,
   toBatchListPublicImportBatchMeta,
+  type BatchListMergedMeta,
 } from "@/lib/planning/v3/service/batchListMetadata";
 import { listStoredBatchListCandidates } from "@/lib/planning/v3/service/storedBatchListCandidates";
-import { listBatches as listLegacyBatches } from "@/lib/planning/v3/service/transactionStore";
 
 export type TransactionBatchLegacyRow = {
   id: string;
@@ -29,10 +28,6 @@ export type TransactionBatchListResult = {
   nextCursor?: string;
 };
 
-function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
 function toLegacyFromMeta(meta: ImportBatchMeta, fileName?: string): TransactionBatchLegacyRow {
   const count = Math.max(0, Math.trunc(Number(meta.rowCount) || 0));
   return {
@@ -54,22 +49,10 @@ function asPositiveInt(value: unknown, fallback: number): number {
 
 export async function listTransactionBatchRows(options: TransactionBatchListOptions = {}): Promise<TransactionBatchListResult> {
   const limit = asPositiveInt(options.limit, 50);
-  const cursor = asString(options.cursor);
-  const [legacyListed, storedListed] = await Promise.all([
-    listLegacyBatches({
-      ...(limit ? { limit: Math.max(limit, 200) } : {}),
-      ...(cursor ? { cursor } : {}),
-    }),
-    listStoredBatchListCandidates(),
-  ]);
-
-  const legacyItems = legacyListed.items as TransactionBatchLegacyRow[];
-  const legacyById = new Map(legacyItems.map((item) => [item.id, item]));
+  void options.cursor;
+  const storedListed = await listStoredBatchListCandidates();
   const mergedMeta = sortBatchListMetadataByCreatedAtDesc(
-    mergeBatchListMetadata({
-      legacyItems,
-      storedItems: storedListed,
-    }),
+    storedListed.map((item): BatchListMergedMeta => item),
     { tieBreak: "id-desc" },
   ).slice(0, limit);
 
@@ -83,9 +66,8 @@ export async function listTransactionBatchRows(options: TransactionBatchListOpti
   });
   const items = mergedMeta.map((row) => {
     const createdAt = getBatchListPublicCreatedAtString(row);
-    const legacy = legacyById.get(row.meta.id);
     return {
-      ...(legacy ?? toLegacyFromMeta(row.meta)),
+      ...toLegacyFromMeta(row.meta),
       // Transaction batch list keeps the legacy string contract for createdAt.
       createdAt,
     };
@@ -94,6 +76,5 @@ export async function listTransactionBatchRows(options: TransactionBatchListOpti
   return {
     data,
     items,
-    ...(legacyListed.nextCursor ? { nextCursor: legacyListed.nextCursor } : {}),
   };
 }

@@ -920,6 +920,14 @@ export async function listBatches(options: ListBatchesOptions = {}): Promise<Lis
   };
 }
 
+export async function hasLegacyBatch(batchId: string): Promise<boolean> {
+  assertServerOnly();
+
+  const safeBatchId = sanitizeRecordId(batchId);
+  const batches = await readBatches();
+  return batches.some((entry) => entry.id === safeBatchId);
+}
+
 export async function readBatch(batchId: string): Promise<ReadBatchResult | null> {
   assertServerOnly();
 

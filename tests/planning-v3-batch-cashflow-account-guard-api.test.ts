@@ -75,10 +75,40 @@ async function saveStoredShadowBatch(input: {
   })));
 }
 
+async function saveStoredUnboundBatch(input: {
+  batchId: string;
+  createdAt: string;
+  rows: Array<{
+    txnId: string;
+    date: string;
+    amountKrw: number;
+    description: string;
+  }>;
+}) {
+  await saveBatch({
+    id: input.batchId,
+    createdAt: input.createdAt,
+    source: "csv",
+    rowCount: input.rows.length,
+  }, input.rows.map((row) => ({
+    ...row,
+    batchId: input.batchId,
+    source: "csv" as const,
+  })));
+}
+
+function readLegacyTransactionFiles(rootDir: string): { batches: string; records: string } {
+  const txDir = path.join(rootDir, "v3", "transactions");
+  return {
+    batches: fs.readFileSync(path.join(txDir, "batches.ndjson"), "utf-8"),
+    records: fs.readFileSync(path.join(txDir, "records.ndjson"), "utf-8"),
+  };
+}
+
 describe("planning v3 batch cashflow account guard", () => {
   let root = "";
 
-  beforeEach(() => {
+  beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-planning-v3-batch-account-guard-"));
     env.NODE_ENV = "test";
     env.PLANNING_DATA_DIR = root;
@@ -118,6 +148,29 @@ describe("planning v3 batch cashflow account guard", () => {
         meta: { rowIndex: 3 },
       }),
     ].join("\n"));
+    await saveBatch({
+      id: "batch-legacy",
+      createdAt: "2026-03-03T00:00:00.000Z",
+      source: "csv",
+      rowCount: 2,
+    }, [
+      {
+        txnId: "aaaaaaaaaaaaaaaaaaaaaaaa",
+        batchId: "batch-legacy",
+        date: "2026-03-01",
+        amountKrw: 2000000,
+        description: "salary",
+        source: "csv",
+      },
+      {
+        txnId: "bbbbbbbbbbbbbbbbbbbbbbbb",
+        batchId: "batch-legacy",
+        date: "2026-03-03",
+        amountKrw: -200000,
+        description: "unknown spend",
+        source: "csv",
+      },
+    ]);
   });
 
   afterEach(() => {
@@ -131,18 +184,26 @@ describe("planning v3 batch cashflow account guard", () => {
   });
 
   it("blocks cashflow until accountId is attached to batch", async () => {
+    await saveStoredUnboundBatch({
+      batchId: "batch-stored-needs-account",
+      createdAt: "2026-03-10T00:00:00.000Z",
+      rows: [
+        { txnId: "abababababababab", date: "2026-03-01", amountKrw: 2000000, description: "salary" },
+        { txnId: "bcbcbcbcbcbcbcbc", date: "2026-03-03", amountKrw: -200000, description: "unknown spend" },
+      ],
+    });
     const context: RouteContext = {
-      params: Promise.resolve({ id: "batch-legacy" }),
+      params: Promise.resolve({ id: "batch-stored-needs-account" }),
     };
 
     const first = await cashflowGET(
-      requestGet("/api/planning/v3/transactions/batches/batch-legacy/cashflow?csrf=test"),
+      requestGet("/api/planning/v3/transactions/batches/batch-stored-needs-account/cashflow?csrf=test"),
       context,
     );
     expect(first.status).toBe(400);
 
     const bind = await bindAccountPOST(
-      requestPost("/api/planning/v3/transactions/batches/batch-legacy/account", {
+      requestPost("/api/planning/v3/transactions/batches/batch-stored-needs-account/account", {
         accountId: "acc-main",
       }),
       context,
@@ -150,7 +211,7 @@ describe("planning v3 batch cashflow account guard", () => {
     expect(bind.status).toBe(200);
 
     const second = await cashflowGET(
-      requestGet("/api/planning/v3/transactions/batches/batch-legacy/cashflow?csrf=test"),
+      requestGet("/api/planning/v3/transactions/batches/batch-stored-needs-account/cashflow?csrf=test"),
       context,
     );
     expect(second.status).toBe(200);
@@ -163,13 +224,21 @@ describe("planning v3 batch cashflow account guard", () => {
   });
 
   it("ignores legacy unscoped overrides and only applies batch-scoped override in cashflow projection", async () => {
+    await saveStoredUnboundBatch({
+      batchId: "batch-stored-overrides",
+      createdAt: "2026-03-10T00:00:00.000Z",
+      rows: [
+        { txnId: "cdcdcdcdcdcdcdcdcdcdcdcd", date: "2026-03-01", amountKrw: 2000000, description: "salary" },
+        { txnId: "bdbdbdbdbdbdbdbdbdbdbdbd", date: "2026-03-03", amountKrw: -200000, description: "unknown spend" },
+      ],
+    });
     const context: RouteContext = {
-      params: Promise.resolve({ id: "batch-legacy" }),
+      params: Promise.resolve({ id: "batch-stored-overrides" }),
     };
-    const expenseTxnId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    const expenseTxnId = "bdbdbdbdbdbdbdbdbdbdbdbd";
 
     const bind = await bindAccountPOST(
-      requestPost("/api/planning/v3/transactions/batches/batch-legacy/account", {
+      requestPost("/api/planning/v3/transactions/batches/batch-stored-overrides/account", {
         accountId: "acc-main",
       }),
       context,
@@ -178,7 +247,7 @@ describe("planning v3 batch cashflow account guard", () => {
 
     await upsertLegacyUnscopedTxnOverride(expenseTxnId, { category: "fixed" });
     const legacyIgnored = await cashflowGET(
-      requestGet("/api/planning/v3/transactions/batches/batch-legacy/cashflow?csrf=test"),
+      requestGet("/api/planning/v3/transactions/batches/batch-stored-overrides/cashflow?csrf=test"),
       context,
     );
     expect(legacyIgnored.status).toBe(200);
@@ -189,12 +258,12 @@ describe("planning v3 batch cashflow account guard", () => {
     expect(legacyPayload.profilePatch?.monthlyDiscretionaryExpenses).toBe(200000);
 
     await upsertBatchTxnOverride({
-      batchId: "batch-legacy",
+      batchId: "batch-stored-overrides",
       txnId: expenseTxnId,
       categoryId: "housing",
     });
     const scopedApplied = await cashflowGET(
-      requestGet("/api/planning/v3/transactions/batches/batch-legacy/cashflow?csrf=test"),
+      requestGet("/api/planning/v3/transactions/batches/batch-stored-overrides/cashflow?csrf=test"),
       context,
     );
     expect(scopedApplied.status).toBe(200);
@@ -236,7 +305,73 @@ describe("planning v3 batch cashflow account guard", () => {
     expect(payload.profilePatch?.monthlyIncomeNet).toBe(4000000);
   });
 
-  it("updates same-id coexistence through route-local success branch and keeps cashflow/detail stored-first", async () => {
+  it("rejects cashflow for same-id hybrid legacy fallback", async () => {
+    const batchId = "batch-hybrid-cashflow";
+    const txDir = path.join(root, "v3", "transactions");
+    fs.appendFileSync(path.join(txDir, "batches.ndjson"), `\n${JSON.stringify({
+      id: batchId,
+      createdAt: "2026-03-09T00:00:00.000Z",
+      kind: "csv",
+      fileName: "hybrid-cashflow.csv",
+      total: 2,
+      ok: 2,
+      failed: 0,
+      accountId: "acc-legacy",
+    })}\n`);
+    fs.appendFileSync(path.join(txDir, "records.ndjson"), `\n${[
+      JSON.stringify({
+        id: "t-hybrid-1",
+        txnId: "abababababababababababab",
+        batchId,
+        createdAt: "2026-03-09T00:00:00.000Z",
+        date: "2026-03-09",
+        amountKrw: 2000000,
+        description: "legacy salary",
+        source: "csv",
+      }),
+      JSON.stringify({
+        id: "t-hybrid-2",
+        txnId: "bcbcbcbcbcbcbcbcbcbcbcbc",
+        batchId,
+        createdAt: "2026-03-09T00:00:00.000Z",
+        date: "2026-03-10",
+        amountKrw: -200000,
+        description: "legacy spend",
+        source: "csv",
+      }),
+    ].join("\n")}\n`);
+    await saveBatch({
+      id: batchId,
+      createdAt: "2026-03-10T00:00:00.000Z",
+      source: "csv",
+      rowCount: 3,
+      accounts: [{ id: "acc-stored" }],
+    }, [{
+      txnId: "cccccccccccccccc",
+      batchId,
+      date: "2026-03-10",
+      amountKrw: 9000,
+      description: "stale stored row",
+      accountId: "acc-stored",
+      source: "csv",
+    }]);
+
+    const response = await cashflowGET(
+      requestGet(`/api/planning/v3/transactions/batches/${batchId}/cashflow?csrf=test`),
+      { params: Promise.resolve({ id: batchId }) },
+    );
+
+    expect(response.status).toBe(404);
+    const payload = await response.json() as {
+      ok?: boolean;
+      error?: { code?: string };
+      monthly?: unknown;
+    };
+    expect(payload).toMatchObject({ ok: false, error: { code: "NO_DATA" } });
+    expect(payload.monthly).toBeUndefined();
+  });
+
+  it("classifies same-id account binding as migration conflict and keeps cashflow/detail stored-first", async () => {
     const context: RouteContext = {
       params: Promise.resolve({ id: "batch-legacy" }),
     };
@@ -251,6 +386,7 @@ describe("planning v3 batch cashflow account guard", () => {
         { txnId: "dddddddddddddddd", date: "2026-03-05", amountKrw: -500000, description: "same-account paired expense" },
       ],
     });
+    const beforeLegacyFiles = readLegacyTransactionFiles(root);
 
     const bind = await bindAccountPOST(
       requestPost("/api/planning/v3/transactions/batches/batch-legacy/account", {
@@ -258,33 +394,13 @@ describe("planning v3 batch cashflow account guard", () => {
       }),
       context,
     );
-    expect(bind.status).toBe(200);
+    expect(bind.status).toBe(409);
     const bindPayload = await bind.json() as {
       ok?: boolean;
-      batch?: {
-        id?: string;
-        createdAt?: string;
-        fileName?: string;
-        total?: number;
-        ok?: number;
-        failed?: number;
-        accountId?: string;
-        accountHint?: string;
-      };
-      updatedTransactionCount?: number;
+      error?: { code?: string };
     };
-    expect(bindPayload.ok).toBe(true);
-    expect(bindPayload.batch).toEqual({
-      id: "batch-legacy",
-      createdAt: "2026-03-10T00:00:00.000Z",
-      kind: "csv",
-      total: 2,
-      ok: 2,
-      failed: 0,
-      accountId: "acc-main",
-      accountHint: "acc-main",
-    });
-    expect(bindPayload.updatedTransactionCount).toBe(2);
+    expect(bindPayload).toMatchObject({ ok: false, error: { code: "MIGRATION_CONFLICT" } });
+    expect(readLegacyTransactionFiles(root)).toEqual(beforeLegacyFiles);
 
     const response = await cashflowGET(
       requestGet("/api/planning/v3/transactions/batches/batch-legacy/cashflow?csrf=test"),
@@ -312,12 +428,12 @@ describe("planning v3 batch cashflow account guard", () => {
       batch?: { accountId?: string; accountHint?: string };
       transactions?: Array<{ accountId?: string }>;
     };
-    expect(detailPayload.batch?.accountId).toBe("acc-main");
-    expect(detailPayload.batch?.accountHint).toBe("acc-main");
-    expect(detailPayload.transactions?.every((row) => row.accountId === "acc-main")).toBe(true);
+    expect(detailPayload.batch?.accountId).toBe("acc-stored");
+    expect(detailPayload.batch?.accountHint).toBe("acc-stored");
+    expect(detailPayload.transactions?.every((row) => row.accountId === "acc-stored")).toBe(true);
   });
 
-  it("keeps same-id coexistence success when visible binding matches even if legacy updated count is zero", async () => {
+  it("classifies same-id account binding as migration conflict even when legacy binding already matches", async () => {
     const context: RouteContext = {
       params: Promise.resolve({ id: "batch-zero-count" }),
     };
@@ -371,6 +487,7 @@ describe("planning v3 batch cashflow account guard", () => {
         { txnId: "2222222222222222", date: "2026-03-07", amountKrw: -700000, description: "same-account pair" },
       ],
     });
+    const beforeLegacyFiles = readLegacyTransactionFiles(root);
 
     const bind = await bindAccountPOST(
       requestPost("/api/planning/v3/transactions/batches/batch-zero-count/account", {
@@ -378,16 +495,13 @@ describe("planning v3 batch cashflow account guard", () => {
       }),
       context,
     );
-    expect(bind.status).toBe(200);
+    expect(bind.status).toBe(409);
     const bindPayload = await bind.json() as {
       ok?: boolean;
-      batch?: { accountId?: string; accountHint?: string };
-      updatedTransactionCount?: number;
+      error?: { code?: string };
     };
-    expect(bindPayload.ok).toBe(true);
-    expect(bindPayload.batch?.accountId).toBe("acc-main");
-    expect(bindPayload.batch?.accountHint).toBe("acc-main");
-    expect(bindPayload.updatedTransactionCount).toBe(0);
+    expect(bindPayload).toMatchObject({ ok: false, error: { code: "MIGRATION_CONFLICT" } });
+    expect(readLegacyTransactionFiles(root)).toEqual(beforeLegacyFiles);
 
     const detail = await batchDetailGET(
       requestGet("/api/planning/v3/transactions/batches/batch-zero-count?csrf=test"),
@@ -398,9 +512,9 @@ describe("planning v3 batch cashflow account guard", () => {
       batch?: { accountId?: string; accountHint?: string };
       transactions?: Array<{ accountId?: string }>;
     };
-    expect(detailPayload.batch?.accountId).toBe("acc-main");
-    expect(detailPayload.batch?.accountHint).toBe("acc-main");
-    expect(detailPayload.transactions?.every((row) => row.accountId === "acc-main")).toBe(true);
+    expect(detailPayload.batch?.accountId).toBe("acc-stored-before");
+    expect(detailPayload.batch?.accountHint).toBe("acc-stored-before");
+    expect(detailPayload.transactions?.every((row) => row.accountId === "acc-stored-before")).toBe(true);
   });
 
   it("updates account binding through stored meta writer when only stored metadata exists", async () => {

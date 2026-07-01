@@ -518,7 +518,7 @@ describe("planning v3 batches APIs", () => {
     }));
   });
 
-  it("pure legacy batch delete returns an explicit boundary guard instead of NO_DATA", async () => {
+  it("pure legacy batch delete is hidden as NO_DATA and leaves legacy data quarantined", async () => {
     const legacy = await appendBatchFromCsv({
       csvText: [
         "date,amount,description",
@@ -537,7 +537,7 @@ describe("planning v3 batches APIs", () => {
       requestJson(`/api/planning/v3/transactions/batches/${legacy.batch.id}?csrf=test`, "DELETE"),
       { params: Promise.resolve({ id: legacy.batch.id }) },
     );
-    expect(deleted.status).toBe(400);
+    expect(deleted.status).toBe(404);
     const deletedPayload = await deleted.json() as {
       ok?: boolean;
       deleted?: boolean;
@@ -545,21 +545,16 @@ describe("planning v3 batches APIs", () => {
     };
     expect(deletedPayload.ok).toBe(false);
     expect(deletedPayload.deleted).toBeUndefined();
-    expect(deletedPayload.error?.code).toBe("INPUT");
-    expect(deletedPayload.error?.message).toBe("기존 배치만 남아 있는 경우 이 삭제 경로는 지원하지 않습니다.");
+    expect(deletedPayload.error?.code).toBe("NO_DATA");
+    expect(deletedPayload.error?.message).toBe("배치를 찾을 수 없습니다.");
+    const quarantined = await readBatchTransactions(legacy.batch.id);
+    expect(quarantined?.batch.fileName).toBe("pure-legacy-delete-boundary.csv");
 
     const detailAfterGuard = await batchDetailGET(
       requestJson(`/api/planning/v3/transactions/batches/${legacy.batch.id}?csrf=test`, "GET"),
       { params: Promise.resolve({ id: legacy.batch.id }) },
     );
-    expect(detailAfterGuard.status).toBe(200);
-    const detailPayload = await detailAfterGuard.json() as {
-      batch?: { fileName?: string; total?: number };
-    };
-    expect(detailPayload.batch).toEqual(expect.objectContaining({
-      fileName: "pure-legacy-delete-boundary.csv",
-      total: 1,
-    }));
+    expect(detailAfterGuard.status).toBe(404);
   });
 
   it("synthetic stored-only batch account binding returns an explicit unsupported guard instead of NO_DATA", async () => {
@@ -683,23 +678,32 @@ describe("planning v3 batches APIs", () => {
   });
 
   it("batch detail ignores legacy unscoped override and applies batch-scoped override", async () => {
-    const created = await appendBatchFromCsv({
-      csvText: [
-        "date,amount,description",
-        "2026-04-01,-15000,lunch",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
+    const batchId = "detailboundary001";
+    const txnId = "aaaaaaaaaaaaaaaaaaaaaaaa";
+    await saveStoredShadowBatch({
+      batchId,
       accountId: "acc-main",
-      fileName: "detail-boundary.csv",
+      createdAt: "2026-04-01T00:00:00.000Z",
+      importMetadata: {
+        diagnostics: {
+          rows: 1,
+          parsed: 1,
+          skipped: 0,
+        },
+        provenance: {
+          fileName: "detail-boundary.csv",
+          fileNameProvided: true,
+        },
+      },
+      rows: [
+        {
+          txnId,
+          date: "2026-04-01",
+          amountKrw: -15000,
+          description: "lunch",
+        },
+      ],
     });
-    const batchId = created.batch.id;
-    const loaded = await readBatchTransactions(batchId);
-    const txnId = String(loaded?.transactions?.[0]?.txnId ?? "");
-    expect(txnId).not.toBe("");
 
     await upsertOverride(txnId, { kind: "income" });
     const legacyIgnored = await batchDetailGET(
@@ -732,7 +736,7 @@ describe("planning v3 batches APIs", () => {
     expect((scopedPayload.transactions ?? []).find((row) => row.txnId === txnId)?.kind).toBe("income");
   });
 
-  it("batch detail narrows shell and stats total and ok to visible rows while keeping failed and fileName fallback", async () => {
+  it("pure legacy batch detail keeps helper classification but is hidden from user routes", async () => {
     const txDir = path.join(root, "v3", "transactions");
     fs.mkdirSync(txDir, { recursive: true });
     fs.writeFileSync(path.join(txDir, "batches.ndjson"), `${JSON.stringify({
@@ -787,42 +791,17 @@ describe("planning v3 batches APIs", () => {
       retainsLegacyStatsFailedViaBatchAlias: true,
       retainsLegacyBatchFileName: true,
     });
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
-      batch?: {
-        fileName?: string;
-        total?: number;
-        ok?: number;
-        failed?: number;
-        accountId?: string;
-        accountHint?: string;
-      };
-      stats?: {
-        total?: number;
-        ok?: number;
-        failed?: number;
-        inferredMonths?: number;
-      };
-      transactions?: Array<{ accountId?: string }>;
+      ok?: boolean;
+      error?: { code?: string; message?: string };
     };
-    expect(payload.batch).toEqual(expect.objectContaining({
-      fileName: "detail-legacy-count.csv",
-      total: 3,
-      ok: 2,
-      failed: 1,
-      accountId: "acc-legacy",
-      accountHint: "acc-legacy",
-    }));
-    expect(payload.stats).toEqual(expect.objectContaining({
-      total: 3,
-      ok: 2,
-      failed: 1,
-      inferredMonths: 1,
-    }));
-    expect(payload.transactions).toHaveLength(2);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("NO_DATA");
+    expect(payload.error?.message).toBe("배치를 찾을 수 없습니다.");
   });
 
-  it("helper classifies hybrid stored meta without importMetadata as old stored meta gap while detail output stays unchanged", async () => {
+  it("helper classifies hybrid stored meta without importMetadata as old stored meta gap while detail rejects legacy-backed rows", async () => {
     const txDir = path.join(root, "v3", "transactions");
     fs.mkdirSync(txDir, { recursive: true });
     fs.writeFileSync(path.join(txDir, "batches.ndjson"), `${JSON.stringify({
@@ -897,42 +876,17 @@ describe("planning v3 batches APIs", () => {
       requestJson("/api/planning/v3/transactions/batches/detailoldstoredgap001?csrf=test", "GET"),
       { params: Promise.resolve({ id: "detailoldstoredgap001" }) },
     );
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
-      batch?: {
-        createdAt?: string;
-        fileName?: string;
-        total?: number;
-        ok?: number;
-        failed?: number;
-        accountId?: string;
-        accountHint?: string;
-      };
-      stats?: {
-        total?: number;
-        ok?: number;
-        failed?: number;
-        inferredMonths?: number;
-      };
+      ok?: boolean;
+      error?: { code?: string };
+      data?: unknown;
     };
-    expect(payload.batch).toEqual(expect.objectContaining({
-      createdAt: "2026-04-10T00:00:00.000Z",
-      fileName: "legacy-gap-detail.csv",
-      total: 3,
-      ok: 2,
-      failed: 1,
-      accountId: "acc-stored",
-      accountHint: "acc-stored",
-    }));
-    expect(payload.stats).toEqual(expect.objectContaining({
-      total: 3,
-      ok: 2,
-      failed: 1,
-      inferredMonths: 1,
-    }));
+    expect(payload).toMatchObject({ ok: false, error: { code: "NO_DATA" } });
+    expect(payload.data).toBeUndefined();
   });
 
-  it("batch detail prefers stored importMetadata for failed and fileName before legacy summary in hybrid fallback", async () => {
+  it("helper keeps stored importMetadata ownership while detail rejects hybrid fallback rows", async () => {
     const txDir = path.join(root, "v3", "transactions");
     fs.mkdirSync(txDir, { recursive: true });
     fs.writeFileSync(path.join(txDir, "batches.ndjson"), `${JSON.stringify({
@@ -1017,37 +971,14 @@ describe("planning v3 batches APIs", () => {
       requestJson("/api/planning/v3/transactions/batches/detailstoredowner001?csrf=test", "GET"),
       { params: Promise.resolve({ id: "detailstoredowner001" }) },
     );
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
-      batch?: {
-        fileName?: string;
-        total?: number;
-        ok?: number;
-        failed?: number;
-        accountId?: string;
-        accountHint?: string;
-      };
-      stats?: {
-        total?: number;
-        ok?: number;
-        failed?: number;
-        inferredMonths?: number;
-      };
+      ok?: boolean;
+      error?: { code?: string };
+      data?: unknown;
     };
-    expect(payload.batch).toEqual(expect.objectContaining({
-      fileName: "stored-detail.csv",
-      total: 2,
-      ok: 2,
-      failed: 0,
-      accountId: "acc-stored",
-      accountHint: "acc-stored",
-    }));
-    expect(payload.stats).toEqual(expect.objectContaining({
-      total: 2,
-      ok: 2,
-      failed: 0,
-      inferredMonths: 1,
-    }));
+    expect(payload).toMatchObject({ ok: false, error: { code: "NO_DATA" } });
+    expect(payload.data).toBeUndefined();
   });
 
   it("sourceBinding read-only candidate helper returns true for complete writer-handoff subset", async () => {
@@ -1159,7 +1090,7 @@ describe("planning v3 batches APIs", () => {
     expect(hasStoredFirstReadOnlySourceBindingCandidate(mismatched as never)).toBe(false);
   });
 
-  it("batch detail keeps stored failed but bridges fileName from legacy summary when hybrid retained provenance is blank", async () => {
+  it("helper marks legacy fileName bridge while detail rejects hybrid fallback rows", async () => {
     const txDir = path.join(root, "v3", "transactions");
     fs.mkdirSync(txDir, { recursive: true });
     fs.writeFileSync(path.join(txDir, "batches.ndjson"), `${JSON.stringify({
@@ -1242,40 +1173,17 @@ describe("planning v3 batches APIs", () => {
       requestJson("/api/planning/v3/transactions/batches/detailstoredblankprov001?csrf=test", "GET"),
       { params: Promise.resolve({ id: "detailstoredblankprov001" }) },
     );
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
-      batch?: {
-        fileName?: string;
-        total?: number;
-        ok?: number;
-        failed?: number;
-        accountId?: string;
-        accountHint?: string;
-      };
-      stats?: {
-        total?: number;
-        ok?: number;
-        failed?: number;
-        inferredMonths?: number;
-      };
+      ok?: boolean;
+      error?: { code?: string };
+      data?: unknown;
     };
-    expect(payload.batch).toEqual(expect.objectContaining({
-      fileName: "legacy-blank-provenance-detail.csv",
-      total: 2,
-      ok: 2,
-      failed: 0,
-      accountId: "acc-stored",
-      accountHint: "acc-stored",
-    }));
-    expect(payload.stats).toEqual(expect.objectContaining({
-      total: 2,
-      ok: 2,
-      failed: 0,
-      inferredMonths: 1,
-    }));
+    expect(payload).toMatchObject({ ok: false, error: { code: "NO_DATA" } });
+    expect(payload.data).toBeUndefined();
   });
 
-  it("hybrid retained visible fileName compat bridge predicate stays false when both stored and legacy provenance are blank", async () => {
+  it("hybrid retained visible fileName compat bridge predicate stays false while detail rejects fallback rows", async () => {
     const txDir = path.join(root, "v3", "transactions");
     fs.mkdirSync(txDir, { recursive: true });
     fs.writeFileSync(path.join(txDir, "batches.ndjson"), `${JSON.stringify({
@@ -1357,57 +1265,32 @@ describe("planning v3 batches APIs", () => {
       requestJson("/api/planning/v3/transactions/batches/detailstoredblankboth001?csrf=test", "GET"),
       { params: Promise.resolve({ id: "detailstoredblankboth001" }) },
     );
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
-      batch?: {
-        fileName?: string;
-        total?: number;
-        ok?: number;
-        failed?: number;
-        accountId?: string;
-        accountHint?: string;
-      };
-      stats?: {
-        total?: number;
-        ok?: number;
-        failed?: number;
-        inferredMonths?: number;
-      };
+      ok?: boolean;
+      error?: { code?: string };
+      data?: unknown;
     };
-    expect(payload.batch?.fileName).toBeUndefined();
-    expect(payload.batch).toEqual(expect.objectContaining({
-      total: 2,
-      ok: 2,
-      failed: 0,
-      accountId: "acc-stored",
-      accountHint: "acc-stored",
-    }));
-    expect(payload.stats).toEqual(expect.objectContaining({
-      total: 2,
-      ok: 2,
-      failed: 0,
-      inferredMonths: 1,
-    }));
+    expect(payload).toMatchObject({ ok: false, error: { code: "NO_DATA" } });
+    expect(payload.data).toBeUndefined();
   });
 
   it("batch detail preserves detailed category ids instead of collapsing them to unknown", async () => {
-    const created = await appendBatchFromCsv({
-      csvText: [
-        "date,amount,description",
-        "2026-04-01,-15000,lunch",
-      ].join("\n"),
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
+    const batchId = "detailcategory001";
+    const txnId = "bbbbbbbbbbbbbbbbbbbbbbbb";
+    await saveStoredShadowBatch({
+      batchId,
       accountId: "acc-main",
-      fileName: "detail-category.csv",
+      createdAt: "2026-04-01T00:00:00.000Z",
+      rows: [
+        {
+          txnId,
+          date: "2026-04-01",
+          amountKrw: -15000,
+          description: "lunch",
+        },
+      ],
     });
-    const batchId = created.batch.id;
-    const loaded = await readBatchTransactions(batchId);
-    const txnId = String(loaded?.transactions?.[0]?.txnId ?? "");
-    expect(txnId).not.toBe("");
 
     await upsertOverride({
       batchId,
@@ -1557,7 +1440,7 @@ describe("planning v3 batches APIs", () => {
     expect(payload.meta?.rowCount).toBe(1);
   });
 
-  it("batch detail keeps same-id coexistence visible binding stored-first while raw rows stay legacy during hybrid fallback", async () => {
+  it("batch detail rejects same-id hybrid legacy fallback instead of exposing global legacy rows", async () => {
     const legacy = await appendBatchFromCsv({
       csvText: [
         "date,amount,description",
@@ -1587,53 +1470,14 @@ describe("planning v3 batches APIs", () => {
       requestJson(`/api/planning/v3/transactions/batches/${legacy.batch.id}?csrf=test`, "GET"),
       { params: Promise.resolve({ id: legacy.batch.id }) },
     );
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     const payload = await response.json() as {
-      batch?: { createdAt?: string; fileName?: string; total?: number; accountId?: string; accountHint?: string };
-      sample?: Array<{ amountKrw?: number; descMasked?: string }>;
-      stats?: { total?: number; ok?: number; failed?: number; inferredMonths?: number };
-      accountMonthlyNet?: Array<{ accountId?: string; ym?: string; netKrw?: number; txCount?: number }>;
-      transactions?: Array<{ txnId?: string; accountId?: string; amountKrw?: number }>;
-      meta?: { createdAt?: string; rowCount?: number; accounts?: Array<{ id?: string }> };
-      data?: Array<{ amountKrw?: number; description?: string; accountId?: string }>;
+      ok?: boolean;
+      error?: { code?: string };
+      data?: unknown;
     };
-    expect(payload.batch).toEqual(expect.objectContaining({
-      createdAt: "2026-05-10T00:00:00.000Z",
-      fileName: "detail-hybrid.csv",
-      total: 2,
-      accountId: "acc-stored",
-      accountHint: "acc-stored",
-    }));
-    expect(payload.sample).toEqual([
-      expect.objectContaining({ dateIso: "2026-05-01", amountKrw: 3000000 }),
-      expect.objectContaining({ amountKrw: -500000, descMasked: "rent" }),
-    ]);
-    expect(payload.stats).toEqual(expect.objectContaining({ total: 2, ok: 2, failed: 0 }));
-    expect(payload.stats?.inferredMonths).toBe(1);
-    expect(payload.accountMonthlyNet).toEqual([
-      expect.objectContaining({
-        accountId: "acc-stored",
-        ym: "2026-05",
-        netKrw: 2500000,
-        txCount: 2,
-      }),
-    ]);
-    expect(payload.transactions).toEqual([
-      expect.objectContaining({ txnId: expect.any(String), accountId: "acc-stored", amountKrw: 3000000 }),
-      expect.objectContaining({ txnId: expect.any(String), accountId: "acc-stored", amountKrw: -500000 }),
-    ]);
-    expect(payload.transactions?.every((row) => row.accountId === "acc-stored")).toBe(true);
-    expect(payload.meta).toEqual(expect.objectContaining({
-      createdAt: "2026-05-10T00:00:00.000Z",
-      rowCount: 3,
-      accounts: [expect.objectContaining({ id: "acc-stored" })],
-    }));
-    expect(payload.data).toHaveLength(2);
-    expect(payload.data?.every((row) => row.accountId === "acc-legacy")).toBe(true);
-    expect((payload.data ?? []).map((row) => row.amountKrw).sort((a, b) => Number(a) - Number(b))).toEqual([
-      -500000,
-      3000000,
-    ]);
+    expect(payload).toMatchObject({ ok: false, error: { code: "NO_DATA" } });
+    expect(payload.data).toBeUndefined();
   });
 
   it("batch detail downgrades batch/meta createdAt under the shared public createdAt boundary when only stored rows exist without stored meta", async () => {

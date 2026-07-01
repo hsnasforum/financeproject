@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as importCsvPOST } from "../src/app/api/planning/v3/transactions/import/csv/route";
-import { readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
+import { getBatchTransactions } from "../src/lib/planning/v3/store/batchesStore";
 
 import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
 
@@ -138,14 +138,14 @@ describe("POST /api/planning/v3/transactions/import/csv account mapping", () => 
     expect(secondBatchId).not.toBe(firstBatchId);
 
     const [firstBatch, secondBatch] = await Promise.all([
-      readBatchTransactions(firstBatchId),
-      readBatchTransactions(secondBatchId),
+      getBatchTransactions(firstBatchId),
+      getBatchTransactions(secondBatchId),
     ]);
 
-    expect(firstBatch).not.toBeNull();
-    expect(secondBatch).not.toBeNull();
-    const firstTransactions = firstBatch?.transactions ?? [];
-    const secondTransactions = secondBatch?.transactions ?? [];
+    expect(firstBatch.length).toBeGreaterThan(0);
+    expect(secondBatch.length).toBeGreaterThan(0);
+    const firstTransactions = firstBatch;
+    const secondTransactions = secondBatch;
 
     expect(firstTransactions.every((tx) => tx.accountId === "acc-main")).toBe(true);
     expect(secondTransactions.every((tx) => tx.accountId === "acc-savings")).toBe(true);

@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { POST as draftsPOST, GET as draftsGET } from "../src/app/api/planning/v3/profile/drafts/route";
 import { GET as draftDetailGET, DELETE as draftDetailDELETE } from "../src/app/api/planning/v3/profile/drafts/[id]/route";
-import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
+import { importCsvToBatch } from "../src/lib/planning/v3/service/importCsvToBatch";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 
 import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
@@ -144,8 +144,7 @@ describe("planning v3 profile drafts API", () => {
     env.PLANNING_DATA_DIR = root;
 
     const account = await createAccount({ name: "Main", kind: "checking" });
-    const created = await appendBatchFromCsv({
-      accountId: account.id,
+    const created = await importCsvToBatch({
       csvText: [
         "date,amount,description",
         "2026-01-01,3000000,salary",
@@ -154,9 +153,10 @@ describe("planning v3 profile drafts API", () => {
         "2026-02-02,-1100000,rent",
       ].join("\n"),
       mapping: { dateKey: "date", amountKey: "amount", descKey: "description" },
-      fileName: "profile-drafts-api.csv",
+      provenance: { fileName: "profile-drafts-api.csv" },
+      options: { accountId: account.id },
     });
-    batchId = created.batch.id;
+    batchId = created.batchMeta.id;
   });
 
   afterEach(() => {

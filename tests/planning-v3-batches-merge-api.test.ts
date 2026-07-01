@@ -47,7 +47,7 @@ describe("POST /api/planning/v3/transactions/batches/merge", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("merges from batch into batch with txnId dedupe", async () => {
+  it("returns unsupported and leaves legacy batches unchanged", async () => {
     const from = await appendBatchFromCsv({
       csvText: [
         "date,amount,description",
@@ -69,25 +69,24 @@ describe("POST /api/planning/v3/transactions/batches/merge", () => {
       accountId: "acc-main",
       fileName: "into.csv",
     });
+    const intoBefore = await readBatchTransactions(into.batch.id);
+    const beforeTxnIds = (intoBefore?.transactions ?? []).map((row) => row.txnId).sort();
 
     const response = await mergeBatchesPOST(requestJson("/api/planning/v3/transactions/batches/merge", {
       fromBatchId: from.batch.id,
       intoBatchId: into.batch.id,
     }));
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(410);
     const payload = await response.json() as {
       ok?: boolean;
-      mergedCount?: number;
-      dedupedCount?: number;
+      error?: { code?: string; message?: string };
     };
-    expect(payload.ok).toBe(true);
-    expect(payload.mergedCount).toBe(2);
-    expect(payload.dedupedCount).toBe(0);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("UNSUPPORTED");
 
     const intoAfter = await readBatchTransactions(into.batch.id);
     expect(intoAfter).not.toBeNull();
-    expect(intoAfter?.transactions).toHaveLength(3);
-    expect(new Set((intoAfter?.transactions ?? []).map((row) => row.txnId)).size).toBe(3);
+    expect((intoAfter?.transactions ?? []).map((row) => row.txnId).sort()).toEqual(beforeTxnIds);
   });
 });

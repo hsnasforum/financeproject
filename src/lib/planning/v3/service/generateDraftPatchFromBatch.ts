@@ -22,6 +22,7 @@ import {
   getBatchTxnOverrides,
   loadStoredFirstBatchTransactions,
 } from "../transactions/store";
+import { isUserFacingStoredBatchRead } from "./userFacingBatchReadPolicy";
 
 type YmStat = {
   ym: string;
@@ -125,7 +126,7 @@ function toStoredTransactions(batchId: string, rows: Array<{
 
 async function loadPipeline(batchId: string): Promise<LoadedPipeline> {
   const loaded = await loadStoredFirstBatchTransactions(batchId);
-  if (!loaded) {
+  if (!isUserFacingStoredBatchRead(loaded)) {
     throw new GenerateDraftPatchFromBatchError("NOT_FOUND", "batch not found");
   }
 

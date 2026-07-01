@@ -9,7 +9,6 @@ import {
 } from "../src/app/api/planning/v3/accounts/[id]/starting-balance/route";
 import { createAccount } from "../src/lib/planning/v3/store/accountsStore";
 import { appendBatchFromCsv } from "../src/lib/planning/v3/service/transactionStore";
-import { readBatchTransactions } from "../src/lib/planning/v3/service/transactionStore";
 import { saveBatch } from "../src/lib/planning/v3/store/batchesStore";
 import { upsertOverride } from "../src/lib/planning/v3/store/txnOverridesStore";
 import { installPlanningAuthRequiredFalseForTest } from "./planning/auth/testPlanningAuthEnv";
@@ -146,25 +145,20 @@ describe("planning v3 balances APIs", () => {
       startingBalanceKrw: 1000,
     });
 
-    const csvText = [
-      "date,amount,description",
-      "2026-03-01,100,급여",
-      "2026-03-02,-50,식비",
-      "2026-04-03,25,기타",
-    ].join("\n");
-
-    const batch = await appendBatchFromCsv({
-      csvText,
+    const batchId = "balancescompute001";
+    await saveStoredShadowBatch({
+      batchId,
       accountId: accountWithStart.id,
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
+      createdAt: "2026-04-03T00:00:00.000Z",
+      rows: [
+        { txnId: "aaaaaaaaaaaaaaaaaaaaaaaa", date: "2026-03-01", amountKrw: 100, description: "급여" },
+        { txnId: "bbbbbbbbbbbbbbbbbbbbbbbb", date: "2026-03-02", amountKrw: -50, description: "식비" },
+        { txnId: "cccccccccccccccccccccccc", date: "2026-04-03", amountKrw: 25, description: "기타" },
+      ],
     });
 
     const response = await monthlyBalancesGET(
-      requestGet(`/api/planning/v3/balances/monthly?batchId=${encodeURIComponent(batch.batch.id)}&includeTransfers=0&csrf=test`),
+      requestGet(`/api/planning/v3/balances/monthly?batchId=${encodeURIComponent(batchId)}&includeTransfers=0&csrf=test`),
     );
     expect(response.status).toBe(200);
     const payload = await response.json() as {
@@ -188,25 +182,20 @@ describe("planning v3 balances APIs", () => {
       startingBalanceKrw: 1000,
     });
 
-    const batch = await appendBatchFromCsv({
-      csvText: [
-        "date,amount,description",
-        "2026-03-01,-50,식비",
-      ].join("\n"),
+    const batchId = "balancesoverride001";
+    const txnId = "aaaaaaaaaaaaaaaaaaaaaaaa";
+    await saveStoredShadowBatch({
+      batchId,
       accountId: accountWithStart.id,
-      mapping: {
-        dateKey: "date",
-        amountKey: "amount",
-        descKey: "description",
-      },
+      createdAt: "2026-03-01T00:00:00.000Z",
+      rows: [
+        { txnId, date: "2026-03-01", amountKrw: -50, description: "식비" },
+      ],
     });
-    const loaded = await readBatchTransactions(batch.batch.id);
-    const txnId = String(loaded?.transactions?.[0]?.txnId ?? "");
-    expect(txnId).not.toBe("");
 
     await upsertOverride(txnId, { kind: "transfer" });
     const legacyIgnored = await monthlyBalancesGET(
-      requestGet(`/api/planning/v3/balances/monthly?batchId=${encodeURIComponent(batch.batch.id)}&includeTransfers=0&csrf=test`),
+      requestGet(`/api/planning/v3/balances/monthly?batchId=${encodeURIComponent(batchId)}&includeTransfers=0&csrf=test`),
     );
     expect(legacyIgnored.status).toBe(200);
     const legacyPayload = await legacyIgnored.json() as {
@@ -215,12 +204,12 @@ describe("planning v3 balances APIs", () => {
     expect(legacyPayload.data?.[0]?.closingKrw).toBe(950);
 
     await upsertOverride({
-      batchId: batch.batch.id,
+      batchId,
       txnId,
       kind: "transfer",
     });
     const scopedApplied = await monthlyBalancesGET(
-      requestGet(`/api/planning/v3/balances/monthly?batchId=${encodeURIComponent(batch.batch.id)}&includeTransfers=0&csrf=test`),
+      requestGet(`/api/planning/v3/balances/monthly?batchId=${encodeURIComponent(batchId)}&includeTransfers=0&csrf=test`),
     );
     expect(scopedApplied.status).toBe(200);
     const scopedPayload = await scopedApplied.json() as {

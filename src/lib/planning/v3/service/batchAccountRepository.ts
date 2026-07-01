@@ -1,19 +1,17 @@
 import {
-  TransactionStoreInputError,
-  updateBatchAccount,
-  type UpdateBatchAccountResult,
-} from "./transactionStore";
-import {
-  runSameIdCoexistenceAccountRouteCommand,
-  type SameIdCoexistenceVerifiedSuccessResponseShell,
-} from "./sameIdCoexistenceAccountCommand";
-import {
   getStoredBatchAccountCommandSurfaceState,
 } from "./storedBatchCommandSurface";
 import { updateStoredBatchAccountBinding } from "../store/batchesStore";
-import { type SameIdCoexistenceUserFacingInternalFailure } from "./sameIdCoexistenceRouteFailure";
 
-export { TransactionStoreInputError };
+export class TransactionStoreInputError extends Error {
+  readonly details: Array<{ field: string; message: string }>;
+
+  constructor(message: string, details: Array<{ field: string; message: string }> = []) {
+    super(message);
+    this.name = "TransactionStoreInputError";
+    this.details = details;
+  }
+}
 
 export type StoredMetaOnlyAccountBindingBatch = {
   id: string;
@@ -34,19 +32,7 @@ export type CurrentUserBatchAccountBindingResult =
       updatedTransactionCount: 0;
     }
   | { status: "stored-not-found" }
-  | {
-      status: "same-id-internal-failure";
-      userFacingFailure: SameIdCoexistenceUserFacingInternalFailure;
-    }
-  | {
-      status: "same-id-success";
-      response: SameIdCoexistenceVerifiedSuccessResponseShell;
-    }
-  | {
-      status: "legacy-success";
-      response: UpdateBatchAccountResult;
-    }
-  | { status: "legacy-not-found" };
+  | { status: "migration-conflict" };
 
 function toStoredMetaOnlyResponseBatch(input: {
   batchId: string;
@@ -93,26 +79,8 @@ export async function updateCurrentUserBatchAccountBinding(
   }
 
   if (commandSurface === "stored-meta-legacy-coexistence") {
-    const commandResult = await runSameIdCoexistenceAccountRouteCommand({
-      batchId,
-      targetAccountId: accountId,
-    });
-    if (commandResult.status === "route-safe-internal-failure") {
-      return {
-        status: "same-id-internal-failure",
-        userFacingFailure: commandResult.userFacingFailure,
-      };
-    }
-    return {
-      status: "same-id-success",
-      response: commandResult.response,
-    };
+    return { status: "migration-conflict" };
   }
 
-  const updated = await updateBatchAccount(batchId, accountId);
-  if (!updated) return { status: "legacy-not-found" };
-  return {
-    status: "legacy-success",
-    response: updated,
-  };
+  return { status: "stored-not-found" };
 }

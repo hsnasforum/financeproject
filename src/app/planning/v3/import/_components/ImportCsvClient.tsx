@@ -606,7 +606,7 @@ export function ImportCsvClient() {
     setApiError(null);
 
     try {
-      const response = await fetch("/api/planning/v3/transactions/import/csv", {
+      const response = await fetch("/api/planning/v3/transactions/batches/import-csv", {
         method: "POST",
         credentials: "same-origin",
         headers: {
@@ -616,27 +616,28 @@ export function ImportCsvClient() {
           csvText,
           mapping: mappingPayload,
           ...(selectedFileName ? { fileName: selectedFileName } : {}),
-          accountId: selectedAccountId,
+          options: { accountId: selectedAccountId },
         })),
       });
 
       const payload = await response.json().catch(() => null);
-      if (!response.ok || !isRecord(payload) || payload.ok !== true || !isRecord(payload.batch) || !isRecord(payload.stats)) {
+      if (!response.ok || !isRecord(payload) || payload.ok !== true || !asString(payload.batchId) || !isRecord(payload.meta)) {
         setApiError(extractApiError(payload));
         return;
       }
 
-      const id = asString(payload.batch.id);
+      const id = asString(payload.batchId);
       if (!id) {
         setApiError({ message: "배치 저장 응답 형식이 올바르지 않습니다.", details: [] });
         return;
       }
+      const rowCount = asNumber(payload.meta.rowCount);
 
       setSavedBatch({
         id,
-        total: asNumber(payload.stats.total),
-        ok: asNumber(payload.stats.ok),
-        failed: asNumber(payload.stats.failed),
+        total: rowCount,
+        ok: rowCount,
+        failed: 0,
       });
     } catch {
       setApiError({ message: "배치 저장에 실패했습니다.", details: [] });

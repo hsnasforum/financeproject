@@ -85,31 +85,24 @@ export async function POST(request: Request, context: RouteContext) {
         { status: 400 },
       );
     }
-    if (result.status === "stored-not-found" || result.status === "legacy-not-found") {
+    if (result.status === "stored-not-found") {
       return NextResponse.json(
         { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." }, meta: userMeta },
         { status: 404 },
       );
     }
-    if (result.status === "same-id-internal-failure") {
+    if (result.status === "migration-conflict") {
       return NextResponse.json(
         {
           ok: false,
           error: {
-            code: result.userFacingFailure.code,
-            message: result.userFacingFailure.message,
+            code: "MIGRATION_CONFLICT",
+            message: "같은 ID의 기존 거래 데이터가 남아 있어 사용자 요청으로 계좌 연결을 바꿀 수 없습니다.",
           },
           meta: userMeta,
         },
-        { status: 500 },
+        { status: 409 },
       );
-    }
-    if (result.status === "same-id-success") {
-      return NextResponse.json({
-        ok: true,
-        ...result.response,
-        meta: userMeta,
-      });
     }
     if (result.status === "stored-meta-only") {
       return NextResponse.json(
@@ -121,13 +114,6 @@ export async function POST(request: Request, context: RouteContext) {
         },
       );
     }
-
-    return NextResponse.json({
-      ok: true,
-      batch: result.response.batch,
-      updatedTransactionCount: result.response.updatedTransactionCount,
-      meta: userMeta,
-    });
   } catch (error) {
     if (error instanceof TransactionStoreInputError || isInvalidIdError(error)) {
       return NextResponse.json(
@@ -140,4 +126,9 @@ export async function POST(request: Request, context: RouteContext) {
       { status: 500 },
     );
   }
+
+  return NextResponse.json(
+    { ok: false, error: { code: "INTERNAL", message: "배치 계좌 연결 상태를 확인하지 못했습니다." }, meta: userMeta },
+    { status: 500 },
+  );
 }
