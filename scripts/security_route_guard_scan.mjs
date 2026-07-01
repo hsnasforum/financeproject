@@ -12,6 +12,9 @@ const PROD_HIDDEN_PAGE_ALLOWLIST = new Set([
 ]);
 
 const PUBLIC_MUTATION_ALLOWLIST = new Map([]);
+const DELEGATED_ROUTE_HANDLER_NAMES = new Set([
+  "handleCreatePlanningRunPost",
+]);
 
 function rel(filePath) {
   return path.relative(ROOT, filePath).split(path.sep).join("/");
@@ -44,14 +47,24 @@ function parseProxyImports(content) {
   for (const match of content.matchAll(/import\s+\{\s*([^}]+)\}\s+from\s+["'](.+)["'];?/g)) {
     const spec = match[1] ?? "";
     const source = match[2] ?? "";
-    if (!source.startsWith(".")) continue;
+    if (!source.startsWith(".") && !source.startsWith("@/")) continue;
     for (const token of spec.split(",")) {
       const normalized = token.trim();
-      const parsed = /^(GET|POST|PUT|PATCH|DELETE)(?:\s+as\s+([A-Za-z0-9_$]+))?$/.exec(normalized);
-      if (!parsed) continue;
+      const methodHandler = /^(GET|POST|PUT|PATCH|DELETE)(?:\s+as\s+([A-Za-z0-9_$]+))?$/.exec(normalized);
+      if (methodHandler) {
+        out.push({
+          method: methodHandler[1],
+          alias: methodHandler[2] ?? methodHandler[1],
+          source,
+        });
+        continue;
+      }
+
+      const delegatedHandler = /^([A-Za-z0-9_$]+)(?:\s+as\s+([A-Za-z0-9_$]+))?$/.exec(normalized);
+      if (!delegatedHandler || !DELEGATED_ROUTE_HANDLER_NAMES.has(delegatedHandler[1])) continue;
       out.push({
-        method: parsed[1],
-        alias: parsed[2] ?? parsed[1],
+        method: null,
+        alias: delegatedHandler[2] ?? delegatedHandler[1],
         source,
       });
     }
@@ -60,7 +73,9 @@ function parseProxyImports(content) {
 }
 
 async function resolveRelativeModule(fromFile, sourcePath) {
-  const resolved = path.resolve(path.dirname(fromFile), sourcePath);
+  const resolved = sourcePath.startsWith("@/")
+    ? path.join(ROOT, "src", sourcePath.slice(2))
+    : path.resolve(path.dirname(fromFile), sourcePath);
   const candidates = [];
   if (resolved.endsWith(".ts") || resolved.endsWith(".tsx")) {
     candidates.push(resolved);

@@ -388,6 +388,12 @@ export async function listSubscriptionNotices(
       ok: true,
       data: normalized.items,
       meta: {
+        provenance: {
+          mode: "live",
+          degraded: false,
+          fetchedAt: new Date().toISOString(),
+          source: "한국부동산원 청약홈",
+        },
         resolvedFrom,
         endpointPath: usedEndpoint,
         usedEndpoint,

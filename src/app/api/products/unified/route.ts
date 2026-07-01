@@ -221,9 +221,14 @@ export async function GET(request: Request) {
     const data = dataTimed.value;
 
     const itemRows = Array.isArray(data.items) ? data.items : [];
+    const depositProtectionMatched = itemRows.filter((item) => item.signals?.depositProtection === "matched").length;
     const coverage = {
       totalProducts: itemRows.length,
       kdbBadged: itemRows.filter((item) => Array.isArray(item.badges) && item.badges.includes("KDB_MATCHED")).length,
+      depositProtection: {
+        matched: depositProtectionMatched,
+        unknown: itemRows.length - depositProtectionMatched,
+      },
     };
 
     const generatedAt = new Date().toISOString();

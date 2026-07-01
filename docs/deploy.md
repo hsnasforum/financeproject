@@ -50,6 +50,7 @@ pnpm build
 - 따라서 dev artifacts 조회, dev action 실행(`dart:watch` 원클릭 등)은 운영에서 사용할 수 없습니다.
 - Planning 인증은 production에서 항상 필요합니다. 인증 사용자별 파일 저장을 쓸 때는 `PLANNING_NAMESPACE_ENABLED=true`를 사용하고, 개인용/desktop처럼 단일 사용자만 허용하는 topology는 `PLANNING_SINGLE_USER_MODE=true`를 명시합니다.
 - 명시적 단일 사용자 모드도 공용 root가 아니라 `.data/planning/users/default/...` 레이아웃을 사용합니다.
+- 현재 파일 저장소의 mutation 직렬화는 단일 Node 프로세스 내부 keyed queue입니다. 같은 사용자·저장 키의 read-modify-write lost update를 막지만 프로세스 간 lock은 아닙니다.
 - 여러 Node 프로세스나 여러 인스턴스가 같은 `PLANNING_DATA_DIR` 파일 루트를 공유한다면 process-local mutex만으로 저장 완료를 보장하지 않습니다. 이 topology에서는 파일 lock/CAS 또는 DB transaction 설계를 먼저 확정해야 합니다.
 
 ## Planning 데이터 inventory

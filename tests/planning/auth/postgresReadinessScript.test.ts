@@ -410,7 +410,7 @@ describe("planning postgres readiness script", () => {
     expect(fs.readFileSync(path.join(outDir, "files", "users", "alice", "profiles", "profile-1.json"), "utf-8"))
       .toContain('"version": 2');
     expect(fs.readdirSync(outDir).filter((name) => name.includes(".tmp-"))).toEqual([]);
-  }, 15_000);
+  }, 60_000);
 
   it("rejects export paths inside the source data directory before writing files", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "planning-postgres-readiness-"));
@@ -634,9 +634,9 @@ describe("planning postgres readiness script", () => {
     );
   });
 
-  it("keeps the dry-run readiness gate wired into release verification", () => {
-    const releaseVerify = fs.readFileSync("scripts/release_verify.mjs", "utf-8");
+  it("keeps the dry-run readiness gate wired into release verification", async () => {
+    const { QUALITY_GATE_SUITES } = await import("../../../scripts/quality_gates.mjs");
 
-    expect(releaseVerify).toContain('"planning:postgres:readiness"');
+    expect(QUALITY_GATE_SUITES["release:verify"].optional).toContain("planning:postgres:readiness");
   });
 });

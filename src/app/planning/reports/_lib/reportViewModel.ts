@@ -6,6 +6,12 @@ import {
   toMarkdownFromResultDto,
   type ResultDtoV1,
 } from "../../../../lib/planning/v2/resultDto";
+import { type Stage } from "../../../../lib/planning/engine";
+import {
+  buildInterpretationVM,
+  type InterpretationVM,
+  type InterpretationVerdict,
+} from "../../../../lib/planning/v2/insights/interpretationVm";
 import {
   type PlanningRunOverallStatus,
   type PlanningRunRecord,
@@ -129,6 +135,20 @@ type ReportSummaryEvidence = {
   emergencyFundMonths?: CalcEvidence;
 };
 
+export type ReportInterpretationContract = {
+  stage?: Stage;
+  severity: "risk" | "caution" | "info" | "unknown";
+  verdictCode: InterpretationVerdict;
+  label: string;
+  headline: string;
+  reasonCodes: string[];
+  recommendedActions: Array<{
+    id: string;
+    title: string;
+    href?: string;
+  }>;
+};
+
 export type ReportVM = {
   header: { reportId: string; createdAt: string; runId: string };
   assumptionsLines: string[];
@@ -243,7 +263,17 @@ export type ReportVM = {
       };
     };
   };
-  raw?: { reportMarkdown?: string; runJson?: unknown; resultDto?: ResultDtoV1 };
+  interpretation?: ReportInterpretationContract;
+  raw?: {
+    reportMarkdown?: string;
+    runJsonPreview?: {
+      text: string;
+      hasMore: boolean;
+      totalChars: number;
+      loading?: boolean;
+      error?: string;
+    };
+  };
 };
 
 export type ReportViewModel = ReportVM;
@@ -957,6 +987,48 @@ function toStageById(run: PlanningRunRecord | null): Partial<Record<PlanningRunS
   return out;
 }
 
+function toStage(value: unknown): Stage | undefined {
+  return value === "DEFICIT" || value === "DEBT" || value === "EMERGENCY" || value === "INVEST"
+    ? value
+    : undefined;
+}
+
+function resolveCanonicalStage(run: PlanningRunRecord): Stage | undefined {
+  const outputs = asRecord(run.outputs);
+  const engine = asRecord(outputs.engine);
+  return toStage(engine.stage);
+}
+
+function severityFromVerdict(code: InterpretationVerdict): ReportInterpretationContract["severity"] {
+  if (code === "RISK") return "risk";
+  if (code === "CAUTION") return "caution";
+  if (code === "GOOD") return "info";
+  return "unknown";
+}
+
+function buildReportInterpretationContract(input: {
+  stage?: Stage;
+  interpretation: InterpretationVM;
+}): ReportInterpretationContract {
+  const reasonCodes = [
+    ...input.interpretation.diagnostics.map((diagnostic) => diagnostic.id),
+    ...input.interpretation.warnings.map((warning) => warning.code),
+  ];
+  return {
+    ...(input.stage ? { stage: input.stage } : {}),
+    severity: severityFromVerdict(input.interpretation.verdict.code),
+    verdictCode: input.interpretation.verdict.code,
+    label: input.interpretation.verdict.label,
+    headline: input.interpretation.verdict.headline,
+    reasonCodes: [...new Set(reasonCodes)],
+    recommendedActions: input.interpretation.nextActions.map((action) => ({
+      id: action.id,
+      title: action.title,
+      ...(action.href ? { href: action.href } : {}),
+    })),
+  };
+}
+
 export function buildReportVM(
   run: PlanningRunRecord | null,
   report?: ReportLike,
@@ -1086,6 +1158,36 @@ export function buildReportVM(
     summaryMetrics,
     policy: repro?.policy ?? DEFAULT_PLANNING_POLICY,
   });
+  const interpretationVm = buildInterpretationVM({
+    summary: {
+      ...(typeof monthlySurplusKrw === "number" ? { monthlySurplusKrw } : {}),
+      ...(typeof emergencyFundMonths === "number" ? { emergencyFundMonths } : {}),
+      ...(typeof dto.summary.endNetWorthKrw === "number" ? { endNetWorthKrw: dto.summary.endNetWorthKrw } : {}),
+      ...(typeof dto.summary.worstCashKrw === "number" ? { worstCashKrw: dto.summary.worstCashKrw } : {}),
+      ...(typeof dto.summary.worstCashMonthIndex === "number" ? { worstCashMonthIndex: dto.summary.worstCashMonthIndex } : {}),
+      ...(typeof dsrPct === "number" ? { dsrPct } : {}),
+      ...(goalsAchieved ? { goalsAchievedText: goalsAchieved } : {}),
+    },
+    summaryEvidence,
+    aggregatedWarnings: toInsightWarnings(warningAgg),
+    goals: guideGoals,
+    outcomes: {
+      actionsTop: topActions,
+      snapshotMeta: {
+        ...(dto.meta.snapshot.missing ? { missing: true } : {}),
+        ...(typeof dto.meta.health?.snapshotStaleDays === "number" ? { staleDays: dto.meta.health.snapshotStaleDays } : {}),
+      },
+      monteCarlo: {
+        ...(typeof keyDepletionProb === "number" ? { retirementDepletionBeforeEnd: keyDepletionProb } : {}),
+      },
+      runId,
+      timelinePointCount: timelinePoints.length,
+    },
+  }, repro?.policy ?? DEFAULT_PLANNING_POLICY);
+  const interpretation = buildReportInterpretationContract({
+    stage: resolveCanonicalStage(run),
+    interpretation: interpretationVm,
+  });
 
   return {
     header: {
@@ -1182,10 +1284,9 @@ export function buildReportVM(
         },
       },
     },
+    interpretation,
     raw: {
       ...(reportMarkdown ? { reportMarkdown } : {}),
-      runJson: run,
-      resultDto: dto,
     },
   };
 }

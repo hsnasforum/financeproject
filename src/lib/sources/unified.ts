@@ -1,242 +1,44 @@
 import { prisma } from "@/lib/db/prisma";
-import { loadFinlifeSnapshot } from "@/lib/finlife/snapshot";
-import { shouldRunFinlifeSync } from "@/lib/finlife/syncPolicy";
-import { runFinlifeSnapshotSync } from "@/lib/finlife/syncRunner";
-import { samplebankProvider } from "@/lib/providers/samplebank";
-import { runProvider } from "@/lib/providers/runProvider";
 import { buildNormFilter, normalizeSearchQuery, type QueryMode } from "@/lib/sources/search";
-import { refreshSourceIfStale } from "@/lib/sources/datago/sync";
 import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedCursor";
 import { normalizeProviderName } from "@/lib/sources/providerName";
 import { type UnifiedSourceId } from "@/lib/sources/types";
 import {
+  DEFAULT_UNIFIED_SOURCE_LOADERS,
+  buildFinlifeOptions,
+  buildKdbOptions,
+  getSamplebankMergedItems,
+  getUnifiedSourceLoader,
+  type UnifiedSourcePage,
+  type UnifiedSourceLoaderMap,
+} from "@/lib/sources/unifiedLoaders";
+import {
+  applyDepositProtectionOnViews,
   buildStableUnifiedId,
   integrateCanonicalWithMatches,
   mergeUnifiedCatalogRows,
-  sortUnifiedOptions,
   type DepositProtectionMode,
   type UnifiedMergeItem,
-  type UnifiedOptionView,
 } from "@/lib/sources/unifiedEnrichPolicy";
+import {
+  UnifiedInputError,
+  type EnrichSourceId,
+  type UnifiedProductView,
+  type UnifiedProductsInput,
+  type UnifiedResult,
+} from "@/lib/sources/unifiedTypes";
 
-export class UnifiedInputError extends Error {}
+export { UnifiedInputError } from "@/lib/sources/unifiedTypes";
+export type {
+  EnrichSourceId,
+  UnifiedMode,
+  UnifiedPageInfo,
+  UnifiedProductView,
+  UnifiedProductsInput,
+  UnifiedResult,
+} from "@/lib/sources/unifiedTypes";
 
-export type UnifiedProductView = {
-  stableId: string;
-  sourceId: UnifiedSourceId;
-  sourceIds?: UnifiedSourceId[];
-  kind: string;
-  externalKey: string;
-  providerName: string;
-  productName: string;
-  summary?: string;
-  firstSeenAt?: string;
-  lastSeenAt?: string;
-  updatedAt?: string;
-  badges?: string[];
-  signals?: {
-    depositProtection?: "matched" | "unknown";
-    kdbMatched?: boolean;
-  };
-  options?: UnifiedOptionView[];
-  match?: {
-    method: string;
-    confidence: number;
-    internalProductId: number | null;
-    canonicalFinPrdtCd?: string;
-    evidence?: Record<string, unknown>;
-  };
-};
-
-export type UnifiedPageInfo = {
-  hasMore: boolean;
-  nextCursor: string | null;
-  limit: number;
-  sourceId?: UnifiedSourceId;
-};
-
-export type UnifiedResult = {
-  kind: "deposit" | "saving";
-  sources: Record<string, { count: number }>;
-  merged: UnifiedProductView[];
-  items: UnifiedProductView[];
-  extras?: {
-    kdbOnly?: UnifiedProductView[];
-  };
-  diagnostics?: {
-    providerIndex: {
-      finlifeProviders: number;
-      kdbProvidersIndexed: number;
-    };
-    matchSummary: {
-      kdb: { byExact: number; byNormalized: number; byFuzzy: number; none: number };
-    };
-    unmatchedProviders: Array<{ providerName: string; count: number }>;
-    notes: string[];
-  };
-  pageInfo: UnifiedPageInfo;
-};
-
-type EnrichSourceId = "datago_kdb";
-export type UnifiedMode = "merged" | "integrated";
 const MATCH_CONFIDENCE_THRESHOLD = 0.92;
-
-function normalizeRate(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const cleaned = value.trim().replace(/,/g, "");
-    if (!cleaned) return null;
-    const parsed = Number(cleaned);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
-function parseTermMonths(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    const term = Math.trunc(value);
-    return term >= 0 ? term : null;
-  }
-  if (typeof value !== "string") return null;
-  const matched = value.replace(/,/g, "").match(/\d+/);
-  if (!matched) return null;
-  const parsed = Number(matched[0]);
-  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
-}
-
-function buildFinlifeOptions(
-  options: Array<{ saveTrm: string | null; intrRate: number | null; intrRate2: number | null }>,
-): UnifiedOptionView[] {
-  return sortUnifiedOptions(
-    options.map((option) => ({
-      sourceId: "finlife",
-      termMonths: parseTermMonths(option.saveTrm),
-      saveTrm: option.saveTrm ?? undefined,
-      intrRate: normalizeRate(option.intrRate),
-      intrRate2: normalizeRate(option.intrRate2),
-    })),
-  );
-}
-
-function buildKdbOptions(rawJson: unknown): UnifiedOptionView[] {
-  const raw = (rawJson as Record<string, unknown> | null) ?? null;
-  if (!raw) return [];
-  const saveTrm = typeof raw.prdJinTrmCone === "string" ? raw.prdJinTrmCone : "";
-  const highRate = typeof raw.hitIrtCndCone === "string" ? raw.hitIrtCndCone : "";
-  const lowRate = typeof raw.lowIrtCndCone === "string" ? raw.lowIrtCndCone : "";
-
-  const option: UnifiedOptionView = {
-    sourceId: "datago_kdb",
-    termMonths: parseTermMonths(saveTrm),
-    saveTrm: saveTrm || undefined,
-    intrRate: normalizeRate(lowRate),
-    intrRate2: normalizeRate(highRate),
-  };
-  if (option.termMonths === null && !option.saveTrm && option.intrRate === null && option.intrRate2 === null) {
-    return [];
-  }
-  return sortUnifiedOptions([option]);
-}
-
-function matchesUnifiedQuery(text: string, qNorm: string, qMode: QueryMode): boolean {
-  if (!qNorm) return true;
-  if (!text) return false;
-  if (qMode === "prefix") return text.startsWith(qNorm);
-  return text.includes(qNorm);
-}
-
-function toSamplebankOptionRows(
-  options: Array<{
-    sourceId: "samplebank";
-    termMonths: number | null;
-    saveTrm?: string;
-    intrRate: number | null;
-    intrRate2: number | null;
-  }>,
-): UnifiedOptionView[] {
-  return sortUnifiedOptions(
-    options.map((option) => ({
-      sourceId: "samplebank",
-      termMonths: option.termMonths,
-      saveTrm: option.saveTrm,
-      intrRate: option.intrRate,
-      intrRate2: option.intrRate2,
-    })),
-  );
-}
-
-async function getSamplebankMergedItems(input: {
-  kind: "deposit" | "saving";
-  q: string | null;
-  qMode: QueryMode;
-  includeTimestamps: boolean;
-  debug: boolean;
-}): Promise<{ items: UnifiedProductView[]; count: number }> {
-  const executed = await runProvider(samplebankProvider, {
-    kind: input.kind,
-  }, {
-    debug: input.debug,
-  });
-  if (!executed.ok) {
-    console.error("[unified] samplebank provider failed", {
-      code: executed.error.code,
-      message: executed.error.message,
-    });
-    return { items: [], count: 0 };
-  }
-
-  const qNorm = normalizeSearchQuery(input.q ?? "");
-  const filtered = executed.data.items
-    .filter((item) => item.kind === input.kind)
-    .filter((item) => matchesUnifiedQuery(
-      normalizeSearchQuery(`${item.providerName} ${item.productName}`),
-      qNorm,
-      input.qMode,
-    ));
-
-  const merged = filtered.map((item) => ({
-    stableId: item.stableId || `samplebank:${item.externalKey}`,
-    sourceId: "samplebank" as const,
-    kind: item.kind,
-    externalKey: item.externalKey,
-    providerName: item.providerName,
-    productName: item.productName,
-    options: toSamplebankOptionRows(item.options),
-    firstSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
-    lastSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
-    updatedAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
-    badges: ["SAMPLEBANK"],
-  }));
-  return {
-    items: merged,
-    count: merged.length,
-  };
-}
-
-function resolveFinlifeSnapshotTtlMs(): number {
-  const sec = Number(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS ?? "43200");
-  if (!Number.isFinite(sec)) return 12 * 60 * 60 * 1000;
-  return Math.max(60, Math.trunc(sec)) * 1000;
-}
-
-async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", refresh: boolean): Promise<void> {
-  if (!refresh) return;
-
-  const snapshot = loadFinlifeSnapshot(kind);
-  const ttlMs = snapshot?.meta?.ttlMs ?? resolveFinlifeSnapshotTtlMs();
-  const decision = shouldRunFinlifeSync(snapshot?.meta ?? null, Date.now(), { ttlMs, minCompletionRate: 0.95 });
-  if (!decision.shouldRun) return;
-
-  const result = await runFinlifeSnapshotSync(kind);
-  if (result.ok) return;
-
-  console.error("[unified] finlife refresh failed", {
-    kind,
-    code: result.error.code,
-    message: result.error.message,
-    upstreamStatus: result.error.upstreamStatus ?? null,
-  });
-}
 
 function normalizeEnrichSources(input: EnrichSourceId[] | undefined): EnrichSourceId[] {
   if (!Array.isArray(input) || input.length === 0) return [];
@@ -245,6 +47,30 @@ function normalizeEnrichSources(input: EnrichSourceId[] | undefined): EnrichSour
     if (sourceId === "datago_kdb") picked.add(sourceId);
   }
   return [...picked];
+}
+
+function withUnknownDepositProtectionSignals(items: UnifiedProductView[]): UnifiedProductView[] {
+  return items.map((item) => ({
+    ...item,
+    signals: {
+      ...(item.signals ?? {}),
+      depositProtection: item.signals?.depositProtection ?? "unknown",
+    },
+  }));
+}
+
+function applyDepositProtectionToResult(result: UnifiedResult, mode: DepositProtectionMode): UnifiedResult {
+  if (result.kind !== "deposit" || mode === "any") return result;
+  const items = applyDepositProtectionOnViews({ items: result.items, mode });
+  return {
+    ...result,
+    items,
+    merged: items,
+    pageInfo: {
+      ...result.pageInfo,
+      hasMore: mode === "require" && items.length === 0 ? false : result.pageInfo.hasMore,
+    },
+  };
 }
 
 async function enrichFinlifeDepositItems(input: {
@@ -258,10 +84,25 @@ async function enrichFinlifeDepositItems(input: {
   debug: boolean;
 }): Promise<{ items: UnifiedProductView[]; extras?: { kdbOnly?: UnifiedProductView[] }; diagnostics?: UnifiedResult["diagnostics"] }> {
   const enrichSources = normalizeEnrichSources(input.enrichSources);
-  if (input.items.length === 0 || enrichSources.length === 0) return { items: input.items };
+  if (input.items.length === 0) return { items: input.items };
+  if (enrichSources.length === 0) {
+    return {
+      items: applyDepositProtectionOnViews({
+        items: withUnknownDepositProtectionSignals(input.items),
+        mode: input.depositProtection,
+      }),
+    };
+  }
 
   const finPrdtCdList = [...new Set(input.items.map((item) => item.externalKey).filter(Boolean))];
-  if (finPrdtCdList.length === 0) return { items: input.items };
+  if (finPrdtCdList.length === 0) {
+    return {
+      items: applyDepositProtectionOnViews({
+        items: withUnknownDepositProtectionSignals(input.items),
+        mode: input.depositProtection,
+      }),
+    };
+  }
 
   const products = await prisma.product.findMany({
     where: {
@@ -276,7 +117,14 @@ async function enrichFinlifeDepositItems(input: {
       raw: true,
     },
   });
-  if (products.length === 0) return { items: input.items };
+  if (products.length === 0) {
+    return {
+      items: applyDepositProtectionOnViews({
+        items: withUnknownDepositProtectionSignals(input.items),
+        mode: input.depositProtection,
+      }),
+    };
+  }
 
   const codeByProductId = new Map<number, string>();
   const productIds: number[] = [];
@@ -383,6 +231,7 @@ async function enrichFinlifeDepositItems(input: {
   const integrated = integrateCanonicalWithMatches({
     canonicalItems: input.items,
     isKdbMatched: (item) => kdbMatchedCodes.has(item.externalKey),
+    depositProtectionMode: input.depositProtection,
   });
   const filtered = integrated.items;
 
@@ -465,6 +314,9 @@ async function enrichFinlifeDepositItems(input: {
       productName: row.productNameRaw,
       summary: summaryLine || undefined,
       badges: ["KDB_ONLY"],
+      signals: {
+        depositProtection: "matched",
+      },
       options: buildKdbOptions(row.rawJson),
       firstSeenAt: input.includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
       lastSeenAt: input.includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
@@ -512,307 +364,28 @@ async function enrichFinlifeDepositItems(input: {
   return result;
 }
 
-async function getOnlyNewSinceBySource(kind: "deposit" | "saving", sourceIds: string[]): Promise<Map<string, Date>> {
-  const out = new Map<string, Date>();
-  if (sourceIds.length === 0) return out;
-  const rows = await prisma.externalSourceSnapshot.findMany({
-    where: { kind, sourceId: { in: sourceIds } },
-    select: { sourceId: true, metaJson: true },
-  });
-  for (const row of rows) {
-    const meta = (row.metaJson as Record<string, unknown> | null) ?? null;
-    const lastRun = (meta?.lastRun as Record<string, unknown> | undefined) ?? undefined;
-    const startedAt = typeof lastRun?.startedAt === "string" ? lastRun.startedAt : null;
-    if (!startedAt) continue;
-    const date = new Date(startedAt);
-    if (Number.isFinite(date.getTime())) out.set(row.sourceId, date);
-  }
-  return out;
+function normalizeUnifiedLimit(limit: number): number {
+  return Math.min(1000, Math.max(1, Math.trunc(limit)));
 }
 
-async function getSingleSourceExternal(input: {
-  sourceId: "datago_kdb";
-  kind: "deposit" | "saving";
-  cursor: string | null;
-  q: string | null;
-  onlyNew: boolean;
-  changedSince: string | null;
-  includeTimestamps: boolean;
-  limit: number;
-  sort: "recent" | "name";
-  qMode: QueryMode;
-}): Promise<UnifiedResult> {
-  const { sourceId, kind, cursor, q, onlyNew, changedSince, includeTimestamps, limit, sort, qMode } = input;
-  const sourceMap: Record<string, { count: number }> = {};
-  const onlyNewMap = await getOnlyNewSinceBySource(kind, [sourceId]);
-  const onlyNewThreshold = onlyNew ? onlyNewMap.get(sourceId) : undefined;
+function uniqueIncludedSources(includeSources: UnifiedSourceId[]): UnifiedSourceId[] {
+  return [...new Set(includeSources)];
+}
 
-  const changedSinceDate = changedSince ? new Date(changedSince) : null;
-  const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
-  const qNorm = normalizeSearchQuery(q ?? "");
-  const qFilter = buildNormFilter(["providerNameNorm", "productNameNorm"], qNorm, qMode);
-
-  const decoded = cursor ? decodeUnifiedCursor(cursor) : null;
-  if (cursor && !decoded) {
-    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
-  }
-
-  const rows = await prisma.externalProduct.findMany({
-    where: {
-      sourceId,
-      kind,
-      ...qFilter,
-      ...(onlyNewThreshold ? { firstSeenAt: { gte: onlyNewThreshold } } : {}),
-      ...(hasChangedSince && changedSinceDate
-        ? {
-            OR: [
-              { firstSeenAt: { gte: changedSinceDate } },
-              { updatedAt: { gte: changedSinceDate } },
-            ],
-          }
-        : {}),
-    },
-    include: {
-      matches: {
-        orderBy: { confidence: "desc" },
-        take: 1,
-        select: {
-          method: true,
-          confidence: true,
-          internalProductId: true,
-          evidenceJson: true,
-          internalProduct: {
-            select: {
-              finPrdtCd: true,
-            },
-          },
-        },
-      },
-    },
-    orderBy: sort === "recent"
-      ? [{ lastSeenAt: "desc" }, { updatedAt: "desc" }, { id: "desc" }]
-      : [{ providerNameNorm: "asc" }, { productNameNorm: "asc" }, { id: "asc" }],
-    take: limit + 1,
-    ...(decoded ? { cursor: { id: decoded.id }, skip: 1 } : {}),
-  });
-
-  const hasMore = rows.length > limit;
-  const picked = hasMore ? rows.slice(0, limit) : rows;
-  const nextCursor = hasMore ? encodeUnifiedCursor({ id: picked[picked.length - 1].id }) : null;
-
-  const merged: UnifiedProductView[] = picked.map((row) => ({
-    stableId: buildStableUnifiedId({
-      sourceId,
-      externalKey: row.externalKey,
-      canonicalFinPrdtCd: row.matches[0]?.internalProduct?.finPrdtCd ?? null,
-    }),
-    sourceId,
-    kind: row.kind,
-    externalKey: row.externalKey,
-    providerName: row.providerNameRaw,
-    productName: row.productNameRaw,
-    summary: row.summary ?? undefined,
-    firstSeenAt: includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
-    lastSeenAt: includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
-    updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
-    options: buildKdbOptions(row.rawJson),
-    match: row.matches[0]
-      ? {
-          method: row.matches[0].method,
-          confidence: row.matches[0].confidence,
-          internalProductId: row.matches[0].internalProductId,
-          canonicalFinPrdtCd: row.matches[0].internalProduct?.finPrdtCd ?? undefined,
-          evidence: (row.matches[0].evidenceJson as Record<string, unknown>) ?? undefined,
-        }
-      : undefined,
-  }));
-
-  sourceMap[sourceId] = { count: merged.length };
+function sourceResultFromPage(kind: "deposit" | "saving", page: UnifiedSourcePage): UnifiedResult {
   return {
     kind,
-    sources: sourceMap,
-    merged,
-    items: merged,
-    pageInfo: {
-      hasMore,
-      nextCursor,
-      limit,
-      sourceId,
-    },
+    sources: { [page.sourceId]: { count: page.count } },
+    merged: page.items,
+    items: page.items,
+    pageInfo: page.pageInfo,
   };
 }
 
-async function getSingleSourceFinlife(input: {
-  kind: "deposit" | "saving";
-  cursor: string | null;
-  q: string | null;
-  onlyNew: boolean;
-  changedSince: string | null;
-  includeTimestamps: boolean;
-  limit: number;
-  sort: "recent" | "name";
-  qMode: QueryMode;
-}): Promise<UnifiedResult> {
-  const { kind, cursor, q, onlyNew, changedSince, includeTimestamps, limit, sort, qMode } = input;
-  const sourceId: UnifiedSourceId = "finlife";
-  const sourceMap: Record<string, { count: number }> = {};
-  const decoded = cursor ? decodeUnifiedCursor(cursor) : null;
-  if (cursor && !decoded) {
-    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
-  }
-
-  const snapshot = loadFinlifeSnapshot(kind);
-  const snapshotGeneratedAt = snapshot?.meta?.generatedAt ? new Date(snapshot.meta.generatedAt) : null;
-  const hasOnlyNewThreshold = Boolean(onlyNew && snapshotGeneratedAt && Number.isFinite(snapshotGeneratedAt.getTime()));
-
-  const changedSinceDate = changedSince ? new Date(changedSince) : null;
-  const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
-  const qNorm = normalizeSearchQuery(q ?? "");
-  const qFilter = buildNormFilter(["productNameNorm", "providerNameNorm", "searchTextNorm"], qNorm, qMode);
-
-  const rows = await prisma.product.findMany({
-    where: {
-      kind,
-      ...qFilter,
-      ...(hasOnlyNewThreshold && snapshotGeneratedAt ? { createdAt: { gte: snapshotGeneratedAt } } : {}),
-      ...(hasChangedSince && changedSinceDate
-        ? {
-            OR: [
-              { createdAt: { gte: changedSinceDate } },
-              { updatedAt: { gte: changedSinceDate } },
-            ],
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      finPrdtCd: true,
-      name: true,
-      createdAt: true,
-      updatedAt: true,
-      raw: true,
-      options: {
-        select: {
-          saveTrm: true,
-          intrRate: true,
-          intrRate2: true,
-        },
-        orderBy: [
-          { saveTrm: "asc" },
-          { id: "asc" },
-        ],
-      },
-      provider: {
-        select: {
-          name: true,
-        },
-      },
-    },
-    orderBy: sort === "recent" ? [{ updatedAt: "desc" }, { id: "desc" }] : [{ name: "asc" }, { id: "asc" }],
-    take: limit + 1,
-    ...(decoded ? { cursor: { id: decoded.id }, skip: 1 } : {}),
-  });
-
-  const hasMore = rows.length > limit;
-  const picked = hasMore ? rows.slice(0, limit) : rows;
-  const nextCursor = hasMore ? encodeUnifiedCursor({ id: picked[picked.length - 1].id }) : null;
-
-  const merged: UnifiedProductView[] = picked.map((row) => {
-    const raw = (row.raw as Record<string, unknown> | null) ?? null;
-    const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
-    const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
-    return {
-      stableId: buildStableUnifiedId({
-        sourceId,
-        externalKey: row.finPrdtCd,
-      }),
-      sourceId,
-      kind,
-      externalKey: row.finPrdtCd,
-      providerName: providerNameRaw || row.provider?.name || "",
-      productName: productNameRaw || row.name || "",
-      firstSeenAt: includeTimestamps ? row.createdAt.toISOString() : undefined,
-      lastSeenAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
-      updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
-      options: buildFinlifeOptions(row.options),
-    };
-  });
-
-  sourceMap[sourceId] = { count: merged.length };
-  return {
-    kind,
-    sources: sourceMap,
-    merged,
-    items: merged,
-    pageInfo: {
-      hasMore,
-      nextCursor,
-      limit,
-      sourceId,
-    },
-  };
-}
-
-async function getSingleSourceSamplebank(input: {
-  kind: "deposit" | "saving";
-  cursor: string | null;
-  q: string | null;
-  includeTimestamps: boolean;
-  limit: number;
-  qMode: QueryMode;
-  debug: boolean;
-}): Promise<UnifiedResult> {
-  const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
-  if (input.cursor && !decoded) {
-    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
-  }
-
-  const loaded = await getSamplebankMergedItems({
-    kind: input.kind,
-    q: input.q,
-    qMode: input.qMode,
-    includeTimestamps: input.includeTimestamps,
-    debug: input.debug,
-  });
-  const normalizedLimit = Math.min(1000, Math.max(1, input.limit));
-  const offset = decoded?.id ?? 0;
-  const sliced = loaded.items.slice(offset, offset + normalizedLimit);
-  const hasMore = offset + normalizedLimit < loaded.items.length;
-  const nextCursor = hasMore ? encodeUnifiedCursor({ id: offset + normalizedLimit }) : null;
-
-  return {
-    kind: input.kind,
-    sources: { samplebank: { count: loaded.count } },
-    merged: sliced,
-    items: sliced,
-    pageInfo: {
-      hasMore,
-      nextCursor,
-      limit: normalizedLimit,
-      sourceId: "samplebank",
-    },
-  };
-}
-
-export async function getUnifiedProducts(input: {
-  kind: "deposit" | "saving";
-  mode?: UnifiedMode;
-  includeSources: UnifiedSourceId[];
-  sourceId: UnifiedSourceId | null;
-  cursor: string | null;
-  q: string | null;
-  refresh: boolean;
-  onlyNew: boolean;
-  changedSince: string | null;
-  includeTimestamps: boolean;
-  limit: number;
-  sort: "recent" | "name";
-  qMode: QueryMode;
-  enrichSources?: EnrichSourceId[];
-  depositProtection?: DepositProtectionMode;
-  includeKdbOnly?: boolean;
-  debug?: boolean;
-}): Promise<UnifiedResult> {
+export async function getUnifiedProductsWithLoaders(
+  input: UnifiedProductsInput,
+  loaders: UnifiedSourceLoaderMap = DEFAULT_UNIFIED_SOURCE_LOADERS,
+): Promise<UnifiedResult> {
   const {
     kind,
     mode = "merged",
@@ -832,13 +405,17 @@ export async function getUnifiedProducts(input: {
     includeKdbOnly = false,
     debug = false,
   } = input;
-
-  const usesFinlife = mode === "integrated"
-    || sourceId === "finlife"
-    || (!sourceId && includeSources.includes("finlife"));
-  if (usesFinlife) {
-    await refreshFinlifeSnapshotIfStale(kind, refresh);
-  }
+  const normalizedLimit = normalizeUnifiedLimit(limit);
+  const sourceQuery = {
+    kind,
+    q,
+    onlyNew,
+    changedSince,
+    includeTimestamps,
+    sort,
+    qMode,
+    debug,
+  };
 
   if (mode === "integrated") {
     if (!includeSources.includes("finlife")) {
@@ -848,21 +425,18 @@ export async function getUnifiedProducts(input: {
       throw new UnifiedInputError("Cursor pagination is not supported in integrated mode.");
     }
 
+    const finlifeLoader = getUnifiedSourceLoader(loaders, "finlife");
+    await finlifeLoader.refreshIfNeeded({ kind, refresh });
     if (includeSources.includes("datago_kdb")) {
-      await refreshSourceIfStale("datago_kdb", kind, refresh);
+      await getUnifiedSourceLoader(loaders, "datago_kdb").refreshIfNeeded({ kind, refresh });
     }
 
-    const canonical = await getSingleSourceFinlife({
-      kind,
+    const canonicalPage = await finlifeLoader.query({
+      ...sourceQuery,
       cursor: null,
-      q,
-      onlyNew,
-      changedSince,
-      includeTimestamps,
-      limit: Math.min(1000, Math.max(1, limit)),
-      sort,
-      qMode,
+      limit: normalizedLimit,
     });
+    const canonical = sourceResultFromPage(kind, canonicalPage);
 
     if (kind !== "deposit") {
       return {
@@ -918,44 +492,16 @@ export async function getUnifiedProducts(input: {
     if (!includeSources.includes(sourceId) || includeSources.length !== 1) {
       throw new UnifiedInputError("Cursor pagination requires single sourceId.");
     }
-    if (sourceId === "datago_kdb") {
-      await refreshSourceIfStale(sourceId, kind, refresh);
-      return getSingleSourceExternal({
-        sourceId,
-        kind,
-        cursor,
-        q,
-        onlyNew,
-        changedSince,
-        includeTimestamps,
-        limit,
-        sort,
-        qMode,
-      });
-    }
-    if (sourceId === "samplebank") {
-      return getSingleSourceSamplebank({
-        kind,
-        cursor,
-        q,
-        includeTimestamps,
-        limit,
-        qMode,
-        debug,
-      });
-    }
-    const base = await getSingleSourceFinlife({
-      kind,
+    const loader = getUnifiedSourceLoader(loaders, sourceId);
+    await loader.refreshIfNeeded({ kind, refresh });
+    const page = await loader.query({
+      ...sourceQuery,
       cursor,
-      q,
-      onlyNew,
-      changedSince,
-      includeTimestamps,
       limit,
-      sort,
-      qMode,
     });
-    if (kind === "deposit" && enrichSources.length > 0) {
+    const base = sourceResultFromPage(kind, page);
+
+    if (sourceId === "finlife" && kind === "deposit" && enrichSources.length > 0) {
       const enriched = await enrichFinlifeDepositItems({
         items: base.items,
         enrichSources,
@@ -974,188 +520,34 @@ export async function getUnifiedProducts(input: {
         diagnostics: enriched.diagnostics,
       };
     }
-    return base;
+
+    return applyDepositProtectionToResult(base, depositProtection);
   }
 
   const sourceMap: Record<string, { count: number }> = {};
   const merged: UnifiedProductView[] = [];
-  const qNorm = normalizeSearchQuery(q ?? "");
-
-  if (includeSources.includes("datago_kdb")) {
-    await refreshSourceIfStale("datago_kdb", kind, refresh);
-  }
-
-  if (includeSources.includes("finlife")) {
-    const snapshot = loadFinlifeSnapshot(kind);
-    const snapshotGeneratedAt = snapshot?.meta?.generatedAt ? new Date(snapshot.meta.generatedAt) : null;
-    const hasOnlyNewThreshold = Boolean(onlyNew && snapshotGeneratedAt && Number.isFinite(snapshotGeneratedAt.getTime()));
-    const changedSinceDate = changedSince ? new Date(changedSince) : null;
-    const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
-    const qFilter = buildNormFilter(["productNameNorm", "providerNameNorm", "searchTextNorm"], qNorm, qMode);
-
-    const finlifeRows = await prisma.product.findMany({
-      where: {
-        kind,
-        ...qFilter,
-        ...(hasOnlyNewThreshold && snapshotGeneratedAt ? { createdAt: { gte: snapshotGeneratedAt } } : {}),
-        ...(hasChangedSince && changedSinceDate
-          ? {
-              OR: [
-                { createdAt: { gte: changedSinceDate } },
-                { updatedAt: { gte: changedSinceDate } },
-              ],
-            }
-          : {}),
-      },
-      select: {
-        finPrdtCd: true,
-        name: true,
-        createdAt: true,
-        updatedAt: true,
-        raw: true,
-        options: {
-          select: {
-            saveTrm: true,
-            intrRate: true,
-            intrRate2: true,
-          },
-          orderBy: [
-            { saveTrm: "asc" },
-            { id: "asc" },
-          ],
-        },
-        provider: {
-          select: {
-            name: true,
-          },
-        },
-      },
-      orderBy: sort === "recent" ? [{ updatedAt: "desc" }, { id: "desc" }] : [{ name: "asc" }, { id: "asc" }],
-      take: Math.min(1000, Math.max(1, limit)),
+  for (const includedSourceId of uniqueIncludedSources(includeSources)) {
+    const loader = getUnifiedSourceLoader(loaders, includedSourceId);
+    await loader.refreshIfNeeded({ kind, refresh });
+    const page = await loader.query({
+      ...sourceQuery,
+      cursor: null,
+      limit: normalizedLimit,
     });
-
-    for (const row of finlifeRows) {
-      const raw = (row.raw as Record<string, unknown> | null) ?? null;
-      const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
-      const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
-      merged.push({
-        stableId: buildStableUnifiedId({
-          sourceId: "finlife",
-          externalKey: row.finPrdtCd,
-        }),
-        sourceId: "finlife",
-        kind,
-        externalKey: row.finPrdtCd,
-        providerName: providerNameRaw || row.provider?.name || "",
-        productName: productNameRaw || row.name || "",
-        firstSeenAt: includeTimestamps ? row.createdAt.toISOString() : undefined,
-        lastSeenAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
-        updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
-        options: buildFinlifeOptions(row.options),
-      });
-    }
-    sourceMap.finlife = { count: finlifeRows.length };
-  }
-
-  const externalSources = includeSources.filter((id) => id !== "finlife" && id !== "samplebank") as Array<"datago_kdb">;
-  if (externalSources.length > 0) {
-    const onlyNewMap = await getOnlyNewSinceBySource(kind, externalSources);
-    const changedSinceDate = changedSince ? new Date(changedSince) : null;
-    const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
-    const qFilter = buildNormFilter(["providerNameNorm", "productNameNorm"], qNorm, qMode);
-
-    const rows = await prisma.externalProduct.findMany({
-      where: {
-        kind,
-        sourceId: { in: externalSources },
-        ...qFilter,
-      },
-      include: {
-        matches: {
-          orderBy: { confidence: "desc" },
-          take: 1,
-          select: {
-            method: true,
-            confidence: true,
-            internalProductId: true,
-            evidenceJson: true,
-            internalProduct: {
-              select: {
-                finPrdtCd: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: sort === "recent"
-        ? [{ lastSeenAt: "desc" }, { updatedAt: "desc" }]
-        : [{ sourceId: "asc" }, { providerNameNorm: "asc" }, { productNameNorm: "asc" }],
-      take: Math.min(1000, Math.max(1, limit)),
-    });
-
-    for (const row of rows) {
-      if (onlyNew) {
-        const threshold = onlyNewMap.get(row.sourceId);
-        if (!threshold || row.firstSeenAt < threshold) continue;
-      }
-      if (hasChangedSince && changedSinceDate) {
-        if (row.firstSeenAt < changedSinceDate && row.updatedAt < changedSinceDate) continue;
-      }
-
-      merged.push({
-        stableId: buildStableUnifiedId({
-          sourceId: row.sourceId,
-          externalKey: row.externalKey,
-          canonicalFinPrdtCd: row.matches[0]?.internalProduct?.finPrdtCd ?? null,
-        }),
-        sourceId: row.sourceId as UnifiedSourceId,
-        kind: row.kind,
-        externalKey: row.externalKey,
-        providerName: row.providerNameRaw,
-        productName: row.productNameRaw,
-        summary: row.summary ?? undefined,
-        firstSeenAt: includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
-        lastSeenAt: includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
-        updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
-        options: buildKdbOptions(row.rawJson),
-        match: row.matches[0]
-          ? {
-              method: row.matches[0].method,
-              confidence: row.matches[0].confidence,
-              internalProductId: row.matches[0].internalProductId,
-              canonicalFinPrdtCd: row.matches[0].internalProduct?.finPrdtCd ?? undefined,
-              evidence: (row.matches[0].evidenceJson as Record<string, unknown>) ?? undefined,
-            }
-          : undefined,
-      });
-      const bucket = sourceMap[row.sourceId] ?? { count: 0 };
-      bucket.count += 1;
-      sourceMap[row.sourceId] = bucket;
-    }
-  }
-
-  if (includeSources.includes("samplebank")) {
-    const samplebankLoaded = await getSamplebankMergedItems({
-      kind,
-      q,
-      qMode,
-      includeTimestamps,
-      debug,
-    });
-    merged.push(...samplebankLoaded.items);
-    sourceMap.samplebank = {
-      count: samplebankLoaded.count,
-    };
+    sourceMap[page.sourceId] = { count: page.count };
+    merged.push(...page.items);
   }
 
   const deduped = mergeUnifiedCatalogRows({
     items: merged as UnifiedMergeItem[],
     sort,
   }) as UnifiedProductView[];
-  const normalizedLimit = Math.min(1000, Math.max(1, limit));
+  const protectedItems = kind === "deposit"
+    ? applyDepositProtectionOnViews({ items: deduped, mode: depositProtection })
+    : deduped;
   const offset = mergedCursor?.id ?? 0;
-  const sliced = deduped.slice(offset, offset + normalizedLimit);
-  const hasMore = offset + normalizedLimit < deduped.length;
+  const sliced = protectedItems.slice(offset, offset + normalizedLimit);
+  const hasMore = offset + normalizedLimit < protectedItems.length;
   const nextCursor = hasMore ? encodeUnifiedCursor({ id: offset + normalizedLimit }) : null;
 
   return {
@@ -1169,6 +561,10 @@ export async function getUnifiedProducts(input: {
       limit,
     },
   };
+}
+
+export async function getUnifiedProducts(input: UnifiedProductsInput): Promise<UnifiedResult> {
+  return getUnifiedProductsWithLoaders(input);
 }
 
 type UnifiedLookupTarget = {
@@ -1264,6 +660,9 @@ function buildFinlifeItemFromProductRow(
     summary,
     badges: ["FINLIFE"],
     options: buildFinlifeOptions(row.options),
+    signals: {
+      depositProtection: "unknown",
+    },
     firstSeenAt: includeTimestamps ? row.createdAt.toISOString() : undefined,
     lastSeenAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
     updatedAt: includeTimestamps ? row.updatedAt.toISOString() : undefined,
@@ -1299,6 +698,9 @@ function buildDatagoItemFromExternalRow(
     productName: row.productNameRaw,
     summary: buildDatagoSummary(row.summary, row.rawJson),
     badges: canonicalFinPrdtCd ? ["KDB_MATCHED"] : ["KDB_ONLY"],
+    signals: {
+      depositProtection: "matched",
+    },
     options: buildKdbOptions(row.rawJson),
     firstSeenAt: includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
     lastSeenAt: includeTimestamps ? row.lastSeenAt.toISOString() : undefined,

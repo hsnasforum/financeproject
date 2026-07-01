@@ -5,13 +5,17 @@ import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const {
+  ensureRunActionProgressMock,
   ensureRunActionPlanMock,
+  getRunActionPlanMock,
   getRunActionProgressMock,
   getRunMock,
   sanitizeRunRecordForResponseMock,
   updateRunMock,
 } = vi.hoisted(() => ({
+  ensureRunActionProgressMock: vi.fn(),
   ensureRunActionPlanMock: vi.fn(),
+  getRunActionPlanMock: vi.fn(),
   getRunActionProgressMock: vi.fn(),
   getRunMock: vi.fn(),
   sanitizeRunRecordForResponseMock: vi.fn((value: PlanningRunRecord) => value),
@@ -19,7 +23,9 @@ const {
 }));
 
 vi.mock("../../src/lib/planning/server/store/runActionStore", () => ({
+  ensureRunActionProgress: ensureRunActionProgressMock,
   ensureRunActionPlan: ensureRunActionPlanMock,
+  getRunActionPlan: getRunActionPlanMock,
   getRunActionProgress: getRunActionProgressMock,
   summarizeRunActionProgress: vi.fn(),
   updateRunActionProgress: vi.fn(),
@@ -72,7 +78,9 @@ function createRun(): PlanningRunRecord {
 
 describe("GET /api/planning/v2/runs/[id] fallback", () => {
   beforeEach(() => {
+    ensureRunActionProgressMock.mockReset();
     ensureRunActionPlanMock.mockReset();
+    getRunActionPlanMock.mockReset();
     getRunActionProgressMock.mockReset();
     getRunMock.mockReset();
     sanitizeRunRecordForResponseMock.mockClear();
@@ -101,10 +109,10 @@ describe("GET /api/planning/v2/runs/[id] fallback", () => {
     expect(serviceSource).toContain("updateCurrentUserRunActionProgress");
   });
 
-  it("returns 200 even when persisting hydrated action center fails", async () => {
+  it("returns 200 with canonical action center without persisting run meta", async () => {
     const run = createRun();
     getRunMock.mockResolvedValue(run);
-    ensureRunActionPlanMock.mockResolvedValue({ items: [{ actionKey: "action-1" }] });
+    getRunActionPlanMock.mockResolvedValue({ items: [{ actionKey: "action-1" }] });
     getRunActionProgressMock.mockResolvedValue({ items: [{ actionKey: "action-1", status: "todo" }] });
     updateRunMock.mockRejectedValue(new Error("write failed"));
 
@@ -127,12 +135,13 @@ describe("GET /api/planning/v2/runs/[id] fallback", () => {
     expect(payload.ok).toBe(true);
     expect(payload.data?.actionCenter?.plan?.items?.[0]?.actionKey).toBe("action-1");
     expect(payload.data?.actionCenter?.progress?.items?.[0]?.status).toBe("todo");
+    expect(updateRunMock).not.toHaveBeenCalled();
   });
 
   it("returns the run payload even when action center hydration fails", async () => {
     const run = createRun();
     getRunMock.mockResolvedValue(run);
-    ensureRunActionPlanMock.mockRejectedValue(new Error("plan failed"));
+    getRunActionPlanMock.mockRejectedValue(new Error("plan failed"));
 
     const response = await runDetailGET(
       buildGetRequest("/api/planning/v2/runs/run-fallback"),

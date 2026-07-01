@@ -56,14 +56,16 @@ jobs:
       - name: Install Playwright Chromium (for planning:v2:complete)
         run: pnpm e2e:install:chromium
 
-      - name: Required Gate - Release Verify (test + complete + compat)
+      - name: Required Gate - Release Verify (quality gate registry)
         run: pnpm release:verify
-
-      - name: Planning V2 Static Guard
-        run: pnpm planning:v2:guard
-
-      - name: Planning V2 Regression Gate
-        run: pnpm planning:v2:regress
 
       - name: Build
         run: pnpm build
+
+      - name: Desktop artifact provenance gate
+        run: |
+          pnpm planning:v2:desktop:build -- --no-next-build
+          test -z "$(git ls-files '.dist/**')"
+          test -f .dist/planning-v2-desktop/desktop-manifest.json
+          install_root="$(mktemp -d)"
+          pnpm planning:v2:desktop:install -- --skip-install --from=.dist/planning-v2-desktop --to="$install_root/planning-v2-desktop"

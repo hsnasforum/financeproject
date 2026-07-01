@@ -1,6 +1,1 @@
-import path from "node:path";
-import { resolveDataDir } from "../../../src/lib/planning/storage/dataDir";
-
-export function resolveAlertsRootDir(cwd = process.cwd()): string {
-  return path.join(resolveDataDir({ cwd }), "alerts");
-}
+﻿export * from "@/lib/planning/v3/alerts/rootDir";

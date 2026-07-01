@@ -3,6 +3,7 @@
 ## 사전 확인
 - 기준 체크리스트는 루트 `RELEASE_CHECKLIST.md`
 - stable final single-owner gate의 primary인 `pnpm release:verify` 통과
+  - gate ID, 필수/선택/advisory 분류, suite membership은 `scripts/quality_gates.mjs`를 기준으로 확인
   - 포함: `pnpm test`, `pnpm planning:v2:complete`, `pnpm multi-agent:guard`
   - script가 있으면 `pnpm planning:v2:compat`, `pnpm planning:v2:regress`, `pnpm planning:postgres:readiness`도 이어서 실행
   - advisory `pnpm planning:ssot:check`는 WARN으로만 기록

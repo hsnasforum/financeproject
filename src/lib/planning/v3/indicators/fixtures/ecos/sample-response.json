@@ -1,0 +1,32 @@
+{
+  "StatisticSearch": {
+    "list_total_count": 3,
+    "RESULT": {
+      "CODE": "INFO-000",
+      "MESSAGE": "정상 처리되었습니다."
+    },
+    "row": [
+      {
+        "STAT_CODE": "722Y001",
+        "ITEM_CODE1": "0101000",
+        "CYCLE": "M",
+        "TIME": "202401",
+        "DATA_VALUE": "3.50"
+      },
+      {
+        "STAT_CODE": "722Y001",
+        "ITEM_CODE1": "0101000",
+        "CYCLE": "M",
+        "TIME": "202402",
+        "DATA_VALUE": "3.50"
+      },
+      {
+        "STAT_CODE": "722Y001",
+        "ITEM_CODE1": "0101000",
+        "CYCLE": "M",
+        "TIME": "202403",
+        "DATA_VALUE": "3.50"
+      }
+    ]
+  }
+}

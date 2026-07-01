@@ -40,6 +40,8 @@ pnpm planning:v2:desktop:build -- --no-next-build
   - `uninstall.sh` / `uninstall.cmd`
   - `scripts/planning_v2_desktop_launch.mjs` (서버 시작 + 브라우저 자동 오픈)
 
+`desktop-manifest.json`에는 package version, Git SHA, lockfile SHA-256, 빌드 시각, artifact checksum이 기록됩니다. `.dist/`는 생성물이며 Git source SSOT에 포함하지 않습니다.
+
 ## 설치
 ```bash
 pnpm planning:v2:desktop:install -- --from=.dist/planning-v2-desktop --to=$HOME/planning-v2-desktop
@@ -47,6 +49,8 @@ pnpm planning:v2:desktop:install -- --from=.dist/planning-v2-desktop --to=$HOME/
 
 주의:
 - `--to`는 프로젝트 워크스페이스 바깥 경로를 권장합니다(예: `$HOME/...`, `/opt/...`).
+- 설치 스크립트는 복사 전에 `desktop-manifest.json`의 package version, Git SHA, lockfile SHA-256, artifact checksum을 현재 checkout과 비교합니다.
+- manifest가 없거나 오래된 checkout/lockfile/아티팩트와 맞지 않으면 설치하지 않습니다. 이 경우 원본 리포지토리에서 아티팩트를 다시 빌드한 뒤 설치합니다.
 
 설치 후 디렉토리에서 수동 설치도 가능:
 ```bash

@@ -1,9 +1,4 @@
-import {
-  REASON_CODE_MESSAGES_KO,
-  assumptionsHealthMessage,
-  debtStrategyWarningMessage,
-  type AssumptionsHealthWarningCode,
-} from "@/lib/planning/v2/warningsCatalog.ko";
+import { resolveWarningCatalog, warningFallbackMessage } from "@/lib/planning/catalog/warningCatalog";
 import { type PlanningRunRecord } from "../../../../lib/planning/store/types";
 
 export type ReportDashboardWarningRow = {
@@ -27,29 +22,13 @@ function asString(value: unknown): string {
 }
 
 function unknownWarningMessage(code: string): string {
-  return `알 수 없는 경고 (${code || "UNKNOWN"})`;
+  return warningFallbackMessage(code || "UNKNOWN");
 }
 
-function isAssumptionsHealthWarningCode(value: string): value is AssumptionsHealthWarningCode {
-  return value === "SNAPSHOT_MISSING"
-    || value === "SNAPSHOT_STALE"
-    || value === "SNAPSHOT_VERY_STALE"
-    || value === "OPTIMISTIC_RETURN"
-    || value === "OPTIMISTIC_RETURN_HIGH"
-    || value === "RISK_ASSUMPTION_MISMATCH"
-    || value === "RISK_ASSUMPTION_MISMATCH_LOW";
-}
-
-function resolveWarningMessage(code: string, source: "simulate" | "health" | "debt"): string {
+function resolveWarningMessage(code: string): string {
   if (!code) return unknownWarningMessage(code);
-  if (source === "debt") return debtStrategyWarningMessage(code);
-  if (code in REASON_CODE_MESSAGES_KO) {
-    return REASON_CODE_MESSAGES_KO[code as keyof typeof REASON_CODE_MESSAGES_KO];
-  }
-  if (source === "health" && isAssumptionsHealthWarningCode(code)) {
-    return assumptionsHealthMessage(code);
-  }
-  return unknownWarningMessage(code);
+  const catalog = resolveWarningCatalog(code);
+  return catalog.plainDescription || unknownWarningMessage(code);
 }
 
 function simulateWarningCodes(run: PlanningRunRecord): string[] {
@@ -78,10 +57,10 @@ export function aggregateReportWarningsFromRun(run: PlanningRunRecord | null): R
   if (!run) return [];
   const grouped = new Map<string, ReportDashboardWarningRow>();
 
-  const collect = (codes: string[], source: "simulate" | "health" | "debt") => {
+  const collect = (codes: string[]) => {
     for (const code of codes) {
       const normalizedCode = code.trim() || "UNKNOWN";
-      const message = resolveWarningMessage(normalizedCode, source);
+      const message = resolveWarningMessage(normalizedCode);
       const key = `${normalizedCode}:${message}`;
       const current = grouped.get(key);
       if (current) {
@@ -96,9 +75,9 @@ export function aggregateReportWarningsFromRun(run: PlanningRunRecord | null): R
     }
   };
 
-  collect(simulateWarningCodes(run), "simulate");
-  collect(healthWarningCodes(run), "health");
-  collect(debtWarningCodes(run), "debt");
+  collect(simulateWarningCodes(run));
+  collect(healthWarningCodes(run));
+  collect(debtWarningCodes(run));
 
   return Array.from(grouped.values()).sort((left, right) => {
     if (right.count !== left.count) return right.count - left.count;

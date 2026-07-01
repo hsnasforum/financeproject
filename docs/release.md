@@ -13,6 +13,8 @@
 
 `release:verify`는 다음을 순차 실행합니다.
 
+`scripts/quality_gates.mjs`가 gate ID, required/optional/advisory 분류, suite membership의 단일 기준입니다.
+
 - `pnpm cleanup:next-artifacts -- --build-preflight`
 - `pnpm deps:audit`
 - `pnpm planning:v2:complete`
@@ -29,6 +31,7 @@
 - 내부 `planning:v2:e2e:fast`와 `planning:v2:e2e:full`은 기존 dev/e2e webServer를 재사용하지 않도록 전용 포트와 고유 dist dir로 격리 실행합니다.
 - `planning:v2:regress`는 전용 planning e2e data dir를 매번 새로 만들어 shared `.data/planning-e2e` 오염을 피합니다.
 - `planning:postgres:readiness`는 SQLite runtime schema와 PostgreSQL target schema를 검증하고 `tmp/planning-postgres-readiness/`에 manifest, exported files, dry-run apply plan, checksum evidence를 남깁니다.
+- CI는 `pnpm release:verify`를 registry suite의 primary gate로 사용하며, 이 suite에 포함된 `planning:v2:guard`와 `planning:v2:regress`를 별도 step에서 다시 실행하지 않습니다.
 
 선택:
 

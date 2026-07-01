@@ -13,8 +13,11 @@ import {
   type UpdateRunPatch,
 } from "../store/runStore";
 import {
+  ensureRunActionProgress,
   ensureRunActionPlan,
+  getRunActionPlan,
   getRunActionProgress,
+  getRunActionProgressSummaries,
   summarizeRunActionProgress,
   updateRunActionProgress,
   type RunActionProgressSummary,
@@ -99,10 +102,29 @@ export async function ensureCurrentUserRunActionPlan(
   return ensureRunActionPlan(run);
 }
 
+export async function ensureCurrentUserRunActionProgress(
+  run: CurrentUserPlanningRunRecord,
+  plan?: CurrentUserPlanningRunActionPlan,
+): Promise<CurrentUserPlanningRunActionProgress> {
+  return ensureRunActionProgress(run, plan);
+}
+
+export async function getCurrentUserRunActionPlanSnapshot(
+  runId: string,
+): Promise<CurrentUserPlanningRunActionPlan | null> {
+  return getRunActionPlan(runId);
+}
+
 export async function getCurrentUserRunActionProgress(
   runId: string,
 ): Promise<CurrentUserPlanningRunActionProgress | null> {
   return getRunActionProgress(runId);
+}
+
+export async function summarizeCurrentUserRunActionProgressByRunId(
+  runs: CurrentUserPlanningRunRecord[],
+): Promise<Record<string, CurrentUserPlanningRunActionProgressSummary>> {
+  return getRunActionProgressSummaries(runs);
 }
 
 export async function updateCurrentUserRunActionProgress(

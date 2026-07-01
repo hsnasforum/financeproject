@@ -1,4 +1,1 @@
-export {
-  selectTopFromItems,
-  selectTopFromStore,
-} from "./select/selectTop";
+﻿export * from "@/lib/planning/v3/news/selectTop";

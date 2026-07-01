@@ -1600,7 +1600,6 @@ export default function PlanningReportsPrototypeClient(props: PlanningReportsPro
                 <ReportAdvancedRaw
                   raw={{
                     reportMarkdown: selectedRunVm.raw?.reportMarkdown,
-                    runJson: selectedRunVm.raw?.runJson ?? selectedRun,
                   }}
                   reproducibility={selectedRunVm.reproducibility}
                 />

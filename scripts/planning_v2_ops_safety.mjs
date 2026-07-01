@@ -57,6 +57,103 @@ function fallbackRedactText(text) {
     .replace(/\b\d{7,}\b/g, "<AMOUNT>");
 }
 
+function parseBoolean(value, fallback) {
+  if (typeof value !== "string") return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") return false;
+  return fallback;
+}
+
+function toRelativeDataDir(cwd, rawDataDir) {
+  const absolute = path.resolve(cwd, asString(rawDataDir) || ".data/planning");
+  const relative = path.relative(cwd, absolute).replaceAll("\\", "/");
+  if (!relative || (!relative.startsWith("..") && !path.isAbsolute(relative))) {
+    return {
+      dataDir: relative || ".",
+      dataDirExternal: false,
+    };
+  }
+  return {
+    dataDir: "<external>",
+    dataDirExternal: true,
+    dataDirBasename: path.basename(absolute),
+  };
+}
+
+function classifyDatabaseUrl(value) {
+  const raw = asString(value).toLowerCase();
+  if (!raw) return "missing";
+  if (raw.startsWith("postgresql://")) return "postgresql";
+  if (raw.startsWith("postgres://")) return "postgres";
+  if (raw.startsWith("file:")) return "sqlite-file";
+  return "other";
+}
+
+function resolveStorageMode(input) {
+  if (input.planningNamespaceEnabled) return "multi-user-namespaced";
+  if (input.planningSingleUserMode) return "single-user-local";
+  if (input.nodeEnv === "production" && input.authRequired) return "invalid-production-unscoped";
+  return "local-default";
+}
+
+function buildOperatingEnvironmentEvidence(cwd, env) {
+  const nodeEnv = asString(env.NODE_ENV).toLowerCase() || "development";
+  const authRequired = nodeEnv === "production" || parseBoolean(env.PLANNING_AUTH_REQUIRED, true);
+  const planningNamespaceEnabled = parseBoolean(env.PLANNING_NAMESPACE_ENABLED, false);
+  const planningSingleUserMode = parseBoolean(env.PLANNING_SINGLE_USER_MODE, false);
+  return {
+    nodeEnv,
+    authRequired,
+    planningNamespaceEnabled,
+    planningSingleUserMode,
+    storageMode: resolveStorageMode({
+      nodeEnv,
+      authRequired,
+      planningNamespaceEnabled,
+      planningSingleUserMode,
+    }),
+    databaseUrl: classifyDatabaseUrl(env.DATABASE_URL),
+    ...toRelativeDataDir(cwd, env.PLANNING_DATA_DIR),
+  };
+}
+
+function buildTopologyEvidence(processInfo) {
+  return {
+    processId: Number(processInfo.pid ?? 0),
+    platform: asString(processInfo.platform) || process.platform,
+    nodeVersion: asString(processInfo.nodeVersion) || asString(processInfo.version) || process.version,
+    writeSerializationScope: "process-local",
+    sharedFileStoreCompletion: "not_proven",
+  };
+}
+
+function buildEnvironmentLogBlock(environment, topology) {
+  const lines = [
+    "## environment",
+    `nodeEnv=${environment.nodeEnv}`,
+    `authRequired=${environment.authRequired ? "true" : "false"}`,
+    `planningNamespaceEnabled=${environment.planningNamespaceEnabled ? "true" : "false"}`,
+    `planningSingleUserMode=${environment.planningSingleUserMode ? "true" : "false"}`,
+    `storageMode=${environment.storageMode}`,
+    `databaseUrl=${environment.databaseUrl}`,
+    `dataDir=${environment.dataDir}`,
+    `dataDirExternal=${environment.dataDirExternal ? "true" : "false"}`,
+    "",
+    "[topology]",
+    `processId=${topology.processId}`,
+    `platform=${topology.platform}`,
+    `nodeVersion=${topology.nodeVersion}`,
+    `writeSerializationScope=${topology.writeSerializationScope}`,
+    `sharedFileStoreCompletion=${topology.sharedFileStoreCompletion}`,
+  ];
+  if (environment.dataDirExternal && environment.dataDirBasename) {
+    lines.splice(8, 0, `dataDirBasename=${environment.dataDirBasename}`);
+  }
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
 export function parseOpsSafetyArgs(argv = []) {
   const out = {
     withRegress: false,
@@ -140,12 +237,28 @@ function buildLegacyLogBlock(input) {
     lines.push(`skipped=${input.applyResult.skipped}`);
     lines.push(`failed=${input.applyResult.failed}`);
   }
+  if (typeof input.postApplyCandidateCount === "number") {
+    lines.push("", "[post-apply]");
+    lines.push(`totalRuns=${input.postApplySummary?.totalRuns ?? "-"}`);
+    lines.push(`legacyCandidates=${input.postApplySummary?.legacyCandidates ?? "-"}`);
+    lines.push(`count=${input.postApplyCandidateCount}`);
+    lines.push(`overThreshold=${input.postApplyOverThreshold ? "true" : "false"}`);
+    if (Array.isArray(input.postApplyCandidatesSample) && input.postApplyCandidatesSample.length > 0) {
+      lines.push(...input.postApplyCandidatesSample.map((row) => (
+        `- ${row.id} profile=${row.profileId} kind=${row.runKind} reason=${row.reason}`
+      )));
+    } else {
+      lines.push("- sample=none");
+    }
+  }
   return `${lines.join("\n").trimEnd()}\n`;
 }
 
 export async function runOpsSafetyPipeline(options = {}) {
   const startedAt = new Date().toISOString();
   const cwd = path.resolve(options.cwd || process.cwd());
+  const env = options.env || process.env;
+  const processInfo = options.processInfo || process;
   const args = {
     withRegress: options.withRegress === true,
     strictDoctor: options.strictDoctor === true,
@@ -161,6 +274,8 @@ export async function runOpsSafetyPipeline(options = {}) {
   const opsRunner = typeof options.opsPipelineRunner === "function" ? options.opsPipelineRunner : runOpsPipeline;
   const legacyHelpers = options.legacyHelpers || await loadLegacyBackfillHelpers();
   const reportErrors = [];
+  const operatingEnvironment = buildOperatingEnvironmentEvidence(cwd, env);
+  const topology = buildTopologyEvidence(processInfo);
 
   const opsResult = await opsRunner({
     cwd,
@@ -231,15 +346,28 @@ export async function runOpsSafetyPipeline(options = {}) {
             limit: args.legacyLimit,
             includeOpsDoctor: args.legacyIncludeOpsDoctor,
           });
+          const postApplySummary = await legacyHelpers.summarizeLegacyRunBackfill();
+          const postApplyCandidates = await legacyHelpers.listLegacyRunBackfillCandidates({
+            limit: args.legacyLimit,
+            includeOpsDoctor: args.legacyIncludeOpsDoctor,
+          });
+          const postApplyCandidateCount = Array.isArray(postApplyCandidates) ? postApplyCandidates.length : 0;
+          const postApplyOverThreshold = args.legacyFailThreshold >= 0 && postApplyCandidateCount > args.legacyFailThreshold;
           const applyFailed = Math.max(0, Number(applyResult?.failed ?? 0)) > 0;
           legacySection = {
             ...baseLegacy,
-            status: applyFailed || overThreshold ? "FAIL" : "PASS",
-            reason: applyFailed ? "apply_failed" : (overThreshold ? "threshold_exceeded" : "ok"),
+            status: applyFailed || postApplyOverThreshold ? "FAIL" : "PASS",
+            reason: applyFailed ? "apply_failed" : (postApplyOverThreshold ? "post_apply_threshold_exceeded" : "ok"),
             applyResult,
+            postApplySummary,
+            postApplyCandidateCount,
+            postApplyOverThreshold,
+            postApplyCandidatesSample: Array.isArray(postApplyCandidates) ? postApplyCandidates.slice(0, 20) : [],
           };
           if (applyFailed) reportErrors.push(`legacy backfill apply failed count=${applyResult.failed}`);
-          if (overThreshold) reportErrors.push(`legacy candidates exceed threshold (${candidateCount} > ${args.legacyFailThreshold})`);
+          if (postApplyOverThreshold) {
+            reportErrors.push(`legacy candidates exceed threshold after apply (${postApplyCandidateCount} > ${args.legacyFailThreshold})`);
+          }
         }
       } else {
         legacySection = {
@@ -282,6 +410,8 @@ export async function runOpsSafetyPipeline(options = {}) {
       logPath: asString(opsResult.logPath),
       steps: Array.isArray(opsResult.report?.steps) ? opsResult.report.steps : [],
     },
+    operatingEnvironment,
+    topology,
     legacyBackfill: legacySection,
     ...(reportErrors.length > 0 ? { errors: reportErrors } : {}),
   };
@@ -291,6 +421,8 @@ export async function runOpsSafetyPipeline(options = {}) {
     `startedAt=${startedAt}`,
     `finishedAt=${finishedAt}`,
     `ok=${ok ? "true" : "false"}`,
+    "",
+    buildEnvironmentLogBlock(operatingEnvironment, topology).trimEnd(),
     "",
     "[ops]",
     `ok=${opsResult.ok ? "true" : "false"}`,
@@ -319,6 +451,9 @@ async function runCli(argv = process.argv.slice(2)) {
   console.log(`- legacyBackfill: ${result.report.legacyBackfill.status} (${result.report.legacyBackfill.reason})`);
   if (typeof result.report.legacyBackfill.candidateCount === "number") {
     console.log(`- legacyCandidates=${result.report.legacyBackfill.candidateCount}`);
+  }
+  if (typeof result.report.legacyBackfill.postApplyCandidateCount === "number") {
+    console.log(`- postApplyLegacyCandidates=${result.report.legacyBackfill.postApplyCandidateCount}`);
   }
   console.log(`[planning:v2:ops:safety] report=${result.reportPath}`);
   console.log(`[planning:v2:ops:safety] log=${result.logPath}`);

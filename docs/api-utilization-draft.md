@@ -285,6 +285,15 @@
   - MOLIT 매매 상세 API(`RTMSDataSvcAptTradeDev`)는 별도 활용 신청/권한이 필요할 수 있다. 상세 API가 401/403/404를 반환하면 서버는 일반 매매 API(`RTMSDataSvcAptTrade`)로 재시도한다.
   - MOLIT `serviceKey`는 Encoding/Decoding 키 모두 허용하며, 이미 인코딩된 값(`%xx`)은 재인코딩하지 않는다.
 
+### Public API 성공 provenance 계약
+- `PublicApiResult` 성공 응답은 반드시 `meta.provenance`를 포함한다.
+- `meta.provenance.mode`는 `live`, `cache`, `mock` 중 하나이며, `ok=true`만으로 live 성공을 뜻하지 않는다.
+- `meta.provenance.degraded=true`이면 `degradedReason`으로 `env-missing`, `upstream-failure`, `timeout`, `endpoint-fallback`, `legacy-cache` 같은 원인을 함께 노출한다.
+- FX/주택 provider는 mock fallback을 허용하더라도 `source` 문자열에 `(mock)`을 붙이지 않는다. mock 여부는 `meta.provenance.mode=mock`으로만 판단한다.
+- 계산·추천 경로가 public API 결과를 쓰는 경우, 기본값은 `mode=live`이고 `degraded=false`인 결과만 핵심 판단 근거로 사용한다. mock/cache/degraded 결과를 허용하려면 해당 경로의 입력 계약이나 UI 문구에 허용 정책과 제한을 명시한다.
+- 캐시 호환성: FX/주택 공개 route는 provenance 포함 payload를 `v2` cache key로 저장한다. 과거 cache payload에 provenance가 없으면 삭제나 migration 없이 `mode=cache`, `degradedReason=legacy-cache`로 읽는다.
+- rollback: 이 변경은 저장 데이터 migration을 만들지 않는다. 이전 코드로 되돌리면 새 `v2` cache 파일은 사용되지 않으며, 필요한 경우 `tmp/api-cache` 파일만 운영 절차에 따라 삭제한다.
+
 ### URL 설정 런북 (REB/MOIS/MOLIT 공통)
 1. Swagger UI에서 `Schemes`를 `HTTPS`로 선택한다.
 2. 인증(자물쇠/Authorize)에서 API Key를 넣는다.

@@ -8,11 +8,14 @@ const PLANNING_ROUTE_IMPORT_MARKERS = [
   "@/app/api/planning",
 ];
 const PLANNING_ROUTE_IMPORT_PATTERN = /from\s+["'](?:@\/app\/api\/planning|(?:\.\.\/)+src\/app\/api\/planning)/u;
+const PLANNING_ROUTE_SOURCE_SCAN_PATTERNS = [
+  /findPlanningRouteFiles\s*\(/u,
+  /findPlanningProxyRouteFiles\s*\(/u,
+];
 
 const LEGACY_RUNTIME_ROUTE_IMPORTS_WITH_IMPLICIT_LOCAL_AUTH_FALLBACK: string[] = [];
 
 const STATIC_ROUTE_SOURCE_REFERENCES_WITHOUT_TEST_AUTH_FALLBACK = [
-  "tests/planning-v2-static-guard.test.ts",
   "tests/planning/auth/planningRouteUserScopeCoverage.test.ts",
 ].sort();
 
@@ -34,7 +37,8 @@ function normalizePath(filePath: string): string {
 }
 
 function referencesPlanningApiRouteSource(source: string): boolean {
-  return PLANNING_ROUTE_IMPORT_MARKERS.some((marker) => source.includes(marker));
+  return PLANNING_ROUTE_IMPORT_MARKERS.some((marker) => source.includes(marker))
+    && PLANNING_ROUTE_SOURCE_SCAN_PATTERNS.some((pattern) => pattern.test(source));
 }
 
 function importsPlanningApiRoute(source: string): boolean {

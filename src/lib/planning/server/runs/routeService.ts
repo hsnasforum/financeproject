@@ -7,14 +7,16 @@ import {
 import {
   createCurrentUserRun,
   deleteCurrentUserRun,
+  ensureCurrentUserRunActionProgress,
   ensureCurrentUserRunActionPlan,
   getCurrentUserRun,
+  getCurrentUserRunActionPlanSnapshot,
   getCurrentUserRunActionProgress,
   getCurrentUserRunBlob,
   getCurrentUserRunProfile,
   listCurrentUserRuns,
+  summarizeCurrentUserRunActionProgressByRunId,
   summarizeCurrentUserRunActionProgress,
-  updateCurrentUserRun,
   updateCurrentUserRunActionProgress,
   type CurrentUserPlanningRunRecord,
   type CurrentUserPlanningRunActionPlan,
@@ -161,13 +163,6 @@ function logActionCenterHydrationFailure(runId: string, error: unknown) {
   });
 }
 
-function logActionCenterPersistFailure(runId: string, error: unknown) {
-  console.error("[planning/runs/:id] failed to persist hydrated action center", {
-    runId,
-    message: errorMessage(error, "unknown error"),
-  });
-}
-
 export async function listCurrentUserRunsForRoute(options?: {
   profileId?: string;
   limit?: number;
@@ -175,17 +170,7 @@ export async function listCurrentUserRunsForRoute(options?: {
 }): Promise<CurrentUserRunListResponseData> {
   const runs = await listCurrentUserRuns(options);
   const sanitizedRuns = runs.map((run) => sanitizeRunRecordForResponse(run));
-  const actionProgressSummaryByRunId: Record<string, CurrentUserPlanningRunActionProgressSummary> = {};
-
-  for (const run of sanitizedRuns) {
-    try {
-      const progress = await getCurrentUserRunActionProgress(run.id);
-      if (!progress) continue;
-      actionProgressSummaryByRunId[run.id] = summarizeCurrentUserRunActionProgress(progress);
-    } catch {
-      continue;
-    }
-  }
+  const actionProgressSummaryByRunId = await summarizeCurrentUserRunActionProgressByRunId(sanitizedRuns);
 
   return {
     runs: sanitizedRuns,
@@ -209,9 +194,10 @@ export async function createCurrentUserRunResponseData(
 ): Promise<CurrentUserRunRecord> {
   const created = await createCurrentUserRun(input, options);
   try {
-    await ensureCurrentUserRunActionPlan(created);
+    const plan = await ensureCurrentUserRunActionPlan(created);
+    await ensureCurrentUserRunActionProgress(created, plan);
   } catch (error) {
-    console.error("[planning] failed to initialize action plan", error);
+    console.error("[planning] failed to initialize action center", error);
   }
   return sanitizeRunRecordForResponse(created);
 }
@@ -222,9 +208,16 @@ export async function getCurrentUserRunDetailResponseData(runId: string): Promis
 
   let runWithActionCenter = run;
   try {
-    const plan = run.actionCenter?.plan ?? await ensureCurrentUserRunActionPlan(run);
-    const progress = run.actionCenter?.progress ?? await getCurrentUserRunActionProgress(run.id);
-    if (progress) {
+    const embeddedActionCenter = run.actionCenter;
+    const plan = await getCurrentUserRunActionPlanSnapshot(run.id).catch((error) => {
+      logActionCenterHydrationFailure(run.id, error);
+      return null;
+    }) ?? embeddedActionCenter?.plan ?? null;
+    const progress = await getCurrentUserRunActionProgress(run.id).catch((error) => {
+      logActionCenterHydrationFailure(run.id, error);
+      return null;
+    }) ?? embeddedActionCenter?.progress ?? null;
+    if (plan && progress) {
       runWithActionCenter = {
         ...run,
         actionCenter: {
@@ -232,16 +225,6 @@ export async function getCurrentUserRunDetailResponseData(runId: string): Promis
           progress,
         },
       };
-      if (!run.actionCenter?.plan || !run.actionCenter?.progress) {
-        await updateCurrentUserRun(run.id, {
-          actionCenter: {
-            plan,
-            progress,
-          },
-        }).catch((error) => {
-          logActionCenterPersistFailure(run.id, error);
-        });
-      }
     }
   } catch (error) {
     logActionCenterHydrationFailure(run.id, error);
@@ -266,17 +249,11 @@ export async function patchCurrentUserRunActionCenter(input: {
   const run = await getCurrentUserRun(input.runId);
   if (!run) return null;
 
-  const plan = run.actionCenter?.plan ?? await ensureCurrentUserRunActionPlan(run);
+  await ensureCurrentUserRunActionPlan(run);
   const updatedProgress = await updateCurrentUserRunActionProgress(run.id, {
     actionKey: input.patch.actionKey,
     ...(input.patch.status ? { status: input.patch.status } : {}),
     ...(input.patch.note !== undefined ? { note: input.patch.note } : {}),
-  });
-  await updateCurrentUserRun(run.id, {
-    actionCenter: {
-      plan,
-      progress: updatedProgress,
-    },
   });
   const summary = summarizeCurrentUserRunActionProgress(updatedProgress);
   return {
@@ -292,7 +269,9 @@ export async function patchCurrentUserRunActionCenter(input: {
 export async function getCurrentUserRunActionProgressResult(
   runId: string,
 ): Promise<CurrentUserRunActionProgressResult | null> {
-  const progress = await getCurrentUserRunActionProgress(runId);
+  const run = await getCurrentUserRun(runId);
+  if (!run) return null;
+  const progress = await getCurrentUserRunActionProgress(run.id) ?? run.actionCenter?.progress ?? null;
   if (!progress) return null;
   return {
     progress,
@@ -370,5 +349,6 @@ export async function getCurrentUserRunActionPlan(
 ): Promise<CurrentUserPlanningRunActionPlan | null> {
   const run = await getCurrentUserRun(runId);
   if (!run) return null;
-  return ensureCurrentUserRunActionPlan(run);
+  const embeddedPlan = run.actionCenter ? run.actionCenter.plan : null;
+  return await getCurrentUserRunActionPlanSnapshot(run.id) ?? embeddedPlan;
 }

@@ -1,6 +1,23 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { runPnpm } from "./pnpm_runner.mjs";
+import {
+  DESKTOP_MANIFEST_KIND,
+  DESKTOP_PROVENANCE_VERSION,
+  computeArtifactChecksum,
+  currentGitSha,
+  lockfileSha256,
+  readPackageVersion,
+} from "./planning_v2_desktop_provenance.mjs";
+
+const REQUIRED_V3_ARTIFACT_FILES = [
+  "src/lib/planning/v3/ops/doctor.ts",
+  "src/lib/planning/v3/ops/refreshAll.ts",
+  "src/lib/planning/v3/ops/export.ts",
+  "src/lib/planning/v3/ops/restore.ts",
+  "src/lib/planning/v3/report/weeklyHtml.ts",
+  "tsconfig.planning-v3.json",
+];
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -148,6 +165,9 @@ async function main() {
   await ensureFileExists(path.join(cwd, "scripts"));
   await ensureFileExists(path.join(cwd, "package.json"));
   await ensureFileExists(path.join(cwd, "pnpm-lock.yaml"));
+  for (const relativePath of REQUIRED_V3_ARTIFACT_FILES) {
+    await ensureFileExists(path.join(cwd, relativePath));
+  }
 
   await fs.rm(artifactDir, { recursive: true, force: true });
   await fs.mkdir(artifactDir, { recursive: true });
@@ -158,6 +178,7 @@ async function main() {
   await copyPrismaAssets(cwd, artifactDir);
   await copyIfExists(path.join(cwd, "next.config.ts"), path.join(artifactDir, "next.config.ts"));
   await copyIfExists(path.join(cwd, "tsconfig.json"), path.join(artifactDir, "tsconfig.json"));
+  await copyIfExists(path.join(cwd, "tsconfig.planning-v3.json"), path.join(artifactDir, "tsconfig.planning-v3.json"));
   await copyIfExists(path.join(cwd, "middleware.ts"), path.join(artifactDir, "middleware.ts"));
   await copyIfExists(path.join(cwd, ".env.local.example"), path.join(artifactDir, ".env.local.example"));
   await copyIfExists(path.join(cwd, ".next", "standalone"), path.join(artifactDir, ".next", "standalone"));
@@ -180,11 +201,22 @@ async function main() {
   await fs.chmod(path.join(artifactDir, "run.sh"), 0o755);
   await fs.chmod(path.join(artifactDir, "uninstall.sh"), 0o755);
 
-  const packageJson = JSON.parse(await fs.readFile(path.join(cwd, "package.json"), "utf-8"));
+  const packageVersion = await readPackageVersion(cwd);
+  const gitSha = currentGitSha(cwd);
+  if (!gitSha) {
+    throw new Error("git SHA could not be resolved for desktop provenance manifest");
+  }
+  const lockfileDigest = await lockfileSha256(cwd);
+  const artifactChecksum = await computeArtifactChecksum(artifactDir);
   const manifest = {
-    kind: "planning-v2-desktop",
-    version: asString(packageJson.version) || "unknown",
+    kind: DESKTOP_MANIFEST_KIND,
+    provenanceVersion: DESKTOP_PROVENANCE_VERSION,
+    version: packageVersion,
+    packageVersion,
+    gitSha,
+    lockfileSha256: lockfileDigest,
     builtAt: new Date().toISOString(),
+    artifactChecksum,
     localOnlyDefault: true,
     runtimeMode: "next-prod-local-only",
     packagingOption: "C (node-based portable runtime)",

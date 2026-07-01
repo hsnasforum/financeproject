@@ -10,6 +10,7 @@ export type OpsContractErrorCode =
   | "VALIDATION"
   | "STALE_ASSUMPTIONS"
   | "STORAGE_CORRUPT"
+  | "STORAGE_UNAVAILABLE"
   | "BACKUP_INVALID"
   | "BACKUP_RECEIPT_STORE_UNAVAILABLE"
   | "RESTORE_NOT_COMMITTED"
@@ -38,6 +39,7 @@ const DEFAULT_MESSAGE: Record<OpsContractErrorCode, string> = {
   VALIDATION: "입력값이 올바르지 않습니다.",
   STALE_ASSUMPTIONS: "가정 스냅샷이 오래되었습니다. 최신화 후 다시 시도해 주세요.",
   STORAGE_CORRUPT: "저장 데이터가 손상되었을 수 있습니다. /ops/doctor에서 점검해 주세요.",
+  STORAGE_UNAVAILABLE: "저장소를 사용할 수 없습니다. /ops/doctor에서 권한과 파일 상태를 점검해 주세요.",
   BACKUP_INVALID: "백업 파일 형식이 올바르지 않습니다.",
   BACKUP_RECEIPT_STORE_UNAVAILABLE: "미리보기 확인 저장소를 사용할 수 없습니다.",
   RESTORE_NOT_COMMITTED: "복원을 완료하지 못했습니다. 기존 데이터는 변경되지 않았습니다.",
@@ -52,6 +54,7 @@ const DEFAULT_STATUS: Record<OpsContractErrorCode, number> = {
   VALIDATION: 400,
   STALE_ASSUMPTIONS: 409,
   STORAGE_CORRUPT: 500,
+  STORAGE_UNAVAILABLE: 503,
   BACKUP_INVALID: 400,
   BACKUP_RECEIPT_STORE_UNAVAILABLE: 503,
   RESTORE_NOT_COMMITTED: 409,
@@ -100,6 +103,16 @@ export function normalizeOpsErrorCode(raw: unknown): OpsContractErrorCode {
     || code.startsWith("ENCRYPTED_PACKAGE_")
   ) {
     return "BACKUP_INVALID";
+  }
+  if (
+    code === "STORAGE_UNAVAILABLE"
+    || code === "EACCES"
+    || code === "EPERM"
+    || code === "EIO"
+    || code === "ENOTDIR"
+    || code === "EISDIR"
+  ) {
+    return "STORAGE_UNAVAILABLE";
   }
   if (
     code === "STORAGE_CORRUPT"

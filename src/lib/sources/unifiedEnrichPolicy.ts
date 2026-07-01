@@ -10,8 +10,14 @@ export function applyDepositProtectionOnViews<T extends WithDepositSignal>(input
   items: T[];
   mode: DepositProtectionMode;
 }): T[] {
-  void input.mode;
-  return input.items;
+  if (input.mode === "any") return input.items;
+  if (input.mode === "require") {
+    return input.items.filter((item) => item.signals?.depositProtection === "matched");
+  }
+  return [
+    ...input.items.filter((item) => item.signals?.depositProtection === "matched"),
+    ...input.items.filter((item) => item.signals?.depositProtection !== "matched"),
+  ];
 }
 
 export type UnifiedOptionView = {
@@ -249,11 +255,15 @@ export type CanonicalIntegratedItem = {
 export function integrateCanonicalWithMatches<T extends CanonicalIntegratedItem>(input: {
   canonicalItems: T[];
   isKdbMatched: (item: T) => boolean;
+  depositProtectionMode: DepositProtectionMode;
   kdbOnlyItems?: T[];
 }): { items: T[]; extras?: { kdbOnly?: T[] } } {
   const withSignals = input.canonicalItems.map((item) => {
+    const kdbMatched = input.isKdbMatched(item);
     const signals: NonNullable<T["signals"]> = {
-      kdbMatched: input.isKdbMatched(item),
+      ...(item.signals ?? {}),
+      depositProtection: kdbMatched ? "matched" : item.signals?.depositProtection ?? "unknown",
+      kdbMatched,
     };
     const badges = new Set<string>(item.badges ?? ["FINLIFE"]);
     if (signals.kdbMatched) badges.add("KDB_MATCHED");
@@ -266,7 +276,7 @@ export function integrateCanonicalWithMatches<T extends CanonicalIntegratedItem>
 
   const items = applyDepositProtectionOnViews({
     items: withSignals,
-    mode: "any",
+    mode: input.depositProtectionMode,
   });
 
   if (!input.kdbOnlyItems) return { items };

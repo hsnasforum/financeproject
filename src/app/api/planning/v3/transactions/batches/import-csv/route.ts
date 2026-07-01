@@ -11,6 +11,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type ImportBody = {
   csvText?: unknown;
@@ -124,6 +125,8 @@ export async function POST(request: Request) {
       },
     }, { status: 201 });
   } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     if (error instanceof ImportCsvToBatchInputError) {
       const encodingIssue = error.details.some((row) => asString(row.field) === "csvEncoding");
       return NextResponse.json(

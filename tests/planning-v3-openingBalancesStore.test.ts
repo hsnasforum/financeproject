@@ -61,6 +61,19 @@ describe("planning v3 openingBalancesStore", () => {
     });
   });
 
+  it("does not overwrite a corrupted opening balances file during upsert", async () => {
+    const balancesPath = path.join(root, "planning-v3", "opening-balances.json");
+    const corrupted = "{ broken opening balances json";
+    fs.mkdirSync(path.dirname(balancesPath), { recursive: true });
+    fs.writeFileSync(balancesPath, corrupted, "utf-8");
+
+    await expect(upsertOpeningBalance("acc-a", "2026-03-01", 1000)).rejects.toMatchObject({
+      name: "StorageCorruptedError",
+    });
+
+    expect(fs.readFileSync(balancesPath, "utf-8")).toBe(corrupted);
+  });
+
   it("isolates opening balances by planning namespace when enabled", async () => {
     env.PLANNING_NAMESPACE_ENABLED = "1";
     env.PLANNING_USER_ID = "default";

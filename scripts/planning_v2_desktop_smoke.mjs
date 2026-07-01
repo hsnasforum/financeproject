@@ -213,11 +213,19 @@ async function main() {
   const appDir = path.resolve(args.appDir);
   const baseUrl = `http://127.0.0.1:${args.port}`;
   const jar = {};
+  const childEnv = {
+    ...process.env,
+    PLANNING_APP_NAME: process.env.PLANNING_APP_NAME || "PlanningV2",
+    PLANNING_AUTH_REQUIRED: process.env.PLANNING_AUTH_REQUIRED || "false",
+    PLANNING_PACKAGED_MODE: process.env.PLANNING_PACKAGED_MODE || "1",
+    PLANNING_RUNTIME_MODE: process.env.PLANNING_RUNTIME_MODE || "packaged-smoke",
+    PLANNING_SINGLE_USER_MODE: process.env.PLANNING_SINGLE_USER_MODE || "true",
+  };
 
   let exited = null;
   const server = spawn(process.execPath, ["scripts/next_dev_safe.mjs", "--host", "127.0.0.1", "--port", String(args.port)], {
     cwd: appDir,
-    env: process.env,
+    env: childEnv,
     detached: process.platform !== "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });

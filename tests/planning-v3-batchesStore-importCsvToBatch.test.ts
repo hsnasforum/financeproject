@@ -96,6 +96,46 @@ describe("planning v3 batchesStore/importCsvToBatch", () => {
     expect(fileIds).toEqual([...fileIds].sort((left, right) => left.localeCompare(right)));
   });
 
+  it("does not overwrite a corrupted batch index during import", async () => {
+    const batchesDir = path.join(root, "planning-v3", "batches");
+    const indexPath = path.join(batchesDir, "index.json");
+    const corrupted = "{ broken batch index";
+    fs.mkdirSync(batchesDir, { recursive: true });
+    fs.writeFileSync(indexPath, corrupted, "utf-8");
+
+    await expect(importCsvToBatch({
+      csvText: ["date,amount,description", "2026-01-01,1000,a"].join("\n"),
+    })).rejects.toMatchObject({
+      name: "StorageCorruptedError",
+    });
+
+    expect(fs.readFileSync(indexPath, "utf-8")).toBe(corrupted);
+    const names = fs.readdirSync(batchesDir).sort();
+    expect(names).toEqual(["index.json"]);
+  });
+
+  it("reports malformed batch transaction NDJSON with line context", async () => {
+    const batchesDir = path.join(root, "planning-v3", "batches");
+    const batchPath = path.join(batchesDir, "batch-corrupt.ndjson");
+    fs.mkdirSync(batchesDir, { recursive: true });
+    fs.writeFileSync(batchPath, [
+      JSON.stringify({
+        txnId: "aaaaaaaaaaaa",
+        batchId: "batch-corrupt",
+        date: "2026-01-01",
+        amountKrw: 1000,
+        source: "csv",
+      }),
+      "{ broken transaction row",
+      "",
+    ].join("\n"), "utf-8");
+
+    await expect(getBatchTransactions("batch-corrupt")).rejects.toMatchObject({
+      name: "StorageCorruptedError",
+      lineNumber: 2,
+    });
+  });
+
   it("persists batch-level diagnostics/provenance metadata without touching row schema", async () => {
     const csvText = [
       "거래일,금액,적요",

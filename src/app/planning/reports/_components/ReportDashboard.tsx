@@ -13,7 +13,7 @@ import {
 } from "./reportDashboard/sections";
 import {
   PLANNER_ACTION_LINKS,
-  actionSummaryTone,
+  actionSummaryToneFromInterpretation,
   buildActionRecommendHref,
   compactText,
   isStageSuccess,
@@ -38,12 +38,7 @@ export default function ReportDashboard({ vm }: Props) {
     || (normalization?.fixesApplied.length ?? 0) > 0;
   const evidenceById = new Map<string, EvidenceItem>((vm.evidence?.items ?? []).map((item) => [item.id, item]));
   const leadAction = vm.actionRows[0] ?? null;
-  const summaryTone = actionSummaryTone({
-    worstCashKrw: vm.summaryCards.worstCashKrw,
-    criticalWarnings: vm.summaryCards.criticalWarnings,
-    dsrPct: vm.summaryCards.dsrPct,
-    totalWarnings: vm.summaryCards.totalWarnings,
-  });
+  const summaryTone = actionSummaryToneFromInterpretation(vm.interpretation);
   const basisPreview = compactText(
     vm.monthlyOperatingGuide?.basisLabel || vm.assumptionsLines[0],
     120,

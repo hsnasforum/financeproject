@@ -306,7 +306,7 @@ describe("run action progress route", () => {
     expect(typeof persisted?.doneAt).toBe("string");
   });
 
-  it("recovers from corrupted action center json without breaking reads", async () => {
+  it("does not recreate corrupted action center json on reads", async () => {
     const profileRes = await profilesPOST(jsonRequest("POST", "/api/planning/v2/profiles", {
       name: "runs detail recovery profile",
       profile: profileFixture(),
@@ -341,29 +341,25 @@ describe("run action progress route", () => {
     expect(Array.isArray(firstReadPayload.data?.items)).toBe(true);
 
     const runDir = resolveProfileRunDir(profileId, runId);
-    fs.writeFileSync(path.join(runDir, "action-plan.json"), "{");
-    fs.writeFileSync(path.join(runDir, "action-progress.json"), "{");
+    const planPath = path.join(runDir, "action-plan.json");
+    const progressPath = path.join(runDir, "action-progress.json");
+    fs.writeFileSync(planPath, "{");
+    fs.writeFileSync(progressPath, "{");
 
     const recoveredPlanRes = await actionPlanGET(getRequest(`/api/planning/runs/${runId}/action-plan`), {
       params: Promise.resolve({ id: runId }),
     });
-    const recoveredPlanPayload = await recoveredPlanRes.json() as {
-      ok?: boolean;
-      data?: { items?: Array<{ actionKey?: string }> };
-    };
-    expect(recoveredPlanRes.status).toBe(200);
-    expect(recoveredPlanPayload.ok).toBe(true);
-    expect(Array.isArray(recoveredPlanPayload.data?.items)).toBe(true);
+    const recoveredPlanPayload = await recoveredPlanRes.json() as { error?: { code?: string } };
+    expect(recoveredPlanRes.status).toBe(404);
+    expect(recoveredPlanPayload.error?.code).toBe("NO_DATA");
+    expect(fs.readFileSync(planPath, "utf-8")).toBe("{");
 
     const recoveredProgressRes = await actionProgressGET(getRequest(`/api/planning/runs/${runId}/action-progress`), {
       params: Promise.resolve({ id: runId }),
     });
-    const recoveredProgressPayload = await recoveredProgressRes.json() as {
-      ok?: boolean;
-      data?: { items?: Array<{ actionKey?: string; status?: string }> };
-    };
-    expect(recoveredProgressRes.status).toBe(200);
-    expect(recoveredProgressPayload.ok).toBe(true);
-    expect(Array.isArray(recoveredProgressPayload.data?.items)).toBe(true);
+    const recoveredProgressPayload = await recoveredProgressRes.json() as { error?: { code?: string } };
+    expect(recoveredProgressRes.status).toBe(404);
+    expect(recoveredProgressPayload.error?.code).toBe("NO_DATA");
+    expect(fs.readFileSync(progressPath, "utf-8")).toBe("{");
   });
 });

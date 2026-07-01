@@ -11,9 +11,8 @@ import {
 import { getCurrentUserReport } from "@/lib/planning/server/reports/repository";
 import {
   getCurrentUserRun,
-  getCurrentUserRunActionProgress,
   listCurrentUserRuns,
-  summarizeCurrentUserRunActionProgress,
+  summarizeCurrentUserRunActionProgressByRunId,
   type CurrentUserPlanningRunActionProgressSummary,
   type CurrentUserPlanningRunRecord,
 } from "@/lib/planning/server/runs/repository";
@@ -76,25 +75,6 @@ export async function loadPlanningRunsPageInitialData(input: {
       let actionProgressSummaryByRunId: Record<string, CurrentUserPlanningRunActionProgressSummary> = {};
       let loadNotice = "";
 
-      async function summarizeActionProgressByRunId(
-        targetRuns: CurrentUserPlanningRunRecord[],
-      ): Promise<Record<string, CurrentUserPlanningRunActionProgressSummary>> {
-        const entries = await Promise.all(targetRuns.map(async (run) => {
-          try {
-            const progress = await getCurrentUserRunActionProgress(run.id);
-            if (!progress) return null;
-            return [run.id, summarizeCurrentUserRunActionProgress(progress)] as const;
-          } catch {
-            return null;
-          }
-        }));
-        return Object.fromEntries(
-          entries.filter(
-            (entry): entry is readonly [string, CurrentUserPlanningRunActionProgressSummary] => entry !== null,
-          ),
-        );
-      }
-
       if (!filterProfileId) {
         filterProfileId = await getCurrentUserDefaultProfileId().catch(() => "") || "";
       }
@@ -112,7 +92,7 @@ export async function loadPlanningRunsPageInitialData(input: {
           ...(filterProfileId ? { profileId: filterProfileId } : {}),
           limit: 200,
         });
-        actionProgressSummaryByRunId = await summarizeActionProgressByRunId(runs);
+        actionProgressSummaryByRunId = await summarizeCurrentUserRunActionProgressByRunId(runs);
         runsReady = true;
       } catch (error) {
         console.error("[planning/runs] failed to load initial runs", error);

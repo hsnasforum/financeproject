@@ -7,8 +7,8 @@ const { runNewsRefreshMock } = vi.hoisted(() => ({
   runNewsRefreshMock: vi.fn(),
 }));
 
-vi.mock("../planning/v3/news/cli/newsRefresh", async () => {
-  const actual = await vi.importActual("../planning/v3/news/cli/newsRefresh");
+vi.mock("@/lib/planning/v3/news/cli/newsRefresh", async () => {
+  const actual = await vi.importActual("@/lib/planning/v3/news/cli/newsRefresh");
   return {
     ...(actual as object),
     runNewsRefresh: (...args: unknown[]) => runNewsRefreshMock(...args),

@@ -2,17 +2,9 @@ import { pathToFileURL } from "node:url";
 import { tsImport } from "tsx/esm/api";
 import { createIsolatedPlanningV2E2EOptions } from "./planning_v2_e2e_isolation.mjs";
 import { runPnpm } from "./pnpm_runner.mjs";
+import { QUALITY_GATE_SUITES } from "./quality_gates.mjs";
 
-const COMPLETE_STEPS = [
-  "planning:v2:guard",
-  "sec:check",
-  "planning:v2:freeze:guard",
-  "planning:v2:scan:guards",
-  "planning:v2:report:test",
-  "planning:v2:guide:test",
-  "planning:v2:smoke",
-  "planning:v2:e2e:fast",
-];
+const COMPLETE_STEPS = QUALITY_GATE_SUITES["planning:v2:complete"].required;
 const SELF_TEST_DOC_PATH = "docs/planning-v2-5min-selftest.md";
 let redactTextImpl = fallbackRedactText;
 

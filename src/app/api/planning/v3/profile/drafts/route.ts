@@ -15,6 +15,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type CreateDraftBody = {
   batchId?: unknown;
@@ -83,6 +84,8 @@ export async function POST(request: Request) {
     assertNoForbiddenDraftKeys(payload);
     return NextResponse.json(payload);
   } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     if (isGenerateDraftInputError(error)) {
       if (error.code === "INPUT") {
         return NextResponse.json(
@@ -144,6 +147,8 @@ export async function GET(request: Request) {
     assertNoForbiddenDraftKeys(payload);
     return NextResponse.json(payload);
   } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     if (error instanceof ForbiddenDraftKeyError) {
       return NextResponse.json(
         { ok: false, error: { code: "INTERNAL", message: "상담 정보 초안 내용을 확인하지 못했습니다." }, meta: userMeta },

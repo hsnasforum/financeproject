@@ -11,6 +11,7 @@ export default defineConfig({
     exclude: [
       ...configDefaults.exclude,
       "tests/e2e/**",
+      ".dist/**",
       ".next/**",
       ".next-build*/**",
       "tmp/**",

@@ -33,22 +33,22 @@ describe("applyDepositProtectionOnViews", () => {
     expect(out.map((item) => item.externalKey)).toEqual(["A", "B"]);
   });
 
-  it("keeps input order in prefer mode", () => {
+  it("keeps all items but moves matched signals first in prefer mode", () => {
     const out = applyDepositProtectionOnViews({
       mode: "prefer",
       items: [row("B", false), row("A", true)],
     });
 
-    expect(out.map((item) => item.externalKey)).toEqual(["B", "A"]);
+    expect(out.map((item) => item.externalKey)).toEqual(["A", "B"]);
   });
 
-  it("keeps all items in require mode", () => {
+  it("keeps only matched signals in require mode", () => {
     const out = applyDepositProtectionOnViews({
       mode: "require",
       items: [row("A", true), row("B", false)],
     });
 
-    expect(out.map((item) => item.externalKey)).toEqual(["A", "B"]);
+    expect(out.map((item) => item.externalKey)).toEqual(["A"]);
   });
 });
 
@@ -60,6 +60,7 @@ describe("integrateCanonicalWithMatches", () => {
         { externalKey: "FIN2", badges: ["FINLIFE"] },
       ] as TestRow[],
       isKdbMatched: (item) => item.externalKey === "FIN2",
+      depositProtectionMode: "any",
       kdbOnlyItems: [
         { externalKey: "KDB_ONLY_1", badges: ["KDB_ONLY"] },
       ] as TestRow[],
@@ -67,6 +68,23 @@ describe("integrateCanonicalWithMatches", () => {
 
     expect(out.items.map((item) => item.externalKey)).toEqual(["FIN1", "FIN2"]);
     expect(out.items[1]?.badges).toContain("KDB_MATCHED");
+    expect(out.items[0]?.signals?.depositProtection).toBe("unknown");
+    expect(out.items[1]?.signals?.depositProtection).toBe("matched");
     expect(out.extras?.kdbOnly?.map((item) => item.externalKey)).toEqual(["KDB_ONLY_1"]);
+  });
+
+  it("passes deposit protection mode through integrated canonical matching", () => {
+    const out = integrateCanonicalWithMatches({
+      canonicalItems: [
+        { externalKey: "FIN1", badges: ["FINLIFE"] },
+        { externalKey: "FIN2", badges: ["FINLIFE"] },
+        { externalKey: "FIN3", badges: ["FINLIFE"] },
+      ] as TestRow[],
+      isKdbMatched: (item) => item.externalKey === "FIN3",
+      depositProtectionMode: "require",
+    });
+
+    expect(out.items.map((item) => item.externalKey)).toEqual(["FIN3"]);
+    expect(out.items[0]?.signals?.depositProtection).toBe("matched");
   });
 });

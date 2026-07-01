@@ -14,6 +14,10 @@ import {
   GET as runByIdGET,
 } from "../../src/app/api/planning/v2/runs/[id]/route";
 import { buildConfirmString } from "../../src/lib/ops/confirm";
+import {
+  createPlanningRun,
+  parseCreatePlanningRunCommand,
+} from "../../src/lib/planning/server/runs/createRunService";
 import { installPlanningAuthRequiredFalseForTest } from "../planning/auth/testPlanningAuthEnv";
 
 const env = process.env as Record<string, string | undefined>;
@@ -134,6 +138,14 @@ describe("planning v2 persistence routes", () => {
       path.join(process.cwd(), "src/lib/planning/server/runs/routeService.ts"),
       "utf-8",
     );
+    const createRunServiceSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/runs/createRunService.ts"),
+      "utf-8",
+    );
+    const createRunRouteAdapterSource = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/planning/server/runs/createRunRouteAdapter.ts"),
+      "utf-8",
+    );
     const legacyRunRouteSource = fs.readFileSync(
       path.join(process.cwd(), "src/app/api/planning/run/route.ts"),
       "utf-8",
@@ -148,7 +160,7 @@ describe("planning v2 persistence routes", () => {
     expect(runsRouteSource).not.toContain("runResponseSanitizer");
     expect(runsRouteSource).not.toContain("server/runs/repository");
     expect(runsRouteSource).toContain("listCurrentUserRunsForRoute");
-    expect(runsRouteSource).toContain("createCurrentUserRunResponseData");
+    expect(runsRouteSource).toContain("handleCreatePlanningRunPost");
 
     expect(routeServiceSource).toContain("listCurrentUserRuns(options)");
     expect(routeServiceSource).toContain("createCurrentUserRun(input, options)");
@@ -156,8 +168,16 @@ describe("planning v2 persistence routes", () => {
     expect(routeServiceSource).toContain("appendAuditLog");
     expect(routeServiceSource).toContain("appendOpsMetricEvent");
 
-    expect(legacyRunRouteSource).toContain("runsPost");
-    expect(legacyV2RunRouteSource).toContain("runsPost");
+    expect(createRunServiceSource).toContain("createCurrentUserRunResponseData");
+    expect(createRunServiceSource).toContain("runStagePipeline");
+    expect(createRunServiceSource).toContain("recordCurrentUserRunStageMetrics");
+    expect(createRunRouteAdapterSource).toContain("parseCreatePlanningRunCommand");
+    expect(createRunRouteAdapterSource).toContain("createPlanningRun");
+
+    expect(legacyRunRouteSource).not.toContain("runsPost");
+    expect(legacyV2RunRouteSource).not.toContain("runsPost");
+    expect(legacyRunRouteSource).toContain("handleCreatePlanningRunPost");
+    expect(legacyV2RunRouteSource).toContain("handleCreatePlanningRunPost");
   });
 
   it("supports profiles CRUD through routes", async () => {
@@ -385,6 +405,88 @@ describe("planning v2 persistence routes", () => {
     expect(deleteResponse.status).toBe(200);
     expect(deletePayload.ok).toBe(true);
     expect(deletePayload.data?.deleted).toBe(true);
+  });
+
+  it("keeps run creation successful when stage metrics recording fails", async () => {
+    const createProfileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Metrics failure profile",
+      profile: sampleProfile(),
+    }));
+    const createProfilePayload = await createProfileResponse.json() as {
+      data?: { id?: string };
+    };
+    const profileId = String(createProfilePayload.data?.id ?? "");
+    expect(profileId).toBeTruthy();
+
+    const parsed = parseCreatePlanningRunCommand({
+      profileId,
+      title: "metrics failure still creates run",
+      input: {
+        horizonMonths: 24,
+        runScenarios: false,
+        getActions: false,
+        analyzeDebt: false,
+      },
+    });
+    if (!parsed.ok) {
+      throw new Error(`unexpected parse failure: ${parsed.message}`);
+    }
+
+    const result = await createPlanningRun(parsed.command, {
+      requestBaseUrl: `http://${LOCAL_HOST}`,
+    }, {
+      recordStageMetrics: async () => {
+        throw new Error("metrics store unavailable");
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status).toBe(201);
+      expect(result.payload.data.id).toBeTruthy();
+      expect(result.payload.data.profileId).toBe(profileId);
+    }
+  });
+
+  it("keeps run creation successful when audit recording fails", async () => {
+    const createProfileResponse = await profilesPOST(buildJsonRequest("POST", "/api/planning/v2/profiles", {
+      name: "Audit failure profile",
+      profile: sampleProfile(),
+    }));
+    const createProfilePayload = await createProfileResponse.json() as {
+      data?: { id?: string };
+    };
+    const profileId = String(createProfilePayload.data?.id ?? "");
+    expect(profileId).toBeTruthy();
+
+    const parsed = parseCreatePlanningRunCommand({
+      profileId,
+      title: "audit failure still creates run",
+      input: {
+        horizonMonths: 24,
+        runScenarios: false,
+        getActions: false,
+        analyzeDebt: false,
+      },
+    });
+    if (!parsed.ok) {
+      throw new Error(`unexpected parse failure: ${parsed.message}`);
+    }
+
+    const result = await createPlanningRun(parsed.command, {
+      requestBaseUrl: `http://${LOCAL_HOST}`,
+    }, {
+      recordAudit: () => {
+        throw new Error("audit store unavailable");
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.status).toBe(201);
+      expect(result.payload.data.id).toBeTruthy();
+      expect(result.payload.data.profileId).toBe(profileId);
+    }
   });
 
   it("rejects run save when debt offer liabilityId does not match profile debt ids", async () => {

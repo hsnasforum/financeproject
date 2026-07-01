@@ -1,7 +1,7 @@
 import { formatKrw, formatMonths } from "@/lib/planning/i18n/format";
 import { type Stage } from "@/lib/planning/engine";
 import { type PlanningRunOverallStatus } from "@/lib/planning/store/types";
-import { PLANNER_ACTION_LINKS } from "@/lib/planner/compute";
+import { PLANNER_ACTION_LINKS } from "@/lib/planning/catalog/plannerActionLinks";
 import { type ReportVM } from "../../_lib/reportViewModel";
 
 export type ReportSummaryTone = {
@@ -78,29 +78,8 @@ export function compactText(value: string | undefined, maxLength: number): strin
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
-export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
-
-export function asStage(value: unknown): Stage | undefined {
-  return value === "DEFICIT" || value === "DEBT" || value === "EMERGENCY" || value === "INVEST" ? value : undefined;
-}
-
 export function resolvePlanningStage(vm: ReportVM): Stage | undefined {
-  const raw = asRecord(vm.raw);
-  const run = asRecord(raw?.runJson);
-  const outputs = asRecord(run?.outputs);
-  const engine = asRecord(outputs?.engine);
-  const engineFinancialStatus = asRecord(engine?.financialStatus);
-  const simulate = asRecord(outputs?.simulate);
-  const simulateFinancialStatus = asRecord(simulate?.financialStatus);
-
-  return (
-    asStage(engineFinancialStatus?.stage)
-    ?? asStage(engine?.stage)
-    ?? asStage(simulateFinancialStatus?.stage)
-    ?? asStage(simulate?.stage)
-  );
+  return vm.interpretation?.stage;
 }
 
 export function buildActionRecommendHref(input: {
@@ -145,35 +124,25 @@ export function resolveHousingSupportContext(vm: ReportVM): "goal" | "action" | 
   return null;
 }
 
-export function actionSummaryTone(input: {
-  worstCashKrw?: number;
-  criticalWarnings?: number;
-  dsrPct?: number;
-  totalWarnings?: number;
-}): ReportSummaryTone {
-  const worstCash = input.worstCashKrw ?? 0;
-  const criticalWarnings = input.criticalWarnings ?? 0;
-  const dsrPct = input.dsrPct ?? 0;
-  const totalWarnings = input.totalWarnings ?? 0;
-
-  if (worstCash <= 0 || criticalWarnings > 0 || dsrPct >= 60) {
+export function actionSummaryToneFromInterpretation(interpretation?: ReportVM["interpretation"]): ReportSummaryTone {
+  if (interpretation?.severity === "risk") {
     return {
       label: "위험 우선",
       variant: "destructive",
-      reason: "현금 부족, 치명 경고, 높은 DSR 중 하나 이상이 보여 바로 조정이 필요한 상태입니다.",
+      reason: interpretation.headline || "핵심 지표가 위험 구간이라 바로 조정이 필요한 상태입니다.",
     };
   }
-  if (dsrPct >= 40 || totalWarnings >= 8) {
+  if (interpretation?.severity === "caution") {
     return {
       label: "주의 구간",
       variant: "warning",
-      reason: "일부 지표가 경고 구간이라 다음 액션과 월 운영안을 먼저 확인해야 합니다.",
+      reason: interpretation.headline || "일부 지표가 경고 구간이라 다음 액션과 월 운영안을 먼저 확인해야 합니다.",
     };
   }
   return {
     label: "양호",
     variant: "success",
-    reason: "큰 위험 신호는 적지만, 다음 액션과 기준 가정을 확인하면서 유지하는 편이 안전합니다.",
+    reason: interpretation?.headline || "큰 위험 신호는 적지만, 다음 액션과 기준 가정을 확인하면서 유지하는 편이 안전합니다.",
   };
 }
 

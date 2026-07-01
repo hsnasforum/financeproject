@@ -121,6 +121,23 @@ export type PublicApiError = {
   diagnostics?: Record<string, unknown>;
 };
 
+export type DataProvenanceMode = "live" | "cache" | "mock";
+
+export type DataProvenance = {
+  mode: DataProvenanceMode;
+  degraded: boolean;
+  degradedReason?: string;
+  asOf?: string;
+  fetchedAt?: string;
+  source?: string;
+  upstreamStatus?: number;
+  retryAfterSeconds?: number;
+};
+
+export type PublicApiSuccessMeta = Record<string, unknown> & {
+  provenance: DataProvenance;
+};
+
 export type PublicApiResult<T> =
-  | { ok: true; data: T; meta?: Record<string, unknown> }
+  | { ok: true; data: T; meta: PublicApiSuccessMeta }
   | { ok: false; error: PublicApiError };

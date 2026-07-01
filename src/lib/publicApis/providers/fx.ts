@@ -1,6 +1,12 @@
 import fxMock from "@/data/public/fx.mock.json";
-import { fetchExternal, requireServerEnv } from "../../http/fetchExternal";
-import { type ExchangeRateQuote, type PublicApiResult } from "@/lib/publicApis/contracts/types";
+import { ExternalApiError, fetchExternal, requireServerEnv } from "../../http/fetchExternal";
+import { type DataProvenance, type ExchangeRateQuote, type PublicApiResult } from "@/lib/publicApis/contracts/types";
+
+const FX_SOURCE_LABEL = "한국수출입은행";
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
 
 function parseRate(value: unknown): number | null {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -43,6 +49,7 @@ function normalizeKeximJson(raw: unknown, wanted: Set<string>): ExchangeRateQuot
 
 function fromMock(currencies: string[]): ExchangeRateQuote[] {
   const wanted = new Set(currencies);
+  const fetchedAt = nowIso();
   return fxMock.quotes
     .filter((q) => (wanted.size ? wanted.has(q.currency) : true))
     .map((q) => ({
@@ -50,17 +57,54 @@ function fromMock(currencies: string[]): ExchangeRateQuote[] {
       currency: q.currency,
       base: "KRW",
       rate: q.rate,
-      source: "한국수출입은행(mock)",
-      fetchedAt: new Date().toISOString(),
+      source: FX_SOURCE_LABEL,
+      fetchedAt,
     }));
+}
+
+function mockMeta(degradedReason: string, extra?: { upstreamStatus?: number | undefined; retryAfterSeconds?: number | undefined }): { provenance: DataProvenance } {
+  const provenance: DataProvenance = {
+    mode: "mock",
+    degraded: true,
+    degradedReason,
+    asOf: fxMock.asOfDate,
+    fetchedAt: nowIso(),
+    source: FX_SOURCE_LABEL,
+  };
+  if (typeof extra?.upstreamStatus === "number") provenance.upstreamStatus = extra.upstreamStatus;
+  if (typeof extra?.retryAfterSeconds === "number") provenance.retryAfterSeconds = extra.retryAfterSeconds;
+  return {
+    provenance,
+  };
+}
+
+function liveMeta(quotes: ExchangeRateQuote[], fallbackAsOf: string): { provenance: DataProvenance } {
+  return {
+    provenance: {
+      mode: "live",
+      degraded: false,
+      asOf: quotes[0]?.asOfDate ?? fallbackAsOf,
+      fetchedAt: nowIso(),
+      source: FX_SOURCE_LABEL,
+    },
+  };
+}
+
+function fallbackReason(error: unknown): string {
+  if (error instanceof ExternalApiError && error.timeout) return "timeout";
+  return "upstream-failure";
 }
 
 export async function getExchangeQuotes(date: string, currencies: string[]): Promise<PublicApiResult<ExchangeRateQuote[]>> {
   const wanted = new Set(currencies.filter(Boolean));
+  const fallbackToMock = process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0";
+  const hasApiKey = Boolean((process.env.KEXIM_API_KEY ?? "").trim());
 
-  const useMock = process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0" && !process.env.KEXIM_API_KEY;
-  if (useMock) {
-    return { ok: true, data: fromMock(currencies) };
+  if (!hasApiKey) {
+    if (fallbackToMock) {
+      return { ok: true, data: fromMock(currencies), meta: mockMeta("env-missing") };
+    }
+    return { ok: false, error: { code: "CONFIG", message: "KEXIM_API_KEY 설정이 필요합니다." } };
   }
 
   try {
@@ -76,16 +120,34 @@ export async function getExchangeQuotes(date: string, currencies: string[]): Pro
       retryOn: [429, 500, 502, 503, 504],
     });
     if (fetched.kind !== "json") {
+      if (fallbackToMock) {
+        return {
+          ok: true,
+          data: fromMock(currencies),
+          meta: mockMeta("upstream-failure", {
+            upstreamStatus: fetched.status,
+            retryAfterSeconds: fetched.retryAfterSeconds,
+          }),
+        };
+      }
       return { ok: false, error: { code: "UPSTREAM", message: "환율 API 응답 형식이 예상과 다릅니다." } };
     }
 
     const quotes = normalizeKeximJson(fetched.body, wanted);
-    return { ok: true, data: quotes };
+    return { ok: true, data: quotes, meta: liveMeta(quotes, date) };
   } catch (error) {
-    if (process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0") {
-      return { ok: true, data: fromMock(currencies) };
+    if (fallbackToMock) {
+      return {
+        ok: true,
+        data: fromMock(currencies),
+        meta: mockMeta(fallbackReason(error), {
+          upstreamStatus: error instanceof ExternalApiError ? error.status : undefined,
+          retryAfterSeconds: error instanceof ExternalApiError ? error.retryAfterSeconds : undefined,
+        }),
+      };
     }
     const message = error instanceof Error ? error.message : "환율 정보를 가져오지 못했습니다.";
-    return { ok: false, error: { code: "UPSTREAM", message } };
+    const code = error instanceof ExternalApiError ? error.detail.code : "UPSTREAM";
+    return { ok: false, error: { code, message } };
   }
 }

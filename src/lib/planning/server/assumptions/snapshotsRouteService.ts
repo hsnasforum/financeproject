@@ -4,6 +4,7 @@ import {
   loadAssumptionsSnapshotById,
   loadLatestAssumptionsSnapshot,
 } from "../../assumptions/storage";
+import { floorToInteger } from "../../calc/roundingPolicy";
 
 export type RouteAssumptionsSnapshotItem = {
   id: string;
@@ -40,7 +41,7 @@ function computeStaleDays(fetchedAt: string | undefined, now: Date): number | un
   if (!fetchedAt) return undefined;
   const parsed = new Date(fetchedAt);
   if (Number.isNaN(parsed.getTime())) return undefined;
-  const diff = Math.floor((toUtcDayMs(now) - toUtcDayMs(parsed)) / 86_400_000);
+  const diff = floorToInteger((toUtcDayMs(now) - toUtcDayMs(parsed)) / 86_400_000) ?? 0;
   return Math.max(0, diff);
 }
 

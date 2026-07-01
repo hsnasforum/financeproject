@@ -43,6 +43,17 @@ describe("ops error contract fixHref mapping", () => {
     expect(result.body.error.fixHref).toBe("/ops/doctor");
   });
 
+  it("maps STORAGE_UNAVAILABLE to a distinct storage unavailable contract", () => {
+    const result = toOpsContractError({
+      code: "STORAGE_UNAVAILABLE",
+      message: "unavailable",
+      status: 503,
+    });
+    expect(result.status).toBe(503);
+    expect(result.body.error.code).toBe("STORAGE_UNAVAILABLE");
+    expect(result.body.error.fixHref).toBe("/ops/doctor");
+  });
+
   it("maps MIGRATION_FAILED to STORAGE_CORRUPT contract", () => {
     const result = toOpsContractError({
       code: "MIGRATION_FAILED",

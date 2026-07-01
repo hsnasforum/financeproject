@@ -24,7 +24,6 @@ type Props = {
   };
   raw?: {
     reportMarkdown?: string;
-    runJson?: unknown;
     runJsonPreview?: {
       text: string;
       hasMore: boolean;
@@ -87,10 +86,9 @@ function SafeTextViewer(props: {
 }
 
 export default function ReportAdvancedRaw({ reproducibility, raw, onLoadMoreRunJson }: Props) {
-  if (!reproducibility && !raw?.reportMarkdown && !raw?.runJson && !raw?.runJsonPreview) return null;
+  if (!reproducibility && !raw?.reportMarkdown && !raw?.runJsonPreview) return null;
 
   const runJsonPreview = raw?.runJsonPreview;
-  const fallbackRunJson = raw?.runJson ? JSON.stringify(raw.runJson, null, 2) : "";
 
   return (
     <Card className="rounded-[2.5rem] border-slate-100 bg-white p-8 shadow-sm lg:p-10" data-testid="report-advanced-raw">
@@ -198,12 +196,6 @@ export default function ReportAdvancedRaw({ reproducibility, raw, onLoadMoreRunJ
               )}
             </div>
           </details>
-        ) : fallbackRunJson ? (
-          <SafeTextViewer
-            testId="report-advanced-raw-json-fallback"
-            text={fallbackRunJson}
-            title="Run JSON (실행 데이터 스냅샷)"
-          />
         ) : null}
       </div>
     </Card>

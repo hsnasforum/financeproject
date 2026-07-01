@@ -47,7 +47,7 @@ describe("POST /api/planning/v3/transactions/batches/merge", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("returns unsupported and leaves legacy batches unchanged", async () => {
+  it("keeps legacy merge disabled for user requests", async () => {
     const from = await appendBatchFromCsv({
       csvText: [
         "date,amount,description",
@@ -69,6 +69,10 @@ describe("POST /api/planning/v3/transactions/batches/merge", () => {
       accountId: "acc-main",
       fileName: "into.csv",
     });
+    const legacyBatchesPath = path.join(root, "v3", "transactions", "batches.ndjson");
+    const legacyRecordsPath = path.join(root, "v3", "transactions", "records.ndjson");
+    const beforeBatchesRaw = fs.readFileSync(legacyBatchesPath, "utf-8");
+    const beforeRecordsRaw = fs.readFileSync(legacyRecordsPath, "utf-8");
     const intoBefore = await readBatchTransactions(into.batch.id);
     const beforeTxnIds = (intoBefore?.transactions ?? []).map((row) => row.txnId).sort();
 
@@ -80,13 +84,15 @@ describe("POST /api/planning/v3/transactions/batches/merge", () => {
     expect(response.status).toBe(410);
     const payload = await response.json() as {
       ok?: boolean;
-      error?: { code?: string; message?: string };
+      error?: { code?: string };
     };
-    expect(payload.ok).toBe(false);
-    expect(payload.error?.code).toBe("UNSUPPORTED");
+    expect(payload).toMatchObject({ ok: false, error: { code: "UNSUPPORTED" } });
+    expect(fs.readFileSync(legacyBatchesPath, "utf-8")).toBe(beforeBatchesRaw);
+    expect(fs.readFileSync(legacyRecordsPath, "utf-8")).toBe(beforeRecordsRaw);
 
     const intoAfter = await readBatchTransactions(into.batch.id);
     expect(intoAfter).not.toBeNull();
+    expect(intoAfter?.transactions).toEqual(intoBefore?.transactions);
     expect((intoAfter?.transactions ?? []).map((row) => row.txnId).sort()).toEqual(beforeTxnIds);
   });
 });

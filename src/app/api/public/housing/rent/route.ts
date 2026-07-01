@@ -4,6 +4,16 @@ import { getHousingRentBenchmark } from "@/lib/publicApis/providers/housing";
 
 const TTL_SECONDS = 14 * 24 * 60 * 60;
 
+function readPayloadMeta(payload: Record<string, unknown>, fetchedAt: string): Record<string, unknown> {
+  const meta = typeof payload.meta === "object" && payload.meta !== null
+    ? payload.meta as Record<string, unknown>
+    : {};
+  const provenance = typeof meta.provenance === "object" && meta.provenance !== null
+    ? meta.provenance
+    : { mode: "cache", degraded: true, degradedReason: "legacy-cache", fetchedAt };
+  return { ...meta, provenance };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const regionCode = (searchParams.get("regionCode") ?? "11680").trim();
@@ -11,14 +21,14 @@ export async function GET(request: Request) {
   const areaBand = (searchParams.get("areaBand") ?? "84").trim();
   const rentType = (searchParams.get("rentType") ?? "all").trim().toLowerCase();
 
-  const key = makeApiCacheKey("housing-rent", { regionCode, month, areaBand, rentType });
+  const key = makeApiCacheKey("housing-rent", { regionCode, month, areaBand, rentType }, "v2");
   const hit = getApiCacheRecord(key);
   if (hit) {
     const payload = hit.entry.payload as Record<string, unknown>;
     return NextResponse.json({
       ...payload,
       meta: {
-        ...(typeof payload.meta === "object" && payload.meta !== null ? payload.meta : {}),
+        ...readPayloadMeta(payload, hit.entry.fetchedAt),
         cache: "hit",
         key,
         fetchedAt: hit.entry.fetchedAt,
@@ -47,11 +57,13 @@ export async function GET(request: Request) {
     ok: true,
     data,
     assumptions: { note: "전월세 벤치마크는 참고용입니다. 개별 계약 조건에 따라 달라질 수 있습니다." },
+    meta: result.meta,
   };
   const entry = setApiCache(key, payload, TTL_SECONDS);
   return NextResponse.json({
     ...payload,
     meta: {
+      ...result.meta,
       cache: "miss",
       key,
       fetchedAt: entry.fetchedAt,

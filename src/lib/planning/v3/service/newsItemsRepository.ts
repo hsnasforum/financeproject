@@ -2,8 +2,8 @@ import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
 import { loadEffectiveNewsConfig } from "@/lib/planning/v3/news/settings";
 import { readAllItems, readTrendsCache } from "@/lib/planning/v3/news/store";
 import { closeNewsDatabase, openNewsDatabase, readNewsTopicTrends, type BurstLevel } from "../news/items";
-import { resolveNewsRootDir } from "../../../../../planning/v3/news/rootDir";
-import { scoreItems } from "../../../../../planning/v3/news/select/score";
+import { resolveNewsRootDir } from "@/lib/planning/v3/news/rootDir";
+import { scoreItems } from "@/lib/planning/v3/news/select/score";
 
 export type { BurstLevel };
 

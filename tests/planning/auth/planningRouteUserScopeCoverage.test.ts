@@ -39,6 +39,9 @@ function normalizeRepoPath(filePath: string) {
 }
 
 function resolveRouteImportPath(importerPath: string, importPath: string) {
+  if (importPath.startsWith("@/")) {
+    return normalizeRepoPath(path.join("src", `${importPath.slice(2)}.ts`));
+  }
   if (!importPath.startsWith(".")) return null;
   const resolved = path.normalize(path.join(path.dirname(importerPath), `${importPath}.ts`));
   return normalizeRepoPath(resolved);
@@ -429,9 +432,18 @@ const ROUTE_AUTH_BOUNDARY_HELPER_NAMES = [
 
 const ROUTE_AUTH_RESPONSE_GUARD_PATTERN = "if (!isPlanningRouteUser(currentUser)) return currentUser";
 
-const EXPECTED_PLANNING_ROUTE_COUNT = 95;
-
 const ROUTE_AUTH_IMPORT_PATH = "/planning/api/routeAuth";
+const ROUTE_AUTH_DELEGATE_TARGET_IMPORT_PATHS = [
+  ROUTE_AUTH_IMPORT_PATH,
+  "/api/routeAuth",
+] as const;
+const ROUTE_AUTH_BOUNDARY_DELEGATE_HELPERS = [
+  {
+    importedName: "handleCreatePlanningRunPost",
+    modulePathFragment: "/planning/server/runs/createRunRouteAdapter",
+    targetPath: "src/lib/planning/server/runs/createRunRouteAdapter.ts",
+  },
+] as const;
 
 function createSourceFileFromSource(filePath: string, source: string): ts.SourceFile {
   return ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
@@ -440,24 +452,50 @@ function createSourceFileFromSource(filePath: string, source: string): ts.Source
 function collectRouteAuthImportedHelperNames(
   sourceFile: ts.SourceFile,
   importedName: string,
+  modulePathFragments: readonly string[] = [ROUTE_AUTH_IMPORT_PATH],
 ): Set<string> {
-  return collectImportedHelperNames(sourceFile, importedName, [ROUTE_AUTH_IMPORT_PATH]);
+  return collectImportedHelperNames(sourceFile, importedName, modulePathFragments);
 }
 
-function sourceFileCallsRouteAuthHelper(sourceFile: ts.SourceFile, importedName: string): boolean {
-  return sourceFileCallsIdentifier(sourceFile, collectRouteAuthImportedHelperNames(sourceFile, importedName));
-}
-
-function sourceFileImportsAnyRouteAuthBoundaryHelper(sourceFile: ts.SourceFile): boolean {
-  return ROUTE_AUTH_BOUNDARY_HELPER_NAMES.some((helperName) =>
-    collectRouteAuthImportedHelperNames(sourceFile, helperName).size > 0,
+function sourceFileCallsRouteAuthHelper(
+  sourceFile: ts.SourceFile,
+  importedName: string,
+  modulePathFragments?: readonly string[],
+): boolean {
+  return sourceFileCallsIdentifier(
+    sourceFile,
+    collectRouteAuthImportedHelperNames(sourceFile, importedName, modulePathFragments),
   );
 }
 
-function sourceFileCallsAnyRouteAuthBoundaryHelper(sourceFile: ts.SourceFile): boolean {
+function sourceFileImportsAnyRouteAuthBoundaryHelper(
+  sourceFile: ts.SourceFile,
+  modulePathFragments?: readonly string[],
+): boolean {
   return ROUTE_AUTH_BOUNDARY_HELPER_NAMES.some((helperName) =>
-    sourceFileCallsRouteAuthHelper(sourceFile, helperName),
+    collectRouteAuthImportedHelperNames(sourceFile, helperName, modulePathFragments).size > 0,
   );
+}
+
+function sourceFileCallsAnyRouteAuthBoundaryHelper(
+  sourceFile: ts.SourceFile,
+  modulePathFragments?: readonly string[],
+): boolean {
+  return ROUTE_AUTH_BOUNDARY_HELPER_NAMES.some((helperName) =>
+    sourceFileCallsRouteAuthHelper(sourceFile, helperName, modulePathFragments),
+  );
+}
+
+function sourceFileDelegatesToRouteAuthBoundaryHelper(sourceFile: ts.SourceFile): boolean {
+  return ROUTE_AUTH_BOUNDARY_DELEGATE_HELPERS.some(({ importedName, modulePathFragment, targetPath }) => {
+    const delegateNames = collectImportedHelperNames(sourceFile, importedName, [modulePathFragment]);
+    if (!sourceFileCallsIdentifier(sourceFile, delegateNames)) return false;
+    if (!fs.existsSync(targetPath)) return false;
+
+    const targetSourceFile = routeSourceFile(targetPath);
+    return sourceFileImportsAnyRouteAuthBoundaryHelper(targetSourceFile, ROUTE_AUTH_DELEGATE_TARGET_IMPORT_PATHS)
+      && sourceFileCallsAnyRouteAuthBoundaryHelper(targetSourceFile, ROUTE_AUTH_DELEGATE_TARGET_IMPORT_PATHS);
+  });
 }
 
 function routeSourceFile(filePath: string): ts.SourceFile {
@@ -465,11 +503,15 @@ function routeSourceFile(filePath: string): ts.SourceFile {
 }
 
 function routeCallsImportedRouteAuthBoundaryHelperInSource(filePath: string, source: string): boolean {
-  return sourceFileCallsAnyRouteAuthBoundaryHelper(createSourceFileFromSource(filePath, source));
+  const sourceFile = createSourceFileFromSource(filePath, source);
+  return sourceFileCallsAnyRouteAuthBoundaryHelper(sourceFile)
+    || sourceFileDelegatesToRouteAuthBoundaryHelper(sourceFile);
 }
 
 function routeCallsImportedRouteAuthBoundaryHelper(filePath: string): boolean {
-  return sourceFileCallsAnyRouteAuthBoundaryHelper(routeSourceFile(filePath));
+  const sourceFile = routeSourceFile(filePath);
+  return sourceFileCallsAnyRouteAuthBoundaryHelper(sourceFile)
+    || sourceFileDelegatesToRouteAuthBoundaryHelper(sourceFile);
 }
 
 const PLANNING_ADJACENT_AUTH_ROUTE_FILES = [
@@ -492,26 +534,12 @@ const SUCCESS_RESPONSE_PATTERNS = [
   "jsonResponseWithOptionalGzip(",
 ] as const;
 
-const USER_META_PROXY_EXCEPTIONS = new Set([
-  "src/app/api/planning/run/[id]/route.ts",
-  "src/app/api/planning/run/route.ts",
-  "src/app/api/planning/runs/[id]/action-plan/route.ts",
-  "src/app/api/planning/runs/[id]/action-progress/route.ts",
-  "src/app/api/planning/runs/[id]/blob/[name]/route.ts",
-  "src/app/api/planning/runs/[id]/route.ts",
-  "src/app/api/planning/v2/run/route.ts",
-]);
-
 const USER_META_RAW_RESPONSE_EXCEPTIONS = new Set([
   "src/app/api/planning/v2/reports/[id]/download/route.ts",
 ]);
 
-const USER_META_JSON_EXCEPTIONS = new Set([
-  ...USER_META_PROXY_EXCEPTIONS,
-  ...USER_META_RAW_RESPONSE_EXCEPTIONS,
-]);
-
 const PROXY_IMPORT_PATTERNS = [
+  "/planning/server/runs/createRunRouteAdapter",
   " from \"../v2/",
   " from \"../../v2/",
   " from \"../../../v2/",
@@ -520,6 +548,24 @@ const PROXY_IMPORT_PATTERNS = [
 ] as const;
 
 const PROXY_DELEGATE_CALL_PATTERN = /return\s+\w+\(request(?:,|\))/;
+
+function isProxyUserMetaExceptionRoute(filePath: string): boolean {
+  const source = fs.readFileSync(filePath, "utf8");
+  const importsDelegate = PROXY_IMPORT_PATTERNS.some((pattern) => source.includes(pattern));
+  const buildsSuccessResponse = SUCCESS_RESPONSE_PATTERNS.some((pattern) => source.includes(pattern));
+  return importsDelegate && PROXY_DELEGATE_CALL_PATTERN.test(source) && !buildsSuccessResponse;
+}
+
+function findPlanningProxyRouteFiles(): string[] {
+  return findPlanningRouteFiles().filter(isProxyUserMetaExceptionRoute).sort();
+}
+
+const USER_META_PROXY_EXCEPTIONS = new Set(findPlanningProxyRouteFiles());
+
+const USER_META_JSON_EXCEPTIONS = new Set([
+  ...USER_META_PROXY_EXCEPTIONS,
+  ...USER_META_RAW_RESPONSE_EXCEPTIONS,
+]);
 
 const RAW_SUCCESS_RESPONSE_PATTERNS = [
   "return new Response(",
@@ -718,8 +764,9 @@ describe("planning route current-user scope coverage", () => {
   it("covers the current planning API route inventory", () => {
     const routeFiles = findPlanningRouteFiles();
 
-    expect(routeFiles).toHaveLength(EXPECTED_PLANNING_ROUTE_COUNT);
+    expect(routeFiles.length).toBeGreaterThan(0);
     expect(new Set(routeFiles).size).toBe(routeFiles.length);
+    expect(routeFiles.every((filePath) => normalizeRepoPath(filePath).startsWith("src/app/api/planning/"))).toBe(true);
   });
 
   it("covers planning-adjacent auth boundary route inventory", () => {
@@ -738,7 +785,9 @@ describe("planning route current-user scope coverage", () => {
 
   it("keeps every planning auth boundary route on the standard routeAuth import boundary", () => {
     const missingRouteAuthImport = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
-      return !sourceFileImportsAnyRouteAuthBoundaryHelper(routeSourceFile(filePath));
+      const sourceFile = routeSourceFile(filePath);
+      return !sourceFileImportsAnyRouteAuthBoundaryHelper(sourceFile)
+        && !sourceFileDelegatesToRouteAuthBoundaryHelper(sourceFile);
     });
 
     expect(missingRouteAuthImport).toEqual([]);

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
 import { atomicWriteJson } from "../storage/atomicWrite";
+import { withPlanningStoreWriteLock } from "../storage/storeWriteLock";
 import { resolveProfileRunDir, resolveRunDir, sanitizeRecordId } from "./paths";
 import {
   type PlanningRunActionPlan,
@@ -13,15 +14,16 @@ import {
   type PlanningRunRecord,
 } from "./types";
 import { resolveReportResultDtoFromRun } from "../reports/reportInputContract";
-import { getRun } from "./runStore";
 import { buildInterpretationVM } from "../v2/insights/interpretationVm";
 import { resolveInterpretationActionHref } from "../v2/insights/actionLinks";
 import { type GoalStatusRow } from "../v2/resultGuide";
 import { type ActionItemV2 } from "../v2/actions/types";
 import { roundKrw } from "../calc/roundingPolicy";
+import { getRun, listRuns, updateRun } from "./runStore";
 
 const ACTION_PLAN_FILE = "action-plan.json";
 const ACTION_PROGRESS_FILE = "action-progress.json";
+const ACTION_CENTER_LEGACY_BACKUP_FILE = "action-center-legacy-backup.json";
 
 function assertServerOnly(): void {
   if (typeof window !== "undefined") {
@@ -87,18 +89,36 @@ async function resolveActionProgressPath(runId: string): Promise<string> {
   return path.join(await resolveActionDir(runId), ACTION_PROGRESS_FILE);
 }
 
+async function resolveActionCenterLegacyBackupPath(runId: string): Promise<string> {
+  return path.join(await resolveActionDir(runId), ACTION_CENTER_LEGACY_BACKUP_FILE);
+}
+
 function isRecoverableJsonReadError(error: unknown): boolean {
   const nodeError = error as NodeJS.ErrnoException;
   if (nodeError?.code === "ENOENT") return true;
   return error instanceof SyntaxError;
 }
 
-async function readJsonFile(filePath: string): Promise<unknown | null> {
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+async function readJsonFile(
+  filePath: string,
+  options?: { rewriteDecoded?: boolean },
+): Promise<unknown | null> {
   try {
     const raw = await fs.readFile(filePath, "utf-8");
     const loaded = JSON.parse(raw) as unknown;
     const decoded = await decodeStoragePayload(loaded);
-    if (decoded.rewriteToVault) {
+    if (decoded.rewriteToVault && options?.rewriteDecoded !== false) {
       await writeJsonAtomic(filePath, decoded.payload);
     }
     return decoded.payload;
@@ -111,6 +131,10 @@ async function readJsonFile(filePath: string): Promise<unknown | null> {
 async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
   const stored = await encodeStoragePayload(payload);
   await atomicWriteJson(filePath, stored);
+}
+
+function withRunActionWriteLock<T>(runId: string, callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning:runs:action-center:${sanitizeRecordId(runId)}`, callback);
 }
 
 function isActionStatus(value: unknown): value is PlanningRunActionStatus {
@@ -171,6 +195,41 @@ function parseActionProgress(payload: unknown, runId: string): PlanningRunAction
     runId,
     updatedAt,
     items,
+  };
+}
+
+type LegacyActionCenterBackup = {
+  version: 1;
+  runId: string;
+  profileId: string;
+  backedUpAt: string;
+  actionCenter: {
+    plan: PlanningRunActionPlan;
+    progress: PlanningRunActionProgress;
+  };
+};
+
+function parseLegacyActionCenterBackup(payload: unknown, runId: string): LegacyActionCenterBackup | null {
+  const row = asRecord(payload);
+  if (Number(row.version) !== 1) return null;
+  if (asString(row.runId) !== runId) return null;
+  const backedUpAt = asString(row.backedUpAt);
+  if (!backedUpAt || !Number.isFinite(Date.parse(backedUpAt))) return null;
+  const profileId = asString(row.profileId);
+  if (!profileId) return null;
+  const actionCenter = asRecord(row.actionCenter);
+  const plan = parseActionPlan(actionCenter.plan, runId);
+  const progress = parseActionProgress(actionCenter.progress, runId);
+  if (!plan || !progress) return null;
+  return {
+    version: 1,
+    runId,
+    profileId,
+    backedUpAt,
+    actionCenter: {
+      plan,
+      progress,
+    },
   };
 }
 
@@ -325,12 +384,14 @@ export async function getRunActionPlan(runId: string): Promise<PlanningRunAction
 
 export async function ensureRunActionPlan(run: PlanningRunRecord): Promise<PlanningRunActionPlan> {
   const safeRunId = sanitizeRecordId(run.id);
-  const existing = await getRunActionPlan(safeRunId);
-  if (existing) return existing;
+  return withRunActionWriteLock(safeRunId, async () => {
+    const existing = await getRunActionPlan(safeRunId);
+    if (existing) return existing;
 
-  const generated = buildActionPlanFromRun(run);
-  await writeJsonAtomic(await resolveActionPlanPath(safeRunId), generated);
-  return generated;
+    const generated = buildActionPlanFromRun(run);
+    await writeJsonAtomic(await resolveActionPlanPath(safeRunId), generated);
+    return generated;
+  });
 }
 
 function buildDefaultProgress(plan: PlanningRunActionPlan): PlanningRunActionProgress {
@@ -378,26 +439,320 @@ function mergeProgressWithPlan(
   };
 }
 
+function shouldRewriteProgress(
+  current: PlanningRunActionProgress | null,
+  next: PlanningRunActionProgress,
+): boolean {
+  return !current
+    || current.items.length !== next.items.length
+    || current.items.some((item, index) => {
+      const nextItem = next.items[index];
+      if (!nextItem) return true;
+      return item.actionKey !== nextItem.actionKey
+        || item.status !== nextItem.status
+        || asString(item.note) !== asString(nextItem.note)
+        || asString(item.doneAt) !== asString(nextItem.doneAt);
+    });
+}
+
 export async function getRunActionProgress(runId: string): Promise<PlanningRunActionProgress | null> {
   const safeRunId = sanitizeRecordId(runId);
-  const run = await getRun(safeRunId);
-  if (!run) return null;
-  const plan = await ensureRunActionPlan(run);
   const loaded = await readJsonFile(await resolveActionProgressPath(safeRunId));
-  const parsed = parseActionProgress(loaded, safeRunId);
-  const merged = mergeProgressWithPlan(plan, parsed);
+  return parseActionProgress(loaded, safeRunId);
+}
 
-  const changed = !parsed
-    || parsed.items.length !== merged.items.length
-    || parsed.items.some((item, index) => {
-      const next = merged.items[index];
-      if (!next) return true;
-      return item.actionKey !== next.actionKey || item.status !== next.status || asString(item.note) !== asString(next.note);
-    });
-  if (changed) {
-    await writeJsonAtomic(await resolveActionProgressPath(safeRunId), merged);
+export async function ensureRunActionProgress(
+  run: PlanningRunRecord,
+  planInput?: PlanningRunActionPlan,
+): Promise<PlanningRunActionProgress> {
+  const safeRunId = sanitizeRecordId(run.id);
+  return withRunActionWriteLock(safeRunId, async () => {
+    const plan = planInput ?? await ensureRunActionPlan(run);
+    const loaded = await readJsonFile(await resolveActionProgressPath(safeRunId));
+    const parsed = parseActionProgress(loaded, safeRunId);
+    const merged = mergeProgressWithPlan(plan, parsed);
+
+    if (shouldRewriteProgress(parsed, merged)) {
+      await writeJsonAtomic(await resolveActionProgressPath(safeRunId), merged);
+    }
+    return merged;
+  });
+}
+
+export async function getRunActionProgressSummaries(
+  runs: PlanningRunRecord[],
+): Promise<Record<string, RunActionProgressSummary>> {
+  const entries = await Promise.all(runs.map(async (run) => {
+    try {
+      const progress = await getRunActionProgress(run.id) ?? run.actionCenter?.progress ?? null;
+      if (!progress) return null;
+      return [run.id, summarizeRunActionProgress(progress)] as const;
+    } catch {
+      return null;
+    }
+  }));
+  return Object.fromEntries(
+    entries.filter(
+      (entry): entry is readonly [string, RunActionProgressSummary] => entry !== null,
+    ),
+  );
+}
+
+export type RunActionCenterMigrationItem = {
+  runId: string;
+  profileId: string;
+  status: "candidate" | "migrated" | "rolled-back" | "skipped" | "failed";
+  reason: string;
+  canonicalPlan: "missing" | "present" | "invalid" | "not-checked";
+  canonicalProgress: "missing" | "present" | "invalid" | "not-checked";
+  backupWritten: boolean;
+  embeddedRemoved: boolean;
+  rollbackVerified: boolean;
+};
+
+export type RunActionCenterMigrationReport = {
+  version: 1;
+  mode: "dry-run" | "apply" | "rollback";
+  dryRun: boolean;
+  generatedAt: string;
+  summary: {
+    scanned: number;
+    candidates: number;
+    migrated: number;
+    rolledBack: number;
+    skipped: number;
+    failed: number;
+    backupsWritten: number;
+    embeddedRemoved: number;
+    planFilesWritten: number;
+    progressFilesWritten: number;
+    rollbackVerified: number;
+  };
+  items: RunActionCenterMigrationItem[];
+};
+
+type ActionCenterCanonicalState = {
+  plan: "missing" | "present" | "invalid";
+  progress: "missing" | "present" | "invalid";
+  parsedPlan: PlanningRunActionPlan | null;
+  parsedProgress: PlanningRunActionProgress | null;
+};
+
+async function readCanonicalActionCenterState(
+  runId: string,
+  options?: { rewriteDecoded?: boolean },
+): Promise<ActionCenterCanonicalState> {
+  const safeRunId = sanitizeRecordId(runId);
+  const planPath = await resolveActionPlanPath(safeRunId);
+  const progressPath = await resolveActionProgressPath(safeRunId);
+  const planExists = await fileExists(planPath);
+  const progressExists = await fileExists(progressPath);
+  const parsedPlan = parseActionPlan(await readJsonFile(planPath, options), safeRunId);
+  const parsedProgress = parseActionProgress(await readJsonFile(progressPath, options), safeRunId);
+  return {
+    plan: parsedPlan ? "present" : planExists ? "invalid" : "missing",
+    progress: parsedProgress ? "present" : progressExists ? "invalid" : "missing",
+    parsedPlan,
+    parsedProgress,
+  };
+}
+
+function createMigrationItem(input: {
+  run: PlanningRunRecord;
+  status: RunActionCenterMigrationItem["status"];
+  reason: string;
+  canonical?: Partial<Pick<RunActionCenterMigrationItem, "canonicalPlan" | "canonicalProgress">>;
+  backupWritten?: boolean;
+  embeddedRemoved?: boolean;
+  rollbackVerified?: boolean;
+}): RunActionCenterMigrationItem {
+  return {
+    runId: input.run.id,
+    profileId: input.run.profileId,
+    status: input.status,
+    reason: input.reason,
+    canonicalPlan: input.canonical?.canonicalPlan ?? "not-checked",
+    canonicalProgress: input.canonical?.canonicalProgress ?? "not-checked",
+    backupWritten: input.backupWritten === true,
+    embeddedRemoved: input.embeddedRemoved === true,
+    rollbackVerified: input.rollbackVerified === true,
+  };
+}
+
+function summarizeMigrationItems(items: RunActionCenterMigrationItem[]): RunActionCenterMigrationReport["summary"] {
+  return {
+    scanned: items.length,
+    candidates: items.filter((item) => item.status === "candidate").length,
+    migrated: items.filter((item) => item.status === "migrated").length,
+    rolledBack: items.filter((item) => item.status === "rolled-back").length,
+    skipped: items.filter((item) => item.status === "skipped").length,
+    failed: items.filter((item) => item.status === "failed").length,
+    backupsWritten: items.filter((item) => item.backupWritten).length,
+    embeddedRemoved: items.filter((item) => item.embeddedRemoved).length,
+    planFilesWritten: items.filter((item) => item.reason.includes("plan-written")).length,
+    progressFilesWritten: items.filter((item) => item.reason.includes("progress-written")).length,
+    rollbackVerified: items.filter((item) => item.rollbackVerified).length,
+  };
+}
+
+async function migrateOneEmbeddedActionCenter(run: PlanningRunRecord): Promise<RunActionCenterMigrationItem> {
+  const embedded = run.actionCenter;
+  if (!embedded) {
+    return createMigrationItem({ run, status: "skipped", reason: "no-embedded-action-center" });
   }
-  return merged;
+  const plan = parseActionPlan(embedded.plan, run.id);
+  const progress = parseActionProgress(embedded.progress, run.id);
+  if (!plan || !progress) {
+    return createMigrationItem({ run, status: "failed", reason: "invalid-embedded-action-center" });
+  }
+
+  const canonical = await readCanonicalActionCenterState(run.id);
+  if (canonical.plan === "invalid" || canonical.progress === "invalid") {
+    return createMigrationItem({
+      run,
+      status: "failed",
+      reason: "invalid-canonical-file",
+      canonical: {
+        canonicalPlan: canonical.plan,
+        canonicalProgress: canonical.progress,
+      },
+    });
+  }
+
+  const backup: LegacyActionCenterBackup = {
+    version: 1,
+    runId: run.id,
+    profileId: run.profileId,
+    backedUpAt: nowIso(),
+    actionCenter: {
+      plan,
+      progress,
+    },
+  };
+  await writeJsonAtomic(await resolveActionCenterLegacyBackupPath(run.id), backup);
+  let planWritten = false;
+  let progressWritten = false;
+  if (!canonical.parsedPlan) {
+    await writeJsonAtomic(await resolveActionPlanPath(run.id), plan);
+    planWritten = true;
+  }
+  if (!canonical.parsedProgress) {
+    await writeJsonAtomic(await resolveActionProgressPath(run.id), progress);
+    progressWritten = true;
+  }
+  await updateRun(run.id, { actionCenter: null });
+
+  const reasonParts = [
+    "embedded-migrated",
+    ...(planWritten ? ["plan-written"] : []),
+    ...(progressWritten ? ["progress-written"] : []),
+  ];
+  return createMigrationItem({
+    run,
+    status: "migrated",
+    reason: reasonParts.join(","),
+    canonical: {
+      canonicalPlan: canonical.plan,
+      canonicalProgress: canonical.progress,
+    },
+    backupWritten: true,
+    embeddedRemoved: true,
+  });
+}
+
+async function rollbackOneEmbeddedActionCenter(run: PlanningRunRecord): Promise<RunActionCenterMigrationItem> {
+  const backup = parseLegacyActionCenterBackup(
+    await readJsonFile(await resolveActionCenterLegacyBackupPath(run.id)),
+    run.id,
+  );
+  if (!backup) {
+    return createMigrationItem({ run, status: "skipped", reason: "no-valid-backup" });
+  }
+  await updateRun(run.id, { actionCenter: backup.actionCenter });
+  const restored = await getRun(run.id);
+  const rollbackVerified = restored?.actionCenter?.progress.updatedAt === backup.actionCenter.progress.updatedAt
+    && restored.actionCenter.plan.generatedAt === backup.actionCenter.plan.generatedAt;
+  return createMigrationItem({
+    run,
+    status: rollbackVerified ? "rolled-back" : "failed",
+    reason: rollbackVerified ? "embedded-restored" : "rollback-verification-failed",
+    rollbackVerified,
+  });
+}
+
+export async function migrateEmbeddedRunActionCenters(options?: {
+  dryRun?: boolean;
+  rollback?: boolean;
+  limit?: number;
+}): Promise<RunActionCenterMigrationReport> {
+  const dryRun = options?.dryRun !== false;
+  const rollback = options?.rollback === true;
+  const mode: RunActionCenterMigrationReport["mode"] = rollback ? "rollback" : dryRun ? "dry-run" : "apply";
+  const limit = Math.max(1, Math.trunc(Number(options?.limit ?? 500)));
+  const runs = await listRuns({ limit });
+  const items: RunActionCenterMigrationItem[] = [];
+
+  for (const run of runs) {
+    if (rollback) {
+      const backup = parseLegacyActionCenterBackup(
+        await readJsonFile(await resolveActionCenterLegacyBackupPath(run.id), { rewriteDecoded: !dryRun }),
+        run.id,
+      );
+      if (!backup) {
+        items.push(createMigrationItem({ run, status: "skipped", reason: "no-valid-backup" }));
+        continue;
+      }
+      items.push(dryRun
+        ? createMigrationItem({ run, status: "candidate", reason: "rollback-backup-found" })
+        : await rollbackOneEmbeddedActionCenter(run));
+      continue;
+    }
+
+    const embedded = run.actionCenter;
+    if (!embedded) {
+      items.push(createMigrationItem({ run, status: "skipped", reason: "no-embedded-action-center" }));
+      continue;
+    }
+    const plan = parseActionPlan(embedded.plan, run.id);
+    const progress = parseActionProgress(embedded.progress, run.id);
+    if (!plan || !progress) {
+      items.push(createMigrationItem({ run, status: "failed", reason: "invalid-embedded-action-center" }));
+      continue;
+    }
+    const canonical = await readCanonicalActionCenterState(run.id, { rewriteDecoded: !dryRun });
+    if (canonical.plan === "invalid" || canonical.progress === "invalid") {
+      items.push(createMigrationItem({
+        run,
+        status: "failed",
+        reason: "invalid-canonical-file",
+        canonical: {
+          canonicalPlan: canonical.plan,
+          canonicalProgress: canonical.progress,
+        },
+      }));
+      continue;
+    }
+    items.push(dryRun
+      ? createMigrationItem({
+        run,
+        status: "candidate",
+        reason: "embedded-action-center-found",
+        canonical: {
+          canonicalPlan: canonical.plan,
+          canonicalProgress: canonical.progress,
+        },
+      })
+      : await migrateOneEmbeddedActionCenter(run));
+  }
+
+  return {
+    version: 1,
+    mode,
+    dryRun,
+    generatedAt: nowIso(),
+    summary: summarizeMigrationItems(items),
+    items,
+  };
 }
 
 export async function updateRunActionProgress(
@@ -409,43 +764,46 @@ export async function updateRunActionProgress(
   },
 ): Promise<PlanningRunActionProgress> {
   const safeRunId = sanitizeRecordId(runId);
-  const progress = await getRunActionProgress(safeRunId);
-  if (!progress) {
-    throw new Error("RUN_NOT_FOUND");
-  }
-  const actionKey = asString(input.actionKey);
-  if (!actionKey) {
-    throw new Error("ACTION_KEY_REQUIRED");
-  }
-  const index = progress.items.findIndex((item) => item.actionKey === actionKey);
-  if (index < 0) {
-    throw new Error("ACTION_KEY_NOT_FOUND");
-  }
-  if (input.status !== undefined && !isActionStatus(input.status)) {
-    throw new Error("ACTION_STATUS_INVALID");
-  }
-  const current = progress.items[index];
-  const note = input.note === undefined ? current.note : asString(input.note);
-  const nextStatus = input.status ?? current.status;
-  const updatedAt = nowIso();
-  const nextItem: PlanningRunActionProgressItem = {
-    ...current,
-    status: nextStatus,
-    ...(note ? { note } : {}),
-    ...(nextStatus === "done" ? { doneAt: current.doneAt ?? updatedAt } : {}),
-    updatedAt,
-  };
-  if (!note) {
-    delete (nextItem as { note?: string }).note;
-  }
-  if (nextStatus !== "done") {
-    delete (nextItem as { doneAt?: string }).doneAt;
-  }
-  const next: PlanningRunActionProgress = {
-    ...progress,
-    updatedAt,
-    items: progress.items.map((item, itemIndex) => (itemIndex === index ? nextItem : item)),
-  };
-  await writeJsonAtomic(await resolveActionProgressPath(safeRunId), next);
-  return next;
+  return withRunActionWriteLock(safeRunId, async () => {
+    const run = await getRun(safeRunId);
+    if (!run) {
+      throw new Error("RUN_NOT_FOUND");
+    }
+    const progress = await ensureRunActionProgress(run);
+    const actionKey = asString(input.actionKey);
+    if (!actionKey) {
+      throw new Error("ACTION_KEY_REQUIRED");
+    }
+    const index = progress.items.findIndex((item) => item.actionKey === actionKey);
+    if (index < 0) {
+      throw new Error("ACTION_KEY_NOT_FOUND");
+    }
+    if (input.status !== undefined && !isActionStatus(input.status)) {
+      throw new Error("ACTION_STATUS_INVALID");
+    }
+    const current = progress.items[index];
+    const note = input.note === undefined ? current.note : asString(input.note);
+    const nextStatus = input.status ?? current.status;
+    const updatedAt = nowIso();
+    const nextItem: PlanningRunActionProgressItem = {
+      ...current,
+      status: nextStatus,
+      ...(note ? { note } : {}),
+      ...(nextStatus === "done" ? { doneAt: current.doneAt ?? updatedAt } : {}),
+      updatedAt,
+    };
+    if (!note) {
+      delete (nextItem as { note?: string }).note;
+    }
+    if (nextStatus !== "done") {
+      delete (nextItem as { doneAt?: string }).doneAt;
+    }
+    const next: PlanningRunActionProgress = {
+      ...progress,
+      updatedAt,
+      items: progress.items.map((item, itemIndex) => (itemIndex === index ? nextItem : item)),
+    };
+    await writeJsonAtomic(await resolveActionProgressPath(safeRunId), next);
+    return next;
+  });
 }

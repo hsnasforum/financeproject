@@ -3,6 +3,7 @@ import { aggregateWarnings as aggregateGuideWarnings } from "@/lib/planning/v2/r
 import { buildResultSummaryMetrics, type ResultSummaryEvidence } from "@/lib/planning/v2/resultSummary";
 import { type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
 import { type ActionItemV2 } from "@/lib/planning/v2/actions/types";
+import { warningFallbackMessage } from "@/lib/planning/catalog/warningCatalog";
 
 export type WorkspaceGuideBadge = {
   status: "risk" | "warn" | "ok";
@@ -550,7 +551,7 @@ export function buildWorkspaceResultSummaryVm(input: {
       count: warning.count,
       ...(typeof warning.firstMonth === "number" ? { firstMonth: warning.firstMonth } : {}),
       ...(typeof warning.lastMonth === "number" ? { lastMonth: warning.lastMonth } : {}),
-      sampleMessage: warning.sampleMessage ?? `${warning.code} 경고가 감지되었습니다.`,
+      sampleMessage: warning.sampleMessage ?? warningFallbackMessage(warning.code),
     };
   });
   const aggregatedWarnings = aggregatedWarningsForInsight.map((warning) => ({

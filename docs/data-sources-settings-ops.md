@@ -33,7 +33,10 @@
 1. `replayEnabled=yes`는 최근 스냅샷 재생 가능 상태를 뜻하며, live upstream 성공과 같은 의미는 아닙니다.
 2. 일부 ping은 `PUBLIC_APIS_FALLBACK_TO_MOCK`가 켜져 있으면 mock/fallback 데이터로 200을 반환할 수 있습니다.
 3. 특히 국토부 매매·전월세 ping은 upstream 오류가 있어도 fallback/mock 경로로 회복될 수 있으니, `최근 연결 확인`만으로 live 상태를 단정하지 않습니다.
-4. live 여부를 분리해서 보고 싶으면 아래 진단 표의 `replayEnabled`, `lastSnapshotGeneratedAt`, 최근 오류 목록을 같이 확인합니다.
+4. public API 성공 응답은 `meta.provenance.mode`(`live`/`cache`/`mock`)와 `meta.provenance.degraded`를 함께 봅니다. `ok=true`만으로 live 성공이라고 해석하지 않습니다.
+5. `degraded=true`이면 UI의 최근 연결 확인은 `주의`로 표시하고, `degradedReason`을 운영 판단 근거로 남깁니다.
+6. live 여부를 분리해서 보고 싶으면 아래 진단 표의 `replayEnabled`, `lastSnapshotGeneratedAt`, 최근 오류 목록을 같이 확인합니다.
+7. 캐시 포맷은 하위 호환으로 읽습니다. 새 FX/주택 공개 API 캐시는 `v2` 키에 provenance를 저장하며, provenance가 없는 과거 캐시 payload를 만나면 `mode=cache`, `degradedReason=legacy-cache`로 표시합니다.
 
 ## 6. 권장 검증 명령
 - `pnpm test tests/data-source-user-impact.test.ts tests/data-source-impact-ping.test.ts tests/data-source-impact-health.test.ts tests/data-sources-status.test.ts`

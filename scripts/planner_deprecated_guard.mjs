@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const removedFiles = [
+  "src/lib/planner/core.ts",
   "src/lib/planner/metrics.ts",
   "src/lib/planner/rules.ts",
 ];
@@ -17,7 +18,7 @@ for (const filePath of removedFiles) {
 const checks = [
   {
     name: "deprecated planner module imports",
-    pattern: "lib/planner/(metrics|rules)",
+    pattern: "lib/planner/(core|metrics|rules)",
   },
 ];
 

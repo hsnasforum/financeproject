@@ -6,6 +6,7 @@ const mocked = vi.hoisted(() => ({
   getReport: vi.fn(),
   getRun: vi.fn(),
   getRunActionProgress: vi.fn(),
+  summarizeRunActionProgressByRunId: vi.fn(),
   listProfiles: vi.fn(),
   listRuns: vi.fn(),
   redirect: vi.fn((href: string) => {
@@ -129,6 +130,7 @@ vi.mock("@/lib/planning/server/runs/repository", () => ({
   getCurrentUserRun: mocked.getRun,
   getCurrentUserRunActionProgress: mocked.getRunActionProgress,
   listCurrentUserRuns: mocked.listRuns,
+  summarizeCurrentUserRunActionProgressByRunId: mocked.summarizeRunActionProgressByRunId,
   summarizeCurrentUserRunActionProgress: vi.fn(() => ({
     total: 1,
     done: 1,
@@ -179,6 +181,7 @@ describe("planning reports page fallback", () => {
     mocked.getReport.mockReset();
     mocked.getRun.mockReset();
     mocked.getRunActionProgress.mockReset();
+    mocked.summarizeRunActionProgressByRunId.mockReset();
     mocked.listProfiles.mockReset();
     mocked.listRuns.mockReset();
     mocked.redirect.mockClear();
@@ -345,9 +348,20 @@ describe("planning reports page fallback", () => {
       observedScopeDepths.push(mocked.pageScopeDepth);
       return [run];
     });
-    mocked.getRunActionProgress.mockImplementation(async (id: string) => {
+    mocked.summarizeRunActionProgressByRunId.mockImplementation(async (runs: Array<{ id?: string }>) => {
       observedScopeDepths.push(mocked.pageScopeDepth);
-      return id === run.id ? { runId: id, items: [] } : null;
+      return runs.some((entry) => entry.id === run.id)
+        ? {
+          [run.id]: {
+            total: 1,
+            done: 1,
+            doing: 0,
+            todo: 0,
+            snoozed: 0,
+            completionPct: 100,
+          },
+        }
+        : {};
     });
 
     const html = renderToStaticMarkup(await PlanningRunsPage({

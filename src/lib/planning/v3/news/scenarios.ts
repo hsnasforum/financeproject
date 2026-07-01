@@ -6,8 +6,8 @@ import {
   readTodayCache as readStoredTodayCache,
   type ScenariosCache,
   type TodayCache,
-} from "../../../../../planning/v3/news/store";
-import { type ScenarioCard, type ScenarioPack } from "../../../../../planning/v3/news/scenario/contracts";
+} from "@/lib/planning/v3/news/store";
+import { type ScenarioCard, type ScenarioPack } from "@/lib/planning/v3/news/scenario/contracts";
 import { type NewsScenarioPack } from "@/lib/news/types";
 
 export { readLatestDraftSummaryForStress };

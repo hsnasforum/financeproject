@@ -3,6 +3,15 @@ import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { runPnpm } from "./pnpm_runner.mjs";
+import {
+  DESKTOP_MANIFEST_KIND,
+  DESKTOP_PROVENANCE_VERSION,
+  computeArtifactChecksum,
+  currentGitSha,
+  lockfileSha256,
+  readDesktopManifest,
+  readPackageVersion,
+} from "./planning_v2_desktop_provenance.mjs";
 
 function asString(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -76,6 +85,47 @@ async function createWindowsShortcuts(installDir, shortcutName = "Planning v2") 
   await runCommand("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], installDir);
 }
 
+function requireEqual(label, actual, expected) {
+  if (actual === expected) return;
+  throw new Error(`desktop provenance manifest mismatch: ${label} expected=${expected || "(empty)"} actual=${actual || "(empty)"}`);
+}
+
+function requireObject(value, label) {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  throw new Error(`desktop provenance manifest missing ${label}`);
+}
+
+async function verifyDesktopArtifact(fromDir, cwd) {
+  const manifest = await readDesktopManifest(fromDir);
+  requireEqual("kind", asString(manifest.kind), DESKTOP_MANIFEST_KIND);
+  requireEqual("provenanceVersion", String(manifest.provenanceVersion ?? ""), String(DESKTOP_PROVENANCE_VERSION));
+
+  const packageVersion = await readPackageVersion(cwd);
+  requireEqual("version", asString(manifest.version), packageVersion);
+  requireEqual("packageVersion", asString(manifest.packageVersion), packageVersion);
+
+  const gitSha = currentGitSha(cwd);
+  if (!gitSha) {
+    throw new Error("desktop provenance manifest cannot be verified: current git SHA is unavailable");
+  }
+  requireEqual("gitSha", asString(manifest.gitSha).toLowerCase(), gitSha);
+
+  const lockfileDigest = await lockfileSha256(cwd);
+  requireEqual("lockfileSha256", asString(manifest.lockfileSha256), lockfileDigest);
+
+  const expectedChecksum = requireObject(manifest.artifactChecksum, "artifactChecksum");
+  requireEqual("artifactChecksum.algorithm", asString(expectedChecksum.algorithm), "sha256");
+  const actualChecksum = await computeArtifactChecksum(fromDir);
+  requireEqual("artifactChecksum.value", asString(expectedChecksum.value), actualChecksum.value);
+  requireEqual("artifactChecksum.fileCount", String(expectedChecksum.fileCount ?? ""), String(actualChecksum.fileCount));
+  requireEqual("artifactChecksum.totalBytes", String(expectedChecksum.totalBytes ?? ""), String(actualChecksum.totalBytes));
+
+  return {
+    manifest,
+    checksum: actualChecksum,
+  };
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cwd = process.cwd();
@@ -83,6 +133,7 @@ async function main() {
   const toDir = path.resolve(cwd, args.to);
 
   await fs.access(fromDir);
+  const verified = await verifyDesktopArtifact(fromDir, cwd);
   await fs.rm(toDir, { recursive: true, force: true });
   await fs.mkdir(path.dirname(toDir), { recursive: true });
   await fs.mkdir(toDir, { recursive: true });
@@ -108,6 +159,9 @@ async function main() {
     await createWindowsShortcuts(toDir, "Planning v2");
   }
 
+  process.stdout.write(
+    `[planning:v2:desktop:install] verified version=${verified.manifest.version} gitSha=${verified.manifest.gitSha} files=${verified.checksum.fileCount}\n`,
+  );
   process.stdout.write(`[planning:v2:desktop:install] installed=${toDir}\n`);
   process.stdout.write(`[planning:v2:desktop:install] run=${process.platform === "win32" ? "run.cmd" : "./run.sh"}\n`);
 }

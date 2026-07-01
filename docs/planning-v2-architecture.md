@@ -39,6 +39,10 @@
     - `src/app/planning/reports/_lib/reportViewModel.ts`
     - `src/app/api/planning/v2/runs/[id]/report/route.ts`
     - `src/app/api/planning/reports/[runId]/export.html/route.ts`
+  - Production UI 계약:
+    - `ReportVM.interpretation`을 stage/severity/reason code/recommended action의 canonical contract로 사용한다.
+    - report dashboard, 추천 CTA, badge/tone/insight는 `run.outputs.*`를 다시 읽지 않는다.
+    - `ReportVM.raw`는 markdown 또는 명시적 debug preview만 담고, production 컴포넌트에서 run JSON 원문을 fallback으로 해석하지 않는다.
 
 신규 계산/정책/리포트 해석은 위 경로에만 추가합니다.
 
@@ -52,6 +56,7 @@
 원칙:
 
 - UI는 `run.outputs.*`를 직접 재해석하기보다 `ResultDto` 또는 `ReportVM`을 소비한다.
+- report production UI의 action link는 `src/lib/planning/catalog/*`의 중립 catalog를 사용하고 `src/lib/planner/*`에서 가져오지 않는다.
 - `planner_last_snapshot_v1` 기반 경로는 legacy 전용으로 유지한다.
 - `recommend`는 planning stage 입력 계약이 확장되기 전까지 planning engine의 대체 판정을 만들지 않는다.
 

@@ -1,6 +1,6 @@
 import { resolveOdcloudEndpoint, setSearchParams, odcloudFetchWithAuth } from "../odcloud";
 import { extractOdcloudRows, scanPagedOdcloud } from "../odcloudScan";
-import { type BenefitCandidate, type PublicApiResult, type PublicApiErrorCode, type PublicApiError } from "../contracts/types";
+import { type BenefitCandidate, type DataProvenance, type PublicApiResult, type PublicApiErrorCode, type PublicApiError } from "../contracts/types";
 import { buildSchemaMismatchError } from "../schemaDrift";
 import { extractRegionTagsFromTexts } from "../../regions/kr";
 import { getSnapshotOrNull } from "../benefitsSnapshot";
@@ -550,6 +550,12 @@ export async function searchBenefits(
       ok: true,
       data: normalizedItems,
       meta: {
+        provenance: {
+          mode: "live",
+          degraded: false,
+          fetchedAt: new Date().toISOString(),
+          source: "행정안전부 보조금24",
+        },
         ...scanResult.meta,
         scannedPages: scanResult.meta.pagesFetched ?? scanResult.meta.scannedPages,
         scannedRows: scanResult.meta.rowsFetched ?? scanResult.meta.scannedRows,
@@ -579,6 +585,16 @@ export async function getBenefitItem(serviceId: string): Promise<PublicApiResult
   const id = serviceId.trim();
   if (!id) return { ok: false, error: { code: "INPUT", message: "serviceId를 입력하세요." } };
   const fromSnapshot = getSnapshotOrNull();
+  let provenance: DataProvenance | null = fromSnapshot
+    ? {
+        mode: "cache",
+        degraded: fromSnapshot.isStale,
+        ...(fromSnapshot.isStale ? { degradedReason: "snapshot-stale" } : {}),
+        asOf: fromSnapshot.snapshot.meta.generatedAt,
+        fetchedAt: new Date().toISOString(),
+        source: fromSnapshot.snapshot.meta.source ?? "benefits-snapshot",
+      }
+    : null;
   let found = fromSnapshot
     ? findBenefitCandidateByServiceId(fromSnapshot.snapshot.items, id)
     : null;
@@ -591,6 +607,7 @@ export async function getBenefitItem(serviceId: string): Promise<PublicApiResult
     });
     if (!searched.ok) return searched as PublicApiResult<{ item: BenefitCandidate; conditions: string[] }>;
     found = findBenefitCandidateByServiceId(searched.data, id);
+    provenance = searched.meta.provenance;
   }
   if (!found) return { ok: false, error: { code: "NO_DATA", message: "상세 대상 서비스를 찾지 못했습니다." } };
 
@@ -636,6 +653,14 @@ export async function getBenefitItem(serviceId: string): Promise<PublicApiResult
     data: {
       item: found,
       conditions: resultConditions,
+    },
+    meta: {
+      provenance: provenance ?? {
+        mode: "live",
+        degraded: false,
+        fetchedAt: new Date().toISOString(),
+        source: "행정안전부 보조금24",
+      },
     },
   };
 }

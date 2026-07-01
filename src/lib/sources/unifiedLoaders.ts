@@ -1,0 +1,521 @@
+import { prisma } from "@/lib/db/prisma";
+import { loadFinlifeSnapshot } from "@/lib/finlife/snapshot";
+import { shouldRunFinlifeSync } from "@/lib/finlife/syncPolicy";
+import { runFinlifeSnapshotSync } from "@/lib/finlife/syncRunner";
+import { samplebankProvider } from "@/lib/providers/samplebank";
+import { runProvider } from "@/lib/providers/runProvider";
+import { refreshSourceIfStale } from "@/lib/sources/datago/sync";
+import { buildNormFilter, normalizeSearchQuery, type QueryMode } from "@/lib/sources/search";
+import { type UnifiedSourceId } from "@/lib/sources/types";
+import { decodeUnifiedCursor, encodeUnifiedCursor } from "@/lib/sources/unifiedCursor";
+import {
+  buildStableUnifiedId,
+  sortUnifiedOptions,
+  type UnifiedOptionView,
+} from "@/lib/sources/unifiedEnrichPolicy";
+import {
+  UnifiedInputError,
+  type UnifiedPageInfo,
+  type UnifiedProductView,
+} from "@/lib/sources/unifiedTypes";
+
+export type RefreshInput = {
+  kind: "deposit" | "saving";
+  refresh: boolean;
+};
+
+export type SourceQuery = {
+  kind: "deposit" | "saving";
+  cursor: string | null;
+  q: string | null;
+  onlyNew: boolean;
+  changedSince: string | null;
+  includeTimestamps: boolean;
+  limit: number;
+  sort: "recent" | "name";
+  qMode: QueryMode;
+  debug: boolean;
+};
+
+export type UnifiedSourcePage = {
+  sourceId: UnifiedSourceId;
+  count: number;
+  items: UnifiedProductView[];
+  pageInfo: UnifiedPageInfo;
+};
+
+export type UnifiedSourceLoader = {
+  sourceId: UnifiedSourceId;
+  refreshIfNeeded(input: RefreshInput): Promise<void>;
+  query(input: SourceQuery): Promise<UnifiedSourcePage>;
+};
+
+export type UnifiedSourceLoaderMap = Partial<Record<UnifiedSourceId, UnifiedSourceLoader>>;
+
+function normalizeLimit(limit: number): number {
+  return Math.min(1000, Math.max(1, Math.trunc(limit)));
+}
+
+function normalizeRate(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const cleaned = value.trim().replace(/,/g, "");
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function parseTermMonths(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const term = Math.trunc(value);
+    return term >= 0 ? term : null;
+  }
+  if (typeof value !== "string") return null;
+  const matched = value.replace(/,/g, "").match(/\d+/);
+  if (!matched) return null;
+  const parsed = Number(matched[0]);
+  return Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : null;
+}
+
+export function buildFinlifeOptions(
+  options: Array<{ saveTrm: string | null; intrRate: number | null; intrRate2: number | null }>,
+): UnifiedOptionView[] {
+  return sortUnifiedOptions(
+    options.map((option) => ({
+      sourceId: "finlife",
+      termMonths: parseTermMonths(option.saveTrm),
+      saveTrm: option.saveTrm ?? undefined,
+      intrRate: normalizeRate(option.intrRate),
+      intrRate2: normalizeRate(option.intrRate2),
+    })),
+  );
+}
+
+export function buildKdbOptions(rawJson: unknown): UnifiedOptionView[] {
+  const raw = (rawJson as Record<string, unknown> | null) ?? null;
+  if (!raw) return [];
+  const saveTrm = typeof raw.prdJinTrmCone === "string" ? raw.prdJinTrmCone : "";
+  const highRate = typeof raw.hitIrtCndCone === "string" ? raw.hitIrtCndCone : "";
+  const lowRate = typeof raw.lowIrtCndCone === "string" ? raw.lowIrtCndCone : "";
+
+  const option: UnifiedOptionView = {
+    sourceId: "datago_kdb",
+    termMonths: parseTermMonths(saveTrm),
+    saveTrm: saveTrm || undefined,
+    intrRate: normalizeRate(lowRate),
+    intrRate2: normalizeRate(highRate),
+  };
+  if (option.termMonths === null && !option.saveTrm && option.intrRate === null && option.intrRate2 === null) {
+    return [];
+  }
+  return sortUnifiedOptions([option]);
+}
+
+function matchesUnifiedQuery(text: string, qNorm: string, qMode: QueryMode): boolean {
+  if (!qNorm) return true;
+  if (!text) return false;
+  if (qMode === "prefix") return text.startsWith(qNorm);
+  return text.includes(qNorm);
+}
+
+function toSamplebankOptionRows(
+  options: Array<{
+    sourceId: "samplebank";
+    termMonths: number | null;
+    saveTrm?: string;
+    intrRate: number | null;
+    intrRate2: number | null;
+  }>,
+): UnifiedOptionView[] {
+  return sortUnifiedOptions(
+    options.map((option) => ({
+      sourceId: "samplebank",
+      termMonths: option.termMonths,
+      saveTrm: option.saveTrm,
+      intrRate: option.intrRate,
+      intrRate2: option.intrRate2,
+    })),
+  );
+}
+
+export async function getSamplebankMergedItems(input: {
+  kind: "deposit" | "saving";
+  q: string | null;
+  qMode: QueryMode;
+  includeTimestamps: boolean;
+  debug: boolean;
+}): Promise<{ items: UnifiedProductView[]; count: number }> {
+  const executed = await runProvider(samplebankProvider, {
+    kind: input.kind,
+  }, {
+    debug: input.debug,
+  });
+  if (!executed.ok) {
+    console.error("[unified] samplebank provider failed", {
+      code: executed.error.code,
+      message: executed.error.message,
+    });
+    return { items: [], count: 0 };
+  }
+
+  const qNorm = normalizeSearchQuery(input.q ?? "");
+  const filtered = executed.data.items
+    .filter((item) => item.kind === input.kind)
+    .filter((item) => matchesUnifiedQuery(
+      normalizeSearchQuery(`${item.providerName} ${item.productName}`),
+      qNorm,
+      input.qMode,
+    ));
+
+  const merged = filtered.map((item) => ({
+    stableId: item.stableId || `samplebank:${item.externalKey}`,
+    sourceId: "samplebank" as const,
+    kind: item.kind,
+    externalKey: item.externalKey,
+    providerName: item.providerName,
+    productName: item.productName,
+    options: toSamplebankOptionRows(item.options),
+    firstSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
+    lastSeenAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
+    updatedAt: input.includeTimestamps ? executed.meta.generatedAt : undefined,
+    badges: ["SAMPLEBANK"],
+  }));
+  return {
+    items: merged,
+    count: merged.length,
+  };
+}
+
+function resolveFinlifeSnapshotTtlMs(): number {
+  const sec = Number(process.env.FINLIFE_SNAPSHOT_TTL_SECONDS ?? "43200");
+  if (!Number.isFinite(sec)) return 12 * 60 * 60 * 1000;
+  return Math.max(60, Math.trunc(sec)) * 1000;
+}
+
+export async function refreshFinlifeSnapshotIfStale(kind: "deposit" | "saving", refresh: boolean): Promise<void> {
+  if (!refresh) return;
+
+  const snapshot = loadFinlifeSnapshot(kind);
+  const ttlMs = snapshot?.meta?.ttlMs ?? resolveFinlifeSnapshotTtlMs();
+  const decision = shouldRunFinlifeSync(snapshot?.meta ?? null, Date.now(), { ttlMs, minCompletionRate: 0.95 });
+  if (!decision.shouldRun) return;
+
+  const result = await runFinlifeSnapshotSync(kind);
+  if (result.ok) return;
+
+  console.error("[unified] finlife refresh failed", {
+    kind,
+    code: result.error.code,
+    message: result.error.message,
+    upstreamStatus: result.error.upstreamStatus ?? null,
+  });
+}
+
+async function getOnlyNewSinceBySource(kind: "deposit" | "saving", sourceIds: string[]): Promise<Map<string, Date>> {
+  const out = new Map<string, Date>();
+  if (sourceIds.length === 0) return out;
+  const rows = await prisma.externalSourceSnapshot.findMany({
+    where: { kind, sourceId: { in: sourceIds } },
+    select: { sourceId: true, metaJson: true },
+  });
+  for (const row of rows) {
+    const meta = (row.metaJson as Record<string, unknown> | null) ?? null;
+    const lastRun = (meta?.lastRun as Record<string, unknown> | undefined) ?? undefined;
+    const startedAt = typeof lastRun?.startedAt === "string" ? lastRun.startedAt : null;
+    if (!startedAt) continue;
+    const date = new Date(startedAt);
+    if (Number.isFinite(date.getTime())) out.set(row.sourceId, date);
+  }
+  return out;
+}
+
+function pageResult(input: {
+  sourceId: UnifiedSourceId;
+  items: UnifiedProductView[];
+  count: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+  limit: number;
+}): UnifiedSourcePage {
+  return {
+    sourceId: input.sourceId,
+    count: input.count,
+    items: input.items,
+    pageInfo: {
+      hasMore: input.hasMore,
+      nextCursor: input.nextCursor,
+      limit: input.limit,
+      sourceId: input.sourceId,
+    },
+  };
+}
+
+async function queryFinlife(input: SourceQuery): Promise<UnifiedSourcePage> {
+  const sourceId: UnifiedSourceId = "finlife";
+  const limit = normalizeLimit(input.limit);
+  const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
+  if (input.cursor && !decoded) {
+    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
+  }
+
+  const snapshot = loadFinlifeSnapshot(input.kind);
+  const snapshotGeneratedAt = snapshot?.meta?.generatedAt ? new Date(snapshot.meta.generatedAt) : null;
+  const hasOnlyNewThreshold = Boolean(input.onlyNew && snapshotGeneratedAt && Number.isFinite(snapshotGeneratedAt.getTime()));
+
+  const changedSinceDate = input.changedSince ? new Date(input.changedSince) : null;
+  const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
+  const qNorm = normalizeSearchQuery(input.q ?? "");
+  const qFilter = buildNormFilter(["productNameNorm", "providerNameNorm", "searchTextNorm"], qNorm, input.qMode);
+
+  const rows = await prisma.product.findMany({
+    where: {
+      kind: input.kind,
+      ...qFilter,
+      ...(hasOnlyNewThreshold && snapshotGeneratedAt ? { createdAt: { gte: snapshotGeneratedAt } } : {}),
+      ...(hasChangedSince && changedSinceDate
+        ? {
+            OR: [
+              { createdAt: { gte: changedSinceDate } },
+              { updatedAt: { gte: changedSinceDate } },
+            ],
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      finPrdtCd: true,
+      name: true,
+      createdAt: true,
+      updatedAt: true,
+      raw: true,
+      options: {
+        select: {
+          saveTrm: true,
+          intrRate: true,
+          intrRate2: true,
+        },
+        orderBy: [
+          { saveTrm: "asc" },
+          { id: "asc" },
+        ],
+      },
+      provider: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: input.sort === "recent" ? [{ updatedAt: "desc" }, { id: "desc" }] : [{ name: "asc" }, { id: "asc" }],
+    take: limit + 1,
+    ...(decoded ? { cursor: { id: decoded.id }, skip: 1 } : {}),
+  });
+
+  const hasMore = rows.length > limit;
+  const picked = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? encodeUnifiedCursor({ id: picked[picked.length - 1].id }) : null;
+
+  const items: UnifiedProductView[] = picked.map((row) => {
+    const raw = (row.raw as Record<string, unknown> | null) ?? null;
+    const providerNameRaw = typeof raw?.kor_co_nm === "string" ? raw.kor_co_nm : "";
+    const productNameRaw = typeof raw?.fin_prdt_nm === "string" ? raw.fin_prdt_nm : "";
+    return {
+      stableId: buildStableUnifiedId({
+        sourceId,
+        externalKey: row.finPrdtCd,
+      }),
+      sourceId,
+      kind: input.kind,
+      externalKey: row.finPrdtCd,
+      providerName: providerNameRaw || row.provider?.name || "",
+      productName: productNameRaw || row.name || "",
+      firstSeenAt: input.includeTimestamps ? row.createdAt.toISOString() : undefined,
+      lastSeenAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
+      updatedAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
+      options: buildFinlifeOptions(row.options),
+      signals: {
+        depositProtection: "unknown",
+      },
+    };
+  });
+
+  return pageResult({
+    sourceId,
+    items,
+    count: items.length,
+    hasMore,
+    nextCursor,
+    limit,
+  });
+}
+
+async function queryDatagoKdb(input: SourceQuery): Promise<UnifiedSourcePage> {
+  const sourceId = "datago_kdb" as const;
+  const limit = normalizeLimit(input.limit);
+  const onlyNewMap = await getOnlyNewSinceBySource(input.kind, [sourceId]);
+  const onlyNewThreshold = input.onlyNew ? onlyNewMap.get(sourceId) : undefined;
+
+  const changedSinceDate = input.changedSince ? new Date(input.changedSince) : null;
+  const hasChangedSince = Boolean(changedSinceDate && Number.isFinite(changedSinceDate.getTime()));
+  const qNorm = normalizeSearchQuery(input.q ?? "");
+  const qFilter = buildNormFilter(["providerNameNorm", "productNameNorm"], qNorm, input.qMode);
+
+  const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
+  if (input.cursor && !decoded) {
+    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
+  }
+
+  const rows = await prisma.externalProduct.findMany({
+    where: {
+      sourceId,
+      kind: input.kind,
+      ...qFilter,
+      ...(onlyNewThreshold ? { firstSeenAt: { gte: onlyNewThreshold } } : {}),
+      ...(hasChangedSince && changedSinceDate
+        ? {
+            OR: [
+              { firstSeenAt: { gte: changedSinceDate } },
+              { updatedAt: { gte: changedSinceDate } },
+            ],
+          }
+        : {}),
+    },
+    include: {
+      matches: {
+        orderBy: { confidence: "desc" },
+        take: 1,
+        select: {
+          method: true,
+          confidence: true,
+          internalProductId: true,
+          evidenceJson: true,
+          internalProduct: {
+            select: {
+              finPrdtCd: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: input.sort === "recent"
+      ? [{ lastSeenAt: "desc" }, { updatedAt: "desc" }, { id: "desc" }]
+      : [{ providerNameNorm: "asc" }, { productNameNorm: "asc" }, { id: "asc" }],
+    take: limit + 1,
+    ...(decoded ? { cursor: { id: decoded.id }, skip: 1 } : {}),
+  });
+
+  const hasMore = rows.length > limit;
+  const picked = hasMore ? rows.slice(0, limit) : rows;
+  const nextCursor = hasMore ? encodeUnifiedCursor({ id: picked[picked.length - 1].id }) : null;
+
+  const items: UnifiedProductView[] = picked.map((row) => ({
+    stableId: buildStableUnifiedId({
+      sourceId,
+      externalKey: row.externalKey,
+      canonicalFinPrdtCd: row.matches[0]?.internalProduct?.finPrdtCd ?? null,
+    }),
+    sourceId,
+    kind: row.kind,
+    externalKey: row.externalKey,
+    providerName: row.providerNameRaw,
+    productName: row.productNameRaw,
+    summary: row.summary ?? undefined,
+    firstSeenAt: input.includeTimestamps ? row.firstSeenAt.toISOString() : undefined,
+    lastSeenAt: input.includeTimestamps ? row.lastSeenAt.toISOString() : undefined,
+    updatedAt: input.includeTimestamps ? row.updatedAt.toISOString() : undefined,
+    options: buildKdbOptions(row.rawJson),
+    signals: {
+      depositProtection: "matched",
+    },
+    match: row.matches[0]
+      ? {
+          method: row.matches[0].method,
+          confidence: row.matches[0].confidence,
+          internalProductId: row.matches[0].internalProductId,
+          canonicalFinPrdtCd: row.matches[0].internalProduct?.finPrdtCd ?? undefined,
+          evidence: (row.matches[0].evidenceJson as Record<string, unknown>) ?? undefined,
+        }
+      : undefined,
+  }));
+
+  return pageResult({
+    sourceId,
+    items,
+    count: items.length,
+    hasMore,
+    nextCursor,
+    limit,
+  });
+}
+
+async function querySamplebank(input: SourceQuery): Promise<UnifiedSourcePage> {
+  const sourceId = "samplebank" as const;
+  const limit = normalizeLimit(input.limit);
+  const decoded = input.cursor ? decodeUnifiedCursor(input.cursor) : null;
+  if (input.cursor && !decoded) {
+    throw new UnifiedInputError("잘못된 cursor 형식입니다.");
+  }
+
+  const loaded = await getSamplebankMergedItems({
+    kind: input.kind,
+    q: input.q,
+    qMode: input.qMode,
+    includeTimestamps: input.includeTimestamps,
+    debug: input.debug,
+  });
+  const offset = decoded?.id ?? 0;
+  const items = loaded.items.slice(offset, offset + limit);
+  const hasMore = offset + limit < loaded.items.length;
+  const nextCursor = hasMore ? encodeUnifiedCursor({ id: offset + limit }) : null;
+
+  return pageResult({
+    sourceId,
+    items,
+    count: loaded.count,
+    hasMore,
+    nextCursor,
+    limit,
+  });
+}
+
+export const finlifeUnifiedSourceLoader: UnifiedSourceLoader = {
+  sourceId: "finlife",
+  async refreshIfNeeded(input) {
+    await refreshFinlifeSnapshotIfStale(input.kind, input.refresh);
+  },
+  query: queryFinlife,
+};
+
+export const datagoKdbUnifiedSourceLoader: UnifiedSourceLoader = {
+  sourceId: "datago_kdb",
+  async refreshIfNeeded(input) {
+    await refreshSourceIfStale("datago_kdb", input.kind, input.refresh);
+  },
+  query: queryDatagoKdb,
+};
+
+export const samplebankUnifiedSourceLoader: UnifiedSourceLoader = {
+  sourceId: "samplebank",
+  async refreshIfNeeded() {
+    return undefined;
+  },
+  query: querySamplebank,
+};
+
+export const DEFAULT_UNIFIED_SOURCE_LOADERS: UnifiedSourceLoaderMap = {
+  finlife: finlifeUnifiedSourceLoader,
+  datago_kdb: datagoKdbUnifiedSourceLoader,
+  samplebank: samplebankUnifiedSourceLoader,
+};
+
+export function getUnifiedSourceLoader(
+  loaders: UnifiedSourceLoaderMap,
+  sourceId: UnifiedSourceId,
+): UnifiedSourceLoader {
+  const loader = loaders[sourceId];
+  if (!loader) {
+    throw new UnifiedInputError(`지원하지 않는 sourceId입니다: ${sourceId}`);
+  }
+  return loader;
+}

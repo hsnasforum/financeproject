@@ -1,7 +1,7 @@
 import housingSalesMock from "@/data/public/housing-sales.mock.json";
 import { toWonFromManwon } from "@/lib/housing/money";
 import { ExternalApiError, fetchExternal, requireServerEnv } from "../../http/fetchExternal";
-import { type HousingBenchmark, type PublicApiResult } from "@/lib/publicApis/contracts/types";
+import { type DataProvenance, type HousingBenchmark, type PublicApiResult } from "@/lib/publicApis/contracts/types";
 import {
   buildApiUrl,
   buildEndpoint,
@@ -16,6 +16,12 @@ import {
 
 const DEFAULT_MOLIT_SALES_BASE = "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade";
 const FALLBACK_SUMMARY_STATUSES = new Set([401, 403, 404]);
+const SALES_SOURCE_LABEL = "국토교통부";
+const RENT_SOURCE_LABEL = "국토교통부 전월세";
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
 
 function quantile(sorted: number[], q: number): number {
   if (!sorted.length) return 0;
@@ -42,7 +48,7 @@ function toBenchmark(regionCode: string, month: string, areaBand: string, values
     max: sorted[sorted.length - 1] ?? 0,
     unit: "KRW",
     source,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: nowIso(),
   };
 }
 
@@ -74,6 +80,76 @@ function shouldRetrySalesSummary(base: string, error: unknown): boolean {
   );
 }
 
+function provenanceMeta(input: {
+  mode: DataProvenance["mode"];
+  source: string;
+  asOf: string;
+  degraded: boolean;
+  degradedReason?: string | undefined;
+  upstreamStatus?: number | undefined;
+  retryAfterSeconds?: number | undefined;
+}): { provenance: DataProvenance } {
+  return {
+    provenance: {
+      mode: input.mode,
+      degraded: input.degraded,
+      ...(input.degradedReason ? { degradedReason: input.degradedReason } : {}),
+      asOf: input.asOf,
+      fetchedAt: nowIso(),
+      source: input.source,
+      ...(typeof input.upstreamStatus === "number" ? { upstreamStatus: input.upstreamStatus } : {}),
+      ...(typeof input.retryAfterSeconds === "number" ? { retryAfterSeconds: input.retryAfterSeconds } : {}),
+    },
+  };
+}
+
+function fallbackReason(error: unknown): string {
+  if (error instanceof ExternalApiError && error.timeout) return "timeout";
+  return "upstream-failure";
+}
+
+function fallbackMeta(source: string, month: string, degradedReason: string, error?: unknown): { provenance: DataProvenance } {
+  return provenanceMeta({
+    mode: "mock",
+    source,
+    asOf: month,
+    degraded: true,
+    degradedReason,
+    upstreamStatus: error instanceof ExternalApiError ? error.status : undefined,
+    retryAfterSeconds: error instanceof ExternalApiError ? error.retryAfterSeconds : undefined,
+  });
+}
+
+function mockSalesBenchmark(regionCode: string, month: string, areaBand: string): HousingBenchmark {
+  return {
+    ...housingSalesMock,
+    regionCode,
+    month,
+    areaBand,
+    dealType: "SALE",
+    source: SALES_SOURCE_LABEL,
+    fetchedAt: nowIso(),
+  } as HousingBenchmark;
+}
+
+function mockRentBenchmark(regionCode: string, month: string, areaBand: string): HousingBenchmark {
+  const base = housingSalesMock.median;
+  return {
+    ...housingSalesMock,
+    regionCode,
+    month,
+    areaBand,
+    dealType: "RENT",
+    rentType: "ALL",
+    monthlyMin: Math.round(base * 0.0001),
+    monthlyMedian: Math.round(base * 0.00013),
+    monthlyP75: Math.round(base * 0.00016),
+    monthlyMax: Math.round(base * 0.0002),
+    source: RENT_SOURCE_LABEL,
+    fetchedAt: nowIso(),
+  } as HousingBenchmark;
+}
+
 async function fetchHousingSalesBody(base: string, key: string, params: Record<string, string>, options?: { allowHttpError?: boolean }) {
   const endpoint = buildEndpoint(base, resolveSalesEndpointName(base));
   const url = buildApiUrl(endpoint, key, params);
@@ -94,20 +170,17 @@ async function fetchHousingSalesBody(base: string, key: string, params: Record<s
 }
 
 export async function getHousingSalesBenchmark(regionCode: string, month: string, areaBand: string): Promise<PublicApiResult<HousingBenchmark>> {
-  const useMock = process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0" && !process.env.MOLIT_SALES_API_KEY;
-  if (useMock) {
-    return {
-      ok: true,
-      data: {
-        ...housingSalesMock,
-        regionCode,
-        month,
-        areaBand,
-        dealType: "SALE",
-        source: "국토교통부(mock)",
-        fetchedAt: new Date().toISOString(),
-      } as HousingBenchmark,
-    };
+  const fallbackToMock = process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0";
+  const hasApiKey = Boolean((process.env.MOLIT_SALES_API_KEY ?? "").trim());
+  if (!hasApiKey) {
+    if (fallbackToMock) {
+      return {
+        ok: true,
+        data: mockSalesBenchmark(regionCode, month, areaBand),
+        meta: fallbackMeta(SALES_SOURCE_LABEL, month, "env-missing"),
+      };
+    }
+    return { ok: false, error: { code: "CONFIG", message: "MOLIT_SALES_API_KEY 설정이 필요합니다." } };
   }
 
   try {
@@ -115,6 +188,7 @@ export async function getHousingSalesBenchmark(regionCode: string, month: string
     const base = normalizeBaseUrl(process.env.MOLIT_SALES_API_URL ?? "", DEFAULT_MOLIT_SALES_BASE);
     const params = { LAWD_CD: regionCode, DEAL_YMD: month, numOfRows: "100", pageNo: "1" };
     let fetched;
+    let usedSummaryFallback = false;
     try {
       fetched = await fetchHousingSalesBody(base, key, params, { allowHttpError: Boolean(resolveSalesSummaryFallbackBase(base)) });
     } catch (error) {
@@ -124,6 +198,7 @@ export async function getHousingSalesBenchmark(regionCode: string, month: string
         status: error instanceof ExternalApiError ? error.status : undefined,
       });
       fetched = await fetchHousingSalesBody(fallbackBase, key, params);
+      usedSummaryFallback = true;
     }
     const header = getMolitHeader(fetched.body);
     if (header.resultCode && !isMolitSuccessCode(header.resultCode)) {
@@ -137,48 +212,43 @@ export async function getHousingSalesBenchmark(regionCode: string, month: string
       return { ok: false, error: { code: "UPSTREAM", message: "해당 면적대 실거래 데이터를 찾지 못했습니다." } };
     }
 
-    return { ok: true, data: toBenchmark(regionCode, month, areaBand, values, "국토교통부", "SALE") };
+    return {
+      ok: true,
+      data: toBenchmark(regionCode, month, areaBand, values, SALES_SOURCE_LABEL, "SALE"),
+      meta: provenanceMeta({
+        mode: "live",
+        source: SALES_SOURCE_LABEL,
+        asOf: month,
+        degraded: usedSummaryFallback,
+        degradedReason: usedSummaryFallback ? "endpoint-fallback" : undefined,
+      }),
+    };
   } catch (error) {
-    if (process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0") {
+    if (fallbackToMock) {
       return {
         ok: true,
-        data: {
-          ...housingSalesMock,
-          regionCode,
-          month,
-          areaBand,
-          dealType: "SALE",
-          source: "국토교통부(mock)",
-          fetchedAt: new Date().toISOString(),
-        } as HousingBenchmark,
+        data: mockSalesBenchmark(regionCode, month, areaBand),
+        meta: fallbackMeta(SALES_SOURCE_LABEL, month, fallbackReason(error), error),
       };
     }
     const message = error instanceof Error ? error.message : "실거래 데이터를 가져오지 못했습니다.";
-    return { ok: false, error: { code: "UPSTREAM", message } };
+    const code = error instanceof ExternalApiError ? error.detail.code : "UPSTREAM";
+    return { ok: false, error: { code, message } };
   }
 }
 
 export async function getHousingRentBenchmark(regionCode: string, month: string, areaBand: string): Promise<PublicApiResult<HousingBenchmark>> {
-  const useMock = process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0" && !process.env.MOLIT_RENT_API_KEY;
-  if (useMock) {
-    const base = housingSalesMock.median;
-    return {
-      ok: true,
-      data: {
-        ...housingSalesMock,
-        regionCode,
-        month,
-        areaBand,
-        dealType: "RENT",
-        rentType: "ALL",
-        monthlyMin: Math.round(base * 0.0001),
-        monthlyMedian: Math.round(base * 0.00013),
-        monthlyP75: Math.round(base * 0.00016),
-        monthlyMax: Math.round(base * 0.0002),
-        source: "국토교통부 전월세(mock)",
-        fetchedAt: new Date().toISOString(),
-      } as HousingBenchmark,
-    };
+  const fallbackToMock = process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0";
+  const hasApiKey = Boolean((process.env.MOLIT_RENT_API_KEY ?? "").trim());
+  if (!hasApiKey) {
+    if (fallbackToMock) {
+      return {
+        ok: true,
+        data: mockRentBenchmark(regionCode, month, areaBand),
+        meta: fallbackMeta(RENT_SOURCE_LABEL, month, "env-missing"),
+      };
+    }
+    return { ok: false, error: { code: "CONFIG", message: "MOLIT_RENT_API_KEY 설정이 필요합니다." } };
   }
 
   try {
@@ -227,32 +297,26 @@ export async function getHousingRentBenchmark(regionCode: string, month: string,
         monthlyMax: monthlyStats?.max,
         rentType: monthlyStats && monthlyStats.max > 0 ? "ALL" : "JEONSE",
         unit: "KRW",
-        source: "국토교통부 전월세",
-        fetchedAt: new Date().toISOString(),
+        source: RENT_SOURCE_LABEL,
+        fetchedAt: nowIso(),
       },
+      meta: provenanceMeta({
+        mode: "live",
+        source: RENT_SOURCE_LABEL,
+        asOf: month,
+        degraded: false,
+      }),
     };
   } catch (error) {
-    if (process.env.PUBLIC_APIS_FALLBACK_TO_MOCK !== "0") {
-      const base = housingSalesMock.median;
+    if (fallbackToMock) {
       return {
         ok: true,
-        data: {
-          ...housingSalesMock,
-          regionCode,
-          month,
-          areaBand,
-          dealType: "RENT",
-          rentType: "ALL",
-          monthlyMin: Math.round(base * 0.0001),
-          monthlyMedian: Math.round(base * 0.00013),
-          monthlyP75: Math.round(base * 0.00016),
-          monthlyMax: Math.round(base * 0.0002),
-          source: "국토교통부 전월세(mock)",
-          fetchedAt: new Date().toISOString(),
-        } as HousingBenchmark,
+        data: mockRentBenchmark(regionCode, month, areaBand),
+        meta: fallbackMeta(RENT_SOURCE_LABEL, month, fallbackReason(error), error),
       };
     }
     const message = error instanceof Error ? error.message : "전월세 데이터를 가져오지 못했습니다.";
-    return { ok: false, error: { code: "UPSTREAM", message } };
+    const code = error instanceof ExternalApiError ? error.detail.code : "UPSTREAM";
+    return { ok: false, error: { code, message } };
   }
 }

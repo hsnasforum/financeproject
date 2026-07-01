@@ -13,6 +13,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -104,6 +105,8 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     if (error instanceof GenerateDraftPatchFromBatchError) {
       if (error.code === "INPUT") {
         return NextResponse.json(

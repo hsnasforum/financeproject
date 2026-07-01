@@ -1,4 +1,4 @@
-import { listDrafts } from "../planning/v3/store/draftStore";
+import { getLatestCashflowDraftSummary } from "../planning/v3/store/draftStore";
 import { type DraftSummaryForStress } from "./stressRunner";
 
 function asNumber(value: unknown): number | undefined {
@@ -7,12 +7,11 @@ function asNumber(value: unknown): number | undefined {
 }
 
 export async function readLatestDraftSummaryForStress(): Promise<DraftSummaryForStress | null> {
-  const drafts = await listDrafts();
-  const latest = drafts[0];
-  if (!latest?.summary) return null;
+  const summary = await getLatestCashflowDraftSummary();
+  if (!summary) return null;
   return {
-    medianIncomeKrw: asNumber(latest.summary.medianIncomeKrw),
-    medianExpenseKrw: asNumber(latest.summary.medianExpenseKrw),
-    avgNetKrw: asNumber(latest.summary.avgNetKrw),
+    medianIncomeKrw: asNumber(summary.medianIncomeKrw),
+    medianExpenseKrw: asNumber(summary.medianExpenseKrw),
+    avgNetKrw: asNumber(summary.avgNetKrw),
   };
 }

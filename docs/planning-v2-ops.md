@@ -69,7 +69,9 @@
   - `pnpm planning:v2:ops:safety`
   - `ops:run` 실행 후 legacy run 백필 후보를 자동 점검합니다.
   - 운영 기본 임계치: `legacy-fail-threshold=0` (후보 0건 유지)
+  - safety 리포트에는 `operatingEnvironment`와 `topology`가 포함됩니다. `DATABASE_URL`은 원문 대신 provider만 기록하고, 파일 저장 완료 보장은 `process-local` 범위로만 표기합니다.
   - 즉시 백필 적용: `pnpm planning:v2:ops:safety -- --legacy-mode=apply --confirm="BACKFILL LEGACY RUNS"`
+  - apply 모드는 백필 전 후보와 적용 결과를 모두 기록하고, 적용 후 `postApplyCandidateCount`가 임계치 이하일 때만 통과합니다.
 - 격주/월간 또는 업데이트 후 운영:
   - `pnpm planning:v2:ops:safety:regress`
 - 보관 정책 정리:
@@ -82,6 +84,7 @@
 - 실행 리포트/로그:
   - `.data/planning/ops/reports/{YYYYMMDD-HHmmss}.json`
   - `.data/planning/ops/logs/{YYYYMMDD-HHmmss}.log`
+  - 실제 운영 topology 확인이 필요하면 production 환경에서 동일 명령을 실행한 뒤 리포트의 `operatingEnvironment.storageMode`, `operatingEnvironment.dataDir`, `topology.writeSerializationScope`, `topology.sharedFileStoreCompletion`을 최종 보고서에 첨부합니다.
 
 ## Planning Cleanup (Retention)
 - 화면: `/ops/planning-cleanup`

@@ -1,0 +1,179 @@
+# 2026-06-29 0629 전달문 로컬 재검증
+
+## 변경 파일
+- 이번 라운드 신규 변경: `work/6/29/2026-06-29-0629-delivery-revalidation.md`, `work/6/29/2026-06-29-0629-delivery-final-report-draft.md`, `work/6/29/2026-06-29-0629-delivery-completion-audit.md`
+- 이번 라운드 문서 보강: `docs/planning-v3-boundary-adr.md`, `docs/README.md`, `src/lib/planning/v3/README.md`
+- 이번 라운드 P2-03 보강: `scripts/planner_deprecated_guard.mjs`, `docs/planner-deprecated-cleanup.md`
+- 이번 라운드 P0-02 hybrid fallback 보강: `src/lib/planning/v3/service/userFacingBatchReadPolicy.ts`, `src/lib/planning/v3/service/batchReadRepository.ts`, `src/lib/planning/v3/service/loadBatchVisiblePipeline.ts`, `src/lib/planning/v3/service/getBatchSummary.ts`, `src/lib/planning/v3/service/generateDraftPatchFromBatch.ts`, `tests/planning-v3-batches-api.test.ts`, `tests/planning-v3-getBatchSummary.test.ts`, `tests/planning-v3-batch-cashflow-account-guard-api.test.ts`
+- 이번 라운드 P2-04 보강: `src/components/planning/workspace/workspaceRuntimeHelpers.ts`, `src/components/planning/workspace/useWorkspaceRuntimeStateBundle.ts`, `src/components/planning/workspace/useWorkspaceFeedbackSubmitAction.ts`, `src/components/planning/workspace/useWorkspaceOptimizeAction.ts`, `src/components/planning/workspace/useWorkspaceProfileSyncAction.ts`, `src/components/planning/workspace/useWorkspaceRunExecutionActions.ts`, `src/components/planning/workspace/useWorkspaceRuntimeBundle.ts`
+- 이번 라운드 P2-05 gate 안정화: `tests/desktop-artifact-provenance.test.ts`, `tests/planning-v3-store-concurrency.test.ts`, `tests/planning/auth/postgresReadinessScript.test.ts`
+- `C:/Users/HS/Downloads/financeproject_통합검토_구현워커_전달문_0629.md` 기준으로 현재 브랜치 구현과 P2 경계를 재검증했습니다.
+
+## 사용 skill
+- `planning-gate-selector`: 전달문이 요구한 planning, API, storage, release 영향 범위에 맞춰 targeted test와 required gate를 고르는 데 사용했습니다.
+- `work-log-closeout`: `/work` 종료 기록의 섹션, 실제 실행 명령, 남은 리스크 기록 형식을 맞추는 데 사용했습니다.
+
+## 변경 이유
+- 사용자는 첨부 통합 Markdown을 유일한 구현 기준으로 삼고 P0/P1/P2 순서, 회귀 테스트, 운영 topology, migration/dry-run/rollback, required gate 증거를 요구했습니다.
+- 현재 빌링 문제로 commit/push/PR 업데이트는 보류해야 하므로, 로컬 검증 결과와 미완료 외부 단계를 커밋 없이 남겨야 합니다.
+- 시작 기준 SHA와 현재 main을 비교해 전달문 기준 커밋 이후 main drift가 있는지 확인할 필요가 있었습니다.
+
+## 핵심 변경
+- 시작/종료 로컬 HEAD는 `baf6325ecdadb3a2b249c0946490ec48887430ab`입니다.
+- `origin/main`과 로컬 `main`은 모두 전달문 기준 SHA `5e1cc1c901f9ad3925fb450a8446b192ed4bf8f5`와 일치해 main drift는 없었습니다.
+- 현재 브랜치에는 P0/P1 구현 커밋이 이미 포함되어 있습니다: `aac556ab` P0-01, `645bf614` P0-02, `e266ddf9` P0-03, `d1860e73` P1-01, `dccfc284` P1-02, `2d47134f` P1-03, `5b6564d9` P1-04, `d74f8038` P1-05, `856f1801` P1-06, `f1cfe174`/`08353c8a` P1-07, `92b4d559` P1-08, `64ade8f0` P1-09, `e90e51ff` P1-10입니다.
+- 운영 topology는 `docs/deploy.md`와 `.env.local.example` 기준으로 확인했습니다. planning은 `PLANNING_NAMESPACE_ENABLED=true` 또는 desktop/단일 사용자 `PLANNING_SINGLE_USER_MODE=true`가 필요하고, 둘 다 없으면 startup guard가 실패해야 합니다.
+- 파일 저장소 mutation 직렬화는 process-local keyed queue입니다. 다중 Node 프로세스나 여러 인스턴스가 같은 `PLANNING_DATA_DIR`을 공유하는 topology에서는 외부 file lock, CAS, DB transaction 없이 완료 처리하면 안 된다는 제한이 문서화되어 있습니다.
+- 실제 운영 데이터 migration은 실행하지 않았습니다. owner 불명 legacy row는 자동 배정하지 않고 quarantine하는 경로와 dry-run/rollback 의미는 로컬 테스트로 검증했습니다.
+- P2-06 보강으로 `docs/planning-v3-boundary-adr.md`를 추가했습니다. v3는 v2 대체재가 아니라 `ledger/import`, `draft/profile`, `news/exposure`, `scenario/journal` bounded context 모음이며, stable `/planning*` route는 v3 writer route로 해석하지 않는다는 결정을 source-adjacent 문서에 고정했습니다.
+- P2-07은 confirmed PostgreSQL apply가 아직 미지원이라는 현 상태를 ADR에 함께 명시했습니다. `planning:postgres:readiness`는 manifest/export/dry-run apply/checksum evidence까지 제공하고, 실제 apply는 source mutation 없이 차단되는 상태입니다.
+- P2-03 보강으로 `planner:deprecated:guard`가 문서에 removed로 적힌 `src/lib/planner/core.ts` 복귀와 `lib/planner/core` import까지 함께 차단하도록 맞췄습니다.
+- P2-04 보강으로 runtime 순수 helper와 타입을 `workspaceRuntimeHelpers.ts`로 분리하고, 기존 `useWorkspaceRuntimeBundle.ts` export 표면은 re-export로 유지했습니다.
+- P2-04 추가 보강으로 runtime state hook을 `useWorkspaceRuntimeStateBundle.ts`로 분리하고, 기존 `useWorkspaceRuntimeBundle.ts` export 표면은 re-export로 유지했습니다.
+- P2-04 추가 보강으로 feedback submit lifecycle을 `useWorkspaceFeedbackSubmitAction.ts`로 분리했습니다.
+- P2-04 추가 보강으로 optimizer 실행 lifecycle을 `useWorkspaceOptimizeAction.ts`로 분리했습니다.
+- P2-04 추가 보강으로 profile 저장 동기화 lifecycle을 `useWorkspaceProfileSyncAction.ts`로 분리했습니다.
+- P2-04 추가 보강으로 run 저장/실행/시나리오/저장 lifecycle을 `useWorkspaceRunExecutionActions.ts`로 분리했습니다.
+- `useWorkspaceRuntimeBundle.ts`는 1285 lines에서 653 lines로 줄었고, 기존 export 표면은 re-export와 반환 객체로 유지했습니다.
+- P2-05 gate 안정화로 `release:verify`의 긴 연속 실행 뒤 timeout에 걸리던 desktop artifact, v3 store concurrency, PostgreSQL readiness 테스트의 explicit timeout을 실제 실행 시간에 맞게 늘렸습니다.
+- 전달문 최종 보고서 필수 항목을 `work/6/29/2026-06-29-0629-delivery-final-report-draft.md`에 초안으로 정리했습니다.
+- 전달문 요구사항별 완료/미완료/blocked 근거를 `work/6/29/2026-06-29-0629-delivery-completion-audit.md`에 별도 감사표로 정리했습니다.
+- P0-02 추가 보강으로 user-facing batch detail/summary/cashflow/draft reader가 `policy.usesLegacyTransactions=true`인 hybrid legacy fallback을 정상 응답으로 노출하지 않도록 `userFacingBatchReadPolicy.ts` 공통 helper에 모았습니다.
+
+## 검증
+- `git rev-parse HEAD` -> `baf6325ecdadb3a2b249c0946490ec48887430ab`.
+- `git fetch origin main --prune` 후 `git rev-parse origin/main` -> `5e1cc1c901f9ad3925fb450a8446b192ed4bf8f5`.
+- `git rev-parse main` -> `5e1cc1c901f9ad3925fb450a8446b192ed4bf8f5`.
+- `corepack pnpm --version && corepack pnpm install --frozen-lockfile` PASS, pnpm `10.29.3`, lockfile up to date.
+- Targeted P0/P1 tests PASS, 21 files / 194 tests.
+  - 실행 범위: auth/currentUser, routeAuth, user-scope coverage, namespace, v3 transaction/batch user scope, import account API, transactionStore, legacy transaction migration, backup API, storage error API, store concurrency, Action Center SSOT, draft boundary, desktop artifact provenance, v3 canonical source/write owner, create-run service boundary, report canonical contract, unified products route, public API provenance.
+- `corepack pnpm lint && corepack pnpm typecheck && corepack pnpm planning:auth:check && corepack pnpm planning:user-scope:check` PASS.
+  - `planning:auth:check`: 13 files / 74 tests.
+  - `planning:user-scope:check`: 12 files / 32 tests.
+- `corepack pnpm test` PASS, 738 files / 2437 tests.
+- `corepack pnpm release:verify` PASS.
+  - 내부 `planning:v2:complete` PASS, fast e2e 6 tests 포함.
+  - 내부 `planning:v2:regress` PASS, full e2e 8 tests 포함.
+  - 내부 `corepack pnpm test` PASS, 738 files / 2437 tests.
+  - advisory `planning:ssot:check` PASS, 5 files / 9 tests.
+- `corepack pnpm planning:v2:desktop:build` PASS.
+  - Next production build PASS.
+  - artifact path: `.dist/planning-v2-desktop`.
+- `corepack pnpm planning:v2:desktop:smoke` PASS.
+  - `runId=35cc6156-dc24-44cd-b3e0-b71462ce4b70`.
+  - `DEV_ACTION_TOKEN`이 없어 ops doctor API probe는 skipped 경고가 있었습니다.
+- `corepack pnpm planning:v2:regress` PASS.
+  - regression 9 cases PASS.
+  - isolated full e2e 8 tests PASS.
+- `git diff --check -- docs/planning-v3-boundary-adr.md docs/README.md src/lib/planning/v3/README.md` PASS.
+- `corepack pnpm test tests/planning-v3-canonical-source-contract.test.ts tests/planning-v3-canonical-write-owner.test.ts tests/planning-v3-legacy-transaction-migration.test.ts` PASS, 3 files / 10 tests.
+- `corepack pnpm planning:postgres:readiness` PASS.
+  - mode: dry-run.
+  - `.data/planning` manifest: 39 files, 268294 bytes.
+  - schema validation: SQLite 14 models, PostgreSQL 28 models.
+  - apply plan: `operationCount=0`, transaction batch/account/opening balance/transaction target operations 모두 0.
+  - checksum compare PASS.
+  - confirmed apply: unavailable, `postgres_apply_not_implemented`.
+- `node --check scripts/planner_deprecated_guard.mjs && corepack pnpm planner:deprecated:guard` PASS.
+- `corepack pnpm test tests/planner-page-redirect.test.ts tests/planner-compute-route-auth.test.ts tests/planning/report-canonical-contract.test.ts` PASS, 3 files / 10 tests.
+- `git diff --check -- scripts/planner_deprecated_guard.mjs docs/planner-deprecated-cleanup.md` PASS.
+- `corepack pnpm lint` PASS.
+- `corepack pnpm test tests/planning/ui/workspaceRuntimeBundle.test.ts tests/planning/ui/workspaceProfileBundle.test.ts tests/planning/ui/workspaceExecutionOptionsBundle.test.ts` PASS, 3 files / 15 tests.
+- `git diff --check -- src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/components/planning/workspace/workspaceRuntimeHelpers.ts` PASS.
+- `corepack pnpm typecheck` PASS.
+- `corepack pnpm lint` PASS after P2-04 helper split.
+- `corepack pnpm test tests/planning/ui/workspaceRuntimeBundle.test.ts tests/planning/ui/workspaceProfileBundle.test.ts tests/planning/ui/workspaceExecutionOptionsBundle.test.ts` PASS after state hook split, 3 files / 15 tests.
+- `corepack pnpm typecheck` PASS after state hook split.
+- `corepack pnpm lint` PASS after state hook split.
+- `git diff --check -- src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/components/planning/workspace/workspaceRuntimeHelpers.ts src/components/planning/workspace/useWorkspaceRuntimeStateBundle.ts` PASS.
+- `corepack pnpm test tests/planning/ui/workspaceRuntimeBundle.test.ts tests/planning/ui/workspaceProfileBundle.test.ts tests/planning/ui/workspaceExecutionOptionsBundle.test.ts` PASS after feedback action split, 3 files / 15 tests.
+- `git diff --check -- src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/components/planning/workspace/workspaceRuntimeHelpers.ts src/components/planning/workspace/useWorkspaceRuntimeStateBundle.ts src/components/planning/workspace/useWorkspaceFeedbackSubmitAction.ts` PASS.
+- `corepack pnpm typecheck` PASS after feedback action split.
+- `corepack pnpm lint` PASS after feedback action split.
+- `corepack pnpm test tests/planning/ui/workspaceRuntimeBundle.test.ts tests/planning/ui/workspaceProfileBundle.test.ts tests/planning/ui/workspaceExecutionOptionsBundle.test.ts` PASS after optimizer action split, 3 files / 15 tests.
+- `git diff --check -- src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/components/planning/workspace/useWorkspaceOptimizeAction.ts` PASS.
+- `corepack pnpm lint` PASS after optimizer action split.
+- `corepack pnpm typecheck` PASS after optimizer action split.
+- `corepack pnpm test tests/planning/ui/workspaceRuntimeBundle.test.ts tests/planning/ui/workspaceProfileBundle.test.ts tests/planning/ui/workspaceExecutionOptionsBundle.test.ts` PASS after profile sync action split, 3 files / 15 tests.
+- `corepack pnpm typecheck` PASS after profile sync action split.
+- `corepack pnpm lint` PASS after profile sync action split.
+- `git diff --check -- docs/planning-v3-boundary-adr.md docs/README.md src/lib/planning/v3/README.md scripts/planner_deprecated_guard.mjs docs/planner-deprecated-cleanup.md src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/components/planning/workspace/workspaceRuntimeHelpers.ts src/components/planning/workspace/useWorkspaceRuntimeStateBundle.ts src/components/planning/workspace/useWorkspaceFeedbackSubmitAction.ts src/components/planning/workspace/useWorkspaceOptimizeAction.ts src/components/planning/workspace/useWorkspaceProfileSyncAction.ts work/6/29/2026-06-29-0629-delivery-revalidation.md` PASS.
+- `corepack pnpm multi-agent:guard` PASS after profile sync action split.
+- `corepack pnpm test tests/planning/ui/workspaceRuntimeBundle.test.ts tests/planning/ui/workspaceProfileBundle.test.ts tests/planning/ui/workspaceExecutionOptionsBundle.test.ts` PASS after run execution action split, 3 files / 15 tests.
+- `corepack pnpm typecheck` PASS after run execution action split.
+- `corepack pnpm lint` PASS after run execution action split.
+- `git diff --check -- docs/planning-v3-boundary-adr.md docs/README.md src/lib/planning/v3/README.md scripts/planner_deprecated_guard.mjs docs/planner-deprecated-cleanup.md src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/components/planning/workspace/workspaceRuntimeHelpers.ts src/components/planning/workspace/useWorkspaceRuntimeStateBundle.ts src/components/planning/workspace/useWorkspaceFeedbackSubmitAction.ts src/components/planning/workspace/useWorkspaceOptimizeAction.ts src/components/planning/workspace/useWorkspaceProfileSyncAction.ts src/components/planning/workspace/useWorkspaceRunExecutionActions.ts work/6/29/2026-06-29-0629-delivery-revalidation.md` PASS.
+- `corepack pnpm multi-agent:guard` PASS after run execution action split.
+- `corepack pnpm test` PASS after P2-04 latest split, 738 files / 2437 tests.
+- `corepack pnpm planning:auth:check` PASS after P2-04 latest split, 13 files / 74 tests.
+- `corepack pnpm planning:user-scope:check` PASS after P2-04 latest split, 12 files / 32 tests.
+- `corepack pnpm release:verify` first retried run returned FAIL at `gate=test`.
+  - failed tests: `tests/desktop-artifact-provenance.test.ts` manifest provenance timeout, `tests/planning-v3-store-concurrency.test.ts` batch concurrency timeout plus follow-on orphan assertion, `tests/planning/auth/postgresReadinessScript.test.ts` repeated dry-run timeout.
+- `corepack pnpm test tests/planning-v3-store-concurrency.test.ts tests/planning/auth/postgresReadinessScript.test.ts tests/desktop-artifact-provenance.test.ts` PASS before timeout adjustment, 3 files / 23 tests. 실패 원인은 제품 로직 결함보다 release 연속 실행 부하와 explicit timeout 부족으로 재분류했습니다.
+- `corepack pnpm test tests/planning-v3-store-concurrency.test.ts tests/planning/auth/postgresReadinessScript.test.ts tests/desktop-artifact-provenance.test.ts` PASS after timeout adjustment, 3 files / 23 tests.
+- `git diff --check -- tests/planning-v3-store-concurrency.test.ts tests/planning/auth/postgresReadinessScript.test.ts tests/desktop-artifact-provenance.test.ts` PASS.
+- `corepack pnpm lint` PASS after timeout adjustment.
+- `corepack pnpm release:verify` PASS after timeout adjustment.
+  - 내부 `planning:v2:complete` PASS, fast e2e 6 tests 포함.
+  - 내부 `planning:v2:compat` PASS.
+  - 내부 `planning:v2:regress` PASS, regression 9 cases와 isolated full e2e 8 tests 포함.
+  - 내부 `corepack pnpm test` PASS, 738 files / 2437 tests.
+  - advisory `planning:ssot:check` PASS, 5 files / 9 tests.
+- `corepack pnpm typecheck` PASS after final release gate.
+- `git diff --check -- docs/planning-v3-boundary-adr.md docs/README.md src/lib/planning/v3/README.md scripts/planner_deprecated_guard.mjs docs/planner-deprecated-cleanup.md src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/components/planning/workspace/workspaceRuntimeHelpers.ts src/components/planning/workspace/useWorkspaceRuntimeStateBundle.ts src/components/planning/workspace/useWorkspaceFeedbackSubmitAction.ts src/components/planning/workspace/useWorkspaceOptimizeAction.ts src/components/planning/workspace/useWorkspaceProfileSyncAction.ts src/components/planning/workspace/useWorkspaceRunExecutionActions.ts tests/planning-v3-store-concurrency.test.ts tests/planning/auth/postgresReadinessScript.test.ts tests/desktop-artifact-provenance.test.ts work/6/29/2026-06-29-0629-delivery-revalidation.md` PASS.
+- `.dist` tracked file count는 `git ls-files .dist | wc -l` 기준 0입니다.
+- `.dist` ignored local file count는 `find .dist -type f` 기준 29239입니다.
+- `git status --short .dist | wc -l`은 0입니다.
+- 재생성된 `.dist/planning-v2-desktop/desktop-manifest.json`은 `version=1.0.4`, `packageVersion=1.0.4`, `gitSha=baf6325ecdadb3a2b249c0946490ec48887430ab`, `fileCount=27009`, `totalBytes=428664054`입니다.
+- `corepack pnpm test -- --runInBand`는 실행하지 않았습니다. 현재 `package.json`의 `test` script가 `vitest run`이라 Jest 전용 `--runInBand` 대신 `corepack pnpm test`로 전체 테스트를 실행했습니다.
+
+## 2026-06-29 P0-02 draft/apply follow-up
+- 현재 코드 감사 중 `src/app/api/planning/v3/draft/apply/route.ts`가 user-facing v3 route임에도 legacy `service/transactionStore`를 직접 import하는 것을 확인했습니다.
+- 수정 전 실패 증거: `corepack pnpm test tests/planning-v2-static-guard.test.ts` FAIL. 신규 static guard 테스트가 `draft/apply`의 legacy `transactionStore` 직접 import를 잡았습니다.
+- 수정 내용:
+  - `src/app/api/planning/v3/draft/apply/route.ts`를 `loadCurrentUserBatchDetail` + `getStoredFirstBatchBindingAccountId` 기반으로 전환했습니다.
+  - legacy-only 또는 legacy-backed batch는 `NO_DATA`로 거부하고, stored-first batch preview 동작은 유지했습니다.
+  - `scripts/planning_v2_static_guard.mjs`의 v3 user-facing route scan 범위를 `transactions`/`batches` 하위에서 v3 API route 전체로 넓혔습니다.
+  - `tests/planning-v3-draft-apply-api.test.ts`에 legacy-only batch 거부 테스트를 추가했습니다.
+- 수정 후 성공 증거:
+  - `node --check scripts/planning_v2_static_guard.mjs` PASS.
+  - `corepack pnpm test tests/planning-v2-static-guard.test.ts` PASS, 1 file / 2 tests.
+  - `corepack pnpm test tests/planning-v3-draft-apply-api.test.ts` PASS, 1 file / 4 tests.
+  - `corepack pnpm planning:v2:guard` PASS, `v3UserFacingTransactionRouteFiles=59`.
+  - `corepack pnpm lint` PASS.
+  - `corepack pnpm typecheck` PASS.
+  - `corepack pnpm planning:auth:check` PASS, 13 files / 74 tests.
+  - `corepack pnpm planning:user-scope:check` PASS, 12 files / 32 tests.
+  - `corepack pnpm test` PASS, 739 files / 2441 tests.
+  - `corepack pnpm release:verify` PASS. 내부 full `pnpm test`도 739 files / 2441 tests PASS.
+
+## 2026-06-29 P0-02 hybrid fallback follow-up
+- 현재 코드 감사 중 batch detail, cashflow, `getBatchSummary`가 same-id stored meta + legacy row fallback을 user-facing 정상 데이터로 노출할 수 있음을 확인했습니다.
+- 수정 전 실패 증거: `corepack pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts` FAIL.
+  - 신규 기대값 기준으로 batch detail은 404 대신 200, cashflow는 404 대신 200, `getBatchSummary`는 `NOT_FOUND` reject 대신 summary resolve가 발생했습니다.
+- 수정 내용:
+  - `src/lib/planning/v3/service/userFacingBatchReadPolicy.ts`를 추가해 user-facing stored read 기준을 `!policy.usesLegacyTransactions`로 공유했습니다.
+  - `batchReadRepository`, `loadBatchVisiblePipeline`, `getBatchSummary`, `generateDraftPatchFromBatch`가 같은 helper를 사용하도록 변경했습니다.
+  - 기존 historical helper/compat bridge 테스트는 내부 분류 검증으로 유지하고, route 응답은 legacy-backed rows를 `NO_DATA`/`NOT_FOUND`로 거부하도록 기대값을 바꿨습니다.
+  - `tests/planning-v3-getBatchSummary.test.ts`의 기본 fixture를 legacy-only import가 아니라 canonical stored batch fixture로 바꿨습니다.
+- 수정 후 성공 증거:
+  - `corepack pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts` PASS, 3 files / 45 tests.
+  - `corepack pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts tests/planning-v3-categorized-api.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts tests/planning-v3-balances-api.test.ts tests/planning-v3-draft-profile-api.test.ts tests/planning-v3-generateDraftPatchFromBatch.test.ts tests/planning-v3-draft-apply-api.test.ts` PASS, 8 files / 77 tests.
+  - `corepack pnpm planning:v2:guard` PASS, `v3UserFacingTransactionRouteFiles=59`.
+  - `corepack pnpm typecheck` PASS.
+  - `corepack pnpm planning:auth:check` PASS, 13 files / 74 tests.
+  - `corepack pnpm planning:user-scope:check` PASS, 12 files / 32 tests.
+  - `corepack pnpm lint` PASS.
+  - `corepack pnpm test` PASS, 739 files / 2442 tests.
+  - `corepack pnpm release:verify` PASS. 내부 full `pnpm test`도 739 files / 2442 tests PASS.
+  - `corepack pnpm build` PASS.
+
+## 남은 리스크
+- commit/push/PR 생성 또는 업데이트는 빌링 문제가 초기화될 때까지 중단했습니다.
+- 전달문이 요구한 "독립 PR 단위" 완료와 원격 CI 증거는 아직 없습니다. 현재 증거는 로컬 브랜치와 기존 PR #106의 로컬 검증 기준입니다.
+- 전체 과거 P0/P1을 기준 SHA로 되돌린 실패 재현 로그는 없습니다. 다만 이번 follow-up에서는 P0-02 `draft/apply` legacy direct import와 same-id hybrid legacy-backed row 노출에 대해 수정 전 FAIL과 수정 후 PASS 증거를 확보했습니다.
+- 운영 legacy 데이터 inventory는 로컬 저장소/테스트 기준만 확인했습니다. 실제 production 데이터의 migration 대상, 충돌, quarantine 수는 운영 데이터 접근 없이 확정할 수 없습니다.
+- 실제 migration 적용은 0건입니다. 따라서 운영 rollback 검증도 코드/테스트 수준이며, production dry-run 결과가 필요합니다.
+- `planning:postgres:readiness`의 로컬 dry-run apply plan은 operation 0건이라 rollback probe가 `no_target_operations`로 skip됐습니다. 실제 PostgreSQL disposable target에서의 transaction rollback/partial apply 검증은 아직 없습니다.
+- 다중 프로세스 공유 파일 저장소 topology라면 현재 process-local mutex만으로 완료로 볼 수 없고, file lock/CAS/DB transaction 후속 설계가 필요합니다.
+- P2-04 workspace runtime bundle은 helper/state/feedback/optimizer/profile sync/run execution lifecycle 분리를 로컬에서 완료했습니다. 추가 parser/polling 분리는 선택적 후속 리팩터링 후보입니다.

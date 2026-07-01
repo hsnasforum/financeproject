@@ -14,6 +14,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type CreateBody = {
   accountId?: unknown;
@@ -80,7 +81,9 @@ export async function GET(request: Request) {
   try {
     const items = await listCurrentUserAccounts();
     return NextResponse.json({ ok: true, items, meta: userMeta });
-  } catch {
+  } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     return NextResponse.json(
       { ok: false, error: { code: "INTERNAL", message: "계좌 목록을 불러오지 못했습니다." }, meta: userMeta },
       { status: 500 },
@@ -113,6 +116,8 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ ok: true, account, meta: userMeta }, { status: 201 });
   } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     if (error instanceof AccountsStoreInputError) {
       return NextResponse.json(
         {

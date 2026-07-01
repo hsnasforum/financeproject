@@ -4,26 +4,14 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { runCompleteCli } from "./planning_v2_complete.mjs";
 import { runPnpm } from "./pnpm_runner.mjs";
+import { QUALITY_GATE_SUITES } from "./quality_gates.mjs";
 
-const PREFLIGHT_REQUIRED_GATES = [
-  "cleanup:next-artifacts",
-  "deps:audit",
-];
-const EARLY_REQUIRED_GATES = [
-  "planning:v2:complete",
-  "multi-agent:guard",
-];
-const OPTIONAL_GATES = [
-  "planning:v2:compat",
-  "planning:v2:regress",
-  "planning:postgres:readiness",
-];
-const LATE_REQUIRED_GATES = [
-  "test",
-];
-const ADVISORY_GATES = [
-  "planning:ssot:check",
-];
+const RELEASE_VERIFY_GATES = QUALITY_GATE_SUITES["release:verify"];
+const PREFLIGHT_REQUIRED_GATES = RELEASE_VERIFY_GATES.preflightRequired;
+const EARLY_REQUIRED_GATES = RELEASE_VERIFY_GATES.earlyRequired;
+const OPTIONAL_GATES = RELEASE_VERIFY_GATES.optional;
+const LATE_REQUIRED_GATES = RELEASE_VERIFY_GATES.lateRequired;
+const ADVISORY_GATES = RELEASE_VERIFY_GATES.advisory;
 
 const cwd = process.cwd();
 const packageJsonPath = path.join(cwd, "package.json");

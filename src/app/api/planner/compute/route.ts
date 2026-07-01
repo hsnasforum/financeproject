@@ -1,5 +1,6 @@
 import { clampPlannerAssumptions, computePlanner } from "@/lib/planner/compute";
 import { jsonError, jsonOk } from "@/lib/http/apiResponse";
+import { append as appendAuditLog } from "@/lib/audit/auditLogStore";
 import { PlannerInputError, type PlannerAssumptions } from "@/lib/planner/types";
 import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
 import {
@@ -8,6 +9,15 @@ import {
   withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import { issuesToApi as plannerIssuesToApi, parsePlannerInput } from "../../../../lib/schemas/plannerInput";
+
+const LEGACY_PLANNER_COMPUTE_CONTRACT = {
+  id: "planner-compute",
+  status: "deprecated-compatibility",
+  owner: "Planning Reports / Architecture",
+  sunset: "TBD-after-telemetry-inventory",
+  replacement: "planning-v2 run/report APIs",
+  telemetryEvent: "legacy_planner_compute_called",
+} as const;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -44,6 +54,27 @@ function withComputeGuard(request: Request) {
   }
 }
 
+function recordLegacyPlannerComputeTelemetry(meta: ReturnType<typeof planningUserMeta>): void {
+  try {
+    appendAuditLog({
+      event: LEGACY_PLANNER_COMPUTE_CONTRACT.telemetryEvent,
+      route: "/api/planner/compute",
+      summary: "Legacy planner compute API called",
+      details: {
+        legacyApiId: LEGACY_PLANNER_COMPUTE_CONTRACT.id,
+        status: LEGACY_PLANNER_COMPUTE_CONTRACT.status,
+        replacement: LEGACY_PLANNER_COMPUTE_CONTRACT.replacement,
+        userId: meta.userId,
+        authSource: meta.authSource,
+      },
+    });
+  } catch (error) {
+    console.error("[planner/compute] failed to record legacy telemetry", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+}
+
 export async function POST(request: Request) {
   const guardFailure = withComputeGuard(request);
   if (guardFailure) return guardFailure;
@@ -62,11 +93,16 @@ export async function POST(request: Request) {
 
       const assumptions = clampPlannerAssumptions(parseAssumptions(payload.assumptions));
       const result = computePlanner(parsedInput.value, assumptions);
+      const userMeta = planningUserMeta(currentUser);
+      recordLegacyPlannerComputeTelemetry(userMeta);
 
       return jsonOk({
         result,
       }, {
-        meta: planningUserMeta(currentUser),
+        meta: {
+          ...userMeta,
+          legacyApi: LEGACY_PLANNER_COMPUTE_CONTRACT,
+        },
       });
     });
   } catch (error) {

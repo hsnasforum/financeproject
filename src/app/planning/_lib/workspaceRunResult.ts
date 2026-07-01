@@ -5,10 +5,6 @@ import {
   type ProfileNormalizationDisclosure,
 } from "@/lib/planning/v2/normalizationDisclosure";
 import { type ResultDtoV1 } from "@/lib/planning/v2/resultDto";
-import {
-  assumptionsHealthMessage,
-  type AssumptionsHealthWarningCode,
-} from "@/lib/planning/v2/warningsCatalog.ko";
 import { resolveWarningCatalog } from "@/lib/planning/catalog/warningCatalog";
 import { type SnapshotListItem } from "./snapshotList";
 import {
@@ -122,23 +118,12 @@ function buildSummaryOnlyHealthWarning(
   const data = typeof summary?.snapshotStaleDays === "number"
     ? { days: summary.snapshotStaleDays }
     : undefined;
-  const message = (
-    normalizedCode === "SNAPSHOT_MISSING"
-    || normalizedCode === "SNAPSHOT_STALE"
-    || normalizedCode === "SNAPSHOT_VERY_STALE"
-    || normalizedCode === "OPTIMISTIC_RETURN"
-    || normalizedCode === "OPTIMISTIC_RETURN_HIGH"
-    || normalizedCode === "RISK_ASSUMPTION_MISMATCH"
-    || normalizedCode === "RISK_ASSUMPTION_MISMATCH_LOW"
-  )
-    ? assumptionsHealthMessage(normalizedCode as AssumptionsHealthWarningCode, data)
-    : resolveWarningCatalog(normalizedCode).plainDescription;
-  const severity = resolveWarningCatalog(normalizedCode).severityHint;
+  const catalog = resolveWarningCatalog(normalizedCode);
 
   return {
     code: normalizedCode,
-    severity,
-    message,
+    severity: catalog.severityHint,
+    message: catalog.plainDescription,
     ...(data ? { data } : {}),
   };
 }

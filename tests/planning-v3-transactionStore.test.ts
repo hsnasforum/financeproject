@@ -199,6 +199,30 @@ describe("planning v3 transactionStore", () => {
     expect((detail?.sample ?? []).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("reports malformed legacy transaction NDJSON with line context", async () => {
+    const transactionsDir = path.join(root, "v3", "transactions");
+    const recordsPath = path.join(transactionsDir, "records.ndjson");
+    fs.mkdirSync(transactionsDir, { recursive: true });
+    fs.writeFileSync(recordsPath, [
+      JSON.stringify({
+        id: "record-good",
+        txnId: "aaaaaaaaaaaa",
+        batchId: "batch-main",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        date: "2026-01-01",
+        amountKrw: 1000,
+        source: "csv",
+      }),
+      "{ broken record row",
+      "",
+    ].join("\n"), "utf-8");
+
+    await expect(readAllTransactions()).rejects.toMatchObject({
+      name: "StorageCorruptedError",
+      lineNumber: 2,
+    });
+  });
+
   it("keeps imports idempotent for the same CSV in the same store", async () => {
     const csvText = [
       "date,amount,description",

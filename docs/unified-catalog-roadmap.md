@@ -27,7 +27,7 @@
 
 - 매칭 임계값(예: 0.92) 튜닝 필요
 - 오탐/미탐 관리 필요
-- 보호 신호 필터는 비활성 상태이며 추후 별도 소스 재도입 시 복구 예정
+- 보호 신호 필터는 `depositProtection=any|prefer|require`로 활성화되어 있으며, KDB 매칭 항목은 `matched`, 확인 근거가 없는 항목은 `unknown`으로 노출됩니다.
 
 ## Suggested Metrics
 

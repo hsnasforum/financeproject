@@ -30,6 +30,10 @@ function statusFromCode(code?: string): number {
   return 502;
 }
 
+function isHealthyResult(result: { meta: { provenance: { degraded: boolean } } }, fallbackSuccess: boolean): boolean {
+  return fallbackSuccess && !result.meta.provenance.degraded;
+}
+
 export async function GET(request: Request) {
   const blocked = guardDevReadRequest(request);
   if (blocked) return blocked;
@@ -53,8 +57,8 @@ export async function GET(request: Request) {
         ok: true,
         data: {
           source,
-          success: true,
-          summary: { asOf: result.data.asOf, rateCount: Object.keys(result.data.rates).length },
+          success: isHealthyResult(result, true),
+          summary: { asOf: result.data.asOf, rateCount: Object.keys(result.data.rates).length, provenance: result.meta.provenance },
           fetchedAt,
         },
       });
@@ -68,7 +72,7 @@ export async function GET(request: Request) {
         ok: true,
         data: {
           source,
-          success: scannedRows > 0,
+          success: isHealthyResult(result, scannedRows > 0),
           summary: {
             count: result.data.length,
             normalizedCount: typeof result.meta?.normalizedCount === "number" ? result.meta.normalizedCount : result.data.length,
@@ -80,6 +84,7 @@ export async function GET(request: Request) {
             resolvedFrom: typeof result.meta?.resolvedFrom === "string" ? result.meta.resolvedFrom : undefined,
             authMode: typeof result.meta?.authMode === "string" ? result.meta.authMode : undefined,
             scannedPages: typeof result.meta?.scannedPages === "number" ? result.meta.scannedPages : undefined,
+            provenance: result.meta.provenance,
           },
           fetchedAt,
         },
@@ -94,7 +99,7 @@ export async function GET(request: Request) {
         ok: true,
         data: {
           source,
-          success: scannedRows > 0,
+          success: isHealthyResult(result, scannedRows > 0),
           summary: {
             count: result.data.length,
             normalizedCount: typeof result.meta?.normalizedCount === "number" ? result.meta.normalizedCount : result.data.length,
@@ -106,6 +111,7 @@ export async function GET(request: Request) {
             resolvedFrom: typeof result.meta?.resolvedFrom === "string" ? result.meta.resolvedFrom : undefined,
             authMode: typeof result.meta?.authMode === "string" ? result.meta.authMode : undefined,
             scannedPages: typeof result.meta?.scannedPages === "number" ? result.meta.scannedPages : undefined,
+            provenance: result.meta.provenance,
           },
           fetchedAt,
         },
@@ -139,8 +145,8 @@ export async function GET(request: Request) {
         ok: true,
         data: {
           source,
-          success: true,
-          summary: { month: result.data.month, count: result.data.count },
+          success: isHealthyResult(result, true),
+          summary: { month: result.data.month, count: result.data.count, provenance: result.meta.provenance },
           fetchedAt,
         },
       });
@@ -152,8 +158,8 @@ export async function GET(request: Request) {
       ok: true,
       data: {
         source,
-        success: true,
-        summary: { month: result.data.month, count: result.data.count },
+        success: isHealthyResult(result, true),
+        summary: { month: result.data.month, count: result.data.count, provenance: result.meta.provenance },
         fetchedAt,
       },
     });

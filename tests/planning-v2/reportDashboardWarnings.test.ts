@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aggregateReportWarningsFromRun } from "../../src/app/planning/reports/_lib/dashboardWarnings";
-import { REASON_CODE_MESSAGES_KO, debtStrategyWarningMessage } from "../../src/lib/planning/v2/warningsCatalog.ko";
+import { resolveWarningCatalog } from "../../src/lib/planning/catalog/warningCatalog";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 
 function buildRun(input?: Partial<PlanningRunRecord>): PlanningRunRecord {
@@ -57,7 +57,7 @@ describe("aggregateReportWarningsFromRun", () => {
     const debt = rows.find((row) => row.code === "DSR_HIGH_WARN");
 
     expect(simulate).toBeDefined();
-    expect(simulate?.message).toBe(REASON_CODE_MESSAGES_KO.NEGATIVE_CASHFLOW);
+    expect(simulate?.message).toBe(resolveWarningCatalog("NEGATIVE_CASHFLOW").plainDescription);
     expect(simulate?.count).toBe(2);
 
     expect(health).toBeDefined();
@@ -65,7 +65,7 @@ describe("aggregateReportWarningsFromRun", () => {
     expect(health?.count).toBe(2);
 
     expect(debt).toBeDefined();
-    expect(debt?.message).toBe(debtStrategyWarningMessage("DSR_HIGH_WARN"));
+    expect(debt?.message).toBe(resolveWarningCatalog("DSR_HIGH_WARN").plainDescription);
     expect(debt?.count).toBe(1);
   });
 
@@ -84,6 +84,6 @@ describe("aggregateReportWarningsFromRun", () => {
 
     const rows = aggregateReportWarningsFromRun(run);
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.message).toBe("알 수 없는 경고 (UNKNOWN_CUSTOM_WARNING)");
+    expect(rows[0]?.message).toBe(resolveWarningCatalog("UNKNOWN_CUSTOM_WARNING").plainDescription);
   });
 });

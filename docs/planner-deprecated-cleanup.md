@@ -1,6 +1,6 @@
 # Planner Deprecated Cleanup Inventory
 
-Last updated: 2026-03-05
+Last updated: 2026-06-28
 
 ## Removed in P2 Start
 
@@ -17,7 +17,24 @@ Last updated: 2026-03-05
 - CI/script guard: `pnpm planner:deprecated:guard`
 - Checks:
   - removed files do not reappear,
-  - no `lib/planner/metrics` or `lib/planner/rules` import references remain in `src`/`tests`.
+  - no `lib/planner/core`, `lib/planner/metrics`, or `lib/planner/rules` import references remain in `src`/`tests`.
+
+## Legacy Planner Compute Boundary
+
+- Compatibility route: `POST /api/planner/compute`
+- Runtime owner: Planning Reports / Architecture
+- Status: `deprecated-compatibility`
+- Replacement: planning-v2 run/report APIs
+- Telemetry event: `legacy_planner_compute_called`
+- Sunset: `TBD-after-telemetry-inventory`
+
+운영 원칙:
+
+- route는 same-origin 검증과 planning user scope 안에서만 계산한다.
+- 성공 응답 `meta.legacyApi`에 owner/status/replacement/sunset/telemetryEvent를 함께 실어 호출자가 compatibility API 사용을 식별할 수 있게 한다.
+- 호출 시 audit log에 `legacy_planner_compute_called`를 best-effort로 남긴다.
+- report production UI는 `@/lib/planner/*`를 직접 import하지 않고, action link는 `src/lib/planning/catalog/plannerActionLinks.ts`를 사용한다.
+- 제거 여부와 sunset 날짜는 telemetry inventory와 외부 호출자 확인 후 별도 PR에서 확정한다.
 
 ## Legacy Report Boundary
 

@@ -2,6 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { roundKrw } from "../../calc";
 import { atomicWriteFile, atomicWriteJson } from "../../storage/atomicWrite";
+import {
+  readJsonFile,
+  readNdjsonFile,
+  isStorageNotFoundError,
+  storageSchemaCorrupted,
+  toStorageReadError,
+} from "../../storage/serverFileRead";
+import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type ImportBatchMeta, type StoredImportMetadata, type StoredTransaction } from "../domain/transactions";
@@ -131,6 +139,10 @@ function resolveIndexPath(cwd = process.cwd()): string {
 
 function resolveBatchTransactionsPath(batchId: string, cwd = process.cwd()): string {
   return path.join(resolveBatchesRootDir(cwd), `${sanitizeRecordId(batchId)}.ndjson`);
+}
+
+function withBatchesIndexWriteLock<T>(callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning-v3:batches:index:${resolveIndexPath()}`, callback);
 }
 
 function normalizeBatchMeta(value: unknown): ImportBatchMeta | null {
@@ -289,21 +301,19 @@ function sortTransactionsDeterministic(items: StoredTransaction[]): StoredTransa
 }
 
 async function readIndexState(): Promise<BatchesIndexState> {
-  try {
-    const parsed = JSON.parse(await fs.readFile(resolveIndexPath(), "utf-8")) as unknown;
-    if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.items)) {
-      return { version: 1, items: [] };
-    }
-    const items = parsed.items
-      .map((item) => normalizeBatchMeta(item))
-      .filter((item): item is ImportBatchMeta => item !== null);
-    return {
-      version: 1,
-      items: sortMetaById(items),
-    };
-  } catch {
-    return { version: 1, items: [] };
+  const filePath = resolveIndexPath();
+  const parsed = await readJsonFile(filePath);
+  if (parsed.kind === "not-found") return { version: 1, items: [] };
+  if (!isRecord(parsed.value) || parsed.value.version !== 1 || !Array.isArray(parsed.value.items)) {
+    throw storageSchemaCorrupted(filePath, "batch index storage schema is invalid");
   }
+  const items = parsed.value.items
+    .map((item) => normalizeBatchMeta(item))
+    .filter((item): item is ImportBatchMeta => item !== null);
+  return {
+    version: 1,
+    items: sortMetaById(items),
+  };
 }
 
 async function writeIndexState(state: BatchesIndexState): Promise<void> {
@@ -335,7 +345,8 @@ export async function listBatchTransactionFileIds(): Promise<string[]> {
       })
       .filter((name): name is string => Boolean(name))
       .sort((left, right) => left.localeCompare(right));
-  } catch {
+  } catch (error) {
+    if (!isStorageNotFoundError(error)) throw toStorageReadError(error, resolveBatchesRootDir());
     return [];
   }
 }
@@ -344,10 +355,12 @@ export async function getBatchTransactionsFileModifiedAt(batchId: string): Promi
   assertServerOnly();
   const safeBatchId = sanitizeRecordId(batchId);
   try {
-    const stat = await fs.stat(resolveBatchTransactionsPath(safeBatchId));
+    const filePath = resolveBatchTransactionsPath(safeBatchId);
+    const stat = await fs.stat(filePath);
     if (!stat.isFile() || !Number.isFinite(stat.mtimeMs)) return undefined;
     return new Date(stat.mtimeMs).toISOString();
-  } catch {
+  } catch (error) {
+    if (!isStorageNotFoundError(error)) throw toStorageReadError(error, resolveBatchTransactionsPath(safeBatchId));
     return undefined;
   }
 }
@@ -362,24 +375,26 @@ export async function getBatchMeta(batchId: string): Promise<ImportBatchMeta | n
 export async function updateStoredBatchAccountBinding(batchId: string, accountId: string): Promise<ImportBatchMeta | null> {
   assertServerOnly();
 
-  const safeBatchId = sanitizeRecordId(batchId);
-  const safeAccountId = sanitizeRecordId(accountId);
-  const state = await readIndexState();
-  const current = state.items.find((item) => item.id === safeBatchId) ?? null;
-  if (!current) return null;
+  return withBatchesIndexWriteLock(async () => {
+    const safeBatchId = sanitizeRecordId(batchId);
+    const safeAccountId = sanitizeRecordId(accountId);
+    const state = await readIndexState();
+    const current = state.items.find((item) => item.id === safeBatchId) ?? null;
+    if (!current) return null;
 
-  const nextAccounts = buildUpdatedBatchAccounts(current.accounts, safeAccountId);
-  const updated: ImportBatchMeta = {
-    ...current,
-    accounts: nextAccounts,
-  };
+    const nextAccounts = buildUpdatedBatchAccounts(current.accounts, safeAccountId);
+    const updated: ImportBatchMeta = {
+      ...current,
+      accounts: nextAccounts,
+    };
 
-  await writeIndexState({
-    version: 1,
-    items: state.items.map((item) => (item.id === safeBatchId ? updated : item)),
+    await writeIndexState({
+      version: 1,
+      items: state.items.map((item) => (item.id === safeBatchId ? updated : item)),
+    });
+
+    return updated;
   });
-
-  return updated;
 }
 
 export async function restoreStoredBatchAccountBindingSnapshot(
@@ -388,89 +403,95 @@ export async function restoreStoredBatchAccountBindingSnapshot(
 ): Promise<ImportBatchMeta | null> {
   assertServerOnly();
 
-  const safeBatchId = sanitizeRecordId(batchId);
-  const state = await readIndexState();
-  const current = state.items.find((item) => item.id === safeBatchId) ?? null;
-  if (!current) return null;
+  return withBatchesIndexWriteLock(async () => {
+    const safeBatchId = sanitizeRecordId(batchId);
+    const state = await readIndexState();
+    const current = state.items.find((item) => item.id === safeBatchId) ?? null;
+    if (!current) return null;
 
-  const updated = withClonedBatchAccounts(current, accounts);
-  await writeIndexState({
-    version: 1,
-    items: state.items.map((item) => (item.id === safeBatchId ? updated : item)),
+    const updated = withClonedBatchAccounts(current, accounts);
+    await writeIndexState({
+      version: 1,
+      items: state.items.map((item) => (item.id === safeBatchId ? updated : item)),
+    });
+
+    return updated;
   });
-
-  return updated;
 }
 
 export async function saveBatch(meta: ImportBatchMeta, transactions: StoredTransaction[]): Promise<void> {
   assertServerOnly();
 
-  const normalizedMeta = normalizeBatchMeta(meta);
-  if (!normalizedMeta) {
-    throw new Error("invalid batch meta");
-  }
+  await withBatchesIndexWriteLock(async () => {
+    const normalizedMeta = normalizeBatchMeta(meta);
+    if (!normalizedMeta) {
+      throw new Error("invalid batch meta");
+    }
 
-  const normalizedTransactions = sortTransactionsDeterministic(
-    transactions
-      .map((row) => normalizeStoredTransaction(row, normalizedMeta.id))
-      .filter((row): row is StoredTransaction => row !== null),
-  );
+    const normalizedTransactions = sortTransactionsDeterministic(
+      transactions
+        .map((row) => normalizeStoredTransaction(row, normalizedMeta.id))
+        .filter((row): row is StoredTransaction => row !== null),
+    );
+    const state = await readIndexState();
+    const transactionsPath = resolveBatchTransactionsPath(normalizedMeta.id);
+    let previousRaw: string | null = null;
+    try {
+      previousRaw = await fs.readFile(transactionsPath, "utf-8");
+    } catch (error) {
+      if (!isStorageNotFoundError(error)) throw toStorageReadError(error, transactionsPath);
+    }
 
-  const lines = normalizedTransactions.map((row) => JSON.stringify({
-    ...row,
-    batchId: normalizedMeta.id,
-  }));
-  await atomicWriteFile(
-    resolveBatchTransactionsPath(normalizedMeta.id),
-    lines.length > 0 ? `${lines.join("\n")}\n` : "",
-  );
+    const lines = normalizedTransactions.map((row) => JSON.stringify({
+      ...row,
+      batchId: normalizedMeta.id,
+    }));
+    await atomicWriteFile(
+      transactionsPath,
+      lines.length > 0 ? `${lines.join("\n")}\n` : "",
+    );
 
-  const state = await readIndexState();
-  const byId = new Map(state.items.map((item) => [item.id, item]));
-  byId.set(normalizedMeta.id, normalizedMeta);
-  await writeIndexState({
-    version: 1,
-    items: sortMetaById([...byId.values()]),
+    try {
+      const byId = new Map(state.items.map((item) => [item.id, item]));
+      byId.set(normalizedMeta.id, normalizedMeta);
+      await writeIndexState({
+        version: 1,
+        items: sortMetaById([...byId.values()]),
+      });
+    } catch (error) {
+      if (previousRaw === null) {
+        await fs.unlink(transactionsPath).catch(() => undefined);
+      } else {
+        await atomicWriteFile(transactionsPath, previousRaw);
+      }
+      throw error;
+    }
   });
 }
 
 export async function getBatchTransactions(batchId: string): Promise<StoredTransaction[]> {
   assertServerOnly();
   const safeBatchId = sanitizeRecordId(batchId);
-  try {
-    const raw = await fs.readFile(resolveBatchTransactionsPath(safeBatchId), "utf-8");
-    if (!raw.trim()) return [];
+  const read = await readNdjsonFile(resolveBatchTransactionsPath(safeBatchId));
+  if (read.kind === "not-found") return [];
+  const rows = read.rows
+    .map((row) => normalizeStoredTransaction(row.value, safeBatchId))
+    .filter((row): row is StoredTransaction => row !== null);
 
-    const rows = raw
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .map((line) => {
-        try {
-          return JSON.parse(line) as unknown;
-        } catch {
-          return null;
-        }
-      })
-      .filter((row): row is unknown => row !== null)
-      .map((row) => normalizeStoredTransaction(row, safeBatchId))
-      .filter((row): row is StoredTransaction => row !== null);
-
-    return sortTransactionsDeterministic(rows);
-  } catch {
-    return [];
-  }
+  return sortTransactionsDeterministic(rows);
 }
 
 export async function deleteBatch(batchId: string): Promise<void> {
   assertServerOnly();
-  const safeBatchId = sanitizeRecordId(batchId);
+  await withBatchesIndexWriteLock(async () => {
+    const safeBatchId = sanitizeRecordId(batchId);
 
-  const state = await readIndexState();
-  const nextItems = state.items.filter((item) => item.id !== safeBatchId);
-  if (nextItems.length !== state.items.length) {
-    await writeIndexState({ version: 1, items: nextItems });
-  }
+    const state = await readIndexState();
+    const nextItems = state.items.filter((item) => item.id !== safeBatchId);
+    if (nextItems.length !== state.items.length) {
+      await writeIndexState({ version: 1, items: nextItems });
+    }
 
-  await fs.unlink(resolveBatchTransactionsPath(safeBatchId)).catch(() => undefined);
+    await fs.unlink(resolveBatchTransactionsPath(safeBatchId)).catch(() => undefined);
+  });
 }

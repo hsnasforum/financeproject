@@ -32,6 +32,7 @@
 - 5분 셀프 테스트: [planning-v2-5min-selftest.md](./planning-v2-5min-selftest.md)
 - Backlog 분류: [planning-backlog.md](./planning-backlog.md)
 - v3 kickoff: [planning-v3-kickoff.md](./planning-v3-kickoff.md)
+- v3 boundary ADR: [planning-v3-boundary-adr.md](./planning-v3-boundary-adr.md)
 
 ## Operations
 - Ops about: `/ops/about`
@@ -60,6 +61,7 @@
 - One page: [planning-v2-onepage.md](./planning-v2-onepage.md)
 - Report recommendation: [planning-report-recommendation.md](./planning-report-recommendation.md)
 - v3 migration: [planning-v3-migration.md](./planning-v3-migration.md)
+- v3 boundary ADR: [planning-v3-boundary-adr.md](./planning-v3-boundary-adr.md)
 
 ## Announcements
 - [planning-v2-complete.md](./announcements/planning-v2-complete.md)

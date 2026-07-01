@@ -18,6 +18,16 @@ function parsePairs(input: string): Array<{ currency: string; amount: number }> 
     .filter((row) => /^[A-Z]{3}$/.test(row.currency));
 }
 
+function readPayloadMeta(payload: Record<string, unknown>, fetchedAt: string): Record<string, unknown> {
+  const meta = typeof payload.meta === "object" && payload.meta !== null
+    ? payload.meta as Record<string, unknown>
+    : {};
+  const provenance = typeof meta.provenance === "object" && meta.provenance !== null
+    ? meta.provenance
+    : { mode: "cache", degraded: true, degradedReason: "legacy-cache", fetchedAt };
+  return { ...meta, provenance };
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const date = (searchParams.get("date") ?? "").trim();
@@ -28,14 +38,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: { code: "INPUT", message: "pairs 형식이 올바르지 않습니다. 예: USD:1000,JPY:50000" } }, { status: 400 });
   }
 
-  const key = makeApiCacheKey("fx", { date, pairs });
+  const key = makeApiCacheKey("fx", { date, pairs }, "v2");
   const hit = getApiCacheRecord(key);
   if (hit) {
     const payload = hit.entry.payload as Record<string, unknown>;
     return NextResponse.json({
       ...payload,
       meta: {
-        ...(typeof payload.meta === "object" && payload.meta !== null ? payload.meta : {}),
+        ...readPayloadMeta(payload, hit.entry.fetchedAt),
         cache: "hit",
         key,
         fetchedAt: hit.entry.fetchedAt,
@@ -64,12 +74,17 @@ export async function GET(request: Request) {
   });
 
   const totalKrw = items.reduce((sum, row) => sum + (typeof row.krw === "number" ? row.krw : 0), 0);
-  const payload = { ok: true, data: { items, totalKrw, assumptions: { note: "환율은 기준일 데이터 기반이며 변동될 수 있습니다." } } };
+  const payload = {
+    ok: true,
+    data: { items, totalKrw, assumptions: { note: "환율은 기준일 데이터 기반이며 변동될 수 있습니다." } },
+    meta: result.meta,
+  };
 
   const entry = setApiCache(key, payload, TTL_SECONDS);
   return NextResponse.json({
     ...payload,
     meta: {
+      ...result.meta,
       cache: "miss",
       key,
       fetchedAt: entry.fetchedAt,

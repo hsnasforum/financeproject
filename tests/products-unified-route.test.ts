@@ -33,6 +33,14 @@ type UnifiedRouteJson = {
   data?: {
     items?: Array<{ badges?: string[] }>;
   };
+  coverage?: {
+    totalProducts?: number;
+    kdbBadged?: number;
+    depositProtection?: {
+      matched?: number;
+      unknown?: number;
+    };
+  };
   diagnostics?: {
     providerIndex?: {
       finlifeProviders?: number;
@@ -180,5 +188,34 @@ describe("GET /api/products/unified", () => {
       kind: "deposit",
       mode: "merged",
     }));
+  });
+
+  it("passes depositProtection mode to unified product service", async () => {
+    const { status, json } = await callUnified("?kind=deposit&depositProtection=require");
+
+    expect(status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(mocked.getUnifiedProducts).toHaveBeenCalledWith(expect.objectContaining({
+      depositProtection: "require",
+    }));
+  });
+
+  it("reports deposit protection matched and unknown coverage", async () => {
+    mocked.getUnifiedProducts.mockResolvedValueOnce({
+      ...sampleUnified,
+      items: [
+        { badges: ["KDB_MATCHED"], signals: { depositProtection: "matched" } },
+        { badges: [], signals: { depositProtection: "unknown" } },
+        { badges: [] },
+      ],
+    });
+
+    const { status, json } = await callUnified("?kind=deposit");
+
+    expect(status).toBe(200);
+    expect(json.coverage?.depositProtection).toEqual({
+      matched: 1,
+      unknown: 2,
+    });
   });
 });

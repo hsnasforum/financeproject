@@ -1,6 +1,7 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { readJsonFile, storageSchemaCorrupted } from "../../storage/serverFileRead";
+import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type OpeningBalance } from "../domain/types";
@@ -89,24 +90,22 @@ function sortMap(entries: Record<string, OpeningBalance>): Record<string, Openin
 }
 
 async function readState(): Promise<OpeningBalancesState> {
-  try {
-    const parsed = JSON.parse(await fs.readFile(resolveOpeningBalancesPath(), "utf-8")) as unknown;
-    if (!isRecord(parsed) || !isRecord(parsed.items)) {
-      return { version: 1, items: {} };
-    }
-    const items: Record<string, OpeningBalance> = {};
-    for (const accountId of Object.keys(parsed.items)) {
-      const normalized = normalizeOpeningBalance(parsed.items[accountId]);
-      if (!normalized) continue;
-      items[normalized.accountId] = normalized;
-    }
-    return {
-      version: 1,
-      items: sortMap(items),
-    };
-  } catch {
-    return { version: 1, items: {} };
+  const filePath = resolveOpeningBalancesPath();
+  const parsed = await readJsonFile(filePath);
+  if (parsed.kind === "not-found") return { version: 1, items: {} };
+  if (!isRecord(parsed.value) || !isRecord(parsed.value.items)) {
+    throw storageSchemaCorrupted(filePath, "opening balances storage schema is invalid");
   }
+  const items: Record<string, OpeningBalance> = {};
+  for (const accountId of Object.keys(parsed.value.items)) {
+    const normalized = normalizeOpeningBalance(parsed.value.items[accountId]);
+    if (!normalized) continue;
+    items[normalized.accountId] = normalized;
+  }
+  return {
+    version: 1,
+    items: sortMap(items),
+  };
 }
 
 async function writeState(state: OpeningBalancesState): Promise<void> {
@@ -114,6 +113,10 @@ async function writeState(state: OpeningBalancesState): Promise<void> {
     version: 1,
     items: sortMap(state.items),
   });
+}
+
+function withOpeningBalancesWriteLock<T>(callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning-v3:opening-balances:${resolveOpeningBalancesPath()}`, callback);
 }
 
 export async function getOpeningBalances(): Promise<Record<string, OpeningBalance>> {
@@ -128,14 +131,16 @@ export async function upsertOpeningBalance(
   amountKrw: number,
 ): Promise<OpeningBalance> {
   assertServerOnly();
-  const next: OpeningBalance = {
-    accountId: normalizeAccountId(accountId),
-    asOfDate: normalizeAsOfDate(asOfDate),
-    amountKrw: normalizeAmount(amountKrw),
-  };
+  return withOpeningBalancesWriteLock(async () => {
+    const next: OpeningBalance = {
+      accountId: normalizeAccountId(accountId),
+      asOfDate: normalizeAsOfDate(asOfDate),
+      amountKrw: normalizeAmount(amountKrw),
+    };
 
-  const state = await readState();
-  state.items[next.accountId] = next;
-  await writeState(state);
-  return next;
+    const state = await readState();
+    state.items[next.accountId] = next;
+    await writeState(state);
+    return next;
+  });
 }

@@ -38,12 +38,24 @@ function testEnv(values: Record<string, string | undefined> = {}): NodeJS.Proces
 }
 
 describe("Auth.js planning integration contract", () => {
-  it("keeps the planning auth verification gate explicit in package scripts", () => {
+  it("keeps the planning auth verification gate explicit in the quality gate registry", async () => {
     const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
+    const {
+      PLANNING_AUTH_CHECK_TEST_FILES,
+      getQualityGate,
+      renderQualityGateCommand,
+    } = await import("../../../scripts/quality_gates.mjs");
 
-    expect(pkg.scripts?.["planning:auth:check"]).toBe(
-      "vitest run tests/planning/auth/*.test.ts tests/middleware-security.test.ts tests/planner-compute-route-auth.test.ts tests/recommend-api.test.ts tests/planning-v2-api/products-candidates-route.test.ts tests/planning-v2-api/profiles-route.test.ts tests/planning-v2-api/assumptions-overrides-route.test.ts tests/planning/ops/planning-cache-route-user-scope.test.ts tests/planning/ops/ops-runs-route-service-boundary.test.ts tests/planning/ops/ops-doctor-route-service-boundary.test.ts tests/planning/ops/ops-doctor-route-action-response.test.ts tests/planning/ops/ops-doctor-action-result.test.ts tests/planning/ops/actions-preview-route.test.ts tests/planning/ops/actions-run-route.test.ts",
+    expect(pkg.scripts?.["planning:auth:check"]).toBe("node scripts/quality_gates_runner.mjs planning:auth:check");
+    expect(renderQualityGateCommand(getQualityGate("planning:auth:check"))).toBe(
+      `vitest run ${PLANNING_AUTH_CHECK_TEST_FILES.join(" ")}`,
     );
+    expect(PLANNING_AUTH_CHECK_TEST_FILES).toEqual(expect.arrayContaining([
+      "tests/planning/auth/*.test.ts",
+      "tests/planner-compute-route-auth.test.ts",
+      "tests/recommend-api.test.ts",
+      "tests/planning/ops/actions-run-route.test.ts",
+    ]));
   });
 
   it("keeps Auth.js dependencies and OAuth providers explicit", () => {

@@ -1,6 +1,7 @@
 import { lookupWarningGlossaryKo } from "./warningGlossary.ko";
 import { type ActionItemV2 } from "../actions/types";
 import { type GoalRow } from "../report/mapGoals";
+import { DEFAULT_PLANNING_POLICY } from "../../catalog";
 
 export type UserInsight = {
   severity: "ok" | "warn" | "risk";
@@ -42,7 +43,8 @@ export type BuildUserInsightArgs = {
   monteCarlo?: { retirementDepletionBeforeEnd?: number };
 };
 
-const SNAPSHOT_VERY_STALE_DAYS = 120;
+const INSIGHT_POLICY = DEFAULT_PLANNING_POLICY;
+const SNAPSHOT_VERY_STALE_DAYS = INSIGHT_POLICY.snapshot.staleRiskDays;
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -106,22 +108,24 @@ function buildDsrBullet(summary: BuildUserInsightArgs["summary"]): string {
     return "DSR 정보가 충분하지 않아 부채 탭에서 월 상환 부담을 함께 확인하세요.";
   }
 
-  if (dsrPct >= 60) return `대출 상환 비중이 ${dsrPct.toFixed(1)}%로 높아 계획이 쉽게 흔들릴 수 있습니다.`;
-  if (dsrPct >= 40) return `대출 상환 비중이 ${dsrPct.toFixed(1)}%로 적지 않아 지출 변동에 민감합니다.`;
+  if (dsrPct >= INSIGHT_POLICY.dsr.riskPct) return `대출 상환 비중이 ${dsrPct.toFixed(1)}%로 높아 계획이 쉽게 흔들릴 수 있습니다.`;
+  if (dsrPct >= INSIGHT_POLICY.dsr.cautionPct) return `대출 상환 비중이 ${dsrPct.toFixed(1)}%로 적지 않아 지출 변동에 민감합니다.`;
   return `대출 상환 비중은 ${dsrPct.toFixed(1)}%로 비교적 관리 가능한 수준입니다.`;
 }
 
 function buildMonteCarloBullet(mcDepletionProb?: number): { score: number; text: string } | null {
   if (typeof mcDepletionProb !== "number" || !Number.isFinite(mcDepletionProb)) return null;
+  const depletionPct = normalizePct(mcDepletionProb);
+  if (typeof depletionPct !== "number") return null;
 
-  if (mcDepletionProb >= 0.3) {
+  if (depletionPct >= INSIGHT_POLICY.monteCarlo.riskDepletionPct) {
     return {
       score: 5,
       text: "보수적으로 보면 3~4번 중 1번 정도는 자금이 먼저 마를 수 있어 안전마진이 부족합니다.",
     };
   }
 
-  if (mcDepletionProb >= 0.1) {
+  if (depletionPct >= INSIGHT_POLICY.monteCarlo.cautionDepletionPct) {
     return {
       score: 3,
       text: "변동성을 고려하면 자금이 모자랄 가능성이 있어 보수 시나리오 확인이 필요합니다.",
@@ -175,7 +179,7 @@ function buildThirdBullet(args: {
     });
   }
 
-  if (args.totalWarnings >= 8) {
+  if (args.totalWarnings >= INSIGHT_POLICY.warnings.cautionCount) {
     candidates.push({
       score: 2,
       text: `주의 신호가 ${args.totalWarnings}건 쌓여 있어 보수적으로 조정하는 편이 좋습니다.`,
@@ -242,7 +246,7 @@ export function buildUserInsight(args: BuildUserInsightArgs): UserInsight {
   const hasCriticalWarning = args.aggregatedWarnings.some((warning) => warning.severity === "critical");
   const goalsMissed = resolveGoalsMissed(args.goals, args.summary.goalsAchievedText);
   const totalWarnings = args.aggregatedWarnings.reduce((sum, warning) => sum + warning.count, 0);
-  const warningCountHigh = totalWarnings >= 8;
+  const warningCountHigh = totalWarnings >= INSIGHT_POLICY.warnings.cautionCount;
   const snapshotMissing = args.snapshotMeta?.missing === true;
   const snapshotStaleDays = asNumber(args.snapshotMeta?.staleDays);
   const snapshotVeryStale = typeof snapshotStaleDays === "number" && snapshotStaleDays > SNAPSHOT_VERY_STALE_DAYS;
@@ -250,10 +254,10 @@ export function buildUserInsight(args: BuildUserInsightArgs): UserInsight {
 
   const severity: UserInsight["severity"] = (worstCashKrw ?? Number.POSITIVE_INFINITY) <= 0
     || hasCriticalWarning
-    || (dsrPct ?? 0) >= 60
-    || (depletionProb ?? 0) >= 0.3
+    || (dsrPct ?? 0) >= INSIGHT_POLICY.dsr.riskPct
+    || (normalizePct(depletionProb) ?? 0) >= INSIGHT_POLICY.monteCarlo.riskDepletionPct
     ? "risk"
-    : ((dsrPct ?? 0) >= 40 || goalsMissed || warningCountHigh || snapshotVeryStale)
+    : ((dsrPct ?? 0) >= INSIGHT_POLICY.dsr.cautionPct || goalsMissed || warningCountHigh || snapshotVeryStale)
       ? "warn"
       : "ok";
 
@@ -279,7 +283,7 @@ export function buildUserInsight(args: BuildUserInsightArgs): UserInsight {
   const nextSteps = buildNextSteps({
     actionsTop: args.actionsTop,
     cashRisk: (worstCashKrw ?? Number.POSITIVE_INFINITY) <= 0,
-    highDsr: (dsrPct ?? 0) >= 40,
+    highDsr: (dsrPct ?? 0) >= INSIGHT_POLICY.dsr.cautionPct,
     goalsMissed,
     snapshotVeryStale,
     snapshotMissing,

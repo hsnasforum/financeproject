@@ -38,31 +38,6 @@ function asDateTime(value: string): string {
   return new Date(parsed).toLocaleString("ko-KR", { hour12: false });
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
-
-function asStage(value: unknown): Stage | undefined {
-  return value === "DEFICIT" || value === "DEBT" || value === "EMERGENCY" || value === "INVEST" ? value : undefined;
-}
-
-function resolvePlanningStage(vm: ReportVM): Stage | undefined {
-  const raw = asRecord(vm.raw);
-  const run = asRecord(raw?.runJson);
-  const outputs = asRecord(run?.outputs);
-  const engine = asRecord(outputs?.engine);
-  const engineFinancialStatus = asRecord(engine?.financialStatus);
-  const simulate = asRecord(outputs?.simulate);
-  const simulateFinancialStatus = asRecord(simulate?.financialStatus);
-
-  return (
-    asStage(engineFinancialStatus?.stage)
-    ?? asStage(engine?.stage)
-    ?? asStage(simulateFinancialStatus?.stage)
-    ?? asStage(simulate?.stage)
-  );
-}
-
 function buildRecommendHref(runId: string, stage: Stage | undefined, overallStatus?: PlanningRunOverallStatus): string {
   if (!runId || !stage) return "/recommend";
   const params = new URLSearchParams();
@@ -134,7 +109,7 @@ export default function ReportRecommendationsSection({
     return rankPlanningProductRecommendations(vm, effectivePayload, 3);
   }, [effectivePayload, vm]);
   const recommendHref = useMemo(
-    () => buildRecommendHref(runId, resolvePlanningStage(vm), vm.stage.overallStatus),
+    () => buildRecommendHref(runId, vm.interpretation?.stage, vm.stage.overallStatus),
     [runId, vm],
   );
 

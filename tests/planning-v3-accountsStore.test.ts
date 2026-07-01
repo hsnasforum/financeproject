@@ -92,4 +92,21 @@ describe("planning v3 accountsStore", () => {
     expect(updated.id).toBe("acc-z");
     expect(updated.name).toBe("Z Account Updated");
   });
+
+  it("does not overwrite a corrupted accounts file during upsert", async () => {
+    const accountsPath = path.join(root, "planning-v3", "accounts.json");
+    const corrupted = "{ broken accounts json";
+    fs.mkdirSync(path.dirname(accountsPath), { recursive: true });
+    fs.writeFileSync(accountsPath, corrupted, "utf-8");
+
+    await expect(upsertAccount({
+      accountId: "acc-main",
+      name: "Main",
+      kind: "checking",
+    })).rejects.toMatchObject({
+      name: "StorageCorruptedError",
+    });
+
+    expect(fs.readFileSync(accountsPath, "utf-8")).toBe(corrupted);
+  });
 });

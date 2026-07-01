@@ -13,6 +13,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 type PatchBody = {
   accountId?: unknown;
@@ -86,7 +87,9 @@ export async function GET(request: Request) {
   try {
     const data = await getCurrentUserOpeningBalances();
     return NextResponse.json({ ok: true, data, meta: userMeta });
-  } catch {
+  } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     return NextResponse.json(
       { ok: false, error: { code: "INTERNAL", message: "초기잔액 목록 조회에 실패했습니다." }, meta: userMeta },
       { status: 500 },
@@ -137,7 +140,9 @@ export async function PATCH(request: Request) {
   try {
     const openingBalance = await upsertCurrentUserOpeningBalance(accountId, asOfDate, amountKrw);
     return NextResponse.json({ ok: true, openingBalance, meta: userMeta });
-  } catch {
+  } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     return NextResponse.json(
       { ok: false, error: { code: "INPUT", message: "초기잔액 저장에 실패했습니다." }, meta: userMeta },
       { status: 400 },

@@ -24,6 +24,7 @@ import {
   resolveRunsIndexPath,
 } from "../store/paths";
 import { type PlanningRunRecord } from "../store/types";
+import { listBatches, listBatchTransactionFileIds } from "../v3/store/batchesStore";
 import {
   compactStorageJournal,
   endStorageTransaction,
@@ -132,6 +133,53 @@ async function findBlobDir(entry: RunIndexEntry): Promise<string | null> {
   const legacy = resolveRunBlobsDir(entry.id);
   if (await fileExists(legacy)) return legacy;
   return null;
+}
+
+async function collectPlanningV3BatchIssues(): Promise<StorageConsistencyIssue[]> {
+  const issues: StorageConsistencyIssue[] = [];
+  let indexIds: Set<string>;
+  let fileIds: Set<string>;
+
+  try {
+    const [batches, transactionFileIds] = await Promise.all([
+      listBatches(),
+      listBatchTransactionFileIds(),
+    ]);
+    indexIds = new Set(batches.map((batch) => asString(batch.id)).filter((id) => id.length > 0));
+    fileIds = new Set(transactionFileIds.map((id) => asString(id)).filter((id) => id.length > 0));
+  } catch (error) {
+    issues.push({
+      code: "PLANNING_V3_BATCH_STORE_UNREADABLE",
+      severity: "fail",
+      message: "Planning v3 batch index 또는 transaction 파일 목록을 읽지 못했습니다.",
+      data: {
+        error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      },
+    });
+    return issues;
+  }
+
+  for (const batchId of [...indexIds].sort((left, right) => left.localeCompare(right))) {
+    if (fileIds.has(batchId)) continue;
+    issues.push({
+      code: "PLANNING_V3_BATCH_TXN_MISSING",
+      severity: "fail",
+      message: "Planning v3 batch index 항목에 대응하는 transaction 파일이 없습니다.",
+      data: { batchId },
+    });
+  }
+
+  for (const batchId of [...fileIds].sort((left, right) => left.localeCompare(right))) {
+    if (indexIds.has(batchId)) continue;
+    issues.push({
+      code: "PLANNING_V3_BATCH_TXN_ORPHAN",
+      severity: "warn",
+      message: "Planning v3 batch index에 없는 transaction 파일이 남아 있습니다.",
+      data: { batchId },
+    });
+  }
+
+  return issues;
 }
 
 function summarizeIssues(issues: StorageConsistencyIssue[]): StorageConsistencyReport["summary"] {
@@ -266,6 +314,8 @@ export async function checkPlanningStorageConsistency(): Promise<StorageConsiste
       },
     });
   }
+
+  issues.push(...await collectPlanningV3BatchIssues());
 
   const assumptionsPath = path.resolve(process.cwd(), (process.env.PLANNING_ASSUMPTIONS_PATH ?? ASSUMPTIONS_PATH).trim() || ASSUMPTIONS_PATH);
   if (await fileExists(assumptionsPath)) {

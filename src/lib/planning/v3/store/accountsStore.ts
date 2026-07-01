@@ -1,7 +1,8 @@
 import path from "node:path";
-import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { atomicWriteJson } from "../../storage/atomicWrite";
+import { readJsonFile, storageSchemaCorrupted } from "../../storage/serverFileRead";
+import { withPlanningStoreWriteLock } from "../../storage/storeWriteLock";
 import { isPlanningNamespaceEnabled } from "../../store/namespace";
 import { sanitizeRecordId } from "../../store/paths";
 import { type Account } from "../domain/types";
@@ -180,7 +181,7 @@ function sortAccounts(accounts: Account[]): Account[] {
   });
 }
 
-function parseState(parsed: unknown): AccountStoreState {
+function parseState(parsed: unknown, filePath: string): AccountStoreState {
   if (isRecord(parsed) && Array.isArray(parsed.items)) {
     const items = parsed.items
       .map((item) => normalizeAccount(item))
@@ -193,22 +194,18 @@ function parseState(parsed: unknown): AccountStoreState {
       .filter((item): item is Account => item !== null);
     return { version: 2, items: sortAccounts(items) };
   }
-  return { version: 2, items: [] };
+  throw storageSchemaCorrupted(filePath, "accounts storage schema is invalid");
 }
 
 async function readState(): Promise<AccountStoreState> {
   const primaryPath = resolveAccountsPath();
-  try {
-    const raw = await fs.readFile(primaryPath, "utf-8");
-    return parseState(JSON.parse(raw) as unknown);
-  } catch {
-    try {
-      const legacyRaw = await fs.readFile(resolveLegacyAccountsPath(), "utf-8");
-      return parseState(JSON.parse(legacyRaw) as unknown);
-    } catch {
-      return { version: 2, items: [] };
-    }
-  }
+  const primary = await readJsonFile(primaryPath);
+  if (primary.kind === "ok") return parseState(primary.value, primaryPath);
+
+  const legacyPath = resolveLegacyAccountsPath();
+  const legacy = await readJsonFile(legacyPath);
+  if (legacy.kind === "ok") return parseState(legacy.value, legacyPath);
+  return { version: 2, items: [] };
 }
 
 async function writeState(state: AccountStoreState): Promise<void> {
@@ -216,6 +213,10 @@ async function writeState(state: AccountStoreState): Promise<void> {
     version: 2,
     items: sortAccounts(state.items),
   });
+}
+
+function withAccountsWriteLock<T>(callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning-v3:accounts:${resolveAccountsPath()}`, callback);
 }
 
 export async function listAccounts(): Promise<Account[]> {
@@ -234,35 +235,39 @@ export async function getAccount(id: string): Promise<Account | null> {
 export async function upsertAccount(input: UpsertAccountInput): Promise<Account> {
   assertServerOnly();
 
-  const state = await readState();
-  const safeId = input.accountId !== undefined && input.accountId !== null && asString(input.accountId)
-    ? normalizeAccountId(input.accountId)
-    : sanitizeRecordId(randomUUID());
-  const index = state.items.findIndex((item) => item.id === safeId);
-  const current = index >= 0 ? state.items[index] : null;
+  return withAccountsWriteLock(async () => {
+    const state = await readState();
+    const safeId = input.accountId !== undefined && input.accountId !== null && asString(input.accountId)
+      ? normalizeAccountId(input.accountId)
+      : sanitizeRecordId(randomUUID());
+    const index = state.items.findIndex((item) => item.id === safeId);
+    const current = index >= 0 ? state.items[index] : null;
+    const note = normalizeNote(input.note);
+    const startingBalance = input.startingBalanceKrw !== undefined
+      ? normalizeStartingBalance(input.startingBalanceKrw)
+      : undefined;
 
-  const next: Account = {
-    id: safeId,
-    name: normalizeName(input.name),
-    kind: normalizeKind(input.kind, current?.kind ?? DEFAULT_KIND),
-    currency: "KRW",
-    ...(normalizeNote(input.note) ? { note: normalizeNote(input.note) } : {}),
-    createdAt: normalizeCreatedAt(input.createdAt, current?.createdAt ?? new Date().toISOString()),
-    ...(input.startingBalanceKrw !== undefined
-      ? (normalizeStartingBalance(input.startingBalanceKrw) !== undefined
-        ? { startingBalanceKrw: normalizeStartingBalance(input.startingBalanceKrw) }
-        : {})
-      : (current?.startingBalanceKrw !== undefined ? { startingBalanceKrw: current.startingBalanceKrw } : {})),
-  };
+    const next: Account = {
+      id: safeId,
+      name: normalizeName(input.name),
+      kind: normalizeKind(input.kind, current?.kind ?? DEFAULT_KIND),
+      currency: "KRW",
+      ...(note ? { note } : {}),
+      createdAt: normalizeCreatedAt(input.createdAt, current?.createdAt ?? new Date().toISOString()),
+      ...(input.startingBalanceKrw !== undefined
+        ? (startingBalance !== undefined ? { startingBalanceKrw: startingBalance } : {})
+        : (current?.startingBalanceKrw !== undefined ? { startingBalanceKrw: current.startingBalanceKrw } : {})),
+    };
 
-  if (index >= 0) {
-    state.items[index] = next;
-  } else {
-    state.items.push(next);
-  }
+    if (index >= 0) {
+      state.items[index] = next;
+    } else {
+      state.items.push(next);
+    }
 
-  await writeState(state);
-  return next;
+    await writeState(state);
+    return next;
+  });
 }
 
 export async function createAccount(input: CreateAccountInput): Promise<Account> {
@@ -277,31 +282,35 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
 
 export async function updateAccount(id: string, input: UpdateAccountInput): Promise<Account | null> {
   assertServerOnly();
-  const safeId = sanitizeRecordId(id);
-  const current = await getAccount(safeId);
-  if (!current) return null;
+  return withAccountsWriteLock(async () => {
+    const safeId = sanitizeRecordId(id);
+    const current = await getAccount(safeId);
+    if (!current) return null;
 
-  return upsertAccount({
-    accountId: safeId,
-    name: input.name !== undefined ? input.name : current.name,
-    kind: input.kind !== undefined ? input.kind : current.kind,
-    note: input.note !== undefined ? input.note : current.note,
-    createdAt: current.createdAt,
-    startingBalanceKrw: input.startingBalanceKrw !== undefined ? input.startingBalanceKrw : current.startingBalanceKrw,
+    return upsertAccount({
+      accountId: safeId,
+      name: input.name !== undefined ? input.name : current.name,
+      kind: input.kind !== undefined ? input.kind : current.kind,
+      note: input.note !== undefined ? input.note : current.note,
+      createdAt: current.createdAt,
+      startingBalanceKrw: input.startingBalanceKrw !== undefined ? input.startingBalanceKrw : current.startingBalanceKrw,
+    });
   });
 }
 
 export async function deleteAccount(id: string): Promise<boolean> {
   assertServerOnly();
-  const safeId = sanitizeRecordId(id);
+  return withAccountsWriteLock(async () => {
+    const safeId = sanitizeRecordId(id);
 
-  const state = await readState();
-  const next = state.items.filter((item) => item.id !== safeId);
-  if (next.length === state.items.length) return false;
+    const state = await readState();
+    const next = state.items.filter((item) => item.id !== safeId);
+    if (next.length === state.items.length) return false;
 
-  state.items = next;
-  await writeState(state);
-  return true;
+    state.items = next;
+    await writeState(state);
+    return true;
+  });
 }
 
 export async function setAccountStartingBalance(id: string, startingBalanceKrw: unknown): Promise<Account | null> {

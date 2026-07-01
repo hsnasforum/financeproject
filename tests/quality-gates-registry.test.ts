@@ -1,0 +1,77 @@
+import fs from "node:fs";
+import { describe, expect, it } from "vitest";
+import {
+  PLANNING_AUTH_CHECK_TEST_FILES,
+  QUALITY_GATE_SUITES,
+  getQualityGate,
+  renderQualityGateCommand,
+} from "../scripts/quality_gates.mjs";
+
+function read(filePath: string): string {
+  return fs.readFileSync(filePath, "utf8");
+}
+
+describe("quality gate registry", () => {
+  it("keeps release and planning v2 complete runners on the shared registry", () => {
+    const releaseSource = read("scripts/release_verify.mjs");
+    const completeSource = read("scripts/planning_v2_complete.mjs");
+    const releaseGateIds = [
+      ...QUALITY_GATE_SUITES["release:verify"].preflightRequired,
+      ...QUALITY_GATE_SUITES["release:verify"].earlyRequired,
+      ...QUALITY_GATE_SUITES["release:verify"].optional,
+      ...QUALITY_GATE_SUITES["release:verify"].lateRequired,
+      ...QUALITY_GATE_SUITES["release:verify"].advisory,
+    ];
+
+    expect(releaseSource).toContain("QUALITY_GATE_SUITES");
+    expect(completeSource).toContain("QUALITY_GATE_SUITES");
+    expect(releaseSource).not.toContain("const EARLY_REQUIRED_GATES = [");
+    expect(completeSource).not.toContain("const COMPLETE_STEPS = [");
+    expect(QUALITY_GATE_SUITES["planning:v2:complete"].required).toEqual([
+      "planning:v2:guard",
+      "sec:check",
+      "planning:v2:freeze:guard",
+      "planning:v2:scan:guards",
+      "planning:v2:report:test",
+      "planning:v2:guide:test",
+      "planning:v2:smoke",
+      "planning:v2:e2e:fast",
+    ]);
+    expect(releaseGateIds.every((id) => Boolean(getQualityGate(id)))).toBe(true);
+  });
+
+  it("keeps planning auth check script as a registry runner instead of a long exact string", () => {
+    const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> };
+    const authGate = getQualityGate("planning:auth:check");
+
+    expect(pkg.scripts?.["planning:auth:check"]).toBe("node scripts/quality_gates_runner.mjs planning:auth:check");
+    expect(authGate).toBeTruthy();
+    expect(renderQualityGateCommand(authGate)).toBe(`vitest run ${PLANNING_AUTH_CHECK_TEST_FILES.join(" ")}`);
+    expect(PLANNING_AUTH_CHECK_TEST_FILES).toEqual(expect.arrayContaining([
+      "tests/planning/auth/*.test.ts",
+      "tests/planner-compute-route-auth.test.ts",
+      "tests/planning-v2-api/products-candidates-route.test.ts",
+      "tests/planning/ops/actions-run-route.test.ts",
+    ]));
+  });
+
+  it("keeps CI from duplicating release registry gates outside release:verify", () => {
+    const ciSource = read(".github/workflows/ci.yml");
+
+    expect(ciSource).toContain("Required Gate - Release Verify (quality gate registry)");
+    expect(ciSource).toContain("pnpm release:verify");
+    expect(ciSource).not.toContain("Planning V2 Static Guard");
+    expect(ciSource).not.toContain("Planning V2 Regression Gate");
+    expect(ciSource).not.toContain("run: pnpm planning:v2:guard");
+    expect(ciSource).not.toContain("run: pnpm planning:v2:regress");
+  });
+
+  it("keeps planning route coverage discovery-based instead of fixed counts or proxy lists", () => {
+    const coverageSource = read("tests/planning/auth/planningRouteUserScopeCoverage.test.ts");
+    const legacyProxyRoute = ["src", "app", "api", "planning", "run", "[id]", "route.ts"].join("/");
+
+    expect(coverageSource).not.toContain("EXPECTED_PLANNING_ROUTE_COUNT");
+    expect(coverageSource).toContain("findPlanningProxyRouteFiles");
+    expect(coverageSource).not.toContain(legacyProxyRoute);
+  });
+});

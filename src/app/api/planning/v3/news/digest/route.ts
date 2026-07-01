@@ -9,7 +9,7 @@ import {
 import { normalizeSeriesId } from "@/lib/planning/v3/indicators/aliases";
 import { loadEffectiveSeriesSpecs } from "@/lib/planning/v3/indicators/specOverrides";
 import { computeTopicContradictions } from "@/lib/planning/v3/news/contradiction";
-import { readNewsDigestDay, type DigestDay, type DigestWatchItem } from "@/lib/planning/v3/news/digest";
+import { readNewsDigestDay, type DigestDay, type DigestWatchItem } from "@/lib/planning/v3/news/digestReader";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import { readCurrentUserIndicatorSeriesObservations } from "@/lib/planning/v3/service/indicatorRepository";
 

@@ -4,14 +4,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { recordPlanningFallbackUsage } from "../engine";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
-import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
-import { atomicWriteJson } from "../storage/atomicWrite";
 import {
   appendStorageTransactionStep,
   beginStorageTransaction,
   endStorageTransaction,
   type StorageTransactionContext,
 } from "../storage/journal";
+import { withPlanningStoreWriteLock } from "../storage/storeWriteLock";
 import { LIMITS, RAW_TIMELINE_SAMPLE_STEP_MONTHS, sampleByStride, takeTop } from "../v2/limits";
 import { loadCanonicalRun } from "../v2/loadCanonicalRun";
 import {
@@ -40,6 +39,12 @@ import {
   restoreFileFromTrash,
 } from "./trash";
 import { migrateLegacyRunToEngineEnvelope } from "./engineEnvelopeMigration";
+import {
+  fromStoredPayload,
+  readJsonFile,
+  toStoredPayload,
+  writeJsonAtomic,
+} from "./runRecordCodec";
 import { type PlanningRunRecord, type PlanningRunStageId } from "./types";
 
 export const DEFAULT_RUNS_PER_PROFILE_RETENTION = 50;
@@ -137,11 +142,7 @@ function assertServerOnly(): void {
 assertServerOnly();
 
 async function ensureStartupMigrations(): Promise<void> {
-  try {
-    await runPlanningMigrationsOnStartup();
-  } catch {
-    // ignore here; /ops/doctor surfaces migration failures
-  }
+  await runPlanningMigrationsOnStartup();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -381,41 +382,6 @@ function sortByCreatedAtDesc<T extends { id: string; createdAt: string }>(record
   });
 }
 
-async function writeJsonAtomic(filePath: string, payload: unknown): Promise<void> {
-  await atomicWriteJson(filePath, payload);
-}
-
-function isRecoverableJsonReadError(error: unknown): boolean {
-  const nodeError = error as NodeJS.ErrnoException;
-  if (nodeError?.code === "ENOENT") return true;
-  return error instanceof SyntaxError;
-}
-
-async function readJsonFile(filePath: string): Promise<unknown | null> {
-  try {
-    const raw = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(raw) as unknown;
-  } catch (error) {
-    if (isRecoverableJsonReadError(error)) return null;
-    throw error;
-  }
-}
-
-async function toStoredPayload(payload: unknown): Promise<unknown> {
-  return encodeStoragePayload(payload);
-}
-
-async function fromStoredPayload(payload: unknown): Promise<{
-  payload: unknown;
-  rewriteToVault: boolean;
-}> {
-  const decoded = await decodeStoragePayload(payload);
-  return {
-    payload: decoded.payload,
-    rewriteToVault: decoded.rewriteToVault,
-  };
-}
-
 function toMetaRecord(record: PlanningRunRecord): PlanningRunRecord {
   const outputs = compactRunOutputs(record.outputs, { storeRawOutputs: true });
   return {
@@ -532,6 +498,14 @@ type RunPaths = {
   legacyRunDir: string;
 };
 
+type ReadRunMetaOptions = {
+  persistMigrations?: boolean;
+};
+
+type ReadRunIndexOptions = {
+  repair?: boolean;
+};
+
 function getRunPaths(runId: string, profileId?: string): RunPaths {
   const safeRunId = sanitizeRecordId(runId);
   const safeProfileId = asString(profileId);
@@ -560,7 +534,10 @@ async function tryMigrateLegacyRunToPartition(record: PlanningRunRecord, paths: 
   await fs.unlink(paths.legacyFilePath).catch(() => undefined);
 }
 
-async function readRunMetaByPath(filePath: string): Promise<PlanningRunRecord | null> {
+async function readRunMetaByPath(
+  filePath: string,
+  options?: ReadRunMetaOptions,
+): Promise<PlanningRunRecord | null> {
   const loaded = await readJsonFile(filePath);
   if (!loaded) return null;
   const decoded = await fromStoredPayload(loaded);
@@ -584,7 +561,7 @@ async function readRunMetaByPath(filePath: string): Promise<PlanningRunRecord | 
         runId: migration.run.id,
       });
     }
-    if (decoded.rewriteToVault || canonicalMeta.migrated || migration.migrated) {
+    if (options?.persistMigrations === true && (decoded.rewriteToVault || canonicalMeta.migrated || migration.migrated)) {
       await writeJsonAtomic(filePath, await toStoredPayload(migration.run));
     }
     return migration.run;
@@ -655,29 +632,37 @@ async function findPartitionMetaPathByRunId(runId: string): Promise<string | nul
   return null;
 }
 
-async function readRunMeta(id: string, profileIdHint?: string): Promise<PlanningRunRecord | null> {
+async function readRunMeta(
+  id: string,
+  profileIdHint?: string,
+  options?: ReadRunMetaOptions,
+): Promise<PlanningRunRecord | null> {
   const paths = getRunPaths(id, profileIdHint);
   if (paths.partitionMetaPath) {
-    const fromPartition = await readRunMetaByPath(paths.partitionMetaPath);
+    const fromPartition = await readRunMetaByPath(paths.partitionMetaPath, options);
     if (fromPartition) return fromPartition;
   }
   if (!paths.partitionMetaPath) {
     const partitionMetaPath = await findPartitionMetaPathByRunId(paths.runId);
     if (partitionMetaPath) {
-      const fromPartition = await readRunMetaByPath(partitionMetaPath);
+      const fromPartition = await readRunMetaByPath(partitionMetaPath, options);
       if (fromPartition) return fromPartition;
     }
   }
 
-  const fromLegacyMeta = await readRunMetaByPath(paths.legacyMetaPath);
+  const fromLegacyMeta = await readRunMetaByPath(paths.legacyMetaPath, options);
   if (fromLegacyMeta) {
-    await tryMigrateLegacyRunToPartition(fromLegacyMeta, getRunPaths(id, fromLegacyMeta.profileId));
+    if (options?.persistMigrations === true) {
+      await tryMigrateLegacyRunToPartition(fromLegacyMeta, getRunPaths(id, fromLegacyMeta.profileId));
+    }
     return fromLegacyMeta;
   }
 
-  const fromLegacyFile = await readRunMetaByPath(paths.legacyFilePath);
+  const fromLegacyFile = await readRunMetaByPath(paths.legacyFilePath, options);
   if (fromLegacyFile) {
-    await tryMigrateLegacyRunToPartition(fromLegacyFile, getRunPaths(id, fromLegacyFile.profileId));
+    if (options?.persistMigrations === true) {
+      await tryMigrateLegacyRunToPartition(fromLegacyFile, getRunPaths(id, fromLegacyFile.profileId));
+    }
     return fromLegacyFile;
   }
 
@@ -807,38 +792,46 @@ async function writeRunIndex(
   }
 }
 
-async function readRunIndex(): Promise<RunIndexEntry[]> {
+function withRunIndexWriteLock<T>(callback: () => Promise<T> | T): Promise<T> {
+  return withPlanningStoreWriteLock(`planning:runs:index:${resolveRunsIndexPath()}`, callback);
+}
+
+async function readRunIndex(options?: ReadRunIndexOptions): Promise<RunIndexEntry[]> {
   const filePath = resolveRunsIndexPath();
   const loaded = await readJsonFile(filePath);
   const decoded = loaded === null ? null : await fromStoredPayload(loaded);
   const decodedPayload = decoded?.payload ?? loaded;
   const parsed = parseRunIndex(decodedPayload);
   if (parsed.length > 0 || (isRecord(decodedPayload) && Array.isArray(decodedPayload.entries))) {
-    if (decoded?.rewriteToVault) {
-      await writeRunIndex(parsed);
+    if (options?.repair === true && decoded?.rewriteToVault) {
+      await withRunIndexWriteLock(() => writeRunIndex(parsed));
     }
     return parsed;
   }
 
   const scanned = await scanRunsDirForIndex();
-  if (scanned.length > 0 || loaded !== null) {
-    await writeRunIndex(scanned);
+  if (options?.repair === true && (scanned.length > 0 || loaded !== null)) {
+    await withRunIndexWriteLock(() => writeRunIndex(scanned));
   }
   return scanned;
 }
 
 async function upsertRunIndexEntry(entry: RunIndexEntry): Promise<void> {
-  const entries = await readRunIndex();
-  const next = entries.filter((row) => row.id !== entry.id);
-  next.push(entry);
-  await writeRunIndex(next);
+  await withRunIndexWriteLock(async () => {
+    const entries = await readRunIndex({ repair: true });
+    const next = entries.filter((row) => row.id !== entry.id);
+    next.push(entry);
+    await writeRunIndex(next);
+  });
 }
 
 async function removeRunIndexEntry(id: string): Promise<void> {
-  const entries = await readRunIndex();
-  const next = entries.filter((row) => row.id !== id);
-  if (next.length === entries.length) return;
-  await writeRunIndex(next);
+  await withRunIndexWriteLock(async () => {
+    const entries = await readRunIndex({ repair: true });
+    const next = entries.filter((row) => row.id !== id);
+    if (next.length === entries.length) return;
+    await writeRunIndex(next);
+  });
 }
 
 function stageIdToBlobName(id: PlanningRunStageId): RunBlobName | null {
@@ -876,9 +869,6 @@ async function readBlob(runId: string, blobName: RunBlobName): Promise<unknown |
   const loaded = await readJsonFile(blobPath);
   if (loaded !== null) {
     const decoded = await fromStoredPayload(loaded);
-    if (decoded.rewriteToVault) {
-      await writeJsonAtomic(blobPath, await toStoredPayload(decoded.payload));
-    }
     return decoded.payload;
   }
 
@@ -1045,12 +1035,14 @@ export async function rebuildRunIndexFromDisk(): Promise<{
   indexPath: string;
 }> {
   assertServerOnly();
-  const scanned = await scanRunsDirForIndex();
-  await writeRunIndex(scanned);
-  return {
-    entries: scanned.length,
-    indexPath: normalizeRelativePath(resolveRunsIndexPath()),
-  };
+  return withRunIndexWriteLock(async () => {
+    const scanned = await scanRunsDirForIndex();
+    await writeRunIndex(scanned);
+    return {
+      entries: scanned.length,
+      indexPath: normalizeRelativePath(resolveRunsIndexPath()),
+    };
+  });
 }
 
 export async function scanRunIndexEntriesFromDisk(): Promise<RunIndexEntry[]> {
@@ -1060,7 +1052,6 @@ export async function scanRunIndexEntriesFromDisk(): Promise<RunIndexEntry[]> {
 
 export async function listRuns(options?: ListRunsOptions): Promise<PlanningRunRecord[]> {
   assertServerOnly();
-  await ensureStartupMigrations();
 
   const rows = await listRunIndexEntries({
     ...(options?.profileId ? { profileId: options.profileId } : {}),
@@ -1074,7 +1065,6 @@ export async function listRuns(options?: ListRunsOptions): Promise<PlanningRunRe
 
 export async function getRun(id: string): Promise<PlanningRunRecord | null> {
   assertServerOnly();
-  await ensureStartupMigrations();
   const safeId = sanitizeRecordId(id);
   const indexRows = await readRunIndex();
   const hintedProfileId = indexRows.find((row) => row.id === safeId)?.profileId;
@@ -1083,7 +1073,6 @@ export async function getRun(id: string): Promise<PlanningRunRecord | null> {
 
 export async function summarizeLegacyRunBackfill(): Promise<LegacyRunBackfillSummary> {
   assertServerOnly();
-  await ensureStartupMigrations();
 
   const indexRows = await readRunIndex();
   const summary: LegacyRunBackfillSummary = {
@@ -1131,7 +1120,6 @@ export async function listLegacyRunBackfillCandidates(options?: {
   includeOpsDoctor?: boolean;
 }): Promise<LegacyRunBackfillCandidate[]> {
   assertServerOnly();
-  await ensureStartupMigrations();
 
   const indexRows = await readRunIndex();
   const out: LegacyRunBackfillCandidate[] = [];
@@ -1182,7 +1170,7 @@ export async function backfillLegacyRuns(options?: {
     }
 
     try {
-      const loaded = await getRun(candidate.id);
+      const loaded = await readRunMeta(candidate.id, candidate.profileId, { persistMigrations: true });
       const hasEngine = Boolean(loaded && isEngineEnvelopeLike(loaded.outputs.engine));
       const rawEngineSchemaVersion = Math.trunc(Number(loaded?.outputs.engineSchemaVersion));
       const hasEngineSchema = Number.isFinite(rawEngineSchemaVersion) && rawEngineSchemaVersion >= 1;
@@ -1205,13 +1193,17 @@ export async function backfillLegacyRuns(options?: {
   };
 }
 
-export type UpdateRunPatch = Partial<Pick<
+type UpdateRunPatchBase = Partial<Pick<
   PlanningRunRecord,
-  "title" | "scenario" | "overallStatus" | "stages" | "input" | "meta" | "outputs" | "reproducibility" | "actionCenter"
+  "title" | "scenario" | "overallStatus" | "stages" | "input" | "meta" | "outputs" | "reproducibility"
 >>;
 
+export type UpdateRunPatch = UpdateRunPatchBase & {
+  actionCenter?: PlanningRunRecord["actionCenter"] | null;
+};
+
 function mergeRunPatch(current: PlanningRunRecord, patch: UpdateRunPatch): PlanningRunRecord {
-  return {
+  const next: PlanningRunRecord = {
     ...current,
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.scenario !== undefined ? { scenario: patch.scenario } : {}),
@@ -1221,8 +1213,13 @@ function mergeRunPatch(current: PlanningRunRecord, patch: UpdateRunPatch): Plann
     ...(patch.meta ? { meta: { ...current.meta, ...patch.meta } } : {}),
     ...(patch.outputs ? { outputs: { ...current.outputs, ...patch.outputs } } : {}),
     ...(patch.reproducibility !== undefined ? { reproducibility: patch.reproducibility } : {}),
-    ...(patch.actionCenter !== undefined ? { actionCenter: patch.actionCenter } : {}),
   };
+  if (patch.actionCenter === null) {
+    delete next.actionCenter;
+  } else if (patch.actionCenter !== undefined) {
+    next.actionCenter = patch.actionCenter;
+  }
+  return next;
 }
 
 export async function updateRun(id: string, patch: UpdateRunPatch): Promise<PlanningRunRecord | null> {

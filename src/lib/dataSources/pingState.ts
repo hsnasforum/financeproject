@@ -39,6 +39,11 @@ function pushSummaryPart(parts: string[], label: string, value: string | null) {
   parts.push(`${label}${value}`);
 }
 
+function getSummaryProvenance(summary: Record<string, unknown> | undefined): Record<string, unknown> | null {
+  if (!summary || typeof summary.provenance !== "object" || summary.provenance === null) return null;
+  return summary.provenance as Record<string, unknown>;
+}
+
 export function formatDataSourcePingSummary(summary: Record<string, unknown> | undefined): string {
   if (!summary) return "연결 성공";
   const parts: string[] = [];
@@ -77,6 +82,14 @@ export function formatDataSourcePingSummary(summary: Record<string, unknown> | u
     const dropStats = summary.dropStats as Record<string, unknown>;
     const missingTitle = asFiniteNumber(dropStats.missingTitle);
     if (missingTitle !== null && missingTitle > 0) parts.push(`drop.missingTitle=${missingTitle}`);
+  }
+
+  const provenance = getSummaryProvenance(summary);
+  if (provenance) {
+    pushSummaryPart(parts, "출처 ", asNonEmptyString(provenance.mode));
+    if (provenance.degraded === true) {
+      parts.push(`주의 ${asNonEmptyString(provenance.degradedReason) ?? "degraded"}`);
+    }
   }
 
   return parts.length ? parts.join(" · ") : "연결 성공";
@@ -121,6 +134,15 @@ export function buildDataSourcePingDetails(summary: Record<string, unknown> | un
 
   const authMode = asNonEmptyString(summary.authMode);
   if (authMode) details.push({ label: "인증", value: authMode });
+
+  const provenance = getSummaryProvenance(summary);
+  if (provenance) {
+    const mode = asNonEmptyString(provenance.mode);
+    if (mode) details.push({ label: "출처", value: mode });
+    if (provenance.degraded === true) {
+      details.push({ label: "주의", value: asNonEmptyString(provenance.degradedReason) ?? "degraded" });
+    }
+  }
 
   return details;
 }

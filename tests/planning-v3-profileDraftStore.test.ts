@@ -89,6 +89,18 @@ describe("planning v3 profile draft store", () => {
     expect(found).toBeNull();
   });
 
+  it("reports corrupted profile draft files instead of hiding them", async () => {
+    const draftsDir = path.join(root, "planning-v3", "drafts");
+    const draftPath = path.join(draftsDir, "d_corrupt.json");
+    fs.mkdirSync(draftsDir, { recursive: true });
+    fs.writeFileSync(draftPath, "{ broken profile draft", "utf-8");
+
+    await expect(listProfileDrafts()).rejects.toMatchObject({
+      name: "StorageCorruptedError",
+      filePath: draftPath,
+    });
+  });
+
   it("deleteProfileDraft removes stored draft", async () => {
     const created = await createDraftFromBatch(batchId);
     const deleted = await deleteProfileDraft(created.id);

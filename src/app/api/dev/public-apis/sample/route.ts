@@ -142,6 +142,7 @@ async function executeSample(apiName: ApiName, params: Record<string, unknown>):
       payload: {
         quotes: result.data.slice(0, 5).map((q) => ({ currency: q.currency, rate: q.rate, asOfDate: q.asOfDate, source: q.source })),
         count: result.data.length,
+        provenance: result.meta.provenance,
       },
     };
   }
@@ -152,7 +153,7 @@ async function executeSample(apiName: ApiName, params: Record<string, unknown>):
     const areaBand = typeof params.areaBand === "string" ? params.areaBand : "84";
     const result = await getHousingSalesBenchmark(regionCode, month, areaBand);
     if (!result.ok) return { ok: false, error: result.error.code, message: result.error.message, status: result.error.code === "CONFIG" ? 503 : 502 };
-    return { ok: true, payload: result.data };
+    return { ok: true, payload: { benchmark: result.data, provenance: result.meta.provenance } };
   }
 
   if (apiName === "molit-rent") {
@@ -161,21 +162,21 @@ async function executeSample(apiName: ApiName, params: Record<string, unknown>):
     const areaBand = typeof params.areaBand === "string" ? params.areaBand : "84";
     const result = await getHousingRentBenchmark(regionCode, month, areaBand);
     if (!result.ok) return { ok: false, error: result.error.code, message: result.error.message, status: result.error.code === "CONFIG" ? 503 : 502 };
-    return { ok: true, payload: result.data };
+    return { ok: true, payload: { benchmark: result.data, provenance: result.meta.provenance } };
   }
 
   if (apiName === "mois-benefits") {
     const query = typeof params.query === "string" ? params.query : "주거";
     const result = await searchBenefits(query);
     if (!result.ok) return { ok: false, error: result.error.code, message: result.error.message, status: 502 };
-    return { ok: true, payload: { query, count: result.data.length, items: result.data.slice(0, 5) } };
+    return { ok: true, payload: { query, count: result.data.length, items: result.data.slice(0, 5), provenance: result.meta.provenance } };
   }
 
   if (apiName === "reb-subscription") {
     const region = typeof params.region === "string" ? params.region : "서울";
     const result = await listSubscriptionNotices(region);
     if (!result.ok) return { ok: false, error: result.error.code, message: result.error.message, status: 502 };
-    return { ok: true, payload: { region, count: result.data.length, items: result.data.slice(0, 5) } };
+    return { ok: true, payload: { region, count: result.data.length, items: result.data.slice(0, 5), provenance: result.meta.provenance } };
   }
 
   const corpCode = typeof params.corpCode === "string" ? params.corpCode : "00126380";

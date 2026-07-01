@@ -1,1 +1,1 @@
-export * from "../../../../../planning/v3/indicators/store";
+export * from "./store/index";

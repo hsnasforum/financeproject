@@ -18,8 +18,8 @@ import { readNewsTopicTrends } from "@/lib/news/trendReader";
 import { isPlanningNamespaceEnabled } from "@/lib/planning/store/namespace";
 import { loadEffectiveNewsConfig } from "@/lib/planning/v3/news/settings";
 import { readAllItems, readTrendsCache } from "@/lib/planning/v3/news/store";
-import { resolveNewsRootDir } from "../../../../../planning/v3/news/rootDir";
-import { scoreItems } from "../../../../../planning/v3/news/select/score";
+import { resolveNewsRootDir } from "@/lib/planning/v3/news/rootDir";
+import { scoreItems } from "@/lib/planning/v3/news/select/score";
 
 type StoreSearchIndexBuildInput = {
   generatedAt: string;

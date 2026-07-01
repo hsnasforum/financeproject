@@ -229,7 +229,19 @@ export async function fetchEximExchange(params?: { dateYYYYMMDD?: string }): Pro
       return { ok: false, error: { code: "NO_DATA", message: "해당 날짜 환율 데이터가 없습니다." } };
     }
 
-    return { ok: true, data: normalized };
+    return {
+      ok: true,
+      data: normalized,
+      meta: {
+        provenance: {
+          mode: "live",
+          degraded: false,
+          asOf: normalized.asOf,
+          fetchedAt: new Date().toISOString(),
+          source: normalized.rawMeta.source,
+        },
+      },
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
     const timeout = error instanceof ExternalApiError ? Boolean(error.timeout) : /timeout|timed out|etimedout|abort/i.test(message);

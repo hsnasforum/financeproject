@@ -11,6 +11,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -63,6 +64,8 @@ export async function GET(request: Request) {
     assertNoForbiddenDraftKeys(payload);
     return NextResponse.json(payload);
   } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     if (error instanceof ForbiddenDraftKeyError) {
       return NextResponse.json(
         { ok: false, error: { code: "INTERNAL", message: "배치 응답 데이터 검증에 실패했습니다." }, meta: userMeta },

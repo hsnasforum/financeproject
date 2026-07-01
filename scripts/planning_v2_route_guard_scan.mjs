@@ -6,6 +6,9 @@ const APP_DIR = path.join(ROOT, "src", "app");
 const PLANNING_API_DIR = path.join(APP_DIR, "api", "planning", "v2");
 const OPS_API_DIR = path.join(APP_DIR, "api", "ops");
 const DEBUG_DIR = path.join(APP_DIR, "debug");
+const DELEGATED_ROUTE_HANDLER_NAMES = new Set([
+  "handleCreatePlanningRunPost",
+]);
 
 function rel(filePath) {
   return path.relative(ROOT, filePath).split(path.sep).join("/");
@@ -44,25 +47,38 @@ function hasDebugGate(content) {
 }
 
 function parseRouteProxy(content) {
-  const importMatch = content.match(
-    /import\s+\{\s*(GET|POST|PUT|PATCH|DELETE)\s+as\s+([A-Za-z0-9_$]+)\s*\}\s+from\s+["'](.+)["'];?/,
-  );
-  if (!importMatch) return null;
-  const method = importMatch[1];
-  const alias = importMatch[2];
-  const source = importMatch[3];
-  const exportPattern = new RegExp(
-    `export\\s+async\\s+function\\s+${method}\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\breturn\\s+${alias}\\s*\\(`,
-  );
-  if (!exportPattern.test(content)) return null;
-  return { source };
+  for (const importMatch of content.matchAll(/import\s+\{\s*([^}]+)\}\s+from\s+["'](.+)["'];?/g)) {
+    const spec = importMatch[1] ?? "";
+    const source = importMatch[2] ?? "";
+    if (!source.startsWith(".") && !source.startsWith("@/")) continue;
+
+    for (const token of spec.split(",")) {
+      const normalized = token.trim();
+      const methodHandler = /^(GET|POST|PUT|PATCH|DELETE)\s+as\s+([A-Za-z0-9_$]+)$/.exec(normalized);
+      const delegatedHandler = /^([A-Za-z0-9_$]+)(?:\s+as\s+([A-Za-z0-9_$]+))?$/.exec(normalized);
+      const alias = methodHandler?.[2] ?? delegatedHandler?.[2] ?? delegatedHandler?.[1];
+      const method = methodHandler?.[1] ?? null;
+      const importedName = methodHandler?.[1] ?? delegatedHandler?.[1];
+      if (!alias || !importedName) continue;
+      if (!methodHandler && !DELEGATED_ROUTE_HANDLER_NAMES.has(importedName)) continue;
+
+      const exportPattern = method
+        ? new RegExp(
+          `export\\s+async\\s+function\\s+${method}\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\breturn\\s+${alias}\\s*\\(`,
+        )
+        : new RegExp(`export\\s+async\\s+function\\s+\\w+\\s*\\([^)]*\\)\\s*\\{[\\s\\S]*?\\breturn\\s+${alias}\\s*\\(`);
+      if (exportPattern.test(content)) return { source };
+    }
+  }
+  return null;
 }
 
 async function resolveProxyFile(fromFile, sourcePath) {
-  if (!sourcePath.startsWith(".")) return null;
   const baseDir = path.dirname(fromFile);
   const candidates = [];
-  const resolved = path.resolve(baseDir, sourcePath);
+  const resolved = sourcePath.startsWith("@/")
+    ? path.join(ROOT, "src", sourcePath.slice(2))
+    : path.resolve(baseDir, sourcePath);
   if (resolved.endsWith(".ts") || resolved.endsWith(".tsx")) {
     candidates.push(resolved);
   } else {

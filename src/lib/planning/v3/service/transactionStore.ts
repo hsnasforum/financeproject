@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { resolvePlanningDataDir } from "../../storage/dataDir";
+import { readNdjsonFile } from "../../storage/serverFileRead";
 import { sanitizeRecordId } from "../../store/paths";
 import { type AccountTransaction } from "../domain/types";
 import { type ImportBatchMeta, type V3ImportBatch, type V3TransactionRecord } from "../domain/transactions";
@@ -388,6 +389,24 @@ function normalizeBatchLine(line: string): V3ImportBatch | null {
   }
 }
 
+function readBatchesFromRawNdjsonLenient(raw: string): V3ImportBatch[] {
+  const byId = new Map<string, V3ImportBatch>();
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const normalized = normalizeBatchLine(trimmed);
+    if (normalized) byId.set(normalized.id, normalized);
+  }
+  return [...byId.values()].sort((left, right) => {
+    const leftTs = Date.parse(left.createdAt);
+    const rightTs = Date.parse(right.createdAt);
+    if (Number.isFinite(leftTs) && Number.isFinite(rightTs) && leftTs !== rightTs) {
+      return rightTs - leftTs;
+    }
+    return right.id.localeCompare(left.id);
+  });
+}
+
 function hasExpectedLegacyBatchAccountBinding(batch: V3ImportBatch | undefined, accountId: string): boolean {
   return Boolean(
     batch
@@ -486,20 +505,9 @@ function normalizeTransactionRecord(value: unknown): V3TransactionRecord | null 
 }
 
 async function readNdjsonRows(filePath: string): Promise<unknown[]> {
-  const raw = await fs.readFile(filePath, "utf-8").catch(() => "");
-  if (!raw.trim()) return [];
-
-  const rows: unknown[] = [];
-  for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      rows.push(JSON.parse(trimmed) as unknown);
-    } catch {
-      continue;
-    }
-  }
-  return rows;
+  const read = await readNdjsonFile(filePath);
+  if (read.kind === "not-found") return [];
+  return read.rows.map((row) => row.value);
 }
 
 async function readBatches(): Promise<V3ImportBatch[]> {
@@ -1024,7 +1032,7 @@ export async function verifyLegacyBatchAccountAppendPostWrite(input: {
   const safeAccountId = normalizeAccountId(input.accountId);
   const raw = await fs.readFile(resolveBatchesPath(), "utf-8").catch(() => "");
   const tailLine = getLastNonEmptyNdjsonLine(raw);
-  const batches = await readBatches();
+  const batches = readBatchesFromRawNdjsonLenient(raw);
   const latestParsedBatch = batches.find((entry) => entry.id === safeBatchId);
 
   if (tailLine && !normalizeBatchLine(tailLine)) {

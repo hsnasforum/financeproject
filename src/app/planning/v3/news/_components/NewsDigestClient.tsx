@@ -8,7 +8,7 @@ import { PageShell } from "@/components/ui/PageShell";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { SubSectionHeader } from "@/components/ui/SubSectionHeader";
 import { withDevCsrf } from "@/lib/dev/clientCsrf";
-import { type DigestDay } from "@/lib/planning/v3/news/digest";
+import { type DigestDay } from "@/lib/planning/v3/news/digestReader";
 import { type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
 
 type NewsDigestClientProps = {

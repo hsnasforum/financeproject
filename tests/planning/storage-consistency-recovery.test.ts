@@ -13,6 +13,7 @@ import { resolveProfileRunMetaPath, resolveRunsIndexPath } from "../../src/lib/p
 import { createProfile } from "../../src/lib/planning/store/profileStore";
 import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
 import { createRun, readRunIndexEntries } from "../../src/lib/planning/store/runStore";
+import { saveBatch } from "../../src/lib/planning/v3/store/batchesStore";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -21,6 +22,7 @@ const originalRunsDir = process.env.PLANNING_RUNS_DIR;
 const originalProfileMetaPath = process.env.PLANNING_PROFILE_META_PATH;
 const originalJournalPath = process.env.PLANNING_STORAGE_JOURNAL_PATH;
 const originalVaultConfigPath = process.env.PLANNING_VAULT_CONFIG_PATH;
+const originalPlanningDataDir = process.env.PLANNING_DATA_DIR;
 
 function profileFixture() {
   return {
@@ -46,6 +48,7 @@ describe.sequential("planning storage consistency/recovery", () => {
     env.PLANNING_PROFILE_META_PATH = path.join(root, "vault", "profiles.meta.json");
     env.PLANNING_STORAGE_JOURNAL_PATH = path.join(root, "storage", "journal.ndjson");
     env.PLANNING_VAULT_CONFIG_PATH = path.join(root, "security", "vault.json");
+    env.PLANNING_DATA_DIR = root;
     await resetVaultRuntimeForTests();
   });
 
@@ -62,6 +65,8 @@ describe.sequential("planning storage consistency/recovery", () => {
     else delete env.PLANNING_STORAGE_JOURNAL_PATH;
     if (typeof originalVaultConfigPath === "string") env.PLANNING_VAULT_CONFIG_PATH = originalVaultConfigPath;
     else delete env.PLANNING_VAULT_CONFIG_PATH;
+    if (typeof originalPlanningDataDir === "string") env.PLANNING_DATA_DIR = originalPlanningDataDir;
+    else delete env.PLANNING_DATA_DIR;
     await resetVaultRuntimeForTests();
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -153,5 +158,32 @@ describe.sequential("planning storage consistency/recovery", () => {
 
     const report = await checkPlanningStorageConsistency();
     expect(report.issues.some((issue) => issue.code === "RUN_BLOB_REF_MISSING")).toBe(true);
+  });
+
+  it("checker catches planning v3 batch index/file mismatches", async () => {
+    await saveBatch(
+      {
+        id: "batch-missing-file",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        source: "csv",
+        rowCount: 1,
+      },
+      [{
+        txnId: "txn-missing-file",
+        batchId: "batch-missing-file",
+        date: "2026-01-01",
+        amountKrw: 1_000,
+        description: "missing file row",
+        source: "csv",
+      }],
+    );
+
+    const batchesDir = path.join(root, "planning-v3", "batches");
+    fs.rmSync(path.join(batchesDir, "batch-missing-file.ndjson"), { force: true });
+    fs.writeFileSync(path.join(batchesDir, "batch-orphan-file.ndjson"), "", "utf-8");
+
+    const report = await checkPlanningStorageConsistency();
+    expect(report.issues.some((issue) => issue.code === "PLANNING_V3_BATCH_TXN_MISSING")).toBe(true);
+    expect(report.issues.some((issue) => issue.code === "PLANNING_V3_BATCH_TXN_ORPHAN")).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolveWarningCatalog } from "../../../src/lib/planning/catalog/warningCatalog";
 import {
   buildWorkspaceCompletedRunState,
   buildWorkspaceHealthGuardState,
@@ -243,7 +244,7 @@ describe("workspaceRunResult", () => {
       {
         code: "SNAPSHOT_STALE",
         severity: "warn",
-        message: "스냅샷 기준일이 오래되었습니다(47일). /ops/assumptions에서 동기화를 권장합니다.",
+        message: resolveWarningCatalog("SNAPSHOT_STALE").plainDescription,
         data: { days: 47 },
       },
     ]);

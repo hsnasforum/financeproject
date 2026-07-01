@@ -15,6 +15,7 @@ import {
   planningUserMeta,
   requirePlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
+import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -107,6 +108,8 @@ export async function POST(request: Request) {
     assertNoForbiddenDraftKeys(responsePayload);
     return NextResponse.json(responsePayload, { status: 201 });
   } catch (error) {
+    const storageError = planningStorageErrorResponse(error, userMeta);
+    if (storageError) return storageError;
     if (error instanceof ImportCsvToBatchInputError) {
       return NextResponse.json(
         { ok: false, error: { code: "INPUT", message: "CSV 파싱에 실패했습니다. 파일 형식을 확인해 주세요." }, meta: userMeta },

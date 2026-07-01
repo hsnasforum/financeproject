@@ -1,0 +1,459 @@
+# 2026-06-29 0629 전달문 최종 보고서 초안
+
+## 상태
+- 판정: 로컬 구현과 로컬 required gate는 통과했습니다.
+- 추가 확인: GitHub 제외 상태에서 가능한 local inventory, dry-run, ops safety도 통과했습니다.
+- 현재 범위 밖: commit, push, PR 생성/업데이트, 원격 CI, 실제 운영 데이터 inventory, 외부 DB rollback은 deferred external verification으로 분리했습니다.
+- 분리 사유: 사용자가 원격/운영/외부 DB 검증을 현재 범위 밖으로 재분류했고, 빌링 문제가 해결될 때까지 commit/push 금지를 유지했습니다.
+- 요구사항별 코드/테스트/문서 증거 인덱스: `work/6/30/2026-06-30-requirement-evidence-index.md`.
+- 운영 topology/inventory 증거 수집 runbook: `work/6/30/2026-06-30-production-evidence-runbook.md`.
+- GitHub 금지 해제 후 PR 재구성 명령 runbook: `work/6/30/2026-06-30-pr-reconstruction-command-runbook.md`.
+- deferred external verification 정정: `work/6/30/2026-06-30-deferred-external-verification.md`.
+
+## 시작/종료 SHA
+- 전달문 기준 SHA: `5e1cc1c901f9ad3925fb450a8446b192ed4bf8f5`
+- 현재 로컬 HEAD: `baf6325ecdadb3a2b249c0946490ec48887430ab`
+- 로컬 `main`: `5e1cc1c901f9ad3925fb450a8446b192ed4bf8f5`
+- `origin/main`: `5e1cc1c901f9ad3925fb450a8446b192ed4bf8f5`
+- 작업 브랜치: `codex/p2-05-quality-gates`
+
+## 관련 package scripts 확인
+- `lint` -> `eslint src tests scripts planning middleware.ts next.config.ts playwright.config.ts postcss.config.mjs prisma.config.ts vitest.config.ts eslint.config.mjs`
+- `typecheck` -> `tsc --noEmit`
+- `test` -> `vitest run`
+- `planning:auth:check` -> `node scripts/quality_gates_runner.mjs planning:auth:check`
+- `planning:user-scope:check` -> `vitest run tests/planning-v2-api/*user-scope*.test.ts tests/planning-v3-*-user-scope.test.ts`
+- `release:verify` -> `node scripts/release_verify.mjs`
+- `planner:deprecated:guard` -> `node scripts/planner_deprecated_guard.mjs`
+- `planning:v2:complete` -> `node scripts/planning_v2_complete.mjs`
+- `planning:v2:compat` -> `node --import tsx scripts/planning_v2_compat.mjs`
+- `planning:v2:regress` -> `node --import tsx scripts/planning_v2_regression.mjs`
+- `planning:v2:ops:safety` -> `node --import tsx scripts/planning_v2_ops_safety.mjs`
+- `planning:v2:ops:safety:weekly` -> `node --import tsx scripts/planning_v2_ops_safety.mjs --legacy-mode=check --legacy-fail-threshold=0`
+- `planning:v2:backfill-legacy-runs` -> `node --import tsx scripts/planning_v2_backfill_legacy_runs.mjs`
+- `planning:auth:sqlite-backfill` -> `node scripts/planning_auth_sqlite_backfill.mjs`
+- `planning:postgres:readiness` -> `node scripts/planning_postgres_readiness.mjs --dry-run --out-dir=tmp/planning-postgres-readiness`
+- `planning:v2:desktop:build` -> `node scripts/planning_v2_desktop_build.mjs`
+- `planning:v2:desktop:smoke` -> `node scripts/planning_v2_desktop_smoke.mjs`
+
+## PR/커밋 목록
+- PR: 이번 라운드에서는 생성/업데이트하지 않았습니다.
+- commit/push: 이번 라운드에서는 수행하지 않았습니다.
+- 기준 이후 기존 로컬 커밋:
+  - `aac556ab` P0-01 storage ownership mode
+  - `645bf614` P0-02 legacy transaction surfaces 제거
+  - `e266ddf9` P0-03 replace restore atomicity
+  - `d1860e73` P1-01 storage read error semantics
+  - `dccfc284` P1-02 file store mutation serialization
+  - `6be7c0de` P1-03 canonical transaction write owner 보강
+  - `2d47134f` P1-03 Action Center SSOT
+  - `5b6564d9` P1-04 v3 draft storage boundaries
+  - `d74f8038` P1-05 desktop artifact provenance
+  - `856f1801` P1-06 v3 canonical source root
+  - `f1cfe174`, `08353c8a` P1-07 run application service / runStore read purity
+  - `92b4d559` P1-08 report interpretation canonicalization
+  - `64ade8f0` P1-09 depositProtection contract
+  - `e90e51ff` P1-10 public API provenance
+  - `078e5dd1`, `d9e853cd`, `baf6325e` P2 source loader, gate, rounding follow-up
+
+## 커밋별 변경 파일 요약
+- 전체 파일 목록 재생성 명령: `git log --reverse --name-only --pretty=tformat:%x2d%x2d%x2d%x20%h%x20%s 5e1cc1c901f9ad3925fb450a8446b192ed4bf8f5..HEAD`
+- `aac556ab` P0-01:
+  - `.env.example`
+  - `.env.local.example`
+  - `docs/deploy.md`
+  - `docs/planning-v2-family-mode.md`
+  - `docs/planning-v2-ops.md`
+  - `scripts/next_prod_safe.mjs`
+  - `scripts/planning_v2_desktop_launch.mjs`
+  - `src/lib/planning/auth/currentUser.ts`
+  - `src/lib/planning/store/namespace.ts`
+  - `tests/planning/auth/currentUser.test.ts`
+  - `tests/planning/auth/routeAuth.test.ts`
+  - `tests/planning/store/planningStoreNamespace.test.ts`
+- `645bf614` P0-02:
+  - `src/app/api/planning/v3/transactions/batches/[id]/route.ts`
+  - `src/app/api/planning/v3/transactions/import/csv/route.ts`
+  - `src/app/planning/v3/import/_components/ImportCsvClient.tsx`
+  - `src/app/planning/v3/transactions/_components/TransactionsBatchListClient.tsx`
+  - `src/lib/planning/v3/service/batchReadRepository.ts`
+  - `src/lib/planning/v3/service/loadBatchVisiblePipeline.ts`
+  - `src/lib/planning/v3/service/transactionBatchListRows.ts`
+  - `src/lib/planning/v3/transactions/store.ts`
+  - `tests/planning-v3-transactions-batches-user-scope.test.ts`
+  - `tests/planning-v3-user-facing-remote-host-api.test.ts`
+- `e266ddf9` P0-03:
+  - `scripts/planning_v2_ops_run.mjs`
+  - `scripts/planning_v2_ops_safety.mjs`
+  - `src/lib/ops/backup/backupRestoreRouteService.ts`
+  - `src/lib/ops/backup/planningDataVault.ts`
+  - `src/lib/ops/errorContract.ts`
+  - `tests/planning/ops/backup-api.test.ts`
+- `d1860e73` P1-01:
+  - `src/app/api/planning/v3/accounts/route.ts`
+  - `src/app/api/planning/v3/batches/import/csv/route.ts`
+  - `src/app/api/planning/v3/opening-balances/route.ts`
+  - `src/lib/planning/api/storageErrorResponse.ts`
+  - `src/lib/planning/storage/serverFileRead.ts`
+  - `src/lib/planning/v3/store/accountsStore.ts`
+  - `src/lib/planning/v3/store/batchesStore.ts`
+  - `src/lib/planning/v3/store/draftStore.ts`
+  - `tests/planning-v3-storage-error-api.test.ts`
+- `dccfc284` P1-02:
+  - `docs/deploy.md`
+  - `src/lib/planning/storage/consistency.ts`
+  - `src/lib/planning/storage/storeWriteLock.ts`
+  - `src/lib/planning/store/runActionStore.ts`
+  - `src/lib/planning/store/runStore.ts`
+  - `src/lib/planning/v3/store/accountsStore.ts`
+  - `src/lib/planning/v3/store/batchesStore.ts`
+  - `tests/planning-store-concurrency.test.ts`
+  - `tests/planning-v3-store-concurrency.test.ts`
+  - `tests/planning/storage-consistency-recovery.test.ts`
+- `6be7c0de` P0-02/P1-03 보강:
+  - `src/app/api/planning/v3/transactions/batches/[id]/account/route.ts`
+  - `src/app/api/planning/v3/transactions/batches/merge/route.ts`
+  - `src/lib/planning/v3/service/batchAccountRepository.ts`
+  - `src/lib/planning/v3/service/legacyTransactionMigration.ts`
+  - `src/lib/planning/v3/service/storedBatchCommandSurface.ts`
+  - `tests/planning-v3-canonical-write-owner.test.ts`
+  - `tests/planning-v3-legacy-transaction-migration.test.ts`
+- `2d47134f` P1-03:
+  - `src/components/PlanningRunsClient.tsx`
+  - `src/lib/planning/server/pages/planningRscLoaders.ts`
+  - `src/lib/planning/server/runs/repository.ts`
+  - `src/lib/planning/server/runs/routeService.ts`
+  - `src/lib/planning/store/runActionStore.ts`
+  - `src/lib/planning/store/runStore.ts`
+  - `tests/planning-v2-api/run-action-center-ssot.test.ts`
+  - `tests/planning-v2-api/run-action-progress-route.test.ts`
+- `5b6564d9` P1-04:
+  - `src/lib/news/stressContext.ts`
+  - `src/lib/planning/v3/store/draftStore.ts`
+  - `tests/planning-v3-draft-boundary.test.ts`
+- `64ade8f0` P1-09:
+  - `docs/unified-catalog-contract.md`
+  - `docs/unified-catalog-roadmap.md`
+  - `src/app/api/products/unified/route.ts`
+  - `src/lib/sources/unified.ts`
+  - `src/lib/sources/unifiedEnrichPolicy.ts`
+  - `tests/products-unified-route.test.ts`
+  - `tests/unified-enrich.test.ts`
+- `e90e51ff` P1-10:
+  - `docs/api-utilization-draft.md`
+  - `docs/data-sources-settings-ops.md`
+  - `src/app/api/dev/data-sources/ping/route.ts`
+  - `src/app/api/dev/public-apis/sample/route.ts`
+  - `src/app/api/public/fx/route.ts`
+  - `src/app/api/public/housing/rent/route.ts`
+  - `src/app/api/public/housing/sales/route.ts`
+  - `src/lib/publicApis/contracts/types.ts`
+  - `tests/public-api-provenance.test.ts`
+- `d74f8038` P1-05:
+  - `.dist/planning-v2-desktop-installed/**`
+  - `.dist/planning-v2-desktop/**`
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/release.yml`
+  - `.gitignore`
+  - `docs/planning-v2-desktop-local.md`
+  - `scripts/planning_v2_desktop_build.mjs`
+  - `scripts/planning_v2_desktop_install.mjs`
+  - `scripts/planning_v2_desktop_provenance.mjs`
+  - `scripts/planning_v2_desktop_smoke.mjs`
+  - `tests/desktop-artifact-provenance.test.ts`
+  - `tsconfig.json`
+- `f1cfe174` P1-07:
+  - `scripts/planning_v2_route_guard_scan.mjs`
+  - `scripts/security_route_guard_scan.mjs`
+  - `src/app/api/planning/run/route.ts`
+  - `src/app/api/planning/v2/run/route.ts`
+  - `src/app/api/planning/v2/runs/route.ts`
+  - `src/lib/planning/server/runs/createRunRouteAdapter.ts`
+  - `src/lib/planning/server/runs/createRunService.ts`
+  - `tests/planning-v2-api/create-run-service-boundary.test.ts`
+  - `tests/planning-v2-api/persistence-routes.test.ts`
+- `08353c8a` P2-01:
+  - `src/lib/planning/store/runRecordCodec.ts`
+  - `src/lib/planning/store/runStore.ts`
+  - `tests/planning-store.test.ts`
+- `856f1801` P1-06:
+  - `package.json`
+  - `planning/v3/**`
+  - `src/lib/planning/v3/**`
+  - `scripts/planning_v2_desktop_build.mjs`
+  - `tests/desktop-artifact-provenance.test.ts`
+  - `tests/planning-v3-canonical-source-contract.test.ts`
+  - `tsconfig.planning-v3.json`
+- `078e5dd1` P2-02:
+  - `src/lib/sources/unified.ts`
+  - `src/lib/sources/unifiedLoaders.ts`
+  - `src/lib/sources/unifiedTypes.ts`
+  - `tests/unified-source-loaders.test.ts`
+- `92b4d559` P1-08:
+  - `docs/planner-deprecated-cleanup.md`
+  - `docs/planning-v2-architecture.md`
+  - `src/app/api/planner/compute/route.ts`
+  - `src/app/planning/reports/_lib/reportViewModel.ts`
+  - `src/lib/planner/compute.ts`
+  - `src/lib/planning/catalog/plannerActionLinks.ts`
+  - `src/lib/planning/v2/insights/interpret.ts`
+  - `tests/planning/report-canonical-contract.test.ts`
+- `d9e853cd` P2-05:
+  - `.github/workflows/ci.yml`
+  - `docs/maintenance.md`
+  - `docs/release-checklist.md`
+  - `docs/release.md`
+  - `package.json`
+  - `scripts/quality_gates.mjs`
+  - `scripts/quality_gates_runner.mjs`
+  - `scripts/release_verify.mjs`
+  - `tests/quality-gates-registry.test.ts`
+  - `vitest.config.ts`
+- `baf6325e` follow-up:
+  - `src/lib/planning/calc/roundingPolicy.ts`
+  - `src/lib/planning/server/runs/createRunService.ts`
+  - `src/lib/planning/v3/**`
+  - `work/6/29/2026-06-29-ssot-rounding-pr.md`
+
+## 이번 로컬 변경 파일
+- `docs/planning-v3-boundary-adr.md`
+- `docs/README.md`
+- `docs/planner-deprecated-cleanup.md`
+- `docs/planning-v2-ops.md`
+- `scripts/planner_deprecated_guard.mjs`
+- `scripts/planning_v2_static_guard.mjs`
+- `scripts/planning_v2_ops_safety.mjs`
+- `src/app/api/planning/v3/draft/apply/route.ts`
+- `src/lib/planning/v3/service/userFacingBatchReadPolicy.ts`
+- `src/lib/planning/v3/service/batchReadRepository.ts`
+- `src/lib/planning/v3/service/loadBatchVisiblePipeline.ts`
+- `src/lib/planning/v3/service/getBatchSummary.ts`
+- `src/lib/planning/v3/service/generateDraftPatchFromBatch.ts`
+- `src/lib/planning/v3/README.md`
+- `src/components/planning/workspace/useWorkspaceRuntimeBundle.ts`
+- `src/components/planning/workspace/workspaceRuntimeHelpers.ts`
+- `src/components/planning/workspace/useWorkspaceRuntimeStateBundle.ts`
+- `src/components/planning/workspace/useWorkspaceFeedbackSubmitAction.ts`
+- `src/components/planning/workspace/useWorkspaceOptimizeAction.ts`
+- `src/components/planning/workspace/useWorkspaceProfileSyncAction.ts`
+- `src/components/planning/workspace/useWorkspaceRunExecutionActions.ts`
+- `tests/desktop-artifact-provenance.test.ts`
+- `tests/planning-v3-batches-api.test.ts`
+- `tests/planning-v3-getBatchSummary.test.ts`
+- `tests/planning-v3-batch-cashflow-account-guard-api.test.ts`
+- `tests/planning-v3-draft-apply-api.test.ts`
+- `tests/planning-v3-store-concurrency.test.ts`
+- `tests/planning/auth/postgresReadinessScript.test.ts`
+- `tests/planning/ops-safety.test.ts`
+- `tests/planning-v2-static-guard.test.ts`
+- `work/6/30/2026-06-30-synthetic-ops-evidence.md`
+- `work/6/29/2026-06-29-0629-delivery-revalidation.md`
+- `work/6/29/2026-06-29-0629-delivery-final-report-draft.md`
+- `work/6/29/2026-06-29-0629-delivery-completion-audit.md`
+
+## Issue별 책임 변화
+- P0-01: `currentUser`, planning namespace, startup guard, env/docs가 인증 사용자와 저장 namespace 불변식을 담당합니다.
+- P0-02: 사용자 노출 v3 transaction/import/list/detail/summary/cashflow/draft 경로는 canonical stored snapshot만 다루며, `policy.usesLegacyTransactions=true`인 legacy-backed hybrid 읽기는 `NO_DATA`/`NOT_FOUND`로 격리합니다. owner 불명 legacy 데이터는 migration/quarantine 경로로 분리합니다. `planning:v2:guard`가 user-facing v3 route 전체의 legacy `service/transactionStore` 직접 import 재발도 차단합니다.
+- P0-03: backup replace는 staging/commit 구조로 원자성을 확보하고, partial restore 성공 응답을 피합니다.
+- P1-01: v3 storage read 오류는 not-found, corrupt, unavailable 의미를 분리해 빈 상태로 축약하지 않습니다.
+- P1-02: file store read-modify-write는 process-local keyed queue로 직렬화합니다. 다중 프로세스 공유 저장소는 별도 lock/CAS/DB transaction 없이는 완료로 보지 않습니다.
+- P1-03: Action Center 원본은 별도 file이 canonical이고 run meta는 summary 역할로 축소됩니다.
+- P1-04: cashflow/profile/import preview draft family가 교차 해석되지 않도록 저장 경계를 분리합니다.
+- P1-05: `.dist`는 source tree tracked artifact가 아니며 desktop artifact manifest가 package/git/lockfile/checksum provenance를 가집니다.
+- P1-06: planning v3 canonical source root는 `src/lib/planning/v3` 기준으로 정리했고 packaging 경계도 그 기준을 따릅니다.
+- P1-07: planning run 생성 책임은 route adapter에서 application service로 이동했습니다.
+- P1-08: report/dashboard는 raw run 재해석 대신 canonical report contract를 사용합니다.
+- P1-09: `depositProtection`은 지원 mode와 거부 mode가 API 계약으로 드러납니다.
+- P1-10: public API 성공 응답은 live/mock/degraded provenance를 노출해야 합니다.
+- P2-03: legacy planner cleanup guard가 `src/lib/planner/core.ts` 복귀와 `lib/planner/core` import를 차단합니다.
+- P2-04: workspace runtime bundle은 helper/state/feedback/optimizer/profile sync/run execution lifecycle로 분리됐습니다.
+- P2-05: release 장시간 실행에서 timeout이 먼저 실패하지 않도록 느린 gate 테스트의 explicit timeout을 조정했습니다.
+- P2-06: v3는 v2 대체재가 아니라 bounded context 모음이라는 ADR을 추가했습니다.
+- P2-07: PostgreSQL readiness는 dry-run/export/checksum/deferred apply 경계를 문서화하고, confirmed apply 미지원 상태를 명시했습니다.
+- Ops evidence: `planning:v2:ops:safety` 리포트가 `operatingEnvironment`와 `topology`를 남깁니다. `DATABASE_URL`은 provider만 기록하고, 공유 파일 저장소 완료 보장은 `not_proven`으로 남깁니다. apply 모드는 백필 후 inventory를 다시 집계해 `postApplyCandidateCount`가 임계치 이하일 때만 통과합니다.
+
+## 수정 전 실패와 수정 후 성공 증거
+- P0/P1 수정 전 실패 재현: 이번 라운드에서는 기준 SHA로 되돌려 재실행하지 않았습니다.
+- P0/P1 과거 수정 전 실패 증거: 6/28 `/work` 로그에서 항목별 FAIL->PASS 기록을 재확인했습니다.
+  - P0-01: production storage ownership 미명시와 single-user shared root 실패.
+  - P0-02: legacy import URL이 전역 NDJSON을 생성한 실패.
+  - P0-03: replace 손상 entry가 200으로 성공하고 `committed`가 누락된 실패.
+  - P1-01/P1-02: 손상 JSON empty 처리, 병렬 lost update, doctor missing/orphan 미탐지 실패.
+  - Action Center SSOT, draft boundary, desktop artifact, v3 canonical root, run application service, report contract, depositProtection, public API provenance: 각 6/28 `/work` 문서에 수정 전 FAIL과 수정 후 PASS 기록.
+- P0/P1 수정 후 성공: targeted P0/P1 tests 21 files / 194 tests PASS.
+- P2-04 수정 후 성공: workspace runtime targeted tests 3 files / 15 tests PASS.
+- P2-05 수정 전 실패: `corepack pnpm release:verify`가 내부 `gate=test`에서 FAIL.
+  - 실패 항목: desktop artifact provenance timeout, v3 store concurrency timeout 후 orphan assertion, PostgreSQL readiness repeated dry-run timeout.
+- P2-05 재분류 근거: 실패 파일만 재실행한 `corepack pnpm test tests/planning-v3-store-concurrency.test.ts tests/planning/auth/postgresReadinessScript.test.ts tests/desktop-artifact-provenance.test.ts`는 timeout 조정 전에도 3 files / 23 tests PASS.
+- P2-05 수정 후 성공: timeout 조정 후 동일 targeted tests 3 files / 23 tests PASS, 이후 `corepack pnpm release:verify` PASS.
+- Ops evidence 수정 전 실패: `corepack pnpm test tests/planning/ops-safety.test.ts` FAIL.
+  - 신규 테스트 `records environment and process-local topology evidence without leaking DATABASE_URL`가 `operatingEnvironment` 미존재로 실패했습니다.
+- Ops evidence 수정 후 성공: `corepack pnpm test tests/planning/ops-safety.test.ts` PASS, 1 file / 5 tests.
+- Synthetic ops evidence 수정 전 실패: `corepack pnpm test tests/planning/ops-safety.test.ts` FAIL.
+  - 신규 테스트 `uses synthetic file-backed legacy data to report post-apply inventory`에서 apply 모드가 백필 전 `candidateCount=1`과 `legacy-fail-threshold=0`을 기준으로 `apply.ok=false`를 반환했습니다.
+- Synthetic ops evidence 수정 후 성공: `corepack pnpm test tests/planning/ops-safety.test.ts` PASS, 1 file / 6 tests.
+- P0-02 static guard 수정 전 실패: `corepack pnpm test tests/planning-v2-static-guard.test.ts` FAIL.
+  - `planning:v2:guard` 출력에 `v3UserFacingTransactionRouteFiles=`가 없어 실패했습니다.
+- P0-02 draft/apply route 보강 수정 전 실패: `corepack pnpm test tests/planning-v2-static-guard.test.ts` FAIL.
+  - `src/app/api/planning/v3/draft/apply/route.ts`가 legacy `service/transactionStore`를 직접 import해 실패했습니다.
+- P0-02 static guard 수정 후 성공: `corepack pnpm test tests/planning-v2-static-guard.test.ts` PASS, 1 file / 2 tests.
+- P0-02 draft/apply 수정 후 성공: `corepack pnpm test tests/planning-v3-draft-apply-api.test.ts` PASS, 1 file / 4 tests.
+- P0-02 static guard 수정 후 성공: `corepack pnpm planning:v2:guard` PASS, `v3UserFacingTransactionRouteFiles=59`.
+- P0-02 hybrid fallback 수정 전 실패: `corepack pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts` FAIL.
+  - 실패 항목: batch detail 404 기대값이 200으로 응답, cashflow 404 기대값이 200으로 응답, `getBatchSummary` NOT_FOUND 기대값이 legacy-backed summary resolve로 응답했습니다.
+- P0-02 hybrid fallback 수정 후 성공: 같은 명령 PASS, 3 files / 45 tests.
+- P0-02 shared reader 확장 검증: `corepack pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts tests/planning-v3-categorized-api.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts tests/planning-v3-balances-api.test.ts tests/planning-v3-draft-profile-api.test.ts tests/planning-v3-generateDraftPatchFromBatch.test.ts tests/planning-v3-draft-apply-api.test.ts` PASS, 8 files / 77 tests.
+- 최신 통합 재검증: P0-02 draft/apply 보강 후 `corepack pnpm release:verify` PASS.
+  - 내부 full `pnpm test` 결과는 739 files / 2443 tests PASS입니다.
+
+## 실행 명령과 결과
+- `corepack pnpm install --frozen-lockfile` PASS.
+- `corepack pnpm lint` PASS.
+- `corepack pnpm typecheck` PASS.
+- `corepack pnpm test` PASS, 739 files / 2443 tests.
+- `corepack pnpm planning:auth:check` PASS, 13 files / 74 tests.
+- `corepack pnpm planning:user-scope:check` PASS, 12 files / 32 tests.
+- `corepack pnpm release:verify` PASS.
+- `corepack pnpm build` PASS, Next.js 16.2.6 production build, 251 static pages generated.
+- `corepack pnpm planning:v2:desktop:build` PASS.
+- `corepack pnpm planning:v2:desktop:smoke` PASS, `runId=35cc6156-dc24-44cd-b3e0-b71462ce4b70`.
+- `corepack pnpm planning:v2:regress` PASS, regression 9 cases와 isolated full e2e 8 tests PASS.
+- `corepack pnpm planning:postgres:readiness` PASS dry-run.
+- `node --check scripts/planner_deprecated_guard.mjs && corepack pnpm planner:deprecated:guard` PASS.
+- `corepack pnpm planning:v2:backfill-legacy-runs -- --dry-run --limit=500` PASS:
+  - `totalRuns=0`
+  - `legacyCandidates=0`
+  - `userLegacyCandidates=0`
+  - `opsDoctorLegacyCandidates=0`
+  - `unreadableCandidates=0`
+- `corepack pnpm planning:auth:sqlite-backfill -- --dry-run` PASS:
+  - `sourceMutation=false`
+  - `dbPath=prisma/dev.db`
+  - auth tables absent, planning owned tables absent, row count 0
+- `corepack pnpm planning:postgres:readiness` PASS dry-run 재실행:
+  - `.data/planning` manifest files 30 / bytes 238707
+  - `operationCount=0`
+  - rollback probe `SKIPPED`, reason `no_target_operations`
+- `corepack pnpm planning:v2:ops:safety -- --legacy-mode=check --legacy-limit=500 --legacy-fail-threshold=-1` PASS:
+  - opsRun PASS
+  - legacyBackfill PASS
+  - `legacyCandidates=0`
+  - report `.data/planning/ops/reports/20260629-083542-safety.json`
+  - log `.data/planning/ops/logs/20260629-083542-safety.log`
+- `node --check scripts/planning_v2_ops_safety.mjs` PASS.
+- `corepack pnpm test tests/planning/ops-safety.test.ts` PASS, 1 file / 5 tests.
+- `corepack pnpm test tests/planning/ops-safety.test.ts` PASS, 1 file / 6 tests after synthetic file-backed post-apply inventory test.
+- `corepack pnpm test tests/planning/ops-safety.test.ts tests/planning-store.test.ts` PASS, 2 files / 22 tests.
+- `node --check scripts/planning_v2_static_guard.mjs` PASS.
+- `corepack pnpm test tests/planning-v2-static-guard.test.ts` PASS, 1 file / 2 tests.
+- `corepack pnpm test tests/planning-v3-draft-apply-api.test.ts` PASS, 1 file / 4 tests.
+- `corepack pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts` PASS, 3 files / 45 tests.
+- `corepack pnpm test tests/planning-v3-batches-api.test.ts tests/planning-v3-getBatchSummary.test.ts tests/planning-v3-categorized-api.test.ts tests/planning-v3-batch-cashflow-account-guard-api.test.ts tests/planning-v3-balances-api.test.ts tests/planning-v3-draft-profile-api.test.ts tests/planning-v3-generateDraftPatchFromBatch.test.ts tests/planning-v3-draft-apply-api.test.ts` PASS, 8 files / 77 tests.
+- `corepack pnpm planning:v2:guard` PASS, `v3UserFacingTransactionRouteFiles=59`.
+- `corepack pnpm planning:v2:ops:safety -- --legacy-mode=check --legacy-limit=500 --legacy-fail-threshold=-1` PASS 재실행:
+  - report `.data/planning/ops/reports/20260629-084153-safety.json`
+  - log `.data/planning/ops/logs/20260629-084153-safety.log`
+  - `environment`: `nodeEnv=development`, `storageMode=local-default`, `databaseUrl=missing`, `dataDir=.data/planning`
+  - `topology`: `writeSerializationScope=process-local`, `sharedFileStoreCompletion=not_proven`
+- `corepack pnpm planning:v2:ops:safety -- --legacy-mode=check --legacy-limit=500 --legacy-fail-threshold=-1` PASS 2026-06-30 재실행:
+  - opsRun PASS
+  - legacyBackfill PASS
+  - `legacyCandidates=0`
+  - report `.data/planning/ops/reports/20260630-041311-safety.json`
+  - log `.data/planning/ops/logs/20260630-041311-safety.log`
+- `corepack pnpm planning:v2:ops:safety -- --legacy-mode=check --legacy-limit=500 --legacy-fail-threshold=-1` PASS 2026-06-30 topology/env 재실행:
+  - opsRun PASS
+  - legacyBackfill PASS
+  - `legacyCandidates=0`
+  - report `.data/planning/ops/reports/20260630-044955-safety.json`
+  - log `.data/planning/ops/logs/20260630-044955-safety.log`
+  - `operatingEnvironment`: `nodeEnv=development`, `authRequired=true`, `storageMode=local-default`, `databaseUrl=missing`, `dataDir=.data/planning`
+  - `topology`: `writeSerializationScope=process-local`, `sharedFileStoreCompletion=not_proven`
+- `corepack pnpm test tests/planning/ops-safety.test.ts tests/planning-v3-legacy-transaction-migration.test.ts tests/planning/auth/postgresReadinessScript.test.ts` PASS 2026-06-30 deferred external verification 대체 검증:
+  - 3 files / 23 tests PASS.
+- `corepack pnpm planning:v2:backfill-legacy-runs -- --dry-run --limit=500` PASS 2026-06-30 deferred external verification 대체 검증:
+  - `totalRuns=0`
+  - `legacyCandidates=0`
+  - `userLegacyCandidates=0`
+  - `opsDoctorLegacyCandidates=0`
+  - `unreadableCandidates=0`
+- `corepack pnpm planning:auth:sqlite-backfill -- --dry-run` PASS 2026-06-30 deferred external verification 대체 검증:
+  - `sourceMutation=false`
+  - missing ownership row 수 0.
+- `corepack pnpm planning:postgres:readiness` PASS 2026-06-30 deferred external verification 대체 검증:
+  - manifest files 34 / bytes 252690
+  - dry-run apply operations 0
+  - rollback probe `SKIPPED`, reason `no_target_operations`
+  - confirmed apply unavailable, reason `postgres_apply_not_implemented`
+- `corepack pnpm planning:v2:ops:safety -- --legacy-mode=check --legacy-limit=500 --legacy-fail-threshold=-1` PASS 2026-06-30 deferred external verification 대체 검증:
+  - report `.data/planning/ops/reports/20260630-072041-safety.json`
+  - log `.data/planning/ops/logs/20260630-072041-safety.log`
+  - `legacyCandidates=0`
+  - `topology`: `writeSerializationScope=process-local`, `sharedFileStoreCompletion=not_proven`
+- `corepack pnpm lint` PASS.
+- PowerShell `package.json` script inventory 확인 PASS:
+  - 전달문 관련 script 17개가 모두 존재합니다.
+- `git diff --check -- docs/README.md docs/planner-deprecated-cleanup.md docs/planning-v2-ops.md scripts/planner_deprecated_guard.mjs scripts/planning_v2_ops_safety.mjs scripts/planning_v2_static_guard.mjs src/app/api/planning/v3/draft/apply/route.ts src/components/planning/workspace/useWorkspaceRuntimeBundle.ts src/lib/planning/v3/README.md tests/desktop-artifact-provenance.test.ts tests/planning-v3-draft-apply-api.test.ts tests/planning-v3-store-concurrency.test.ts tests/planning/auth/postgresReadinessScript.test.ts tests/planning/ops-safety.test.ts` PASS.
+- `git diff --check -- docs/planning-v2-ops.md scripts/planning_v2_ops_safety.mjs tests/planning/ops-safety.test.ts` PASS.
+- PowerShell whitespace/EOF check for untracked docs, workspace hook split files, static guard test, and `/work` docs PASS.
+- `rg -n '/planning/v3/service/transactionStore' src/app/api/planning/v3` 결과 없음.
+- draft/apply follow-up 직후에는 이전 full-test 총계와 이전 v3 route scan count 잔존 여부를 검색했습니다. 이번 hybrid follow-up 뒤 최신 full-test 총계는 739 files / 2443 tests로 갱신했습니다.
+- 최신 변경 후 추가 재검증:
+  - `corepack pnpm lint` PASS.
+  - `corepack pnpm typecheck` PASS.
+  - `corepack pnpm planning:auth:check` PASS, 13 files / 74 tests.
+  - `corepack pnpm planning:user-scope:check` PASS, 12 files / 32 tests.
+  - `corepack pnpm test` PASS, 739 files / 2443 tests.
+  - `corepack pnpm release:verify` PASS.
+  - `release:verify` 내부 `planning:v2:e2e:fast` PASS, 6 tests.
+  - `release:verify` 내부 `planning:v2:regress` PASS, regression 9 cases와 isolated full e2e 8 tests.
+  - `release:verify` 내부 `pnpm test` PASS, 739 files / 2443 tests.
+  - `release:verify` 내부 advisory `planning:ssot:check` PASS, 5 files / 9 tests.
+  - `corepack pnpm build` PASS.
+
+## Migration 대상/충돌/quarantine
+- 로컬 legacy run backfill dry-run 기준 migration candidate 수: 0.
+- 합성 file-backed legacy fixture 기준 migration candidate 수: 적용 전 1, apply 후 `postApplyCandidateCount=0`.
+- 로컬 PostgreSQL readiness dry-run 기준 target operation 수: 0.
+- 로컬 dry-run 기준 conflict 수: 0.
+- 로컬 dry-run 기준 quarantine 수: 0.
+- 로컬 auth SQLite backfill dry-run 기준 missing ownership row 수: 0.
+- 운영 데이터 기준 수량: deferred external verification. production 데이터 dry-run report로 별도 확정합니다.
+- owner 불명 legacy 데이터 정책: 자동 배정 금지, quarantine.
+
+## Rollback 검증
+- P0-02 legacy migration: dry-run/rollback 의미는 로컬 테스트로 검증했습니다.
+- P1-03 Action Center: embedded legacy action center migration dry-run/rollback 테스트 PASS.
+- PostgreSQL readiness: 로컬 dry-run apply plan이 operation 0건이라 rollback probe는 `SKIPPED`, reason `no_target_operations`입니다.
+- 실제 PostgreSQL disposable target rollback: deferred external verification.
+
+## 호환성/API/storage/env/deploy 변화
+- API: planning v3 transaction user-facing path는 canonical stored-first/owner-scoped 계약으로 정리됐고, legacy-backed hybrid row fallback은 사용자 응답에서 숨깁니다. public API는 provenance를 성공 응답 계약에 포함합니다.
+- Storage: planning namespace, v3 draft family, action center file, desktop manifest provenance, storage error semantics가 명시화됐습니다.
+- Migration: legacy owner 불명 데이터는 quarantine이며 자동 owner 배정하지 않습니다.
+- Env/deploy: `PLANNING_NAMESPACE_ENABLED=true` 또는 명시적 `PLANNING_SINGLE_USER_MODE=true`가 필요합니다. production/auth required에서 둘 다 없으면 startup/config check가 실패해야 합니다. `planning:v2:ops:safety`는 현재 env/storage mode와 topology 한계를 리포트에 기록합니다.
+- Local runtime env: WSL `printenv` 기준 `DATABASE_URL`, `PLANNING_AUTH_REQUIRED`, `PLANNING_NAMESPACE_ENABLED`, `PLANNING_SINGLE_USER_MODE`, `PLANNING_DATA_DIR`, `NODE_ENV`, `AUTH_SECRET`, `NEXTAUTH_SECRET`는 모두 missing입니다. `.env.local`에 `DATABASE_URL` 키가 있어도 이번 pnpm script runtime에는 자동 로드되지 않았으므로 safety report도 `databaseUrl=missing`입니다.
+- Multi-process: 현재 file store serialization은 process-local입니다. 공유 파일 저장소를 여러 Node 프로세스나 인스턴스가 쓰면 별도 lock/CAS/DB transaction이 필요합니다.
+
+## Desktop artifact clean 증거
+- `git ls-files .dist | wc -l` -> `0`.
+- `git status --short .dist | wc -l` -> `0`.
+- `git status --short --ignored .dist tmp/planning-postgres-readiness .data/planning/ops .data/planning/eval | head -80` 확인:
+  - `.dist/`, `.data/planning/`, `tmp/planning-postgres-readiness/`는 ignored generated output입니다.
+- `.dist/planning-v2-desktop/desktop-manifest.json` 현재 manifest 확인:
+  - `version=1.0.4`
+  - `packageVersion=1.0.4`
+  - `gitSha=baf6325ecdadb3a2b249c0946490ec48887430ab`
+  - `artifactChecksum.fileCount=27009`
+  - `artifactChecksum.totalBytes=428664054`
+  - `artifactChecksum.value=494fff0f859aa4f3645dacbab286a187922a6319e7c71c49e5323a5204645a65`
+  - `lockfileSha256=c2763552593aabbcd3c944f93cc25b1f641b4240349482091bb5c13a44d823f7`
+  - `runtimeMode=next-prod-local-only`
+
+## 남은 불확실성과 후속 issue
+- [deferred external verification] commit/push/PR 및 원격 CI 증거는 현재 범위 밖입니다.
+- [deferred external verification] 실제 production legacy 데이터 inventory, conflict/quarantine 수는 운영 데이터 dry-run report로 별도 확정합니다. 로컬 `.data/planning` inventory에서는 후보 0건입니다.
+- [deferred external verification] 실제 production topology/env 증거는 production에서 `planning:v2:ops:safety`를 실행한 리포트로 별도 확인합니다. 로컬 리포트는 `development/local-default`만 증명합니다.
+- [deferred external verification] 실제 PostgreSQL disposable target의 transaction rollback/partial apply 검증은 현재 범위 밖입니다.
+- [follow-up] 다중 프로세스 공유 파일 저장소 운영이 필요하면 file lock/CAS/DB transaction 설계를 별도 issue로 진행해야 합니다.
+- [follow-up] P2-04의 parser/polling 추가 분리는 선택적 리팩터링 후보입니다.

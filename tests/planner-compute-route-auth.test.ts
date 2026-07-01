@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { POST as computePOST } from "../src/app/api/planner/compute/route";
 import { type PlannerInput } from "../src/lib/planner/types";
 
@@ -9,6 +12,8 @@ const originalTrustAuthHeaders = process.env.PLANNING_TRUST_AUTH_HEADERS;
 const originalPlanningUserId = process.env.PLANNING_USER_ID;
 const originalAuthSecret = process.env.AUTH_SECRET;
 const originalNextAuthSecret = process.env.NEXTAUTH_SECRET;
+const originalAuditLogPath = process.env.AUDIT_LOG_PATH;
+const auditTempDirs: string[] = [];
 
 const LOCAL_HOST = "localhost:3000";
 const LOCAL_ORIGIN = `http://${LOCAL_HOST}`;
@@ -53,6 +58,11 @@ describe("legacy planner compute route auth", () => {
     else delete env.AUTH_SECRET;
     if (typeof originalNextAuthSecret === "string") env.NEXTAUTH_SECRET = originalNextAuthSecret;
     else delete env.NEXTAUTH_SECRET;
+    if (typeof originalAuditLogPath === "string") env.AUDIT_LOG_PATH = originalAuditLogPath;
+    else delete env.AUDIT_LOG_PATH;
+    for (const dir of auditTempDirs.splice(0)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("returns the standard 401 response when planning auth is required", async () => {
@@ -121,12 +131,26 @@ describe("legacy planner compute route auth", () => {
     env.PLANNING_AUTH_REQUIRED = "1";
     env.PLANNING_TRUST_AUTH_HEADERS = "1";
     env.PLANNING_USER_ID = "default";
+    const auditDir = fs.mkdtempSync(path.join(os.tmpdir(), "planner-compute-audit-"));
+    auditTempDirs.push(auditDir);
+    env.AUDIT_LOG_PATH = path.join(auditDir, "audit.json");
 
     const res = await computePOST(buildRequest({ "x-planning-user-id": "alice" }));
     const payload = await res.json() as {
       ok?: boolean;
       result?: unknown;
-      meta?: { userId?: string; authSource?: string };
+      meta?: {
+        userId?: string;
+        authSource?: string;
+        legacyApi?: {
+          id?: string;
+          status?: string;
+          owner?: string;
+          sunset?: string;
+          replacement?: string;
+          telemetryEvent?: string;
+        };
+      };
     };
 
     expect(res.status).toBe(200);
@@ -135,6 +159,32 @@ describe("legacy planner compute route auth", () => {
     expect(payload.meta).toMatchObject({
       userId: "alice",
       authSource: "trusted-header",
+    });
+    expect(payload.meta?.legacyApi).toMatchObject({
+      id: "planner-compute",
+      status: "deprecated-compatibility",
+      owner: "Planning Reports / Architecture",
+      sunset: "TBD-after-telemetry-inventory",
+      replacement: "planning-v2 run/report APIs",
+      telemetryEvent: "legacy_planner_compute_called",
+    });
+    const auditRows = JSON.parse(fs.readFileSync(env.AUDIT_LOG_PATH, "utf8")) as Array<{
+      event?: string;
+      route?: string;
+      details?: {
+        legacyApiId?: string;
+        userId?: string;
+        authSource?: string;
+      };
+    }>;
+    expect(auditRows.at(-1)).toMatchObject({
+      event: "legacy_planner_compute_called",
+      route: "/api/planner/compute",
+      details: {
+        legacyApiId: "planner-compute",
+        userId: "alice",
+        authSource: "trusted-header",
+      },
     });
   });
 });

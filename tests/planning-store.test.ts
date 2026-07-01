@@ -2,6 +2,7 @@ import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createProfile,
@@ -17,6 +18,7 @@ import {
   createRun,
   deleteRun,
   getRun,
+  getRunBlob,
   listLegacyRunBackfillCandidates,
   listRuns,
   restoreRunFromTrash,
@@ -26,7 +28,12 @@ import {
   getPlanningFallbackUsageSnapshot,
   resetPlanningFallbackUsageSnapshot,
 } from "../src/lib/planning/engine";
-import { resolveRunsIndexPath } from "../src/lib/planning/store/paths";
+import {
+  resolveProfileRunBlobsDir,
+  resolveProfileRunDir,
+  resolveProfileRunMetaPath,
+  resolveRunsIndexPath,
+} from "../src/lib/planning/store/paths";
 import { listPlanningTrash, purgePlanningTrashOlderThan } from "../src/lib/planning/store/trash";
 import { type PlanningRunRecord } from "../src/lib/planning/store/types";
 import { buildResultDtoV1 } from "../src/lib/planning/v2/resultDto";
@@ -68,6 +75,20 @@ function rawSimulateBlob(value: Record<string, unknown>): PlanningRunRecord["out
     },
     ...value,
   } as unknown as PlanningRunRecord["outputs"]["simulate"];
+}
+
+function fileFingerprint(filePath: string): { hash: string; mtimeMs: number; size: number } {
+  const bytes = fs.readFileSync(filePath);
+  const stat = fs.statSync(filePath);
+  return {
+    hash: crypto.createHash("sha256").update(bytes).digest("hex"),
+    mtimeMs: stat.mtimeMs,
+    size: stat.size,
+  };
+}
+
+function chmodIfExists(filePath: string, mode: number): void {
+  if (fs.existsSync(filePath)) fs.chmodSync(filePath, mode);
 }
 
 describe("planning store", () => {
@@ -185,7 +206,7 @@ describe("planning store", () => {
     expect(afterRestore?.id).toBe(target.id);
   }, 15_000);
 
-  it("rebuilds the run index when the index json is truncated", async () => {
+  it("scans runs for read fallback without rebuilding a truncated run index", async () => {
     const profile = await createProfile({
       name: "index recovery",
       profile: sampleProfile(),
@@ -206,13 +227,70 @@ describe("planning store", () => {
       },
     });
 
-    fs.writeFileSync(resolveRunsIndexPath(), "{\n", "utf-8");
+    const indexPath = resolveRunsIndexPath();
+    fs.writeFileSync(indexPath, "{\n", "utf-8");
+    const beforeFingerprint = fileFingerprint(indexPath);
 
     const runs = await listRuns({ profileId: profile.id, limit: 20 });
     expect(runs.some((row) => row.id === created.id)).toBe(true);
+    expect(fileFingerprint(indexPath)).toEqual(beforeFingerprint);
 
     const loaded = await getRun(created.id);
     expect(loaded?.id).toBe(created.id);
+    expect(fileFingerprint(indexPath)).toEqual(beforeFingerprint);
+  });
+
+  it("reads run data from read-only run storage without attempting repair writes", async () => {
+    const profile = await createProfile({
+      name: "read only profile",
+      profile: sampleProfile(),
+    });
+
+    const created = await createRun({
+      id: "readonly-run-1",
+      profileId: profile.id,
+      title: "read-only-run",
+      input: { horizonMonths: 12 },
+      meta: { snapshot: { missing: true } },
+      outputs: {
+        simulate: simulateBlob({
+          summary: { endNetWorthKrw: 9_999 },
+          warnings: [],
+          goalsStatus: [],
+          keyTimelinePoints: [],
+        }),
+      },
+    }, { enforceRetention: false });
+
+    const indexPath = resolveRunsIndexPath();
+    const runDir = resolveProfileRunDir(profile.id, created.id);
+    const metaPath = resolveProfileRunMetaPath(profile.id, created.id);
+    const blobDir = resolveProfileRunBlobsDir(profile.id, created.id);
+    const blobPath = path.join(blobDir, "simulate.json");
+    const indexFingerprint = fileFingerprint(indexPath);
+    const metaFingerprint = fileFingerprint(metaPath);
+    const blobFingerprint = fileFingerprint(blobPath);
+
+    try {
+      for (const filePath of [indexPath, metaPath, blobPath]) chmodIfExists(filePath, 0o444);
+      for (const dirPath of [path.dirname(indexPath), runDir, blobDir]) chmodIfExists(dirPath, 0o555);
+
+      const runs = await listRuns({ profileId: profile.id, limit: 20 });
+      expect(runs.some((row) => row.id === created.id)).toBe(true);
+
+      const loaded = await getRun(created.id);
+      expect(loaded?.id).toBe(created.id);
+
+      const simulate = await getRunBlob(created.id, "simulate") as { summary?: { endNetWorthKrw?: number } } | null;
+      expect(simulate?.summary?.endNetWorthKrw).toBe(9_999);
+
+      expect(fileFingerprint(indexPath)).toEqual(indexFingerprint);
+      expect(fileFingerprint(metaPath)).toEqual(metaFingerprint);
+      expect(fileFingerprint(blobPath)).toEqual(blobFingerprint);
+    } finally {
+      for (const dirPath of [path.dirname(indexPath), runDir, blobDir]) chmodIfExists(dirPath, 0o755);
+      for (const filePath of [indexPath, metaPath, blobPath]) chmodIfExists(filePath, 0o644);
+    }
   });
 
   it("recovers default profile resolution when profile meta files are truncated", async () => {
@@ -320,7 +398,7 @@ describe("planning store", () => {
     expect(listedAgain.filter((row) => row.id === "legacy-profile")).toHaveLength(1);
   });
 
-  it("migrates legacy run meta into profile partition on read", async () => {
+  it("reads legacy run meta without moving it into profile partition", async () => {
     const profile = await createProfile({
       name: "레거시 런 프로필",
       profile: sampleProfile(),
@@ -349,10 +427,11 @@ describe("planning store", () => {
 
     const loaded = await getRun(createdRun.id);
     expect(loaded?.id).toBe(createdRun.id);
-    expect(fs.existsSync(path.join(root, "vault", "profiles", profile.id, "runs", createdRun.id, "run.json"))).toBe(true);
+    expect(fs.existsSync(path.join(root, "vault", "profiles", profile.id, "runs", createdRun.id, "run.json"))).toBe(false);
+    expect(fs.existsSync(legacyRunPath)).toBe(true);
   });
 
-  it("lazy-migrates missing run engine envelope on read and persists schema version", async () => {
+  it("hydrates missing run engine envelope on read without mutating run meta", async () => {
     resetPlanningFallbackUsageSnapshot();
     const profile = await createProfile({
       name: "엔진 마이그레이션 프로필",
@@ -414,6 +493,8 @@ describe("planning store", () => {
     expect(created.outputs.engine).toBeUndefined();
     expect(created.outputs.engineSchemaVersion).toBeUndefined();
 
+    const runMetaPath = path.join(root, "vault", "profiles", profile.id, "runs", created.id, "run.json");
+    const beforeFingerprint = fileFingerprint(runMetaPath);
     const before = getPlanningFallbackUsageSnapshot().legacyRunEngineMigrationCount;
     const firstRead = await getRun(created.id);
     const afterFirst = getPlanningFallbackUsageSnapshot().legacyRunEngineMigrationCount;
@@ -422,15 +503,16 @@ describe("planning store", () => {
     expect(firstRead?.outputs.engineSchemaVersion).toBe(1);
     expect(afterFirst).toBeGreaterThanOrEqual(before);
     expect(getPlanningFallbackUsageSnapshot().sourceBreakdown?.legacyRunEngineMigrationCount?.legacyEngineFallback).toBeGreaterThanOrEqual(1);
+    expect(fileFingerprint(runMetaPath)).toEqual(beforeFingerprint);
 
     const secondRead = await getRun(created.id);
     const afterSecond = getPlanningFallbackUsageSnapshot().legacyRunEngineMigrationCount;
     expect(secondRead?.outputs.engine).toBeDefined();
     expect(secondRead?.outputs.engineSchemaVersion).toBe(1);
-    expect(afterSecond).toBe(afterFirst);
+    expect(afterSecond).toBeGreaterThan(afterFirst);
   });
 
-  it("backfills legacy dto.debt fields from dto.raw.debt on read and persists", async () => {
+  it("backfills legacy dto.debt fields from dto.raw.debt on read without mutating run meta", async () => {
     resetPlanningFallbackUsageSnapshot();
     const profile = await createProfile({
       name: "debt backfill profile",
@@ -520,6 +602,7 @@ describe("planning store", () => {
       },
     };
     fs.writeFileSync(runMetaPath, `${JSON.stringify(runPayload, null, 2)}\n`, "utf-8");
+    const beforeFingerprint = fileFingerprint(runMetaPath);
 
     const before = getPlanningFallbackUsageSnapshot().legacyReportContractFallbackCount;
     const loaded = await getRun(created.id);
@@ -529,11 +612,12 @@ describe("planning store", () => {
     expect(loaded?.outputs.resultDto?.debt?.warnings?.[0]?.code).toBe("HIGH_DEBT_RATIO");
     expect(afterFirst).toBeGreaterThanOrEqual(before);
     expect(getPlanningFallbackUsageSnapshot().sourceBreakdown?.legacyReportContractFallbackCount?.compatRebuild).toBeGreaterThanOrEqual(1);
+    expect(fileFingerprint(runMetaPath)).toEqual(beforeFingerprint);
 
     const loadedAgain = await getRun(created.id);
     const afterSecond = getPlanningFallbackUsageSnapshot().legacyReportContractFallbackCount;
     expect(loadedAgain?.outputs.resultDto?.debt?.totalMonthlyPaymentKrw).toBe(555_000);
-    expect(afterSecond).toBe(afterFirst);
+    expect(afterSecond).toBeGreaterThan(afterFirst);
   });
 
   it("summarizes and backfills legacy run candidates", async () => {
@@ -620,7 +704,7 @@ describe("planning store", () => {
     expect(missingResultDtoLoaded?.outputs.engineSchemaVersion).toBe(1);
   });
 
-  it("hydrates missing resultDto into canonical run meta on read", async () => {
+  it("hydrates missing resultDto on read without mutating run meta", async () => {
     const profile = await createProfile({
       name: "missing dto read migration",
       profile: sampleProfile(),
@@ -649,17 +733,19 @@ describe("planning store", () => {
 
     expect(created.outputs.resultDto).toBeUndefined();
 
+    const runMetaPath = path.join(root, "vault", "profiles", profile.id, "runs", created.id, "run.json");
+    const beforeFingerprint = fileFingerprint(runMetaPath);
     const loaded = await getRun(created.id);
 
     expect(loaded?.outputs.resultDto).toBeDefined();
     expect(loaded?.outputs.engine).toBeDefined();
     expect(loaded?.outputs.engineSchemaVersion).toBe(1);
 
-    const runMetaPath = path.join(root, "vault", "profiles", profile.id, "runs", created.id, "run.json");
     const persisted = JSON.parse(fs.readFileSync(runMetaPath, "utf-8")) as PlanningRunRecord;
-    expect(persisted.outputs.resultDto).toBeDefined();
-    expect(persisted.outputs.engine).toBeDefined();
-    expect(persisted.outputs.engineSchemaVersion).toBe(1);
+    expect(persisted.outputs.resultDto).toBeUndefined();
+    expect(persisted.outputs.engine).toBeUndefined();
+    expect(persisted.outputs.engineSchemaVersion).toBeUndefined();
+    expect(fileFingerprint(runMetaPath)).toEqual(beforeFingerprint);
   });
 
   it("stores only resultDto by default and keeps compact raw outputs only when enabled", async () => {
