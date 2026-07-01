@@ -38,6 +38,16 @@ import { PROFILE_SCHEMA_VERSION, RUN_SCHEMA_VERSION, ASSUMPTIONS_SCHEMA_VERSION 
 import { type ProfileNormalizationDisclosure } from "../../planning/v2/normalizationDisclosure";
 import { resolveOpsDataDir, resolvePlanningDataDir } from "../../planning/storage/dataDir";
 import { getPlanningUserDir, isPlanningNamespaceEnabled, resolvePlanningUserId } from "../../planning/store/namespace";
+import {
+  callReplaceRestoreFaultInjection as callRestoreFaultInjection,
+  cleanupReplaceRestoreSnapshot,
+  createReplaceRestoreSnapshot,
+  recoverPendingReplaceRestoreSnapshot as recoverPendingReplaceRestoreTransaction,
+  rollbackReplaceRestoreSnapshot,
+  type ReplaceRestoreFaultInjection,
+  type ReplaceRestoreFaultOperation,
+  type ReplaceRestoreSnapshot,
+} from "./replaceRestoreTransaction";
 import { decodeZip, encodeZip, type ZipFileEntry } from "./zipCodec";
 
 const VAULT_KIND = "planning-data-vault";
@@ -146,18 +156,8 @@ export type VaultRestoreIssue = {
   message: string;
 };
 
-export type VaultRestoreFaultOperation = {
-  phase: "preflight" | "commit" | "rollback" | "cleanup";
-  kind: "snapshot" | "clear" | "write" | "rollback" | "cleanup";
-  entity?: VaultRestoreIssue["entity"];
-  id?: string;
-  path?: string;
-};
-
-export type VaultRestoreFaultInjection = {
-  beforeOperation?: (operation: VaultRestoreFaultOperation) => void | Promise<void>;
-  beforeWrite?: (operation: VaultRestoreFaultOperation) => void | Promise<void>;
-};
+export type VaultRestoreFaultOperation = ReplaceRestoreFaultOperation;
+export type VaultRestoreFaultInjection = ReplaceRestoreFaultInjection;
 
 export type VaultRestoreOptions = {
   maxEntries: number;
@@ -1358,16 +1358,6 @@ function appendRestoreNotCommittedIssue(issues: VaultRestoreIssue[]): VaultResto
   return [...issues, restoreNotCommittedIssue()];
 }
 
-async function callRestoreFaultInjection(
-  faultInjection: VaultRestoreFaultInjection | undefined,
-  operation: VaultRestoreFaultOperation,
-): Promise<void> {
-  await faultInjection?.beforeOperation?.(operation);
-  if (operation.kind === "write") {
-    await faultInjection?.beforeWrite?.(operation);
-  }
-}
-
 async function beforeRestoreWrite(
   options: VaultRestoreOptions,
   operation: Omit<VaultRestoreFaultOperation, "phase" | "kind">,
@@ -1377,29 +1367,6 @@ async function beforeRestoreWrite(
     kind: "write",
     ...operation,
   });
-}
-
-type ReplaceRestoreSnapshotEntry = {
-  targetPath: string;
-  backupPath: string;
-  existed: boolean;
-};
-
-type ReplaceRestoreSnapshot = {
-  root: string;
-  journalPath: string;
-  entries: ReplaceRestoreSnapshotEntry[];
-};
-
-async function pathExists(targetPath: string): Promise<boolean> {
-  try {
-    await fs.lstat(targetPath);
-    return true;
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return false;
-    throw error;
-  }
 }
 
 function uniqueRestoreTargets(targets: string[]): string[] {
@@ -1424,119 +1391,11 @@ function replaceRestoreTargets(restoreSharedState: boolean): string[] {
   return uniqueRestoreTargets(targets);
 }
 
-async function writeReplaceRestoreJournal(snapshot: ReplaceRestoreSnapshot): Promise<void> {
-  await writeJsonAtomic(snapshot.journalPath, {
-    version: 1,
-    kind: "planning-data-vault-replace-restore-journal",
-    createdAt: new Date().toISOString(),
-    snapshotRoot: snapshot.root,
-    entries: snapshot.entries,
-  });
-}
-
-async function createReplaceRestoreSnapshot(
-  restoreSharedState: boolean,
-  options: VaultRestoreOptions,
-): Promise<ReplaceRestoreSnapshot> {
-  const snapshotRoot = path.join(resolveOpsDataDir(), "backup", "restore-snapshots", crypto.randomUUID());
-  const journalPath = resolveReplaceRestoreJournalPath();
-  const entries: ReplaceRestoreSnapshotEntry[] = [];
-  await fs.mkdir(snapshotRoot, { recursive: true });
-
-  for (const [index, targetPath] of replaceRestoreTargets(restoreSharedState).entries()) {
-    await callRestoreFaultInjection(options.faultInjection, {
-      phase: "preflight",
-      kind: "snapshot",
-      path: targetPath,
-    });
-    const backupPath = path.join(snapshotRoot, `${index}`);
-    const existed = await pathExists(targetPath);
-    entries.push({ targetPath, backupPath, existed });
-    if (!existed) continue;
-    await fs.mkdir(path.dirname(backupPath), { recursive: true });
-    await fs.cp(targetPath, backupPath, {
-      recursive: true,
-      force: true,
-      verbatimSymlinks: true,
-    });
-  }
-
-  const snapshot = { root: snapshotRoot, journalPath, entries };
-  await writeReplaceRestoreJournal(snapshot);
-  return snapshot;
-}
-
-async function rollbackReplaceRestoreSnapshot(
-  snapshot: ReplaceRestoreSnapshot,
-  options: VaultRestoreOptions,
-): Promise<void> {
-  for (const entry of [...snapshot.entries].reverse()) {
-    await callRestoreFaultInjection(options.faultInjection, {
-      phase: "rollback",
-      kind: "rollback",
-      path: entry.targetPath,
-    });
-    await fs.rm(entry.targetPath, { recursive: true, force: true });
-    if (!entry.existed) continue;
-    await fs.mkdir(path.dirname(entry.targetPath), { recursive: true });
-    await fs.cp(entry.backupPath, entry.targetPath, {
-      recursive: true,
-      force: true,
-      verbatimSymlinks: true,
-    });
-  }
-}
-
-async function cleanupReplaceRestoreSnapshot(snapshot: ReplaceRestoreSnapshot, options: VaultRestoreOptions): Promise<void> {
-  await callRestoreFaultInjection(options.faultInjection, {
-    phase: "cleanup",
-    kind: "cleanup",
-    path: snapshot.root,
-  });
-  await fs.rm(snapshot.root, { recursive: true, force: true }).catch(() => undefined);
-  await fs.rm(snapshot.journalPath, { force: true }).catch(() => undefined);
-}
-
-async function readPendingReplaceRestoreSnapshot(): Promise<ReplaceRestoreSnapshot | null> {
-  const journalPath = resolveReplaceRestoreJournalPath();
-  let raw: unknown;
-  try {
-    raw = JSON.parse(await fs.readFile(journalPath, "utf-8")) as unknown;
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return null;
-    throw error;
-  }
-  if (!isRecord(raw) || raw.kind !== "planning-data-vault-replace-restore-journal") return null;
-  const root = asString(raw.snapshotRoot);
-  const rows = Array.isArray(raw.entries) ? raw.entries : [];
-  if (!root) return null;
-  const entries = rows
-    .map((entry) => {
-      if (!isRecord(entry)) return null;
-      const targetPath = asString(entry.targetPath);
-      const backupPath = asString(entry.backupPath);
-      if (!targetPath || !backupPath) return null;
-      return {
-        targetPath,
-        backupPath,
-        existed: entry.existed === true,
-      };
-    })
-    .filter((entry): entry is ReplaceRestoreSnapshotEntry => entry !== null);
-  if (entries.length < 1) return null;
-  return {
-    root,
-    journalPath,
-    entries,
-  };
-}
-
 async function recoverPendingReplaceRestoreSnapshot(options: VaultRestoreOptions): Promise<void> {
-  const snapshot = await readPendingReplaceRestoreSnapshot();
-  if (!snapshot) return;
-  await rollbackReplaceRestoreSnapshot(snapshot, options);
-  await cleanupReplaceRestoreSnapshot(snapshot, options);
+  await recoverPendingReplaceRestoreTransaction({
+    journalPath: resolveReplaceRestoreJournalPath(),
+    faultInjection: options.faultInjection,
+  });
 }
 
 function toManifestWithoutFiles(
@@ -1880,7 +1739,12 @@ export async function restorePlanningDataVaultZip(
         warnings,
       };
     }
-    replaceSnapshot = await createReplaceRestoreSnapshot(restoreSharedState, options);
+    replaceSnapshot = await createReplaceRestoreSnapshot({
+      targets: replaceRestoreTargets(restoreSharedState),
+      snapshotRoot: path.join(resolveOpsDataDir(), "backup", "restore-snapshots", crypto.randomUUID()),
+      journalPath: resolveReplaceRestoreJournalPath(),
+      faultInjection: options.faultInjection,
+    });
   }
 
   try {

@@ -569,6 +569,21 @@ describe.sequential("ops backup API", () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
+  it("keeps replace restore transaction helpers outside the vault orchestration module", () => {
+    const vaultPath = path.join(process.cwd(), "src/lib/ops/backup/planningDataVault.ts");
+    const transactionPath = path.join(process.cwd(), "src/lib/ops/backup/replaceRestoreTransaction.ts");
+    const vaultSource = fs.readFileSync(vaultPath, "utf-8");
+    const transactionSource = fs.readFileSync(transactionPath, "utf-8");
+
+    expect(transactionSource).toContain("export async function createReplaceRestoreSnapshot");
+    expect(transactionSource).toContain("export async function rollbackReplaceRestoreSnapshot");
+    expect(transactionSource).toContain("export async function recoverPendingReplaceRestoreSnapshot");
+    expect(vaultSource).toContain("from \"./replaceRestoreTransaction\"");
+    expect(vaultSource).not.toContain("async function createReplaceRestoreSnapshot");
+    expect(vaultSource).not.toContain("async function rollbackReplaceRestoreSnapshot");
+    expect(vaultSource).not.toContain("async function readPendingReplaceRestoreSnapshot");
+  });
+
   it("exports encrypted backup and excludes secret file patterns", async () => {
     const response = await backupExportPOST(new Request(`${LOCAL_ORIGIN}/api/ops/backup/export`, {
       method: "POST",
