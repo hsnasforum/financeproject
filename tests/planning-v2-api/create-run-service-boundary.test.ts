@@ -31,14 +31,17 @@ describe("planning run create service boundary", () => {
     const preflightPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunPreflight.ts");
     const stagePlanPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunStagePlan.ts");
     const assemblerPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunRecordAssembler.ts");
+    const sideEffectsPath = path.join(process.cwd(), "src/lib/planning/server/runs/createRunSideEffects.ts");
 
     expect(fs.existsSync(servicePath)).toBe(true);
     expect(fs.existsSync(parserPath)).toBe(true);
     expect(fs.existsSync(preflightPath)).toBe(true);
     expect(fs.existsSync(stagePlanPath)).toBe(true);
     expect(fs.existsSync(assemblerPath)).toBe(true);
+    expect(fs.existsSync(sideEffectsPath)).toBe(true);
     const serviceSource = fs.readFileSync(servicePath, "utf-8");
     const parserSource = fs.readFileSync(parserPath, "utf-8");
+    const sideEffectsSource = fs.readFileSync(sideEffectsPath, "utf-8");
 
     expect(runsRoute).toContain("handleCreatePlanningRunPost");
     expect(runsRoute).not.toContain("runStagePipeline");
@@ -57,9 +60,15 @@ describe("planning run create service boundary", () => {
     expect(serviceSource).toContain("evaluateCreatePlanningRunPreflight");
     expect(serviceSource).toContain("buildPlanningStagePlan");
     expect(serviceSource).toContain("assemblePlanningRunRecordInput");
+    expect(serviceSource).toContain("recordCreateRunAuditSafely");
+    expect(serviceSource).toContain("recordCreateRunStageMetricsSafely");
     expect(serviceSource).toContain("export async function createPlanningRun");
     expect(serviceSource).toContain("runStagePipeline");
     expect(serviceSource).toContain("recordCurrentUserRunStageMetrics");
     expect(serviceSource).not.toContain("request: Request");
+    expect(serviceSource).not.toContain("[planning/runs] failed to record create audit");
+    expect(serviceSource).not.toContain("[planning/runs] failed to record stage metrics");
+    expect(sideEffectsSource).toContain("[planning/runs] failed to record create audit");
+    expect(sideEffectsSource).toContain("[planning/runs] failed to record stage metrics");
   });
 });

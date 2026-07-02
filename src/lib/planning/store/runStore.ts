@@ -62,6 +62,13 @@ import {
   toStoredPayload,
   writeJsonAtomic,
 } from "./runRecordCodec";
+import {
+  buildRunIndexFile,
+  parseRunIndex,
+  sortRunIndexEntriesByCreatedAtDesc,
+  toRunIndexEntry,
+  type RunIndexEntry,
+} from "./runIndex";
 import { selectRunRetentionTargets } from "./runRetention";
 import { type PlanningRunRecord } from "./types";
 
@@ -72,10 +79,10 @@ export type {
   LegacyRunBackfillResult,
   LegacyRunBackfillSummary,
 } from "./runLegacyBackfillService";
+export type { RunIndexEntry } from "./runIndex";
 
 export const DEFAULT_RUNS_PER_PROFILE_RETENTION = 50;
 
-const RUN_INDEX_VERSION = 1;
 const BLOB_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
 
 type ListRunsOptions = {
@@ -99,26 +106,6 @@ type CreateRunInput = Omit<PlanningRunRecord, "version" | "schemaVersion" | "id"
 type PurgeRunsOptions = {
   profileId?: string;
   maxPerProfile?: number;
-};
-
-export type RunIndexEntry = {
-  id: string;
-  profileId: string;
-  title?: string;
-  createdAt: string;
-  overallStatus?: PlanningRunRecord["overallStatus"];
-  snapshot?: {
-    id?: string;
-    asOf?: string;
-    missing?: boolean;
-  };
-  warningsCount?: number;
-  criticalCount?: number;
-};
-
-type RunIndexFile = {
-  version: typeof RUN_INDEX_VERSION;
-  entries: RunIndexEntry[];
 };
 
 function assertServerOnly(): void {
@@ -330,17 +317,6 @@ function compactRunOutputs(
   return compacted;
 }
 
-function sortByCreatedAtDesc<T extends { id: string; createdAt: string }>(records: T[]): T[] {
-  return [...records].sort((a, b) => {
-    const aTs = Date.parse(a.createdAt);
-    const bTs = Date.parse(b.createdAt);
-    if (Number.isFinite(aTs) && Number.isFinite(bTs) && bTs !== aTs) {
-      return bTs - aTs;
-    }
-    return b.id.localeCompare(a.id);
-  });
-}
-
 function toMetaRecord(record: PlanningRunRecord): PlanningRunRecord {
   const outputs = compactRunOutputs(record.outputs, { storeRawOutputs: true });
   return {
@@ -407,43 +383,6 @@ function ensureCanonicalResultDtoWithSource(record: PlanningRunRecord): {
     ...migrated,
     source: toFallbackSourceForResultDtoMigration(record),
   };
-}
-
-function toRunIndexEntry(record: PlanningRunRecord): RunIndexEntry {
-  return {
-    id: record.id,
-    profileId: record.profileId,
-    ...(asString(record.title) ? { title: asString(record.title) } : {}),
-    createdAt: record.createdAt,
-    ...(record.overallStatus ? { overallStatus: record.overallStatus } : {}),
-    snapshot: {
-      ...(asString(record.meta.snapshot?.id) ? { id: asString(record.meta.snapshot?.id) } : {}),
-      ...(asString(record.meta.snapshot?.asOf) ? { asOf: asString(record.meta.snapshot?.asOf) } : {}),
-      ...(record.meta.snapshot?.missing === true ? { missing: true } : {}),
-    },
-    ...(typeof record.outputs?.resultDto?.summary?.totalWarnings === "number"
-      ? { warningsCount: record.outputs.resultDto.summary.totalWarnings }
-      : {}),
-    ...(typeof record.meta.health?.criticalCount === "number"
-      ? { criticalCount: record.meta.health.criticalCount }
-      : {}),
-  };
-}
-
-function isRunIndexEntry(value: unknown): value is RunIndexEntry {
-  if (!isRecord(value)) return false;
-  if (!asString(value.id)) return false;
-  if (!asString(value.profileId)) return false;
-  if (!asString(value.createdAt)) return false;
-  return true;
-}
-
-function parseRunIndex(payload: unknown): RunIndexEntry[] {
-  if (!isRecord(payload)) return [];
-  const version = Math.trunc(Number(payload.version));
-  if (version !== RUN_INDEX_VERSION) return [];
-  const rows = asArray(payload.entries).filter((entry) => isRunIndexEntry(entry)) as RunIndexEntry[];
-  return sortByCreatedAtDesc(rows).map((row) => ({ ...row }));
 }
 
 type RunPaths = {
@@ -707,7 +646,7 @@ async function scanRunsDirForIndex(): Promise<RunIndexEntry[]> {
     entries = await fs.readdir(dirPath, { withFileTypes: true });
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return sortByCreatedAtDesc(out) as RunIndexEntry[];
+    if (nodeError?.code === "ENOENT") return sortRunIndexEntriesByCreatedAtDesc(out);
     throw error;
   }
 
@@ -738,7 +677,7 @@ async function scanRunsDirForIndex(): Promise<RunIndexEntry[]> {
   }
 
   const deduped = Array.from(new Map(out.map((row) => [row.id, row])).values());
-  return sortByCreatedAtDesc(deduped) as RunIndexEntry[];
+  return sortRunIndexEntriesByCreatedAtDesc(deduped);
 }
 
 async function writeRunIndex(
@@ -746,10 +685,7 @@ async function writeRunIndex(
   options?: { journal?: boolean; tx?: StorageTransactionContext },
 ): Promise<void> {
   const filePath = resolveRunsIndexPath();
-  const payload: RunIndexFile = {
-    version: RUN_INDEX_VERSION,
-    entries: sortByCreatedAtDesc(entries) as RunIndexEntry[],
-  };
+  const payload = buildRunIndexFile(entries);
   const shouldJournal = options?.journal !== false;
   const tx = options?.tx ?? (shouldJournal
     ? await beginStorageTransaction("RUN_INDEX_UPDATE", {

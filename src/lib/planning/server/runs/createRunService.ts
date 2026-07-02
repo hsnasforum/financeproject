@@ -36,6 +36,10 @@ import {
   buildCreatePlanningRunSuccessMeta,
   totalStageDurationMs,
 } from "./createRunRecordAssembler";
+import {
+  recordCreateRunAuditSafely,
+  recordCreateRunStageMetricsSafely,
+} from "./createRunSideEffects";
 import { evaluateCreatePlanningRunPreflight } from "./createRunPreflight";
 import {
   buildPlanningStagePlan,
@@ -132,26 +136,18 @@ function recordCreateAudit(
     message: string;
   },
 ) {
-  try {
-    dependencies.recordAudit({
-      result: input.result,
-      recordId: input.recordId,
-      message: input.message,
-    });
-  } catch (error) {
-    console.error("[planning/runs] failed to record create audit", error);
-  }
+  recordCreateRunAuditSafely(dependencies.recordAudit, {
+    result: input.result,
+    recordId: input.recordId,
+    message: input.message,
+  });
 }
 
 async function recordStageMetricsSafely(
   dependencies: ResolvedCreatePlanningRunDependencies,
   input: Parameters<typeof recordCurrentUserRunStageMetrics>[0],
 ) {
-  try {
-    await dependencies.recordStageMetrics(input);
-  } catch (error) {
-    console.error("[planning/runs] failed to record stage metrics", error);
-  }
+  await recordCreateRunStageMetricsSafely(dependencies.recordStageMetrics, input);
 }
 
 export function recordCreatePlanningRunParseFailure(
