@@ -139,10 +139,10 @@ export function PlanningRunsClient({
   const [restoreTargetRunId, setRestoreTargetRunId] = useState("");
   const [restoreConfirmText, setRestoreConfirmText] = useState("");
   const [restoreWorking, setRestoreWorking] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const runsRef = useRef<PlanningRunRecord[]>(initialRuns);
   const selectedRunIdRef = useRef(initialEffectiveSelectedRunId);
   const selectedActionCenterRunIdRef = useRef("");
-  const compareSeedRunIdRef = useRef("");
 
   function pushNotice(message: string): void {
     if (!isMountedRef.current) return;
@@ -158,6 +158,7 @@ export function PlanningRunsClient({
 
   useEffect(() => {
     isMountedRef.current = true;
+    setHydrated(true);
     return () => {
       isMountedRef.current = false;
     };
@@ -177,14 +178,9 @@ export function PlanningRunsClient({
   );
 
   const compareResult = useMemo(() => {
-    const selectedPeerIds = selectedRun
-      ? runs.filter((run) => run.id !== selectedRun.id).map((run) => run.id)
-      : [];
     const effectiveCompareIds = compareIds.length === 1 && selectedRun && compareIds[0] !== selectedRun.id
       ? [selectedRun.id, compareIds[0]]
-      : compareIds.length === 1 && selectedRun && compareIds[0] === selectedRun.id && selectedPeerIds.length === 1
-        ? [selectedRun.id, selectedPeerIds[0]]
-        : compareIds;
+      : compareIds;
     if (effectiveCompareIds.length !== 2) return null;
     const first = runs.find((run) => run.id === effectiveCompareIds[0]);
     const second = runs.find((run) => run.id === effectiveCompareIds[1]);
@@ -195,16 +191,6 @@ export function PlanningRunsClient({
       diff: diffRuns(first, second),
     };
   }, [compareIds, runs, selectedRun]);
-
-  useEffect(() => {
-    if (!selectedRunId || compareSeedRunIdRef.current === selectedRunId) return;
-    if (!runs.some((run) => run.id === selectedRunId)) return;
-    compareSeedRunIdRef.current = selectedRunId;
-    setCompareIds((prev) => {
-      if (prev.includes(selectedRunId) || prev.length >= 2) return prev;
-      return [selectedRunId, ...prev].slice(0, 2);
-    });
-  }, [runs, selectedRunId]);
 
   const compareWhyChanged = useMemo(() => {
     if (!compareResult) return null;
@@ -574,11 +560,12 @@ export function PlanningRunsClient({
     };
   }, [selectedRun]);
 
-  function toggleCompare(id: string): void {
+  function setCompareChecked(id: string, checked: boolean): void {
     setCompareIds((prev) => {
-      if (prev.includes(id)) {
+      if (!checked) {
         return prev.filter((item) => item !== id);
       }
+      if (prev.includes(id)) return prev;
       if (prev.length >= 2) {
         return [prev[1], id];
       }
@@ -794,7 +781,7 @@ export function PlanningRunsClient({
           />
 
           <div className="mt-6 overflow-hidden rounded-2xl border border-slate-100">
-            <table className="min-w-full text-left text-[11px] text-slate-700" data-testid="planning-runs-table">
+            <table className="min-w-full text-left text-[11px] text-slate-700" data-ready={hydrated ? "true" : "false"} data-testid="planning-runs-table">
               <thead className="bg-surface-muted border-b border-slate-100">
                 <tr className="text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <th className="no-print px-4 py-3">비교</th>
@@ -825,7 +812,7 @@ export function PlanningRunsClient({
                       <td className="no-print px-4 py-3">
                         <input
                           checked={checked}
-                          onChange={() => toggleCompare(run.id)}
+                          onChange={(event) => setCompareChecked(run.id, event.currentTarget.checked)}
                           type="checkbox"
                           className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                         />

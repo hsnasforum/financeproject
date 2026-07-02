@@ -62,3 +62,24 @@
 - `flow-history-to-report` e2e 실패를 기능 회귀와 timeout/flake로 분리한다. 특히 `PlanningRunsClient`의 비교 안내 문구 렌더 조건과 `/planning/reports` 초기 로드 timeout을 재현해야 한다.
 - hydration mismatch는 #126 follow-up으로 유지하되, e2e timeout이나 report toggle 상태 손상과 연결되는지 확인한다.
 - PR #127은 CI/E2E가 다시 PASS하기 전까지 Draft와 blocking 상태를 유지한다.
+
+## PR #127 cleanup repair 최종 확인
+- `PlanningRunsClient`의 자동 compare seed가 선택 실행만으로 비교 결과를 열어 E2E compare 안내 상태를 깨는 문제를 확인했다.
+- 자동 seed는 제거하고, 사용자가 비교 대상을 명시 체크했을 때만 선택 실행과 조합하도록 보정했다.
+- `planning-runs-table`에 hydration 준비 신호 `data-ready`를 추가하고, E2E가 checkbox 조작 전 해당 신호를 기다리도록 안정화했다.
+- PR 비교면은 `230 files changed`이며 `.dist/**`, `.next/**`, `.data/**`, `test-results/**`, `nanobanana-output/**`, trace zip 산출물은 포함되지 않는다.
+- `PlanningReportsDashboardClient`의 `<details open>` hydration warning은 전체 `e2e:rc`에서 계속 재현되지만 테스트는 PASS했다. #126 follow-up은 유지한다.
+
+## 최신 검증 결과
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm typecheck`: PASS
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm lint`: PASS
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm test`: PASS, 753 files / 2497 tests
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm build`: PASS
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm planning:current-screens:guard`: PASS, 5 files / 9 tests
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm planning:ssot:check`: PASS
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm planner:deprecated:guard`: PASS
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm planning:user-scope:check`: PASS, 15 files / 88 tests
+- `/home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm planning:v2:guard`: PASS
+- `PORT=3142 PLANNING_DATA_DIR=.data/planning-e2e-127-clean /home/xpdlqj/.nvm/versions/node/v22.22.0/bin/pnpm e2e:rc`: PASS, 24 passed / 1 skipped
+- `git diff --check origin/main...HEAD`: PASS
+- `git diff --name-only origin/main...HEAD | grep -E '^(\\.dist/|\\.next|\\.data/|test-results/|nanobanana-output/)|\\.zip$'`: 0건
