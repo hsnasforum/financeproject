@@ -62,6 +62,7 @@ import {
   toStoredPayload,
   writeJsonAtomic,
 } from "./runRecordCodec";
+import { selectRunRetentionTargets } from "./runRetention";
 import { type PlanningRunRecord } from "./types";
 
 export type { RunBlobName } from "./runBlobStore";
@@ -1088,25 +1089,14 @@ export async function purgeRunsByRetention(options?: PurgeRunsOptions): Promise<
 
   const maxPerProfile = toSafeLimit(options?.maxPerProfile, DEFAULT_RUNS_PER_PROFILE_RETENTION);
   const all = await readRunIndex();
-  const target = asString(options?.profileId)
-    ? all.filter((row) => row.profileId === asString(options?.profileId))
-    : all;
-
-  const grouped = new Map<string, RunIndexEntry[]>();
-  for (const row of target) {
-    const list = grouped.get(row.profileId) ?? [];
-    list.push(row);
-    grouped.set(row.profileId, list);
-  }
-
+  const purgeTargets = selectRunRetentionTargets(all, {
+    maxPerProfile,
+    ...(asString(options?.profileId) ? { profileId: asString(options?.profileId) } : {}),
+  });
   const removedIds: string[] = [];
-  for (const runs of grouped.values()) {
-    const sorted = sortByCreatedAtDesc(runs).map((row) => row as RunIndexEntry);
-    const purgeTargets = sorted.slice(maxPerProfile);
-    for (const row of purgeTargets) {
-      const removed = await deleteRun(row.id);
-      if (removed) removedIds.push(row.id);
-    }
+  for (const row of purgeTargets) {
+    const removed = await deleteRun(row.id);
+    if (removed) removedIds.push(row.id);
   }
 
   return removedIds;

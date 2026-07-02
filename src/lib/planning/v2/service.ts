@@ -1,1 +1,1 @@
-export * from "../core/v2/service.ts";
+export * from "../server/v2/service.ts";

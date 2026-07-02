@@ -33,7 +33,8 @@ async function gatherFiles(baseDir, suffix) {
 }
 
 function hasRequestGuard(content) {
-  return /assertSameOrigin\s*\(/.test(content)
+  return /assertPlanningWriteGuard\s*\(/.test(content)
+    || /assertSameOrigin\s*\(/.test(content)
     || /assertLocalHost\s*\(/.test(content)
     || /guardLocalRequest\s*\(/.test(content);
 }

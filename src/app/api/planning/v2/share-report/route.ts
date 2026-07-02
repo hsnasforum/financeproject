@@ -1,10 +1,10 @@
 import {
-  assertCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
   } from "../../../../../lib/dev/devGuards";
 import { jsonError,
   jsonOk } from "../../../../../lib/planning/api/response";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import {
   createCurrentUserShareReportResponseData,
   listCurrentUserShareReportResponseData,
@@ -23,10 +23,6 @@ type ShareCreateBody = {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
 }
 
 function parseMaskLevel(value: unknown): MaskLevel {
@@ -48,11 +44,7 @@ function withReadGuard(request: Request) {
 
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);

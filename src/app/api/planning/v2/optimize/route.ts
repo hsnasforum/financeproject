@@ -3,10 +3,9 @@ import {
 import { fail,
   ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
-  assertSameOrigin,
   toGuardErrorResponse,
   } from "../../../../../lib/dev/devGuards";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import { generateCandidatePlans } from "../../../../../lib/planning/server/v2/optimizer/greedy";
 import { type RiskTolerance } from "../../../../../lib/planning/server/v2/scenarios";
 import { createPlanningService } from "../../../../../lib/planning/server/v2/service";
@@ -213,17 +212,9 @@ function parseSearch(input: unknown): {
   };
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);

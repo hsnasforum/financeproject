@@ -2,10 +2,9 @@ import {
   fail,
   ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
-  assertSameOrigin,
   toGuardErrorResponse,
-  } from "../../../../../lib/dev/devGuards";
+} from "../../../../../lib/dev/devGuards";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import { type DebtStrategyInput,
   type LiabilityV2,
   type RefiOffer } from "../../../../../lib/planning/server/v2/debt/types";
@@ -168,17 +167,9 @@ function assertOfferLiabilityIdsMatch(offers: RefiOffer[], liabilities: Liabilit
   ]);
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);

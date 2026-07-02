@@ -1,8 +1,8 @@
 import {
-  assertCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
 } from "../../../../../../lib/dev/devGuards";
+import { assertPlanningWriteGuard } from "../../../../../../lib/planning/api/writeGuard";
 import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
 import {
   planningAuthErrorResponse as toAuthErrorResponse,
@@ -20,10 +20,6 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withReadGuard(request: Request) {
   try {
     assertSameOrigin(request);
@@ -37,11 +33,7 @@ function withReadGuard(request: Request) {
 
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);

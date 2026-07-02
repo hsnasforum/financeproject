@@ -2,10 +2,9 @@ import {
   fail,
   ok } from "../../../../../lib/planning/server/v2/apiResponse";
 import {
-  assertCsrf,
-  assertSameOrigin,
   toGuardErrorResponse,
-  } from "../../../../../lib/dev/devGuards";
+} from "../../../../../lib/dev/devGuards";
+import { assertPlanningWriteGuard } from "../../../../../lib/planning/api/writeGuard";
 import { getPlanningFeatureFlags } from "../../../../../lib/planning/server/config";
 import { buildCacheKey } from "../../../../../lib/planning/server/cache/key";
 import {
@@ -118,17 +117,9 @@ function parseMaxCandidates(value: unknown): number {
   return parsed;
 }
 
-function hasCsrfCookie(request: Request): boolean {
-  return (request.headers.get("cookie") ?? "").includes("dev_csrf=");
-}
-
 function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
   try {
-    assertSameOrigin(request);
-    const csrfToken = typeof body?.csrf === "string" ? body.csrf.trim() : "";
-    if (hasCsrfCookie(request) && csrfToken) {
-      assertCsrf(request, { csrf: csrfToken });
-    }
+    assertPlanningWriteGuard(request, body);
     return null;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
