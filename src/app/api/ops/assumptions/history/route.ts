@@ -1,18 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { listOpsAssumptionsHistory } from "@/lib/ops/assumptions/assumptionsHistoryRouteService";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
-import {
-  isPlanningRouteUser,
-  requirePlanningRouteUser,
-} from "@/lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import { assumptionsUserMeta } from "../_lib";
 
 function asString(value: unknown): string {
@@ -54,24 +52,24 @@ export async function GET(request: Request) {
     });
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const result = await listOpsAssumptionsHistory({
-    currentUser,
-    limit,
-  });
-  if (result.kind === "storage-corrupt") {
-    return opsErrorResponse({
-      code: "STORAGE_CORRUPT",
-      message: result.message,
-      status: 500,
+    const result = await listOpsAssumptionsHistory({
+      currentUser,
+      limit,
     });
-  }
+    if (result.kind === "storage-corrupt") {
+      return opsErrorResponse({
+        code: "STORAGE_CORRUPT",
+        message: result.message,
+        status: 500,
+      });
+    }
 
-  return NextResponse.json({
-    ok: true,
-    items: result.items,
-    meta: assumptionsUserMeta(currentUser, result.meta),
+    return NextResponse.json({
+      ok: true,
+      items: result.items,
+      meta: assumptionsUserMeta(currentUser, result.meta),
+    });
   });
 }

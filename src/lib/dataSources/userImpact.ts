@@ -47,8 +47,8 @@ const DATA_SOURCE_USER_IMPACT_DEFS: DataSourceUserImpactDef[] = [
     basis: "공개된 상품 조건 기준의 비교용 정보입니다. 실제 가입 가능 여부와 최종 금리는 심사 결과에 따라 달라질 수 있습니다.",
     freshness: "금융사 공시 시점 기준입니다. 공시 반영 시점과 실제 가입 가능 시점이 다를 수 있습니다.",
     routes: [
-      { href: "/products/deposit", label: "예금" },
-      { href: "/products/saving", label: "적금" },
+      { href: "/products/catalog?kind=deposit", label: "예금" },
+      { href: "/products/catalog?kind=saving", label: "적금" },
       { href: "/products/credit-loan", label: "신용대출" },
     ],
     primarySourceIds: ["FINLIFE"],

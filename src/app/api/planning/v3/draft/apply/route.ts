@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { aggregateMonthlyCashflow } from "@/lib/planning/v3/service/aggregateMonthlyCashflow";
 import {
   buildDraftPatchFromCashflow,
@@ -15,9 +16,8 @@ import { getCurrentUserProfile } from "@/lib/planning/v3/service/profileReposito
 import { getStoredFirstBatchBindingAccountId } from "@/lib/planning/v3/service/storedFirstVisibleRows";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type ApplyMode = "preview" | "apply";
@@ -181,77 +181,77 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const mode = parseMode(body?.mode);
-  const ids = sanitizeIds(body?.profileId, body?.batchId);
-  const splitOptions = parseSplitOptions(body);
-  if (!mode || !ids || !splitOptions) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "요청 형식이 올바르지 않습니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const [baseRecord, batchLoaded] = await Promise.all([
-      getCurrentUserProfile(ids.profileId),
-      loadCurrentUserBatchDetail(ids.batchId),
-    ]);
-
-    const loaded = batchLoaded?.loaded ?? null;
-    if (!baseRecord || !loaded || loaded.policy.usesLegacyTransactions) {
+    const mode = parseMode(body?.mode);
+    const ids = sanitizeIds(body?.profileId, body?.batchId);
+    const splitOptions = parseSplitOptions(body);
+    if (!mode || !ids || !splitOptions) {
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "프로필 또는 배치를 찾을 수 없습니다." }, meta: userMeta },
-        { status: 404 },
-      );
-    }
-    if (!getStoredFirstBatchBindingAccountId(loaded)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." }, meta: userMeta },
+        { ok: false, error: { code: "INPUT", message: "요청 형식이 올바르지 않습니다." }, meta: userMeta },
         { status: 400 },
       );
     }
 
-    const monthly = aggregateMonthlyCashflow(loaded.transactions);
-    const built = buildDraftPatchFromCashflow(monthly, splitOptions);
-    const mergedProfile = applyProfilePatch(baseRecord.profile, built.profilePatch);
+    try {
+      const [baseRecord, batchLoaded] = await Promise.all([
+        getCurrentUserProfile(ids.profileId),
+        loadCurrentUserBatchDetail(ids.batchId),
+      ]);
 
-    if (mode === "preview") {
-      return NextResponse.json({
-        ok: true,
-        currentProfileSummary: toSummary(baseRecord.profile),
-        proposedSummary: toSummary(mergedProfile),
-        diffRows: buildDiffRows(baseRecord.profile, mergedProfile),
-        profilePatch: built.profilePatch,
-        evidence: built.draftPatch.evidence,
-        meta: userMeta,
-      });
-    }
+      const loaded = batchLoaded?.loaded ?? null;
+      if (!baseRecord || !loaded || loaded.policy.usesLegacyTransactions) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "프로필 또는 배치를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
+      if (!getStoredFirstBatchBindingAccountId(loaded)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "배치 계좌를 먼저 선택해 주세요." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "EXPORT_ONLY",
-          message: "v3는 미리보기/내보내기만 지원합니다. 저장은 허용되지 않습니다.",
+      const monthly = aggregateMonthlyCashflow(loaded.transactions);
+      const built = buildDraftPatchFromCashflow(monthly, splitOptions);
+      const mergedProfile = applyProfilePatch(baseRecord.profile, built.profilePatch);
+
+      if (mode === "preview") {
+        return NextResponse.json({
+          ok: true,
+          currentProfileSummary: toSummary(baseRecord.profile),
+          proposedSummary: toSummary(mergedProfile),
+          diffRows: buildDiffRows(baseRecord.profile, mergedProfile),
+          profilePatch: built.profilePatch,
+          evidence: built.draftPatch.evidence,
+          meta: userMeta,
+        });
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "EXPORT_ONLY",
+            message: "v3는 미리보기/내보내기만 지원합니다. 저장은 허용되지 않습니다.",
+          },
+          meta: userMeta,
         },
-        meta: userMeta,
-      },
-      { status: 409 },
-    );
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("split")) {
+        { status: 409 },
+      );
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("split")) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "초안 생성 옵션이 올바르지 않습니다." }, meta: userMeta },
-        { status: 400 },
+        { ok: false, error: { code: "INTERNAL", message: "드래프트 적용 처리에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "드래프트 적용 처리에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

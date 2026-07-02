@@ -1,19 +1,19 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   readCurrentUserAlertRules,
   writeCurrentUserAlertRuleOverrides,
-} from "@/lib/planning/v3/service/newsAlertRulesRepository";
+  } from "@/lib/planning/v3/service/newsAlertRulesRepository";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 const RuleOverrideInputSchema = z.object({
@@ -105,23 +105,23 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { defaults, overrides, effective } = readCurrentUserAlertRules();
+    const { defaults, overrides, effective } = readCurrentUserAlertRules();
 
-  const payload = parseWithV3Whitelist(RulesGetResponseSchema, {
-    ok: true,
-    data: {
-      updatedAt: overrides.updatedAt ?? null,
-      defaults,
-      overrides,
-      effective,
-    },
-    meta: userMeta,
-  }, { scope: "response", context: "api.v3.news.alertRules.get" });
-  return NextResponse.json(payload);
+    const payload = parseWithV3Whitelist(RulesGetResponseSchema, {
+      ok: true,
+      data: {
+        updatedAt: overrides.updatedAt ?? null,
+        defaults,
+        overrides,
+        effective,
+      },
+      meta: userMeta,
+    }, { scope: "response", context: "api.v3.news.alertRules.get" });
+    return NextResponse.json(payload);
+  });
 }
 
 export async function POST(request: Request) {
@@ -134,32 +134,32 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = SaveBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "규칙 오버라이드 입력 형식이 올바르지 않습니다." },
-        meta: userMeta,
+    const parsed = SaveBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "규칙 오버라이드 입력 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
+
+    const { written, effective } = writeCurrentUserAlertRuleOverrides({ rules: parsed.data.rules });
+
+    const payload = parseWithV3Whitelist(RulesPostResponseSchema, {
+      ok: true,
+      data: {
+        updatedAt: written.updatedAt ?? null,
+        overrides: written,
+        effective,
       },
-      { status: 400 },
-    );
-  }
-
-  const { written, effective } = writeCurrentUserAlertRuleOverrides({ rules: parsed.data.rules });
-
-  const payload = parseWithV3Whitelist(RulesPostResponseSchema, {
-    ok: true,
-    data: {
-      updatedAt: written.updatedAt ?? null,
-      overrides: written,
-      effective,
-    },
-    meta: userMeta,
-  }, { scope: "response", context: "api.v3.news.alertRules.post" });
-  return NextResponse.json(payload);
+      meta: userMeta,
+    }, { scope: "response", context: "api.v3.news.alertRules.post" });
+    return NextResponse.json(payload);
+  });
 }

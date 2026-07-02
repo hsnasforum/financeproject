@@ -1,15 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
 import { exportOpsSupportBundle } from "../../../../../lib/ops/support/supportExportRouteService";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -49,29 +50,29 @@ export async function GET(request: Request) {
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const result = await exportOpsSupportBundle({
-    currentUser,
-    startedAt,
-  });
-  if (result.kind === "internal-error") {
-    return opsErrorResponse({
-      code: "INTERNAL",
-      message: result.message,
-      status: 500,
-      fixHref: "/ops/support",
+    const result = await exportOpsSupportBundle({
+      currentUser,
+      startedAt,
     });
-  }
+    if (result.kind === "internal-error") {
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: result.message,
+        status: 500,
+        fixHref: "/ops/support",
+      });
+    }
 
-  const zipBody = Uint8Array.from(result.bytes).buffer;
-  return new NextResponse(zipBody, {
-    status: 200,
-    headers: {
-      "content-type": "application/zip",
-      "content-disposition": `attachment; filename="${result.fileName}"`,
-      "cache-control": "no-store",
-    },
+    const zipBody = Uint8Array.from(result.bytes).buffer;
+    return new NextResponse(zipBody, {
+      status: 200,
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="${result.fileName}"`,
+        "cache-control": "no-store",
+      },
+    });
   });
 }

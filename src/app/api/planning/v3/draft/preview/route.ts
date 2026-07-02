@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { loadCanonicalProfile } from "@/lib/planning/v2/loadCanonicalProfile";
 import { type ProfileV2 } from "@/lib/planning/v2/types";
 import { applyDraftToProfile } from "@/lib/planning/v3/draft/service";
@@ -12,9 +13,8 @@ import { type EvidenceRow } from "@/lib/planning/v3/domain/types";
 import { getCurrentUserPreviewDraft } from "@/lib/planning/v3/service/draftPreviewRepository";
 import { getCurrentUserProfile } from "@/lib/planning/v3/service/profileRepository";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type PreviewBody = {
@@ -121,79 +121,79 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const draftId = asString(body?.draftId);
-  const hasInlinePatch = isRecord(body?.draftPatch);
-  if (!hasInlinePatch && !draftId) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "draftPatch 또는 draftId가 필요합니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
-
-  try {
-    let draft: V3DraftRecord | null = null;
-    if (hasInlinePatch) {
-      draft = toInlineDraft(body?.draftPatch as Record<string, unknown>, draftId || undefined);
-    } else {
-      draft = await getCurrentUserPreviewDraft(draftId);
-      if (!draft) {
-        return NextResponse.json(
-          { ok: false, error: { code: "NO_DATA", message: "초안을 찾을 수 없습니다." }, meta: userMeta },
-          { status: 404 },
-        );
-      }
-    }
-
-    let baseProfile: ProfileV2;
-    if (body?.baseProfile !== undefined) {
-      baseProfile = loadCanonicalProfile(body.baseProfile).profile;
-    } else {
-      const baseProfileId = asString(body?.baseProfileId);
-      if (baseProfileId) {
-        const baseRecord = await getCurrentUserProfile(baseProfileId);
-        if (!baseRecord) {
-          return NextResponse.json(
-            { ok: false, error: { code: "NO_DATA", message: "기준 프로필을 찾을 수 없습니다." }, meta: userMeta },
-            { status: 404 },
-          );
-        }
-        baseProfile = baseRecord.profile;
-      } else {
-        baseProfile = defaultCanonicalProfile();
-      }
-    }
-
-    const applied = applyDraftToProfile({
-      baseProfile,
-      draft,
-    });
-
-    const evidence = normalizeEvidenceRows(body?.evidence);
-
-    return NextResponse.json({
-      ok: true,
-      mergedProfile: applied.merged,
-      diffSummary: {
-        changedKeys: applied.summary.changedFields,
-        notes: applied.summary.notes,
-      },
-      ...(evidence.length > 0 ? { evidence } : {}),
-      meta: userMeta,
-    });
-  } catch (error) {
-    if (isInvalidIdError(error)) {
+    const draftId = asString(body?.draftId);
+    const hasInlinePatch = isRecord(body?.draftPatch);
+    if (!hasInlinePatch && !draftId) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
+        { ok: false, error: { code: "INPUT", message: "draftPatch 또는 draftId가 필요합니다." }, meta: userMeta },
         { status: 400 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "드래프트 미리보기에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+
+    try {
+      let draft: V3DraftRecord | null = null;
+      if (hasInlinePatch) {
+        draft = toInlineDraft(body?.draftPatch as Record<string, unknown>, draftId || undefined);
+      } else {
+        draft = await getCurrentUserPreviewDraft(draftId);
+        if (!draft) {
+          return NextResponse.json(
+            { ok: false, error: { code: "NO_DATA", message: "초안을 찾을 수 없습니다." }, meta: userMeta },
+            { status: 404 },
+          );
+        }
+      }
+
+      let baseProfile: ProfileV2;
+      if (body?.baseProfile !== undefined) {
+        baseProfile = loadCanonicalProfile(body.baseProfile).profile;
+      } else {
+        const baseProfileId = asString(body?.baseProfileId);
+        if (baseProfileId) {
+          const baseRecord = await getCurrentUserProfile(baseProfileId);
+          if (!baseRecord) {
+            return NextResponse.json(
+              { ok: false, error: { code: "NO_DATA", message: "기준 프로필을 찾을 수 없습니다." }, meta: userMeta },
+              { status: 404 },
+            );
+          }
+          baseProfile = baseRecord.profile;
+        } else {
+          baseProfile = defaultCanonicalProfile();
+        }
+      }
+
+      const applied = applyDraftToProfile({
+        baseProfile,
+        draft,
+      });
+
+      const evidence = normalizeEvidenceRows(body?.evidence);
+
+      return NextResponse.json({
+        ok: true,
+        mergedProfile: applied.merged,
+        diffSummary: {
+          changedKeys: applied.summary.changedFields,
+          notes: applied.summary.notes,
+        },
+        ...(evidence.length > 0 ? { evidence } : {}),
+        meta: userMeta,
+      });
+    } catch (error) {
+      if (isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "드래프트 미리보기에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
+    }
+  });
 }

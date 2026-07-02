@@ -1,19 +1,20 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   getCurrentUserBatchImportSummary,
   ImportCsvToBatchInputError,
   importCurrentUserCsvToBatch,
-} from "@/lib/planning/v3/service/batchImportRepository";
-import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+  } from "@/lib/planning/v3/service/batchImportRepository";
+import { ForbiddenDraftKeyError,
+  assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
@@ -73,58 +74,58 @@ export async function POST(request: Request) {
   const payload = await readCsvPayload(request);
   const guarded = withWriteGuard(request, payload.csrf);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  if (!payload.csvText.trim()) {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "CSV 파일을 선택해 주세요." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const imported = await importCurrentUserCsvToBatch({
-      csvText: payload.csvText,
-      sanitizeTextFields: true,
-      ...(payload.fileName ? { provenance: { fileName: payload.fileName } } : {}),
-    });
-    const summary = await getCurrentUserBatchImportSummary(imported.batchMeta.id);
-
-    const responsePayload = {
-      ok: true,
-      data: {
-        batchId: imported.batchMeta.id,
-        createdAt: imported.batchMeta.createdAt,
-        summary: {
-          months: summary.range?.months ?? summary.monthly.length,
-          txns: summary.counts.txns,
-          transfers: summary.counts.transfers,
-          unassignedCategory: summary.counts.unassignedCategory,
-        },
-      },
-    };
-    assertNoForbiddenDraftKeys(responsePayload);
-    return NextResponse.json(responsePayload, { status: 201 });
-  } catch (error) {
-    const storageError = planningStorageErrorResponse(error, userMeta);
-    if (storageError) return storageError;
-    if (error instanceof ImportCsvToBatchInputError) {
+    if (!payload.csvText.trim()) {
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "CSV 파싱에 실패했습니다. 파일 형식을 확인해 주세요." }, meta: userMeta },
+        { ok: false, error: { code: "INPUT", message: "CSV 파일을 선택해 주세요." }, meta: userMeta },
         { status: 400 },
       );
     }
-    if (error instanceof ForbiddenDraftKeyError) {
+
+    try {
+      const imported = await importCurrentUserCsvToBatch({
+        csvText: payload.csvText,
+        sanitizeTextFields: true,
+        ...(payload.fileName ? { provenance: { fileName: payload.fileName } } : {}),
+      });
+      const summary = await getCurrentUserBatchImportSummary(imported.batchMeta.id);
+
+      const responsePayload = {
+        ok: true,
+        data: {
+          batchId: imported.batchMeta.id,
+          createdAt: imported.batchMeta.createdAt,
+          summary: {
+            months: summary.range?.months ?? summary.monthly.length,
+            txns: summary.counts.txns,
+            transfers: summary.counts.transfers,
+            unassignedCategory: summary.counts.unassignedCategory,
+          },
+        },
+      };
+      assertNoForbiddenDraftKeys(responsePayload);
+      return NextResponse.json(responsePayload, { status: 201 });
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
+      if (error instanceof ImportCsvToBatchInputError) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "CSV 파싱에 실패했습니다. 파일 형식을 확인해 주세요." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
+      if (error instanceof ForbiddenDraftKeyError) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INTERNAL", message: "응답 데이터 검증에 실패했습니다." }, meta: userMeta },
+          { status: 500 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "응답 데이터 검증에 실패했습니다." }, meta: userMeta },
+        { ok: false, error: { code: "INTERNAL", message: "배치 생성에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 생성에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

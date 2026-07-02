@@ -422,15 +422,11 @@ function findResponseHelperSuccessJsonWithNonUserMeta(filePath: string): string[
 
 const ROUTE_AUTH_HELPERS = [
   "withPlanningRouteUser(",
-  "requirePlanningRouteUser(",
 ] as const;
 
 const ROUTE_AUTH_BOUNDARY_HELPER_NAMES = [
   "withPlanningRouteUser",
-  "requirePlanningRouteUser",
 ] as const;
-
-const ROUTE_AUTH_RESPONSE_GUARD_PATTERN = "if (!isPlanningRouteUser(currentUser)) return currentUser";
 
 const ROUTE_AUTH_IMPORT_PATH = "/planning/api/routeAuth";
 const ROUTE_AUTH_DELEGATE_TARGET_IMPORT_PATHS = [
@@ -582,6 +578,8 @@ const RAW_RESPONSE_GUARD_PATTERNS = [
 const FORBIDDEN_ROUTE_AUTH_BYPASS_PATTERNS = [
   "withCurrentPlanningUser(",
   "requireCurrentPlanningUser(",
+  "requirePlanningRouteUser(",
+  "isPlanningRouteUser(",
   "runWithPlanningUserScope(",
   "enterPlanningUserScope(",
   "resolvePlanningUserId(",
@@ -595,19 +593,19 @@ const FORBIDDEN_ROUTE_AUTH_BYPASS_PATTERNS = [
   "authSource: currentUser.source",
 ] as const;
 
-const ROUTE_AUTH_FAILURE_RETURN_PATTERN = /if\s*\(authError\)\s+return\s+(?:\w+\()?authError\)?;/u;
 const ROUTE_AUTH_FAILURE_WRAPPED_RETURN_PATTERN = /if\s*\(authError\)\s+return\s+(\w+)\(authError\);/gu;
 
-function hasRouteAuthFailureBridge(source: string): boolean {
-  return source.includes("planningAuthErrorResponse")
-    && source.includes("toAuthErrorResponse(error)")
-    && ROUTE_AUTH_FAILURE_RETURN_PATTERN.test(source);
-}
-
 function isHeaderOnlyAuthErrorResponseWrapper(source: string, wrapperName: string): boolean {
-  return source.includes(
+  const traceHeaderOnlyWrapper = source.includes(
     `const ${wrapperName} = <T extends Response>(response: T) => setTraceHeader(response, traceId);`,
   );
+  if (traceHeaderOnlyWrapper) return true;
+
+  const deprecationHeaderOnlyWrapperPattern = new RegExp(
+    `function\\s+${wrapperName}\\s*<T\\s+extends\\s+Response>\\s*\\(\\s*response\\s*:\\s*T\\s*\\)\\s*:\\s*T\\s*\\{\\s*return\\s+withPlanningDeprecationHeaders\\(\\s*response\\s*,\\s*LEGACY_PLANNER_COMPUTE_CONTRACT\\s*\\);\\s*\\}`,
+    "u",
+  );
+  return deprecationHeaderOnlyWrapperPattern.test(source);
 }
 
 function findNonHeaderOnlyAuthErrorResponseWrappers(filePath: string): string[] {
@@ -689,6 +687,8 @@ const OPS_USER_SCOPED_ROUTE_IMPORT_PATTERNS = [
 const FORBIDDEN_OPS_ROUTE_AUTH_BYPASS_PATTERNS = [
   "withCurrentPlanningUser(",
   "requireCurrentPlanningUser(",
+  "requirePlanningRouteUser(",
+  "isPlanningRouteUser(",
   "runWithPlanningUserScope(",
   "enterPlanningUserScope(",
   "resolvePlanningUserId(",
@@ -703,6 +703,8 @@ const FORBIDDEN_OPS_ROUTE_AUTH_BYPASS_PATTERNS = [
 const FORBIDDEN_DIRECT_CURRENT_USER_SCOPE_ROUTE_PATTERNS = [
   "withCurrentPlanningUser(",
   "requireCurrentPlanningUser(",
+  "requirePlanningRouteUser(",
+  "isPlanningRouteUser(",
   "runWithPlanningUserScope(",
   "enterPlanningUserScope(",
   "resolvePlanningUserId(",
@@ -793,18 +795,14 @@ describe("planning route current-user scope coverage", () => {
     expect(missingRouteAuthImport).toEqual([]);
   });
 
-  it("keeps requirePlanningRouteUser callers on the Response guard contract", () => {
-    const missingResponseGuard = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
-      const source = fs.readFileSync(filePath, "utf8");
-      const sourceFile = createSourceFileFromSource(filePath, source);
+  it("keeps planning auth boundary routes off deprecated direct route user guards", () => {
+    const directRouteGuards = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
+      const sourceFile = routeSourceFile(filePath);
       return sourceFileCallsRouteAuthHelper(sourceFile, "requirePlanningRouteUser")
-        && (
-          !sourceFileCallsRouteAuthHelper(sourceFile, "isPlanningRouteUser")
-          || !source.includes(ROUTE_AUTH_RESPONSE_GUARD_PATTERN)
-        );
+        || sourceFileCallsRouteAuthHelper(sourceFile, "isPlanningRouteUser");
     });
 
-    expect(missingResponseGuard).toEqual([]);
+    expect(directRouteGuards).toEqual([]);
   });
 
   it("keeps planning auth boundary routes on the routeAuth boundary", () => {
@@ -816,14 +814,14 @@ describe("planning route current-user scope coverage", () => {
     expect(directCurrentUserRoutes).toEqual([]);
   });
 
-  it("keeps callback route auth helpers translating auth failures through routeAuth", () => {
-    const missingAuthErrorBridge = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
-      const source = fs.readFileSync(filePath, "utf8");
-      const sourceFile = createSourceFileFromSource(filePath, source);
-      return sourceFileCallsRouteAuthHelper(sourceFile, "withPlanningRouteUser") && !hasRouteAuthFailureBridge(source);
+  it("keeps callback route auth helpers as the only route auth lifecycle API", () => {
+    const invalidAuthHelpers = findPlanningAuthBoundaryRouteFiles().filter((filePath) => {
+      const sourceFile = routeSourceFile(filePath);
+      return !sourceFileCallsRouteAuthHelper(sourceFile, "withPlanningRouteUser")
+        && !sourceFileDelegatesToRouteAuthBoundaryHelper(sourceFile);
     });
 
-    expect(missingAuthErrorBridge).toEqual([]);
+    expect(invalidAuthHelpers).toEqual([]);
   });
 
   it("keeps wrapped auth error responses header-only", () => {

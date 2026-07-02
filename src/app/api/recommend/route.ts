@@ -20,6 +20,7 @@ import { unifiedProductsToRecommendCandidates } from "../../../lib/recommend/uni
 import { getUnifiedProducts } from "@/lib/sources/unified";
 import { pushError } from "../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../lib/observability/trace";
+import { buildPublicDiagnosticMeta, logPublicApiDiagnostic, publicErrorMessage } from "@/lib/http/publicApiDiagnostics";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -210,10 +211,20 @@ export async function POST(request: Request) {
       const candidateBundle = candidateResult.value;
 
       if (candidateBundle.candidates.length === 0) {
+        const diagnosticCode = "RECOMMEND_NO_CANDIDATES";
+        const diagnosticMeta = buildPublicDiagnosticMeta(diagnosticCode, { traceId, debug: debugTimingsEnabled });
+        logPublicApiDiagnostic({
+          route: "/api/recommend",
+          source: "recommend",
+          traceId,
+          status: 200,
+          code: diagnosticCode,
+        });
         return withTrace(jsonOk({
           meta: {
             ...traceMeta({
               ...userMeta,
+              diagnosticId: diagnosticMeta.diagnosticId,
               kind: profile.kind,
               topN: profile.topN,
               rateMode: profile.rateMode,
@@ -240,12 +251,13 @@ export async function POST(request: Request) {
               ? {
                   debug: {
                     timings: timingsToDebugMap(timings),
+                    ...(typeof diagnosticMeta.debug === "object" && diagnosticMeta.debug !== null ? diagnosticMeta.debug : {}),
                   },
                 }
               : {}),
           },
           items: [],
-          message: "No products in DB. Run pnpm live:smoke or pnpm products:sync",
+          message: publicErrorMessage(diagnosticCode),
           debug: {
             candidateCount: 0,
             rateMin: 0,

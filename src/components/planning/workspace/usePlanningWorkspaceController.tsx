@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { type StepId, type StepStatus } from "@/app/planning/_lib/runPipeline";
 import {
   formToProfile,
   normalizeDraftWithDisclosure,
@@ -9,40 +8,21 @@ import {
   type FormDraft,
 } from "@/app/planning/_lib/profileFormModel";
 import {
-  buildWorkspaceActionsDebugSections,
-  buildWorkspaceActionsVm,
-  buildWorkspaceDebtDebugSections,
-  buildWorkspaceDebtVm,
-  buildWorkspaceMonteCarloDebugSections,
-  buildWorkspaceMonteCarloVm,
-  buildWorkspaceScenarioDebugSections,
-  buildWorkspaceWarningsGoalsDebugSections,
-  buildWorkspaceResultSummaryVm,
-  buildWorkspaceScenarioVm,
-} from "@/app/planning/_lib/workspaceResultInsights";
-import {
-  buildWorkspaceQuickStartVm,
-  isWorkspaceQuickStartProfileDone,
   resolveWorkspaceSelectedProfileSyncState,
   stableStringifyWorkspaceValue,
 } from "@/app/planning/_lib/workspaceQuickStart";
-import { assumptionsFormToRecord } from "@/app/planning/_lib/workspaceAssumptionsEditor";
-import { debtOfferRowsToPayload } from "@/app/planning/_lib/workspaceDebtOffersEditor";
 import {
   buildWorkspaceHealthGuardState,
   buildWorkspaceSnapshotState,
 } from "@/app/planning/_lib/workspaceRunResult";
 import { type SnapshotListItem } from "@/app/planning/_lib/snapshotList";
 import { normalizeWorkspaceSnapshotItemsState } from "@/app/planning/_lib/workspaceSnapshotSelection";
-import { getVisibleSections, type PlanningTabId } from "@/app/planning/_lib/workspaceUiState";
 import { buildMetricEvidence } from "@/app/planning/_lib/metricEvidence";
 import { writeDevCsrfToken } from "@/lib/dev/clientCsrf";
 import { type PlanningFeatureFlags } from "@/lib/planning/config";
 import { type Locale } from "@/lib/planning/i18n";
 import { appendProfileIdQuery, normalizeProfileId } from "@/lib/planning/profileScope";
 import { type PlanningProfileRecord } from "@/lib/planning/store/types";
-import { LIMITS } from "@/lib/planning/v2/limits";
-import { preflightRun } from "@/lib/planning/v2/preflight";
 import {
   parseProfileNormalizationDisclosure,
   type ProfileNormalizationDisclosure,
@@ -62,8 +42,11 @@ import { useWorkspaceSnapshotSelectionBundle } from "@/components/planning/works
 import { useWorkspaceProfileBundle } from "@/components/planning/workspace/useWorkspaceProfileBundle";
 import { useWorkspaceQuickStartHandoff } from "@/components/planning/workspace/useWorkspaceQuickStartHandoff";
 import {
-  formatPreflightIssue,
-  formatRunOverallStatusKo,
+  buildWorkspaceExecutionGuardPresenter,
+  buildWorkspaceQuickStartPresenter,
+  buildWorkspaceResultPresenter,
+} from "@/components/planning/workspace/workspacePresenters";
+import {
   resolveRunMatchesCurrentProfile,
   resolveRunStatusReviewRequired,
   useWorkspaceRuntimeActionsBundle,
@@ -80,15 +63,6 @@ export type PlanningWorkspaceClientProps = {
     history: SnapshotListItem[];
   };
   csrf?: string;
-};
-
-const TAB_LABELS: Record<PlanningTabId, string> = {
-  summary: "Summary",
-  warningsGoals: "Warnings & Goals",
-  actions: "Actions",
-  scenarios: "Scenarios",
-  monteCarlo: "Monte Carlo",
-  debt: "Debt",
 };
 
 export function usePlanningWorkspaceController({
@@ -213,58 +187,39 @@ export function usePlanningWorkspaceController({
     })).filter((row) => row.id.length > 0),
     [profileBundle.profileForm.debts],
   );
-  const assumptionsOverrideForPreflight = useMemo(
-    () => assumptionsFormToRecord(execution.assumptionsForm, execution.assumptionsExtraOverrides),
-    [execution.assumptionsExtraOverrides, execution.assumptionsForm],
-  );
-  const debtOffersForPreflight = useMemo(() => {
-    if (!execution.effectiveRunDebtEnabled || execution.beginnerMode) return [];
-    return debtOfferRowsToPayload(execution.debtOfferRows).map((entry) => ({
-      liabilityId: String((entry as Record<string, unknown>).liabilityId ?? ""),
-      newAprPct: Number((entry as Record<string, unknown>).newAprPct ?? 0),
-      ...(typeof (entry as Record<string, unknown>).feeKrw === "number"
-        ? { feeKrw: Number((entry as Record<string, unknown>).feeKrw) }
-        : {}),
-    }));
-  }, [execution.beginnerMode, execution.debtOfferRows, execution.effectiveRunDebtEnabled]);
-  const preflightIssues = useMemo(
-    () => preflightRun({
-      profile: profileBundle.profileForm as unknown as Record<string, unknown>,
-      selectedSnapshot: effectiveSnapshotSelection,
-      debtOffers: debtOffersForPreflight,
-      assumptionsOverride: assumptionsOverrideForPreflight,
-      ...(execution.effectiveRunMonteCarloEnabled ? {
-        monteCarlo: {
-          enabled: true,
-          paths: Number.parseInt(execution.monteCarloPaths, 10),
-          horizonMonths: Number.parseInt(execution.horizonMonths, 10),
-        },
-      } : {}),
+  const executionGuard = useMemo(
+    () => buildWorkspaceExecutionGuardPresenter({
+      profileForm: profileBundle.profileForm,
+      effectiveSnapshotSelection,
+      assumptionsForm: execution.assumptionsForm,
+      assumptionsExtraOverrides: execution.assumptionsExtraOverrides,
+      beginnerMode: execution.beginnerMode,
+      effectiveRunDebtEnabled: execution.effectiveRunDebtEnabled,
+      debtOfferRows: execution.debtOfferRows,
+      effectiveRunMonteCarloEnabled: execution.effectiveRunMonteCarloEnabled,
+      monteCarloPaths: execution.monteCarloPaths,
+      horizonMonths: execution.horizonMonths,
     }),
     [
-      assumptionsOverrideForPreflight,
-      debtOffersForPreflight,
       effectiveSnapshotSelection,
+      execution.assumptionsExtraOverrides,
+      execution.assumptionsForm,
+      execution.beginnerMode,
+      execution.debtOfferRows,
+      execution.effectiveRunDebtEnabled,
       execution.effectiveRunMonteCarloEnabled,
       execution.horizonMonths,
       execution.monteCarloPaths,
       profileBundle.profileForm,
     ],
   );
-  const preflightBlockIssues = useMemo(
-    () => preflightIssues.filter((issue) => issue.severity === "block"),
-    [preflightIssues],
-  );
-  const preflightWarnIssues = useMemo(
-    () => preflightIssues.filter((issue) => issue.severity === "warn"),
-    [preflightIssues],
-  );
-  const preflightHasBlockers = preflightBlockIssues.length > 0;
-  const preflightWarnSummary = preflightWarnIssues[0] ? formatPreflightIssue(preflightWarnIssues[0]) : "";
-  const preflightWarnSignature = useMemo(
-    () => preflightWarnIssues.map((issue) => `${issue.code}:${issue.message}`).join("|"),
-    [preflightWarnIssues],
-  );
+  const {
+    preflightBlockIssues,
+    preflightWarnIssues,
+    preflightHasBlockers,
+    preflightWarnSummary,
+    preflightWarnSignature,
+  } = executionGuard;
   const profileSyncState = useMemo(() => resolveWorkspaceSelectedProfileSyncState({
     selectedProfileId: profileBundle.selectedProfileId,
     selectedProfile: profileBundle.selectedProfile
@@ -381,59 +336,9 @@ export function usePlanningWorkspaceController({
   }, [preflightWarnSignature, runtimeGeneratedAt, setSaveWarningConfirmed]);
 
   const resultDto = runtimeState.runResult?.resultDto ?? null;
-  const scenariosVm = buildWorkspaceScenarioVm(resultDto);
-  const scenariosBaseSummary = scenariosVm.baseSummary;
-  const scenariosBaseWarnings = scenariosVm.baseWarnings;
-  const scenarioComparisonRows = scenariosVm.comparisonRows;
-
-  const monteVm = buildWorkspaceMonteCarloVm(resultDto);
-  const monteData = monteVm.data;
-  const monteProbabilities = monteVm.probabilities;
-  const monteEndNetWorth = monteVm.percentiles.endNetWorthKrw;
-  const monteWorstCash = monteVm.percentiles.worstCashKrw;
-  const monteDepletionProb = monteVm.depletionProbability;
-
-  const actionsVm = buildWorkspaceActionsVm(resultDto);
-  const topActionTitles = actionsVm.topActionTitles;
-  const actionTableRows = actionsVm.tableRows;
-  const visibleActionRows = runtimeState.showAllActions
-    ? actionTableRows
-    : actionTableRows.slice(0, LIMITS.actionsTop);
-  const omittedActionRows = Math.max(0, actionTableRows.length - visibleActionRows.length);
-  const actionsTopForInsight = actionsVm.topActionsForInsight;
-
-  const debtVm = buildWorkspaceDebtVm(resultDto);
-  const debtMeta = debtVm.meta;
-  const debtSummaries = debtVm.summaries;
-  const debtRefinance = debtVm.refinance;
-  const debtWarnings = debtVm.warnings;
-  const debtWhatIfSummary = debtVm.whatIfSummary;
-  const optimizeCandidates = runtimeState.optimizeResult?.candidates ?? [];
-
-  const healthDisabledReason = healthGuard.disabledReason;
-  const saveButtonDescribedBy = buildPlanningWorkspaceSaveButtonDescribedBy({
-    preflightHasBlockers,
-    saveBlockedByHealth,
-    hasPreflightWarnings: preflightWarnIssues.length > 0,
-  });
-
   const currentStepStatuses = runtimeState.running
     ? runtimeState.pipelineStatuses
     : (runtimeState.runResult?.stepStatuses ?? runtimeState.pipelineStatuses);
-  const statusById = new Map(currentStepStatuses.map((row) => [row.id, row]));
-  const statusFor = (id: StepId): StepStatus => statusById.get(id) ?? { id, state: "PENDING" };
-  const monteCarloStatus = statusFor("monteCarlo");
-  const monteCarloBudgetSkipped = monteCarloStatus.state === "SKIPPED"
-    && typeof monteCarloStatus.message === "string"
-    && monteCarloStatus.message.includes("예산 초과");
-  const scenariosStatus = statusFor("scenarios");
-  const actionsStatus = statusFor("actions");
-  const debtStatus = statusFor("debtStrategy");
-  const hasScenariosData = Boolean(resultDto?.scenarios);
-  const hasMonteCarloData = Boolean(resultDto?.monteCarlo);
-  const hasActionsData = Boolean(resultDto?.actions);
-  const hasDebtData = Boolean(resultDto?.debt);
-
   const {
     chartPoints,
     chartMode,
@@ -455,59 +360,53 @@ export function usePlanningWorkspaceController({
     warningsSummaryTop5,
     guideBadge,
     keyFindings,
-  } = buildWorkspaceResultSummaryVm({
-    resultDto,
-    debtMonthlyPaymentKrw: typeof debtMeta.totalMonthlyPaymentKrw === "number" ? debtMeta.totalMonthlyPaymentKrw : undefined,
-  });
-  const warningsGoalsDebugSections = buildWorkspaceWarningsGoalsDebugSections({
-    beginnerMode: execution.beginnerMode,
-    aggregatedWarnings,
-    goalTableRows,
-    timelineSummaryRows,
-    chartPoints,
-  });
-  const scenariosDebugSections = buildWorkspaceScenarioDebugSections({
-    beginnerMode: execution.beginnerMode,
-    baseSummary: scenariosBaseSummary,
-    comparisonRows: scenarioComparisonRows,
-    baseWarnings: scenariosBaseWarnings,
-  });
-  const monteCarloDebugSections = buildWorkspaceMonteCarloDebugSections({
-    beginnerMode: execution.beginnerMode,
-    probabilities: monteProbabilities,
-    endNetWorthKrw: monteEndNetWorth,
-    worstCashKrw: monteWorstCash,
-    ...(typeof monteDepletionProb === "number" ? { depletionProbability: monteDepletionProb } : {}),
-  });
-  const actionsDebugSections = buildWorkspaceActionsDebugSections({
-    beginnerMode: execution.beginnerMode,
+    scenariosBaseSummary,
+    scenariosBaseWarnings,
+    scenarioComparisonRows,
+    monteData,
+    monteEndNetWorth,
+    monteWorstCash,
+    monteDepletionProb,
     topActionTitles,
-    actionRows: actionTableRows,
-  });
-  const debtDebugSections = buildWorkspaceDebtDebugSections({
-    beginnerMode: execution.beginnerMode,
+    actionTableRows,
+    visibleActionRows,
+    omittedActionRows,
+    actionsTopForInsight,
     debtMeta,
     debtSummaries,
     debtRefinance,
-    debtWhatIfSummary,
     debtWarnings,
+    debtWhatIfSummary,
+    monteCarloStatus,
+    monteCarloBudgetSkipped,
+    scenariosStatus,
+    actionsStatus,
+    debtStatus,
+    hasScenariosData,
+    hasMonteCarloData,
+    hasDebtData,
+    warningsGoalsDebugSections,
+    scenariosDebugSections,
+    monteCarloDebugSections,
+    actionsDebugSections,
+    debtDebugSections,
+    visibleSections,
+    tabs,
+  } = useMemo(() => buildWorkspaceResultPresenter({
+    resultDto,
+    currentStepStatuses,
+    showAllActions: runtimeState.showAllActions,
+    beginnerMode: execution.beginnerMode,
+  }), [currentStepStatuses, execution.beginnerMode, resultDto, runtimeState.showAllActions]);
+  const optimizeCandidates = runtimeState.optimizeResult?.candidates ?? [];
+
+  const healthDisabledReason = healthGuard.disabledReason;
+  const saveButtonDescribedBy = buildPlanningWorkspaceSaveButtonDescribedBy({
+    preflightHasBlockers,
+    saveBlockedByHealth,
+    hasPreflightWarnings: preflightWarnIssues.length > 0,
   });
 
-  const visibleSections = getVisibleSections(execution.beginnerMode, {
-    hasResult: Boolean(resultDto),
-    hasActions: hasActionsData || actionsStatus.state === "FAILED",
-    hasScenarios: hasScenariosData || scenariosStatus.state === "FAILED",
-    hasMonteCarlo: hasMonteCarloData || monteCarloStatus.state === "FAILED" || monteCarloStatus.state === "SKIPPED",
-    hasDebt: hasDebtData || debtStatus.state === "FAILED",
-  });
-  const tabs = visibleSections.map((id) => ({
-    id,
-    label: TAB_LABELS[id],
-  }));
-  const beginnerStepProfileDone = isWorkspaceQuickStartProfileDone(
-    profileBundle.profileForm,
-    profileBundle.profileValidation.errors.length,
-  );
   const runStatusReviewRequired = useMemo(() => {
     return resolveRunStatusReviewRequired({
       profileSyncState,
@@ -538,87 +437,30 @@ export function usePlanningWorkspaceController({
     runtimeActions.currentProfileHash,
     runtimeState.savedRun,
   ]);
-  const beginnerStepRunDone = Boolean(runtimeState.runResult?.hasSimulateResult) && runMatchesCurrentProfile;
-  const beginnerStepSaveDone = Boolean(runtimeState.savedRun?.id) && runMatchesCurrentProfile;
-  const quickStartVm = useMemo(() => buildWorkspaceQuickStartVm({
+  const { quickStartVm, quickStartNextStep } = useMemo(() => buildWorkspaceQuickStartPresenter({
     selectedProfileId: profileBundle.selectedProfileId,
     profileSyncState,
-    beginnerStepProfileDone,
-    beginnerStepRunDone,
-    beginnerStepSaveDone,
+    profileForm: profileBundle.profileForm,
+    profileValidationErrorCount: profileBundle.profileValidation.errors.length,
+    runHasSimulateResult: Boolean(runtimeState.runResult?.hasSimulateResult),
+    runMatchesCurrentProfile,
     runStatusReviewRequired,
-    savedRunId: runtimeState.savedRun?.id,
-    savedRunOverallStatus: runtimeState.savedRun?.overallStatus,
+    savedRun: runtimeState.savedRun,
     reportsPageHref,
     selectedProfileReportHref: (runId) => appendProfileIdQuery(
       `/planning/reports?runId=${encodeURIComponent(runId)}`,
       profileBundle.selectedProfileId,
     ),
-    formatRunOverallStatus: formatRunOverallStatusKo,
   }), [
-    beginnerStepProfileDone,
-    beginnerStepRunDone,
-    beginnerStepSaveDone,
+    profileBundle.profileForm,
+    profileBundle.profileValidation.errors.length,
     profileBundle.selectedProfileId,
     profileSyncState,
     reportsPageHref,
+    runMatchesCurrentProfile,
     runStatusReviewRequired,
-    runtimeState.savedRun?.id,
-    runtimeState.savedRun?.overallStatus,
-  ]);
-  const quickStartNextStep = useMemo(() => {
-    if (profileSyncState === "missing") {
-      return {
-        label: "먼저 프로필 저장",
-        description: "아래 프로필 영역에서 새로 만들기를 누르면 저장 뒤 첫 실행으로 넘어가고, 결과 저장 뒤 리포트를 확인할 수 있습니다.",
-        targetId: "planning-profile-create-button",
-      };
-    }
-    if (profileSyncState === "unknown") {
-      return {
-        label: "진행 상태 다시 확인",
-        description: "저장된 프로필과 현재 편집값을 아직 맞춰 보지 못했습니다. 아래 프로필 목록을 새로고침한 뒤 상태를 다시 확인해 주세요.",
-        targetId: "planning-profile-refresh-button",
-      };
-    }
-    if (profileSyncState === "dirty") {
-      return {
-        label: "먼저 프로필 저장",
-        description: "선택된 프로필과 현재 편집값이 달라 먼저 저장하거나 변경 상태를 정리한 뒤 첫 실행으로 이어가세요.",
-        targetId: "planning-profile-update-button",
-      };
-    }
-    if (quickStartVm.runStatusReviewRequired) {
-      return {
-        label: "진행 상태 다시 확인",
-        description: "현재 환경에서는 최근 저장 실행과 현재 프로필의 일치 여부를 자동 확인하지 못했습니다. 아래 실행 내역에서 진행 상태를 다시 확인해 주세요.",
-        targetId: "planning-quickstart-runs-link",
-      };
-    }
-    if (!quickStartVm.beginnerStepRunDone) {
-      return {
-        label: "이제 첫 실행 시작",
-        description: "아래 간단 진행 카드의 첫 실행 시작을 누르면 요약, 액션, 경고를 한 번에 계산하고, 결과 저장 뒤 저장된 리포트 확인으로 이어집니다.",
-        targetId: "planning-quickstart-run-cta",
-      };
-    }
-    if (!quickStartVm.beginnerStepSaveDone) {
-      return {
-        label: "이제 결과 저장",
-        description: "첫 실행이 끝났습니다. 아래 결과 저장 버튼으로 현재 상태를 보관하면 저장된 리포트와 실행 내역 비교로 이어집니다.",
-        targetId: "planning-quickstart-save-run-button",
-      };
-    }
-    return {
-      label: "저장된 리포트 확인",
-      description: "저장까지 끝났습니다. 아래 리포트 버튼으로 저장된 결과를 다시 보고, 실행 내역에서는 비교를 이어갈 수 있습니다.",
-      targetId: "planning-quickstart-report-button",
-    };
-  }, [
-    profileSyncState,
-    quickStartVm.beginnerStepRunDone,
-    quickStartVm.beginnerStepSaveDone,
-    quickStartVm.runStatusReviewRequired,
+    runtimeState.runResult?.hasSimulateResult,
+    runtimeState.savedRun,
   ]);
 
   useWorkspaceArrivalHandoff({

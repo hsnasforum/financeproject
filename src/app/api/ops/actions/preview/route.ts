@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertLocalHost,
   assertSameOrigin,
   assertDevUnlocked,
   requireCsrf,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
 import { previewOpsActionRoute } from "../../../../../lib/ops/actions/actionPreviewRouteService";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type ActionPreviewBody = {
@@ -63,35 +63,35 @@ export async function POST(request: Request) {
   const csrf = asString(body?.csrf);
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const result = await previewOpsActionRoute({
-    actionId: body?.actionId,
-    params: body?.params,
-  });
-  if (result.kind === "validation-error") {
-    return opsErrorResponse({
-      code: "VALIDATION",
-      message: result.message,
-      status: 400,
-      fixHref: "/ops",
+    const result = await previewOpsActionRoute({
+      actionId: body?.actionId,
+      params: body?.params,
     });
-  }
+    if (result.kind === "validation-error") {
+      return opsErrorResponse({
+        code: "VALIDATION",
+        message: result.message,
+        status: 400,
+        fixHref: "/ops",
+      });
+    }
 
-  if (result.kind === "internal-error") {
-    return opsErrorResponse({
-      code: "INTERNAL",
+    if (result.kind === "internal-error") {
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: result.message,
+        status: 500,
+        fixHref: "/ops",
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
       message: result.message,
-      status: 500,
-      fixHref: "/ops",
+      meta: planningUserMeta(currentUser),
+      data: result.data,
     });
-  }
-
-  return NextResponse.json({
-    ok: true,
-    message: result.message,
-    meta: planningUserMeta(currentUser),
-    data: result.data,
   });
 }

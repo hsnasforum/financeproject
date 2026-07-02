@@ -1,13 +1,13 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import {
   createCurrentUserJournalEntry,
@@ -56,14 +56,14 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  return NextResponse.json({
-    ok: true,
-    entries: listCurrentUserJournalEntries(),
-    meta: userMeta,
+    return NextResponse.json({
+      ok: true,
+      entries: listCurrentUserJournalEntries(),
+      meta: userMeta,
+    });
   });
 }
 
@@ -77,18 +77,18 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const payload = body as { entry?: unknown } | null;
-    const entry = createCurrentUserJournalEntry(payload?.entry ?? {});
-    return NextResponse.json({ ok: true, entry, meta: userMeta });
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
+    try {
+      const payload = body as { entry?: unknown } | null;
+      const entry = createCurrentUserJournalEntry(payload?.entry ?? {});
+      return NextResponse.json({ ok: true, entry, meta: userMeta });
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "저널 입력 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+  });
 }

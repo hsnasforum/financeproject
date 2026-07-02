@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   AccountsStoreInputError,
   deleteCurrentUserAccount,
   updateCurrentUserAccount,
-} from "@/lib/planning/v3/service/accountsRepository";
+  } from "@/lib/planning/v3/service/accountsRepository";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
@@ -69,38 +69,38 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id } = await context.params;
+    const { id } = await context.params;
 
-  try {
-    const updated = await updateCurrentUserAccount(id, {
-      ...(body?.name !== undefined ? { name: body.name } : {}),
-      ...(body?.kind !== undefined ? { kind: body.kind } : {}),
-      ...(body?.note !== undefined ? { note: body.note } : {}),
-      ...(body?.startingBalanceKrw !== undefined ? { startingBalanceKrw: body.startingBalanceKrw } : {}),
-    });
-    if (!updated) {
+    try {
+      const updated = await updateCurrentUserAccount(id, {
+        ...(body?.name !== undefined ? { name: body.name } : {}),
+        ...(body?.kind !== undefined ? { kind: body.kind } : {}),
+        ...(body?.note !== undefined ? { note: body.note } : {}),
+        ...(body?.startingBalanceKrw !== undefined ? { startingBalanceKrw: body.startingBalanceKrw } : {}),
+      });
+      if (!updated) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ ok: true, account: updated, meta: userMeta });
+    } catch (error) {
+      if (error instanceof AccountsStoreInputError || isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "계좌 입력이 올바르지 않습니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." }, meta: userMeta },
-        { status: 404 },
+        { ok: false, error: { code: "INTERNAL", message: "계좌를 수정하지 못했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json({ ok: true, account: updated, meta: userMeta });
-  } catch (error) {
-    if (error instanceof AccountsStoreInputError || isInvalidIdError(error)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "계좌 입력이 올바르지 않습니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "계좌를 수정하지 못했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
@@ -113,31 +113,31 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   const guarded = withWriteGuard(request, body?.csrf);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id } = await context.params;
+    const { id } = await context.params;
 
-  try {
-    const deleted = await deleteCurrentUserAccount(id);
-    if (!deleted) {
+    try {
+      const deleted = await deleteCurrentUserAccount(id);
+      if (!deleted) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ ok: true, deleted: true, meta: userMeta });
+    } catch (error) {
+      if (isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "계좌를 찾을 수 없습니다." }, meta: userMeta },
-        { status: 404 },
+        { ok: false, error: { code: "INTERNAL", message: "계좌를 삭제하지 못했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json({ ok: true, deleted: true, meta: userMeta });
-  } catch (error) {
-    if (isInvalidIdError(error)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "계좌를 삭제하지 못했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

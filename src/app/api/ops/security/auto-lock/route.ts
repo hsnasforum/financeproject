@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { toGuardErrorResponse } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { toOpsContractError } from "../../../../../lib/ops/errorContract";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import {
   assertOpsSecurityVaultCsrf,
   recordOpsSecurityAutoLockError,
@@ -24,14 +25,14 @@ export async function POST(request: Request) {
   } | null;
   try {
     assertOpsSecurityVaultCsrf(request, asString(body?.csrf));
-    const currentUser = await requirePlanningRouteUser(request);
-    if (!isPlanningRouteUser(currentUser)) return currentUser;
-    const status = await updateOpsSecurityAutoLockMinutes(Number(body?.minutes));
-    return withVaultCsrf(request, NextResponse.json({
-      ok: true,
-      data: status,
-      meta: securityUserMeta(currentUser),
-    }));
+    return await withPlanningRouteUser(request, async (currentUser) => {
+      const status = await updateOpsSecurityAutoLockMinutes(Number(body?.minutes));
+      return withVaultCsrf(request, NextResponse.json({
+        ok: true,
+        data: status,
+        meta: securityUserMeta(currentUser),
+      }));
+    });
   } catch (error) {
     const guardError = toGuardErrorResponse(error);
     if (guardError) {

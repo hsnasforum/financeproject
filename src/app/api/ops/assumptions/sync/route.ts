@@ -1,18 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   requireCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { syncOpsAssumptions } from "../../../../../lib/ops/assumptions/assumptionsSyncRouteService";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import {
-  isPlanningRouteUser,
-  requirePlanningRouteUser,
-} from "../../../../../lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { assumptionsUserMeta } from "../_lib";
 
 type SyncBody = {
@@ -61,22 +59,22 @@ export async function POST(request: Request) {
   const guard = guardRequest(request, asString(body?.csrf));
   if (guard) return guard;
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const result = await syncOpsAssumptions({ currentUser });
-  if (result.kind === "internal-error") {
-    return opsErrorResponse({
-      code: "INTERNAL",
+    const result = await syncOpsAssumptions({ currentUser });
+    if (result.kind === "internal-error") {
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: result.message,
+        status: 500,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      snapshotSummary: result.snapshotSummary,
       message: result.message,
-      status: 500,
+      meta: assumptionsUserMeta(currentUser, result.meta),
     });
-  }
-
-  return NextResponse.json({
-    ok: true,
-    snapshotSummary: result.snapshotSummary,
-    message: result.message,
-    meta: assumptionsUserMeta(currentUser, result.meta),
   });
 }

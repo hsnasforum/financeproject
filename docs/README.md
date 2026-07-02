@@ -11,8 +11,8 @@
 - 공식 리포트 허브: `/planning/reports`
 - 실행 기록: `/planning/runs`
 - 추천 허브: `/recommend`
-- 상품 탐색: `/products/catalog`
-- 혜택 탐색: `/benefits`
+- 상품 탐색: `/products/catalog` (`/products/deposit`, `/products/saving`은 catalog preset compatibility route)
+- 혜택 탐색: `/benefits` (canonical search), `/gov24` (guided finder; 같은 공공혜택 표시 contract 공유)
 
 ## Prototype Policy
 - `/planning/reports/prototype` 는 기본 진입 시 공식 리포트로 리다이렉트됩니다.

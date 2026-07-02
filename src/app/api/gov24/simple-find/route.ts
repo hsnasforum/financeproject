@@ -6,6 +6,7 @@ import { type Gov24SimpleFindInput } from "@/lib/publicApis/gov24SimpleFind/type
 import { buildOrgTypeCounts, classifyOrgType, type Gov24OrgType } from "@/lib/gov24/orgClassifier";
 import { buildGov24CardFields } from "@/lib/gov24/cardFields";
 import { attachFallback } from "@/lib/http/fallbackMeta";
+import { BENEFITS_FLOW_COPY } from "@/lib/publicApis/benefitsFlowContract";
 import { normalizeSido } from "@/lib/regions/kr";
 import { filterByResidence } from "@/lib/gov24/residenceHardFilter";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       data: { items: [], totalMatched: 0, page: { cursor, pageSize, nextCursor: null, hasMore: false } },
-      meta: attachFallback({ generatedAt: null, snapshotTotal: 0 }, {
+      meta: attachFallback({ generatedAt: null, snapshotTotal: 0, message: BENEFITS_FLOW_COPY.snapshotMissing }, {
         mode: "CACHE",
         sourceKey: "gov24",
         reason: "snapshot_missing",

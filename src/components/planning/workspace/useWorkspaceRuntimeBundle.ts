@@ -30,6 +30,9 @@ import {
   SCENARIO_TEMPLATE_LABELS,
   createScenarioPatchesFromTemplate,
   parseHorizonMonths,
+  parseMaxCandidatesPerAction,
+  parseMonteCarloPaths,
+  parseMonteCarloSeed,
   resolveWorkspaceRuntimeSnapshotFallback,
   selectPreferredBaselineRunId,
   type BaselineRunOption,
@@ -54,6 +57,9 @@ export {
   formatRunOverallStatusKo,
   parseHorizonMonths,
   parseJsonText,
+  parseMaxCandidatesPerAction,
+  parseMonteCarloPaths,
+  parseMonteCarloSeed,
   resolveRunMatchesCurrentProfile,
   resolveRunStatusReviewRequired,
   resolveWorkspaceRuntimeSnapshotFallback,
@@ -419,21 +425,21 @@ export function useWorkspaceRuntimeActionsBundle({
     const core = parseCoreInputs();
     if (!core) return null;
 
-    const paths = Number.parseInt(monteCarloPaths, 10);
-    const seed = Number.parseInt(monteCarloSeed, 10);
+    const paths = parseMonteCarloPaths(monteCarloPaths);
+    const seed = parseMonteCarloSeed(monteCarloSeed);
     if (effectiveRunMonteCarloEnabled) {
-      if (!Number.isFinite(paths) || paths < 1 || paths > 20000) {
+      if (paths === null) {
         pushWorkspaceError("Monte Carlo paths는 1~20000 범위여야 합니다.");
         return null;
       }
-      if (!Number.isFinite(seed)) {
+      if (seed === null) {
         pushWorkspaceError("Monte Carlo seed는 숫자여야 합니다.");
         return null;
       }
     }
 
-    const maxCandidates = Number.parseInt(maxCandidatesPerAction, 10);
-    if (effectiveRunActionsEnabled && (!Number.isFinite(maxCandidates) || maxCandidates < 1 || maxCandidates > 20)) {
+    const maxCandidates = parseMaxCandidatesPerAction(maxCandidatesPerAction);
+    if (effectiveRunActionsEnabled && maxCandidates === null) {
       pushWorkspaceError("후보 최대 개수는 1~20 범위여야 합니다.");
       return null;
     }
@@ -458,10 +464,10 @@ export function useWorkspaceRuntimeActionsBundle({
 
     return {
       ...core,
-      monteCarlo: { paths, seed },
+      monteCarlo: { paths: paths ?? 0, seed: seed ?? 0 },
       actions: {
         includeProducts: effectiveIncludeProducts,
-        maxCandidatesPerAction: maxCandidates,
+        maxCandidatesPerAction: maxCandidates ?? 0,
       },
       debt: {
         offers,

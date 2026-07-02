@@ -12,7 +12,7 @@ import {
   type OpsBackupExportMode,
 } from "../../../../../lib/ops/backup/backupExportRouteService";
 import { opsErrorResponse, toOpsContractError } from "../../../../../lib/ops/errorContract";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -39,35 +39,35 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null) as { csrf?: unknown; passphrase?: unknown; mode?: unknown; gzip?: unknown } | null;
     assertOpsBackupExportVaultCsrf(request, asString(body?.csrf));
-    const currentUser = await requirePlanningRouteUser(request);
-    if (!isPlanningRouteUser(currentUser)) {
-      ensureOpsBackupExportVaultCsrfCookie(request, currentUser);
-      return currentUser;
-    }
-    const passphrase = asString(body?.passphrase);
-    const mode: OpsBackupExportMode = asString(body?.mode).toLowerCase() === "delta" ? "delta" : "full";
-    const gzipRequested = asBool(body?.gzip) || supportsGzip(request);
+    return await withPlanningRouteUser(request, async () => {
+      const passphrase = asString(body?.passphrase);
+      const mode: OpsBackupExportMode = asString(body?.mode).toLowerCase() === "delta" ? "delta" : "full";
+      const gzipRequested = asBool(body?.gzip) || supportsGzip(request);
 
-    const exported = await exportOpsBackupArchive({
-      passphrase,
-      mode,
-      gzipRequested,
-      startedAt,
+      const exported = await exportOpsBackupArchive({
+        passphrase,
+        mode,
+        gzipRequested,
+        startedAt,
+      });
+      const baseStream = Readable.from(exported.encryptedBytes, { highWaterMark: 64 * 1024 });
+      const streamed = gzipRequested ? baseStream.pipe(createGzip()) : baseStream;
+      const response = new Response(Readable.toWeb(streamed) as ReadableStream, {
+        status: 200,
+        headers: {
+          "content-type": "application/octet-stream",
+          "content-disposition": `attachment; filename="${exported.fileName}"`,
+          "cache-control": "no-store",
+          "x-transfer-mode": "stream",
+          ...(gzipRequested ? { "content-encoding": "gzip", vary: "accept-encoding" } : {}),
+        },
+      });
+      ensureOpsBackupExportVaultCsrfCookie(request, response);
+      return response;
+    }, process.env, (response) => {
+      ensureOpsBackupExportVaultCsrfCookie(request, response);
+      return response;
     });
-    const baseStream = Readable.from(exported.encryptedBytes, { highWaterMark: 64 * 1024 });
-    const streamed = gzipRequested ? baseStream.pipe(createGzip()) : baseStream;
-    const response = new Response(Readable.toWeb(streamed) as ReadableStream, {
-      status: 200,
-      headers: {
-        "content-type": "application/octet-stream",
-        "content-disposition": `attachment; filename="${exported.fileName}"`,
-        "cache-control": "no-store",
-        "x-transfer-mode": "stream",
-        ...(gzipRequested ? { "content-encoding": "gzip", vary: "accept-encoding" } : {}),
-      },
-    });
-    ensureOpsBackupExportVaultCsrfCookie(request, response);
-    return response;
   } catch (error) {
     const guard = toGuardErrorResponse(error);
     if (guard) {

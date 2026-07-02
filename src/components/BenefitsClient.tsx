@@ -28,6 +28,12 @@ import { getBenefitQualityBucket } from "@/lib/publicApis/benefitsQuality";
 import { type BenefitCandidate } from "@/lib/publicApis/contracts/types";
 import { parseBenefitsQueryPreset } from "@/lib/planner/actionQuery";
 import { extractApplyLinks } from "@/lib/gov24/applyLinks";
+import {
+  BENEFITS_FLOW_COPY,
+  benefitResultSummary,
+  buildBenefitsSnapshotStatus,
+  readBenefitErrorMessage,
+} from "@/lib/publicApis/benefitsFlowContract";
 
 type BenefitItem = BenefitCandidate;
 
@@ -163,6 +169,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
     () => (selected ? extractShortcutFromApplyHow(selected.id, selected.applyHow) : null),
     [selected],
   );
+  const snapshotStatus = useMemo(() => buildBenefitsSnapshotStatus(meta), [meta]);
 
   const syncUrl = useCallback((state: FetchState) => {
     const normalizedTopics = isTopicFilterBypassed(state.topics) ? [] : state.topics;
@@ -212,7 +219,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       const res = await fetch(`/api/public/benefits/search?${params.toString()}`, { cache: "no-store", signal: controller.signal });
       const json = await res.json();
       if (!json?.ok) {
-        setError(json?.error?.message ?? "혜택 조회 실패");
+        setError(readBenefitErrorMessage(json));
         return;
       }
       const nextItems = Array.isArray(json.data?.items) ? json.data.items : [];
@@ -230,7 +237,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
       if (options?.syncUrl !== false) syncUrl(state);
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") return;
-      setError("혜택 조회 실패");
+      setError(BENEFITS_FLOW_COPY.requestFailed);
     } finally {
       setLoading(false);
     }
@@ -362,8 +369,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
         description="중앙부처와 지자체 혜택을 현재 검색과 지역 기준으로 다시 찾고 비교해 보는 화면입니다."
       />
       <p className="mb-6 text-xs font-medium leading-relaxed text-slate-500">
-        이 화면은 확정 지원 판정이 아니라, 지금 조건에서 다시 확인할 혜택 후보를 좁혀 보는 단계입니다.
-        신청 전에는 상세에서 지원 조건과 신청 방법을 다시 확인하세요.
+        {BENEFITS_FLOW_COPY.sharedDisclaimer}
       </p>
 
       <div className="mb-8 space-y-6">
@@ -458,14 +464,17 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
 
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4 px-2">
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-black text-primary">{totalMatched.toLocaleString()}건의 혜택 후보</span>
+          <span className="text-sm font-black text-primary">{benefitResultSummary({ surface: "benefits", totalMatched })}</span>
           <p className="text-xs font-medium leading-relaxed text-slate-500">
             현재 검색과 지역 기준으로 다시 읽는 결과입니다. 상세에서 지원 조건과 신청 방법을 다시 확인하세요.
           </p>
-          {meta.snapshot?.generatedAt ? (
+          {snapshotStatus.generatedAt ? (
             <p className="text-[11px] font-medium text-slate-400">
-              기준 확인: {new Date(meta.snapshot.generatedAt).toLocaleString("ko-KR", { hour12: false })}
+              기준 확인: {new Date(snapshotStatus.generatedAt).toLocaleString("ko-KR", { hour12: false })}
             </p>
+          ) : null}
+          {snapshotStatus.notice ? (
+            <p className="text-[11px] font-bold text-amber-600">{snapshotStatus.notice}</p>
           ) : null}
         </div>
         <div className="flex items-center gap-4">
@@ -497,7 +506,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
              </div>
              <div className="flex items-center gap-2">
                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">현재 반영 범위</span>
-               <span className="font-black text-navy tabular-nums">{Math.round((meta.snapshot?.completionRate ?? 0) * 100)}%</span>
+               <span className="font-black text-navy tabular-nums">{snapshotStatus.completionRate !== null ? `${Math.round(snapshotStatus.completionRate * 100)}%` : "-"}</span>
              </div>
              {process.env.NODE_ENV !== "production" && (
                <Button variant="outline" className="h-8 rounded-full text-[10px] font-black px-4 bg-surface-muted" onClick={() => void refreshSnapshot()}>
@@ -593,7 +602,7 @@ export function BenefitsClient({ initialQuery = "" }: { initialQuery?: string })
           <div className="py-20">
             <EmptyState
               title="검색된 혜택이 없습니다"
-              description="지역, 주제, 키워드를 조금 넓혀서 혜택 후보를 다시 찾아보세요."
+              description={BENEFITS_FLOW_COPY.empty}
               actionLabel="필터 초기화"
               onAction={() => applyAndRun({ query: "", topics: [], sido: "", sigungu: "", includeNationwide: true, includeUnknown: true })}
             />

@@ -1,20 +1,20 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   WeeklyPlanSchema,
   readWeeklyPlan,
   writeWeeklyPlan,
-} from "@/lib/planning/v3/news/weeklyPlan";
+  } from "@/lib/planning/v3/news/weeklyPlan";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 export const runtime = "nodejs";
@@ -86,20 +86,20 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const payload = parseWithV3Whitelist(GetResponseSchema, {
-    ok: true,
-    data: readWeeklyPlan(),
-    meta: userMeta,
-  }, {
-    scope: "response",
-    context: "api.v3.news.weeklyPlan.get",
+    const payload = parseWithV3Whitelist(GetResponseSchema, {
+      ok: true,
+      data: readWeeklyPlan(),
+      meta: userMeta,
+    }, {
+      scope: "response",
+      context: "api.v3.news.weeklyPlan.get",
+    });
+
+    return NextResponse.json(payload);
   });
-
-  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {
@@ -112,46 +112,46 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = SaveBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "주간 계획 입력 형식이 올바르지 않습니다." },
+    const parsed = SaveBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "주간 계획 입력 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const saved = writeWeeklyPlan({
+        weekOf: parsed.data.weekOf,
+        topics: parsed.data.topics,
+        seriesIds: parsed.data.seriesIds,
+      });
+      const payload = parseWithV3Whitelist(PostResponseSchema, {
+        ok: true,
+        data: saved,
         meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
+      }, {
+        scope: "response",
+        context: "api.v3.news.weeklyPlan.post",
+      });
 
-  try {
-    const saved = writeWeeklyPlan({
-      weekOf: parsed.data.weekOf,
-      topics: parsed.data.topics,
-      seriesIds: parsed.data.seriesIds,
-    });
-    const payload = parseWithV3Whitelist(PostResponseSchema, {
-      ok: true,
-      data: saved,
-      meta: userMeta,
-    }, {
-      scope: "response",
-      context: "api.v3.news.weeklyPlan.post",
-    });
-
-    return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INTERNAL", message: "주간 계획 저장 중 오류가 발생했습니다." },
-        meta: userMeta,
-      },
-      { status: 500 },
-    );
-  }
+      return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INTERNAL", message: "주간 계획 저장 중 오류가 발생했습니다." },
+          meta: userMeta,
+        },
+        { status: 500 },
+      );
+    }
+  });
 }

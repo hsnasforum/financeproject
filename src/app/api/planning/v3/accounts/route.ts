@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   AccountsStoreInputError,
   listCurrentUserAccounts,
   upsertCurrentUserAccount,
-} from "@/lib/planning/v3/service/accountsRepository";
+  } from "@/lib/planning/v3/service/accountsRepository";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
@@ -74,21 +74,21 @@ function withWriteGuard(request: Request, body: CreateBody): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const items = await listCurrentUserAccounts();
-    return NextResponse.json({ ok: true, items, meta: userMeta });
-  } catch (error) {
-    const storageError = planningStorageErrorResponse(error, userMeta);
-    if (storageError) return storageError;
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "계좌 목록을 불러오지 못했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+    try {
+      const items = await listCurrentUserAccounts();
+      return NextResponse.json({ ok: true, items, meta: userMeta });
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
+      return NextResponse.json(
+        { ok: false, error: { code: "INTERNAL", message: "계좌 목록을 불러오지 못했습니다." }, meta: userMeta },
+        { status: 500 },
+      );
+    }
+  });
 }
 
 export async function POST(request: Request) {
@@ -101,37 +101,37 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const account = await upsertCurrentUserAccount({
-      ...(body?.accountId !== undefined ? { accountId: body.accountId } : {}),
-      name: body?.name,
-      ...(body?.kind !== undefined ? { kind: body.kind } : {}),
-      ...(body?.note !== undefined ? { note: body.note } : {}),
-      ...(body?.createdAt !== undefined ? { createdAt: body.createdAt } : {}),
-      ...(body?.startingBalanceKrw !== undefined ? { startingBalanceKrw: body.startingBalanceKrw } : {}),
-    });
-    return NextResponse.json({ ok: true, account, meta: userMeta }, { status: 201 });
-  } catch (error) {
-    const storageError = planningStorageErrorResponse(error, userMeta);
-    if (storageError) return storageError;
-    if (error instanceof AccountsStoreInputError) {
+    try {
+      const account = await upsertCurrentUserAccount({
+        ...(body?.accountId !== undefined ? { accountId: body.accountId } : {}),
+        name: body?.name,
+        ...(body?.kind !== undefined ? { kind: body.kind } : {}),
+        ...(body?.note !== undefined ? { note: body.note } : {}),
+        ...(body?.createdAt !== undefined ? { createdAt: body.createdAt } : {}),
+        ...(body?.startingBalanceKrw !== undefined ? { startingBalanceKrw: body.startingBalanceKrw } : {}),
+      });
+      return NextResponse.json({ ok: true, account, meta: userMeta }, { status: 201 });
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
+      if (error instanceof AccountsStoreInputError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: { code: "INPUT", message: "계좌 입력이 올바르지 않습니다." },
+            details: error.details,
+            meta: userMeta,
+          },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        {
-          ok: false,
-          error: { code: "INPUT", message: "계좌 입력이 올바르지 않습니다." },
-          details: error.details,
-          meta: userMeta,
-        },
-        { status: 400 },
+        { ok: false, error: { code: "INTERNAL", message: "계좌를 생성하지 못했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "계좌를 생성하지 못했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

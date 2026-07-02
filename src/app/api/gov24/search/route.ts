@@ -6,6 +6,7 @@ import { isGov24SyncInFlight } from "@/lib/publicApis/gov24SyncState";
 import { classifyOrgType } from "@/lib/gov24/orgClassifier";
 import { isRegionMatch } from "@/lib/gov24/regionFilter";
 import { attachFallback } from "@/lib/http/fallbackMeta";
+import { BENEFITS_FLOW_COPY } from "@/lib/publicApis/benefitsFlowContract";
 import { normalizeSido } from "@/lib/regions/kr";
 import { singleflight } from "../../../../lib/cache/singleflight";
 import { getCachePolicy } from "../../../../lib/dataSources/cachePolicy";
@@ -105,6 +106,7 @@ export async function GET(request: Request) {
       const meta = attachFallback({
         snapshot: null,
         sync: { state: isGov24SyncInFlight() ? "syncing" : "needs_sync" },
+        message: BENEFITS_FLOW_COPY.snapshotMissing,
       }, {
         mode: "CACHE",
         sourceKey: "gov24",

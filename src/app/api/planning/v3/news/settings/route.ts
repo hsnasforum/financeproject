@@ -1,22 +1,22 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { NEWS_SOURCES } from "@/lib/planning/v3/news/sources";
 import {
   loadEffectiveNewsConfig,
   readNewsSettings,
   writeNewsSettings,
-} from "@/lib/planning/v3/news/settings";
+  } from "@/lib/planning/v3/news/settings";
 import { NEWS_TOPICS } from "@/lib/planning/v3/news/taxonomy";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 const SourceOverrideInputSchema = z.object({
@@ -133,53 +133,53 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const settings = readNewsSettings();
-  const effective = loadEffectiveNewsConfig();
-  const sourceOverrideById = new Map(settings.sources.map((row) => [row.id, row]));
-  const topicOverrideById = new Map(settings.topics.map((row) => [row.id, row]));
-  const defaultSourceById = new Map(NEWS_SOURCES.map((row) => [row.id, row]));
+    const settings = readNewsSettings();
+    const effective = loadEffectiveNewsConfig();
+    const sourceOverrideById = new Map(settings.sources.map((row) => [row.id, row]));
+    const topicOverrideById = new Map(settings.topics.map((row) => [row.id, row]));
+    const defaultSourceById = new Map(NEWS_SOURCES.map((row) => [row.id, row]));
 
-  const data = {
-    updatedAt: settings.updatedAt ?? null,
-    sources: effective.sources.map((source) => {
-      const base = defaultSourceById.get(source.id);
-      const override = sourceOverrideById.get(source.id);
-      return {
-        id: source.id,
-        name: source.name,
-        feedUrl: source.feedUrl,
-        country: source.country,
-        language: source.language,
-        defaultEnabled: base?.enabled ?? source.enabled,
-        defaultWeight: base?.weight ?? source.weight,
-        overrideEnabled: typeof override?.enabled === "boolean" ? override.enabled : null,
-        overrideWeight: Number.isFinite(override?.weight) ? Number(override?.weight) : null,
-        effectiveEnabled: source.enabled,
-        effectiveWeight: source.weight,
-      };
-    }).sort((a, b) => a.id.localeCompare(b.id)),
-    topics: NEWS_TOPICS.map((topic) => {
-      const override = topicOverrideById.get(topic.id);
-      const merged = effective.topics.find((row) => row.id === topic.id) ?? topic;
-      return {
-        id: topic.id,
-        label: topic.label,
-        defaultKeywords: topic.keywords,
-        overrideKeywords: Array.isArray(override?.keywords) ? override.keywords : null,
-        effectiveKeywords: merged.keywords,
-      };
-    }),
-  };
+    const data = {
+      updatedAt: settings.updatedAt ?? null,
+      sources: effective.sources.map((source) => {
+        const base = defaultSourceById.get(source.id);
+        const override = sourceOverrideById.get(source.id);
+        return {
+          id: source.id,
+          name: source.name,
+          feedUrl: source.feedUrl,
+          country: source.country,
+          language: source.language,
+          defaultEnabled: base?.enabled ?? source.enabled,
+          defaultWeight: base?.weight ?? source.weight,
+          overrideEnabled: typeof override?.enabled === "boolean" ? override.enabled : null,
+          overrideWeight: Number.isFinite(override?.weight) ? Number(override?.weight) : null,
+          effectiveEnabled: source.enabled,
+          effectiveWeight: source.weight,
+        };
+      }).sort((a, b) => a.id.localeCompare(b.id)),
+      topics: NEWS_TOPICS.map((topic) => {
+        const override = topicOverrideById.get(topic.id);
+        const merged = effective.topics.find((row) => row.id === topic.id) ?? topic;
+        return {
+          id: topic.id,
+          label: topic.label,
+          defaultKeywords: topic.keywords,
+          overrideKeywords: Array.isArray(override?.keywords) ? override.keywords : null,
+          effectiveKeywords: merged.keywords,
+        };
+      }),
+    };
 
-  const payload = parseWithV3Whitelist(SettingsGetResponseSchema, { ok: true, data, meta: userMeta }, {
-    scope: "response",
-    context: "api.v3.news.settings.get",
+    const payload = parseWithV3Whitelist(SettingsGetResponseSchema, { ok: true, data, meta: userMeta }, {
+      scope: "response",
+      context: "api.v3.news.settings.get",
+    });
+    return NextResponse.json(payload);
   });
-  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {
@@ -192,58 +192,58 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = SaveBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "설정 입력 형식이 올바르지 않습니다." },
-        meta: userMeta,
+    const parsed = SaveBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "설정 입력 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
+
+    const effective = loadEffectiveNewsConfig();
+    const allowedSourceIds = new Set(effective.sources.map((row) => row.id));
+    const topicIds = new Set(NEWS_TOPICS.map((row) => row.id));
+    const current = readNewsSettings();
+
+    const next = writeNewsSettings({
+      ...current,
+      sources: parsed.data.sources
+        .filter((row) => allowedSourceIds.has(row.id))
+        .map((row) => ({
+          id: row.id,
+          enabled: typeof row.enabled === "boolean" ? row.enabled : undefined,
+          weight: typeof row.weight === "number" && Number.isFinite(row.weight) ? row.weight : undefined,
+        }))
+        .filter((row) => typeof row.enabled === "boolean" || Number.isFinite(row.weight)),
+      topics: parsed.data.topics
+        .filter((row) => topicIds.has(row.id))
+        .map((row) => ({
+          id: row.id,
+          keywords: Array.isArray(row.keywords) ? dedupeKeywords(row.keywords) : undefined,
+        }))
+        .filter((row) => Array.isArray(row.keywords)),
+      customSources: current.customSources ?? [],
+    });
+
+    const payload = parseWithV3Whitelist(SettingsPostResponseSchema, {
+      ok: true,
+      data: {
+        updatedAt: next.updatedAt ?? null,
+        sourcesCount: next.sources.length,
+        topicsCount: next.topics.length,
       },
-      { status: 400 },
-    );
-  }
-
-  const effective = loadEffectiveNewsConfig();
-  const allowedSourceIds = new Set(effective.sources.map((row) => row.id));
-  const topicIds = new Set(NEWS_TOPICS.map((row) => row.id));
-  const current = readNewsSettings();
-
-  const next = writeNewsSettings({
-    ...current,
-    sources: parsed.data.sources
-      .filter((row) => allowedSourceIds.has(row.id))
-      .map((row) => ({
-        id: row.id,
-        enabled: typeof row.enabled === "boolean" ? row.enabled : undefined,
-        weight: typeof row.weight === "number" && Number.isFinite(row.weight) ? row.weight : undefined,
-      }))
-      .filter((row) => typeof row.enabled === "boolean" || Number.isFinite(row.weight)),
-    topics: parsed.data.topics
-      .filter((row) => topicIds.has(row.id))
-      .map((row) => ({
-        id: row.id,
-        keywords: Array.isArray(row.keywords) ? dedupeKeywords(row.keywords) : undefined,
-      }))
-      .filter((row) => Array.isArray(row.keywords)),
-    customSources: current.customSources ?? [],
+      meta: userMeta,
+    }, {
+      scope: "response",
+      context: "api.v3.news.settings.post",
+    });
+    return NextResponse.json(payload);
   });
-
-  const payload = parseWithV3Whitelist(SettingsPostResponseSchema, {
-    ok: true,
-    data: {
-      updatedAt: next.updatedAt ?? null,
-      sourcesCount: next.sources.length,
-      topicsCount: next.topics.length,
-    },
-    meta: userMeta,
-  }, {
-    scope: "response",
-    context: "api.v3.news.settings.post",
-  });
-  return NextResponse.json(payload);
 }

@@ -2,17 +2,17 @@ import {
   assertCsrf,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
-import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
+  } from "../../../../../lib/dev/devGuards";
+import { jsonError,
+  jsonOk } from "../../../../../lib/planning/api/response";
 import {
   createCurrentUserShareReportResponseData,
   listCurrentUserShareReportResponseData,
-} from "../../../../../lib/planning/server/share/routeService";
+  } from "../../../../../lib/planning/server/share/routeService";
 import { type MaskLevel } from "../../../../../lib/planning/server/share/mask";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 type ShareCreateBody = {
@@ -64,24 +64,24 @@ function withWriteGuard(request: Request, body: { csrf?: unknown } | null) {
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const url = new URL(request.url);
-    const limit = Math.max(1, Math.min(100, Math.trunc(Number(url.searchParams.get("limit"))) || 50));
-    const data = await listCurrentUserShareReportResponseData(limit);
-    return jsonOk(
-      {
-        data,
-      },
-      { meta: userMeta },
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "공유 리포트 목록 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
-  }
+    try {
+      const url = new URL(request.url);
+      const limit = Math.max(1, Math.min(100, Math.trunc(Number(url.searchParams.get("limit"))) || 50));
+      const data = await listCurrentUserShareReportResponseData(limit);
+      return jsonOk(
+        {
+          data,
+        },
+        { meta: userMeta },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "공유 리포트 목록 조회에 실패했습니다.";
+      return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
+    }
+  });
 }
 
 export async function POST(request: Request) {
@@ -94,34 +94,34 @@ export async function POST(request: Request) {
 
   const guardFailure = withWriteGuard(request, body);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const runId = asString(body?.runId);
-    if (!runId) {
-      return jsonError("INPUT", "runId는 필수입니다.", { status: 400, meta: userMeta });
-    }
+    try {
+      const runId = asString(body?.runId);
+      if (!runId) {
+        return jsonError("INPUT", "runId는 필수입니다.", { status: 400, meta: userMeta });
+      }
 
-    const created = await createCurrentUserShareReportResponseData({
-      runId,
-      level: parseMaskLevel(body?.level),
-    });
-    return jsonOk(
-      {
-        data: created,
-      },
-      { status: 201, meta: userMeta },
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "공유 리포트 생성에 실패했습니다.";
-    if (message.includes("not found")) {
-      return jsonError("NO_DATA", "run 또는 profile을 찾을 수 없습니다.", {
-        status: 404,
-        meta: userMeta,
+      const created = await createCurrentUserShareReportResponseData({
+        runId,
+        level: parseMaskLevel(body?.level),
       });
+      return jsonOk(
+        {
+          data: created,
+        },
+        { status: 201, meta: userMeta },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "공유 리포트 생성에 실패했습니다.";
+      if (message.includes("not found")) {
+        return jsonError("NO_DATA", "run 또는 profile을 찾을 수 없습니다.", {
+          status: 404,
+          meta: userMeta,
+        });
+      }
+      return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
     }
-    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
-  }
+  });
 }

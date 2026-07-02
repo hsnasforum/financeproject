@@ -10,80 +10,34 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import {
+  getPublicBottomNavItems,
+  isNavigationItemActive,
+  isOpsOrDevRoute,
+  type NavIconKey,
+} from "@/lib/navigation/routeRegistry";
 import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
 import { cn } from "@/lib/utils";
 
-function shouldHideMobileBottomNav(pathname: string): boolean {
-  return pathname.startsWith("/ops") || pathname.startsWith("/dev") || pathname.startsWith("/debug");
-}
-
-type NavItem = {
-  href: string;
-  label: string;
-  match: "prefix" | "exact";
-  excludePrefixes: string[];
-  includePrefixes: string[];
-  Icon: LucideIcon;
+const iconByKey: Record<NavIconKey, LucideIcon> = {
+  home: Home,
+  planning: LineChart,
+  recommend: Sparkles,
+  explore: Compass,
+  settings: Settings,
 };
-
-const navItems: NavItem[] = [
-  {
-    href: "/dashboard",
-    label: "홈",
-    match: "prefix",
-    excludePrefixes: [],
-    includePrefixes: [],
-    Icon: Home,
-  },
-  {
-    href: "/planning",
-    label: "진단",
-    match: "prefix",
-    excludePrefixes: [],
-    includePrefixes: [],
-    Icon: LineChart,
-  },
-  {
-    href: "/recommend",
-    label: "추천",
-    match: "prefix",
-    excludePrefixes: [],
-    includePrefixes: [],
-    Icon: Sparkles,
-  },
-  {
-    href: "/products",
-    label: "탐색",
-    match: "prefix",
-    excludePrefixes: [],
-    includePrefixes: ["/benefits", "/public", "/housing", "/tools", "/invest", "/compare", "/gov24"],
-    Icon: Compass,
-  },
-  {
-    href: "/settings",
-    label: "설정",
-    match: "prefix",
-    excludePrefixes: [],
-    includePrefixes: [],
-    Icon: Settings,
-  },
-];
 
 export function MobileBottomNav() {
   const pathname = usePathname();
-  if (shouldHideMobileBottomNav(pathname)) return null;
+  if (isOpsOrDevRoute(pathname)) return null;
+  const navItems = getPublicBottomNavItems();
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200/70 bg-surface/90 pb-safe backdrop-blur-xl shadow-[0_-8px_30px_-15px_rgba(10,31,68,0.12)] md:hidden">
       <div className="flex items-center justify-around px-2 py-3">
-        {navItems.map(({ Icon, ...item }) => {
-          const isActive = item.includePrefixes.some((prefix) => pathname.startsWith(prefix))
-            ? true
-            : item.excludePrefixes.some((prefix) => pathname.startsWith(prefix))
-            ? false
-            : item.match === "prefix"
-              ? pathname === item.href || pathname.startsWith(item.href)
-              : pathname === item.href;
+        {navItems.map((item) => {
+          const Icon = item.icon ? iconByKey[item.icon] : Compass;
+          const isActive = isNavigationItemActive(pathname, item);
           return (
             <Link
               key={item.href}
@@ -115,7 +69,7 @@ export function MobileBottomNav() {
                   isActive ? "text-primary" : "text-slate-500",
                 )}
               >
-                {item.label}
+                {item.mobileLabel ?? item.label}
               </span>
             </Link>
           );

@@ -1,4 +1,4 @@
-import { isPlanningRouteUser, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "@/lib/planning/api/routeAuth";
 import {
   GET as actionProgressGet,
   PATCH as actionProgressPatch,
@@ -9,21 +9,19 @@ type RouteContext = {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-
-  const { id } = await context.params;
-  return actionProgressGet(request, {
-    params: Promise.resolve({ id }),
+  return await withPlanningRouteUser(request, async () => {
+    const { id } = await context.params;
+    return actionProgressGet(request, {
+      params: Promise.resolve({ id }),
+    });
   });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-
-  const { id } = await context.params;
-  return actionProgressPatch(request, {
-    params: Promise.resolve({ id }),
+  return await withPlanningRouteUser(request, async () => {
+    const { id } = await context.params;
+    return actionProgressPatch(request, {
+      params: Promise.resolve({ id }),
+    });
   });
 }

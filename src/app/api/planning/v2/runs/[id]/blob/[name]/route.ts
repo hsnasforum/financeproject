@@ -2,12 +2,12 @@ import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "../../../../../../../../lib/dev/devGuards";
-import { jsonError, jsonOk } from "../../../../../../../../lib/planning/api/response";
+  } from "../../../../../../../../lib/dev/devGuards";
+import { jsonError,
+  jsonOk } from "../../../../../../../../lib/planning/api/response";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../../../../lib/planning/api/routeAuth";
 import { getCurrentUserRunBlobResponseData } from "../../../../../../../../lib/planning/server/runs/routeService";
 import { gzipSync } from "node:zlib";
@@ -75,46 +75,46 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id, name } = await context.params;
-  const url = new URL(request.url);
-  const isPreview = asString(url.searchParams.get("view")).toLowerCase() === "preview";
+    const { id, name } = await context.params;
+    const url = new URL(request.url);
+    const isPreview = asString(url.searchParams.get("view")).toLowerCase() === "preview";
 
-  try {
-    const responseBlob = await getCurrentUserRunBlobResponseData(id, name);
-    if (responseBlob === null) {
-      return jsonError("NO_DATA", "blob을 찾을 수 없습니다.", { status: 404, meta: userMeta });
+    try {
+      const responseBlob = await getCurrentUserRunBlobResponseData(id, name);
+      if (responseBlob === null) {
+        return jsonError("NO_DATA", "blob을 찾을 수 없습니다.", { status: 404, meta: userMeta });
+      }
+      if (!isPreview) {
+        return jsonResponseWithOptionalGzip(request, {
+          ok: true,
+          meta: userMeta,
+          data: responseBlob,
+        });
+      }
+
+      const cursor = parsePositiveInt(url.searchParams.get("cursor"), 0, 0, Number.MAX_SAFE_INTEGER);
+      const chunkChars = parsePositiveInt(url.searchParams.get("chunkChars"), 16_000, 64, 120_000);
+      const serialized = `${JSON.stringify(responseBlob, null, 2)}\n`;
+      const safeCursor = Math.min(cursor, serialized.length);
+      const text = serialized.slice(safeCursor, safeCursor + chunkChars);
+      const nextCursor = safeCursor + text.length;
+      const hasMore = nextCursor < serialized.length;
+      return jsonOk({
+        data: {
+          text,
+          cursor: safeCursor,
+          nextCursor,
+          chunkChars,
+          totalChars: serialized.length,
+          hasMore,
+        },
+      }, { meta: userMeta });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "blob 조회에 실패했습니다.";
+      return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
     }
-    if (!isPreview) {
-      return jsonResponseWithOptionalGzip(request, {
-        ok: true,
-        meta: userMeta,
-        data: responseBlob,
-      });
-    }
-
-    const cursor = parsePositiveInt(url.searchParams.get("cursor"), 0, 0, Number.MAX_SAFE_INTEGER);
-    const chunkChars = parsePositiveInt(url.searchParams.get("chunkChars"), 16_000, 64, 120_000);
-    const serialized = `${JSON.stringify(responseBlob, null, 2)}\n`;
-    const safeCursor = Math.min(cursor, serialized.length);
-    const text = serialized.slice(safeCursor, safeCursor + chunkChars);
-    const nextCursor = safeCursor + text.length;
-    const hasMore = nextCursor < serialized.length;
-    return jsonOk({
-      data: {
-        text,
-        cursor: safeCursor,
-        nextCursor,
-        chunkChars,
-        totalChars: serialized.length,
-        hasMore,
-      },
-    }, { meta: userMeta });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "blob 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
-  }
+  });
 }

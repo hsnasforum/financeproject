@@ -1,16 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { ExposureProfileSchema } from "@/lib/planning/v3/exposure/contracts";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import {
   readCurrentUserExposureProfile,
@@ -76,16 +76,16 @@ function withWriteGuard(request: Request, body: unknown): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const payload = parseWithV3Whitelist(ExposureGetResponseSchema, {
-    ok: true,
-    profile: readCurrentUserExposureProfile(),
-    meta: userMeta,
-  }, { scope: "response", context: "api.v3.exposure.get" });
-  return NextResponse.json(payload);
+    const payload = parseWithV3Whitelist(ExposureGetResponseSchema, {
+      ok: true,
+      profile: readCurrentUserExposureProfile(),
+      meta: userMeta,
+    }, { scope: "response", context: "api.v3.exposure.get" });
+    return NextResponse.json(payload);
+  });
 }
 
 export async function POST(request: Request) {
@@ -98,23 +98,23 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const payload = body as { profile?: unknown } | null;
-    const saved = saveCurrentUserExposureProfile(payload?.profile ?? {});
-    const responsePayload = parseWithV3Whitelist(ExposurePostResponseSchema, {
-      ok: true,
-      profile: saved,
-      meta: userMeta,
-    }, { scope: "response", context: "api.v3.exposure.post" });
-    return NextResponse.json(responsePayload);
-  } catch {
-    return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "노출 프로필 입력 형식이 올바르지 않습니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
+    try {
+      const payload = body as { profile?: unknown } | null;
+      const saved = saveCurrentUserExposureProfile(payload?.profile ?? {});
+      const responsePayload = parseWithV3Whitelist(ExposurePostResponseSchema, {
+        ok: true,
+        profile: saved,
+        meta: userMeta,
+      }, { scope: "response", context: "api.v3.exposure.post" });
+      return NextResponse.json(responsePayload);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "노출 프로필 입력 형식이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+  });
 }

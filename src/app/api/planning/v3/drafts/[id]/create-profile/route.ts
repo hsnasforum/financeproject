@@ -1,13 +1,13 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type RouteContext = {
@@ -54,20 +54,20 @@ export async function POST(request: Request, context: RouteContext) {
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  await context.params;
-  return NextResponse.json(
-    {
-      ok: false,
-      error: {
-        code: "EXPORT_ONLY",
-        message: "v3는 미리보기/내보내기만 지원합니다. 새 프로필 저장은 허용되지 않습니다.",
+    await context.params;
+    return NextResponse.json(
+      {
+        ok: false,
+        error: {
+          code: "EXPORT_ONLY",
+          message: "v3는 미리보기/내보내기만 지원합니다. 새 프로필 저장은 허용되지 않습니다.",
+        },
+        meta: userMeta,
       },
-      meta: userMeta,
-    },
-    { status: 409 },
-  );
+      { status: 409 },
+    );
+  });
 }

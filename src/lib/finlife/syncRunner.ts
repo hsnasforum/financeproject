@@ -269,7 +269,7 @@ export async function runFinlifeSnapshotSync(kind: FinlifeSnapshotKind): Promise
       fallbackUsed,
       lastUpstreamStatus,
       duplicateAcrossGroupsCount: merged.duplicateAcrossGroupsCount,
-      note: topGroups.length <= 1 ? "업권 범위가 좁을 수 있음. pnpm finlife:probe 권장" : undefined,
+      note: topGroups.length <= 1 ? "업권 범위가 좁을 수 있습니다. FINLIFE 업권 설정을 확인하세요." : undefined,
     };
 
     saveFinlifeSnapshot(kind, { meta, items: merged.items });

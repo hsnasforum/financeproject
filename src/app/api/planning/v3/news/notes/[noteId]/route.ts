@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   deleteNewsNote,
   updateNewsNote,
-} from "@/lib/planning/v3/news/notes";
+  } from "@/lib/planning/v3/news/notes";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 const UpdateBodySchema = z.object({
@@ -63,66 +63,66 @@ export async function PATCH(
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsedBody = UpdateBodySchema.safeParse(body ?? {});
-  if (!parsedBody.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "메모 수정 입력 형식이 올바르지 않습니다." },
-        meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
-
-  const params = await context.params;
-  const noteId = noteIdFromParams(params);
-  if (!noteId) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "noteId가 필요합니다." },
-        meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const updated = updateNewsNote(noteId, {
-      tags: parsedBody.data.tags,
-      note: parsedBody.data.note,
-    });
-    if (!updated) {
+    const parsedBody = UpdateBodySchema.safeParse(body ?? {});
+    if (!parsedBody.success) {
       return NextResponse.json(
         {
           ok: false,
-          error: { code: "NOT_FOUND", message: "메모를 찾을 수 없습니다." },
+          error: { code: "INPUT", message: "메모 수정 입력 형식이 올바르지 않습니다." },
           meta: userMeta,
         },
-        { status: 404 },
+        { status: 400 },
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      data: updated,
-      meta: userMeta,
-    });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "메모 수정 입력 형식이 올바르지 않습니다." },
+    const params = await context.params;
+    const noteId = noteIdFromParams(params);
+    if (!noteId) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "noteId가 필요합니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const updated = updateNewsNote(noteId, {
+        tags: parsedBody.data.tags,
+        note: parsedBody.data.note,
+      });
+      if (!updated) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: { code: "NOT_FOUND", message: "메모를 찾을 수 없습니다." },
+            meta: userMeta,
+          },
+          { status: 404 },
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        data: updated,
         meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
+      });
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "메모 수정 입력 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
+  });
 }
 
 export async function DELETE(
@@ -138,44 +138,44 @@ export async function DELETE(
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const params = await context.params;
-  const noteId = noteIdFromParams(params);
-  if (!noteId) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "noteId가 필요합니다." },
-        meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const deleted = deleteNewsNote(noteId);
-    if (!deleted) {
+    const params = await context.params;
+    const noteId = noteIdFromParams(params);
+    if (!noteId) {
       return NextResponse.json(
         {
           ok: false,
-          error: { code: "NOT_FOUND", message: "메모를 찾을 수 없습니다." },
+          error: { code: "INPUT", message: "noteId가 필요합니다." },
           meta: userMeta,
         },
-        { status: 404 },
+        { status: 400 },
       );
     }
-    return NextResponse.json({ ok: true, meta: userMeta });
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "메모 삭제 요청이 올바르지 않습니다." },
-        meta: userMeta,
-      },
-      { status: 400 },
-    );
-  }
+
+    try {
+      const deleted = deleteNewsNote(noteId);
+      if (!deleted) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: { code: "NOT_FOUND", message: "메모를 찾을 수 없습니다." },
+            meta: userMeta,
+          },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ ok: true, meta: userMeta });
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "메모 삭제 요청이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
+  });
 }

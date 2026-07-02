@@ -1,5 +1,6 @@
 import { permanentRedirect } from "next/navigation";
 import type { Metadata } from "next";
+import { PLANNING_CANONICAL_ROUTES } from "@/lib/planning/routes";
 
 export const metadata: Metadata = {
   title: "Legacy Report Redirect",
@@ -18,7 +19,7 @@ export default async function ReportPage({
   const resolved = await searchParams;
   const runId = typeof resolved.runId === "string" ? resolved.runId.trim() : "";
   if (runId) {
-    permanentRedirect(`/planning/reports?runId=${encodeURIComponent(runId)}`);
+    permanentRedirect(`${PLANNING_CANONICAL_ROUTES.user.reports}?runId=${encodeURIComponent(runId)}`);
   }
-  permanentRedirect("/planning/reports");
+  permanentRedirect(PLANNING_CANONICAL_ROUTES.user.reports);
 }

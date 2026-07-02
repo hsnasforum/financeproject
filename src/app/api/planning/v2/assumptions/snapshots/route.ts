@@ -1,12 +1,12 @@
 import {
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../../lib/dev/devGuards";
-import { jsonError, jsonOk } from "../../../../../../lib/planning/api/response";
+  } from "../../../../../../lib/dev/devGuards";
+import { jsonError,
+  jsonOk } from "../../../../../../lib/planning/api/response";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../../lib/planning/api/routeAuth";
 import { listRouteAssumptionsSnapshots } from "../../../../../../lib/planning/server/assumptions/snapshotsRouteService";
 
@@ -34,20 +34,20 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { searchParams } = new URL(request.url);
-  const limit = toSafeLimit(asString(searchParams.get("limit")));
+    const { searchParams } = new URL(request.url);
+    const limit = toSafeLimit(asString(searchParams.get("limit")));
 
-  try {
-    return jsonOk(await listRouteAssumptionsSnapshots({ limit, now: new Date() }), { meta: userMeta });
-  } catch (error) {
-    return jsonError(
-      "INTERNAL",
-      error instanceof Error ? error.message : "스냅샷 목록 조회에 실패했습니다.",
-      { status: 500 },
-    );
-  }
+    try {
+      return jsonOk(await listRouteAssumptionsSnapshots({ limit, now: new Date() }), { meta: userMeta });
+    } catch (error) {
+      return jsonError(
+        "INTERNAL",
+        error instanceof Error ? error.message : "스냅샷 목록 조회에 실패했습니다.",
+        { status: 500 },
+      );
+    }
+  });
 }

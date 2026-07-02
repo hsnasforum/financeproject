@@ -17,6 +17,7 @@ import {
 } from "./types";
 import { resolveAllocationPolicyId } from "./policy/presets";
 import { toEngineRateBoundary } from "../../v2/aprBoundary";
+import { PLANNING_RUN_INPUT_CONTRACT } from "../../v2/planningRunInputContract";
 
 const MIN_ANNUAL_RATE = -0.99;
 const MAX_ANNUAL_RATE = 2;
@@ -810,9 +811,15 @@ export function validateHorizonMonths(input: unknown): number {
   }
 
   const value = Math.trunc(input);
-  if (value < 1 || value > 1200) {
+  if (
+    value < PLANNING_RUN_INPUT_CONTRACT.horizonMonths.min
+    || value > PLANNING_RUN_INPUT_CONTRACT.horizonMonths.max
+  ) {
     throw new PlanningV2ValidationError("Invalid horizonMonths", [
-      { path: "horizonMonths", message: "must be between 1 and 1200" },
+      {
+        path: "horizonMonths",
+        message: `must be between ${PLANNING_RUN_INPUT_CONTRACT.horizonMonths.min} and ${PLANNING_RUN_INPUT_CONTRACT.horizonMonths.max}`,
+      },
     ]);
   }
 

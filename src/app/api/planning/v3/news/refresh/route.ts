@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+  } from "@/lib/dev/devGuards";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 import { runNewsRefresh } from "@/lib/planning/v3/news/cli/newsRefresh";
 import { resolveNewsRootDir } from "@/lib/planning/v3/news/rootDir";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
@@ -54,38 +58,38 @@ export async function POST(request: Request) {
     );
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const rootDir = resolveNewsRootDir();
-    const result = await runNewsRefresh({ rootDir });
-    const lastRefreshedAt = readCurrentUserNewsState().lastRunAt ?? null;
-    const payload = parseWithV3Whitelist(RefreshResponseSchema, {
-      ok: true,
-      data: {
-        sourcesProcessed: result.sourcesProcessed,
-        itemsFetched: result.itemsFetched,
-        itemsNew: result.itemsNew,
-        itemsDeduped: result.itemsDeduped,
-        errorCount: result.errors.length,
-        lastRefreshedAt,
-      },
-      meta: userMeta,
-    }, { scope: "response", context: "api.v3.news.refresh" });
-    return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: {
-          code: "INTERNAL",
-          message: "뉴스 갱신 실행 중 오류가 발생했습니다.",
+    try {
+      const rootDir = resolveNewsRootDir();
+      const result = await runNewsRefresh({ rootDir });
+      const lastRefreshedAt = readCurrentUserNewsState().lastRunAt ?? null;
+      const payload = parseWithV3Whitelist(RefreshResponseSchema, {
+        ok: true,
+        data: {
+          sourcesProcessed: result.sourcesProcessed,
+          itemsFetched: result.itemsFetched,
+          itemsNew: result.itemsNew,
+          itemsDeduped: result.itemsDeduped,
+          errorCount: result.errors.length,
+          lastRefreshedAt,
         },
         meta: userMeta,
-      },
-      { status: 500 },
-    );
-  }
+      }, { scope: "response", context: "api.v3.news.refresh" });
+      return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: {
+            code: "INTERNAL",
+            message: "뉴스 갱신 실행 중 오류가 발생했습니다.",
+          },
+          meta: userMeta,
+        },
+        { status: 500 },
+      );
+    }
+  });
 }

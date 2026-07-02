@@ -1,15 +1,18 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
-import { assertSameOrigin, toGuardErrorResponse } from "@/lib/dev/devGuards";
+import { assertSameOrigin,
+  toGuardErrorResponse } from "@/lib/dev/devGuards";
 import { type IndicatorGrade } from "@/lib/planning/v3/financeNews/contracts";
 import { computeImpact } from "@/lib/planning/v3/financeNews/impactModel";
-import { readLatestDraftSummaryForStress, readNewsScenarioPack, type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
+import { readLatestDraftSummaryForStress,
+  readNewsScenarioPack,
+  type NewsScenarioPack } from "@/lib/planning/v3/news/scenarios";
 import { runStress } from "@/lib/planning/v3/financeNews/stressRunner";
 import { parseWithV3Whitelist } from "@/lib/planning/v3/security/whitelist";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import { readCurrentUserExposureProfile } from "@/lib/planning/v3/service/exposureRepository";
 
@@ -141,25 +144,25 @@ async function enrichScenarioPack(pack: NewsScenarioPack | null): Promise<NewsSc
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  try {
-    const data = await enrichScenarioPack(readNewsScenarioPack());
-    const payload = parseWithV3Whitelist(ScenariosResponseSchema, { ok: true, data, meta: userMeta }, {
-      scope: "response",
-      context: "api.v3.news.scenarios",
-    });
-    return NextResponse.json(payload);
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INTERNAL", message: "뉴스 시나리오를 불러오는 중 오류가 발생했습니다." },
-        meta: userMeta,
-      },
-      { status: 500 },
-    );
-  }
+    try {
+      const data = await enrichScenarioPack(readNewsScenarioPack());
+      const payload = parseWithV3Whitelist(ScenariosResponseSchema, { ok: true, data, meta: userMeta }, {
+        scope: "response",
+        context: "api.v3.news.scenarios",
+      });
+      return NextResponse.json(payload);
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INTERNAL", message: "뉴스 시나리오를 불러오는 중 오류가 발생했습니다." },
+          meta: userMeta,
+        },
+        { status: 500 },
+      );
+    }
+  });
 }

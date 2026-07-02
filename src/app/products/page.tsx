@@ -15,7 +15,7 @@ const PRODUCT_CARDS = [
     badgeClass: "bg-teal-50 text-teal-700 border-teal-100",
   },
   {
-    href: "/products/deposit",
+    href: "/products/catalog?kind=deposit",
     title: "예금",
     description: "예금 상품군을 먼저 보며 금리, 기간, 보호 여부를 좁혀 볼 때",
     entryLabel: "이 상품군 보기",
@@ -23,7 +23,7 @@ const PRODUCT_CARDS = [
     badgeClass: "bg-primary/5 text-navy border-primary/10",
   },
   {
-    href: "/products/saving",
+    href: "/products/catalog?kind=saving",
     title: "적금",
     description: "적금 상품군을 먼저 보며 기간과 우대조건을 좁혀 볼 때",
     entryLabel: "이 상품군 보기",

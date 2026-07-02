@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import { opsErrorResponse } from "@/lib/ops/errorContract";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import {
   auditOpsPlanningCachePurgeError,
@@ -54,32 +54,32 @@ export async function POST(request: Request) {
       status: guard.status,
     });
   }
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  try {
-    const { result, message } = await purgeOpsPlanningCache({ user: currentUser });
+    try {
+      const { result, message } = await purgeOpsPlanningCache({ user: currentUser });
 
-    return NextResponse.json({
-      ok: true,
-      data: result,
-      meta: {
-        ...planningUserMeta(currentUser),
-        ...planningNamespaceMeta(),
-      },
-      message,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "캐시 정리에 실패했습니다.";
-    auditOpsPlanningCachePurgeError({
-      message,
-      user: currentUser,
-    });
+      return NextResponse.json({
+        ok: true,
+        data: result,
+        meta: {
+          ...planningUserMeta(currentUser),
+          ...planningNamespaceMeta(),
+        },
+        message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "캐시 정리에 실패했습니다.";
+      auditOpsPlanningCachePurgeError({
+        message,
+        user: currentUser,
+      });
 
-    return opsErrorResponse({
-      code: "STORAGE_CORRUPT",
-      message,
-      status: 500,
-    });
-  }
+      return opsErrorResponse({
+        code: "STORAGE_CORRUPT",
+        message,
+        status: 500,
+      });
+    }
+  });
 }

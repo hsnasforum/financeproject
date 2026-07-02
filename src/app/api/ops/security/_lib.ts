@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { assertLocalHost, assertSameOrigin, toGuardErrorResponse } from "../../../../lib/dev/devGuards";
 import { opsErrorResponse } from "../../../../lib/ops/errorContract";
-import { planningUserMeta, type PlanningRouteUser } from "../../../../lib/planning/api/routeAuth";
+import {
+  planningUserMeta,
+  PlanningRouteUser,
+} from "../../../../lib/planning/api/routeAuth";
 import { ensureVaultCsrfCookie } from "../../../../lib/planning/security/vaultCsrf";
 import { isPlanningNamespaceEnabled } from "../../../../lib/planning/store/namespace";
 

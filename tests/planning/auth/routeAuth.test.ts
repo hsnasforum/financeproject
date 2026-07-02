@@ -205,6 +205,40 @@ describe("planning route auth boundary", () => {
     });
   });
 
+  it("returns the standard auth response from withPlanningRouteUser without entering route scope", async () => {
+    const result = await withPlanningRouteUser(
+      requestWithUser("blocked"),
+      () => ({ shouldNotRun: true }),
+      testEnv({ PLANNING_TRUST_AUTH_HEADERS: "0" }),
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(403);
+    await expect(readJson(result as Response)).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "FORBIDDEN",
+        message: "신뢰된 인증 헤더가 비활성화되어 있습니다.",
+      },
+    });
+    expect(resolvePlanningUserId()).toBe("default");
+  });
+
+  it("allows callers to decorate withPlanningRouteUser auth failures", async () => {
+    const result = await withPlanningRouteUser(
+      requestWithUser("blocked"),
+      () => ({ shouldNotRun: true }),
+      testEnv({ PLANNING_TRUST_AUTH_HEADERS: "0" }),
+      (response) => {
+        response.headers.set("x-auth-decorated", "1");
+        return response;
+      },
+    );
+
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).headers.get("x-auth-decorated")).toBe("1");
+  });
+
   it("returns successful requirePlanningRouteUser results with standard user meta", async () => {
     const result = await requirePlanningRouteUser(
       requestWithUser("bob"),
@@ -243,7 +277,39 @@ describe("planning route auth boundary", () => {
     expect(resolvePlanningUserId()).toBe("default");
   });
 
-  it("keeps isPlanningRouteUser as the route guard and refreshes request scope", async () => {
+  it("keeps parallel withPlanningRouteUser callbacks isolated by request user", async () => {
+    const env = testEnv({ PLANNING_TRUST_AUTH_HEADERS: "1" });
+    const [alice, bob] = await Promise.all([
+      withPlanningRouteUser(
+        requestWithUser("alice"),
+        async () => {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return {
+            scopedUserId: resolvePlanningUserId(),
+            authSource: getScopedPlanningAuthSource(),
+          };
+        },
+        env,
+      ),
+      withPlanningRouteUser(
+        requestWithUser("bob"),
+        async () => {
+          await Promise.resolve();
+          return {
+            scopedUserId: resolvePlanningUserId(),
+            authSource: getScopedPlanningAuthSource(),
+          };
+        },
+        env,
+      ),
+    ]);
+
+    expect(alice).toEqual({ scopedUserId: "alice", authSource: "trusted-header" });
+    expect(bob).toEqual({ scopedUserId: "bob", authSource: "trusted-header" });
+    expect(resolvePlanningUserId()).toBe("default");
+  });
+
+  it("keeps deprecated direct route guards from mutating request scope", async () => {
     const denied = await requirePlanningRouteUser(
       requestWithUser("blocked"),
       testEnv({ PLANNING_TRUST_AUTH_HEADERS: "0" }),
@@ -255,6 +321,6 @@ describe("planning route auth boundary", () => {
       testEnv({ PLANNING_TRUST_AUTH_HEADERS: "1" }),
     );
     expect(isPlanningRouteUser(allowed)).toBe(true);
-    expect(resolvePlanningUserId()).toBe("carol");
+    expect(resolvePlanningUserId()).toBe("default");
   });
 });

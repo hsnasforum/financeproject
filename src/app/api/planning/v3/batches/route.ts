@@ -1,15 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
-import { ForbiddenDraftKeyError, assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
+  } from "@/lib/dev/devGuards";
+import { ForbiddenDraftKeyError,
+  assertNoForbiddenDraftKeys } from "@/lib/planning/v3/service/forbiddenDraftKeys";
 import { listBatchCenterRows } from "@/lib/planning/v3/service/batchCenterRows";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
@@ -47,34 +48,34 @@ function withReadGuard(request: Request): Response | null {
 export async function GET(request: Request) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const url = new URL(request.url);
-  const limit = asPositiveInt(url.searchParams.get("limit")) ?? 50;
+    const url = new URL(request.url);
+    const limit = asPositiveInt(url.searchParams.get("limit")) ?? 50;
 
-  try {
-    const summaryRows = await listBatchCenterRows({ limit });
-    const payload = {
-      ok: true,
-      data: summaryRows,
-      meta: userMeta,
-    };
-    assertNoForbiddenDraftKeys(payload);
-    return NextResponse.json(payload);
-  } catch (error) {
-    const storageError = planningStorageErrorResponse(error, userMeta);
-    if (storageError) return storageError;
-    if (error instanceof ForbiddenDraftKeyError) {
+    try {
+      const summaryRows = await listBatchCenterRows({ limit });
+      const payload = {
+        ok: true,
+        data: summaryRows,
+        meta: userMeta,
+      };
+      assertNoForbiddenDraftKeys(payload);
+      return NextResponse.json(payload);
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
+      if (error instanceof ForbiddenDraftKeyError) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INTERNAL", message: "배치 응답 데이터 검증에 실패했습니다." }, meta: userMeta },
+          { status: 500 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INTERNAL", message: "배치 응답 데이터 검증에 실패했습니다." }, meta: userMeta },
+        { ok: false, error: { code: "INTERNAL", message: "배치 목록 조회에 실패했습니다." }, meta: userMeta },
         { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 목록 조회에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

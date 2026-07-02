@@ -4,57 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { Container } from "@/components/ui/Container";
+import {
+  getAdminNavItems,
+  getPublicDesktopNavItems,
+  getPublicMobileStripNavItems,
+  isNavigationItemActive,
+  isOpsOrDevRoute,
+} from "@/lib/navigation/routeRegistry";
 import { devPlanningPrefetch } from "@/lib/navigation/prefetch";
 import { cn } from "@/lib/utils";
 
-type NavItem = {
-  href: string;
-  label: string;
-  match: "exact" | "prefix";
-  excludePrefixes?: string[];
-  includePrefixes?: string[];
-};
-
-const publicNavItems: NavItem[] = [
-  { href: "/dashboard", label: "홈", match: "prefix" },
-  { href: "/planning", label: "재무진단", match: "prefix" },
-  { href: "/recommend", label: "상품추천", match: "prefix" },
-  {
-    href: "/products",
-    label: "금융탐색",
-    match: "prefix",
-    includePrefixes: ["/benefits", "/public", "/housing", "/tools", "/invest", "/compare", "/gov24"],
-  },
-  { href: "/settings", label: "내 설정", match: "prefix" },
-];
-
-const adminNavItems: NavItem[] = [
-  { href: "/ops", label: "Ops", match: "prefix" },
-];
-
-const mobileNavItems = publicNavItems;
-
-function isNavActive(pathname: string, item: NavItem): boolean {
-  if (item.includePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
-    return true;
-  }
-  if (item.excludePrefixes?.some((prefix) => pathname.startsWith(prefix))) {
-    return false;
-  }
-  if (item.match === "exact") {
-    return pathname === item.href;
-  }
-  return pathname.startsWith(item.href);
-}
-
-function isOpsLikePath(pathname: string): boolean {
-  return pathname.startsWith("/ops") || pathname.startsWith("/dev") || pathname.startsWith("/debug");
-}
-
 export function SiteHeader() {
   const pathname = usePathname();
-  const isAdminMenuActive = adminNavItems.some((item) => isNavActive(pathname, item));
-  const showAdminStrip = isOpsLikePath(pathname);
+  const publicNavItems = getPublicDesktopNavItems();
+  const mobileNavItems = getPublicMobileStripNavItems();
+  const adminNavItems = getAdminNavItems();
+  const isAdminMenuActive = adminNavItems.some((item) => isNavigationItemActive(pathname, item));
+  const showAdminStrip = isOpsOrDevRoute(pathname);
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 backdrop-blur-md">
@@ -64,7 +30,7 @@ export function SiteHeader() {
           <div className="flex flex-1 items-center justify-end gap-6">
             <nav className="flex items-center gap-1 rounded-full border border-slate-200/80 bg-[#f5f7fa]/80 p-2">
               {publicNavItems.map((item) => {
-                const isActive = isNavActive(pathname, item);
+                const isActive = isNavigationItemActive(pathname, item);
                 return (
                   <Link
                     key={item.href}
@@ -122,7 +88,7 @@ export function SiteHeader() {
                 prefetch={devPlanningPrefetch(item.href)}
                 className={cn(
                   "rounded-full px-3 py-1.5 whitespace-nowrap text-sm font-bold text-slate-700 transition-colors hover:bg-surface-muted hover:text-primary",
-                  isNavActive(pathname, item) ? "bg-primary/10 text-primary" : "",
+                  isNavigationItemActive(pathname, item) ? "bg-primary/10 text-primary" : "",
                 )}
               >
                 {item.label}
@@ -143,7 +109,7 @@ export function SiteHeader() {
                   href={item.href}
                   className={cn(
                     "rounded-full px-3 py-1 font-bold text-amber-900/80 transition-colors hover:bg-white/70",
-                    isNavActive(pathname, item) ? "bg-white text-amber-900 shadow-sm" : "",
+                    isNavigationItemActive(pathname, item) ? "bg-white text-amber-900 shadow-sm" : "",
                   )}
                 >
                   {item.label}

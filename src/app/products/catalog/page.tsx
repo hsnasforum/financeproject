@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PageShell } from "@/components/ui/PageShell";
@@ -15,66 +16,31 @@ import { ProviderLogo } from "@/components/ui/ProviderLogo";
 import { SearchPill } from "@/components/ui/SearchPill";
 import { FilterField } from "@/components/ui/FilterField";
 import { addCompareIdToStorage, compareStoreConfig } from "@/lib/products/compareStore";
-
-type UnifiedOption = {
-  sourceId?: string;
-  termMonths: number | null;
-  saveTrm?: string;
-  intrRate: number | null;
-  intrRate2: number | null;
-};
-
-type UnifiedItem = {
-  stableId: string;
-  sourceId: string;
-  sourceIds?: string[];
-  kind: string;
-  externalKey: string;
-  providerName: string;
-  productName: string;
-  summary?: string;
-  badges?: string[];
-  options?: UnifiedOption[];
-};
-
-type UnifiedResponse = {
-  ok?: boolean;
-  data?: {
-    items?: UnifiedItem[];
-    merged?: UnifiedItem[];
-    pageInfo?: {
-      hasMore?: boolean;
-      nextCursor?: string | null;
-      limit?: number;
-    };
-  };
-  meta?: {
-    generatedAt?: string;
-  };
-  error?: {
-    code?: string;
-    message?: string;
-  };
-};
-
-type CatalogState = {
-  queryKey: string;
-  rows: UnifiedItem[];
-  nextCursor: string | null;
-  hasMore: boolean;
-};
-
-function formatRate(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "-";
-  return `${value.toFixed(2)}%`;
-}
+import {
+  buildCatalogQueryKey,
+  buildCatalogRequestParams,
+  buildCatalogViewModel,
+  formatCatalogRate,
+  isCatalogSamplebankVisible,
+  parseCatalogKind,
+  parseCatalogResponse,
+  parseCatalogUrlState,
+  type CatalogKind,
+  type CatalogState,
+  type UnifiedResponse,
+} from "@/lib/products/catalogExplorer";
 
 export default function ProductsCatalogPage() {
-  const [kind, setKind] = useState<"deposit" | "saving">("deposit");
-  const [termMonths, setTermMonths] = useState<string>("");
-  const [minRate, setMinRate] = useState<string>("");
-  const [q, setQ] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const urlState = useMemo(() => parseCatalogUrlState(searchParams), [searchParams]);
+  const [kind, setKind] = useState<CatalogKind>(urlState.kind);
+  const [termMonths, setTermMonths] = useState<string>(urlState.termMonths);
+  const [minRate, setMinRate] = useState<string>(urlState.minRate);
+  const [q, setQ] = useState(urlState.q);
   const [selectedProvider, setSelectedProvider] = useState<string>("all");
+  const samplebankVisible = isCatalogSamplebankVisible();
   const [includeSamplebank, setIncludeSamplebank] = useState(false);
   const [catalogState, setCatalogState] = useState<CatalogState>({
     queryKey: "",
@@ -85,10 +51,11 @@ export default function ProductsCatalogPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [compareNotice, setCompareNotice] = useState("");
-  const catalogQueryKey = useMemo(() => {
-    const sourcesKey = includeSamplebank ? "finlife,datago_kdb,samplebank" : "finlife,datago_kdb";
-    return [kind, sourcesKey, q.trim()].join("\u0000");
-  }, [includeSamplebank, kind, q]);
+  const effectiveIncludeSamplebank = samplebankVisible && includeSamplebank;
+  const catalogQueryKey = useMemo(
+    () => buildCatalogQueryKey({ kind, q, includeSamplebank: effectiveIncludeSamplebank }),
+    [effectiveIncludeSamplebank, kind, q],
+  );
   const currentCatalog = useMemo(() => {
     const isCurrent = catalogState.queryKey === catalogQueryKey;
     return {
@@ -99,33 +66,34 @@ export default function ProductsCatalogPage() {
   }, [catalogQueryKey, catalogState.hasMore, catalogState.nextCursor, catalogState.queryKey, catalogState.rows]);
   const { rows, nextCursor, hasMore } = currentCatalog;
 
-  const providers = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>();
-    map.set("all", { id: "all", name: "전체" });
-    rows.forEach((row) => {
-      if (!map.has(row.providerName)) {
-        map.set(row.providerName, { id: row.providerName, name: row.providerName });
-      }
-    });
-    return Array.from(map.values());
-  }, [rows]);
+  useEffect(() => {
+    setKind(urlState.kind);
+    setTermMonths(urlState.termMonths);
+    setMinRate(urlState.minRate);
+    setQ(urlState.q);
+    setSelectedProvider("all");
+    setIncludeSamplebank(false);
+  }, [urlState.kind, urlState.minRate, urlState.q, urlState.termMonths]);
+
+  const catalogViewModel = useMemo(
+    () => buildCatalogViewModel({ rows, selectedProvider, termMonths, minRate }),
+    [minRate, rows, selectedProvider, termMonths],
+  );
+  const providers = catalogViewModel.providers;
+  const filteredRows = catalogViewModel.filteredRows;
 
   const run = useCallback(async (input?: { append?: boolean; cursor?: string | null }) => {
     const append = Boolean(input?.append);
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      params.set("mode", "merged");
-      params.set("kind", kind);
-      const includeSources = includeSamplebank
-        ? "finlife,datago_kdb,samplebank"
-        : "finlife,datago_kdb";
-      params.set("includeSources", includeSources);
-      params.set("limit", "60");
-      params.set("sort", "recent");
-      if (q.trim()) params.set("q", q.trim());
-      if (append && input?.cursor) params.set("cursor", input.cursor);
+      const params = buildCatalogRequestParams({
+        kind,
+        q,
+        includeSamplebank: effectiveIncludeSamplebank,
+        append,
+        cursor: input?.cursor,
+      });
 
       const res = await fetch(`/api/products/unified?${params.toString()}`, { cache: "no-store" });
       const json = (await res.json()) as UnifiedResponse;
@@ -136,11 +104,7 @@ export default function ProductsCatalogPage() {
         return;
       }
 
-      const pageItems = Array.isArray(json.data?.items)
-        ? json.data?.items
-        : (Array.isArray(json.data?.merged) ? json.data.merged : []);
-      const responseHasMore = Boolean(json.data?.pageInfo?.hasMore);
-      const responseNextCursor = typeof json.data?.pageInfo?.nextCursor === "string" ? json.data.pageInfo.nextCursor : null;
+      const { pageItems, hasMore: responseHasMore, nextCursor: responseNextCursor } = parseCatalogResponse(json);
       setCatalogState((prev) => ({
         queryKey: catalogQueryKey,
         rows: append && prev.queryKey === catalogQueryKey ? [...prev.rows, ...pageItems] : pageItems,
@@ -153,7 +117,31 @@ export default function ProductsCatalogPage() {
     } finally {
       setLoading(false);
     }
-  }, [catalogQueryKey, includeSamplebank, kind, q]);
+  }, [catalogQueryKey, effectiveIncludeSamplebank, kind, q]);
+
+  const handleKindChange = useCallback((id: string) => {
+    const nextKind = parseCatalogKind(id);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("kind", nextKind);
+    if (q.trim()) {
+      params.set("q", q.trim());
+    } else {
+      params.delete("q");
+    }
+    if (termMonths.trim()) {
+      params.set("termMonths", termMonths.trim());
+    } else {
+      params.delete("termMonths");
+    }
+    if (minRate.trim()) {
+      params.set("minRate", minRate.trim());
+    } else {
+      params.delete("minRate");
+    }
+    setKind(nextKind);
+    setSelectedProvider("all");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }, [minRate, pathname, q, router, searchParams, termMonths]);
 
   useEffect(() => {
     let active = true;
@@ -171,26 +159,6 @@ export default function ProductsCatalogPage() {
       active = false;
     };
   }, [run]);
-
-  const filteredRows = useMemo(() => {
-    const termFilter = Number(termMonths);
-    const hasTermFilter = Number.isFinite(termFilter) && termFilter > 0;
-    const minRateFilter = Number(minRate);
-    const hasMinRateFilter = Number.isFinite(minRateFilter) && minRateFilter > 0;
-
-    return rows.filter((item) => {
-      if (selectedProvider !== "all" && item.providerName !== selectedProvider) return false;
-      
-      const options = Array.isArray(item.options) ? item.options : [];
-      if (!hasTermFilter && !hasMinRateFilter) return true;
-      if (options.length === 0) return false;
-      return options.some((option) => {
-        if (hasTermFilter && option.termMonths !== termFilter) return false;
-        if (hasMinRateFilter && (option.intrRate2 ?? option.intrRate ?? Number.NEGATIVE_INFINITY) < minRateFilter) return false;
-        return true;
-      });
-    });
-  }, [minRate, rows, selectedProvider, termMonths]);
 
   return (
     <PageShell>
@@ -215,7 +183,7 @@ export default function ProductsCatalogPage() {
                     { id: "saving", label: "정기적금" },
                   ]}
                   activeTab={kind}
-                  onChange={(id) => setKind(id as "deposit" | "saving")}
+                  onChange={handleKindChange}
                 />
               </div>
               
@@ -266,15 +234,17 @@ export default function ProductsCatalogPage() {
               </div>
               
               <div className="ml-auto flex items-center gap-8">
-                <label className="flex cursor-pointer items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 rounded-lg border-slate-200 text-primary focus:ring-primary transition-all"
-                    checked={includeSamplebank}
-                    onChange={(e) => setIncludeSamplebank(e.target.checked)}
-                  />
-                  샘플 데이터 포함
-                </label>
+                {samplebankVisible ? (
+                  <label className="flex cursor-pointer items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 rounded-lg border-slate-200 text-primary focus:ring-primary transition-all"
+                      checked={includeSamplebank}
+                      onChange={(e) => setIncludeSamplebank(e.target.checked)}
+                    />
+                    샘플 데이터 포함
+                  </label>
+                ) : null}
                 <div className="flex items-center gap-3 rounded-2xl bg-primary/10 px-4 py-2 border border-primary/10">
                   <span className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-sm shadow-primary/20" />
                   <span className="text-sm font-black text-navy">
@@ -345,7 +315,7 @@ export default function ProductsCatalogPage() {
                         <span className="text-xs font-black text-slate-600 tabular-nums">{option.termMonths ? `${option.termMonths}개월` : option.saveTrm}</span>
                         <div className="flex items-center gap-3">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">대표 금리</span>
-                          <span className="text-base font-black text-primary tabular-nums">{formatRate(option.intrRate2)}</span>
+                          <span className="text-base font-black text-primary tabular-nums">{formatCatalogRate(option.intrRate2)}</span>
                         </div>
                       </div>
                     ))}

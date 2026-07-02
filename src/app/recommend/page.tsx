@@ -34,6 +34,16 @@ import {
   type SavedRunProfile,
 } from "@/lib/recommend/savedRunsStore";
 import {
+  buildRecommendAutorunSignature,
+  buildRecommendRequest,
+  buildStoredRecommendResult,
+  parseStoredRecommendResult,
+  readRecommendAutorunSessionPayload,
+  RECOMMEND_RESULT_STORAGE_KEY,
+  type StoredRecommendResultV1,
+  writeRecommendAutorunSessionPayload,
+} from "@/lib/recommend/recommendStorageAdapter";
+import {
   type CandidatePool,
   type CandidateSource,
   type DepositProtectionMode,
@@ -131,6 +141,7 @@ type RecommendResponse = {
 };
 
 type StoredProfile = RecommendProfileNormalized;
+type StoredRecommendResult = StoredRecommendResultV1<StoredProfile, RecommendResponse["meta"]>;
 type PlanningInferenceSource = "planning-summary" | "planning-context" | "none" | undefined;
 type PlanningActionContextCode = "BUILD_EMERGENCY_FUND" | "COVER_LUMP_SUM_GOAL";
 type PlanningActionContext = {
@@ -162,28 +173,7 @@ type RecommendCardFreshnessMeta = {
   assumptionNotes: string[];
 };
 
-type StoredRecommendItemV1 = {
-  key: string;
-  sourceId: string;
-  finPrdtCd: string;
-  productName: string;
-  providerName: string;
-  rank: number;
-  appliedRate: number | null;
-  saveTrm: string | null;
-};
-
-type StoredRecommendResultV1 = {
-  version: 1;
-  savedAt: string;
-  profile: StoredProfile;
-  meta?: RecommendResponse["meta"];
-  items: StoredRecommendItemV1[];
-};
-
 const STORAGE_KEY = "recommend_profile_v1";
-const RESULT_STORAGE_KEY = "recommend_last_result_v1";
-const AUTORUN_SIG_SESSION_KEY = "recommend_autorun_sig";
 const ERROR_SUMMARY_ID = "recommend_error_summary";
 
 const defaultProfile: StoredProfile = recommendProfileDefaults();
@@ -501,42 +491,6 @@ function parseQueryOverrides(searchParams: ReturnType<typeof useSearchParams>): 
   };
 }
 
-function buildAutorunSignature(profile: StoredProfile): string {
-  return JSON.stringify({
-    purpose: profile.purpose,
-    kind: profile.kind,
-    preferredTerm: profile.preferredTerm,
-    liquidityPref: profile.liquidityPref,
-    rateMode: profile.rateMode,
-    topN: profile.topN,
-    candidatePool: profile.candidatePool,
-    candidateSources: profile.candidateSources,
-    depositProtection: profile.depositProtection,
-    weights: profile.weights,
-  });
-}
-
-function readAutorunSessionPayload(): { sig: string; runId: string | null } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.sessionStorage.getItem(AUTORUN_SIG_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<{ sig: string; runId: string | null }>;
-    if (typeof parsed.sig !== "string" || !parsed.sig) return null;
-    return {
-      sig: parsed.sig,
-      runId: typeof parsed.runId === "string" && parsed.runId ? parsed.runId : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeAutorunSessionPayload(payload: { sig: string; runId: string | null }): void {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(AUTORUN_SIG_SESSION_KEY, JSON.stringify(payload));
-}
-
 function buildUnifiedId(sourceId: string, finPrdtCd: string): string {
   return `${sourceId}:${finPrdtCd}`;
 }
@@ -581,52 +535,10 @@ function buildExportRun(profile: StoredProfile, response: RecommendResponse): Sa
   });
 }
 
-function normalizeStoredTerm(value: string | null | undefined, termMonths: number | null | undefined): string | null {
-  const raw = typeof value === "string" ? value.trim() : "";
-  if (raw.length > 0) return raw;
-  if (typeof termMonths === "number" && Number.isFinite(termMonths) && termMonths > 0) return String(Math.trunc(termMonths));
-  return null;
-}
-
-function buildStoredResult(profile: StoredProfile, res: RecommendResponse): StoredRecommendResultV1 {
-  const items = (res.items ?? []).map((item, index) => ({
-    key: `${item.sourceId}::${item.finPrdtCd}`,
-    sourceId: item.sourceId,
-    finPrdtCd: item.finPrdtCd,
-    productName: item.productName,
-    providerName: item.providerName,
-    rank: index + 1,
-    appliedRate: Number.isFinite(item.selectedOption.appliedRate) ? item.selectedOption.appliedRate : null,
-    saveTrm: normalizeStoredTerm(item.selectedOption.saveTrm, item.selectedOption.termMonths),
-  }));
-
-  return {
-    version: 1,
-    savedAt: new Date().toISOString(),
-    profile,
-    meta: res.meta,
-    items,
-  };
-}
-
 function formatKoreanDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("ko-KR");
-}
-
-function parseStoredResult(raw: string | null): StoredRecommendResultV1 | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as Partial<StoredRecommendResultV1>;
-    if (parsed.version !== 1) return null;
-    if (typeof parsed.savedAt !== "string") return null;
-    if (!parsed.profile || typeof parsed.profile !== "object") return null;
-    if (!Array.isArray(parsed.items)) return null;
-    return parsed as StoredRecommendResultV1;
-  } catch {
-    return null;
-  }
 }
 
 function normalizeRate(value: number | null | undefined, fallback: number): number | null {
@@ -754,13 +666,13 @@ function RecommendPageInner() {
   const [feedback, setFeedback] = useState("");
   const [result, setResult] = useState<RecommendResponse | null>(null);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [lastStored, setLastStored] = useState<StoredRecommendResultV1 | null>(null);
+  const [lastStored, setLastStored] = useState<StoredRecommendResult | null>(null);
   const [readyToPersist, setReadyToPersist] = useState(false);
   const [openDetailKey, setOpenDetailKey] = useState<string | null>(null);
   const [formIssues, setFormIssues] = useState<Issue[]>([]);
   const [sourceStatusRows, setSourceStatusRows] = useState<SourceStatusRow[]>([]);
   const [sourceStatusReady, setSourceStatusReady] = useState(false);
-  const lastStoredRef = useRef<StoredRecommendResultV1 | null>(null);
+  const lastStoredRef = useRef<StoredRecommendResult | null>(null);
   const autoRunTriggeredRef = useRef(false);
   const submitInFlightRef = useRef(false);
   const sourceStatusAbortRef = useRef<AbortController | null>(null);
@@ -797,11 +709,8 @@ function RecommendPageInner() {
       }
       const requestProfile = parsedProfile.value;
       setProfile(requestProfile);
-      const res = await fetch(`/api/recommend?topN=${requestProfile.topN}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestProfile),
-      });
+      const request = buildRecommendRequest({ profile: requestProfile });
+      const res = await fetch(request.url, request.init);
       const rawJson = (await res.json()) as RecommendResponse;
       if (!res.ok || !rawJson.ok) {
         const apiIssues = parseStringIssues(rawJson.error?.issues ?? []);
@@ -816,23 +725,27 @@ function RecommendPageInner() {
       }
       const json = attachUnifiedIds(rawJson);
 
-      const currStored = buildStoredResult(requestProfile, json);
-      localStorage.setItem(RESULT_STORAGE_KEY, JSON.stringify(currStored));
+      const currStored = buildStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>({
+        profile: requestProfile,
+        meta: json.meta,
+        items: json.items,
+      });
+      localStorage.setItem(RECOMMEND_RESULT_STORAGE_KEY, JSON.stringify(currStored));
       setLastStored(currStored);
       lastStoredRef.current = currStored;
       setResult(json);
       setFormIssues([]);
 
       if (options?.autoSave) {
-        const sig = options.autorunSig ?? buildAutorunSignature(requestProfile);
-        const previous = readAutorunSessionPayload();
+        const sig = options.autorunSig ?? buildRecommendAutorunSignature(requestProfile);
+        const previous = readRecommendAutorunSessionPayload();
         if (previous?.sig === sig && previous.runId) {
           if (options.goHistory) {
             router.push(`/recommend/history?open=${encodeURIComponent(previous.runId)}`);
           }
         } else {
           const runId = saveRunFromRecommend(toSavedRunProfile(requestProfile), json);
-          writeAutorunSessionPayload({ sig, runId });
+          writeRecommendAutorunSessionPayload({ sig, runId });
           if (options.goHistory) {
             router.push(`/recommend/history?open=${encodeURIComponent(runId)}`);
           }
@@ -868,7 +781,9 @@ function RecommendPageInner() {
     if (queryOverrides.hasQuery) {
       nextProfile = parseRecommendProfile({ ...nextProfile, ...queryOverrides.profilePatch }).value;
     }
-    const stored = parseStoredResult(localStorage.getItem(RESULT_STORAGE_KEY));
+    const stored = parseStoredRecommendResult<StoredProfile, RecommendResponse["meta"]>(
+      localStorage.getItem(RECOMMEND_RESULT_STORAGE_KEY),
+    );
 
     async function applyInitialState() {
       await Promise.resolve();
@@ -888,7 +803,7 @@ function RecommendPageInner() {
         void submitWithProfile(nextProfile, {
           autoSave: queryOverrides.autoSave,
           goHistory: queryOverrides.goHistory,
-          autorunSig: buildAutorunSignature(nextProfile),
+          autorunSig: buildRecommendAutorunSignature(nextProfile),
         });
       }
     }
@@ -1506,7 +1421,7 @@ function RecommendPageInner() {
           <div className="flex items-center justify-between mb-6">
             <SubSectionHeader title="지난 추천 히스토리" className="mb-0" />
             <Button size="sm" variant="ghost" className="text-xs text-slate-400 font-bold hover:text-rose-500" onClick={() => {
-              localStorage.removeItem(RESULT_STORAGE_KEY);
+              localStorage.removeItem(RECOMMEND_RESULT_STORAGE_KEY);
               setLastStored(null);
             }}>기록 삭제</Button>
           </div>

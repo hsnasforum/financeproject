@@ -1,18 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
 import { loadOpsLatestAssumptions } from "../../../../../lib/ops/assumptions/assumptionsLatestRouteService";
 import { opsErrorResponse } from "../../../../../lib/ops/errorContract";
-import {
-  isPlanningRouteUser,
-  requirePlanningRouteUser,
-} from "../../../../../lib/planning/api/routeAuth";
+import { withPlanningRouteUser } from "../../../../../lib/planning/api/routeAuth";
 import { assumptionsUserMeta } from "../_lib";
 
 function asString(value: unknown): string {
@@ -47,29 +45,29 @@ export async function GET(request: Request) {
     });
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const result = await loadOpsLatestAssumptions({ currentUser });
-  if (result.kind === "missing") {
-    return opsErrorResponse({
-      code: "STALE_ASSUMPTIONS",
-      message: "저장된 가정 스냅샷이 없습니다.",
-      status: 409,
-    });
-  }
-  if (result.kind === "storage-corrupt") {
-    return opsErrorResponse({
-      code: "STORAGE_CORRUPT",
-      message: result.message,
-      status: 500,
-    });
-  }
+    const result = await loadOpsLatestAssumptions({ currentUser });
+    if (result.kind === "missing") {
+      return opsErrorResponse({
+        code: "STALE_ASSUMPTIONS",
+        message: "저장된 가정 스냅샷이 없습니다.",
+        status: 409,
+      });
+    }
+    if (result.kind === "storage-corrupt") {
+      return opsErrorResponse({
+        code: "STORAGE_CORRUPT",
+        message: result.message,
+        status: 500,
+      });
+    }
 
-  return NextResponse.json({
-    ok: true,
-    snapshot: result.snapshot,
-    snapshotId: result.snapshotId,
-    meta: assumptionsUserMeta(currentUser, result.meta),
+    return NextResponse.json({
+      ok: true,
+      snapshot: result.snapshot,
+      snapshotId: result.snapshotId,
+      meta: assumptionsUserMeta(currentUser, result.meta),
+    });
   });
 }

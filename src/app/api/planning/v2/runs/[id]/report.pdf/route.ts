@@ -2,18 +2,17 @@ import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "../../../../../../../lib/dev/devGuards";
+  } from "../../../../../../../lib/dev/devGuards";
 import { jsonError } from "../../../../../../../lib/planning/api/response";
 import { getPlanningFeatureFlags } from "../../../../../../../lib/planning/config";
 import { getCurrentUserRunReportHtml } from "../../../../../../../lib/planning/server/reports/runReportRouteService";
 import {
   PdfReportError,
   renderPdfReportFromHtml,
-} from "../../../../../../../lib/planning/v2/report/pdfReport";
+  } from "../../../../../../../lib/planning/v2/report/pdfReport";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../../../lib/planning/api/routeAuth";
 
 type RouteContext = {
@@ -37,44 +36,44 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request, context: RouteContext) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const flags = getPlanningFeatureFlags();
-  if (!flags.pdfEnabled) {
-    return jsonError("DISABLED", "서버 설정으로 PDF 리포트 기능이 비활성화되어 있습니다.", {
-      status: 403,
-      meta: userMeta,
-    });
-  }
-
-  const { id } = await context.params;
-
-  try {
-    const report = await getCurrentUserRunReportHtml({ runId: id });
-    if (!report) {
-      return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
+    const flags = getPlanningFeatureFlags();
+    if (!flags.pdfEnabled) {
+      return jsonError("DISABLED", "서버 설정으로 PDF 리포트 기능이 비활성화되어 있습니다.", {
+        status: 403,
+        meta: userMeta,
+      });
     }
 
-    const pdf = await renderPdfReportFromHtml(report.html);
-    const pdfBody = Uint8Array.from(pdf).buffer;
+    const { id } = await context.params;
 
-    return new Response(pdfBody, {
-      status: 200,
-      headers: {
-        "content-type": "application/pdf",
-        "content-disposition": `attachment; filename=\"${report.pdfFilename}\"`,
-        "cache-control": "no-store",
-      },
-    });
-  } catch (error) {
-    if (error instanceof PdfReportError) {
-      if (error.code === "PDF_FONT_MISSING" || error.code === "PDF_ENGINE_MISSING") {
-        return jsonError("INTERNAL", error.message, { status: 503, meta: userMeta });
+    try {
+      const report = await getCurrentUserRunReportHtml({ runId: id });
+      if (!report) {
+        return jsonError("NO_DATA", "실행 기록을 찾을 수 없습니다.", { meta: userMeta });
       }
-      return jsonError("INTERNAL", error.message, { status: 500, meta: userMeta });
+
+      const pdf = await renderPdfReportFromHtml(report.html);
+      const pdfBody = Uint8Array.from(pdf).buffer;
+
+      return new Response(pdfBody, {
+        status: 200,
+        headers: {
+          "content-type": "application/pdf",
+          "content-disposition": `attachment; filename=\"${report.pdfFilename}\"`,
+          "cache-control": "no-store",
+        },
+      });
+    } catch (error) {
+      if (error instanceof PdfReportError) {
+        if (error.code === "PDF_FONT_MISSING" || error.code === "PDF_ENGINE_MISSING") {
+          return jsonError("INTERNAL", error.message, { status: 503, meta: userMeta });
+        }
+        return jsonError("INTERNAL", error.message, { status: 500, meta: userMeta });
+      }
+      return jsonError("INTERNAL", "PDF 리포트 생성에 실패했습니다.", { status: 500, meta: userMeta });
     }
-    return jsonError("INTERNAL", "PDF 리포트 생성에 실패했습니다.", { status: 500, meta: userMeta });
-  }
+  });
 }

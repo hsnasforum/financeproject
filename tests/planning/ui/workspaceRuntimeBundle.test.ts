@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPlanningRunInput,
+  parseHorizonMonths,
   parseJsonText,
+  parseMaxCandidatesPerAction,
+  parseMonteCarloPaths,
+  parseMonteCarloSeed,
   resolveRunMatchesCurrentProfile,
   resolveRunStatusReviewRequired,
   resolveWorkspaceRuntimeSnapshotFallback,
   selectPreferredBaselineRunId,
 } from "../../../src/components/planning/workspace/useWorkspaceRuntimeBundle";
+import { parseCreatePlanningRunCommand } from "../../../src/lib/planning/server/runs/createRunCommandParser";
+import { PLANNING_RUN_INPUT_CONTRACT } from "../../../src/lib/planning/v2/planningRunInputContract";
 import { DEFAULT_PLANNING_POLICY } from "../../../src/lib/planning/v2/insights/planningPolicy";
 
 function baselineRunFixture(id: string, overallStatus?: "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED") {
@@ -141,5 +147,61 @@ describe("workspaceRuntimeBundle", () => {
       value: null,
       error: "Optimizer search JSON 파싱에 실패했습니다.",
     });
+  });
+
+  it("keeps client parser boundaries synchronized with create-run parser contract", () => {
+    const contract = PLANNING_RUN_INPUT_CONTRACT;
+
+    expect(parseHorizonMonths(String(contract.horizonMonths.min))).toBe(contract.horizonMonths.min);
+    expect(parseHorizonMonths(String(contract.horizonMonths.max))).toBe(contract.horizonMonths.max);
+    expect(parseHorizonMonths(String(contract.horizonMonths.max + 1))).toBeNull();
+    expect(parseMonteCarloPaths(String(contract.monteCarloPaths.max))).toBe(contract.monteCarloPaths.max);
+    expect(parseMonteCarloPaths(String(contract.monteCarloPaths.max + 1))).toBeNull();
+    expect(parseMonteCarloSeed("abc")).toBeNull();
+    expect(parseMaxCandidatesPerAction(String(contract.maxCandidatesPerAction.max))).toBe(contract.maxCandidatesPerAction.max);
+    expect(parseMaxCandidatesPerAction(String(contract.maxCandidatesPerAction.max + 1))).toBeNull();
+
+    const accepted = parseCreatePlanningRunCommand({
+      profileId: "profile-1",
+      input: {
+        horizonMonths: contract.horizonMonths.max,
+        monteCarlo: {
+          paths: contract.monteCarloPaths.max,
+          seed: 7,
+        },
+      },
+    }, {
+      randomUUID: () => "run-request-1",
+      now: () => new Date("2026-07-01T00:00:00.000Z"),
+    });
+    expect(accepted.ok).toBe(true);
+    if (accepted.ok) {
+      expect(accepted.command.horizonMonths).toBe(contract.horizonMonths.max);
+      expect(accepted.command.monteCarloConfig).toEqual({
+        paths: contract.monteCarloPaths.max,
+        seed: 7,
+      });
+    }
+
+    const rejectedHorizon = parseCreatePlanningRunCommand({
+      profileId: "profile-1",
+      input: { horizonMonths: contract.horizonMonths.max + 1 },
+    });
+    const rejectedMonteCarlo = parseCreatePlanningRunCommand({
+      profileId: "profile-1",
+      input: {
+        horizonMonths: contract.horizonMonths.max,
+        monteCarlo: { paths: contract.monteCarloPaths.max + 1 },
+      },
+    });
+
+    expect(rejectedHorizon.ok).toBe(false);
+    if (!rejectedHorizon.ok) {
+      expect(rejectedHorizon.issues?.join("\n")).toContain("horizonMonths");
+    }
+    expect(rejectedMonteCarlo.ok).toBe(false);
+    if (!rejectedMonteCarlo.ok) {
+      expect(rejectedMonteCarlo.issues?.join("\n")).toContain("input.monteCarlo.paths");
+    }
   });
 });

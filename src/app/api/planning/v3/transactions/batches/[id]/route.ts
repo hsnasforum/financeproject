@@ -1,14 +1,15 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import {
   deleteCurrentUserStoredBatch,
   getCurrentUserBatchDeleteSurface,
   loadCurrentUserBatchDetail,
-} from "@/lib/planning/v3/service/batchReadRepository";
+  } from "@/lib/planning/v3/service/batchReadRepository";
 import { buildStoredFirstVisibleBatchShell } from "@/lib/planning/v3/service/storedFirstVisibleBatchShell";
 import { applyTxnOverrides } from "@/lib/planning/v3/service/applyOverrides";
 import { resolveTxnCategoryId } from "@/lib/planning/v3/service/categorySemantics";
@@ -16,9 +17,8 @@ import { classifyTransactions } from "@/lib/planning/v3/service/classify";
 import { getStoredFirstBatchDetailProjectionRows } from "@/lib/planning/v3/service/storedFirstVisibleRows";
 import { toStoredFirstPublicImportBatchMeta } from "@/lib/planning/v3/service/storedFirstPublicMetadata";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 import { planningStorageErrorResponse } from "@/lib/planning/api/storageErrorResponse";
 
@@ -214,119 +214,119 @@ function toBatchDetailStats(
 export async function GET(request: Request, context: RouteContext) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id } = await context.params;
+    const { id } = await context.params;
 
-  try {
-    const { loaded, overridesByTxnId } = await loadCurrentUserBatchDetail(id);
-    if (!loaded) {
+    try {
+      const { loaded, overridesByTxnId } = await loadCurrentUserBatchDetail(id);
+      if (!loaded) {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
+
+      // Detail keeps the raw snapshot for `data`, but the visible batch shell and derived
+      // projections follow the same stored-first binding semantics that keep coexistence guarded.
+      const { rawRows, derivedRows } = getStoredFirstBatchDetailProjectionRows(loaded);
+      const classified = classifyTransactions({
+        transactions: derivedRows,
+      });
+      const overridden = applyTxnOverrides(classified, overridesByTxnId);
+      const transactions = toBatchDetailTransactions(overridden);
+      const rowMonthsSummary = summarizeMonths(rawRows);
+      const accountMonthlyNet = summarizeAccountMonthlyNet(derivedRows);
+      const sample = toBatchDetailSample(derivedRows);
+      const batch = buildStoredFirstVisibleBatchShell(loaded);
+      const stats = toBatchDetailStats(batch, rowMonthsSummary);
+
+      return NextResponse.json({
+        ok: true,
+        batch,
+        sample,
+        stats,
+        monthsSummary: rowMonthsSummary,
+        accountMonthlyNet,
+        transactions,
+        meta: {
+          ...toStoredFirstPublicImportBatchMeta({
+            meta: loaded.meta,
+            metadataSource: loaded.policy.metadataSource,
+          }),
+          ...userMeta,
+        },
+        data: rawRows,
+      });
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
+      if (isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
+
       return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." }, meta: userMeta },
-        { status: 404 },
+        { ok: false, error: { code: "INTERNAL", message: "배치 상세 조회에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-
-    // Detail keeps the raw snapshot for `data`, but the visible batch shell and derived
-    // projections follow the same stored-first binding semantics that keep coexistence guarded.
-    const { rawRows, derivedRows } = getStoredFirstBatchDetailProjectionRows(loaded);
-    const classified = classifyTransactions({
-      transactions: derivedRows,
-    });
-    const overridden = applyTxnOverrides(classified, overridesByTxnId);
-    const transactions = toBatchDetailTransactions(overridden);
-    const rowMonthsSummary = summarizeMonths(rawRows);
-    const accountMonthlyNet = summarizeAccountMonthlyNet(derivedRows);
-    const sample = toBatchDetailSample(derivedRows);
-    const batch = buildStoredFirstVisibleBatchShell(loaded);
-    const stats = toBatchDetailStats(batch, rowMonthsSummary);
-
-    return NextResponse.json({
-      ok: true,
-      batch,
-      sample,
-      stats,
-      monthsSummary: rowMonthsSummary,
-      accountMonthlyNet,
-      transactions,
-      meta: {
-        ...toStoredFirstPublicImportBatchMeta({
-          meta: loaded.meta,
-          metadataSource: loaded.policy.metadataSource,
-        }),
-        ...userMeta,
-      },
-      data: rawRows,
-    });
-  } catch (error) {
-    const storageError = planningStorageErrorResponse(error, userMeta);
-    if (storageError) return storageError;
-    if (isInvalidIdError(error)) {
-      return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
-        { status: 400 },
-      );
-    }
-
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 상세 조회에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
   const guarded = withReadGuard(request);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { id } = await context.params;
+    const { id } = await context.params;
 
-  try {
-    const { batchId, deleteSurface } = await getCurrentUserBatchDeleteSurface(id);
-    if (deleteSurface === "missing") {
-      return NextResponse.json(
-        { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." }, meta: userMeta },
-        { status: 404 },
-      );
-    }
-    if (
-      deleteSurface === "synthetic-stored-only-legacy-collision"
-      || deleteSurface === "stored-meta-legacy-coexistence"
-    ) {
-      const message = deleteSurface === "stored-meta-legacy-coexistence"
-          ? "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장된 배치 정보와 파일만 제거됩니다."
-          : "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장 파일만 제거됩니다.";
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            code: "INPUT",
-            message,
+    try {
+      const { batchId, deleteSurface } = await getCurrentUserBatchDeleteSurface(id);
+      if (deleteSurface === "missing") {
+        return NextResponse.json(
+          { ok: false, error: { code: "NO_DATA", message: "배치를 찾을 수 없습니다." }, meta: userMeta },
+          { status: 404 },
+        );
+      }
+      if (
+        deleteSurface === "synthetic-stored-only-legacy-collision"
+        || deleteSurface === "stored-meta-legacy-coexistence"
+      ) {
+        const message = deleteSurface === "stored-meta-legacy-coexistence"
+            ? "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장된 배치 정보와 파일만 제거됩니다."
+            : "같은 ID의 기존 배치가 남아 있어 지금 삭제하면 저장 파일만 제거됩니다.";
+        return NextResponse.json(
+          {
+            ok: false,
+            error: {
+              code: "INPUT",
+              message,
+            },
+            meta: userMeta,
           },
-          meta: userMeta,
-        },
-        { status: 400 },
-      );
-    }
-    await deleteCurrentUserStoredBatch(batchId);
-    return NextResponse.json({ ok: true, deleted: true, meta: userMeta });
-  } catch (error) {
-    const storageError = planningStorageErrorResponse(error, userMeta);
-    if (storageError) return storageError;
-    if (isInvalidIdError(error)) {
+          { status: 400 },
+        );
+      }
+      await deleteCurrentUserStoredBatch(batchId);
+      return NextResponse.json({ ok: true, deleted: true, meta: userMeta });
+    } catch (error) {
+      const storageError = planningStorageErrorResponse(error, userMeta);
+      if (storageError) return storageError;
+      if (isInvalidIdError(error)) {
+        return NextResponse.json(
+          { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
+          { status: 400 },
+        );
+      }
       return NextResponse.json(
-        { ok: false, error: { code: "INPUT", message: "잘못된 요청입니다." }, meta: userMeta },
-        { status: 400 },
+        { ok: false, error: { code: "INTERNAL", message: "배치 삭제에 실패했습니다." }, meta: userMeta },
+        { status: 500 },
       );
     }
-    return NextResponse.json(
-      { ok: false, error: { code: "INTERNAL", message: "배치 삭제에 실패했습니다." }, meta: userMeta },
-      { status: 500 },
-    );
-  }
+  });
 }

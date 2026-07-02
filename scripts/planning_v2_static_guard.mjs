@@ -309,7 +309,9 @@ function checkPlanningCoreFile(filePath, content) {
 
 const LEGACY_PLANNER_ROUTE_PATTERN = /(^|[\s("'`])\/planner(?:[/?#][^\s"'`)]*)?(?=$|[\s)"'`.,;:])/;
 const LEGACY_PLANNER_ROUTE_ALLOWLIST = new Set([
+  "src/lib/planning/routes.ts",
   "src/lib/planning/legacyPlannerRedirect.ts",
+  "src/lib/navigation/routeRegistry.ts",
 ]);
 
 function checkLegacyPlannerRoute(filePath, content) {

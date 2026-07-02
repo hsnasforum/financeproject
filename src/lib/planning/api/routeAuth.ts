@@ -4,9 +4,10 @@ import {
   requireCurrentPlanningUser,
   type PlanningCurrentUser,
 } from "../auth/currentUser";
-import { enterPlanningUserScope, runWithPlanningUserScope } from "../store/userScope";
+import { runWithPlanningUserScope } from "../store/userScope";
 
 export type PlanningRouteUser = PlanningCurrentUser;
+export type PlanningAuthErrorResponseMapper = (response: Response) => Response;
 
 export function planningAuthErrorResponse(error: unknown) {
   if (!isPlanningAuthError(error)) return null;
@@ -17,19 +18,28 @@ export async function withPlanningRouteUser<T>(
   request: Request,
   callback: (user: PlanningRouteUser) => T | Promise<T>,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<T> {
-  const user = await requireCurrentPlanningUser(request, env);
-  return runWithPlanningUserScope({ userId: user.id, authSource: user.source }, () => callback(user));
+  mapAuthErrorResponse?: PlanningAuthErrorResponseMapper,
+): Promise<T | Response> {
+  try {
+    const user = await requireCurrentPlanningUser(request, env);
+    return runWithPlanningUserScope({ userId: user.id, authSource: user.source }, () => callback(user));
+  } catch (error) {
+    const response = planningAuthErrorResponse(error);
+    if (response) return mapAuthErrorResponse ? mapAuthErrorResponse(response) : response;
+    throw error;
+  }
 }
 
+/**
+ * @deprecated Route handlers should use withPlanningRouteUser(request, callback)
+ * so auth and storage scope have one lifecycle.
+ */
 export async function requirePlanningRouteUser(
   request: Request,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<PlanningRouteUser | Response> {
   try {
-    const user = await requireCurrentPlanningUser(request, env);
-    enterPlanningUserScope({ userId: user.id, authSource: user.source });
-    return user;
+    return await requireCurrentPlanningUser(request, env);
   } catch (error) {
     const response = planningAuthErrorResponse(error);
     if (response) return response;
@@ -37,11 +47,12 @@ export async function requirePlanningRouteUser(
   }
 }
 
+/**
+ * @deprecated Route handlers should not need a Response type guard when using
+ * withPlanningRouteUser(request, callback).
+ */
 export function isPlanningRouteUser(value: PlanningRouteUser | Response): value is PlanningRouteUser {
   if (value instanceof Response) return false;
-  // Direct route guards call this after awaiting requirePlanningRouteUser();
-  // refresh the scope in the caller context before storage helpers run.
-  enterPlanningUserScope({ userId: value.id, authSource: value.source });
   return true;
 }
 

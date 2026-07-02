@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import { z } from "zod";
 import {
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
-import { isPlanningRouteUser, planningUserMeta, requirePlanningRouteUser } from "@/lib/planning/api/routeAuth";
+  } from "@/lib/dev/devGuards";
+import {
+  planningUserMeta,
+  withPlanningRouteUser,
+} from "@/lib/planning/api/routeAuth";
 import {
   NewsSourceImportApplyResultSchema,
   NewsSourceImportPreviewSchema,
@@ -67,17 +71,17 @@ export async function GET(request: Request) {
     return toGuardResponse(error);
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const items = exportNewsSourceList();
-  const payload = parseWithV3Whitelist(SourcesGetResponseSchema, {
-    ok: true,
-    data: { items },
-    meta: userMeta,
-  }, { scope: "response", context: "api.v3.news.sources.get" });
-  return NextResponse.json(payload);
+    const items = exportNewsSourceList();
+    const payload = parseWithV3Whitelist(SourcesGetResponseSchema, {
+      ok: true,
+      data: { items },
+      meta: userMeta,
+    }, { scope: "response", context: "api.v3.news.sources.get" });
+    return NextResponse.json(payload);
+  });
 }
 
 export async function POST(request: Request) {
@@ -95,48 +99,48 @@ export async function POST(request: Request) {
     return toGuardResponse(error);
   }
 
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const parsed = SourcesPostBodySchema.safeParse(body ?? {});
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INPUT", message: "소스 import 요청 형식이 올바르지 않습니다." },
-        meta: userMeta,
+    const parsed = SourcesPostBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INPUT", message: "소스 import 요청 형식이 올바르지 않습니다." },
+          meta: userMeta,
+        },
+        { status: 400 },
+      );
+    }
+
+    let preview: z.infer<typeof NewsSourceImportPreviewSchema>;
+    let applied: z.infer<typeof NewsSourceImportApplyResultSchema> | null = null;
+    try {
+      preview = previewImportNewsSources(parsed.data.items);
+      applied = parsed.data.mode === "apply"
+        ? applyImportNewsSources(parsed.data.items)
+        : null;
+    } catch {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: { code: "INTERNAL", message: "뉴스 소스 import 처리 중 오류가 발생했습니다." },
+          meta: userMeta,
+        },
+        { status: 500 },
+      );
+    }
+
+    const payload = parseWithV3Whitelist(SourcesPostResponseSchema, {
+      ok: true,
+      data: {
+        mode: parsed.data.mode,
+        preview,
+        applied,
       },
-      { status: 400 },
-    );
-  }
-
-  let preview: z.infer<typeof NewsSourceImportPreviewSchema>;
-  let applied: z.infer<typeof NewsSourceImportApplyResultSchema> | null = null;
-  try {
-    preview = previewImportNewsSources(parsed.data.items);
-    applied = parsed.data.mode === "apply"
-      ? applyImportNewsSources(parsed.data.items)
-      : null;
-  } catch {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: { code: "INTERNAL", message: "뉴스 소스 import 처리 중 오류가 발생했습니다." },
-        meta: userMeta,
-      },
-      { status: 500 },
-    );
-  }
-
-  const payload = parseWithV3Whitelist(SourcesPostResponseSchema, {
-    ok: true,
-    data: {
-      mode: parsed.data.mode,
-      preview,
-      applied,
-    },
-    meta: userMeta,
-  }, { scope: "response", context: "api.v3.news.sources.post" });
-  return NextResponse.json(payload);
+      meta: userMeta,
+    }, { scope: "response", context: "api.v3.news.sources.post" });
+    return NextResponse.json(payload);
+  });
 }

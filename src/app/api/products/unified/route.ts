@@ -15,6 +15,7 @@ import {
   parseStringValue,
 } from "@/lib/http/validate";
 import type { UnifiedSourceId } from "@/lib/sources/types";
+import { isSamplebankPublicAccessAllowed } from "@/lib/products/samplebankPolicy";
 import { pushError } from "../../../../lib/observability/errorRingBuffer";
 import { attachTrace, getOrCreateTraceId, setTraceHeader } from "../../../../lib/observability/trace";
 
@@ -52,6 +53,13 @@ function parseIncludeSourcesWithIssues(
 function summarizeIssues(issues: string[]): string {
   const first = issues[0] ?? "요청 파라미터가 올바르지 않습니다.";
   return `요청 파라미터 오류 ${issues.length}건: ${first}`;
+}
+
+function hasSamplebankSource(input: {
+  includeSources: UnifiedSourceId[];
+  sourceId: UnifiedSourceId | null;
+}): boolean {
+  return input.sourceId === "samplebank" || input.includeSources.includes("samplebank");
 }
 
 export async function GET(request: Request) {
@@ -101,6 +109,9 @@ export async function GET(request: Request) {
     const sourceId = (sourceIdRaw === "finlife" || sourceIdRaw === "datago_kdb" || sourceIdRaw === "samplebank")
       ? sourceIdRaw
       : null;
+    if (hasSamplebankSource({ includeSources, sourceId }) && !isSamplebankPublicAccessAllowed()) {
+      addIssue(bag, sourceId === "samplebank" ? "sourceId" : "includeSources", "샘플 데이터 소스는 운영 공개 카탈로그에서 사용할 수 없습니다.");
+    }
 
     const cursor = searchParams.get("cursor");
     const q = searchParams.get("q");

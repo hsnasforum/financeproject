@@ -29,7 +29,3 @@ function snapshotPlanningUserScope(scope: PlanningUserScope): PlanningUserScope 
 export function runWithPlanningUserScope<T>(scope: PlanningUserScope, callback: () => T): T {
   return planningUserScope.run(snapshotPlanningUserScope(scope), callback);
 }
-
-export function enterPlanningUserScope(scope: PlanningUserScope): void {
-  planningUserScope.enterWith(snapshotPlanningUserScope(scope));
-}

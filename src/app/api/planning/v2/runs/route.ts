@@ -1,12 +1,12 @@
 import {
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
-import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
+  } from "../../../../../lib/dev/devGuards";
+import { jsonError,
+  jsonOk } from "../../../../../lib/planning/api/response";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 import {
   handleCreatePlanningRunPost,
@@ -33,29 +33,29 @@ function withReadGuard(request: Request) {
 export async function GET(request: Request) {
   const guardFailure = withReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const url = new URL(request.url);
-  const profileId = asString(url.searchParams.get("profileId"));
-  const limit = url.searchParams.get("limit");
-  const offset = url.searchParams.get("offset");
+    const url = new URL(request.url);
+    const profileId = asString(url.searchParams.get("profileId"));
+    const limit = url.searchParams.get("limit");
+    const offset = url.searchParams.get("offset");
 
-  try {
-    const runsResult = await listCurrentUserRunsForRoute({
-      ...(profileId ? { profileId } : {}),
-      ...(limit !== null ? { limit: Number(limit) } : {}),
-      ...(offset !== null ? { offset: Number(offset) } : {}),
-    });
-    return jsonOk(
-      { data: runsResult.runs, meta: { actionProgressSummaryByRunId: runsResult.actionProgressSummaryByRunId } },
-      { meta: userMeta },
-    );
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
-    return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
-  }
+    try {
+      const runsResult = await listCurrentUserRunsForRoute({
+        ...(profileId ? { profileId } : {}),
+        ...(limit !== null ? { limit: Number(limit) } : {}),
+        ...(offset !== null ? { offset: Number(offset) } : {}),
+      });
+      return jsonOk(
+        { data: runsResult.runs, meta: { actionProgressSummaryByRunId: runsResult.actionProgressSummaryByRunId } },
+        { meta: userMeta },
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "실행 기록 조회에 실패했습니다.";
+      return jsonError("INTERNAL", message, { status: 500, meta: userMeta });
+    }
+  });
 }
 
 export async function POST(request: Request) {

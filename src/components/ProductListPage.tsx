@@ -37,6 +37,17 @@ import {
   type ProductListSortKey,
 } from "@/lib/products/listUtils";
 import {
+  buildFinlifeRequestParams,
+  buildProductExplorerApiUrl,
+  buildProductExplorerUrlParams,
+  FINLIFE_PAGE_SIZE,
+  isValidProductExplorerSortKey,
+  parseAmountInput,
+  parseProductExplorerUrlState,
+  type ProductExplorerScanMode,
+  type ProductExplorerViewMode,
+} from "@/lib/products/productExplorerUrlState";
+import {
   addRecent,
   loadShelfFromSnapshot,
   PRODUCT_SHELF_UPDATED_EVENT,
@@ -74,22 +85,6 @@ type StatusApiResponse = {
   data?: SourceStatusRow[];
 };
 
-const FINLIFE_PAGE_SIZE = 50;
-const OPTION_SORT_KEYS: OptionSortKey[] = ["best_desc", "base_desc", "bonus_desc", "term_asc", "term_desc", "provider_asc", "product_asc"];
-
-function parseAmountInput(value: string): number {
-  const parsed = Number(value.replace(/[^0-9]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function parseCsvParam(value: string | null): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
-
 function sanitizeSnapshotNote(note: string | null | undefined): string | null {
   if (!note) return null;
   return note
@@ -124,21 +119,6 @@ function formatFinlifeFallbackMode(payload: FinlifeSourceResult | null): string 
   if (payload?.meta.fallbackUsed && payload.meta.source === "snapshot") return "스냅샷 기준";
   if (payload?.meta.fallbackUsed && payload.meta.source === "live_partial") return "부분 수집 기준";
   return null;
-}
-
-function isValidSortKey(value: string | null): value is SortKey {
-  return value === "rateDesc" || value === "rateAsc" || value === "nameAsc" || value === "termAsc";
-}
-
-function isValidOptionSortKey(value: string | null): value is OptionSortKey {
-  return OPTION_SORT_KEYS.includes(value as OptionSortKey);
-}
-
-function parseMaxPagesParam(value: string | null): number | "auto" {
-  const normalized = (value ?? "").trim().toLowerCase();
-  if (normalized === "auto" || !normalized) return "auto";
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.min(80, Math.trunc(parsed)) : "auto";
 }
 
 function subscribeProductShelf(onStoreChange: () => void): () => void {
@@ -229,33 +209,28 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   );
   const shelf = readProductShelfFromSnapshot(productShelfStorageSnapshot);
   const defaultSortKey: SortKey = ratePreference === "higher" ? "rateDesc" : "rateAsc";
-  const [topFinGrpNo, setTopFinGrpNo] = useState(initialTopFinGrpNo);
-  const [selectedFinCoNo, setSelectedFinCoNo] = useState<string | null>(() => {
-    const parsed = (searchParams?.get("finCoNo") ?? "").trim();
-    return parsed || null;
-  });
-  const [pageNo, setPageNo] = useState(initialPageNo);
-  const [scanMode, setScanMode] = useState<"page" | "all">(() => (searchParams?.get("scan") === "all" ? "all" : "page"));
-  const [maxPages, setMaxPages] = useState<number | "auto">(() => parseMaxPagesParam(searchParams?.get("maxPages") ?? null));
-  const [viewMode, setViewMode] = useState<"product" | "option">(() => (searchParams?.get("view") === "option" ? "option" : "product"));
-  const [sortKey, setSortKey] = useState<SortKey>(() => {
-    const parsedSort = searchParams?.get("sort") ?? null;
-    return isValidSortKey(parsedSort) ? parsedSort : defaultSortKey;
-  });
-  const [optionSortKey, setOptionSortKey] = useState<OptionSortKey>(() => {
-    const parsedOptSort = searchParams?.get("optSort") ?? null;
-    return isValidOptionSortKey(parsedOptSort) ? parsedOptSort : "best_desc";
-  });
-  const [optionGroup, setOptionGroup] = useState(() => searchParams?.get("optGroup") === "1");
+  const initialUrlState = useMemo(
+    () => parseProductExplorerUrlState(searchParams, { defaultSortKey, initialTopFinGrpNo, initialPageNo }),
+    [defaultSortKey, initialPageNo, initialTopFinGrpNo, searchParams],
+  );
+  const [topFinGrpNo, setTopFinGrpNo] = useState(initialUrlState.topFinGrpNo);
+  const [selectedFinCoNo, setSelectedFinCoNo] = useState<string | null>(initialUrlState.selectedFinCoNo);
+  const [pageNo, setPageNo] = useState(initialUrlState.pageNo);
+  const [scanMode, setScanMode] = useState<ProductExplorerScanMode>(initialUrlState.scanMode);
+  const [maxPages, setMaxPages] = useState<number | "auto">(initialUrlState.maxPages);
+  const [viewMode, setViewMode] = useState<ProductExplorerViewMode>(initialUrlState.viewMode);
+  const [sortKey, setSortKey] = useState<SortKey>(initialUrlState.sortKey);
+  const [optionSortKey, setOptionSortKey] = useState<OptionSortKey>(initialUrlState.optionSortKey);
+  const [optionGroup, setOptionGroup] = useState(initialUrlState.optionGroup);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [showAllProviders, setShowAllProviders] = useState(false);
 
-  const [selectedTerms, setSelectedTerms] = useState<string[]>(() => parseCsvParam(searchParams?.get("terms") ?? null));
-  const [amountInput, setAmountInput] = useState(() => (searchParams?.get("amount") ?? "").trim() || "10000000");
-  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>(() => parseCsvParam(searchParams?.get("types") ?? null));
-  const [selectedBenefits, setSelectedBenefits] = useState<string[]>(() => parseCsvParam(searchParams?.get("benefits") ?? null));
-  const [searchQuery, setSearchQuery] = useState(() => (searchParams?.get("q") ?? "").trim());
-  const [onlyFavorites, setOnlyFavorites] = useState(() => searchParams?.get("fav") === "1");
+  const [selectedTerms, setSelectedTerms] = useState<string[]>(initialUrlState.selectedTerms);
+  const [amountInput, setAmountInput] = useState(initialUrlState.amountInput);
+  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>(initialUrlState.selectedProductTypes);
+  const [selectedBenefits, setSelectedBenefits] = useState<string[]>(initialUrlState.selectedBenefits);
+  const [searchQuery, setSearchQuery] = useState(initialUrlState.searchQuery);
+  const [onlyFavorites, setOnlyFavorites] = useState(initialUrlState.onlyFavorites);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
@@ -363,17 +338,16 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
       setLoading(true);
       setError("");
 
-      const params = new URLSearchParams();
-      params.set("topFinGrpNo", topFinGrpNo);
-      params.set("pageNo", scanMode === "page" ? String(pageNo) : "1");
-      params.set("pageSize", String(FINLIFE_PAGE_SIZE));
-      if (scanMode === "all") {
-        params.set("scan", "all");
-        params.set("maxPages", String(maxPages));
-      }
+      const params = buildFinlifeRequestParams({
+        topFinGrpNo,
+        pageNo,
+        scanMode,
+        maxPages,
+        pageSize: FINLIFE_PAGE_SIZE,
+      });
 
       try {
-        const res = await fetch(`/api/finlife/${kind}?${params.toString()}`, { cache: "no-store" });
+        const res = await fetch(buildProductExplorerApiUrl(kind, params), { cache: "no-store" });
         const raw = await res.json();
         const parsed = parseFinlifeApiResponse(raw);
 
@@ -402,27 +376,25 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
   }, [kind, maxPages, pageNo, scanMode, topFinGrpNo]);
 
   useEffect(() => {
-    const params = new URLSearchParams();
-    params.set("topFinGrpNo", topFinGrpNo);
-    params.set("pageSize", String(FINLIFE_PAGE_SIZE));
-    if (scanMode === "page") params.set("pageNo", String(pageNo));
-    if (scanMode === "all") {
-      params.set("scan", "all");
-      params.set("maxPages", String(maxPages));
-    }
-    if (viewMode === "option") params.set("view", "option");
-    if (viewMode === "option") {
-      params.set("optSort", optionSortKey);
-      if (optionGroup) params.set("optGroup", "1");
-    }
-    if (selectedFinCoNo) params.set("finCoNo", selectedFinCoNo);
-    if (searchQuery.trim()) params.set("q", searchQuery.trim());
-    if (onlyFavorites) params.set("fav", "1");
-    if (sortKey !== defaultSortKey) params.set("sort", sortKey);
-    if (selectedTerms.length > 0) params.set("terms", selectedTerms.join(","));
-    if (selectedProductTypes.length > 0) params.set("types", selectedProductTypes.join(","));
-    if (selectedBenefits.length > 0) params.set("benefits", selectedBenefits.join(","));
-    if (amountInput.trim() && amountInput !== "10000000") params.set("amount", amountInput.trim());
+    const params = buildProductExplorerUrlParams({
+      topFinGrpNo,
+      pageNo,
+      scanMode,
+      maxPages,
+      viewMode,
+      optionSortKey,
+      optionGroup,
+      selectedFinCoNo,
+      searchQuery,
+      onlyFavorites,
+      sortKey,
+      defaultSortKey,
+      selectedTerms,
+      selectedProductTypes,
+      selectedBenefits,
+      amountInput,
+      pageSize: FINLIFE_PAGE_SIZE,
+    });
     router.replace(`?${params.toString()}`, { scroll: false });
   }, [
     amountInput,
@@ -700,7 +672,10 @@ export function ProductListPage({ kind, title, ratePreference, initialTopFinGrpN
               <select
                 className="h-12 w-full rounded-2xl border border-slate-200 bg-surface-muted px-4 text-sm font-black text-slate-700 outline-none cursor-pointer transition-all focus:border-primary focus:bg-white"
                 value={sortKey}
-                onChange={(event) => setSortKey(event.target.value as SortKey)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setSortKey(isValidProductExplorerSortKey(next) ? next : defaultSortKey);
+                }}
               >
                 <option value={ratePreference === "higher" ? "rateDesc" : "rateAsc"}>
                   {ratePreference === "higher" ? "금리 높은 순" : "금리 낮은 순"}

@@ -31,6 +31,14 @@ export type DashboardRun = {
   outputs?: Record<string, unknown>;
 };
 
+export type DashboardRunsLoadState = "loaded" | "failed";
+
+export type DashboardInitialViewModel = {
+  runs: DashboardRun[];
+  runsLoadState: DashboardRunsLoadState;
+  runsErrorMessage?: string;
+};
+
 type DashboardDataSource = {
   id: string;
   label: string;
@@ -93,6 +101,8 @@ type DashboardFeedback = {
 
 type DashboardState = {
   runs: DashboardRun[];
+  runsLoadState: DashboardRunsLoadState;
+  runsErrorMessage?: string;
   dataSources: DashboardDataSource[];
   sourceStatuses: DashboardSourceStatus[];
   fxItems: DashboardFxItem[];
@@ -105,6 +115,7 @@ type DashboardState = {
 
 const INITIAL_STATE: DashboardState = {
   runs: [],
+  runsLoadState: "loaded",
   dataSources: [],
   sourceStatuses: [],
   fxItems: [],
@@ -362,13 +373,15 @@ async function fetchJson(url: string): Promise<unknown> {
 }
 
 type DashboardClientProps = {
-  initialRuns: DashboardRun[];
+  initialViewModel: DashboardInitialViewModel;
 };
 
-export function DashboardClient({ initialRuns }: DashboardClientProps) {
+export function DashboardClient({ initialViewModel }: DashboardClientProps) {
   const [state, setState] = useState<DashboardState>({
     ...INITIAL_STATE,
-    runs: initialRuns,
+    runs: initialViewModel.runs,
+    runsLoadState: initialViewModel.runsLoadState,
+    runsErrorMessage: initialViewModel.runsErrorMessage,
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -381,7 +394,9 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
 
       const nextState: DashboardState = {
         ...INITIAL_STATE,
-        runs: initialRuns,
+        runs: initialViewModel.runs,
+        runsLoadState: initialViewModel.runsLoadState,
+        runsErrorMessage: initialViewModel.runsErrorMessage,
       };
 
       const results = await Promise.allSettled([
@@ -434,9 +449,10 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [initialRuns]);
+  }, [initialViewModel]);
 
   const latestRun = state.runs[0] ?? null;
+  const runsLoadFailed = state.runsLoadState === "failed";
   const latestSummary = useMemo(() => runSummary(latestRun), [latestRun]);
   const latestActions = useMemo(() => runActions(latestRun), [latestRun]);
   const latestCandidates = useMemo(() => runCandidates(latestRun), [latestRun]);
@@ -458,18 +474,43 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
   );
   const latestRunReportHref = latestRun ? `/planning/reports?runId=${encodeURIComponent(latestRun.id)}` : "/planning/reports";
   const latestRunPlanningHref = latestRun ? `/planning?profileId=${encodeURIComponent(latestRun.profileId)}` : "/planning";
+  const visibleWarnings = [
+    ...(runsLoadFailed ? [state.runsErrorMessage || "최근 플랜 정보를 불러오지 못했습니다."] : []),
+    ...state.warnings,
+  ];
 
   return (
     <PageShell>
       <div className="space-y-8" data-testid="dashboard-root">
         <ReportHeroCard
           kicker="시작 요약"
-          title={latestRun ? "최근 플랜 기준으로 재무 상태부터 다시 확인하세요" : "재무 상태 진단부터 시작하세요"}
-          description={latestRun
+          title={runsLoadFailed
+            ? "최근 플랜 정보를 다시 불러와야 합니다"
+            : latestRun ? "최근 플랜 기준으로 재무 상태부터 다시 확인하세요" : "재무 상태 진단부터 시작하세요"}
+          description={runsLoadFailed
+            ? "저장된 기록이 없어진 것은 아닙니다. 최근 실행 목록을 불러오지 못한 상태라 새로고침 후 다시 확인하고, 필요하면 새 진단을 시작할 수 있습니다."
+            : latestRun
             ? `${latestRun.title || "최근 플랜"} 기준으로 먼저 리포트에서 현재 재무 상태를 다시 확인하고, 필요하면 추천 허브에서 조건에 맞는 상품 비교로 이어갈 수 있습니다.`
             : "먼저 플래닝에서 현재 재무 상태를 진단하고, 필요하면 추천 허브에서 조건에 맞는 상품 비교로 이어갈 수 있습니다."}
           action={(
-            latestRun ? (
+            runsLoadFailed ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="rounded-full bg-primary px-6 py-2 text-sm font-black text-white shadow-lg shadow-primary/10 transition hover:bg-navy active:scale-95"
+                >
+                  {refreshing ? "새로고침 중..." : "최근 플랜 다시 불러오기"}
+                </button>
+                <Link
+                  href="/planning"
+                  prefetch={devPlanningPrefetch("/planning")}
+                  className="rounded-full border border-primary/20 bg-primary/5 px-5 py-2 text-sm font-black text-navy transition hover:bg-primary/10 active:scale-95"
+                >
+                  새 재무 진단 시작
+                </Link>
+              </>
+            ) : latestRun ? (
               <>
                 <button
                   type="button"
@@ -529,11 +570,13 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
         >
           <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-400">
             <p>
-              최근 실행 {latestRun ? `${formatDateTime(latestRun.createdAt)} · ${formatRunStatus(latestRun.overallStatus)}` : "없음"}
+              최근 실행 {runsLoadFailed ? "불러오기 실패" : latestRun ? `${formatDateTime(latestRun.createdAt)} · ${formatRunStatus(latestRun.overallStatus)}` : "없음"}
             </p>
             <div className="h-1 w-1 rounded-full bg-slate-200" />
             <p className="text-primary">
-              {latestRun
+              {runsLoadFailed
+                ? "기록 없음과 로드 실패를 구분해 보여줍니다."
+                : latestRun
                 ? "먼저 재무 상태를 다시 확인하고, 상품 비교는 필요할 때 추천 허브로 이어집니다."
                 : "먼저 재무 상태 진단을 시작하고, 상품 비교는 필요할 때 추천 허브에서 이어집니다."}
             </p>
@@ -541,8 +584,8 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
           <ReportHeroStatGrid className="xl:grid-cols-5">
             <ReportHeroStatCard
               label="저장된 실행"
-              value={state.runs.length}
-              description={latestRun ? `최근 실행 ${formatDateTime(latestRun.createdAt)}` : "기록 없음"}
+              value={runsLoadFailed ? "-" : state.runs.length}
+              description={runsLoadFailed ? "불러오기 실패" : latestRun ? `최근 실행 ${formatDateTime(latestRun.createdAt)}` : "기록 없음"}
             />
             <ReportHeroStatCard
               label="월 잉여금"
@@ -576,11 +619,11 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
               상품 비교로 이어보기 →
             </Link>
           </div>
-          {state.warnings.length > 0 ? (
+          {visibleWarnings.length > 0 ? (
             <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3 text-xs text-amber-100">
               <p className="font-semibold text-amber-200">일부 정보는 아직 준비되지 않았습니다.</p>
               <div className="mt-1 space-y-1">
-                {state.warnings.slice(0, 4).map((message) => (
+                {visibleWarnings.slice(0, 4).map((message) => (
                   <p key={message}>- {message}</p>
                 ))}
               </div>
@@ -603,7 +646,24 @@ export function DashboardClient({ initialRuns }: DashboardClientProps) {
                 </Link>
               }
             />
-            {loading && state.runs.length < 1 ? (
+            {runsLoadFailed ? (
+              <div
+                className="rounded-[2.5rem] border border-amber-200 bg-amber-50 px-5 py-12 text-center"
+                data-testid="dashboard-runs-load-failed"
+              >
+                <p className="text-sm font-black text-amber-900">최근 실행 기록을 불러오지 못했습니다.</p>
+                <p className="mx-auto mt-2 max-w-lg text-xs font-medium leading-relaxed text-amber-700">
+                  저장된 기록이 없다는 뜻은 아닙니다. 잠시 뒤 새로고침하거나 플래닝 화면에서 새 진단을 이어갈 수 있습니다.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="mt-8 inline-flex h-11 items-center rounded-2xl bg-amber-600 px-8 text-xs font-black text-white transition-all hover:bg-amber-700 active:scale-95"
+                >
+                  다시 불러오기
+                </button>
+              </div>
+            ) : loading && state.runs.length < 1 ? (
               <p className="text-sm text-slate-400 animate-pulse">최근 실행을 불러오는 중입니다.</p>
             ) : state.runs.length < 1 ? (
               <div className="rounded-[2.5rem] border border-dashed border-slate-200 bg-surface-muted/50 px-5 py-16 text-center">

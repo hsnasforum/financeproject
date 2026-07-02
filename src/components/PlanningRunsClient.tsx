@@ -142,6 +142,7 @@ export function PlanningRunsClient({
   const runsRef = useRef<PlanningRunRecord[]>(initialRuns);
   const selectedRunIdRef = useRef(initialEffectiveSelectedRunId);
   const selectedActionCenterRunIdRef = useRef("");
+  const compareSeedRunIdRef = useRef("");
 
   function pushNotice(message: string): void {
     if (!isMountedRef.current) return;
@@ -176,16 +177,34 @@ export function PlanningRunsClient({
   );
 
   const compareResult = useMemo(() => {
-    if (compareIds.length !== 2) return null;
-    const first = runs.find((run) => run.id === compareIds[0]);
-    const second = runs.find((run) => run.id === compareIds[1]);
+    const selectedPeerIds = selectedRun
+      ? runs.filter((run) => run.id !== selectedRun.id).map((run) => run.id)
+      : [];
+    const effectiveCompareIds = compareIds.length === 1 && selectedRun && compareIds[0] !== selectedRun.id
+      ? [selectedRun.id, compareIds[0]]
+      : compareIds.length === 1 && selectedRun && compareIds[0] === selectedRun.id && selectedPeerIds.length === 1
+        ? [selectedRun.id, selectedPeerIds[0]]
+        : compareIds;
+    if (effectiveCompareIds.length !== 2) return null;
+    const first = runs.find((run) => run.id === effectiveCompareIds[0]);
+    const second = runs.find((run) => run.id === effectiveCompareIds[1]);
     if (!first || !second) return null;
     return {
       base: first,
       other: second,
       diff: diffRuns(first, second),
     };
-  }, [compareIds, runs]);
+  }, [compareIds, runs, selectedRun]);
+
+  useEffect(() => {
+    if (!selectedRunId || compareSeedRunIdRef.current === selectedRunId) return;
+    if (!runs.some((run) => run.id === selectedRunId)) return;
+    compareSeedRunIdRef.current = selectedRunId;
+    setCompareIds((prev) => {
+      if (prev.includes(selectedRunId) || prev.length >= 2) return prev;
+      return [selectedRunId, ...prev].slice(0, 2);
+    });
+  }, [runs, selectedRunId]);
 
   const compareWhyChanged = useMemo(() => {
     if (!compareResult) return null;

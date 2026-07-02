@@ -1,15 +1,17 @@
-import { formatSnapshotLabel } from "../../../../planning/_lib/formatSnapshotLabel";
-import { loadSnapshotListForPlanning, type SnapshotListItem } from "../../../../planning/_lib/snapshotList";
+import {
+  formatSnapshotLabel } from "../../../../planning/_lib/formatSnapshotLabel";
+import { loadSnapshotListForPlanning,
+  type SnapshotListItem } from "../../../../planning/_lib/snapshotList";
 import {
   assertLocalHost,
   toGuardErrorResponse,
-} from "../../../../../lib/dev/devGuards";
+  } from "../../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../../lib/dev/onlyDev";
-import { jsonError, jsonOk } from "../../../../../lib/planning/api/response";
+import { jsonError,
+  jsonOk } from "../../../../../lib/planning/api/response";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "../../../../../lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
@@ -59,32 +61,32 @@ export async function GET(request: Request) {
 
   const guardFailure = withLocalReadGuard(request);
   if (guardFailure) return guardFailure;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const { searchParams } = new URL(request.url);
-  const limit = toSafeLimit(asString(searchParams.get("limit")));
+    const { searchParams } = new URL(request.url);
+    const limit = toSafeLimit(asString(searchParams.get("limit")));
 
-  try {
-    const snapshots = await loadSnapshotListForPlanning(limit);
-    const latest = snapshots.latest;
-    const items = [...snapshots.history].sort((a, b) => {
-      const aTs = Date.parse(asString(a.fetchedAt));
-      const bTs = Date.parse(asString(b.fetchedAt));
-      if (Number.isFinite(aTs) && Number.isFinite(bTs) && bTs !== aTs) return bTs - aTs;
-      return b.id.localeCompare(a.id);
-    });
-    return jsonOk({
-      latestId: latest?.id ?? null,
-      latestLabel: latest ? formatSnapshotLabel(latest, "latest") : "LATEST · unavailable",
-      items: items.map((item) => toResponseItem(item)),
-    }, { meta: userMeta });
-  } catch (error) {
-    return jsonError(
-      "INTERNAL",
-      error instanceof Error ? error.message : "스냅샷 목록 조회에 실패했습니다.",
-      { status: 500 },
-    );
-  }
+    try {
+      const snapshots = await loadSnapshotListForPlanning(limit);
+      const latest = snapshots.latest;
+      const items = [...snapshots.history].sort((a, b) => {
+        const aTs = Date.parse(asString(a.fetchedAt));
+        const bTs = Date.parse(asString(b.fetchedAt));
+        if (Number.isFinite(aTs) && Number.isFinite(bTs) && bTs !== aTs) return bTs - aTs;
+        return b.id.localeCompare(a.id);
+      });
+      return jsonOk({
+        latestId: latest?.id ?? null,
+        latestLabel: latest ? formatSnapshotLabel(latest, "latest") : "LATEST · unavailable",
+        items: items.map((item) => toResponseItem(item)),
+      }, { meta: userMeta });
+    } catch (error) {
+      return jsonError(
+        "INTERNAL",
+        error instanceof Error ? error.message : "스냅샷 목록 조회에 실패했습니다.",
+        { status: 500 },
+      );
+    }
+  });
 }

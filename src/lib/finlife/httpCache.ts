@@ -1,9 +1,10 @@
 import { getCachePolicy } from "../dataSources/cachePolicy";
+import { type FinlifeKind } from "@/lib/finlife/types";
 
 export type FinlifeHttpCacheState = "hit" | "miss" | "bypass";
 
 export function buildFinlifeHttpCacheKey(input: {
-  kind: "deposit" | "saving";
+  kind: FinlifeKind;
   topFinGrpNo: string;
   pageNo: number;
   pageSize: number;

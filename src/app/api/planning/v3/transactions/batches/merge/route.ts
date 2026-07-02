@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   assertLocalHost,
   assertSameOrigin,
   requireCsrf,
   toGuardErrorResponse,
-} from "@/lib/dev/devGuards";
+  } from "@/lib/dev/devGuards";
 import { onlyDev } from "@/lib/dev/onlyDev";
 import {
-  isPlanningRouteUser,
   planningUserMeta,
-  requirePlanningRouteUser,
+  withPlanningRouteUser,
 } from "@/lib/planning/api/routeAuth";
 
 type MergeBody = {
@@ -56,28 +56,28 @@ export async function POST(request: Request) {
 
   const guarded = withWriteGuard(request, body);
   if (guarded) return guarded;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
-  const userMeta = planningUserMeta(currentUser);
+  return await withPlanningRouteUser(request, async (currentUser) => {
+    const userMeta = planningUserMeta(currentUser);
 
-  const fromBatchId = asString(body?.fromBatchId);
-  const intoBatchId = asString(body?.intoBatchId);
-  if (!fromBatchId || !intoBatchId) {
+    const fromBatchId = asString(body?.fromBatchId);
+    const intoBatchId = asString(body?.intoBatchId);
+    if (!fromBatchId || !intoBatchId) {
+      return NextResponse.json(
+        { ok: false, error: { code: "INPUT", message: "배치 병합 입력이 올바르지 않습니다." }, meta: userMeta },
+        { status: 400 },
+      );
+    }
+
     return NextResponse.json(
-      { ok: false, error: { code: "INPUT", message: "배치 병합 입력이 올바르지 않습니다." }, meta: userMeta },
-      { status: 400 },
-    );
-  }
-
-  return NextResponse.json(
-    {
-      ok: false,
-      error: {
-        code: "UNSUPPORTED",
-        message: "기존 거래 저장소 병합은 canonical 저장소 전환 후 사용자 요청에서 지원하지 않습니다.",
+      {
+        ok: false,
+        error: {
+          code: "UNSUPPORTED",
+          message: "기존 거래 저장소 병합은 canonical 저장소 전환 후 사용자 요청에서 지원하지 않습니다.",
+        },
+        meta: userMeta,
       },
-      meta: userMeta,
-    },
-    { status: 410 },
-  );
+      { status: 410 },
+    );
+  });
 }

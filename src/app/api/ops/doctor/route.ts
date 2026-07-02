@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import {
+  NextResponse } from "next/server";
 import {
   requireCsrf,
   assertDevUnlocked,
   assertLocalHost,
   assertSameOrigin,
   toGuardErrorResponse,
-} from "../../../../lib/dev/devGuards";
+  } from "../../../../lib/dev/devGuards";
 import { onlyDev } from "../../../../lib/dev/onlyDev";
 import { opsErrorResponse } from "../../../../lib/ops/errorContract";
 import {
@@ -13,8 +14,8 @@ import {
   normalizeOpsDoctorAction,
   runOpsDoctor,
   runOpsDoctorAction,
-} from "../../../../lib/planning/server/ops/doctorRouteService";
-import { isPlanningRouteUser, requirePlanningRouteUser } from "../../../../lib/planning/api/routeAuth";
+  } from "../../../../lib/planning/server/ops/doctorRouteService";
+import { withPlanningRouteUser } from "../../../../lib/planning/api/routeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -52,31 +53,31 @@ export async function GET(request: Request) {
   const csrf = asString(searchParams.get("csrf"));
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  try {
-    const result = await runOpsDoctor();
-    return NextResponse.json({
-      ok: true,
-      schemaVersion: result.schemaVersion,
-      data: result.data,
-      report: result.report,
-      checks: result.checks,
-      issues: result.issues,
-      message: result.message,
-      meta: {
-        ...result.meta,
-        ...doctorRouteMeta(currentUser),
-      },
-    });
-  } catch (error) {
-    return opsErrorResponse({
-      code: "STORAGE_CORRUPT",
-      message: error instanceof Error ? error.message : "doctor 실행 실패",
-      status: 500,
-    });
-  }
+    try {
+      const result = await runOpsDoctor();
+      return NextResponse.json({
+        ok: true,
+        schemaVersion: result.schemaVersion,
+        data: result.data,
+        report: result.report,
+        checks: result.checks,
+        issues: result.issues,
+        message: result.message,
+        meta: {
+          ...result.meta,
+          ...doctorRouteMeta(currentUser),
+        },
+      });
+    } catch (error) {
+      return opsErrorResponse({
+        code: "STORAGE_CORRUPT",
+        message: error instanceof Error ? error.message : "doctor 실행 실패",
+        status: 500,
+      });
+    }
+  });
 }
 
 type DoctorActionBody = {
@@ -92,33 +93,33 @@ export async function POST(request: Request) {
   const csrf = asString(body?.csrf);
   const guard = guardRequest(request, csrf);
   if (guard) return guard;
-  const currentUser = await requirePlanningRouteUser(request);
-  if (!isPlanningRouteUser(currentUser)) return currentUser;
+  return await withPlanningRouteUser(request, async (currentUser) => {
 
-  const action = normalizeOpsDoctorAction(body?.action);
-  if (!action) {
-    return opsErrorResponse({
-      code: "VALIDATION",
-      message: "지원하지 않는 doctor action 입니다.",
-      status: 400,
-      fixHref: "/ops/doctor",
-    });
-  }
+    const action = normalizeOpsDoctorAction(body?.action);
+    if (!action) {
+      return opsErrorResponse({
+        code: "VALIDATION",
+        message: "지원하지 않는 doctor action 입니다.",
+        status: 400,
+        fixHref: "/ops/doctor",
+      });
+    }
 
-  const result = await runOpsDoctorAction(action, currentUser);
-  if (!result.ok) {
-    return opsErrorResponse({
-      code: "INTERNAL",
+    const result = await runOpsDoctorAction(action, currentUser);
+    if (!result.ok) {
+      return opsErrorResponse({
+        code: "INTERNAL",
+        message: result.message,
+        status: 500,
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      status: result.status,
       message: result.message,
-      status: 500,
+      data: result.data,
+      meta: doctorRouteMeta(currentUser),
     });
-  }
-
-  return NextResponse.json({
-    ok: true,
-    status: result.status,
-    message: result.message,
-    data: result.data,
-    meta: doctorRouteMeta(currentUser),
   });
 }
