@@ -47,3 +47,18 @@
 - `PlanningReportsDashboardClient` hydration mismatch는 기능 회귀는 아니지만 React warning과 초기 disclosure 상태 불일치 가능성이 있어 #126 follow-up으로 분리했다.
 - legacy route/API 삭제는 telemetry/access log와 실제 사용처 확인 전까지 닫지 않는 전제가 유지된다.
 - public API debug meta와 console diagnostic에는 운영자 hint가 남아 있다. 일반 사용자 message에는 노출되지 않지만, debug flag 노출 경계는 계속 유지해야 한다.
+
+## PR #127 정리 추가 기록
+- 2026-07-02 후속 라운드에서 PR #127 head를 `origin/main` 기준 clean replay 커밋 `27e8152484e82afe2172e4d0aecd9481e4d26dc2`로 교체했다.
+- GitHub PR diff는 `2790 files changed / 37303 additions / 315587 deletions`에서 `230 files changed / 12111 additions / 7911 deletions`로 축소됐다.
+- `.dist/planning-v2-desktop-installed/**` 대량 삭제는 현재 트리 변경이 아니라 stale merge-base와 선행 브랜치 히스토리 유입으로 확인했고, clean replay 후 PR 비교면에서 제거했다.
+- PR 본문 한글 깨짐은 UTF-8 본문으로 교체했다. 최종 gate 결과는 CI/e2e 재실행 결과에 맞춰 다시 갱신해야 한다.
+- clean replay 후 `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm planning:current-screens:guard`, `pnpm planning:ssot:check`, `pnpm planner:deprecated:guard`, `pnpm planning:user-scope:check`, `pnpm planning:v2:guard`, `git diff --check origin/main...HEAD`는 PASS했다.
+- clean replay 후 `PORT=3142 PLANNING_DATA_DIR=.data/planning-e2e-127-clean pnpm e2e:rc`는 FAIL했다. `flow-history-to-report` 2건이 timeout 또는 page/context close로 실패했고, 같은 라운드에서 `PlanningReportsDashboardClient`의 `<details open>` hydration mismatch warning도 재현됐다.
+- GitHub Actions도 새 head 기준으로 실행됐고, CI는 `multi-agent:guard`에서 이 문서의 다음 라운드 섹션 누락을 지적했으며, E2E Smoke `core_flows`는 `planning runs selected and compare states show distinct report follow-through helpers`에서 비교 안내 문구를 찾지 못해 실패했다.
+
+## 다음 라운드 우선순위
+- `multi-agent:guard`를 다시 실행해 이 `/work` 문서 보강으로 CI 문서 게이트가 해소되는지 확인한다.
+- `flow-history-to-report` e2e 실패를 기능 회귀와 timeout/flake로 분리한다. 특히 `PlanningRunsClient`의 비교 안내 문구 렌더 조건과 `/planning/reports` 초기 로드 timeout을 재현해야 한다.
+- hydration mismatch는 #126 follow-up으로 유지하되, e2e timeout이나 report toggle 상태 손상과 연결되는지 확인한다.
+- PR #127은 CI/E2E가 다시 PASS하기 전까지 Draft와 blocking 상태를 유지한다.
