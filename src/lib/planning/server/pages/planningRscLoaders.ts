@@ -2,6 +2,7 @@ import {
   toPlanningPageLoadMessage,
   withCurrentPlanningPageUser,
 } from "@/lib/planning/server/pageAuth";
+import { createPlanningPageLoadTelemetry } from "@/lib/planning/server/pages/planningPageLoadTelemetry";
 import {
   getCurrentUserDefaultProfileId,
   getCurrentUserProfile,
@@ -65,9 +66,15 @@ export async function loadPlanningRunsPageInitialData(input: {
 }): Promise<PlanningRunsPageInitialData> {
   const fallbackNotice = "처음 상담 기록을 준비하는 중 일시적인 문제가 있어 화면에서 다시 불러옵니다.";
   let filterProfileId = input.initialFilterProfileId;
+  const telemetry = createPlanningPageLoadTelemetry({
+    context: {
+      hasInitialFilterProfileId: Boolean(input.initialFilterProfileId),
+    },
+    route: "/planning/runs",
+  });
 
   try {
-    return await withCurrentPlanningPageUser(async () => {
+    const loaded = await telemetry.step("userScope", () => withCurrentPlanningPageUser(async () => {
       let profiles: CurrentUserPlanningProfileRecord[] = [];
       let profilesReady = false;
       let runs: CurrentUserPlanningRunRecord[] = [];
@@ -76,11 +83,18 @@ export async function loadPlanningRunsPageInitialData(input: {
       let loadNotice = "";
 
       if (!filterProfileId) {
-        filterProfileId = await getCurrentUserDefaultProfileId().catch(() => "") || "";
+        try {
+          filterProfileId = await telemetry.step(
+            "defaultProfileId",
+            () => getCurrentUserDefaultProfileId(),
+          ) || "";
+        } catch {
+          filterProfileId = "";
+        }
       }
 
       try {
-        profiles = await listCurrentUserProfiles();
+        profiles = await telemetry.step("profiles", () => listCurrentUserProfiles());
         profilesReady = true;
       } catch (error) {
         console.error("[planning/runs] failed to load initial profiles", error);
@@ -88,11 +102,15 @@ export async function loadPlanningRunsPageInitialData(input: {
       }
 
       try {
-        runs = await listCurrentUserRuns({
-          ...(filterProfileId ? { profileId: filterProfileId } : {}),
-          limit: 200,
-        });
-        actionProgressSummaryByRunId = await summarizeCurrentUserRunActionProgressByRunId(runs);
+        runs = await telemetry.step("runs", () =>
+          listCurrentUserRuns({
+            ...(filterProfileId ? { profileId: filterProfileId } : {}),
+            limit: 200,
+          }),
+        );
+        actionProgressSummaryByRunId = await telemetry.step("actionProgress", () =>
+          summarizeCurrentUserRunActionProgressByRunId(runs),
+        );
         runsReady = true;
       } catch (error) {
         console.error("[planning/runs] failed to load initial runs", error);
@@ -108,10 +126,22 @@ export async function loadPlanningRunsPageInitialData(input: {
         runs,
         runsReady,
       };
+    }));
+
+    telemetry.finish({
+      hasFilterProfileId: Boolean(loaded.filterProfileId),
+      hasLoadNotice: Boolean(loaded.loadNotice),
+      profileCount: loaded.profiles.length,
+      profilesReady: loaded.profilesReady,
+      runCount: loaded.runs.length,
+      runsReady: loaded.runsReady,
+      status: "ok",
     });
+
+    return loaded;
   } catch (error) {
     console.error("[planning/runs] failed to load initial data in user scope", error);
-    return {
+    const loaded = {
       actionProgressSummaryByRunId: {},
       filterProfileId,
       loadNotice: toPlanningPageLoadMessage(error, fallbackNotice),
@@ -120,6 +150,18 @@ export async function loadPlanningRunsPageInitialData(input: {
       runs: [],
       runsReady: false,
     };
+
+    telemetry.finish({
+      hasFilterProfileId: Boolean(loaded.filterProfileId),
+      hasLoadNotice: Boolean(loaded.loadNotice),
+      profileCount: 0,
+      profilesReady: false,
+      runCount: 0,
+      runsReady: false,
+      status: "fallback",
+    });
+
+    return loaded;
   }
 }
 
