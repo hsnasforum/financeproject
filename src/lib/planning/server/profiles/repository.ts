@@ -6,6 +6,7 @@ import {
   hardDeleteProfileFromTrash,
   listProfileMetas,
   listProfiles,
+  listProfilesWithDefault,
   restoreProfileFromTrash,
   setDefaultProfile,
   updateProfile,
@@ -16,8 +17,17 @@ import { type ProfileV2 } from "../../v2/types";
 export type CurrentUserPlanningProfileRecord = PlanningProfileRecord;
 export type CurrentUserPlanningProfileMeta = PlanningProfileMeta;
 
+export type CurrentUserPlanningProfileListWithDefault = {
+  profiles: CurrentUserPlanningProfileRecord[];
+  defaultProfileId?: string;
+};
+
 export async function listCurrentUserProfiles(): Promise<CurrentUserPlanningProfileRecord[]> {
   return listProfiles();
+}
+
+export async function listCurrentUserProfilesWithDefault(): Promise<CurrentUserPlanningProfileListWithDefault> {
+  return listProfilesWithDefault();
 }
 
 export async function listCurrentUserProfileMetas(): Promise<CurrentUserPlanningProfileMeta[]> {

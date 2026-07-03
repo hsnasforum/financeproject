@@ -56,6 +56,11 @@ type ProfileRegistryState = {
   }>;
 };
 
+export type PlanningProfileListWithDefault = {
+  profiles: PlanningProfileRecord[];
+  defaultProfileId?: string;
+};
+
 const PROFILE_META_VERSION = 1;
 const PROFILE_REGISTRY_VERSION = 1;
 const DEFAULT_PROFILE_ID = "default-profile";
@@ -432,33 +437,40 @@ async function ensureDefaultProfileAfterMutation(): Promise<void> {
   await syncProfileRegistry(records, defaultProfileId);
 }
 
-export async function listProfiles(): Promise<PlanningProfileRecord[]> {
-  assertServerOnly();
-  await ensureStartupMigrations();
-  const records = await loadAllProfilesWithMigration();
-  await resolveDefaultProfileId(records);
-  return records;
-}
-
-export async function listProfileMetas(): Promise<PlanningProfileMeta[]> {
+async function loadProfilesWithDefault(): Promise<PlanningProfileListWithDefault> {
   assertServerOnly();
   await ensureStartupMigrations();
   const records = await loadAllProfilesWithMigration();
   const defaultProfileId = await resolveDefaultProfileId(records);
-  return records.map((record) => ({
+  return {
+    profiles: records,
+    ...(defaultProfileId ? { defaultProfileId } : {}),
+  };
+}
+
+export async function listProfilesWithDefault(): Promise<PlanningProfileListWithDefault> {
+  return loadProfilesWithDefault();
+}
+
+export async function listProfiles(): Promise<PlanningProfileRecord[]> {
+  const loaded = await loadProfilesWithDefault();
+  return loaded.profiles;
+}
+
+export async function listProfileMetas(): Promise<PlanningProfileMeta[]> {
+  const loaded = await loadProfilesWithDefault();
+  return loaded.profiles.map((record) => ({
     profileId: record.id,
     name: record.name,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
-    isDefault: record.id === defaultProfileId,
+    isDefault: record.id === loaded.defaultProfileId,
   }));
 }
 
 export async function getDefaultProfileId(): Promise<string | undefined> {
-  assertServerOnly();
-  await ensureStartupMigrations();
-  const records = await loadAllProfilesWithMigration();
-  return resolveDefaultProfileId(records);
+  const loaded = await loadProfilesWithDefault();
+  return loaded.defaultProfileId;
 }
 
 export async function setDefaultProfile(profileId: string): Promise<string> {

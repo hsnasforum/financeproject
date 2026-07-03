@@ -6,7 +6,7 @@ import { createPlanningPageLoadTelemetry } from "@/lib/planning/server/pages/pla
 import {
   getCurrentUserDefaultProfileId,
   getCurrentUserProfile,
-  listCurrentUserProfiles,
+  listCurrentUserProfilesWithDefault,
   type CurrentUserPlanningProfileRecord,
 } from "@/lib/planning/server/profiles/repository";
 import { getCurrentUserReport } from "@/lib/planning/server/reports/repository";
@@ -82,19 +82,10 @@ export async function loadPlanningRunsPageInitialData(input: {
       let actionProgressSummaryByRunId: Record<string, CurrentUserPlanningRunActionProgressSummary> = {};
       let loadNotice = "";
 
-      if (!filterProfileId) {
-        try {
-          filterProfileId = await telemetry.step(
-            "defaultProfileId",
-            () => getCurrentUserDefaultProfileId(),
-          ) || "";
-        } catch {
-          filterProfileId = "";
-        }
-      }
-
       try {
-        profiles = await telemetry.step("profiles", () => listCurrentUserProfiles());
+        const profileList = await telemetry.step("profiles", () => listCurrentUserProfilesWithDefault());
+        profiles = profileList.profiles;
+        if (!filterProfileId) filterProfileId = profileList.defaultProfileId ?? "";
         profilesReady = true;
       } catch (error) {
         console.error("[planning/runs] failed to load initial profiles", error);
