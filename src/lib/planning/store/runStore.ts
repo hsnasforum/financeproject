@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import { type Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { recordPlanningFallbackUsage } from "../engine";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
 import {
   appendStorageTransactionStep,
@@ -63,6 +62,13 @@ import {
   writeJsonAtomic,
 } from "./runRecordCodec";
 import {
+  createRunReadDiagnosticRecorder,
+  recordRunReadFallbackUsage,
+  type ReadRunMetaByPathDetailedResult,
+  type RunReadDiagnostic,
+  type RunReadDiagnosticAttempt,
+} from "./runReadObservability";
+import {
   buildRunIndexFile,
   parseRunIndex,
   sortRunIndexEntriesByCreatedAtDesc,
@@ -80,6 +86,7 @@ export type {
   LegacyRunBackfillSummary,
 } from "./runLegacyBackfillService";
 export type { RunIndexEntry } from "./runIndex";
+export type { RunReadDiagnostic, RunReadDiagnosticAttempt } from "./runReadObservability";
 
 export const DEFAULT_RUNS_PER_PROFILE_RETENTION = 50;
 
@@ -404,26 +411,6 @@ type ReadRunIndexOptions = {
   repair?: boolean;
 };
 
-export type RunReadDiagnosticAttempt = {
-  source: "partition-hint" | "partition-scan" | "legacy-meta" | "legacy-file";
-  path: string;
-  status: "found" | "missing" | "unreadable";
-  reason?: string;
-};
-
-export type RunReadDiagnostic = {
-  id: string;
-  profileIdHint?: string;
-  status: "found" | "missing" | "unreadable";
-  attempts: RunReadDiagnosticAttempt[];
-  run?: PlanningRunRecord;
-};
-
-type ReadRunMetaByPathDetailedResult =
-  | { status: "found"; run: PlanningRunRecord }
-  | { status: "missing"; reason: string }
-  | { status: "unreadable"; reason: string };
-
 function getRunPaths(runId: string, profileId?: string): RunPaths {
   const safeRunId = sanitizeRecordId(runId);
   const safeProfileId = asString(profileId);
@@ -495,20 +482,7 @@ async function readRunMetaByPathDetailed(
     const canonical = loadCanonicalRun(parsed);
     const canonicalMeta = ensureCanonicalResultDtoWithSource(toMetaRecord(canonical.run));
     const migration = migrateLegacyRunToEngineEnvelope(canonicalMeta.run);
-    if (canonicalMeta.migrated) {
-      recordPlanningFallbackUsage("legacyReportContractFallbackCount", {
-        source: canonicalMeta.source,
-        sourceKey: "compatRebuild",
-        runId: migration.run.id,
-      });
-    }
-    if (migration.migrated) {
-      recordPlanningFallbackUsage("legacyRunEngineMigrationCount", {
-        source: `runStore/readRunMetaByPath/${migration.source ?? "unknown"}`,
-        sourceKey: "legacyEngineFallback",
-        runId: migration.run.id,
-      });
-    }
+    recordRunReadFallbackUsage({ canonicalMeta, migration });
     if (options?.persistMigrations === true && (decoded.rewriteToVault || canonicalMeta.migrated || migration.migrated)) {
       await writeJsonAtomic(filePath, await toStoredPayload(migration.run));
     }
@@ -827,16 +801,15 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
   const explicitProfileIdHint = asString(profileIdHint);
   const indexRows = explicitProfileIdHint ? [] : await readRunIndex();
   const hintedProfileId = explicitProfileIdHint || indexRows.find((row) => row.id === safeId)?.profileId;
-  const attempts: RunReadDiagnosticAttempt[] = [];
+  const diagnostics = createRunReadDiagnosticRecorder({
+    id: safeId,
+    ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
+    normalizePath: normalizeRelativePath,
+  });
 
   async function attempt(source: RunReadDiagnosticAttempt["source"], filePath: string): Promise<PlanningRunRecord | null> {
     const result = await readRunMetaByPathDetailed(filePath);
-    attempts.push({
-      source,
-      path: normalizeRelativePath(filePath),
-      status: result.status,
-      ...(result.status === "found" ? {} : { reason: result.reason }),
-    });
+    diagnostics.recordAttempt(source, filePath, result);
     return result.status === "found" ? result.run : null;
   }
 
@@ -845,13 +818,7 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
     if (paths.partitionMetaPath) {
       const fromHint = await attempt("partition-hint", paths.partitionMetaPath);
       if (fromHint) {
-        return {
-          id: safeId,
-          profileIdHint: hintedProfileId,
-          status: "found",
-          attempts,
-          run: fromHint,
-        };
+        return diagnostics.found(fromHint);
       }
     }
   } else {
@@ -859,12 +826,7 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
     if (partitionMetaPath) {
       const fromPartitionScan = await attempt("partition-scan", partitionMetaPath);
       if (fromPartitionScan) {
-        return {
-          id: safeId,
-          status: "found",
-          attempts,
-          run: fromPartitionScan,
-        };
+        return diagnostics.found(fromPartitionScan);
       }
     }
   }
@@ -872,32 +834,15 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
   const paths = getRunPaths(safeId, hintedProfileId);
   const fromLegacyMeta = await attempt("legacy-meta", paths.legacyMetaPath);
   if (fromLegacyMeta) {
-    return {
-      id: safeId,
-      ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
-      status: "found",
-      attempts,
-      run: fromLegacyMeta,
-    };
+    return diagnostics.found(fromLegacyMeta);
   }
 
   const fromLegacyFile = await attempt("legacy-file", paths.legacyFilePath);
   if (fromLegacyFile) {
-    return {
-      id: safeId,
-      ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
-      status: "found",
-      attempts,
-      run: fromLegacyFile,
-    };
+    return diagnostics.found(fromLegacyFile);
   }
 
-  return {
-    id: safeId,
-    ...(hintedProfileId ? { profileIdHint: hintedProfileId } : {}),
-    status: attempts.some((row) => row.status === "unreadable") ? "unreadable" : "missing",
-    attempts,
-  };
+  return diagnostics.final();
 }
 
 async function readRawRunMetaForIndexEntry(row: Pick<RunIndexEntry, "id" | "profileId">): Promise<PlanningRunRecord | null> {
