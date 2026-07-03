@@ -1,17 +1,7 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
 import path from "node:path";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
-import {
-  appendStorageTransactionStep,
-  beginStorageTransaction,
-  endStorageTransaction,
-} from "../storage/journal";
-import {
-  resolveProfileRunDir,
-  resolveProfileRunMetaPath,
-  sanitizeRecordId,
-} from "./paths";
+import { sanitizeRecordId } from "./paths";
 import {
   deleteRunMetaFromTrash,
   hardDeleteRunFiles,
@@ -21,9 +11,6 @@ import {
 import {
   normalizeRunBlobName,
   readRunBlobPayload,
-  writeStageBlobs,
-  type RunBlobName,
-  type RunBlobRef,
 } from "./runBlobStore";
 import {
   type LegacyRunBackfillCandidate,
@@ -34,12 +21,8 @@ import { createRunLegacyBackfillStore } from "./runLegacyBackfillStore";
 import {
   fromStoredPayload,
   readJsonFile,
-  writeJsonAtomic,
-  toStoredPayload,
 } from "./runRecordCodec";
 import {
-  buildCreateRunRecord,
-  compactRawRunOutputs,
   isEngineEnvelopeLike,
   normalizeRawRunForBackfill,
   toMetaRecord,
@@ -63,6 +46,12 @@ import {
   type RunIndexEntry,
 } from "./runIndex";
 import { createRunIndexStore } from "./runIndexStore";
+import {
+  createRunInFileStore,
+  type RunCreateStoreOptions,
+  type RunCreateStoreSource,
+} from "./runCreateStore";
+import { writeRunMetaRecord } from "./runMetaWriter";
 import { selectRunRetentionTargets } from "./runRetention";
 import { type PlanningRunRecord } from "./types";
 
@@ -84,17 +73,9 @@ type ListRunsOptions = {
   offset?: number;
 };
 
-type CreateRunOptions = {
-  enforceRetention?: boolean;
-  maxPerProfile?: number;
-  storeRawOutputs?: boolean;
-  timelineSampleStepMonths?: number;
-};
+type CreateRunOptions = RunCreateStoreOptions;
 
-type CreateRunInput = Omit<PlanningRunRecord, "version" | "schemaVersion" | "id" | "createdAt"> & {
-  id?: string;
-  createdAt?: string;
-};
+type CreateRunInput = RunCreateStoreSource;
 
 type PurgeRunsOptions = {
   profileId?: string;
@@ -320,9 +301,7 @@ export async function updateRun(id: string, patch: UpdateRunPatch): Promise<Plan
     createdAt: current.createdAt,
     version: 1,
   });
-  const metaPath = resolveProfileRunMetaPath(current.profileId, current.id);
-  await fs.mkdir(resolveProfileRunDir(current.profileId, current.id), { recursive: true });
-  await writeJsonAtomic(metaPath, await toStoredPayload(next));
+  await writeRunMetaRecord(next);
   await runIndexStore.upsert(toRunIndexEntry(next));
   return next;
 }
@@ -378,81 +357,19 @@ export async function createRun(input: CreateRunInput, options?: CreateRunOption
     ? new Date(input.createdAt).toISOString()
     : new Date().toISOString();
 
-  const tx = await beginStorageTransaction("RUN_CREATE", {
+  return createRunInFileStore({
+    source: input,
     runId,
     profileId,
-    runDir: normalizeRelativePath(resolveProfileRunDir(profileId, runId)),
-    runMetaPath: normalizeRelativePath(resolveProfileRunMetaPath(profileId, runId)),
+    createdAt,
+    options,
+    upsertIndexEntry: (entry) => runIndexStore.upsert(entry),
+    removeIndexEntry: (id) => runIndexStore.remove(id),
+    applyRetention: (record, retentionOptions) => purgeRunsByRetention({
+      profileId: record.profileId,
+      maxPerProfile: retentionOptions?.maxPerProfile ?? DEFAULT_RUNS_PER_PROFILE_RETENTION,
+    }).then(() => undefined),
   });
-
-  let createdRecord: PlanningRunRecord | null = null;
-  const sourceOutputs = compactRawRunOutputs(input.outputs, {
-    ...options,
-  });
-
-  try {
-    const blobRefs = await writeStageBlobs({
-      profileId,
-      runId,
-      outputs: sourceOutputs,
-    });
-
-    for (const [blob, ref] of Object.entries(blobRefs) as Array<[RunBlobName, RunBlobRef | undefined]>) {
-      if (!ref) continue;
-      await appendStorageTransactionStep(tx, "WRITE_BLOB", {
-        blob,
-        path: ref.path,
-        sizeBytes: ref.sizeBytes,
-      });
-    }
-
-    const record = buildCreateRunRecord({
-      source: input,
-      runId,
-      profileId,
-      createdAt,
-      blobRefs,
-      options,
-    });
-
-    const metaPath = resolveProfileRunMetaPath(record.profileId, record.id);
-    await fs.mkdir(resolveProfileRunDir(record.profileId, record.id), { recursive: true });
-    await writeJsonAtomic(metaPath, await toStoredPayload(record));
-    await appendStorageTransactionStep(tx, "WRITE_META", {
-      path: normalizeRelativePath(metaPath),
-    });
-
-    await runIndexStore.upsert(toRunIndexEntry(record));
-    await appendStorageTransactionStep(tx, "UPSERT_INDEX", {
-      runId: record.id,
-    });
-
-    if (options?.enforceRetention !== false) {
-      await purgeRunsByRetention({
-        profileId: record.profileId,
-        maxPerProfile: options?.maxPerProfile ?? DEFAULT_RUNS_PER_PROFILE_RETENTION,
-      });
-      await appendStorageTransactionStep(tx, "APPLY_RETENTION", {
-        profileId: record.profileId,
-      });
-    }
-
-    createdRecord = record;
-    await endStorageTransaction(tx, "COMMIT");
-    return record;
-  } catch (error) {
-    await endStorageTransaction(
-      tx,
-      "ROLLBACK",
-      error instanceof Error ? error.message : "create run failed",
-    ).catch(() => undefined);
-    await fs.rm(resolveProfileRunDir(profileId, runId), { recursive: true, force: true }).catch(() => undefined);
-    await runIndexStore.remove(runId).catch(() => undefined);
-    if (createdRecord) {
-      await fs.rm(resolveProfileRunDir(createdRecord.profileId, createdRecord.id), { recursive: true, force: true }).catch(() => undefined);
-    }
-    throw error;
-  }
 }
 
 export async function hardDeleteRun(id: string): Promise<boolean> {
