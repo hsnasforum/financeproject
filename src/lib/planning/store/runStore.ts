@@ -20,12 +20,8 @@ import { backfillResultDtoDebtFromRaw } from "../v2/resultDtoDebtBackfill";
 import { RUN_SCHEMA_VERSION } from "../v2/schemaVersion";
 import {
   resolveProfilePartitionsDir,
-  resolveProfileRunBlobsDir,
   resolveProfileRunDir,
   resolveProfileRunMetaPath,
-  resolveRunDir,
-  resolveRunMetaPath,
-  resolveRunPath,
   resolveRunsDir,
   resolveRunsIndexPath,
   sanitizeRecordId,
@@ -66,8 +62,12 @@ import {
   recordRunReadFallbackUsage,
   type ReadRunMetaByPathDetailedResult,
   type RunReadDiagnostic,
-  type RunReadDiagnosticAttempt,
 } from "./runReadObservability";
+import {
+  getRunPaths,
+  resolveRunReadSources,
+  type RunPaths,
+} from "./runReadSources";
 import {
   buildRunIndexFile,
   parseRunIndex,
@@ -392,17 +392,6 @@ function ensureCanonicalResultDtoWithSource(record: PlanningRunRecord): {
   };
 }
 
-type RunPaths = {
-  runId: string;
-  profileId?: string;
-  partitionMetaPath?: string;
-  partitionRunDir?: string;
-  partitionBlobDir?: string;
-  legacyMetaPath: string;
-  legacyFilePath: string;
-  legacyRunDir: string;
-};
-
 type ReadRunMetaOptions = {
   persistMigrations?: boolean;
 };
@@ -410,23 +399,6 @@ type ReadRunMetaOptions = {
 type ReadRunIndexOptions = {
   repair?: boolean;
 };
-
-function getRunPaths(runId: string, profileId?: string): RunPaths {
-  const safeRunId = sanitizeRecordId(runId);
-  const safeProfileId = asString(profileId);
-  return {
-    runId: safeRunId,
-    ...(safeProfileId ? {
-      profileId: safeProfileId,
-      partitionMetaPath: resolveProfileRunMetaPath(safeProfileId, safeRunId),
-      partitionRunDir: resolveProfileRunDir(safeProfileId, safeRunId),
-      partitionBlobDir: resolveProfileRunBlobsDir(safeProfileId, safeRunId),
-    } : {}),
-    legacyMetaPath: resolveRunMetaPath(safeRunId),
-    legacyFilePath: resolveRunPath(safeRunId),
-    legacyRunDir: resolveRunDir(safeRunId),
-  };
-}
 
 async function tryMigrateLegacyRunToPartition(record: PlanningRunRecord, paths: RunPaths): Promise<void> {
   if (!paths.profileId || !paths.partitionMetaPath || !paths.partitionRunDir) return;
@@ -506,65 +478,22 @@ async function readRawRunMetaByPath(filePath: string): Promise<PlanningRunRecord
   }
 }
 
-async function findPartitionMetaPathByRunId(runId: string): Promise<string | null> {
-  const safeRunId = sanitizeRecordId(runId);
-  const partitionRoot = resolveProfilePartitionsDir();
-  let profileEntries: Dirent[];
-  try {
-    profileEntries = await fs.readdir(partitionRoot, { withFileTypes: true });
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return null;
-    throw error;
-  }
-
-  for (const profileEntry of profileEntries) {
-    if (!profileEntry.isDirectory()) continue;
-    const profileId = asString(profileEntry.name);
-    if (!profileId) continue;
-    const candidate = resolveProfileRunMetaPath(profileId, safeRunId);
-    try {
-      await fs.access(candidate);
-      return candidate;
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
 async function readRunMeta(
   id: string,
   profileIdHint?: string,
   options?: ReadRunMetaOptions,
 ): Promise<PlanningRunRecord | null> {
-  const paths = getRunPaths(id, profileIdHint);
-  if (paths.partitionMetaPath) {
-    const fromPartition = await readRunMetaByPath(paths.partitionMetaPath, options);
-    if (fromPartition) return fromPartition;
-  }
-  if (!paths.partitionMetaPath) {
-    const partitionMetaPath = await findPartitionMetaPathByRunId(paths.runId);
-    if (partitionMetaPath) {
-      const fromPartition = await readRunMetaByPath(partitionMetaPath, options);
-      if (fromPartition) return fromPartition;
+  const { sources } = await resolveRunReadSources(id, profileIdHint);
+  for (const candidate of sources) {
+    const run = await readRunMetaByPath(candidate.filePath, options);
+    if (!run) continue;
+    if (
+      options?.persistMigrations === true
+      && (candidate.source === "legacy-meta" || candidate.source === "legacy-file")
+    ) {
+      await tryMigrateLegacyRunToPartition(run, getRunPaths(id, run.profileId));
     }
-  }
-
-  const fromLegacyMeta = await readRunMetaByPath(paths.legacyMetaPath, options);
-  if (fromLegacyMeta) {
-    if (options?.persistMigrations === true) {
-      await tryMigrateLegacyRunToPartition(fromLegacyMeta, getRunPaths(id, fromLegacyMeta.profileId));
-    }
-    return fromLegacyMeta;
-  }
-
-  const fromLegacyFile = await readRunMetaByPath(paths.legacyFilePath, options);
-  if (fromLegacyFile) {
-    if (options?.persistMigrations === true) {
-      await tryMigrateLegacyRunToPartition(fromLegacyFile, getRunPaths(id, fromLegacyFile.profileId));
-    }
-    return fromLegacyFile;
+    return run;
   }
 
   return null;
@@ -807,39 +736,13 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
     normalizePath: normalizeRelativePath,
   });
 
-  async function attempt(source: RunReadDiagnosticAttempt["source"], filePath: string): Promise<PlanningRunRecord | null> {
-    const result = await readRunMetaByPathDetailed(filePath);
-    diagnostics.recordAttempt(source, filePath, result);
-    return result.status === "found" ? result.run : null;
-  }
-
-  if (hintedProfileId) {
-    const paths = getRunPaths(safeId, hintedProfileId);
-    if (paths.partitionMetaPath) {
-      const fromHint = await attempt("partition-hint", paths.partitionMetaPath);
-      if (fromHint) {
-        return diagnostics.found(fromHint);
-      }
+  const { sources } = await resolveRunReadSources(safeId, hintedProfileId);
+  for (const candidate of sources) {
+    const result = await readRunMetaByPathDetailed(candidate.filePath);
+    diagnostics.recordAttempt(candidate.source, candidate.filePath, result);
+    if (result.status === "found") {
+      return diagnostics.found(result.run);
     }
-  } else {
-    const partitionMetaPath = await findPartitionMetaPathByRunId(safeId);
-    if (partitionMetaPath) {
-      const fromPartitionScan = await attempt("partition-scan", partitionMetaPath);
-      if (fromPartitionScan) {
-        return diagnostics.found(fromPartitionScan);
-      }
-    }
-  }
-
-  const paths = getRunPaths(safeId, hintedProfileId);
-  const fromLegacyMeta = await attempt("legacy-meta", paths.legacyMetaPath);
-  if (fromLegacyMeta) {
-    return diagnostics.found(fromLegacyMeta);
-  }
-
-  const fromLegacyFile = await attempt("legacy-file", paths.legacyFilePath);
-  if (fromLegacyFile) {
-    return diagnostics.found(fromLegacyFile);
   }
 
   return diagnostics.final();
