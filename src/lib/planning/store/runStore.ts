@@ -32,11 +32,11 @@ import {
   sanitizeRecordId,
 } from "./paths";
 import {
-  deleteFileFromTrash,
-  moveFileToTrash,
-  resolveTrashKindDir,
-  restoreFileFromTrash,
-} from "./trash";
+  deleteRunMetaFromTrash,
+  hardDeleteRunFiles,
+  moveRunMetaToTrash,
+  restoreRunMetaFromTrash,
+} from "./runTrashStore";
 import { migrateLegacyRunToEngineEnvelope } from "./engineEnvelopeMigration";
 import {
   normalizeRunBlobName,
@@ -1146,26 +1146,10 @@ export async function hardDeleteRun(id: string): Promise<boolean> {
 
   const safeId = sanitizeRecordId(id);
   const existing = await getRun(safeId);
-  const runDir = existing ? resolveProfileRunDir(existing.profileId, safeId) : resolveRunDir(safeId);
-  const legacyPath = resolveRunPath(safeId);
-
-  let deleted = false;
-
-  try {
-    await fs.rm(runDir, { recursive: true, force: false });
-    deleted = true;
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code !== "ENOENT") throw error;
-  }
-
-  try {
-    await fs.unlink(legacyPath);
-    deleted = true;
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code !== "ENOENT") throw error;
-  }
+  const deleted = await hardDeleteRunFiles({
+    id: safeId,
+    existing,
+  });
 
   if (deleted) {
     await removeRunIndexEntry(safeId);
@@ -1177,19 +1161,7 @@ export async function hardDeleteRun(id: string): Promise<boolean> {
 export async function restoreRunFromTrash(id: string): Promise<boolean> {
   assertServerOnly();
   const safeId = sanitizeRecordId(id);
-  const trashMetaPath = path.join(resolveTrashKindDir("runs"), `${safeId}.json`);
-  const trashedPayload = await readJsonFile(trashMetaPath);
-  const decoded = trashedPayload === null ? null : await fromStoredPayload(trashedPayload);
-  const trashedRecord = decoded?.payload;
-  const restoredProfileId = isRunRecord(trashedRecord) ? trashedRecord.profileId : "";
-  const metaPath = restoredProfileId
-    ? resolveProfileRunMetaPath(restoredProfileId, safeId)
-    : resolveRunMetaPath(safeId);
-  const restored = await restoreFileFromTrash(metaPath, {
-    kind: "runs",
-    id: safeId,
-    ext: ".json",
-  });
+  const restored = await restoreRunMetaFromTrash(safeId);
 
   if (!restored) return false;
   const run = await getRun(safeId);
@@ -1202,11 +1174,7 @@ export async function restoreRunFromTrash(id: string): Promise<boolean> {
 export async function hardDeleteRunFromTrash(id: string): Promise<boolean> {
   assertServerOnly();
   const safeId = sanitizeRecordId(id);
-  return deleteFileFromTrash({
-    kind: "runs",
-    id: safeId,
-    ext: ".json",
-  });
+  return deleteRunMetaFromTrash(safeId);
 }
 
 export async function deleteRun(id: string): Promise<boolean> {
@@ -1214,33 +1182,12 @@ export async function deleteRun(id: string): Promise<boolean> {
 
   const safeId = sanitizeRecordId(id);
   const existing = await getRun(safeId);
-  const metaPath = existing
-    ? resolveProfileRunMetaPath(existing.profileId, safeId)
-    : resolveRunMetaPath(safeId);
-  const legacyPath = resolveRunPath(safeId);
-
-  let moved = await moveFileToTrash(metaPath, {
-    kind: "runs",
+  const moved = await moveRunMetaToTrash({
     id: safeId,
-    ext: ".json",
+    existing,
   });
 
-  if (!moved) {
-    moved = await moveFileToTrash(legacyPath, {
-      kind: "runs",
-      id: safeId,
-      ext: ".json",
-    });
-  }
-
   if (!moved) return false;
-
-  try {
-    const runDir = existing ? resolveProfileRunDir(existing.profileId, safeId) : resolveRunDir(safeId);
-    await fs.rm(runDir, { recursive: true, force: true });
-  } catch {
-    // ignore directory cleanup errors
-  }
 
   await removeRunIndexEntry(safeId);
   return true;
