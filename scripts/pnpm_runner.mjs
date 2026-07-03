@@ -41,7 +41,9 @@ function spawnOnce(candidate, args, options, mode) {
     let stdout = "";
     let stderr = "";
     const { onStdout, onStderr, ...spawnOptions } = options;
-    const child = spawn(candidate.command, [...candidate.args, ...args], spawnOptions);
+    const child = spawn(candidate.command, [...candidate.args, ...args], mode === "buffered"
+      ? spawnOptions
+      : { stdio: "inherit", ...spawnOptions });
 
     const finish = (payload) => {
       if (settled) return;
