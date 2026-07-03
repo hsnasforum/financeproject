@@ -2,12 +2,6 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { sanitizeRecordId } from "./paths";
 import {
-  deleteRunMetaFromTrash,
-  hardDeleteRunFiles,
-  moveRunMetaToTrash,
-  restoreRunMetaFromTrash,
-} from "./runTrashStore";
-import {
   normalizeRunBlobName,
   readRunBlobPayload,
 } from "./runBlobStore";
@@ -50,6 +44,7 @@ import {
   type RunCreateStoreOptions,
   type RunCreateStoreSource,
 } from "./runCreateStore";
+import { createRunDeleteStore } from "./runDeleteStore";
 import { writeRunMetaRecord } from "./runMetaWriter";
 import { selectRunRetentionTargets } from "./runRetention";
 import { ensurePlanningStartupMigrations } from "./startupMigrationGate";
@@ -146,6 +141,11 @@ async function readRunMeta(
 }
 
 const runIndexStore = createRunIndexStore({ readRunMeta });
+const runDeleteStore = createRunDeleteStore({
+  getRun: (id) => getRun(id),
+  removeIndexEntry: (id) => runIndexStore.remove(id),
+  upsertIndexEntry: (entry) => runIndexStore.upsert(entry),
+});
 
 const legacyRunBackfillStore = createRunLegacyBackfillStore({
   listIndexEntries: runIndexStore.read,
@@ -374,52 +374,20 @@ export async function createRun(input: CreateRunInput, options?: CreateRunOption
 
 export async function hardDeleteRun(id: string): Promise<boolean> {
   assertServerOnly();
-
-  const safeId = sanitizeRecordId(id);
-  const existing = await getRun(safeId);
-  const deleted = await hardDeleteRunFiles({
-    id: safeId,
-    existing,
-  });
-
-  if (deleted) {
-    await runIndexStore.remove(safeId);
-  }
-
-  return deleted;
+  return runDeleteStore.hardDeleteRun(id);
 }
 
 export async function restoreRunFromTrash(id: string): Promise<boolean> {
   assertServerOnly();
-  const safeId = sanitizeRecordId(id);
-  const restored = await restoreRunMetaFromTrash(safeId);
-
-  if (!restored) return false;
-  const run = await getRun(safeId);
-  if (run) {
-    await runIndexStore.upsert(toRunIndexEntry(run));
-  }
-  return true;
+  return runDeleteStore.restoreRunFromTrash(id);
 }
 
 export async function hardDeleteRunFromTrash(id: string): Promise<boolean> {
   assertServerOnly();
-  const safeId = sanitizeRecordId(id);
-  return deleteRunMetaFromTrash(safeId);
+  return runDeleteStore.hardDeleteRunFromTrash(id);
 }
 
 export async function deleteRun(id: string): Promise<boolean> {
   assertServerOnly();
-
-  const safeId = sanitizeRecordId(id);
-  const existing = await getRun(safeId);
-  const moved = await moveRunMetaToTrash({
-    id: safeId,
-    existing,
-  });
-
-  if (!moved) return false;
-
-  await runIndexStore.remove(safeId);
-  return true;
+  return runDeleteStore.deleteRun(id);
 }
