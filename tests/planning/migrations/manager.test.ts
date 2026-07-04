@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   inspectPlanningMigrations,
   runPlanningMigrations,
+  runPlanningMigrationsOnStartup,
   getPlanningMigrationStatePath,
 } from "../../../src/lib/planning/migrations/manager";
 import { configureVaultPassphrase, lockVault, resetVaultRuntimeForTests } from "../../../src/lib/planning/security/vaultState";
@@ -114,5 +115,37 @@ describe("planning migration manager", () => {
 
     expect(report.summary.pending).toBeGreaterThan(0);
     expect(report.summary.failed).toBe(0);
+  });
+
+  it("keeps successful startup migrations cached for the current process", async () => {
+    const first = await runPlanningMigrationsOnStartup({ baseDir: root });
+    const second = await runPlanningMigrationsOnStartup({ baseDir: root });
+
+    expect(first.result).toBe("ok");
+    expect(second).toBe(first);
+  });
+
+  it("retries startup migrations after a failed startup result", async () => {
+    const statePath = getPlanningMigrationStatePath(root);
+    fs.rmSync(statePath, { recursive: true, force: true });
+    fs.mkdirSync(statePath, { recursive: true });
+
+    const failed = await runPlanningMigrationsOnStartup({ baseDir: root });
+
+    expect(failed.result).toBe("failed");
+    expect(failed.summary.failed).toBe(1);
+    expect(failed.items[0]?.code).toBe("MIGRATION_FAILED");
+
+    fs.rmSync(statePath, { recursive: true, force: true });
+
+    const retried = await runPlanningMigrationsOnStartup({ baseDir: root });
+    const savedState = JSON.parse(fs.readFileSync(statePath, "utf-8")) as {
+      lastAttempt?: { result?: string; trigger?: string };
+    };
+
+    expect(retried.result).toBe("ok");
+    expect(retried.summary.failed).toBe(0);
+    expect(savedState.lastAttempt?.trigger).toBe("startup");
+    expect(savedState.lastAttempt?.result).toBe("ok");
   });
 });
