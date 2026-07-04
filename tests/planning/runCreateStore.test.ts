@@ -162,6 +162,57 @@ describe("planning run create store", () => {
     ]);
   });
 
+  it("delegates stage blob writes through the injected blob write boundary", async () => {
+    const source = sampleRunSource();
+    const blobRef = {
+      name: "simulate" as const,
+      path: ".data/planning/vault/profiles/profile-1/runs/run-injected/blobs/simulate.json",
+      sizeBytes: 123,
+    };
+    const writeRunStageBlobs = vi.fn<NonNullable<CreateRunInFileStoreInput["writeRunStageBlobs"]>>(async () => ({
+      simulate: blobRef,
+    }));
+    const upsertIndexEntry = vi.fn<CreateRunInFileStoreInput["upsertIndexEntry"]>(async () => undefined);
+    const removeIndexEntry = vi.fn<CreateRunInFileStoreInput["removeIndexEntry"]>(async () => undefined);
+    const applyRetention = vi.fn<CreateRunInFileStoreInput["applyRetention"]>(async () => undefined);
+
+    const record = await createRunInFileStore({
+      source,
+      runId: "run-injected",
+      profileId: "profile-1",
+      createdAt: "2026-07-03T00:00:00.000Z",
+      options: {
+        enforceRetention: false,
+        timelineSampleStepMonths: 6,
+      },
+      upsertIndexEntry,
+      removeIndexEntry,
+      applyRetention,
+      writeRunStageBlobs,
+    });
+
+    const writeInput = writeRunStageBlobs.mock.calls[0]?.[0];
+    expect(writeInput).toMatchObject({
+      profileId: "profile-1",
+      runId: "run-injected",
+      options: {
+        enforceRetention: false,
+        timelineSampleStepMonths: 6,
+      },
+    });
+    expect(writeInput?.outputs).toBe(source.outputs);
+    expect(writeInput?.tx?.kind).toBe("RUN_CREATE");
+    expect(record.outputs.simulate?.ref).toMatchObject(blobRef);
+    expect(record.stages?.[0]?.outputRef?.ref).toMatchObject(blobRef);
+    expect(applyRetention).not.toHaveBeenCalled();
+
+    const events = await readStorageJournalEvents();
+    expect(events.filter((event) => event.event === "STEP").map((event) => event.step)).toEqual([
+      "WRITE_META",
+      "UPSERT_INDEX",
+    ]);
+  });
+
   it("rolls back run files and index entry when index write fails", async () => {
     const upsertIndexEntry = vi.fn<CreateRunInFileStoreInput["upsertIndexEntry"]>(async () => {
       throw new Error("index write failed");

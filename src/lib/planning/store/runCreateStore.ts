@@ -11,17 +11,15 @@ import {
   resolveProfileRunMetaPath,
 } from "./paths";
 import {
-  writeStageBlobs,
-  type RunBlobName,
-  type RunBlobRef,
-} from "./runBlobStore";
+  createRunBlobWriteStore,
+  type WriteRunStageBlobs,
+} from "./runBlobWriteStore";
 import {
   toRunIndexEntry,
   type RunIndexEntry,
 } from "./runIndex";
 import {
   buildCreateRunRecord,
-  compactRawRunOutputs,
 } from "./runMetaRecord";
 import { writeRunMetaRecord } from "./runMetaWriter";
 import { type PlanningRunRecord } from "./types";
@@ -47,11 +45,14 @@ export type CreateRunInFileStoreInput = {
   runId: string;
   source: RunCreateStoreSource;
   upsertIndexEntry: (entry: RunIndexEntry) => Promise<void>;
+  writeRunStageBlobs?: WriteRunStageBlobs;
 };
 
 function normalizeRelativePath(absPath: string, baseDir = process.cwd()): string {
   return path.relative(baseDir, absPath).replaceAll("\\", "/");
 }
+
+const defaultRunBlobWriteStore = createRunBlobWriteStore();
 
 export async function createRunInFileStore(input: CreateRunInFileStoreInput): Promise<PlanningRunRecord> {
   const tx = await beginStorageTransaction("RUN_CREATE", {
@@ -62,25 +63,16 @@ export async function createRunInFileStore(input: CreateRunInFileStoreInput): Pr
   });
 
   let createdRecord: PlanningRunRecord | null = null;
-  const sourceOutputs = compactRawRunOutputs(input.source.outputs, {
-    ...input.options,
-  });
+  const writeRunStageBlobs = input.writeRunStageBlobs ?? defaultRunBlobWriteStore.writeRunStageBlobs;
 
   try {
-    const blobRefs = await writeStageBlobs({
+    const blobRefs = await writeRunStageBlobs({
       profileId: input.profileId,
       runId: input.runId,
-      outputs: sourceOutputs,
+      outputs: input.source.outputs,
+      options: input.options,
+      tx,
     });
-
-    for (const [blob, ref] of Object.entries(blobRefs) as Array<[RunBlobName, RunBlobRef | undefined]>) {
-      if (!ref) continue;
-      await appendStorageTransactionStep(tx, "WRITE_BLOB", {
-        blob,
-        path: ref.path,
-        sizeBytes: ref.sizeBytes,
-      });
-    }
 
     const record = buildCreateRunRecord({
       source: input.source,
