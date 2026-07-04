@@ -7,7 +7,7 @@ import {
   type LegacyRunBackfillSummary,
 } from "./runLegacyBackfillService";
 import { type RunIndexEntry } from "./runIndex";
-import { getRunPaths } from "./runReadSources";
+import { createRunLegacyBackfillReadStore } from "./runLegacyBackfillReadStore";
 import { type PlanningRunRecord } from "./types";
 
 type ReadRunOptions = {
@@ -40,24 +40,16 @@ type RunLegacyBackfillStore = {
 };
 
 export function createRunLegacyBackfillStore(input: CreateRunLegacyBackfillStoreInput): RunLegacyBackfillStore {
-  async function readRawRunMetaByPath(filePath: string): Promise<PlanningRunRecord | null> {
-    const loaded = await input.readJsonFile(filePath);
-    if (!loaded) return null;
-    const decoded = await input.decodeStoredPayload(loaded);
-    return input.normalizeRawRun(decoded.payload);
-  }
-
-  async function readRawRunForIndexEntry(row: Pick<RunIndexEntry, "id" | "profileId">): Promise<PlanningRunRecord | null> {
-    const paths = getRunPaths(row.id, row.profileId);
-    return await readRawRunMetaByPath(paths.partitionMetaPath ?? paths.legacyMetaPath)
-      ?? await readRawRunMetaByPath(paths.legacyMetaPath)
-      ?? await readRawRunMetaByPath(paths.legacyFilePath);
-  }
+  const rawReadStore = createRunLegacyBackfillReadStore({
+    readJsonFile: input.readJsonFile,
+    decodeStoredPayload: input.decodeStoredPayload,
+    normalizeRawRun: input.normalizeRawRun,
+  });
 
   function toServiceDeps() {
     return {
       listIndexEntries: input.listIndexEntries,
-      readRawRunForIndexEntry,
+      readRawRunForIndexEntry: rawReadStore.readRawRunForIndexEntry,
       readRunForCandidate: input.readRunForCandidate,
       ensureStartupMigrations: input.ensureStartupMigrations,
       isEngineEnvelopeLike: input.isEngineEnvelopeLike,
@@ -68,6 +60,6 @@ export function createRunLegacyBackfillStore(input: CreateRunLegacyBackfillStore
     summarize: () => summarizeLegacyRunBackfillWith(toServiceDeps()),
     listCandidates: (options) => listLegacyRunBackfillCandidatesWith(toServiceDeps(), options),
     backfill: (options) => backfillLegacyRunsWith(toServiceDeps(), options),
-    readRawRunForIndexEntry,
+    readRawRunForIndexEntry: rawReadStore.readRawRunForIndexEntry,
   };
 }
