@@ -3,12 +3,18 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  invalidatePlanningStartupMigrationCache,
   inspectPlanningMigrations,
   runPlanningMigrations,
   runPlanningMigrationsOnStartup,
   getPlanningMigrationStatePath,
 } from "../../../src/lib/planning/migrations/manager";
-import { configureVaultPassphrase, lockVault, resetVaultRuntimeForTests } from "../../../src/lib/planning/security/vaultState";
+import {
+  configureVaultPassphrase,
+  lockVault,
+  resetVaultRuntimeForTests,
+  unlockVault,
+} from "../../../src/lib/planning/security/vaultState";
 
 const env = process.env as Record<string, string | undefined>;
 const originalNodeEnv = process.env.NODE_ENV;
@@ -147,5 +153,29 @@ describe("planning migration manager", () => {
     expect(retried.summary.failed).toBe(0);
     expect(savedState.lastAttempt?.trigger).toBe("startup");
     expect(savedState.lastAttempt?.result).toBe("ok");
+  });
+
+  it("allows explicit startup migration cache invalidation after vault unlock", async () => {
+    await configureVaultPassphrase({ passphrase: "test-passphrase-1234" });
+    await lockVault();
+
+    const deferred = await runPlanningMigrationsOnStartup({ baseDir: root });
+    const cached = await runPlanningMigrationsOnStartup({ baseDir: root });
+
+    expect(deferred.result).toBe("partial");
+    expect(deferred.summary.deferred).toBeGreaterThan(0);
+    expect(cached).toBe(deferred);
+
+    await unlockVault("test-passphrase-1234");
+    const stillCached = await runPlanningMigrationsOnStartup({ baseDir: root });
+
+    expect(stillCached).toBe(deferred);
+
+    invalidatePlanningStartupMigrationCache({ baseDir: root });
+    const retried = await runPlanningMigrationsOnStartup({ baseDir: root });
+
+    expect(retried).not.toBe(deferred);
+    expect(retried.result).toBe("ok");
+    expect(retried.summary.deferred).toBe(0);
   });
 });

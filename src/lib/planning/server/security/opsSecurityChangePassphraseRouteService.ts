@@ -1,4 +1,5 @@
 import { appendOpsAuditEvent } from "../../../ops/securityAuditLog";
+import { invalidatePlanningStartupMigrationCache } from "../../migrations/manager";
 import { consumeVaultCsrfOrThrow } from "../../security/vaultCsrf";
 import {
   changeVaultPassphrase,
@@ -45,6 +46,7 @@ export async function changeOpsSecurityVaultPassphrase(input: {
     oldPassphrase: input.oldPassphrase,
     newPassphrase: input.newPassphrase,
   });
+  invalidatePlanningStartupMigrationCache();
   await appendOpsAuditEvent({
     eventType: "VAULT_CHANGE_PASSPHRASE_SUCCESS",
     meta: {

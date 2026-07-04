@@ -1,4 +1,5 @@
 import { appendOpsAuditEvent } from "../../../ops/securityAuditLog";
+import { invalidatePlanningStartupMigrationCache } from "../../migrations/manager";
 import { consumeVaultCsrfOrThrow } from "../../security/vaultCsrf";
 import {
   resetVaultAndPlanningData,
@@ -55,6 +56,7 @@ export async function resetOpsSecurityVaultAndPlanningData(input: {
 
   const reset = await resetVaultAndPlanningData({ keepAudit: input.keepAudit });
   const status = await getVaultStatus();
+  invalidatePlanningStartupMigrationCache();
 
   if (input.keepAudit) {
     await appendOpsAuditEvent({

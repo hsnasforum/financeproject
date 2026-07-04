@@ -1,4 +1,5 @@
 import { appendOpsAuditEvent } from "../../../ops/securityAuditLog";
+import { invalidatePlanningStartupMigrationCache } from "../../migrations/manager";
 import { consumeVaultCsrfOrThrow } from "../../security/vaultCsrf";
 import {
   configureVaultPassphrase,
@@ -34,6 +35,7 @@ export async function configureOpsSecurityVault(input: {
     passphrase: input.passphrase,
     autoLockMinutes: input.autoLockMinutes,
   });
+  invalidatePlanningStartupMigrationCache();
   await appendOpsAuditEvent({
     eventType: "VAULT_CONFIGURE_SUCCESS",
     meta: {
