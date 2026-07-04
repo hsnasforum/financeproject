@@ -1,9 +1,6 @@
 import crypto from "node:crypto";
 import { sanitizeRecordId } from "./paths";
-import {
-  normalizeRunBlobName,
-  readRunBlobPayload,
-} from "./runBlobStore";
+import { createRunBlobReadStore } from "./runBlobReadStore";
 import {
   type LegacyRunBackfillCandidate,
   type LegacyRunBackfillResult,
@@ -118,6 +115,9 @@ const runUpdateStore = createRunUpdateStore({
   getRun: (id) => getRun(id),
   upsertIndexEntry: (entry) => runIndexStore.upsert(entry),
 });
+const runBlobReadStore = createRunBlobReadStore({
+  getRun: (id) => getRun(id),
+});
 
 const legacyRunBackfillStore = createRunLegacyBackfillStore({
   listIndexEntries: runIndexStore.read,
@@ -225,24 +225,7 @@ export async function updateRun(id: string, patch: UpdateRunPatch): Promise<Plan
 export async function getRunBlob(id: string, name: string): Promise<unknown | null> {
   assertServerOnly();
   const safeId = sanitizeRecordId(id);
-  const blobName = normalizeRunBlobName(name);
-  if (!blobName) return null;
-
-  if (blobName === "raw") {
-    const run = await getRun(safeId);
-    if (!run) return null;
-    const outputs = {
-      simulate: await readRunBlobPayload({ runId: safeId, blobName: "simulate", run, fallbackRun: run }),
-      scenarios: await readRunBlobPayload({ runId: safeId, blobName: "scenarios", run, fallbackRun: run }),
-      monteCarlo: await readRunBlobPayload({ runId: safeId, blobName: "monteCarlo", run, fallbackRun: run }),
-      actions: await readRunBlobPayload({ runId: safeId, blobName: "actions", run, fallbackRun: run }),
-      debtStrategy: await readRunBlobPayload({ runId: safeId, blobName: "debtStrategy", run, fallbackRun: run }),
-    };
-    return { run, outputs };
-  }
-
-  const run = await getRun(safeId);
-  return readRunBlobPayload({ runId: safeId, blobName, run, fallbackRun: run });
+  return runBlobReadStore.getRunBlob(safeId, name);
 }
 
 export async function purgeRunsByRetention(options?: PurgeRunsOptions): Promise<string[]> {
