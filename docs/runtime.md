@@ -49,6 +49,12 @@ Planning storage root is resolved by this precedence:
 
 `<AppName>` defaults to `PlanningV2` and can be changed via `PLANNING_APP_NAME`.
 
+## Planning Observability
+
+`/planning/runs` logs server-side slow-load telemetry when its initial data load exceeds `5000` ms.
+Set `PLANNING_PAGE_LOAD_SLOW_MS` to a non-negative millisecond value to tune that threshold.
+The log snapshot is limited to route, safe booleans/counts, step durations, and step statuses; it must not include profile/run ids or stored payloads.
+
 ## Graceful Stop
 
 - Stop with `Ctrl+C` on the terminal running `pnpm start:local`.
