@@ -63,10 +63,10 @@ import {
   type ReadRunMetaByPathDetailedResult,
   type RunReadDiagnostic,
 } from "./runReadObservability";
+import { migrateLegacyRunToPartition } from "./runReadMigration";
 import {
   getRunPaths,
   resolveRunReadSources,
-  type RunPaths,
 } from "./runReadSources";
 import {
   buildRunIndexFile,
@@ -400,17 +400,6 @@ type ReadRunIndexOptions = {
   repair?: boolean;
 };
 
-async function tryMigrateLegacyRunToPartition(record: PlanningRunRecord, paths: RunPaths): Promise<void> {
-  if (!paths.profileId || !paths.partitionMetaPath || !paths.partitionRunDir) return;
-  const existing = await readJsonFile(paths.partitionMetaPath);
-  if (existing !== null) return;
-
-  await fs.mkdir(paths.partitionRunDir, { recursive: true });
-  await writeJsonAtomic(paths.partitionMetaPath, await toStoredPayload(record));
-  await fs.unlink(paths.legacyMetaPath).catch(() => undefined);
-  await fs.unlink(paths.legacyFilePath).catch(() => undefined);
-}
-
 async function readRunMetaByPath(
   filePath: string,
   options?: ReadRunMetaOptions,
@@ -491,7 +480,10 @@ async function readRunMeta(
       options?.persistMigrations === true
       && (candidate.source === "legacy-meta" || candidate.source === "legacy-file")
     ) {
-      await tryMigrateLegacyRunToPartition(run, getRunPaths(id, run.profileId));
+      await migrateLegacyRunToPartition({
+        record: run,
+        paths: getRunPaths(id, run.profileId),
+      });
     }
     return run;
   }
