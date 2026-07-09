@@ -8,6 +8,7 @@ const mocked = vi.hoisted(() => ({
   getRunActionProgress: vi.fn(),
   summarizeRunActionProgressByRunId: vi.fn(),
   listProfiles: vi.fn(),
+  listProfilesWithDefault: vi.fn(),
   listRuns: vi.fn(),
   redirect: vi.fn((href: string) => {
     throw new Error(`REDIRECT:${href}`);
@@ -120,6 +121,7 @@ vi.mock("@/lib/planning/server/pageAuth", () => ({
 vi.mock("@/lib/planning/server/profiles/repository", () => ({
   getCurrentUserDefaultProfileId: mocked.getDefaultProfileId,
   listCurrentUserProfiles: mocked.listProfiles,
+  listCurrentUserProfilesWithDefault: mocked.listProfilesWithDefault,
 }));
 
 vi.mock("@/lib/planning/server/reports/repository", () => ({
@@ -183,6 +185,7 @@ describe("planning reports page fallback", () => {
     mocked.getRunActionProgress.mockReset();
     mocked.summarizeRunActionProgressByRunId.mockReset();
     mocked.listProfiles.mockReset();
+    mocked.listProfilesWithDefault.mockReset();
     mocked.listRuns.mockReset();
     mocked.redirect.mockClear();
     mocked.resolveRequestedReportRunContext.mockReset();
@@ -210,6 +213,13 @@ describe("planning reports page fallback", () => {
     mocked.listProfiles.mockImplementation(async () => {
       expect(mocked.pageScopeDepth).toBeGreaterThan(0);
       return [profile];
+    });
+    mocked.listProfilesWithDefault.mockImplementation(async () => {
+      expect(mocked.pageScopeDepth).toBeGreaterThan(0);
+      return {
+        defaultProfileId: "default-profile",
+        profiles: [profile],
+      };
     });
     mocked.listRuns.mockImplementation(async () => {
       expect(mocked.pageScopeDepth).toBeGreaterThan(0);
@@ -340,9 +350,12 @@ describe("planning reports page fallback", () => {
       observedScopeDepths.push(mocked.pageScopeDepth);
       return profile.id;
     });
-    mocked.listProfiles.mockImplementation(async () => {
+    mocked.listProfilesWithDefault.mockImplementation(async () => {
       observedScopeDepths.push(mocked.pageScopeDepth);
-      return [profile];
+      return {
+        defaultProfileId: profile.id,
+        profiles: [profile],
+      };
     });
     mocked.listRuns.mockImplementation(async () => {
       observedScopeDepths.push(mocked.pageScopeDepth);
@@ -377,7 +390,8 @@ describe("planning reports page fallback", () => {
     expect(html).toContain("data-runs-ready=\"true\"");
     expect(html).toContain("data-action-progress-count=\"1\"");
     expect(mocked.pageScopeCallCount).toBe(1);
-    expect(observedScopeDepths).toEqual([1, 1, 1, 1]);
+    expect(mocked.getDefaultProfileId).not.toHaveBeenCalled();
+    expect(observedScopeDepths).toEqual([1, 1, 1]);
     expect(mocked.listRuns).toHaveBeenCalledWith({ profileId: "profile-1", limit: 200 });
   });
 

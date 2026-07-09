@@ -10,6 +10,7 @@ import {
   getDefaultProfileId,
   getProfile,
   listProfiles,
+  listProfilesWithDefault,
   restoreProfileFromTrash,
   updateProfile,
 } from "../src/lib/planning/store/profileStore";
@@ -153,6 +154,19 @@ describe("planning store", () => {
 
     const listAfterRestore = await listProfiles();
     expect(listAfterRestore.some((item) => item.id === created.id)).toBe(true);
+  });
+
+  it("loads profile records with the resolved default id", async () => {
+    const created = await createProfile({
+      name: "기본 프로필",
+      profile: sampleProfile(),
+    });
+
+    const loaded = await listProfilesWithDefault();
+
+    expect(loaded.profiles.map((item) => item.id)).toContain(created.id);
+    expect(loaded.defaultProfileId).toBeTruthy();
+    expect(loaded.profiles.some((item) => item.id === loaded.defaultProfileId)).toBe(true);
   });
 
   it("supports run CRUD and profile-level retention", async () => {
