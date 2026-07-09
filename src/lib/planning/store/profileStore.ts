@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import { type Dirent } from "node:fs";
 import path from "node:path";
-import { runPlanningMigrationsOnStartup } from "../migrations/manager";
 import { decodeStoragePayload, encodeStoragePayload } from "../security/vaultStorage";
 import { atomicWriteJson } from "../storage/atomicWrite";
 import { type ProfileV2 } from "../v2/types";
@@ -20,6 +19,7 @@ import {
   restoreFileFromTrash,
 } from "./trash";
 import { isPlanningNamespaceEnabled } from "./namespace";
+import { ensurePlanningStartupMigrations } from "./startupMigrationGate";
 import { type PlanningProfileMeta, type PlanningProfileRecord } from "./types";
 
 type ProfilePatch = {
@@ -70,11 +70,7 @@ function assertServerOnly(): void {
 assertServerOnly();
 
 async function ensureStartupMigrations(): Promise<void> {
-  try {
-    await runPlanningMigrationsOnStartup();
-  } catch {
-    // ignore here; /ops/doctor exposes migration failures explicitly
-  }
+  await ensurePlanningStartupMigrations({ mode: "best-effort" });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

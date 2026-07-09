@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import path from "node:path";
-import { runPlanningMigrationsOnStartup } from "../migrations/manager";
 import { sanitizeRecordId } from "./paths";
 import {
   deleteRunMetaFromTrash,
@@ -53,6 +52,7 @@ import {
 } from "./runCreateStore";
 import { writeRunMetaRecord } from "./runMetaWriter";
 import { selectRunRetentionTargets } from "./runRetention";
+import { ensurePlanningStartupMigrations } from "./startupMigrationGate";
 import { type PlanningRunRecord } from "./types";
 
 export type { RunBlobName } from "./runBlobStore";
@@ -91,7 +91,7 @@ function assertServerOnly(): void {
 assertServerOnly();
 
 async function ensureStartupMigrations(): Promise<void> {
-  await runPlanningMigrationsOnStartup();
+  await ensurePlanningStartupMigrations();
 }
 
 function asString(value: unknown): string {
