@@ -1,0 +1,178 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createRunLegacyBackfillStore } from "../../src/lib/planning/store/runLegacyBackfillStore";
+import { type LegacyRunBackfillCandidate } from "../../src/lib/planning/store/runLegacyBackfillService";
+import { type RunIndexEntry } from "../../src/lib/planning/store/runIndex";
+import { type PlanningRunRecord } from "../../src/lib/planning/store/types";
+
+const env = process.env as Record<string, string | undefined>;
+const originalRunsDir = process.env.PLANNING_RUNS_DIR;
+
+function sampleRun(overrides: Partial<PlanningRunRecord> = {}): PlanningRunRecord {
+  return {
+    version: 1,
+    schemaVersion: 2,
+    id: "run-1",
+    profileId: "profile-1",
+    title: "Run 1",
+    createdAt: "2026-07-03T00:00:00.000Z",
+    input: { horizonMonths: 12 },
+    meta: { snapshot: { missing: true } },
+    outputs: {},
+    ...overrides,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function createStore(input: {
+  rows?: RunIndexEntry[];
+  rawByPath?: Map<string, PlanningRunRecord | null>;
+  calls?: string[];
+  readRunForCandidate?: (
+    candidate: LegacyRunBackfillCandidate,
+    options?: { persistMigrations?: boolean },
+  ) => Promise<PlanningRunRecord | null>;
+  ensureStartupMigrations?: () => Promise<void>;
+}) {
+  return createRunLegacyBackfillStore({
+    listIndexEntries: async () => input.rows ?? [],
+    readRunForCandidate: input.readRunForCandidate ?? (async () => null),
+    ensureStartupMigrations: input.ensureStartupMigrations ?? (async () => undefined),
+    isEngineEnvelopeLike: (value) => {
+      if (!isRecord(value)) return false;
+      return value.stage === "DEBT"
+        && isRecord(value.financialStatus)
+        && isRecord(value.stageDecision);
+    },
+    readJsonFile: async (filePath) => {
+      input.calls?.push(filePath);
+      if (!input.rawByPath?.has(filePath)) return null;
+      const payload = input.rawByPath.get(filePath);
+      return payload ? { payload } : null;
+    },
+    decodeStoredPayload: async (loaded) => {
+      return loaded as { payload: unknown };
+    },
+    normalizeRawRun: (value) => {
+      return value && typeof value === "object" ? value as PlanningRunRecord : null;
+    },
+  });
+}
+
+describe("planning run legacy backfill store", () => {
+  let root = "";
+
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "finance-run-legacy-backfill-store-"));
+    env.PLANNING_RUNS_DIR = path.join(root, "runs");
+  });
+
+  afterEach(() => {
+    if (typeof originalRunsDir === "string") env.PLANNING_RUNS_DIR = originalRunsDir;
+    else delete env.PLANNING_RUNS_DIR;
+
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("prefers partition raw meta before legacy paths", async () => {
+    const run = sampleRun();
+    const partitionPath = path.join(root, "vault", "profiles", "profile-1", "runs", "run-1", "run.json");
+    const calls: string[] = [];
+    const store = createStore({
+      rawByPath: new Map([[partitionPath, run]]),
+      calls,
+    });
+
+    await expect(store.readRawRunForIndexEntry({ id: "run-1", profileId: "profile-1" })).resolves.toEqual(run);
+    expect(calls).toEqual([partitionPath]);
+  });
+
+  it("falls back from partition raw meta to legacy run meta", async () => {
+    const run = sampleRun();
+    const partitionPath = path.join(root, "vault", "profiles", "profile-1", "runs", "run-1", "run.json");
+    const legacyMetaPath = path.join(root, "runs", "run-1", "run.json");
+    const calls: string[] = [];
+    const store = createStore({
+      rawByPath: new Map([[legacyMetaPath, run]]),
+      calls,
+    });
+
+    await expect(store.readRawRunForIndexEntry({ id: "run-1", profileId: "profile-1" })).resolves.toEqual(run);
+    expect(calls).toEqual([partitionPath, legacyMetaPath]);
+  });
+
+  it("falls back from legacy run meta to legacy file", async () => {
+    const run = sampleRun();
+    const partitionPath = path.join(root, "vault", "profiles", "profile-1", "runs", "run-1", "run.json");
+    const legacyMetaPath = path.join(root, "runs", "run-1", "run.json");
+    const legacyFilePath = path.join(root, "runs", "run-1.json");
+    const calls: string[] = [];
+    const store = createStore({
+      rawByPath: new Map([[legacyFilePath, run]]),
+      calls,
+    });
+
+    await expect(store.readRawRunForIndexEntry({ id: "run-1", profileId: "profile-1" })).resolves.toEqual(run);
+    expect(calls).toEqual([partitionPath, legacyMetaPath, legacyFilePath]);
+  });
+
+  it("wires legacy backfill summary, candidate listing, and migration reads", async () => {
+    const rawLegacy = sampleRun({
+      id: "legacy",
+      profileId: "profile-1",
+      createdAt: "2026-07-02T00:00:00.000Z",
+      outputs: { resultDto: { version: 1 } as PlanningRunRecord["outputs"]["resultDto"] },
+    });
+    const migrated = sampleRun({
+      id: "legacy",
+      profileId: "profile-1",
+      outputs: {
+        engineSchemaVersion: 1,
+        engine: { stage: "DEBT", financialStatus: {}, stageDecision: {} } as PlanningRunRecord["outputs"]["engine"],
+      },
+    });
+    const rawPath = path.join(root, "vault", "profiles", "profile-1", "runs", "legacy", "run.json");
+    const readOptions: Array<{ persistMigrations?: boolean } | undefined> = [];
+    let migrationsEnsured = 0;
+    const store = createStore({
+      rows: [
+        {
+          id: "legacy",
+          profileId: "profile-1",
+          createdAt: "2026-07-02T00:00:00.000Z",
+          title: "Legacy",
+        },
+      ],
+      rawByPath: new Map([[rawPath, rawLegacy]]),
+      readRunForCandidate: async (_candidate, options) => {
+        readOptions.push(options);
+        return migrated;
+      },
+      ensureStartupMigrations: async () => {
+        migrationsEnsured += 1;
+      },
+    });
+
+    await expect(store.summarize()).resolves.toMatchObject({
+      totalRuns: 1,
+      legacyCandidates: 1,
+      resultDtoOnlyCandidates: 1,
+    });
+    await expect(store.listCandidates()).resolves.toMatchObject([
+      { id: "legacy", profileId: "profile-1", reason: "resultDtoOnly" },
+    ]);
+    await expect(store.backfill()).resolves.toMatchObject({
+      selected: 1,
+      migrated: 1,
+      skipped: 0,
+      failed: 0,
+    });
+    expect(migrationsEnsured).toBe(1);
+    expect(readOptions).toEqual([{ persistMigrations: true }]);
+  });
+});

@@ -62,13 +62,17 @@ async function createSeedProfile(request: APIRequestContext): Promise<string> {
   return profileId;
 }
 
-test("/planner and /planner/* redirect to /planning", async ({ page }) => {
+test("/planner redirects to /planning", async ({ page }) => {
   await page.goto("/planner");
   await expect(page).toHaveURL(/\/planning$/, { timeout: 30_000 });
+});
 
+test("/planner/reports redirects to /planning/reports", async ({ page }) => {
   await page.goto("/planner/reports");
   await expect(page).toHaveURL(/\/planning\/reports$/, { timeout: 30_000 });
+});
 
+test("/planner/legacy redirects to /planning", async ({ page }) => {
   await page.goto("/planner/legacy");
   await expect(page).toHaveURL(/\/planning$/, { timeout: 30_000 });
 });

@@ -38,13 +38,11 @@ import {
   type RunBlobRef,
 } from "./runBlobStore";
 import {
-  backfillLegacyRunsWith,
-  listLegacyRunBackfillCandidatesWith,
-  summarizeLegacyRunBackfillWith,
   type LegacyRunBackfillCandidate,
   type LegacyRunBackfillResult,
   type LegacyRunBackfillSummary,
 } from "./runLegacyBackfillService";
+import { createRunLegacyBackfillStore } from "./runLegacyBackfillStore";
 import {
   fromStoredPayload,
   readJsonFile,
@@ -439,14 +437,10 @@ async function readRunMetaByPathDetailed(
   }
 }
 
-async function readRawRunMetaByPath(filePath: string): Promise<PlanningRunRecord | null> {
-  const loaded = await readJsonFile(filePath);
-  if (!loaded) return null;
-  const decoded = await fromStoredPayload(loaded);
-  const parsed = decoded.payload;
-  if (!isRunRecord(parsed)) return null;
+function normalizeRawRunForBackfill(value: unknown): PlanningRunRecord | null {
+  if (!isRunRecord(value)) return null;
   try {
-    const canonical = loadCanonicalRun(parsed);
+    const canonical = loadCanonicalRun(value);
     return toMetaRecord(canonical.run);
   } catch {
     return null;
@@ -478,6 +472,16 @@ async function readRunMeta(
 }
 
 const runIndexStore = createRunIndexStore({ readRunMeta });
+
+const legacyRunBackfillStore = createRunLegacyBackfillStore({
+  listIndexEntries: runIndexStore.read,
+  readRunForCandidate: (candidate, options) => readRunMeta(candidate.id, candidate.profileId, options),
+  ensureStartupMigrations,
+  isEngineEnvelopeLike,
+  readJsonFile,
+  decodeStoredPayload: fromStoredPayload,
+  normalizeRawRun: normalizeRawRunForBackfill,
+});
 
 export async function listRunIndexEntries(options?: {
   profileId?: string;
@@ -559,22 +563,9 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
   return diagnostics.final();
 }
 
-async function readRawRunMetaForIndexEntry(row: Pick<RunIndexEntry, "id" | "profileId">): Promise<PlanningRunRecord | null> {
-  const paths = getRunPaths(row.id, row.profileId);
-  return await readRawRunMetaByPath(paths.partitionMetaPath ?? paths.legacyMetaPath)
-    ?? await readRawRunMetaByPath(paths.legacyMetaPath)
-    ?? await readRawRunMetaByPath(paths.legacyFilePath);
-}
-
 export async function summarizeLegacyRunBackfill(): Promise<LegacyRunBackfillSummary> {
   assertServerOnly();
-  return summarizeLegacyRunBackfillWith({
-    listIndexEntries: runIndexStore.read,
-    readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
-    readRunForCandidate: (candidate, options) => readRunMeta(candidate.id, candidate.profileId, options),
-    ensureStartupMigrations,
-    isEngineEnvelopeLike,
-  });
+  return legacyRunBackfillStore.summarize();
 }
 
 export async function listLegacyRunBackfillCandidates(options?: {
@@ -582,13 +573,7 @@ export async function listLegacyRunBackfillCandidates(options?: {
   includeOpsDoctor?: boolean;
 }): Promise<LegacyRunBackfillCandidate[]> {
   assertServerOnly();
-  return listLegacyRunBackfillCandidatesWith({
-    listIndexEntries: runIndexStore.read,
-    readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
-    readRunForCandidate: (candidate, readOptions) => readRunMeta(candidate.id, candidate.profileId, readOptions),
-    ensureStartupMigrations,
-    isEngineEnvelopeLike,
-  }, options);
+  return legacyRunBackfillStore.listCandidates(options);
 }
 
 export async function backfillLegacyRuns(options?: {
@@ -596,13 +581,7 @@ export async function backfillLegacyRuns(options?: {
   includeOpsDoctor?: boolean;
 }): Promise<LegacyRunBackfillResult> {
   assertServerOnly();
-  return backfillLegacyRunsWith({
-    listIndexEntries: runIndexStore.read,
-    readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
-    readRunForCandidate: (candidate, readOptions) => readRunMeta(candidate.id, candidate.profileId, readOptions),
-    ensureStartupMigrations,
-    isEngineEnvelopeLike,
-  }, options);
+  return legacyRunBackfillStore.backfill(options);
 }
 
 type UpdateRunPatchBase = Partial<Pick<
