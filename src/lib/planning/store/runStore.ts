@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { type Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { runPlanningMigrationsOnStartup } from "../migrations/manager";
@@ -7,9 +6,7 @@ import {
   appendStorageTransactionStep,
   beginStorageTransaction,
   endStorageTransaction,
-  type StorageTransactionContext,
 } from "../storage/journal";
-import { withPlanningStoreWriteLock } from "../storage/storeWriteLock";
 import { LIMITS, RAW_TIMELINE_SAMPLE_STEP_MONTHS, sampleByStride, takeTop } from "../v2/limits";
 import { loadCanonicalRun } from "../v2/loadCanonicalRun";
 import {
@@ -19,11 +16,8 @@ import {
 import { backfillResultDtoDebtFromRaw } from "../v2/resultDtoDebtBackfill";
 import { RUN_SCHEMA_VERSION } from "../v2/schemaVersion";
 import {
-  resolveProfilePartitionsDir,
   resolveProfileRunDir,
   resolveProfileRunMetaPath,
-  resolveRunsDir,
-  resolveRunsIndexPath,
   sanitizeRecordId,
 } from "./paths";
 import {
@@ -69,12 +63,10 @@ import {
   resolveRunReadSources,
 } from "./runReadSources";
 import {
-  buildRunIndexFile,
-  parseRunIndex,
-  sortRunIndexEntriesByCreatedAtDesc,
   toRunIndexEntry,
   type RunIndexEntry,
 } from "./runIndex";
+import { createRunIndexStore } from "./runIndexStore";
 import { selectRunRetentionTargets } from "./runRetention";
 import { type PlanningRunRecord } from "./types";
 
@@ -89,8 +81,6 @@ export type { RunIndexEntry } from "./runIndex";
 export type { RunReadDiagnostic, RunReadDiagnosticAttempt } from "./runReadObservability";
 
 export const DEFAULT_RUNS_PER_PROFILE_RETENTION = 50;
-
-const BLOB_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
 
 type ListRunsOptions = {
   profileId?: string;
@@ -396,10 +386,6 @@ type ReadRunMetaOptions = {
   persistMigrations?: boolean;
 };
 
-type ReadRunIndexOptions = {
-  repair?: boolean;
-};
-
 async function readRunMetaByPath(
   filePath: string,
   options?: ReadRunMetaOptions,
@@ -491,167 +477,7 @@ async function readRunMeta(
   return null;
 }
 
-async function scanPartitionRunsForIndex(): Promise<RunIndexEntry[]> {
-  const partitionRoot = resolveProfilePartitionsDir();
-  let profileEntries: Dirent[];
-  try {
-    profileEntries = await fs.readdir(partitionRoot, { withFileTypes: true });
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return [];
-    throw error;
-  }
-
-  const out: RunIndexEntry[] = [];
-  for (const profileEntry of profileEntries) {
-    if (!profileEntry.isDirectory()) continue;
-    const profileId = asString(profileEntry.name);
-    if (!profileId) continue;
-
-    const runsDir = path.join(partitionRoot, profileId, "runs");
-    let runEntries: Dirent[];
-    try {
-      runEntries = await fs.readdir(runsDir, { withFileTypes: true });
-    } catch (error) {
-      const nodeError = error as NodeJS.ErrnoException;
-      if (nodeError?.code === "ENOENT") continue;
-      throw error;
-    }
-
-    for (const runEntry of runEntries) {
-      if (!runEntry.isDirectory()) continue;
-      const runId = asString(runEntry.name);
-      if (!runId) continue;
-      const row = await readRunMeta(runId, profileId);
-      if (row) out.push(toRunIndexEntry(row));
-    }
-  }
-
-  return out;
-}
-
-async function scanRunsDirForIndex(): Promise<RunIndexEntry[]> {
-  const out: RunIndexEntry[] = [];
-  const partitionRows = await scanPartitionRunsForIndex();
-  out.push(...partitionRows);
-
-  const dirPath = resolveRunsDir();
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(dirPath, { withFileTypes: true });
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError?.code === "ENOENT") return sortRunIndexEntriesByCreatedAtDesc(out);
-    throw error;
-  }
-
-  for (const entry of entries) {
-    if (entry.isDirectory()) {
-      try {
-        const runId = sanitizeRecordId(entry.name);
-        const row = await readRunMeta(runId);
-        if (row) out.push(toRunIndexEntry(row));
-      } catch {
-        // ignore non-run directory names
-      }
-      continue;
-    }
-
-    if (!entry.isFile()) continue;
-    if (!entry.name.toLowerCase().endsWith(".json")) continue;
-    if (entry.name === path.basename(resolveRunsIndexPath())) continue;
-
-    const runId = entry.name.slice(0, -5);
-    if (!BLOB_NAME_PATTERN.test(runId)) continue;
-    try {
-      const row = await readRunMeta(runId);
-      if (row) out.push(toRunIndexEntry(row));
-    } catch {
-      continue;
-    }
-  }
-
-  const deduped = Array.from(new Map(out.map((row) => [row.id, row])).values());
-  return sortRunIndexEntriesByCreatedAtDesc(deduped);
-}
-
-async function writeRunIndex(
-  entries: RunIndexEntry[],
-  options?: { journal?: boolean; tx?: StorageTransactionContext },
-): Promise<void> {
-  const filePath = resolveRunsIndexPath();
-  const payload = buildRunIndexFile(entries);
-  const shouldJournal = options?.journal !== false;
-  const tx = options?.tx ?? (shouldJournal
-    ? await beginStorageTransaction("RUN_INDEX_UPDATE", {
-      indexPath: normalizeRelativePath(filePath),
-      entriesCount: payload.entries.length,
-    })
-    : null);
-  try {
-    await writeJsonAtomic(filePath, await toStoredPayload(payload));
-    if (tx) {
-      await appendStorageTransactionStep(tx, "WRITE_INDEX", {
-        indexPath: normalizeRelativePath(filePath),
-        entriesCount: payload.entries.length,
-      });
-      if (!options?.tx) {
-        await endStorageTransaction(tx, "COMMIT");
-      }
-    }
-  } catch (error) {
-    if (tx && !options?.tx) {
-      await endStorageTransaction(
-        tx,
-        "ROLLBACK",
-        error instanceof Error ? error.message : "run index write failed",
-      ).catch(() => undefined);
-    }
-    throw error;
-  }
-}
-
-function withRunIndexWriteLock<T>(callback: () => Promise<T> | T): Promise<T> {
-  return withPlanningStoreWriteLock(`planning:runs:index:${resolveRunsIndexPath()}`, callback);
-}
-
-async function readRunIndex(options?: ReadRunIndexOptions): Promise<RunIndexEntry[]> {
-  const filePath = resolveRunsIndexPath();
-  const loaded = await readJsonFile(filePath);
-  const decoded = loaded === null ? null : await fromStoredPayload(loaded);
-  const decodedPayload = decoded?.payload ?? loaded;
-  const parsed = parseRunIndex(decodedPayload);
-  if (parsed.length > 0 || (isRecord(decodedPayload) && Array.isArray(decodedPayload.entries))) {
-    if (options?.repair === true && decoded?.rewriteToVault) {
-      await withRunIndexWriteLock(() => writeRunIndex(parsed));
-    }
-    return parsed;
-  }
-
-  const scanned = await scanRunsDirForIndex();
-  if (options?.repair === true && (scanned.length > 0 || loaded !== null)) {
-    await withRunIndexWriteLock(() => writeRunIndex(scanned));
-  }
-  return scanned;
-}
-
-async function upsertRunIndexEntry(entry: RunIndexEntry): Promise<void> {
-  await withRunIndexWriteLock(async () => {
-    const entries = await readRunIndex({ repair: true });
-    const next = entries.filter((row) => row.id !== entry.id);
-    next.push(entry);
-    await writeRunIndex(next);
-  });
-}
-
-async function removeRunIndexEntry(id: string): Promise<void> {
-  await withRunIndexWriteLock(async () => {
-    const entries = await readRunIndex({ repair: true });
-    const next = entries.filter((row) => row.id !== id);
-    if (next.length === entries.length) return;
-    await writeRunIndex(next);
-  });
-}
+const runIndexStore = createRunIndexStore({ readRunMeta });
 
 export async function listRunIndexEntries(options?: {
   profileId?: string;
@@ -660,7 +486,7 @@ export async function listRunIndexEntries(options?: {
 }): Promise<RunIndexEntry[]> {
   assertServerOnly();
 
-  const all = await readRunIndex();
+  const all = await runIndexStore.read();
   const filtered = asString(options?.profileId)
     ? all.filter((row) => row.profileId === asString(options?.profileId))
     : all;
@@ -672,7 +498,7 @@ export async function listRunIndexEntries(options?: {
 
 export async function readRunIndexEntries(): Promise<RunIndexEntry[]> {
   assertServerOnly();
-  return readRunIndex();
+  return runIndexStore.read();
 }
 
 export async function rebuildRunIndexFromDisk(): Promise<{
@@ -680,19 +506,12 @@ export async function rebuildRunIndexFromDisk(): Promise<{
   indexPath: string;
 }> {
   assertServerOnly();
-  return withRunIndexWriteLock(async () => {
-    const scanned = await scanRunsDirForIndex();
-    await writeRunIndex(scanned);
-    return {
-      entries: scanned.length,
-      indexPath: normalizeRelativePath(resolveRunsIndexPath()),
-    };
-  });
+  return runIndexStore.rebuild();
 }
 
 export async function scanRunIndexEntriesFromDisk(): Promise<RunIndexEntry[]> {
   assertServerOnly();
-  return scanRunsDirForIndex();
+  return runIndexStore.scan();
 }
 
 export async function listRuns(options?: ListRunsOptions): Promise<PlanningRunRecord[]> {
@@ -711,7 +530,7 @@ export async function listRuns(options?: ListRunsOptions): Promise<PlanningRunRe
 export async function getRun(id: string): Promise<PlanningRunRecord | null> {
   assertServerOnly();
   const safeId = sanitizeRecordId(id);
-  const indexRows = await readRunIndex();
+  const indexRows = await runIndexStore.read();
   const hintedProfileId = indexRows.find((row) => row.id === safeId)?.profileId;
   return readRunMeta(safeId, hintedProfileId);
 }
@@ -720,7 +539,7 @@ export async function diagnoseRunRead(id: string, profileIdHint?: string): Promi
   assertServerOnly();
   const safeId = sanitizeRecordId(id);
   const explicitProfileIdHint = asString(profileIdHint);
-  const indexRows = explicitProfileIdHint ? [] : await readRunIndex();
+  const indexRows = explicitProfileIdHint ? [] : await runIndexStore.read();
   const hintedProfileId = explicitProfileIdHint || indexRows.find((row) => row.id === safeId)?.profileId;
   const diagnostics = createRunReadDiagnosticRecorder({
     id: safeId,
@@ -750,7 +569,7 @@ async function readRawRunMetaForIndexEntry(row: Pick<RunIndexEntry, "id" | "prof
 export async function summarizeLegacyRunBackfill(): Promise<LegacyRunBackfillSummary> {
   assertServerOnly();
   return summarizeLegacyRunBackfillWith({
-    listIndexEntries: readRunIndex,
+    listIndexEntries: runIndexStore.read,
     readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
     readRunForCandidate: (candidate, options) => readRunMeta(candidate.id, candidate.profileId, options),
     ensureStartupMigrations,
@@ -764,7 +583,7 @@ export async function listLegacyRunBackfillCandidates(options?: {
 }): Promise<LegacyRunBackfillCandidate[]> {
   assertServerOnly();
   return listLegacyRunBackfillCandidatesWith({
-    listIndexEntries: readRunIndex,
+    listIndexEntries: runIndexStore.read,
     readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
     readRunForCandidate: (candidate, readOptions) => readRunMeta(candidate.id, candidate.profileId, readOptions),
     ensureStartupMigrations,
@@ -778,7 +597,7 @@ export async function backfillLegacyRuns(options?: {
 }): Promise<LegacyRunBackfillResult> {
   assertServerOnly();
   return backfillLegacyRunsWith({
-    listIndexEntries: readRunIndex,
+    listIndexEntries: runIndexStore.read,
     readRawRunForIndexEntry: readRawRunMetaForIndexEntry,
     readRunForCandidate: (candidate, readOptions) => readRunMeta(candidate.id, candidate.profileId, readOptions),
     ensureStartupMigrations,
@@ -833,7 +652,7 @@ export async function updateRun(id: string, patch: UpdateRunPatch): Promise<Plan
   const metaPath = resolveProfileRunMetaPath(current.profileId, current.id);
   await fs.mkdir(resolveProfileRunDir(current.profileId, current.id), { recursive: true });
   await writeJsonAtomic(metaPath, await toStoredPayload(next));
-  await upsertRunIndexEntry(toRunIndexEntry(next));
+  await runIndexStore.upsert(toRunIndexEntry(next));
   return next;
 }
 
@@ -864,7 +683,7 @@ export async function purgeRunsByRetention(options?: PurgeRunsOptions): Promise<
   assertServerOnly();
 
   const maxPerProfile = toSafeLimit(options?.maxPerProfile, DEFAULT_RUNS_PER_PROFILE_RETENTION);
-  const all = await readRunIndex();
+  const all = await runIndexStore.read();
   const purgeTargets = selectRunRetentionTargets(all, {
     maxPerProfile,
     ...(asString(options?.profileId) ? { profileId: asString(options?.profileId) } : {}),
@@ -948,7 +767,7 @@ export async function createRun(input: CreateRunInput, options?: CreateRunOption
       path: normalizeRelativePath(metaPath),
     });
 
-    await upsertRunIndexEntry(toRunIndexEntry(record));
+    await runIndexStore.upsert(toRunIndexEntry(record));
     await appendStorageTransactionStep(tx, "UPSERT_INDEX", {
       runId: record.id,
     });
@@ -973,7 +792,7 @@ export async function createRun(input: CreateRunInput, options?: CreateRunOption
       error instanceof Error ? error.message : "create run failed",
     ).catch(() => undefined);
     await fs.rm(resolveProfileRunDir(profileId, runId), { recursive: true, force: true }).catch(() => undefined);
-    await removeRunIndexEntry(runId).catch(() => undefined);
+    await runIndexStore.remove(runId).catch(() => undefined);
     if (createdRecord) {
       await fs.rm(resolveProfileRunDir(createdRecord.profileId, createdRecord.id), { recursive: true, force: true }).catch(() => undefined);
     }
@@ -992,7 +811,7 @@ export async function hardDeleteRun(id: string): Promise<boolean> {
   });
 
   if (deleted) {
-    await removeRunIndexEntry(safeId);
+    await runIndexStore.remove(safeId);
   }
 
   return deleted;
@@ -1006,7 +825,7 @@ export async function restoreRunFromTrash(id: string): Promise<boolean> {
   if (!restored) return false;
   const run = await getRun(safeId);
   if (run) {
-    await upsertRunIndexEntry(toRunIndexEntry(run));
+    await runIndexStore.upsert(toRunIndexEntry(run));
   }
   return true;
 }
@@ -1029,6 +848,6 @@ export async function deleteRun(id: string): Promise<boolean> {
 
   if (!moved) return false;
 
-  await removeRunIndexEntry(safeId);
+  await runIndexStore.remove(safeId);
   return true;
 }
